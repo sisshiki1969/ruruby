@@ -4,10 +4,12 @@ use std::collections::HashMap;
 pub struct Lexer {
     code: Vec<char>,
     len: usize,
+    line_top_pos: usize,
     pos: usize,
     line: usize,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
+    line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -44,6 +46,8 @@ pub enum TokenKind {
     NumLit(i64),
     Reserved(Reserved),
     Punct(char),
+    Space,
+    LineTerm,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,7 +63,7 @@ impl<T> Annot<T> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Loc(usize, usize);
+pub struct Loc(usize, usize);
 
 pub type Token = Annot<TokenKind>;
 
@@ -78,6 +82,20 @@ impl Token {
 
     fn new_punct(ch: char, loc: Loc) -> Self {
         Annot::new(TokenKind::Punct(ch), loc)
+    }
+
+    fn new_space(loc: Loc) -> Self {
+        Annot::new(TokenKind::Space, loc)
+    }
+
+    fn new_line_term(loc: Loc) -> Self {
+        Annot::new(TokenKind::LineTerm, loc)
+    }
+}
+
+impl Token {
+    pub fn loc(&self) -> Loc {
+        self.loc.clone()
     }
 }
 
@@ -118,17 +136,21 @@ impl Lexer {
         Lexer {
             code,
             len,
+            line_top_pos: 0,
             pos: 0,
-            line: 0,
+            line: 1,
             reserved,
             reserved_rev,
+            line_pos: vec![],
         }
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, Error> {
         let mut tokens: Vec<Token> = vec![];
         loop {
-            self.skip_whitespace();
+            if let Some(tok) = self.skip_whitespace() {
+                tokens.push(tok);
+            };
             let start_pos = self.pos;
             let ch = match self.get() {
                 Ok(ch) => ch,
@@ -140,6 +162,7 @@ impl Lexer {
                 };
             }
             let token = if ch.is_ascii_alphabetic() || ch == '_' {
+                // read identifier or reserved keyword
                 let mut tok = ch.to_string();
                 loop {
                     let ch = match self.peek() {
@@ -159,6 +182,7 @@ impl Lexer {
                     None => Token::new_ident(tok, cur_loc!()),
                 }
             } else if ch.is_numeric() {
+                // read number literal
                 let mut tok = ch.to_string();
                 loop {
                     let ch = match self.peek() {
@@ -186,6 +210,19 @@ impl Lexer {
         }
         Ok(tokens)
     }
+
+    pub fn show_loc(&self, loc: &Loc) {
+        let line = self.line_pos.iter().find(|x| x.2 >= loc.0).unwrap();
+        println!(
+            "{}",
+            self.code[(line.1)..(line.2)].iter().collect::<String>()
+        );
+        println!(
+            "{}{}",
+            " ".repeat(loc.0 - line.1),
+            "^".repeat(loc.1 - loc.0 + 1)
+        );
+    }
 }
 
 impl Lexer {
@@ -210,17 +247,26 @@ impl Lexer {
         }
     }
 
-    fn skip_whitespace(&mut self) {
+    fn skip_whitespace(&mut self) -> Option<Token> {
+        let mut res = None;
         for p in self.pos..self.len {
             let ch = self.code[p];
             if ch == '\n' {
+                self.line_pos.push((self.line, self.line_top_pos, p));
                 self.line += 1;
+                self.line_top_pos = p + 1;
+                res = Some(Token::new_line_term(Loc(p, p)));
             } else if !ch.is_ascii_whitespace() {
                 self.pos = p;
-                return;
+                return res;
+            } else if res.is_none() {
+                // if is_whitespace and res.is_none
+                res = Some(Token::new_space(Loc(p, p)));
             };
         }
         self.pos = self.len;
+        self.line_pos.push((self.line, self.line_top_pos, self.pos));
+        res
     }
 }
 
