@@ -5,18 +5,18 @@ fn main() {
     let program = r"
         a = 0;
         if a == 1_000 then
-            5
+            5 # this is a comment
         else
-            10";
+            10 # also a comment";
     println!("{}", program);
-    let mut lexer = Lexer::new(program);
+    let lexer = Lexer::new(program);
     match lexer.tokenize() {
         Err(err) => println!("{:?}", err),
-        Ok(tokens) => {
-            for token in &tokens {
-                println!("{:?}", token);
+        Ok(result) => {
+            for token in &result.tokens {
+                println!("{}", token);
             }
-            lexer.show_loc(&tokens[15].loc());
+            result.show_loc(&result.tokens[11].loc());
         }
     };
 }
