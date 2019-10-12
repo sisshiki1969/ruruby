@@ -23,11 +23,11 @@ pub fn eval_node(node: &Node) -> Value {
             }
             val
         }
-        NodeKind::If(cond, then) => {
-            if eval_node(&cond).to_bool() {
-                eval_node(&then)
+        NodeKind::If(cond_, then_, else_) => {
+            if eval_node(&cond_).to_bool() {
+                eval_node(&then_)
             } else {
-                Value::Nil
+                eval_node(&else_)
             }
         }
         _ => unimplemented!(),

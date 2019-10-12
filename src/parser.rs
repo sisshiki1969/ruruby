@@ -13,12 +13,20 @@ impl Node {
             loc,
         }
     }
+
+    fn new_comp_stmt() -> Self {
+        Node {
+            kind: NodeKind::CompStmt(vec![]),
+            loc: Loc(0, 0),
+        }
+    }
 }
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             NodeKind::BinOp(op, lhs, rhs) => write!(f, "[{:?} ( {}, {} )]", op, lhs, rhs),
+            NodeKind::CompStmt(nodes) => write!(f, "[{:?}]", nodes),
             _ => write!(f, "[{:?}]", self.kind),
         }
     }
@@ -30,7 +38,7 @@ pub enum NodeKind {
     BinOp(BinOp, Box<Node>, Box<Node>),
     Assign(Box<Node>, Box<Node>),
     CompStmt(Vec<Node>),
-    If(Box<Node>, Box<Node>),
+    If(Box<Node>, Box<Node>, Box<Node>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,7 +72,7 @@ impl Parser {
     }
 
     /// Peek next token (skipping line terminators).
-    fn peek(&mut self) -> &Token {
+    fn peek(&self) -> &Token {
         let mut c = self.cursor;
         loop {
             let tok = &self.tokens[c];
@@ -104,12 +112,28 @@ impl Parser {
         token
     }
 
-    /// If next token is a expected kind of Punct, get it and return true.
+    /// If next token is an expected kind of Punctuator, get it and return true.
     /// Otherwise, return false.
     fn get_if_punct(&mut self, expect: Punct) -> bool {
         match &self.peek().kind {
             TokenKind::Punct(punct) => {
                 if *punct == expect {
+                    self.get();
+                    true
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// If next token is an expected kind of Reserved keyeord, get it and return true.
+    /// Otherwise, return false.
+    fn get_if_reserved(&mut self, expect: Reserved) -> bool {
+        match &self.peek().kind {
+            TokenKind::Reserved(reserved) => {
+                if *reserved == expect {
                     self.get();
                     true
                 } else {
@@ -128,15 +152,6 @@ impl Parser {
             true
         } else {
             false
-        }
-    }
-
-    fn expect_term(&mut self) -> Result<(), ParseError> {
-        let tok = self.get_no_skip_line_term();
-        if tok.is_term() {
-            Ok(())
-        } else {
-            Err(self.error_unexpected(&tok))
         }
     }
 
@@ -259,23 +274,37 @@ impl Parser {
                 }
             }
             TokenKind::Reserved(Reserved::If) => {
-                let cond = self.parse_expr()?;
-                println!("if cond {}", cond);
-                self.parse_then()?;
-                let then = self.parse_comp_stmt()?;
-                println!("if then {}", then);
+                let node = self.parse_if_then();
                 self.expect_reserved(Reserved::End)?;
-                let loc = tok.loc().merge(then.loc);
-                Ok(Node {
-                    kind: NodeKind::If(Box::new(cond), Box::new(then)),
-                    loc,
-                })
+                node
             }
             TokenKind::EOF => {
                 return Err(ParseError::EOF);
             }
             _ => unimplemented!("{:?}", tok.kind),
         }
+    }
+
+    fn parse_if_then(&mut self) -> Result<Node, ParseError> {
+        let loc = self.peek().loc();
+        let cond = self.parse_expr()?;
+        println!("if cond {}", cond);
+        self.parse_then()?;
+        let then_ = self.parse_comp_stmt()?;
+        println!("if then {}", then_);
+        let mut else_ = Node::new_comp_stmt();
+        if self.get_if_reserved(Reserved::Elsif) {
+            else_ = self.parse_if_then()?;
+        } else {
+            if self.get_if_reserved(Reserved::Else) {
+                else_ = self.parse_comp_stmt()?;
+            }
+        }
+        let loc = loc.merge(then_.loc);
+        Ok(Node {
+            kind: NodeKind::If(Box::new(cond), Box::new(then_), Box::new(else_)),
+            loc,
+        })
     }
 
     fn parse_then(&mut self) -> Result<(), ParseError> {
@@ -308,7 +337,7 @@ mod test {
 
     #[test]
     fn if1() {
-        let program = "if 5*4==16 +4 then 7; end";
+        let program = "if 5*4==16 +4 then 4;7 end";
         let expected = Value::FixNum(7);
         eval_script(program, expected);
     }
@@ -316,9 +345,19 @@ mod test {
     #[test]
     fn if2() {
         let program = "if 
-        5*4==16 +4
+        5*4 ==16 +
+        4
         7 end";
         let expected = Value::FixNum(7);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn if3() {
+        let program = "if 5*9==16 +4
+        7 elsif 4==4+9 then 8 elsif 3==1+2 then 10
+        else 12 end";
+        let expected = Value::FixNum(10);
         eval_script(program, expected);
     }
 }
