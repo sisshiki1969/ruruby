@@ -51,6 +51,7 @@ pub enum Reserved {
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Nop,
+    EOF,
     Ident(String),
     NumLit(i64),
     Reserved(Reserved),
@@ -61,16 +62,20 @@ pub enum TokenKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Punct {
+    LParen,
+    RParen,
     Semi,
+
     Plus,
     Minus,
+    Mul,
     Assign,
     Equal,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
-    value: T,
+    pub value: T,
     loc: Loc,
 }
 
@@ -80,14 +85,21 @@ impl<T> Annot<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Loc(usize, usize);
+
+impl Loc {
+    pub fn merge(&self, loc: Loc) -> Loc {
+        use std::cmp::*;
+        Loc(min(self.0, loc.0), max(self.1, loc.1))
+    }
+}
 
 pub type Token = Annot<TokenKind>;
 
 impl Token {
     pub fn loc(&self) -> Loc {
-        self.loc.clone()
+        self.loc
     }
 }
 
@@ -115,6 +127,26 @@ impl Token {
 
     fn new_line_term(loc: Loc) -> Self {
         Annot::new(TokenKind::LineTerm, loc)
+    }
+    fn new_eof() -> Self {
+        Annot::new(TokenKind::EOF, Loc(0, 0))
+    }
+}
+
+impl Token {
+    pub fn is_line_term(&self) -> bool {
+        self.value == TokenKind::LineTerm
+    }
+
+    pub fn is_eof(&self) -> bool {
+        self.value == TokenKind::EOF
+    }
+
+    pub fn is_term(&self) -> bool {
+        match self.value {
+            TokenKind::LineTerm | TokenKind::EOF | TokenKind::Punct(Punct::Semi) => true,
+            _ => false,
+        }
     }
 }
 
@@ -178,8 +210,10 @@ impl Lexer {
     pub fn tokenize(mut self) -> Result<LexerResult, Error> {
         let mut tokens: Vec<Token> = vec![];
         loop {
-            if let Some(_tok) = self.skip_whitespace() {
-                //tokens.push(tok);
+            if let Some(tok) = self.skip_whitespace() {
+                if tok.value == TokenKind::LineTerm {
+                    tokens.push(tok);
+                }
             };
             self.token_start_pos = self.pos;
             let ch = match self.get() {
@@ -218,6 +252,9 @@ impl Lexer {
                     ';' => self.new_punct(Punct::Semi),
                     '+' => self.new_punct(Punct::Plus),
                     '-' => self.new_punct(Punct::Minus),
+                    '*' => self.new_punct(Punct::Mul),
+                    '(' => self.new_punct(Punct::LParen),
+                    ')' => self.new_punct(Punct::RParen),
                     '=' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
@@ -236,6 +273,7 @@ impl Lexer {
                 tokens.push(token);
             }
         }
+        tokens.push(self.new_eof());
         Ok(LexerResult::new(tokens, self))
     }
 
@@ -319,7 +357,9 @@ impl Lexer {
                 Ok(ch) if ch.is_ascii_whitespace() => {
                     self.get().unwrap();
                     self.token_start_pos = self.pos;
-                    res = Some(self.new_space());
+                    if res.is_none() {
+                        res = Some(self.new_space());
+                    }
                 }
                 _ => {
                     return res;
@@ -369,6 +409,9 @@ impl Lexer {
 
     fn new_nop(&self) -> Token {
         Annot::new(TokenKind::Nop, Loc(0, 0))
+    }
+    fn new_eof(&self) -> Token {
+        Annot::new(TokenKind::EOF, Loc(0, 0))
     }
 }
 
@@ -449,10 +492,13 @@ mod test {
         (LineTerm, $loc_0:expr, $loc_1:expr) => {
             Token::new_line_term(Loc($loc_0, $loc_1))
         };
+        (EOF, $loc_0:expr, $loc_1:expr) => {
+            Token::new_eof()
+        };
     );
 
     #[test]
-    fn lexer_test() {
+    fn lexer_test1() {
         let program = "a = 1\n if a==5 then 5 else 8";
         let ans = vec![
             Token![Ident("a"), 0, 0],
@@ -466,6 +512,33 @@ mod test {
             Token![NumLit(5), 20, 20],
             Token![Reserved(Reserved::Else), 22, 25],
             Token![NumLit(8), 27, 27],
+            Token![EOF, 0, 0],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn lexer_test2() {
+        let program = r"
+        a = 0;
+        if a == 1_000 then
+            5 # this is a comment
+        else
+            10 # also a comment";
+        let ans = vec![
+            Token![Ident("a"), 9, 9],
+            Token![Punct(Punct::Assign), 11, 11],
+            Token![NumLit(0), 13, 13],
+            Token![Punct(Punct::Semi), 14, 14],
+            Token![Reserved(Reserved::If), 24, 25],
+            Token![Ident("a"), 27, 27],
+            Token![Punct(Punct::Equal), 29, 30],
+            Token![NumLit(1000), 32, 36],
+            Token![Reserved(Reserved::Then), 38, 41],
+            Token![NumLit(5), 55, 55],
+            Token![Reserved(Reserved::Else), 85, 88],
+            Token![NumLit(10), 102, 103],
+            Token![EOF, 0, 0],
         ];
         assert_tokens(program, ans);
     }

@@ -1,13 +1,12 @@
-mod lexer;
+pub mod lexer;
+pub mod parser;
+pub mod value;
 use crate::lexer::Lexer;
+use crate::parser::Parser;
 
 fn main() {
-    let program = r"
-        a = 0;
-        if a == 1_000 then
-            5 # this is a comment
-        else
-            10 # also a comment";
+    let program = "(7+ 4) *
+    5 -49 ; 6*7;";
     println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {
@@ -16,7 +15,13 @@ fn main() {
             for token in &result.tokens {
                 println!("{}", token);
             }
-            result.show_loc(&result.tokens[11].loc());
+            let mut parser = Parser::new(result);
+            match parser.parse_comp_stmt() {
+                Ok(_) => {}
+                Err(err) => {
+                    println!("{:?}", err);
+                }
+            }
         }
     };
 }
