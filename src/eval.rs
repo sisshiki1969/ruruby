@@ -1,4 +1,4 @@
-use crate::parser::{BinOp, Node, NodeKind};
+use crate::node::{BinOp, Node, NodeKind};
 use crate::value::Value;
 
 /// Evaluate AST.

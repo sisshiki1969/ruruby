@@ -110,8 +110,12 @@ pub struct Annot<T> {
 }
 
 impl<T> Annot<T> {
-    fn new(kind: T, loc: Loc) -> Self {
+    pub fn new(kind: T, loc: Loc) -> Self {
         Annot { kind, loc }
+    }
+
+    pub fn loc(&self) -> Loc {
+        self.loc
     }
 }
 
@@ -130,12 +134,6 @@ impl Loc {
 }
 
 pub type Token = Annot<TokenKind>;
-
-impl Token {
-    pub fn loc(&self) -> Loc {
-        self.loc
-    }
-}
 
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
