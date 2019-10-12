@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Lexer {
-    code: Vec<char>,
     len: usize,
     line_top_pos: usize,
     token_start_pos: usize,
@@ -10,14 +9,45 @@ pub struct Lexer {
     line: usize,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
+    source_info: SourceInfo,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SourceInfo {
+    code: Vec<char>,
     line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
+}
+
+impl SourceInfo {
+    fn new(code: Vec<char>) -> Self {
+        SourceInfo {
+            code,
+            line_pos: vec![],
+        }
+    }
+
+    /// Show the location of the Loc in the source code using '^^^'.
+    pub fn show_loc(&self, loc: &Loc) {
+        for line in &self.line_pos {
+            if line.2 < loc.0 || line.1 > loc.1 {
+                continue;
+            }
+            println!(
+                "{}",
+                self.code[(line.1)..(line.2)].iter().collect::<String>()
+            );
+            use std::cmp::*;
+            let read = if loc.0 < line.1 { 0 } else { loc.0 - line.1 };
+            let length = min(loc.1, line.2) + 1 - max(loc.0, line.1);
+            println!("{}{}", " ".repeat(read), "^".repeat(length));
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct LexerResult {
-    pub code: Vec<char>,
     pub tokens: Vec<Token>,
-    pub line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
+    pub source_info: SourceInfo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,21 +105,25 @@ pub enum Punct {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
-    pub value: T,
+    pub kind: T,
     loc: Loc,
 }
 
 impl<T> Annot<T> {
-    fn new(value: T, loc: Loc) -> Self {
-        Annot { value, loc }
+    fn new(kind: T, loc: Loc) -> Self {
+        Annot { kind, loc }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Loc(usize, usize);
+pub struct Loc(pub usize, pub usize);
 
 impl Loc {
-    pub fn merge(&self, loc: Loc) -> Loc {
+    pub fn new(start: usize, end: usize) -> Self {
+        Loc(start, end)
+    }
+
+    pub fn merge(&self, loc: Loc) -> Self {
         use std::cmp::*;
         Loc(min(self.0, loc.0), max(self.1, loc.1))
     }
@@ -100,6 +134,29 @@ pub type Token = Annot<TokenKind>;
 impl Token {
     pub fn loc(&self) -> Loc {
         self.loc
+    }
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            TokenKind::EOF => write!(f, "Token![{:?}, {}],", self.kind, self.loc.0),
+            TokenKind::Punct(punct) => write!(
+                f,
+                "Token![Punct(Punct::{:?}), {}, {}],",
+                punct, self.loc.0, self.loc.1
+            ),
+            TokenKind::Reserved(reserved) => write!(
+                f,
+                "Token![Reserved(Reserved::{:?}), {}, {}],",
+                reserved, self.loc.0, self.loc.1
+            ),
+            _ => write!(
+                f,
+                "Token![{:?}, {}, {}],",
+                self.kind, self.loc.0, self.loc.1
+            ),
+        }
     }
 }
 
@@ -128,35 +185,26 @@ impl Token {
     fn new_line_term(loc: Loc) -> Self {
         Annot::new(TokenKind::LineTerm, loc)
     }
-    fn new_eof() -> Self {
-        Annot::new(TokenKind::EOF, Loc(0, 0))
+    fn new_eof(pos: usize) -> Self {
+        Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 }
 
 impl Token {
     pub fn is_line_term(&self) -> bool {
-        self.value == TokenKind::LineTerm
+        self.kind == TokenKind::LineTerm
     }
 
     pub fn is_eof(&self) -> bool {
-        self.value == TokenKind::EOF
+        self.kind == TokenKind::EOF
     }
 
+    /// Examine the token, and return true if it is a line terminator or ';' or EOF.
     pub fn is_term(&self) -> bool {
-        match self.value {
+        match self.kind {
             TokenKind::LineTerm | TokenKind::EOF | TokenKind::Punct(Punct::Semi) => true,
             _ => false,
         }
-    }
-}
-
-impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Token![{:?}, {}, {}],",
-            self.value, self.loc.0, self.loc.1
-        )
     }
 }
 
@@ -195,7 +243,6 @@ impl Lexer {
             "true" => Reserved::True
         };
         Lexer {
-            code,
             len,
             line_top_pos: 0,
             token_start_pos: 0,
@@ -203,7 +250,7 @@ impl Lexer {
             line: 1,
             reserved,
             reserved_rev,
-            line_pos: vec![],
+            source_info: SourceInfo::new(code),
         }
     }
 
@@ -211,7 +258,7 @@ impl Lexer {
         let mut tokens: Vec<Token> = vec![];
         loop {
             if let Some(tok) = self.skip_whitespace() {
-                if tok.value == TokenKind::LineTerm {
+                if tok.kind == TokenKind::LineTerm {
                     tokens.push(tok);
                 }
             };
@@ -269,11 +316,11 @@ impl Lexer {
             } else {
                 return Err(Error::UnexpectedChar);
             };
-            if token.value != TokenKind::Nop {
+            if token.kind != TokenKind::Nop {
                 tokens.push(token);
             }
         }
-        tokens.push(self.new_eof());
+        tokens.push(self.new_eof(self.source_info.code.len()));
         Ok(LexerResult::new(tokens, self))
     }
 
@@ -319,12 +366,16 @@ impl Lexer {
     /// Returns Ok(char) or an error if the cursor reached EOF.
     fn get(&mut self) -> Result<char, Error> {
         if self.pos >= self.len {
-            self.line_pos.push((self.line, self.line_top_pos, self.len));
+            self.source_info
+                .line_pos
+                .push((self.line, self.line_top_pos, self.len));
             Err(Error::EOF)
         } else {
-            let ch = self.code[self.pos];
+            let ch = self.source_info.code[self.pos];
             if ch == '\n' {
-                self.line_pos.push((self.line, self.line_top_pos, self.pos));
+                self.source_info
+                    .line_pos
+                    .push((self.line, self.line_top_pos, self.pos));
                 self.line += 1;
                 self.line_top_pos = self.pos + 1;
             }
@@ -339,7 +390,7 @@ impl Lexer {
         if self.pos >= self.len {
             Err(Error::EOF)
         } else {
-            Ok(self.code[self.pos])
+            Ok(self.source_info.code[self.pos])
         }
     }
 
@@ -410,32 +461,17 @@ impl Lexer {
     fn new_nop(&self) -> Token {
         Annot::new(TokenKind::Nop, Loc(0, 0))
     }
-    fn new_eof(&self) -> Token {
-        Annot::new(TokenKind::EOF, Loc(0, 0))
+    fn new_eof(&self, pos: usize) -> Token {
+        Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 }
 
 impl LexerResult {
     fn new(tokens: Vec<Token>, lexer: Lexer) -> Self {
         LexerResult {
-            code: lexer.code,
             tokens,
-            line_pos: lexer.line_pos,
+            source_info: lexer.source_info,
         }
-    }
-
-    /// Show the location of the Loc in the source code using '^^^'.
-    pub fn show_loc(&self, loc: &Loc) {
-        let line = self.line_pos.iter().find(|x| x.2 >= loc.0).unwrap();
-        println!(
-            "{}",
-            self.code[(line.1)..(line.2)].iter().collect::<String>()
-        );
-        println!(
-            "{}{}",
-            " ".repeat(loc.0 - line.1),
-            "^".repeat(loc.1 - loc.0 + 1)
-        );
     }
 }
 
@@ -492,8 +528,8 @@ mod test {
         (LineTerm, $loc_0:expr, $loc_1:expr) => {
             Token::new_line_term(Loc($loc_0, $loc_1))
         };
-        (EOF, $loc_0:expr, $loc_1:expr) => {
-            Token::new_eof()
+        (EOF, $pos:expr) => {
+            Token::new_eof($pos)
         };
     );
 
@@ -504,6 +540,7 @@ mod test {
             Token![Ident("a"), 0, 0],
             Token![Punct(Punct::Assign), 2, 2],
             Token![NumLit(1), 4, 4],
+            Token![LineTerm, 6, 5],
             Token![Reserved(Reserved::If), 7, 8],
             Token![Ident("a"), 10, 10],
             Token![Punct(Punct::Equal), 11, 12],
@@ -512,7 +549,7 @@ mod test {
             Token![NumLit(5), 20, 20],
             Token![Reserved(Reserved::Else), 22, 25],
             Token![NumLit(8), 27, 27],
-            Token![EOF, 0, 0],
+            Token![EOF, 28],
         ];
         assert_tokens(program, ans);
     }
@@ -526,19 +563,23 @@ mod test {
         else
             10 # also a comment";
         let ans = vec![
+            Token![LineTerm, 1, 0],
             Token![Ident("a"), 9, 9],
             Token![Punct(Punct::Assign), 11, 11],
             Token![NumLit(0), 13, 13],
             Token![Punct(Punct::Semi), 14, 14],
+            Token![LineTerm, 16, 15],
             Token![Reserved(Reserved::If), 24, 25],
             Token![Ident("a"), 27, 27],
             Token![Punct(Punct::Equal), 29, 30],
             Token![NumLit(1000), 32, 36],
             Token![Reserved(Reserved::Then), 38, 41],
+            Token![LineTerm, 43, 42],
             Token![NumLit(5), 55, 55],
             Token![Reserved(Reserved::Else), 85, 88],
+            Token![LineTerm, 90, 89],
             Token![NumLit(10), 102, 103],
-            Token![EOF, 0, 0],
+            Token![EOF, 121],
         ];
         assert_tokens(program, ans);
     }
