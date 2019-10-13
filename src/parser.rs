@@ -1,18 +1,25 @@
 use crate::lexer::*;
 use crate::node::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
     tokens: Vec<Token>,
     cursor: usize,
     pub source_info: SourceInfo,
+    pub ident_table: IdentifierTable,
+    ident_id: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParseError {
+pub enum ParseErrorKind {
     UnexpectedToken,
     EOF,
 }
+
+pub type ParseError = Annot<ParseErrorKind>;
+
+pub type IdentifierTable = HashMap<String, usize>;
 
 impl Parser {
     pub fn new(result: LexerResult) -> Self {
@@ -20,6 +27,8 @@ impl Parser {
             tokens: result.tokens,
             cursor: 0,
             source_info: result.source_info,
+            ident_table: HashMap::new(),
+            ident_id: 0,
         }
     }
 
@@ -121,14 +130,25 @@ impl Parser {
         }
     }
 
-    fn error_unexpected(&self, tok: &Token) -> ParseError {
-        self.source_info.show_loc(&tok.loc());
-        ParseError::UnexpectedToken
+    fn error_unexpected<T>(&self, annot: &Annot<T>) -> ParseError {
+        self.source_info.show_loc(&annot.loc());
+        ParseError::new(ParseErrorKind::UnexpectedToken, annot.loc())
     }
 
-    pub fn parse_comp_stmt(&mut self) -> Result<Node, ParseError> {
+    fn error_eof<T>(&self, annot: &Annot<T>) -> ParseError {
+        self.source_info.show_loc(&annot.loc());
+        ParseError::new(ParseErrorKind::EOF, annot.loc())
+    }
+}
+
+impl Parser {
+    pub fn parse_program(&mut self) -> Result<Node, ParseError> {
+        self.parse_comp_stmt()
+    }
+
+    fn parse_comp_stmt(&mut self) -> Result<Node, ParseError> {
         let mut nodes = vec![];
-        let mut loc = self.peek().loc();
+        let loc = self.peek().loc();
         loop {
             let tok = self.peek();
             match tok.kind {
@@ -140,7 +160,7 @@ impl Parser {
                 _ => {}
             };
             let node = self.parse_expr()?;
-            loc = loc.merge(node.loc());
+            loc.merge(node.loc());
             nodes.push(node);
             if !self.get_if_term() {
                 break;
@@ -150,16 +170,29 @@ impl Parser {
         Ok(Node::new(NodeKind::CompStmt(nodes), loc))
     }
 
-    pub fn parse_expr(&mut self) -> Result<Node, ParseError> {
-        self.parse_arg_comp()
+    fn parse_expr(&mut self) -> Result<Node, ParseError> {
+        self.parse_arg()
+    }
+
+    fn parse_arg(&mut self) -> Result<Node, ParseError> {
+        self.parse_arg_assign()
+    }
+
+    fn parse_arg_assign(&mut self) -> Result<Node, ParseError> {
+        let lhs = self.parse_arg_comp()?;
+        if self.get_if_punct(Punct::Assign) {
+            let rhs = self.parse_arg()?;
+            Ok(Node::new_assign(lhs, rhs))
+        } else {
+            Ok(lhs)
+        }
     }
 
     fn parse_arg_comp(&mut self) -> Result<Node, ParseError> {
         let lhs = self.parse_arg_add()?;
         if self.get_if_punct(Punct::Equal) {
             let rhs = self.parse_arg_comp()?;
-            let loc = lhs.loc().merge(rhs.loc());
-            Ok(Node::new_binop(BinOp::Eq, lhs, rhs, loc))
+            Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
         } else {
             Ok(lhs)
         }
@@ -169,12 +202,10 @@ impl Parser {
         let lhs = self.parse_arg_mul()?;
         if self.get_if_punct(Punct::Plus) {
             let rhs = self.parse_arg_add()?;
-            let loc = (lhs.loc()).merge(rhs.loc());
-            Ok(Node::new_binop(BinOp::Add, lhs, rhs, loc))
+            Ok(Node::new_binop(BinOp::Add, lhs, rhs))
         } else if self.get_if_punct(Punct::Minus) {
             let rhs = self.parse_arg_add()?;
-            let loc = lhs.loc().merge(rhs.loc());
-            Ok(Node::new_binop(BinOp::Sub, lhs, rhs, loc))
+            Ok(Node::new_binop(BinOp::Sub, lhs, rhs))
         } else {
             Ok(lhs)
         }
@@ -184,24 +215,38 @@ impl Parser {
         let lhs = self.parse_primary()?;
         if self.get_if_punct(Punct::Mul) {
             let rhs = self.parse_arg_mul()?;
-            let loc = lhs.loc().merge(rhs.loc());
-            Ok(Node::new_binop(BinOp::Mul, lhs, rhs, loc))
+            Ok(Node::new_binop(BinOp::Mul, lhs, rhs))
         } else {
             Ok(lhs)
+        }
+    }
+
+    fn get_local_var_id(&mut self, name: &String) -> usize {
+        match self.ident_table.get(name) {
+            Some(id) => *id,
+            None => {
+                let id = self.ident_id;
+                self.ident_table.insert(name.clone(), id);
+                self.ident_id += 1;
+                id
+            }
         }
     }
 
     fn parse_primary(&mut self) -> Result<Node, ParseError> {
         let tok = self.get().clone();
         match &tok.kind {
+            TokenKind::Ident(name) => {
+                let id = self.get_local_var_id(name);
+                Ok(Node::new_local_var(id, tok.loc()))
+            }
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, tok.loc())),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_expr()?;
-                let tok = self.get();
-                if tok.kind == TokenKind::Punct(Punct::RParen) {
+                if self.get_if_punct(Punct::RParen) {
                     Ok(node)
                 } else {
-                    Err(ParseError::UnexpectedToken)
+                    Err(self.error_unexpected(&tok))
                 }
             }
             TokenKind::Reserved(Reserved::If) => {
@@ -210,7 +255,7 @@ impl Parser {
                 node
             }
             TokenKind::EOF => {
-                return Err(ParseError::EOF);
+                return Err(self.error_eof(&tok));
             }
             _ => unimplemented!("{:?}", tok.kind),
         }
@@ -218,20 +263,17 @@ impl Parser {
 
     fn parse_if_then(&mut self) -> Result<Node, ParseError> {
         let cond = self.parse_expr()?;
-        let mut loc = cond.loc();
         println!("if cond {}", cond);
         self.parse_then()?;
         let then_ = self.parse_comp_stmt()?;
-        loc = loc.merge(then_.loc());
         println!("if then {}", then_);
-        let mut else_ = Node::new_comp_stmt();
+        let mut else_ = Node::new_comp_stmt(self.peek_no_skip_line_term().loc());
         if self.get_if_reserved(Reserved::Elsif) {
             else_ = self.parse_if_then()?;
-            loc = loc.merge(else_.loc());
         } else if self.get_if_reserved(Reserved::Else) {
             else_ = self.parse_comp_stmt()?;
-            loc = loc.merge(else_.loc());
         }
+        let loc = cond.loc().merge(else_.loc());
         Ok(Node::new(
             NodeKind::If(Box::new(cond), Box::new(then_), Box::new(else_)),
             loc,
@@ -250,7 +292,7 @@ impl Parser {
 #[cfg(test)]
 #[allow(unused_imports, dead_code)]
 mod test {
-    use crate::eval::eval_node;
+    use crate::eval::Evaluator;
     use crate::lexer::Lexer;
     use crate::parser::Parser;
     use crate::value::Value;
@@ -260,7 +302,8 @@ mod test {
         let result = lexer.tokenize().unwrap();
         let mut parser = Parser::new(result);
         let node = parser.parse_comp_stmt().unwrap();
-        let res = eval_node(&node);
+        let mut eval = Evaluator::new(parser.source_info, parser.ident_table);
+        let res = eval.eval_node(&node);
         if res != expected {
             panic!("Expected:{:?} Got:{:?}", expected, res);
         }
@@ -289,6 +332,16 @@ mod test {
         7 elsif 4==4+9 then 8 elsif 3==1+2 then 10
         else 12 end";
         let expected = Value::FixNum(10);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn local_var1() {
+        let program = "
+            ruby = 7
+            mruby = (ruby - 4) * 5
+            mruby - ruby";
+        let expected = Value::FixNum(8);
         eval_script(program, expected);
     }
 }

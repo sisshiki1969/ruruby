@@ -3,14 +3,12 @@ pub mod lexer;
 pub mod node;
 pub mod parser;
 pub mod value;
-use crate::eval::eval_node;
+use crate::eval::Evaluator;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
 fn main() {
-    let program = "if 5*9==16 +4
-        7 elsif 4==4+9 then 8 elsif 3==1+2 then 10
-        else 12 end";
+    let program = "amber = 42; amber = amber * 5; amber";
     println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {
@@ -20,10 +18,12 @@ fn main() {
                 println!("{}", token);
             }
             let mut parser = Parser::new(result);
-            match parser.parse_comp_stmt() {
+            match parser.parse_program() {
                 Ok(node) => {
-                    println!("{:?}", eval_node(&node));
-                    parser.source_info.show_loc(&node.loc());
+                    println!("node: {:?}", node);
+                    let mut eval = Evaluator::new(parser.source_info, parser.ident_table);
+                    println!("result: {:?}", eval.eval_node(&node));
+                    //eval.source_info.show_loc(&node.loc());
                 }
                 Err(err) => {
                     println!("{:?}", err);

@@ -123,8 +123,8 @@ impl<T> Annot<T> {
 pub struct Loc(pub usize, pub usize);
 
 impl Loc {
-    pub fn new(start: usize, end: usize) -> Self {
-        Loc(start, end)
+    pub fn new(loc: Loc) -> Self {
+        loc
     }
 
     pub fn merge(&self, loc: Loc) -> Self {

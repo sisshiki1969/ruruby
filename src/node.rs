@@ -14,13 +14,23 @@ impl Node {
         Node::new(NodeKind::Number(num), loc)
     }
 
-    pub fn new_comp_stmt() -> Self {
-        Node::new(NodeKind::CompStmt(vec![]), Loc(0, 0))
+    pub fn new_comp_stmt(loc: Loc) -> Self {
+        Node::new(NodeKind::CompStmt(vec![]), loc)
     }
 
-    pub fn new_binop(op: BinOp, lhs: Node, rhs: Node, loc: Loc) -> Self {
+    pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
+        let loc = (lhs.loc()).merge(rhs.loc());
         let kind = NodeKind::BinOp(op, Box::new(lhs), Box::new(rhs));
         Node::new(kind, loc)
+    }
+
+    pub fn new_local_var(id: usize, loc: Loc) -> Self {
+        Node::new(NodeKind::LocalVar(id), loc)
+    }
+
+    pub fn new_assign(lhs: Node, rhs: Node) -> Self {
+        let loc = Loc::new(lhs.loc()).merge(rhs.loc());
+        Node::new(NodeKind::Assign(Box::new(lhs), Box::new(rhs)), loc)
     }
 }
 
@@ -41,6 +51,7 @@ pub enum NodeKind {
     Assign(Box<Node>, Box<Node>),
     CompStmt(Vec<Node>),
     If(Box<Node>, Box<Node>, Box<Node>),
+    LocalVar(usize),
 }
 
 #[derive(Debug, Clone, PartialEq)]
