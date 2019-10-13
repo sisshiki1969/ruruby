@@ -95,6 +95,8 @@ pub enum Punct {
     LParen,
     RParen,
     Semi,
+    Colon,
+    Comma,
 
     Plus,
     Minus,
@@ -106,7 +108,7 @@ pub enum Punct {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
     pub kind: T,
-    loc: Loc,
+    pub loc: Loc,
 }
 
 impl<T> Annot<T> {
@@ -295,6 +297,8 @@ impl Lexer {
                         self.new_nop()
                     }
                     ';' => self.new_punct(Punct::Semi),
+                    ':' => self.new_punct(Punct::Colon),
+                    ',' => self.new_punct(Punct::Comma),
                     '+' => self.new_punct(Punct::Plus),
                     '-' => self.new_punct(Punct::Minus),
                     '*' => self.new_punct(Punct::Mul),
@@ -427,7 +431,8 @@ impl Lexer {
     }
 
     fn cur_loc(&self) -> Loc {
-        Loc(self.token_start_pos, self.pos - 1)
+        let end = std::cmp::max(self.token_start_pos, self.pos - 1);
+        Loc(self.token_start_pos, end)
     }
 }
 
@@ -538,7 +543,7 @@ mod test {
             Token![Ident("a"), 0, 0],
             Token![Punct(Punct::Assign), 2, 2],
             Token![NumLit(1), 4, 4],
-            Token![LineTerm, 6, 5],
+            Token![LineTerm, 6, 6],
             Token![Reserved(Reserved::If), 7, 8],
             Token![Ident("a"), 10, 10],
             Token![Punct(Punct::Equal), 11, 12],
@@ -561,21 +566,21 @@ mod test {
         else
             10 # also a comment";
         let ans = vec![
-            Token![LineTerm, 1, 0],
+            Token![LineTerm, 1, 1],
             Token![Ident("a"), 9, 9],
             Token![Punct(Punct::Assign), 11, 11],
             Token![NumLit(0), 13, 13],
             Token![Punct(Punct::Semi), 14, 14],
-            Token![LineTerm, 16, 15],
+            Token![LineTerm, 16, 16],
             Token![Reserved(Reserved::If), 24, 25],
             Token![Ident("a"), 27, 27],
             Token![Punct(Punct::Equal), 29, 30],
             Token![NumLit(1000), 32, 36],
             Token![Reserved(Reserved::Then), 38, 41],
-            Token![LineTerm, 43, 42],
+            Token![LineTerm, 43, 43],
             Token![NumLit(5), 55, 55],
             Token![Reserved(Reserved::Else), 85, 88],
-            Token![LineTerm, 90, 89],
+            Token![LineTerm, 90, 90],
             Token![NumLit(10), 102, 103],
             Token![EOF, 121],
         ];
