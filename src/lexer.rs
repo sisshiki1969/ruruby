@@ -1,3 +1,5 @@
+use crate::token::*;
+use crate::util::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -12,38 +14,6 @@ pub struct Lexer {
     source_info: SourceInfo,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SourceInfo {
-    code: Vec<char>,
-    line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
-}
-
-impl SourceInfo {
-    fn new(code: Vec<char>) -> Self {
-        SourceInfo {
-            code,
-            line_pos: vec![],
-        }
-    }
-
-    /// Show the location of the Loc in the source code using '^^^'.
-    pub fn show_loc(&self, loc: &Loc) {
-        for line in &self.line_pos {
-            if line.2 < loc.0 || line.1 > loc.1 {
-                continue;
-            }
-            println!(
-                "{}",
-                self.code[(line.1)..(line.2)].iter().collect::<String>()
-            );
-            use std::cmp::*;
-            let read = if loc.0 < line.1 { 0 } else { loc.0 - line.1 };
-            let length = min(loc.1, line.2) + 1 - max(loc.0, line.1);
-            println!("{}{}", " ".repeat(read), "^".repeat(length));
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct LexerResult {
     pub tokens: Vec<Token>,
@@ -54,158 +24,6 @@ pub struct LexerResult {
 pub enum Error {
     EOF,
     UnexpectedChar,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Reserved {
-    BEGIN,
-    END,
-    Alias,
-    Begin,
-    Break,
-    Case,
-    Class,
-    Def,
-    Defined,
-    Do,
-    Else,
-    Elsif,
-    End,
-    False,
-    If,
-    Return,
-    Then,
-    True,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TokenKind {
-    Nop,
-    EOF,
-    Ident(String),
-    NumLit(i64),
-    Reserved(Reserved),
-    Punct(Punct),
-    Space,
-    LineTerm,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Punct {
-    LParen,
-    RParen,
-    Semi,
-    Colon,
-    Comma,
-
-    Plus,
-    Minus,
-    Mul,
-    Assign,
-    Equal,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Annot<T> {
-    pub kind: T,
-    pub loc: Loc,
-}
-
-impl<T> Annot<T> {
-    pub fn new(kind: T, loc: Loc) -> Self {
-        Annot { kind, loc }
-    }
-
-    pub fn loc(&self) -> Loc {
-        self.loc
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Loc(pub usize, pub usize);
-
-impl Loc {
-    pub fn new(loc: Loc) -> Self {
-        loc
-    }
-
-    pub fn merge(&self, loc: Loc) -> Self {
-        use std::cmp::*;
-        Loc(min(self.0, loc.0), max(self.1, loc.1))
-    }
-}
-
-pub type Token = Annot<TokenKind>;
-
-impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            TokenKind::EOF => write!(f, "Token![{:?}, {}],", self.kind, self.loc.0),
-            TokenKind::Punct(punct) => write!(
-                f,
-                "Token![Punct(Punct::{:?}), {}, {}],",
-                punct, self.loc.0, self.loc.1
-            ),
-            TokenKind::Reserved(reserved) => write!(
-                f,
-                "Token![Reserved(Reserved::{:?}), {}, {}],",
-                reserved, self.loc.0, self.loc.1
-            ),
-            _ => write!(
-                f,
-                "Token![{:?}, {}, {}],",
-                self.kind, self.loc.0, self.loc.1
-            ),
-        }
-    }
-}
-
-#[allow(unused)]
-impl Token {
-    fn new_ident(ident: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::Ident(ident.into()), loc)
-    }
-
-    fn new_reserved(ident: Reserved, loc: Loc) -> Self {
-        Annot::new(TokenKind::Reserved(ident), loc)
-    }
-
-    fn new_numlit(num: i64, loc: Loc) -> Self {
-        Annot::new(TokenKind::NumLit(num), loc)
-    }
-
-    fn new_punct(punct: Punct, loc: Loc) -> Self {
-        Annot::new(TokenKind::Punct(punct), loc)
-    }
-
-    fn new_space(loc: Loc) -> Self {
-        Annot::new(TokenKind::Space, loc)
-    }
-
-    fn new_line_term(loc: Loc) -> Self {
-        Annot::new(TokenKind::LineTerm, loc)
-    }
-    fn new_eof(pos: usize) -> Self {
-        Annot::new(TokenKind::EOF, Loc(pos, pos))
-    }
-}
-
-impl Token {
-    pub fn is_line_term(&self) -> bool {
-        self.kind == TokenKind::LineTerm
-    }
-
-    pub fn is_eof(&self) -> bool {
-        self.kind == TokenKind::EOF
-    }
-
-    /// Examine the token, and return true if it is a line terminator or ';' or EOF.
-    pub fn is_term(&self) -> bool {
-        match self.kind {
-            TokenKind::LineTerm | TokenKind::EOF | TokenKind::Punct(Punct::Semi) => true,
-            _ => false,
-        }
-    }
 }
 
 impl Lexer {
@@ -270,6 +88,7 @@ impl Lexer {
 
             let token = if ch.is_ascii_alphabetic() || ch == '_' {
                 // read identifier or reserved keyword
+                let is_const = ch.is_ascii_uppercase();
                 let mut tok = ch.to_string();
                 loop {
                     let ch = match self.peek() {
@@ -286,7 +105,13 @@ impl Lexer {
                 }
                 match self.reserved.get(&tok) {
                     Some(reserved) => self.new_reserved(*reserved),
-                    None => self.new_ident(tok),
+                    None => {
+                        if is_const {
+                            self.new_const(tok)
+                        } else {
+                            self.new_ident(tok)
+                        }
+                    }
                 }
             } else if ch.is_numeric() {
                 self.lex_number_literal(ch)?
@@ -347,20 +172,6 @@ impl Lexer {
         let i = tok.parse::<i64>().unwrap();
         Ok(self.new_numlit(i))
     }
-    /*
-    pub fn show_loc(&self, loc: &Loc) {
-        let line = self.line_pos.iter().find(|x| x.2 >= loc.0).unwrap();
-        println!(
-            "{}",
-            self.code[(line.1)..(line.2)].iter().collect::<String>()
-        );
-        println!(
-            "{}{}",
-            " ".repeat(loc.0 - line.1),
-            "^".repeat(loc.1 - loc.0 + 1)
-        );
-    }
-    */
 }
 
 impl Lexer {
@@ -439,6 +250,10 @@ impl Lexer {
 impl Lexer {
     fn new_ident(&self, ident: impl Into<String>) -> Token {
         Annot::new(TokenKind::Ident(ident.into()), self.cur_loc())
+    }
+
+    fn new_const(&self, ident: impl Into<String>) -> Token {
+        Annot::new(TokenKind::Const(ident.into()), self.cur_loc())
     }
 
     fn new_reserved(&self, ident: Reserved) -> Token {

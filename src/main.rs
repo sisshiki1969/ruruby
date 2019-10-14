@@ -2,6 +2,8 @@ pub mod eval;
 pub mod lexer;
 pub mod node;
 pub mod parser;
+pub mod token;
+pub mod util;
 pub mod value;
 use crate::eval::Evaluator;
 use crate::lexer::Lexer;
@@ -9,16 +11,21 @@ use crate::parser::Parser;
 
 fn main() {
     let program = "
-    def fact(a)
-        puts(a)
-        if a == 1
-            1
-        else
-            a * fact(a-1)
+    def self1
+        puts(self)
+    end
+
+    self1()
+
+    class Foo
+        puts(self)
+        class Bar
+            puts(self)
         end
     end
     
-    puts(fact(5))";
+    self1()
+    ";
     println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {

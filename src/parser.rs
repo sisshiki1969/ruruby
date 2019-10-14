@@ -1,6 +1,7 @@
 use crate::lexer::*;
 use crate::node::*;
-use std::collections::HashMap;
+use crate::token::*;
+use crate::util::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
@@ -17,33 +18,6 @@ pub enum ParseErrorKind {
 }
 
 pub type ParseError = Annot<ParseErrorKind>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct IdentifierTable {
-    table: HashMap<String, usize>,
-    ident_id: usize,
-}
-
-impl IdentifierTable {
-    pub fn new() -> Self {
-        IdentifierTable {
-            table: HashMap::new(),
-            ident_id: 0,
-        }
-    }
-
-    pub fn get_ident_id(&mut self, name: &String) -> usize {
-        match self.table.get(name) {
-            Some(id) => *id,
-            None => {
-                let id = self.ident_id;
-                self.table.insert(name.clone(), id);
-                self.ident_id += 1;
-                id
-            }
-        }
-    }
-}
 
 impl Parser {
     pub fn new(result: LexerResult) -> Self {
@@ -288,6 +262,9 @@ impl Parser {
             TokenKind::Ident(name) => {
                 let id = self.ident_table.get_ident_id(name);
                 if !self.get_if_punct(Punct::LParen) {
+                    if name == "self" {
+                        return Ok(Node::new(NodeKind::SelfValue, loc));
+                    };
                     return Ok(Node::new_local_var(id, loc));
                 }
                 let mut args = vec![];
@@ -307,6 +284,10 @@ impl Parser {
                     Err(self.error_unexpected(self.loc()))
                 }
             }
+            TokenKind::Const(name) => {
+                let id = self.ident_table.get_ident_id(name);
+                Ok(Node::new_const(id, loc))
+            }
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
@@ -323,6 +304,10 @@ impl Parser {
             }
             TokenKind::Reserved(Reserved::Def) => {
                 let node = self.parse_def()?;
+                Ok(node)
+            }
+            TokenKind::Reserved(Reserved::Class) => {
+                let node = self.parse_class()?;
                 Ok(node)
             }
             TokenKind::EOF => {
@@ -375,17 +360,15 @@ impl Parser {
             _ => return Err(self.error_unexpected(loc)),
         };
         let id = self.ident_table.get_ident_id(&name);
-
         let args = self.parse_params()?;
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
-
         Ok(Node::new_method_decl(id, args, body))
     }
 
     fn parse_params(&mut self) -> Result<Vec<Node>, ParseError> {
         if !self.get_if_punct(Punct::LParen) {
-            return Err(self.error_unexpected(self.peek().1));
+            return Ok(vec![]);
         }
         let mut args = vec![];
         if self.get_if_punct(Punct::RParen) {
@@ -410,6 +393,23 @@ impl Parser {
         } else {
             Err(self.error_unexpected(self.peek().1))
         }
+    }
+
+    fn parse_class(&mut self) -> Result<Node, ParseError> {
+        //  class identifier [`<' identifier]
+        //      COMPSTMT
+        //  end
+        let loc = self.loc();
+        let name = match &self.get().kind {
+            TokenKind::Const(s) => s.clone(),
+            _ => return Err(self.error_unexpected(loc)),
+        };
+        let id = self.ident_table.get_ident_id(&name);
+
+        let body = self.parse_comp_stmt()?;
+        self.expect_reserved(Reserved::End)?;
+
+        Ok(Node::new_class_decl(id, body))
     }
 }
 
@@ -499,6 +499,41 @@ mod test {
     
             func(1,2,3)";
         let expected = Value::FixNum(6);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn func2() {
+        let program = "
+            def fact(a)
+                puts(a)
+                if a == 1
+                    1
+                else
+                    a * fact(a-1)
+                end
+            end
+    
+            fact(5)";
+        let expected = Value::FixNum(120);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn func3() {
+        let program = "
+            def fibo(x)
+                if x == 1
+                    1
+                elsif x == 2
+                    1
+                else
+                    fibo(x-1) + fibo(x-2)
+                end
+            end
+
+            fibo(20)";
+        let expected = Value::FixNum(6765);
         eval_script(program, expected);
     }
 }
