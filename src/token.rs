@@ -71,8 +71,17 @@ pub enum Punct {
     Plus,
     Minus,
     Mul,
+    And,
+    Or,
     Assign,
-    Equal,
+    Eq,
+    Ne,
+    Gt,
+    Ge,
+    Lt,
+    Le,
+    LAnd,
+    LOr,
 }
 
 #[allow(unused)]

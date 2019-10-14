@@ -22,6 +22,13 @@ pub enum BinOp {
     Sub,
     Mul,
     Eq,
+    Ne,
+    Gt,
+    Ge,
+    Lt,
+    Le,
+    LAnd,
+    LOr,
 }
 
 /*

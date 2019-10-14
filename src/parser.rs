@@ -188,7 +188,7 @@ impl Parser {
     }
 
     fn parse_arg_assign(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.parse_arg_comp()?;
+        let lhs = self.parse_arg_logical_or()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
@@ -200,14 +200,65 @@ impl Parser {
         }
     }
 
+    fn parse_arg_logical_or(&mut self) -> Result<Node, ParseError> {
+        let lhs = self.parse_arg_logical_and()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        if self.get_if_punct(Punct::LAnd) {
+            let rhs = self.parse_arg_logical_or()?;
+            Ok(Node::new_binop(BinOp::LAnd, lhs, rhs))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn parse_arg_logical_and(&mut self) -> Result<Node, ParseError> {
+        let lhs = self.parse_arg_eq()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        if self.get_if_punct(Punct::LAnd) {
+            let rhs = self.parse_arg_logical_and()?;
+            Ok(Node::new_binop(BinOp::LAnd, lhs, rhs))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn parse_arg_eq(&mut self) -> Result<Node, ParseError> {
+        let lhs = self.parse_arg_comp()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        if self.get_if_punct(Punct::Eq) {
+            let rhs = self.parse_arg_eq()?;
+            Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
+        } else if self.get_if_punct(Punct::Ne) {
+            let rhs = self.parse_arg_eq()?;
+            Ok(Node::new_binop(BinOp::Ne, lhs, rhs))
+        } else {
+            Ok(lhs)
+        }
+    }
+
     fn parse_arg_comp(&mut self) -> Result<Node, ParseError> {
         let lhs = self.parse_arg_add()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::Equal) {
+        if self.get_if_punct(Punct::Ge) {
             let rhs = self.parse_arg_comp()?;
-            Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
+            Ok(Node::new_binop(BinOp::Ge, lhs, rhs))
+        } else if self.get_if_punct(Punct::Gt) {
+            let rhs = self.parse_arg_comp()?;
+            Ok(Node::new_binop(BinOp::Gt, lhs, rhs))
+        } else if self.get_if_punct(Punct::Le) {
+            let rhs = self.parse_arg_comp()?;
+            Ok(Node::new_binop(BinOp::Le, lhs, rhs))
+        } else if self.get_if_punct(Punct::Lt) {
+            let rhs = self.parse_arg_comp()?;
+            Ok(Node::new_binop(BinOp::Lt, lhs, rhs))
         } else {
             Ok(lhs)
         }
@@ -441,6 +492,27 @@ mod test {
     }
 
     #[test]
+    fn op1() {
+        let program = "4==5";
+        let expected = Value::Bool(false);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn op2() {
+        let program = "4!=5";
+        let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn op10() {
+        let program = "4==4 && 4!=5 && 3<4 && 5>4 && 4<=4 && 4>=4";
+        let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+
+    #[test]
     fn if1() {
         let program = "if 5*4==16 +4 then 4;2*3+1 end";
         let expected = Value::FixNum(7);
@@ -523,9 +595,7 @@ mod test {
     fn func3() {
         let program = "
             def fibo(x)
-                if x == 1
-                    1
-                elsif x == 2
+                if x <= 2
                     1
                 else
                     fibo(x-1) + fibo(x-2)

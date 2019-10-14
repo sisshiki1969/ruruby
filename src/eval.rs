@@ -119,6 +119,45 @@ impl Evaluator {
                 }
             },
             NodeKind::BinOp(op, lhs, rhs) => {
+                match op {
+                    BinOp::LAnd => {
+                        let lhs_v = self.eval_node(&lhs);
+                        if let Value::Bool(b) = lhs_v {
+                            if !b {
+                                return Value::Bool(false);
+                            }
+                            let rhs_v = self.eval_node(&rhs);
+                            if let Value::Bool(b) = rhs_v {
+                                return Value::Bool(b);
+                            } else {
+                                self.source_info.show_loc(&rhs.loc());
+                                panic!("Expected bool.");
+                            }
+                        } else {
+                            self.source_info.show_loc(&lhs.loc());
+                            panic!("Expected bool.");
+                        }
+                    }
+                    BinOp::LOr => {
+                        let lhs_v = self.eval_node(&lhs);
+                        if let Value::Bool(b) = lhs_v {
+                            if b {
+                                return Value::Bool(true);
+                            }
+                            let rhs_v = self.eval_node(&rhs);
+                            if let Value::Bool(b) = rhs_v {
+                                return Value::Bool(b);
+                            } else {
+                                self.source_info.show_loc(&rhs.loc());
+                                panic!("Expected bool.");
+                            }
+                        } else {
+                            self.source_info.show_loc(&lhs.loc());
+                            panic!("Expected bool.");
+                        }
+                    }
+                    _ => {}
+                }
                 let lhs = self.eval_node(&lhs);
                 let rhs = self.eval_node(&rhs);
                 match op {
@@ -126,6 +165,12 @@ impl Evaluator {
                     BinOp::Sub => self.eval_sub(lhs, rhs),
                     BinOp::Mul => self.eval_mul(lhs, rhs),
                     BinOp::Eq => self.eval_eq(lhs, rhs),
+                    BinOp::Ne => self.eval_neq(lhs, rhs),
+                    BinOp::Ge => self.eval_ge(lhs, rhs),
+                    BinOp::Gt => self.eval_gt(lhs, rhs),
+                    BinOp::Le => self.eval_ge(rhs, lhs),
+                    BinOp::Lt => self.eval_gt(rhs, lhs),
+                    _ => unimplemented!("{:?}", op),
                 }
             }
             NodeKind::Assign(lhs, rhs) => match lhs.kind {
@@ -217,21 +262,21 @@ impl Evaluator {
     fn eval_add(&mut self, lhs: Value, rhs: Value) -> Value {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::FixNum(lhs + rhs),
-            (_, _) => unimplemented!(),
+            (_, _) => unimplemented!("NoMethodError: '+'"),
         }
     }
 
     fn eval_sub(&mut self, lhs: Value, rhs: Value) -> Value {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::FixNum(lhs - rhs),
-            (_, _) => unimplemented!(),
+            (_, _) => unimplemented!("NoMethodError: '-'"),
         }
     }
 
     fn eval_mul(&mut self, lhs: Value, rhs: Value) -> Value {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::FixNum(lhs * rhs),
-            (_, _) => unimplemented!(),
+            (_, _) => unimplemented!("NoMethodError: '*'"),
         }
     }
 
@@ -239,7 +284,29 @@ impl Evaluator {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::Bool(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Value::Bool(lhs == rhs),
-            (_, _) => unimplemented!(),
+            (_, _) => unimplemented!("NoMethodError: '=='"),
+        }
+    }
+
+    fn eval_neq(&mut self, lhs: Value, rhs: Value) -> Value {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::Bool(lhs != rhs),
+            (Value::Bool(lhs), Value::Bool(rhs)) => Value::Bool(lhs != rhs),
+            (_, _) => unimplemented!("NoMethodError: '!='"),
+        }
+    }
+
+    fn eval_ge(&mut self, lhs: Value, rhs: Value) -> Value {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::Bool(lhs >= rhs),
+            (_, _) => unimplemented!("NoMethodError: '>='"),
+        }
+    }
+
+    fn eval_gt(&mut self, lhs: Value, rhs: Value) -> Value {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::Bool(lhs > rhs),
+            (_, _) => unimplemented!("NoMethodError: '>'"),
         }
     }
 }

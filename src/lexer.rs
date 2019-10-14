@@ -133,9 +133,54 @@ impl Lexer {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::Equal)
+                            self.new_punct(Punct::Eq)
                         } else {
                             self.new_punct(Punct::Assign)
+                        }
+                    }
+                    '>' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::Ge)
+                        } else {
+                            self.new_punct(Punct::Gt)
+                        }
+                    }
+                    '<' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::Le)
+                        } else {
+                            self.new_punct(Punct::Lt)
+                        }
+                    }
+                    '!' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::Ne)
+                        } else {
+                            unimplemented!("{}", ch)
+                        }
+                    }
+                    '&' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '&' {
+                            self.get()?;
+                            self.new_punct(Punct::LAnd)
+                        } else {
+                            self.new_punct(Punct::And)
+                        }
+                    }
+                    '|' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '|' {
+                            self.get()?;
+                            self.new_punct(Punct::LOr)
+                        } else {
+                            self.new_punct(Punct::Or)
                         }
                     }
                     _ => unimplemented!("{}", ch),
@@ -352,6 +397,78 @@ mod test {
     );
 
     #[test]
+    fn cmp1() {
+        let program = "5 > 0";
+        let ans = vec![
+            Token![NumLit(5), 0, 0],
+            Token![Punct(Punct::Gt), 2, 2],
+            Token![NumLit(0), 4, 4],
+            Token![EOF, 5],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn cmp2() {
+        let program = "5 >= 0";
+        let ans = vec![
+            Token![NumLit(5), 0, 0],
+            Token![Punct(Punct::Ge), 2, 3],
+            Token![NumLit(0), 5, 5],
+            Token![EOF, 6],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn cmp3() {
+        let program = "5 == 0";
+        let ans = vec![
+            Token![NumLit(5), 0, 0],
+            Token![Punct(Punct::Eq), 2, 3],
+            Token![NumLit(0), 5, 5],
+            Token![EOF, 6],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn cmp4() {
+        let program = "5 != 0";
+        let ans = vec![
+            Token![NumLit(5), 0, 0],
+            Token![Punct(Punct::Ne), 2, 3],
+            Token![NumLit(0), 5, 5],
+            Token![EOF, 6],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn cmp5() {
+        let program = "5 < 0";
+        let ans = vec![
+            Token![NumLit(5), 0, 0],
+            Token![Punct(Punct::Lt), 2, 2],
+            Token![NumLit(0), 4, 4],
+            Token![EOF, 5],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn cmp6() {
+        let program = "5 <= 0";
+        let ans = vec![
+            Token![NumLit(5), 0, 0],
+            Token![Punct(Punct::Le), 2, 3],
+            Token![NumLit(0), 5, 5],
+            Token![EOF, 6],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
     fn lexer_test1() {
         let program = "a = 1\n if a==5 then 5 else 8";
         let ans = vec![
@@ -361,7 +478,7 @@ mod test {
             Token![LineTerm, 6, 6],
             Token![Reserved(Reserved::If), 7, 8],
             Token![Ident("a"), 10, 10],
-            Token![Punct(Punct::Equal), 11, 12],
+            Token![Punct(Punct::Eq), 11, 12],
             Token![NumLit(5), 13, 13],
             Token![Reserved(Reserved::Then), 15, 18],
             Token![NumLit(5), 20, 20],
@@ -389,7 +506,7 @@ mod test {
             Token![LineTerm, 16, 16],
             Token![Reserved(Reserved::If), 24, 25],
             Token![Ident("a"), 27, 27],
-            Token![Punct(Punct::Equal), 29, 30],
+            Token![Punct(Punct::Eq), 29, 30],
             Token![NumLit(1000), 32, 36],
             Token![Reserved(Reserved::Then), 38, 41],
             Token![LineTerm, 43, 43],
