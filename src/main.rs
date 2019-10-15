@@ -11,25 +11,17 @@ use crate::parser::Parser;
 
 fn main() {
     let program = "
-    def self1
-        puts(self)
-    end
-
-    self1()
-
-    class Foo
-        puts(self)
-        class Bar
-            puts(self)
+        3 def a(x,y)
+            x+y
+            class Foo
+            end
         end
-    end
-    
-    self1()
-    ";
+        a(1,2)
+        ";
     println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {
-        Err(err) => println!("{:?}", err),
+        Err(err) => println!("ParseError: {:?}", err),
         Ok(result) => {
             for token in &result.tokens {
                 println!("{}", token);
@@ -37,15 +29,14 @@ fn main() {
             let mut parser = Parser::new(result);
             match parser.parse_program() {
                 Ok(node) => {
-                    println!("node: {}", node);
+                    println!("{}", node);
                     let mut eval = Evaluator::new(parser.source_info, parser.ident_table);
                     println!("result: {:?}", eval.eval_node(&node));
-                    //eval.source_info.show_loc(&node.loc());
                 }
                 Err(err) => {
-                    println!("{:?}", err);
+                    println!("ParseError: {:?}", err.kind);
                 }
             }
         }
-    };
+    }
 }

@@ -24,6 +24,11 @@ impl Loc {
         loc
     }
 
+    pub fn dec(&self) -> Self {
+        use std::cmp::*;
+        Loc(min(self.0, self.1 - 1), self.1 - 1)
+    }
+
     pub fn merge(&self, loc: Loc) -> Self {
         use std::cmp::*;
         Loc(min(self.0, loc.0), max(self.1, loc.1))

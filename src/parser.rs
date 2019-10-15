@@ -7,14 +7,20 @@ use crate::util::*;
 pub struct Parser {
     tokens: Vec<Token>,
     cursor: usize,
+    context_stack: Vec<Context>,
     pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
 }
 
 #[derive(Debug, Clone, PartialEq)]
+enum Context {
+    Class,
+    Method,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {
-    UnexpectedToken,
-    EOF,
+    SyntaxError,
 }
 
 pub type ParseError = Annot<ParseErrorKind>;
@@ -24,6 +30,7 @@ impl Parser {
         Parser {
             tokens: result.tokens,
             cursor: 0,
+            context_stack: vec![Context::Class],
             source_info: result.source_info,
             ident_table: IdentifierTable::new(),
         }
@@ -129,38 +136,62 @@ impl Parser {
                 if *reserved == expect {
                     Ok(())
                 } else {
-                    Err(self.error_unexpected(loc))
+                    Err(self.error_unexpected(loc, format!("Expect {:?}", expect)))
                 }
             }
-            _ => Err(self.error_unexpected(loc)),
+            _ => Err(self.error_unexpected(loc, format!("Expect {:?}", expect))),
         }
     }
 
-    fn error_unexpected(&self, loc: Loc) -> ParseError {
+    fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseError {
         self.source_info.show_loc(&loc);
-        ParseError::new(ParseErrorKind::UnexpectedToken, loc)
+        println!("Unexpected token. {}", msg.into());
+        ParseError::new(ParseErrorKind::SyntaxError, loc)
     }
 
     fn error_eof(&self, loc: Loc) -> ParseError {
         self.source_info.show_loc(&loc);
-        ParseError::new(ParseErrorKind::EOF, loc)
+        println!("Unexpected EOF.");
+        ParseError::new(ParseErrorKind::SyntaxError, loc)
     }
 }
 
 impl Parser {
     pub fn parse_program(&mut self) -> Result<Node, ParseError> {
-        self.parse_comp_stmt()
+        let node = self.parse_comp_stmt()?;
+        let (tok, loc) = self.peek();
+        if tok.kind == TokenKind::EOF {
+            Ok(node)
+        } else {
+            Err(self.error_unexpected(loc, "Expected end-of-input."))
+        }
     }
 
     fn parse_comp_stmt(&mut self) -> Result<Node, ParseError> {
-        let mut nodes = vec![];
-        let mut loc = self.loc();
+        // STMT (TERM EXPR)* [TERM]
+
+        fn return_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Result<Node, ParseError> {
+            match nodes.last() {
+                Some(node) => loc = loc.merge(node.loc()),
+                None => {}
+            }
+            Ok(Node::new(NodeKind::CompStmt(nodes), loc))
+        }
+
+        let loc = self.loc();
+        let mut nodes = vec![self.parse_stmt()?];
+
+        if !self.get_if_term() {
+            return return_comp_stmt(nodes, loc);
+        }
         loop {
             let (tok, _) = self.peek();
             match tok.kind {
-                TokenKind::EOF => break,
+                TokenKind::EOF => return return_comp_stmt(nodes, loc),
                 TokenKind::Reserved(reserved) => match reserved {
-                    Reserved::Else | Reserved::Elsif | Reserved::End => break,
+                    Reserved::Else | Reserved::Elsif | Reserved::End => {
+                        return return_comp_stmt(nodes, loc);
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -170,13 +201,13 @@ impl Parser {
             if !self.get_if_term() {
                 break;
             }
-            //println!("{:?}", node);
         }
-        match nodes.last() {
-            Some(node) => loc = loc.merge(node.loc()),
-            None => {}
-        }
-        Ok(Node::new(NodeKind::CompStmt(nodes), loc))
+
+        return_comp_stmt(nodes, loc)
+    }
+
+    fn parse_stmt(&mut self) -> Result<Node, ParseError> {
+        self.parse_expr()
     }
 
     fn parse_expr(&mut self) -> Result<Node, ParseError> {
@@ -332,7 +363,7 @@ impl Parser {
                 if self.get_if_punct(Punct::RParen) {
                     Ok(Node::new_send(id, args, loc.merge(end_loc)))
                 } else {
-                    Err(self.error_unexpected(self.loc()))
+                    Err(self.error_unexpected(self.loc(), format!("Expect ')'")))
                 }
             }
             TokenKind::Const(name) => {
@@ -345,7 +376,7 @@ impl Parser {
                 if self.get_if_punct(Punct::RParen) {
                     Ok(node)
                 } else {
-                    Err(self.error_unexpected(self.loc()))
+                    Err(self.error_unexpected(self.loc(), format!("Expect ')'")))
                 }
             }
             TokenKind::Reserved(Reserved::If) => {
@@ -354,17 +385,28 @@ impl Parser {
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Def) => {
+                self.context_stack.push(Context::Method);
                 let node = self.parse_def()?;
+                self.context_stack.pop();
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Class) => {
+                if *self.context_stack.last().unwrap_or_else(|| panic!()) == Context::Method {
+                    return Err(
+                        self.error_unexpected(loc, "SyntaxError: class definition in method body.")
+                    );
+                }
+                self.context_stack.push(Context::Class);
                 let node = self.parse_class()?;
+                self.context_stack.pop();
                 Ok(node)
             }
             TokenKind::EOF => {
                 return Err(self.error_eof(loc));
             }
-            _ => unimplemented!("{:?}", tok.kind),
+            _ => {
+                return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
+            }
         }
     }
 
@@ -408,7 +450,7 @@ impl Parser {
         let loc = self.loc();
         let name = match &self.get().kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(self.error_unexpected(loc)),
+            _ => return Err(self.error_unexpected(loc, format!("Expect identifier."))),
         };
         let id = self.ident_table.get_ident_id(&name);
         let args = self.parse_params()?;
@@ -418,7 +460,7 @@ impl Parser {
     }
 
     fn parse_params(&mut self) -> Result<Vec<Node>, ParseError> {
-        if !self.get_if_punct(Punct::LParen) {
+        if self.is_line_term() || !self.get_if_punct(Punct::LParen) {
             return Ok(vec![]);
         }
         let mut args = vec![];
@@ -431,7 +473,7 @@ impl Parser {
                     kind: TokenKind::Ident(s),
                     loc,
                 } => (s.clone(), loc),
-                Token { loc, .. } => return Err(self.error_unexpected(loc)),
+                Token { loc, .. } => return Err(self.error_unexpected(loc, "Expect identifier.")),
             };
             let id = self.ident_table.get_ident_id(&arg);
             args.push(Node::new(NodeKind::Param(id), loc));
@@ -442,7 +484,7 @@ impl Parser {
         if self.get_if_punct(Punct::RParen) {
             Ok(args)
         } else {
-            Err(self.error_unexpected(self.peek().1))
+            Err(self.error_unexpected(self.peek_no_skip_line_term().loc(), "Expect ')'."))
         }
     }
 
@@ -451,9 +493,9 @@ impl Parser {
         //      COMPSTMT
         //  end
         let loc = self.loc();
-        let name = match &self.get().kind {
+        let name = match &self.get_no_skip_line_term().kind {
             TokenKind::Const(s) => s.clone(),
-            _ => return Err(self.error_unexpected(loc)),
+            _ => return Err(self.error_unexpected(loc.dec(), "Expect class name.")),
         };
         let id = self.ident_table.get_ident_id(&name);
 
