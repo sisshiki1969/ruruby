@@ -121,6 +121,7 @@ impl Lexer {
                         self.goto_eol();
                         self.new_nop()
                     }
+                    '"' => self.lex_string_literal_double()?,
                     ';' => self.new_punct(Punct::Semi),
                     ':' => self.new_punct(Punct::Colon),
                     ',' => self.new_punct(Punct::Comma),
@@ -217,6 +218,35 @@ impl Lexer {
         let i = tok.parse::<i64>().unwrap();
         Ok(self.new_numlit(i))
     }
+
+    /// Read string literal
+    fn lex_string_literal_double(&mut self) -> Result<Token, Error> {
+        let mut s = "".to_string();
+        loop {
+            match self.get()? {
+                '"' => break,
+                '\\' => s.push(self.read_escaped_char()?),
+                c => s.push(c),
+            }
+        }
+        Ok(self.new_stringlit(s))
+    }
+
+    fn read_escaped_char(&mut self) -> Result<char, Error> {
+        let c = self.get()?;
+        let ch = match c {
+            '\'' | '"' | '?' | '\\' => c,
+            'a' => '\x07',
+            'b' => '\x08',
+            'f' => '\x0c',
+            'n' => '\x0a',
+            'r' => '\x0d',
+            't' => '\x09',
+            'v' => '\x0b',
+            _ => c,
+        };
+        Ok(ch)
+    }
 }
 
 impl Lexer {
@@ -307,6 +337,10 @@ impl Lexer {
 
     fn new_numlit(&self, num: i64) -> Token {
         Annot::new(TokenKind::NumLit(num), self.cur_loc())
+    }
+
+    fn new_stringlit(&self, string: String) -> Token {
+        Annot::new(TokenKind::StringLit(string), self.cur_loc())
     }
 
     fn new_punct(&self, punc: Punct) -> Token {

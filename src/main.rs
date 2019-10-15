@@ -10,14 +10,14 @@ use crate::lexer::Lexer;
 use crate::parser::Parser;
 
 fn main() {
-    let program = "
-        3 def a(x,y)
+    let program = r#"
+        def a(x,y)
+            puts ("abd\t6")
             x+y
-            class Foo
-            end
         end
         a(1,2)
-        ";
+        "wsnd\nferg"
+        "#;
     println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {

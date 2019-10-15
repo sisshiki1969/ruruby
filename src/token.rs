@@ -32,6 +32,7 @@ pub enum TokenKind {
     Ident(String),
     Const(String),
     NumLit(i64),
+    StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
     Space,
@@ -100,6 +101,10 @@ impl Token {
 
     pub fn new_numlit(num: i64, loc: Loc) -> Self {
         Annot::new(TokenKind::NumLit(num), loc)
+    }
+
+    pub fn new_stringlit(string: String, loc: Loc) -> Self {
+        Annot::new(TokenKind::StringLit(string), loc)
     }
 
     pub fn new_punct(punct: Punct, loc: Loc) -> Self {

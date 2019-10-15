@@ -4,6 +4,7 @@ use crate::util::*;
 pub enum NodeKind {
     SelfValue,
     Number(i64),
+    String(String),
     BinOp(BinOp, Box<Node>, Box<Node>),
     Assign(Box<Node>, Box<Node>),
     CompStmt(NodeVec),
@@ -44,6 +45,10 @@ pub type NodeVec = Vec<Node>;
 impl Node {
     pub fn new_number(num: i64, loc: Loc) -> Self {
         Node::new(NodeKind::Number(num), loc)
+    }
+
+    pub fn new_string(s: String, loc: Loc) -> Self {
+        Node::new(NodeKind::String(s), loc)
     }
 
     pub fn new_comp_stmt(loc: Loc) -> Self {

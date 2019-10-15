@@ -371,6 +371,7 @@ impl Parser {
                 Ok(Node::new_const(id, loc))
             }
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
+            TokenKind::StringLit(s) => Ok(Node::new_string(s.clone(), loc)),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
                 if self.get_if_punct(Punct::RParen) {
