@@ -14,7 +14,7 @@ pub enum NodeKind {
     Param(IdentId),
     FuncDecl(IdentId, NodeVec, Box<Node>),
     ClassDecl(IdentId, Box<Node>),
-    Send(IdentId, NodeVec),
+    Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,8 +84,11 @@ impl Node {
         Node::new(NodeKind::ClassDecl(id, Box::new(body)), loc)
     }
 
-    pub fn new_send(id: IdentId, args: Vec<Node>, loc: Loc) -> Self {
-        Node::new(NodeKind::Send(id, args), loc)
+    pub fn new_send(receiver: Node, method_name: Node, args: Vec<Node>, loc: Loc) -> Self {
+        Node::new(
+            NodeKind::Send(Box::new(receiver), Box::new(method_name), args),
+            loc,
+        )
     }
 }
 
@@ -94,8 +97,8 @@ impl std::fmt::Display for Node {
         match &self.kind {
             NodeKind::BinOp(op, lhs, rhs) => write!(f, "({:?}: {}, {})", op, lhs, rhs),
             NodeKind::LocalVar(id) => write!(f, "(LocalVar {:?})", id),
-            NodeKind::Send(id, nodes) => {
-                write!(f, "[ Send {:?}: ", id)?;
+            NodeKind::Send(receiver, method_name, nodes) => {
+                write!(f, "[ Send [{}]: [{}]", receiver, method_name)?;
                 for node in nodes {
                     write!(f, "({}) ", node)?;
                 }

@@ -179,11 +179,13 @@ impl Parser {
         }
 
         let loc = self.loc();
-        let mut nodes = vec![self.parse_stmt()?];
-
+        let mut nodes = vec![];
+        //nodes.push(self.parse_stmt()?);
+        /*
         if !self.get_if_term() {
             return return_comp_stmt(nodes, loc);
         }
+        */
         loop {
             let (tok, _) = self.peek();
             match tok.kind {
@@ -327,13 +329,67 @@ impl Parser {
     fn parse_unary_minus(&mut self) -> Result<Node, ParseError> {
         let loc = self.loc();
         if self.get_if_punct(Punct::Minus) {
-            let lhs = self.parse_primary()?;
+            let lhs = self.parse_primary_ext()?;
             let loc = loc.merge(lhs.loc());
             let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_number(-1, loc));
             Ok(lhs)
         } else {
-            let lhs = self.parse_primary()?;
+            let lhs = self.parse_primary_ext()?;
             Ok(lhs)
+        }
+    }
+
+    fn parse_primary_ext(&mut self) -> Result<Node, ParseError> {
+        let loc = self.loc();
+        let node = self.parse_primary()?;
+        let tok = self.peek_no_skip_line_term();
+        match tok.kind {
+            TokenKind::Punct(Punct::LParen) => {
+                self.get();
+                let args = self.parse_parenthesize_args()?;
+                let end_loc = self.loc();
+
+                Ok(Node::new_send(
+                    Node::new(NodeKind::SelfValue, loc),
+                    node,
+                    args,
+                    loc.merge(end_loc),
+                ))
+            }
+            TokenKind::Punct(Punct::Dot) => {
+                self.get();
+                let tok = self.get().clone();
+                let method = match &tok.kind {
+                    TokenKind::Ident(s) => s,
+                    _ => panic!("method name must be an identifier."),
+                };
+                let id = self.ident_table.get_ident_id(&method);
+                Ok(Node::new_send(
+                    node,
+                    Node::new_local_var(id, tok.loc()),
+                    vec![],
+                    loc.merge(self.loc()),
+                ))
+            }
+            _ => Ok(node),
+        }
+    }
+
+    fn parse_parenthesize_args(&mut self) -> Result<Vec<Node>, ParseError> {
+        let mut args = vec![];
+        if self.get_if_punct(Punct::RParen) {
+            return Ok(args);
+        }
+        loop {
+            args.push(self.parse_arg()?);
+            if !self.get_if_punct(Punct::Comma) {
+                break;
+            }
+        }
+        if self.get_if_punct(Punct::RParen) {
+            Ok(args)
+        } else {
+            Err(self.error_unexpected(self.loc(), format!("Expect ')'")))
         }
     }
 
@@ -343,28 +399,10 @@ impl Parser {
         match &tok.kind {
             TokenKind::Ident(name) => {
                 let id = self.ident_table.get_ident_id(name);
-                if !self.get_if_punct(Punct::LParen) {
-                    if name == "self" {
-                        return Ok(Node::new(NodeKind::SelfValue, loc));
-                    };
-                    return Ok(Node::new_local_var(id, loc));
-                }
-                let mut args = vec![];
-                if self.get_if_punct(Punct::RParen) {
-                    return Ok(Node::new_send(id, args, loc));
-                }
-                loop {
-                    args.push(self.parse_arg()?);
-                    if !self.get_if_punct(Punct::Comma) {
-                        break;
-                    }
-                }
-                let end_loc = self.loc();
-                if self.get_if_punct(Punct::RParen) {
-                    Ok(Node::new_send(id, args, loc.merge(end_loc)))
-                } else {
-                    Err(self.error_unexpected(self.loc(), format!("Expect ')'")))
-                }
+                if name == "self" {
+                    return Ok(Node::new(NodeKind::SelfValue, loc));
+                };
+                return Ok(Node::new_local_var(id, loc));
             }
             TokenKind::Const(name) => {
                 let id = self.ident_table.get_ident_id(name);

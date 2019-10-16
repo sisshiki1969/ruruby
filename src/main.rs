@@ -1,4 +1,6 @@
+pub mod class;
 pub mod eval;
+pub mod instance;
 pub mod lexer;
 pub mod node;
 pub mod parser;
@@ -11,13 +13,14 @@ use crate::parser::Parser;
 
 fn main() {
     let program = r#"
-        def a(x,y)
-            puts ("abd\t6")
-            x+y
+        class Foo
         end
-        a(1,2)
-        "wsnd\nferg"
-        "#;
+        puts(Foo)
+        puts(Foo.new)
+        puts(Foo.new)
+        puts(Foo.new)
+        puts(Foo)
+    "#;
     println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {

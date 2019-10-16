@@ -130,6 +130,7 @@ impl Lexer {
                     '*' => self.new_punct(Punct::Mul),
                     '(' => self.new_punct(Punct::LParen),
                     ')' => self.new_punct(Punct::RParen),
+                    '.' => self.new_punct(Punct::Dot),
                     '=' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {

@@ -68,6 +68,7 @@ pub enum Punct {
     Semi,
     Colon,
     Comma,
+    Dot,
 
     Plus,
     Minus,
