@@ -77,6 +77,13 @@ impl Evaluator {
         };
         eval.method_table.insert(id, info);
 
+        let id = eval.ident_table.get_ident_id(&"assert".to_string());
+        let info = FuncInfo::BuiltinFunc {
+            name: "assert".to_string(),
+            func: Evaluator::builtin_assert,
+        };
+        eval.method_table.insert(id, info);
+
         let id = eval.ident_table.get_ident_id(&"main".to_string());
         let classref = eval.new_class_info(id, Node::new_comp_stmt(Loc(0, 0)));
         eval.class_stack.push(classref);
@@ -100,6 +107,21 @@ impl Evaluator {
                 Value::Instance(instance)
             }
             _ => panic!("not a class!"),
+        }
+    }
+
+    /// Built-in function "assert".
+    pub fn builtin_assert(eval: &mut Evaluator, _receiver: Value, args: Vec<Value>) -> Value {
+        if args.len() != 2 {
+            panic!("Invalid number of arguments.");
+        }
+        if eval.eval_eq(args[0].clone(), args[1].clone()) != Value::Bool(true) {
+            panic!(
+                "Assertion error: Expected: {:?} Actual: {:?}",
+                args[0], args[1]
+            );
+        } else {
+            Value::Nil
         }
     }
 
@@ -312,7 +334,7 @@ impl Evaluator {
         }
     }
 
-    fn eval_eq(&mut self, lhs: Value, rhs: Value) -> Value {
+    pub fn eval_eq(&mut self, lhs: Value, rhs: Value) -> Value {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Value::Bool(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Value::Bool(lhs == rhs),

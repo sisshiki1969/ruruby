@@ -703,4 +703,23 @@ mod test {
         let expected = Value::FixNum(6765);
         eval_script(program, expected);
     }
+
+    #[test]
+    fn local_scope() {
+        let program = "
+            a = 1
+        class Foo
+            a = 2
+            def bar
+                a = 3
+                a
+            end
+            assert(2,a)
+        end
+        assert(1,a)
+        assert(3,Foo.new.bar)
+        assert(1,a)";
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
 }

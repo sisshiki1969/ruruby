@@ -20,14 +20,15 @@ fn main() {
             def bar
                 a = 3
                 puts(a)
+                a
             end
-            puts(a)
+            assert(2,a)
         end
-        puts(a)
+        assert(1,a)
         puts(Foo.new)
         puts(Foo.new())
-        Foo.new.bar
-        puts(a)
+        assert(3,Foo.new.bar)
+        assert(1,a)
     "#;
     println!("{}", program);
     let lexer = Lexer::new(program);
