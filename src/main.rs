@@ -12,14 +12,22 @@ use crate::lexer::Lexer;
 use crate::parser::Parser;
 
 fn main() {
+    println!("Value size= {}", std::mem::size_of::<value::Value>());
     let program = r#"
+        a = 1
         class Foo
+            a = 2
+            def bar
+                a = 3
+                puts(a)
+            end
+            puts(a)
         end
-        puts(Foo)
+        puts(a)
         puts(Foo.new)
-        puts(Foo.new)
-        puts(Foo.new)
-        puts(Foo)
+        puts(Foo.new())
+        Foo.new.bar
+        puts(a)
     "#;
     println!("{}", program);
     let lexer = Lexer::new(program);

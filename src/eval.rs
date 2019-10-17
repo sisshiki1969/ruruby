@@ -25,13 +25,13 @@ impl std::fmt::Debug for FuncInfo {
 type FuncTable = HashMap<IdentId, FuncInfo>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ExecContext {
+pub struct LocalScope {
     lvar_table: ValueTable,
 }
 
-impl ExecContext {
+impl LocalScope {
     pub fn new() -> Self {
-        ExecContext {
+        LocalScope {
             lvar_table: HashMap::new(),
         }
     }
@@ -48,7 +48,7 @@ pub struct Evaluator {
     pub const_table: ValueTable,
     // State
     pub class_stack: Vec<ClassRef>,
-    pub exec_context: Vec<ExecContext>,
+    pub scope_stack: Vec<LocalScope>,
 }
 
 impl Evaluator {
@@ -61,7 +61,7 @@ impl Evaluator {
             method_table: HashMap::new(),
             const_table: HashMap::new(),
             class_stack: vec![],
-            exec_context: vec![ExecContext::new()],
+            scope_stack: vec![LocalScope::new()],
         };
         let id = eval.ident_table.get_ident_id(&"puts".to_string());
         let info = FuncInfo::BuiltinFunc {
@@ -105,7 +105,7 @@ impl Evaluator {
 
     /// Get local variable table.
     pub fn lvar_table(&mut self) -> &mut ValueTable {
-        &mut self.exec_context.last_mut().unwrap().lvar_table
+        &mut self.scope_stack.last_mut().unwrap().lvar_table
     }
 
     fn new_class_info(&mut self, id: IdentId, body: Node) -> ClassRef {
@@ -125,7 +125,7 @@ impl Evaluator {
                     .unwrap_or_else(|| panic!("Evaluator#eval_node: class stack is empty"));
                 Value::Class(*classref)
             }
-            NodeKind::LocalVar(id) => match self.lvar_table().get(&id) {
+            NodeKind::Ident(id) => match self.lvar_table().get(&id) {
                 Some(val) => val.clone(),
                 None => {
                     self.source_info.show_loc(&node.loc());
@@ -197,7 +197,7 @@ impl Evaluator {
                 }
             }
             NodeKind::Assign(lhs, rhs) => match lhs.kind {
-                NodeKind::LocalVar(id) => {
+                NodeKind::Ident(id) => {
                     let rhs = self.eval_node(&rhs);
                     match self.lvar_table().get_mut(&id) {
                         Some(val) => {
@@ -240,14 +240,16 @@ impl Evaluator {
                 let info = self.new_class_info(*id, *body.clone());
                 let val = Value::Class(info);
                 self.const_table.insert(*id, val);
+                self.scope_stack.push(LocalScope::new());
                 self.class_stack.push(info);
                 self.eval_node(body);
                 self.class_stack.pop();
+                self.scope_stack.pop();
                 Value::Nil
             }
             NodeKind::Send(receiver, method, args) => {
                 let id = match method.kind {
-                    NodeKind::LocalVar(id) => id,
+                    NodeKind::Ident(id) => id,
                     _ => {
                         unimplemented!("method must be identifier.");
                     }
@@ -261,7 +263,7 @@ impl Evaluator {
                 match info {
                     FuncInfo::RubyFunc { params, body } => {
                         let args_len = args.len();
-                        self.exec_context.push(ExecContext::new());
+                        self.scope_stack.push(LocalScope::new());
                         for (i, param) in params.clone().iter().enumerate() {
                             if let Node {
                                 kind: NodeKind::Param(param_id),
@@ -279,7 +281,7 @@ impl Evaluator {
                             }
                         }
                         let val = self.eval_node(&body.clone());
-                        self.exec_context.pop();
+                        self.scope_stack.pop();
                         val
                     }
                     FuncInfo::BuiltinFunc { func, .. } => func(self, receiver, args_val),

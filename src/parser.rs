@@ -340,38 +340,54 @@ impl Parser {
     }
 
     fn parse_primary_ext(&mut self) -> Result<Node, ParseError> {
+        // FUNCTION : OPERATION [`(' [CALL_ARGS] `)']
+        //        | PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
+        //        | PRIMARY `::' FNAME `(' [CALL_ARGS] `)'
+        //        | PRIMARY `.' FNAME
+        //        | PRIMARY `::' FNAME
+        //        | super [`(' [CALL_ARGS] `)']
         let loc = self.loc();
-        let node = self.parse_primary()?;
-        let tok = self.peek_no_skip_line_term();
-        match tok.kind {
-            TokenKind::Punct(Punct::LParen) => {
-                self.get();
-                let args = self.parse_parenthesize_args()?;
-                let end_loc = self.loc();
+        let mut node = self.parse_primary()?;
+        if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
+            // OPERATION `(' [CALL_ARGS] `)'
+            self.get();
+            let args = self.parse_parenthesize_args()?;
+            let end_loc = self.loc();
 
-                Ok(Node::new_send(
-                    Node::new(NodeKind::SelfValue, loc),
-                    node,
-                    args,
-                    loc.merge(end_loc),
-                ))
+            return Ok(Node::new_send(
+                Node::new(NodeKind::SelfValue, loc),
+                node,
+                args,
+                loc.merge(end_loc),
+            ));
+        };
+        loop {
+            let tok = self.peek_no_skip_line_term();
+            node = match tok.kind {
+                TokenKind::Punct(Punct::Dot) => {
+                    // PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
+                    // PRIMARY `.' FNAME
+                    self.get();
+                    let tok = self.get().clone();
+                    let method = match &tok.kind {
+                        TokenKind::Ident(s) => s,
+                        _ => panic!("method name must be an identifier."),
+                    };
+                    let id = self.ident_table.get_ident_id(&method);
+                    let mut args = vec![];
+                    if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
+                        self.get();
+                        args = self.parse_parenthesize_args()?;
+                    }
+                    Node::new_send(
+                        node,
+                        Node::new_identifier(id, tok.loc()),
+                        args,
+                        loc.merge(self.loc()),
+                    )
+                }
+                _ => return Ok(node),
             }
-            TokenKind::Punct(Punct::Dot) => {
-                self.get();
-                let tok = self.get().clone();
-                let method = match &tok.kind {
-                    TokenKind::Ident(s) => s,
-                    _ => panic!("method name must be an identifier."),
-                };
-                let id = self.ident_table.get_ident_id(&method);
-                Ok(Node::new_send(
-                    node,
-                    Node::new_local_var(id, tok.loc()),
-                    vec![],
-                    loc.merge(self.loc()),
-                ))
-            }
-            _ => Ok(node),
         }
     }
 
@@ -402,7 +418,7 @@ impl Parser {
                 if name == "self" {
                     return Ok(Node::new(NodeKind::SelfValue, loc));
                 };
-                return Ok(Node::new_local_var(id, loc));
+                return Ok(Node::new_identifier(id, loc));
             }
             TokenKind::Const(name) => {
                 let id = self.ident_table.get_ident_id(name);
