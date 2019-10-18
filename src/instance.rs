@@ -51,7 +51,7 @@ impl GlobalInstanceTable {
         new_instance
     }
 
-    pub fn get(&mut self, instance_ref: InstanceRef) -> &InstanceInfo {
+    pub fn get(&self, instance_ref: InstanceRef) -> &InstanceInfo {
         self.table
             .get(&instance_ref)
             .unwrap_or_else(|| panic!("GlobalInstanceTable#get(): InstanceRef is not valid."))

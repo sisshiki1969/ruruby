@@ -7,6 +7,7 @@ use crate::util::*;
 pub struct Parser {
     tokens: Vec<Token>,
     cursor: usize,
+    prev_cursor: usize,
     context_stack: Vec<Context>,
     pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
@@ -30,6 +31,7 @@ impl Parser {
         Parser {
             tokens: result.tokens,
             cursor: 0,
+            prev_cursor: 0,
             context_stack: vec![Context::Class],
             source_info: result.source_info,
             ident_table: IdentifierTable::new(),
@@ -54,12 +56,17 @@ impl Parser {
         &self.tokens[self.cursor]
     }
 
+    /// Examine the next token, and return true if it is a line terminator.
     fn is_line_term(&self) -> bool {
         self.peek_no_skip_line_term().is_line_term()
     }
 
     fn loc(&self) -> Loc {
         self.tokens[self.cursor].loc()
+    }
+
+    fn prev_loc(&self) -> Loc {
+        self.tokens[self.prev_cursor].loc()
     }
 
     /// Get next token (skipping line terminators).
@@ -69,6 +76,7 @@ impl Parser {
             if token.is_eof() {
                 return token;
             }
+            self.prev_cursor = self.cursor;
             self.cursor += 1;
             if !token.is_line_term() {
                 return token;
@@ -80,6 +88,7 @@ impl Parser {
     fn get_no_skip_line_term(&mut self) -> Token {
         let token = self.tokens[self.cursor].clone();
         if !token.is_eof() {
+            self.prev_cursor = self.cursor;
             self.cursor += 1;
         }
         token
@@ -117,7 +126,7 @@ impl Parser {
         }
     }
 
-    /// Get the next token if it is a line terminator, and return true,
+    /// Get the next token if it is a line terminator or ';' or EOF, and return true,
     /// Otherwise, return false.
     fn get_if_term(&mut self) -> bool {
         if self.peek_no_skip_line_term().is_term() {
@@ -129,8 +138,8 @@ impl Parser {
     }
 
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseError> {
-        let tok = self.get().clone();
         let loc = self.loc();
+        let tok = self.get().clone();
         match &tok.kind {
             TokenKind::Reserved(reserved) => {
                 if *reserved == expect {
@@ -207,11 +216,11 @@ impl Parser {
 
         return_comp_stmt(nodes, loc)
     }
-
-    fn parse_stmt(&mut self) -> Result<Node, ParseError> {
-        self.parse_expr()
-    }
-
+    /*
+        fn parse_stmt(&mut self) -> Result<Node, ParseError> {
+            self.parse_expr()
+        }
+    */
     fn parse_expr(&mut self) -> Result<Node, ParseError> {
         self.parse_arg()
     }
@@ -509,17 +518,24 @@ impl Parser {
         };
         let id = self.ident_table.get_ident_id(&name);
         let args = self.parse_params()?;
+
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         Ok(Node::new_method_decl(id, args, body))
     }
 
     fn parse_params(&mut self) -> Result<Vec<Node>, ParseError> {
-        if self.is_line_term() || !self.get_if_punct(Punct::LParen) {
+        if self.get_if_term() {
             return Ok(vec![]);
+        };
+        if !self.get_if_punct(Punct::LParen) {
+            return Err(self.error_unexpected(self.loc(), ""));
         }
         let mut args = vec![];
         if self.get_if_punct(Punct::RParen) {
+            if !self.get_if_term() {
+                return Err(self.error_unexpected(self.loc(), "Expect terminator"));
+            }
             return Ok(args);
         }
         loop {
@@ -537,6 +553,9 @@ impl Parser {
             }
         }
         if self.get_if_punct(Punct::RParen) {
+            if !self.get_if_term() {
+                return Err(self.error_unexpected(self.loc(), "Expect terminator"));
+            }
             Ok(args)
         } else {
             Err(self.error_unexpected(self.peek_no_skip_line_term().loc(), "Expect ')'."))
@@ -563,11 +582,14 @@ impl Parser {
 
 #[cfg(test)]
 #[allow(unused_imports, dead_code)]
-mod test {
+mod tests {
+    extern crate test;
+
     use crate::eval::Evaluator;
     use crate::lexer::Lexer;
     use crate::parser::Parser;
     use crate::value::Value;
+    use test::Bencher;
 
     fn eval_script(script: impl Into<String>, expected: Value) {
         let lexer = Lexer::new(script);
@@ -688,8 +710,8 @@ mod test {
         eval_script(program, expected);
     }
 
-    #[test]
-    fn func3() {
+    #[bench]
+    fn func3(b: &mut Bencher) {
         let program = "
             def fibo(x)
                 if x <= 2
@@ -701,23 +723,27 @@ mod test {
 
             fibo(20)";
         let expected = Value::FixNum(6765);
-        eval_script(program, expected);
+        b.iter(|| eval_script(program, expected.clone()));
     }
 
     #[test]
     fn local_scope() {
         let program = "
-            a = 1
+        a = 1
         class Foo
             a = 2
             def bar
                 a = 3
                 a
             end
+            def boo(x)
+                x * 2
+            end
             assert(2,a)
         end
         assert(1,a)
         assert(3,Foo.new.bar)
+        assert(10,Foo.new.boo(5))
         assert(1,a)";
         let expected = Value::Nil;
         eval_script(program, expected);

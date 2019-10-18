@@ -5,24 +5,25 @@ use crate::util::*;
 use crate::value::*;
 use std::collections::HashMap;
 
-type ValueTable = HashMap<IdentId, Value>;
-type BuiltinFunc = fn(eval: &mut Evaluator, receiver: Value, args: Vec<Value>) -> Value;
+pub type ValueTable = HashMap<IdentId, Value>;
+pub type BuiltinFunc = fn(eval: &mut Evaluator, receiver: Value, args: Vec<Value>) -> Value;
 
 #[derive(Clone)]
-pub enum FuncInfo {
+pub enum MethodInfo {
     RubyFunc { params: Vec<Node>, body: Box<Node> },
     BuiltinFunc { name: String, func: BuiltinFunc },
 }
 
-impl std::fmt::Debug for FuncInfo {
+impl std::fmt::Debug for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FuncInfo::RubyFunc { params, body } => write!(f, "RubyFunc {:?} {:?}", params, body),
-            FuncInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
+            MethodInfo::RubyFunc { params, body } => write!(f, "RubyFunc {:?} {:?}", params, body),
+            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
         }
     }
 }
-type FuncTable = HashMap<IdentId, FuncInfo>;
+
+pub type MethodTable = HashMap<IdentId, MethodInfo>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalScope {
@@ -44,7 +45,7 @@ pub struct Evaluator {
     pub ident_table: IdentifierTable,
     pub class_table: GlobalClassTable,
     pub instance_table: GlobalInstanceTable,
-    pub method_table: FuncTable,
+    pub method_table: MethodTable,
     pub const_table: ValueTable,
     // State
     pub class_stack: Vec<ClassRef>,
@@ -64,28 +65,21 @@ impl Evaluator {
             scope_stack: vec![LocalScope::new()],
         };
         let id = eval.ident_table.get_ident_id(&"puts".to_string());
-        let info = FuncInfo::BuiltinFunc {
+        let info = MethodInfo::BuiltinFunc {
             name: "puts".to_string(),
             func: Evaluator::builtin_puts,
         };
         eval.method_table.insert(id, info);
 
-        let id = eval.ident_table.get_ident_id(&"new".to_string());
-        let info = FuncInfo::BuiltinFunc {
-            name: "new".to_string(),
-            func: Evaluator::builtin_new,
-        };
-        eval.method_table.insert(id, info);
-
         let id = eval.ident_table.get_ident_id(&"assert".to_string());
-        let info = FuncInfo::BuiltinFunc {
+        let info = MethodInfo::BuiltinFunc {
             name: "assert".to_string(),
             func: Evaluator::builtin_assert,
         };
         eval.method_table.insert(id, info);
 
         let id = eval.ident_table.get_ident_id(&"main".to_string());
-        let classref = eval.new_class_info(id, Node::new_comp_stmt(Loc(0, 0)));
+        let classref = eval.new_class(id, Node::new_comp_stmt(Loc(0, 0)));
         eval.class_stack.push(classref);
 
         eval
@@ -106,7 +100,7 @@ impl Evaluator {
                 let instance = eval.new_instance(class_ref);
                 Value::Instance(instance)
             }
-            _ => panic!("not a class!"),
+            _ => panic!("Receiver must be a class! {:?}", receiver),
         }
     }
 
@@ -128,11 +122,6 @@ impl Evaluator {
     /// Get local variable table.
     pub fn lvar_table(&mut self) -> &mut ValueTable {
         &mut self.scope_stack.last_mut().unwrap().lvar_table
-    }
-
-    fn new_class_info(&mut self, id: IdentId, body: Node) -> ClassRef {
-        let name = self.ident_table.get_name(id).clone();
-        self.class_table.new_class(id, name, body)
     }
 
     /// Evaluate AST.
@@ -249,17 +238,23 @@ impl Evaluator {
                 }
             }
             NodeKind::FuncDecl(id, params, body) => {
-                self.method_table.insert(
-                    *id,
-                    FuncInfo::RubyFunc {
-                        params: params.clone(),
-                        body: body.clone(),
-                    },
-                );
+                let info = MethodInfo::RubyFunc {
+                    params: params.clone(),
+                    body: body.clone(),
+                };
+                if self.class_stack.len() == 1 {
+                    // A method defined in "top level" is registered to the global method table.
+                    self.method_table.insert(*id, info);
+                } else {
+                    // A method defined in a class definition is registered as a instance method of the class.
+                    let class = self.class_stack.last().unwrap();
+                    let class_info = self.class_table.get_mut(*class);
+                    class_info.instance_method_table.insert(*id, info);
+                }
                 Value::Nil
             }
             NodeKind::ClassDecl(id, body) => {
-                let info = self.new_class_info(*id, *body.clone());
+                let info = self.new_class(*id, *body.clone());
                 let val = Value::Class(info);
                 self.const_table.insert(*id, val);
                 self.scope_stack.push(LocalScope::new());
@@ -276,14 +271,33 @@ impl Evaluator {
                         unimplemented!("method must be identifier.");
                     }
                 };
-                let receiver = self.eval_node(receiver);
-                let args_val: Vec<Value> = args.iter().map(|x| self.eval_node(x)).collect();
-                let info = match self.method_table.get(&id) {
-                    Some(info) => info.clone(),
-                    None => unimplemented!("undefined function."),
+                let receiver_val = self.eval_node(receiver);
+                let rec = if receiver.kind == NodeKind::SelfValue {
+                    None
+                } else {
+                    Some(self.eval_node(receiver))
                 };
+                let args_val: Vec<Value> = args.iter().map(|x| self.eval_node(x)).collect();
+                let info = match rec {
+                    None => match self.method_table.get(&id) {
+                        Some(info) => info.clone(),
+                        None => unimplemented!("undefined function."),
+                    },
+                    Some(rec) => match rec {
+                        Value::Instance(instance) => {
+                            let info = self.instance_table.get(instance);
+                            let class_info = self.class_table.get(info.class_id);
+                            class_info.get_instance_method(id).clone()
+                        }
+                        Value::Class(class) => {
+                            self.class_table.get(class).get_class_method(id).clone()
+                        }
+                        _ => unimplemented!("Receiver must be a class or instance. {:?}", rec),
+                    },
+                };
+
                 match info {
-                    FuncInfo::RubyFunc { params, body } => {
+                    MethodInfo::RubyFunc { params, body } => {
                         let args_len = args.len();
                         self.scope_stack.push(LocalScope::new());
                         for (i, param) in params.clone().iter().enumerate() {
@@ -306,7 +320,7 @@ impl Evaluator {
                         self.scope_stack.pop();
                         val
                     }
-                    FuncInfo::BuiltinFunc { func, .. } => func(self, receiver, args_val),
+                    MethodInfo::BuiltinFunc { func, .. } => func(self, receiver_val, args_val),
                 }
             }
             _ => unimplemented!("{:?}", node.kind),
@@ -366,10 +380,35 @@ impl Evaluator {
 }
 
 impl Evaluator {
+    pub fn new_class(&mut self, id: IdentId, body: Node) -> ClassRef {
+        let name = self.ident_table.get_name(id).clone();
+        let class_ref = self.class_table.new_class(id, name, body);
+        let id = self.ident_table.get_ident_id(&"new".to_string());
+        let info = MethodInfo::BuiltinFunc {
+            name: "new".to_string(),
+            func: Evaluator::builtin_new,
+        };
+
+        self.class_table
+            .get_mut(class_ref)
+            .add_class_method(id, info);
+        class_ref
+    }
+
     pub fn new_instance(&mut self, class_id: ClassRef) -> InstanceRef {
         let class_info = self.class_table.get(class_id);
         let class_name = class_info.name.clone();
         self.instance_table.new_instance(class_id, class_name)
+    }
+
+    pub fn get_class_name(&self, class_id: ClassRef) -> String {
+        let class_info = self.class_table.get(class_id);
+        class_info.name.clone()
+    }
+
+    pub fn get_instance_name(&self, instance: InstanceRef) -> String {
+        let info = self.instance_table.get(instance);
+        format!("#<{}:{:?}>", info.class_name, instance)
     }
 }
 
@@ -393,14 +432,8 @@ impl Evaluator {
             },
             Value::FixNum(i) => i.to_string(),
             Value::String(s) => s.clone(),
-            Value::Class(class) => {
-                let class_info = self.class_table.get(*class);
-                format!("{}", class_info.name)
-            }
-            Value::Instance(instance) => {
-                let info = self.instance_table.get(*instance);
-                format!("#<{}:{:?}>", info.class_name, instance)
-            }
+            Value::Class(class) => self.get_class_name(*class),
+            Value::Instance(instance) => self.get_instance_name(*instance),
         }
     }
 }

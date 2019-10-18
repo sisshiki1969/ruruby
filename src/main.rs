@@ -1,3 +1,4 @@
+#![feature(test)]
 pub mod class;
 pub mod eval;
 pub mod instance;
@@ -12,36 +13,23 @@ use crate::lexer::Lexer;
 use crate::parser::Parser;
 
 fn main() {
-    println!("Value size= {}", std::mem::size_of::<value::Value>());
     let program = r#"
-        a = 1
-        class Foo
-            a = 2
-            def bar
-                a = 3
-                puts(a)
-                a
-            end
-            assert(2,a)
-        end
-        assert(1,a)
-        puts(Foo.new)
-        puts(Foo.new())
-        assert(3,Foo.new.bar)
-        assert(1,a)
+        if 0==0 elsee
     "#;
-    println!("{}", program);
+    //println!("{}", program);
     let lexer = Lexer::new(program);
     match lexer.tokenize() {
         Err(err) => println!("ParseError: {:?}", err),
         Ok(result) => {
+            /*
             for token in &result.tokens {
                 println!("{}", token);
             }
+            */
             let mut parser = Parser::new(result);
             match parser.parse_program() {
                 Ok(node) => {
-                    println!("{}", node);
+                    //println!("{}", node);
                     let mut eval = Evaluator::new(parser.source_info, parser.ident_table);
                     println!("result: {:?}", eval.eval_node(&node));
                 }

@@ -1,25 +1,7 @@
+use crate::eval::{MethodInfo, MethodTable};
 use crate::node::Node;
 use crate::util::*;
 use std::collections::HashMap;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClassInfo {
-    pub id: IdentId,
-    pub name: String,
-    pub body: Box<Node>,
-    pub subclass: HashMap<IdentId, ClassRef>,
-}
-
-impl ClassInfo {
-    pub fn new(id: IdentId, name: String, body: Node) -> Self {
-        ClassInfo {
-            id,
-            name,
-            body: Box::new(body),
-            subclass: HashMap::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClassRef(usize);
@@ -30,7 +12,46 @@ impl std::hash::Hash for ClassRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
+pub struct ClassInfo {
+    pub id: IdentId,
+    pub name: String,
+    pub body: Box<Node>,
+    pub instance_method_table: MethodTable,
+    pub class_method_table: MethodTable,
+    pub subclass: HashMap<IdentId, ClassRef>,
+}
+
+impl ClassInfo {
+    pub fn new(id: IdentId, name: String, body: Node) -> Self {
+        ClassInfo {
+            id,
+            name,
+            body: Box::new(body),
+            instance_method_table: HashMap::new(),
+            class_method_table: HashMap::new(),
+            subclass: HashMap::new(),
+        }
+    }
+
+    pub fn get_class_method(&self, id: IdentId) -> &MethodInfo {
+        self.class_method_table
+            .get(&id)
+            .unwrap_or_else(|| panic!("ClassInfo#get_class_method(): Method does not exists."))
+    }
+
+    pub fn add_class_method(&mut self, id: IdentId, info: MethodInfo) -> Option<MethodInfo> {
+        self.class_method_table.insert(id, info)
+    }
+
+    pub fn get_instance_method(&self, id: IdentId) -> &MethodInfo {
+        self.instance_method_table
+            .get(&id)
+            .unwrap_or_else(|| panic!("ClassInfo#get_instance_method(): Method does not exists."))
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct GlobalClassTable {
     table: HashMap<ClassRef, ClassInfo>,
     class_id: usize,
@@ -52,7 +73,7 @@ impl GlobalClassTable {
         new_class
     }
 
-    pub fn get(&mut self, class_ref: ClassRef) -> &ClassInfo {
+    pub fn get(&self, class_ref: ClassRef) -> &ClassInfo {
         self.table
             .get(&class_ref)
             .unwrap_or_else(|| panic!("GlobalClassTable#get(): ClassRef is not valid."))
