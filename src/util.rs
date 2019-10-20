@@ -44,9 +44,9 @@ pub struct SourceInfo {
 }
 
 impl SourceInfo {
-    pub fn new(code: Vec<char>) -> Self {
+    pub fn new() -> Self {
         SourceInfo {
-            code,
+            code: vec![],
             line_pos: vec![],
         }
     }
@@ -62,9 +62,28 @@ impl SourceInfo {
                 self.code[(line.1)..(line.2)].iter().collect::<String>()
             );
             use std::cmp::*;
-            let read = if loc.0 < line.1 { 0 } else { loc.0 - line.1 };
-            let length = min(loc.1, line.2) + 1 - max(loc.0, line.1);
+            let read = if loc.0 < line.1 {
+                0
+            } else {
+                self.code[(line.1)..(loc.0)]
+                    .iter()
+                    .map(|x| calc_width(x))
+                    .sum()
+            };
+            let length = self.code
+                [max(loc.0, line.1)..=min(min(loc.1, line.2), self.code.len() - 1)]
+                .iter()
+                .map(|x| calc_width(x))
+                .sum();
             println!("{}{}", " ".repeat(read), "^".repeat(length));
+        }
+
+        fn calc_width(ch: &char) -> usize {
+            if ch.is_ascii() {
+                1
+            } else {
+                2
+            }
         }
     }
 }

@@ -1,8 +1,9 @@
+use crate::parser::*;
 use crate::token::*;
 use crate::util::*;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
     len: usize,
     line_top_pos: usize,
@@ -11,25 +12,16 @@ pub struct Lexer {
     line: usize,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
-    source_info: SourceInfo,
+    pub source_info: SourceInfo,
 }
 
 #[derive(Debug, Clone)]
 pub struct LexerResult {
     pub tokens: Vec<Token>,
-    pub source_info: SourceInfo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Error {
-    EOF,
-    UnexpectedChar,
 }
 
 impl Lexer {
-    pub fn new(code_text: impl Into<String>) -> Self {
-        let code = code_text.into().chars().collect::<Vec<char>>();
-        let len = code.len();
+    pub fn new() -> Self {
         let mut reserved = HashMap::new();
         let mut reserved_rev = HashMap::new();
         macro_rules! reg_reserved {
@@ -61,18 +53,51 @@ impl Lexer {
             "true" => Reserved::True
         };
         Lexer {
-            len,
+            len: 0,
             line_top_pos: 0,
             token_start_pos: 0,
             pos: 0,
             line: 1,
             reserved,
             reserved_rev,
-            source_info: SourceInfo::new(code),
+            source_info: SourceInfo::new(),
         }
     }
 
-    pub fn tokenize(mut self) -> Result<LexerResult, Error> {
+    #[allow(dead_code)]
+    fn error_unexpected(&self, pos: usize) -> ParseError {
+        let loc = Loc(pos, pos);
+        ParseError::new(
+            ParseErrorKind::SyntaxError("Unexpected char,".to_string()),
+            loc,
+        )
+    }
+
+    fn error_eof(&self, pos: usize) -> ParseError {
+        let loc = Loc(pos, pos);
+        ParseError::new(ParseErrorKind::UnexpectedEOF, loc)
+    }
+
+    pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, ParseError> {
+        let mut code = code_text.into().chars().collect::<Vec<char>>();
+        let pop_flag = match self.source_info.line_pos.last() {
+            None => false,
+            Some(info) => {
+                let next_pos = self.source_info.code.len();
+                self.line_top_pos = next_pos;
+                self.token_start_pos = next_pos;
+                self.pos = next_pos;
+                self.line = info.0;
+                true
+            }
+        };
+        if pop_flag {
+            self.source_info.line_pos.pop();
+        }
+
+        self.source_info.code.append(&mut code);
+        self.len = self.source_info.code.len();
+        //println!("{:?}", self);
         let mut tokens: Vec<Token> = vec![];
         loop {
             if let Some(tok) = self.skip_whitespace() {
@@ -87,32 +112,7 @@ impl Lexer {
             };
 
             let token = if ch.is_ascii_alphabetic() || ch == '_' {
-                // read identifier or reserved keyword
-                let is_const = ch.is_ascii_uppercase();
-                let mut tok = ch.to_string();
-                loop {
-                    let ch = match self.peek() {
-                        Ok(ch) => ch,
-                        Err(_) => {
-                            break;
-                        }
-                    };
-                    if ch.is_ascii_alphanumeric() || ch == '_' {
-                        tok.push(self.get()?);
-                    } else {
-                        break;
-                    }
-                }
-                match self.reserved.get(&tok) {
-                    Some(reserved) => self.new_reserved(*reserved),
-                    None => {
-                        if is_const {
-                            self.new_const(tok)
-                        } else {
-                            self.new_ident(tok)
-                        }
-                    }
-                }
+                self.lex_identifier(ch)?
             } else if ch.is_numeric() {
                 self.lex_number_literal(ch)?
             } else if ch.is_ascii_punctuation() {
@@ -188,18 +188,47 @@ impl Lexer {
                     _ => unimplemented!("{}", ch),
                 }
             } else {
-                return Err(Error::UnexpectedChar);
+                self.lex_identifier(ch)?
             };
             if token.kind != TokenKind::Nop {
                 tokens.push(token);
             }
         }
         tokens.push(self.new_eof(self.source_info.code.len()));
-        Ok(LexerResult::new(tokens, self))
+        Ok(LexerResult::new(tokens))
+    }
+
+    fn lex_identifier(&mut self, ch: char) -> Result<Token, ParseError> {
+        // read identifier or reserved keyword
+        let is_const = ch.is_ascii_uppercase();
+        let mut tok = ch.to_string();
+        loop {
+            let ch = match self.peek() {
+                Ok(ch) => ch,
+                Err(_) => {
+                    break;
+                }
+            };
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                tok.push(self.get()?);
+            } else {
+                break;
+            }
+        }
+        match self.reserved.get(&tok) {
+            Some(reserved) => Ok(self.new_reserved(*reserved)),
+            None => {
+                if is_const {
+                    Ok(self.new_const(tok))
+                } else {
+                    Ok(self.new_ident(tok))
+                }
+            }
+        }
     }
 
     /// Read number literal
-    fn lex_number_literal(&mut self, ch: char) -> Result<Token, Error> {
+    fn lex_number_literal(&mut self, ch: char) -> Result<Token, ParseError> {
         let mut tok = ch.to_string();
         loop {
             let ch = match self.peek() {
@@ -221,7 +250,7 @@ impl Lexer {
     }
 
     /// Read string literal
-    fn lex_string_literal_double(&mut self) -> Result<Token, Error> {
+    fn lex_string_literal_double(&mut self) -> Result<Token, ParseError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -233,7 +262,7 @@ impl Lexer {
         Ok(self.new_stringlit(s))
     }
 
-    fn read_escaped_char(&mut self) -> Result<char, Error> {
+    fn read_escaped_char(&mut self) -> Result<char, ParseError> {
         let c = self.get()?;
         let ch = match c {
             '\'' | '"' | '?' | '\\' => c,
@@ -252,13 +281,13 @@ impl Lexer {
 
 impl Lexer {
     /// Get one char and move to the next.
-    /// Returns Ok(char) or an error if the cursor reached EOF.
-    fn get(&mut self) -> Result<char, Error> {
+    /// Returns Some(char) or None if the cursor reached EOF.
+    fn get(&mut self) -> Result<char, ParseError> {
         if self.pos >= self.len {
             self.source_info
                 .line_pos
                 .push((self.line, self.line_top_pos, self.len));
-            Err(Error::EOF)
+            Err(self.error_eof(self.pos))
         } else {
             let ch = self.source_info.code[self.pos];
             if ch == '\n' {
@@ -274,10 +303,10 @@ impl Lexer {
     }
 
     /// Peek one char and no move.
-    /// Returns Ok(char) or an error if the cursor reached EOF.
-    fn peek(&mut self) -> Result<char, Error> {
+    /// Returns Some(char) or None if the cursor reached EOF.
+    fn peek(&mut self) -> Result<char, ParseError> {
         if self.pos >= self.len {
-            Err(Error::EOF)
+            Err(self.error_eof(self.pos))
         } else {
             Ok(self.source_info.code[self.pos])
         }
@@ -365,11 +394,8 @@ impl Lexer {
 }
 
 impl LexerResult {
-    fn new(tokens: Vec<Token>, lexer: Lexer) -> Self {
-        LexerResult {
-            tokens,
-            source_info: lexer.source_info,
-        }
+    fn new(tokens: Vec<Token>) -> Self {
+        LexerResult { tokens }
     }
 }
 
@@ -378,8 +404,8 @@ impl LexerResult {
 mod test {
     use crate::lexer::*;
     fn assert_tokens(program: impl Into<String>, ans: Vec<Token>) {
-        let lexer = Lexer::new(program.into());
-        match lexer.tokenize() {
+        let mut lexer = Lexer::new();
+        match lexer.tokenize(program.into()) {
             Err(err) => panic!("{:?}", err),
             Ok(LexerResult { tokens, .. }) => {
                 let len = tokens.len();

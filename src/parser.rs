@@ -5,11 +5,12 @@ use crate::util::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
+    pub lexer: Lexer,
     tokens: Vec<Token>,
     cursor: usize,
     prev_cursor: usize,
     context_stack: Vec<Context>,
-    pub source_info: SourceInfo,
+    //pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
 }
 
@@ -21,19 +22,22 @@ enum Context {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {
-    SyntaxError,
+    UnexpectedEOF,
+    UnexpectedToken,
+    SyntaxError(String),
 }
 
 pub type ParseError = Annot<ParseErrorKind>;
 
 impl Parser {
-    pub fn new(result: LexerResult) -> Self {
+    pub fn new() -> Self {
+        let lexer = Lexer::new();
         Parser {
-            tokens: result.tokens,
+            lexer,
+            tokens: vec![],
             cursor: 0,
             prev_cursor: 0,
             context_stack: vec![Context::Class],
-            source_info: result.source_info,
             ident_table: IdentifierTable::new(),
         }
     }
@@ -65,21 +69,22 @@ impl Parser {
         self.tokens[self.cursor].loc()
     }
 
+    #[allow(dead_code)]
     fn prev_loc(&self) -> Loc {
         self.tokens[self.prev_cursor].loc()
     }
 
     /// Get next token (skipping line terminators).
-    fn get(&mut self) -> &Token {
+    fn get(&mut self) -> Result<&Token, ParseError> {
         loop {
             let token = &self.tokens[self.cursor];
             if token.is_eof() {
-                return token;
+                return Err(self.error_eof(token.loc()));
             }
             self.prev_cursor = self.cursor;
             self.cursor += 1;
             if !token.is_line_term() {
-                return token;
+                return Ok(token);
             }
         }
     }
@@ -100,7 +105,7 @@ impl Parser {
         match &self.peek().0.kind {
             TokenKind::Punct(punct) => {
                 if *punct == expect {
-                    self.get();
+                    let _ = self.get();
                     true
                 } else {
                     false
@@ -116,7 +121,7 @@ impl Parser {
         match &self.peek().0.kind {
             TokenKind::Reserved(reserved) => {
                 if *reserved == expect {
-                    self.get();
+                    let _ = self.get();
                     true
                 } else {
                     false
@@ -139,7 +144,7 @@ impl Parser {
 
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseError> {
         let loc = self.loc();
-        let tok = self.get().clone();
+        let tok = self.get()?.clone();
         match &tok.kind {
             TokenKind::Reserved(reserved) => {
                 if *reserved == expect {
@@ -153,20 +158,24 @@ impl Parser {
     }
 
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseError {
-        self.source_info.show_loc(&loc);
-        println!("Unexpected token. {}", msg.into());
-        ParseError::new(ParseErrorKind::SyntaxError, loc)
+        ParseError::new(ParseErrorKind::SyntaxError(msg.into()), loc)
     }
 
     fn error_eof(&self, loc: Loc) -> ParseError {
-        self.source_info.show_loc(&loc);
-        println!("Unexpected EOF.");
-        ParseError::new(ParseErrorKind::SyntaxError, loc)
+        ParseError::new(ParseErrorKind::UnexpectedEOF, loc)
+    }
+
+    fn show_loc(&self, loc: &Loc) {
+        self.lexer.source_info.show_loc(&loc)
     }
 }
 
 impl Parser {
-    pub fn parse_program(&mut self) -> Result<Node, ParseError> {
+    pub fn parse_program(&mut self, program: String) -> Result<Node, ParseError> {
+        //println!("{:?}", program);
+        self.tokens = self.lexer.tokenize(program.clone())?.tokens;
+        self.cursor = 0;
+        self.prev_cursor = 0;
         let node = self.parse_comp_stmt()?;
         let (tok, loc) = self.peek();
         if tok.kind == TokenKind::EOF {
@@ -359,7 +368,7 @@ impl Parser {
         let mut node = self.parse_primary()?;
         if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
             // OPERATION `(' [CALL_ARGS] `)'
-            self.get();
+            self.get()?;
             let args = self.parse_parenthesize_args()?;
             let end_loc = self.loc();
 
@@ -376,8 +385,8 @@ impl Parser {
                 TokenKind::Punct(Punct::Dot) => {
                     // PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
                     // PRIMARY `.' FNAME
-                    self.get();
-                    let tok = self.get().clone();
+                    self.get()?;
+                    let tok = self.get()?.clone();
                     let method = match &tok.kind {
                         TokenKind::Ident(s) => s,
                         _ => panic!("method name must be an identifier."),
@@ -385,7 +394,7 @@ impl Parser {
                     let id = self.ident_table.get_ident_id(&method);
                     let mut args = vec![];
                     if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
-                        self.get();
+                        self.get()?;
                         args = self.parse_parenthesize_args()?;
                     }
                     Node::new_send(
@@ -419,7 +428,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Node, ParseError> {
-        let tok = self.get().clone();
+        let tok = self.get()?.clone();
         let loc = tok.loc();
         match &tok.kind {
             TokenKind::Ident(name) => {
@@ -512,7 +521,7 @@ impl Parser {
         //      [ensure COMPSTMT]
         //  end
         let loc = self.loc();
-        let name = match &self.get().kind {
+        let name = match &self.get()?.kind {
             TokenKind::Ident(s) => s.clone(),
             _ => return Err(self.error_unexpected(loc, format!("Expect identifier."))),
         };
@@ -539,7 +548,7 @@ impl Parser {
             return Ok(args);
         }
         loop {
-            let (arg, loc) = match self.get().clone() {
+            let (arg, loc) = match self.get()?.clone() {
                 Token {
                     kind: TokenKind::Ident(s),
                     loc,
@@ -592,14 +601,17 @@ mod tests {
     use test::Bencher;
 
     fn eval_script(script: impl Into<String>, expected: Value) {
-        let lexer = Lexer::new(script);
-        let result = lexer.tokenize().unwrap();
-        let mut parser = Parser::new(result);
-        let node = parser.parse_comp_stmt().unwrap();
-        let mut eval = Evaluator::new(parser.source_info, parser.ident_table);
-        let res = eval.eval_node(&node);
-        if res != expected {
-            panic!("Expected:{:?} Got:{:?}", expected, res);
+        let mut parser = Parser::new();
+        let node = parser.parse_program(script.into()).unwrap();
+        let mut eval = Evaluator::new();
+        eval.init(parser.lexer.source_info, parser.ident_table);
+        match eval.eval_node(&node) {
+            Ok(res) => {
+                if res != expected {
+                    panic!("Expected:{:?} Got:{:?}", expected, res);
+                }
+            }
+            Err(err) => panic!("Got runtime error: {:?}", err),
         }
     }
 

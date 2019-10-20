@@ -1,14 +1,14 @@
 
 class Foo
-    puts "this"
+    puts("this")
 end
 
 class Bar
-    puts "that"
+    puts("that")
 
     def pr
-        puts "print"
+        puts ("print")
     end
 end
 
-Bar.new.pr
+Bar.new.pr()
