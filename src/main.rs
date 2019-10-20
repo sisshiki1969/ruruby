@@ -56,8 +56,7 @@ fn repl() {
         rl.add_history_entry(line.clone());
         program = format!("{}{}", program, line);
 
-        let source_info = parser.lexer.source_info.clone();
-        let ident_table = parser.ident_table.clone();
+        let parser_save = parser.clone();
         match parser.parse_program(program.clone()) {
             Ok(node) => {
                 //println!("{:?}", node);
@@ -69,16 +68,14 @@ fn repl() {
                         println!("=> {:?}", result);
                     }
                     Err(_) => {
-                        parser.lexer.source_info = source_info;
-                        parser.ident_table = ident_table;
+                        parser = parser_save;
                         println!("{}", program);
                     }
                 }
                 program = String::new();
             }
             Err(err) => {
-                parser.lexer.source_info = source_info;
-                parser.ident_table = ident_table;
+                parser = parser_save;
                 if ParseErrorKind::UnexpectedEOF == err.kind {
                     continue;
                 }
