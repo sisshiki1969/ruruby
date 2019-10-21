@@ -100,12 +100,13 @@ impl Lexer {
         //println!("{:?}", self);
         let mut tokens: Vec<Token> = vec![];
         loop {
+            self.token_start_pos = self.pos;
             if let Some(tok) = self.skip_whitespace() {
                 if tok.kind == TokenKind::LineTerm {
                     tokens.push(tok);
                 }
             };
-            self.token_start_pos = self.pos;
+
             let ch = match self.get() {
                 Ok(ch) => ch,
                 Err(_) => break,
@@ -320,8 +321,8 @@ impl Lexer {
             match self.peek() {
                 Ok('\n') => {
                     self.get().unwrap();
-                    self.token_start_pos = self.pos;
                     res = Some(self.new_line_term());
+                    self.token_start_pos = self.pos;
                 }
                 Ok(ch) if ch.is_ascii_whitespace() => {
                     self.get().unwrap();
@@ -536,7 +537,7 @@ mod test {
             Token![Ident("a"), 0, 0],
             Token![Punct(Punct::Assign), 2, 2],
             Token![NumLit(1), 4, 4],
-            Token![LineTerm, 6, 6],
+            Token![LineTerm, 5, 5],
             Token![Reserved(Reserved::If), 7, 8],
             Token![Ident("a"), 10, 10],
             Token![Punct(Punct::Eq), 11, 12],
@@ -559,7 +560,7 @@ mod test {
         else
             10 # also a comment";
         let ans = vec![
-            Token![LineTerm, 1, 1],
+            Token![LineTerm, 0, 0],
             Token![Ident("a"), 9, 9],
             Token![Punct(Punct::Assign), 11, 11],
             Token![NumLit(0), 13, 13],
@@ -570,10 +571,10 @@ mod test {
             Token![Punct(Punct::Eq), 29, 30],
             Token![NumLit(1000), 32, 36],
             Token![Reserved(Reserved::Then), 38, 41],
-            Token![LineTerm, 43, 43],
+            Token![LineTerm, 42, 42],
             Token![NumLit(5), 55, 55],
             Token![Reserved(Reserved::Else), 85, 88],
-            Token![LineTerm, 90, 90],
+            Token![LineTerm, 89, 89],
             Token![NumLit(10), 102, 103],
             Token![EOF, 121],
         ];

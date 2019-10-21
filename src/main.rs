@@ -45,15 +45,17 @@ fn repl() {
     let mut eval = Evaluator::new();
     eval.repl_init(parser.lexer.source_info.clone(), parser.ident_table.clone());
     eval.repl_set_main();
+    let mut level = parser.get_context_depth();
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
-        let readline = rl.readline(&format!("irb:{} ", prompt).to_string());
+        let readline = rl.readline(&format!("irb:{:1}{} ", level, prompt).to_string());
         let mut line = match readline {
             Ok(line) => line,
             Err(_) => return,
         };
-        line.push('\n');
         rl.add_history_entry(line.clone());
+        line.push('\n');
+
         program = format!("{}{}", program, line);
 
         let parser_save = parser.clone();
@@ -69,17 +71,22 @@ fn repl() {
                     }
                     Err(_) => {
                         parser = parser_save;
-                        println!("{}", program);
+                        //println!("{}", program);
                     }
                 }
+                level = parser.get_context_depth();
                 program = String::new();
             }
             Err(err) => {
-                parser = parser_save;
                 if ParseErrorKind::UnexpectedEOF == err.kind {
+                    level = parser.get_context_depth();
+                    parser = parser_save;
                     continue;
                 }
+                level = parser.get_context_depth();
+                parser.show_loc(&err.loc());
                 println!("ParseError: {:?}", err.kind);
+                parser = parser_save;
                 program = String::new();
             }
         }

@@ -42,13 +42,17 @@ impl Parser {
         }
     }
 
+    pub fn get_context_depth(&self) -> usize {
+        self.context_stack.len()
+    }
+
     /// Peek next token (skipping line terminators).
-    fn peek(&self) -> (&Token, Loc) {
+    fn peek(&self) -> &Token {
         let mut c = self.cursor;
         loop {
             let tok = &self.tokens[c];
             if tok.is_eof() || !tok.is_line_term() {
-                return (tok, tok.loc);
+                return tok;
             } else {
                 c += 1;
             }
@@ -75,6 +79,7 @@ impl Parser {
     }
 
     /// Get next token (skipping line terminators).
+    /// Return ParseError if it was EOF.
     fn get(&mut self) -> Result<&Token, ParseError> {
         loop {
             let token = &self.tokens[self.cursor];
@@ -102,7 +107,7 @@ impl Parser {
     /// If next token is an expected kind of Punctuator, get it and return true.
     /// Otherwise, return false.
     fn get_if_punct(&mut self, expect: Punct) -> bool {
-        match &self.peek().0.kind {
+        match &self.peek().kind {
             TokenKind::Punct(punct) => {
                 if *punct == expect {
                     let _ = self.get();
@@ -118,7 +123,7 @@ impl Parser {
     /// If next token is an expected kind of Reserved keyeord, get it and return true.
     /// Otherwise, return false.
     fn get_if_reserved(&mut self, expect: Reserved) -> bool {
-        match &self.peek().0.kind {
+        match &self.peek().kind {
             TokenKind::Reserved(reserved) => {
                 if *reserved == expect {
                     let _ = self.get();
@@ -143,17 +148,15 @@ impl Parser {
     }
 
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseError> {
-        let loc = self.loc();
-        let tok = self.get()?.clone();
-        match &tok.kind {
+        match &self.get()?.kind {
             TokenKind::Reserved(reserved) => {
                 if *reserved == expect {
                     Ok(())
                 } else {
-                    Err(self.error_unexpected(loc, format!("Expect {:?}", expect)))
+                    Err(self.error_unexpected(self.prev_loc(), format!("Expect {:?}", expect)))
                 }
             }
-            _ => Err(self.error_unexpected(loc, format!("Expect {:?}", expect))),
+            _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect {:?}", expect))),
         }
     }
 
@@ -165,7 +168,7 @@ impl Parser {
         ParseError::new(ParseErrorKind::UnexpectedEOF, loc)
     }
 
-    fn show_loc(&self, loc: &Loc) {
+    pub fn show_loc(&self, loc: &Loc) {
         self.lexer.source_info.show_loc(&loc)
     }
 }
@@ -177,11 +180,11 @@ impl Parser {
         self.cursor = 0;
         self.prev_cursor = 0;
         let node = self.parse_comp_stmt()?;
-        let (tok, loc) = self.peek();
+        let tok = self.peek();
         if tok.kind == TokenKind::EOF {
             Ok(node)
         } else {
-            Err(self.error_unexpected(loc, "Expected end-of-input."))
+            Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
         }
     }
 
@@ -205,8 +208,7 @@ impl Parser {
         }
         */
         loop {
-            let (tok, _) = self.peek();
-            match tok.kind {
+            match self.peek().kind {
                 TokenKind::EOF => return return_comp_stmt(nodes, loc),
                 TokenKind::Reserved(reserved) => match reserved {
                     Reserved::Else | Reserved::Elsif | Reserved::End => {
@@ -489,6 +491,7 @@ impl Parser {
         //      (elsif EXPR THEN COMPSTMT)*
         //      [else COMPSTMT]
         //  end
+        let mut loc = self.prev_loc();
         let cond = self.parse_expr()?;
         self.parse_then()?;
         let then_ = self.parse_comp_stmt()?;
@@ -498,7 +501,7 @@ impl Parser {
         } else if self.get_if_reserved(Reserved::Else) {
             else_ = self.parse_comp_stmt()?;
         }
-        let loc = cond.loc().merge(else_.loc());
+        loc = loc.merge(else_.loc());
         Ok(Node::new(
             NodeKind::If(Box::new(cond), Box::new(then_), Box::new(else_)),
             loc,
@@ -520,10 +523,9 @@ impl Parser {
         //      [else COMPSTMT]
         //      [ensure COMPSTMT]
         //  end
-        let loc = self.loc();
         let name = match &self.get()?.kind {
             TokenKind::Ident(s) => s.clone(),
-            _ => return Err(self.error_unexpected(loc, format!("Expect identifier."))),
+            _ => return Err(self.error_unexpected(self.prev_loc(), format!("Expect identifier."))),
         };
         let id = self.ident_table.get_ident_id(&name);
         let args = self.parse_params()?;
@@ -538,7 +540,7 @@ impl Parser {
             return Ok(vec![]);
         };
         if !self.get_if_punct(Punct::LParen) {
-            return Err(self.error_unexpected(self.loc(), ""));
+            return Err(self.error_unexpected(self.loc(), "Expect \'(\'."));
         }
         let mut args = vec![];
         if self.get_if_punct(Punct::RParen) {
@@ -548,26 +550,27 @@ impl Parser {
             return Ok(args);
         }
         loop {
-            let (arg, loc) = match self.get()?.clone() {
-                Token {
-                    kind: TokenKind::Ident(s),
-                    loc,
-                } => (s.clone(), loc),
-                Token { loc, .. } => return Err(self.error_unexpected(loc, "Expect identifier.")),
+            let arg = match &self.get()?.kind {
+                TokenKind::Ident(s) => s.clone(),
+                _ => return Err(self.error_unexpected(self.prev_loc(), "Expect identifier.")),
             };
             let id = self.ident_table.get_ident_id(&arg);
-            args.push(Node::new(NodeKind::Param(id), loc));
+            args.push(Node::new(NodeKind::Param(id), self.prev_loc()));
             if !self.get_if_punct(Punct::Comma) {
                 break;
             }
         }
         if self.get_if_punct(Punct::RParen) {
             if !self.get_if_term() {
-                return Err(self.error_unexpected(self.loc(), "Expect terminator"));
+                return Err(self.error_unexpected(self.loc(), "Expect terminator."));
             }
             Ok(args)
         } else {
-            Err(self.error_unexpected(self.peek_no_skip_line_term().loc(), "Expect ')'."))
+            for tok in &self.tokens {
+                println!("{:?}", tok);
+            }
+            println!("{:?}", self.loc());
+            Err(self.error_unexpected(self.loc(), "Expect \')\'."))
         }
     }
 

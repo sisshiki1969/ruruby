@@ -70,11 +70,13 @@ impl SourceInfo {
                     .map(|x| calc_width(x))
                     .sum()
             };
-            let length = self.code
-                [max(loc.0, line.1)..=min(min(loc.1, line.2), self.code.len() - 1)]
+            let mut length = self.code[max(loc.0, line.1)..min(loc.1, line.2)]
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
+            if length == 0 {
+                length = 1;
+            }
             println!("{}{}", " ".repeat(read), "^".repeat(length));
         }
 
