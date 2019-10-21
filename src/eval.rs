@@ -50,6 +50,12 @@ pub enum RuntimeErrKind {
     NoMethod(String),
 }
 
+impl RuntimeError {
+    pub fn nomethod(msg: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(RuntimeErrKind::NoMethod(msg.into()), loc)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Evaluator {
     // Global info
@@ -208,7 +214,11 @@ impl Evaluator {
                 None => {
                     self.source_info.show_loc(&node.loc());
                     println!("{:?}", self.lvar_table());
-                    panic!("NameError: uninitialized constant.");
+                    let name = self.ident_table.get_name(*id).clone();
+                    Err(self.error_name(
+                        format!("NameError: uninitialized constant '{}'.", name),
+                        node.loc(),
+                    ))
                 }
             },
             NodeKind::BinOp(op, lhs, rhs) => {
@@ -223,12 +233,14 @@ impl Evaluator {
                             if let Value::Bool(b) = rhs_v {
                                 return Ok(Value::Bool(b));
                             } else {
-                                self.source_info.show_loc(&rhs.loc());
-                                panic!("Expected bool.");
+                                return Err(
+                                    self.error_unimplemented(format!("Expected bool."), rhs.loc())
+                                );
                             }
                         } else {
-                            self.source_info.show_loc(&lhs.loc());
-                            panic!("Expected bool.");
+                            return Err(
+                                self.error_unimplemented(format!("Expected bool."), lhs.loc())
+                            );
                         }
                     }
                     BinOp::LOr => {
@@ -241,12 +253,14 @@ impl Evaluator {
                             if let Value::Bool(b) = rhs_v {
                                 return Ok(Value::Bool(b));
                             } else {
-                                self.source_info.show_loc(&rhs.loc());
-                                panic!("Expected bool.");
+                                return Err(
+                                    self.error_unimplemented(format!("Expected bool."), rhs.loc())
+                                );
                             }
                         } else {
-                            self.source_info.show_loc(&lhs.loc());
-                            panic!("Expected bool.");
+                            return Err(
+                                self.error_unimplemented(format!("Expected bool."), lhs.loc())
+                            );
                         }
                     }
                     _ => {}
@@ -254,16 +268,21 @@ impl Evaluator {
                 let lhs = self.eval_node(&lhs)?;
                 let rhs = self.eval_node(&rhs)?;
                 match op {
-                    BinOp::Add => self.eval_add(lhs, rhs),
-                    BinOp::Sub => self.eval_sub(lhs, rhs),
-                    BinOp::Mul => self.eval_mul(lhs, rhs),
+                    BinOp::Add => self.eval_add(lhs, rhs, loc),
+                    BinOp::Sub => self.eval_sub(lhs, rhs, loc),
+                    BinOp::Mul => self.eval_mul(lhs, rhs, loc),
                     BinOp::Eq => self.eval_eq(lhs, rhs, loc),
-                    BinOp::Ne => self.eval_neq(lhs, rhs),
-                    BinOp::Ge => self.eval_ge(lhs, rhs),
-                    BinOp::Gt => self.eval_gt(lhs, rhs),
-                    BinOp::Le => self.eval_ge(rhs, lhs),
-                    BinOp::Lt => self.eval_gt(rhs, lhs),
-                    _ => unimplemented!("{:?}", op),
+                    BinOp::Ne => self.eval_neq(lhs, rhs, loc),
+                    BinOp::Ge => self.eval_ge(lhs, rhs, loc),
+                    BinOp::Gt => self.eval_gt(lhs, rhs, loc),
+                    BinOp::Le => self.eval_ge(rhs, lhs, loc),
+                    BinOp::Lt => self.eval_gt(rhs, lhs, loc),
+                    _ => {
+                        return Err(self.error_unimplemented(
+                            format!("Unimplemented operator {:?}.", op),
+                            node.loc(),
+                        ))
+                    }
                 }
             }
             NodeKind::Assign(lhs, rhs) => match lhs.kind {
@@ -327,7 +346,9 @@ impl Evaluator {
                 let id = match method.kind {
                     NodeKind::Ident(id) => id,
                     _ => {
-                        unimplemented!("method must be identifier.");
+                        return Err(
+                            self.error_unimplemented(format!("Expected identifier."), method.loc())
+                        )
                     }
                 };
                 let receiver_val = self.eval_node(receiver)?;
@@ -349,12 +370,33 @@ impl Evaluator {
                         Value::Instance(instance) => {
                             let info = self.instance_table.get(instance);
                             let class_info = self.class_table.get(info.class_id);
-                            class_info.get_instance_method(id).clone()
+                            match class_info.get_instance_method(id) {
+                                Some(info) => info.clone(),
+                                None => {
+                                    return Err(self.error_nomethod(
+                                        format!("No instance method found."),
+                                        method.loc(),
+                                    ))
+                                }
+                            }
                         }
                         Value::Class(class) => {
-                            self.class_table.get(class).get_class_method(id).clone()
+                            match self.class_table.get(class).get_class_method(id) {
+                                Some(info) => info.clone(),
+                                None => {
+                                    return Err(self.error_nomethod(
+                                        format!("No class method found."),
+                                        method.loc(),
+                                    ));
+                                }
+                            }
                         }
-                        _ => unimplemented!("Receiver must be a class or instance. {:?}", rec),
+                        _ => {
+                            return Err(self.error_unimplemented(
+                                format!("Receiver must be a class or instance. {:?}", rec),
+                                receiver.loc(),
+                            ))
+                        }
                     },
                 };
 
@@ -375,7 +417,7 @@ impl Evaluator {
                                 };
                                 self.lvar_table().insert(param_id, arg);
                             } else {
-                                unimplemented!("Illegal parameter.");
+                                panic!("Illegal parameter.");
                             }
                         }
                         let val = self.eval_node(&body.clone());
@@ -389,24 +431,24 @@ impl Evaluator {
         }
     }
 
-    fn eval_add(&mut self, lhs: Value, rhs: Value) -> EvalResult {
+    fn eval_add(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs + rhs)),
-            (_, _) => unimplemented!("NoMethodError: '+'"),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '+'", loc)),
         }
     }
 
-    fn eval_sub(&mut self, lhs: Value, rhs: Value) -> EvalResult {
+    fn eval_sub(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs - rhs)),
-            (_, _) => unimplemented!("NoMethodError: '-'"),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '-'", loc)),
         }
     }
 
-    fn eval_mul(&mut self, lhs: Value, rhs: Value) -> EvalResult {
+    fn eval_mul(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs * rhs)),
-            (_, _) => unimplemented!("NoMethodError: '*'"),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '*'", loc)),
         }
     }
 
@@ -418,25 +460,25 @@ impl Evaluator {
         }
     }
 
-    fn eval_neq(&mut self, lhs: Value, rhs: Value) -> EvalResult {
+    fn eval_neq(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs != rhs)),
-            (_, _) => unimplemented!("NoMethodError: '!='"),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '!='", loc)),
         }
     }
 
-    fn eval_ge(&mut self, lhs: Value, rhs: Value) -> EvalResult {
+    fn eval_ge(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs >= rhs)),
-            (_, _) => unimplemented!("NoMethodError: '>='"),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '>='", loc)),
         }
     }
 
-    fn eval_gt(&mut self, lhs: Value, rhs: Value) -> EvalResult {
+    fn eval_gt(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs > rhs)),
-            (_, _) => unimplemented!("NoMethodError: '>'"),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '>'", loc)),
         }
     }
 }

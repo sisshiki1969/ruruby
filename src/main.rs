@@ -83,6 +83,7 @@ fn repl() {
                     parser = parser_save;
                     continue;
                 }
+                parser.show_tokens();
                 level = parser.get_context_depth();
                 parser.show_loc(&err.loc());
                 println!("ParseError: {:?}", err.kind);

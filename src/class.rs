@@ -34,20 +34,16 @@ impl ClassInfo {
         }
     }
 
-    pub fn get_class_method(&self, id: IdentId) -> &MethodInfo {
-        self.class_method_table
-            .get(&id)
-            .unwrap_or_else(|| panic!("ClassInfo#get_class_method(): Method does not exists."))
+    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodInfo> {
+        self.class_method_table.get(&id)
     }
 
     pub fn add_class_method(&mut self, id: IdentId, info: MethodInfo) -> Option<MethodInfo> {
         self.class_method_table.insert(id, info)
     }
 
-    pub fn get_instance_method(&self, id: IdentId) -> &MethodInfo {
-        self.instance_method_table
-            .get(&id)
-            .unwrap_or_else(|| panic!("ClassInfo#get_instance_method(): Method does not exists."))
+    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodInfo> {
+        self.instance_method_table.get(&id)
     }
 }
 

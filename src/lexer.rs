@@ -565,7 +565,7 @@ mod test {
             Token![Punct(Punct::Assign), 11, 11],
             Token![NumLit(0), 13, 13],
             Token![Punct(Punct::Semi), 14, 14],
-            Token![LineTerm, 16, 16],
+            Token![LineTerm, 15, 15],
             Token![Reserved(Reserved::If), 24, 25],
             Token![Ident("a"), 27, 27],
             Token![Punct(Punct::Eq), 29, 30],

@@ -46,6 +46,12 @@ impl Parser {
         self.context_stack.len()
     }
 
+    pub fn show_tokens(&self) {
+        for tok in &self.tokens {
+            println!("{:?}", tok);
+        }
+    }
+
     /// Peek next token (skipping line terminators).
     fn peek(&self) -> &Token {
         let mut c = self.cursor;
@@ -73,7 +79,6 @@ impl Parser {
         self.tokens[self.cursor].loc()
     }
 
-    #[allow(dead_code)]
     fn prev_loc(&self) -> Loc {
         self.tokens[self.prev_cursor].loc()
     }
@@ -258,9 +263,9 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::LAnd) {
+        if self.get_if_punct(Punct::LOr) {
             let rhs = self.parse_arg_logical_or()?;
-            Ok(Node::new_binop(BinOp::LAnd, lhs, rhs))
+            Ok(Node::new_binop(BinOp::LOr, lhs, rhs))
         } else {
             Ok(lhs)
         }
@@ -636,6 +641,13 @@ mod tests {
     fn op2() {
         let program = "4!=5";
         let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn op19() {
+        let program = "4!=4 || 1==1 && 2==3";
+        let expected = Value::Bool(false);
         eval_script(program, expected);
     }
 
