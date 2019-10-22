@@ -132,6 +132,9 @@ fn file_read(file_name: impl Into<String>) {
                 Err(_) => {}
             }
         }
-        Err(err) => println!("ParseError: {:?}", err.kind),
+        Err(err) => {
+            parser.show_loc(&err.loc);
+            println!("ParseError: {:?}", err.kind);
+        }
     }
 }

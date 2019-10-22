@@ -1,6 +1,7 @@
 use crate::eval::{MethodInfo, MethodTable};
 use crate::node::Node;
 use crate::util::*;
+use crate::value::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,6 +18,7 @@ pub struct ClassInfo {
     pub id: IdentId,
     pub name: String,
     pub body: Box<Node>,
+    pub instance_var: HashMap<IdentId, Value>,
     pub instance_method_table: MethodTable,
     pub class_method_table: MethodTable,
     pub subclass: HashMap<IdentId, ClassRef>,
@@ -28,6 +30,7 @@ impl ClassInfo {
             id,
             name,
             body: Box::new(body),
+            instance_var: HashMap::new(),
             instance_method_table: HashMap::new(),
             class_method_table: HashMap::new(),
             subclass: HashMap::new(),

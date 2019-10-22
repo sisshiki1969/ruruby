@@ -254,6 +254,28 @@ impl Evaluator {
                     ))
                 }
             },
+            NodeKind::InstanceVar(id) => match self.self_value {
+                Value::Instance(instance) => {
+                    let info = self.instance_table.get(instance);
+                    match info.instance_var.get(id) {
+                        Some(v) => Ok(v.clone()),
+                        None => Ok(Value::Nil),
+                    }
+                }
+                Value::Class(class) => {
+                    let info = self.class_table.get(class);
+                    match info.instance_var.get(id) {
+                        Some(v) => Ok(v.clone()),
+                        None => Ok(Value::Nil),
+                    }
+                }
+                _ => {
+                    return Err(self.error_unimplemented(
+                        format!("Instance variable can be referred only in instance method."),
+                        node.loc(),
+                    ))
+                }
+            },
             NodeKind::Const(id) => match self.const_table.get(&id) {
                 Some(val) => Ok(val.clone()),
                 None => {
@@ -333,14 +355,22 @@ impl Evaluator {
             NodeKind::Assign(lhs, rhs) => match lhs.kind {
                 NodeKind::Ident(id) => {
                     let rhs = self.eval_node(&rhs)?;
-                    match self.lvar_table().get_mut(&id) {
-                        Some(val) => {
-                            *val = rhs.clone();
+                    self.lvar_table().insert(id, rhs.clone());
+                    Ok(rhs)
+                }
+                NodeKind::InstanceVar(id) => {
+                    let rhs = self.eval_node(&rhs)?;
+                    match self.self_value {
+                        Value::Instance(instance) => {
+                            let info = self.instance_table.get_mut(instance);
+                            info.instance_var.insert(id, rhs.clone());
                         }
-                        None => {
-                            self.lvar_table().insert(id, rhs.clone());
+                        Value::Class(class) => {
+                            let info = self.class_table.get_mut(class);
+                            info.instance_var.insert(id, rhs.clone());
                         }
-                    }
+                        _ => unreachable!("eval: Illegal self value. {:?}", self.self_value),
+                    };
                     Ok(rhs)
                 }
                 _ => unimplemented!(),
@@ -360,7 +390,7 @@ impl Evaluator {
                     self.eval_node(&else_)
                 }
             }
-            NodeKind::FuncDecl(id, params, body) => {
+            NodeKind::MethodDecl(id, params, body) => {
                 let info = MethodInfo::RubyFunc {
                     params: params.clone(),
                     body: body.clone(),
@@ -373,6 +403,24 @@ impl Evaluator {
                     let class = self.class_stack.last().unwrap();
                     let class_info = self.class_table.get_mut(*class);
                     class_info.instance_method_table.insert(*id, info);
+                }
+                Ok(Value::Nil)
+            }
+            NodeKind::ClassMethodDecl(id, params, body) => {
+                let info = MethodInfo::RubyFunc {
+                    params: params.clone(),
+                    body: body.clone(),
+                };
+                if self.class_stack.len() == 1 {
+                    return Err(self.error_unimplemented(
+                        "Currently, class method definition in the top level is not allowed.",
+                        node.loc(),
+                    ));
+                } else {
+                    // A method defined in a class definition is registered as a class method of the class.
+                    let class = self.class_stack.last().unwrap();
+                    let class_info = self.class_table.get_mut(*class);
+                    class_info.class_method_table.insert(*id, info);
                 }
                 Ok(Value::Nil)
             }

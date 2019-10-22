@@ -13,7 +13,8 @@ pub enum NodeKind {
     InstanceVar(IdentId),
     Const(IdentId),
     Param(IdentId),
-    FuncDecl(IdentId, NodeVec, Box<Node>),
+    MethodDecl(IdentId, NodeVec, Box<Node>), // id, params, body
+    ClassMethodDecl(IdentId, NodeVec, Box<Node>), // id, params, body
     ClassDecl(IdentId, Box<Node>),
     Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
 }
@@ -81,7 +82,12 @@ impl Node {
 
     pub fn new_method_decl(id: IdentId, params: Vec<Node>, body: Node) -> Self {
         let loc = Loc::new(body.loc());
-        Node::new(NodeKind::FuncDecl(id, params, Box::new(body)), loc)
+        Node::new(NodeKind::MethodDecl(id, params, Box::new(body)), loc)
+    }
+
+    pub fn new_class_method_decl(id: IdentId, params: Vec<Node>, body: Node) -> Self {
+        let loc = Loc::new(body.loc());
+        Node::new(NodeKind::ClassMethodDecl(id, params, Box::new(body)), loc)
     }
 
     pub fn new_class_decl(id: IdentId, body: Node) -> Self {
@@ -118,8 +124,8 @@ impl std::fmt::Display for Node {
                 write!(f, "]")?;
                 Ok(())
             }
-            NodeKind::FuncDecl(id, args, body) => {
-                write!(f, "[ FuncDecl {:?}: PARAM(", id)?;
+            NodeKind::MethodDecl(id, args, body) => {
+                write!(f, "[ MethodDecl {:?}: PARAM(", id)?;
                 for arg in args {
                     write!(f, "({}) ", arg)?;
                 }

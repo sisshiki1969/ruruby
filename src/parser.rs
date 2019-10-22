@@ -532,8 +532,25 @@ impl Parser {
         //      [else COMPSTMT]
         //      [ensure COMPSTMT]
         //  end
+        let mut is_class_method = false;
         let name = match &self.get()?.kind {
-            TokenKind::Ident(s) => s.clone(),
+            TokenKind::Ident(s) => {
+                if s != "self" {
+                    s.clone()
+                } else {
+                    is_class_method = true;
+                    if self.get_if_punct(Punct::Dot) {
+                        let tok = self.get()?;
+                        if let TokenKind::Ident(s) = &tok.kind {
+                            s.clone()
+                        } else {
+                            return Err(self.error_unexpected(self.loc(), "Expect identifier."));
+                        }
+                    } else {
+                        return Err(self.error_unexpected(self.loc(), "Expect \'.\'."));
+                    }
+                }
+            }
             _ => return Err(self.error_unexpected(self.prev_loc(), format!("Expect identifier."))),
         };
         let id = self.ident_table.get_ident_id(&name);
@@ -541,7 +558,11 @@ impl Parser {
 
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
-        Ok(Node::new_method_decl(id, args, body))
+        if is_class_method {
+            Ok(Node::new_class_method_decl(id, args, body))
+        } else {
+            Ok(Node::new_method_decl(id, args, body))
+        }
     }
 
     fn parse_params(&mut self) -> Result<Vec<Node>, ParseError> {
