@@ -445,6 +445,10 @@ impl Parser {
                 };
                 return Ok(Node::new_identifier(id, loc));
             }
+            TokenKind::InstanceVar(name) => {
+                let id = self.ident_table.get_ident_id(name);
+                return Ok(Node::new_instance_var(id, loc));
+            }
             TokenKind::Const(name) => {
                 let id = self.ident_table.get_ident_id(name);
                 Ok(Node::new_const(id, loc))
@@ -611,8 +615,7 @@ mod tests {
     fn eval_script(script: impl Into<String>, expected: Value) {
         let mut parser = Parser::new();
         let node = parser.parse_program(script.into()).unwrap();
-        let mut eval = Evaluator::new();
-        eval.init(parser.lexer.source_info, parser.ident_table);
+        let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
         match eval.eval_node(&node) {
             Ok(res) => {
                 if res != expected {
@@ -773,6 +776,24 @@ mod tests {
         assert(10,Foo.new.boo(5))
         assert(1,a)";
         let expected = Value::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn class1() {
+        let program = "
+        class Vec
+            assert(Vec, self)
+            def len(x,y)
+                def sq(x)
+                    x*x
+                end
+                sq(x)+sq(y)
+            end
+        end
+
+        Vec.new.len(3,4)";
+        let expected = Value::FixNum(25);
         eval_script(program, expected);
     }
 }

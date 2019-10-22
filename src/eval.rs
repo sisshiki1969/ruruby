@@ -68,33 +68,35 @@ pub struct Evaluator {
     // State
     pub class_stack: Vec<ClassRef>,
     pub scope_stack: Vec<LocalScope>,
+    pub self_value: Value,
     pub loc: Loc,
 }
 
 impl Evaluator {
-    pub fn new() -> Self {
-        let eval = Evaluator {
-            source_info: SourceInfo::new(),
-            ident_table: IdentifierTable::new(),
+    pub fn new(source_info: SourceInfo, ident_table: IdentifierTable) -> Self {
+        let mut eval = Evaluator {
+            source_info,
+            ident_table,
             class_table: GlobalClassTable::new(),
             instance_table: GlobalInstanceTable::new(),
             method_table: HashMap::new(),
             const_table: HashMap::new(),
             class_stack: vec![],
             scope_stack: vec![LocalScope::new()],
+            self_value: Value::Nil,
             loc: Loc(0, 0),
         };
+        eval.init_builtin();
+        eval.init_context();
         eval
     }
     pub fn init(&mut self, source_info: SourceInfo, ident_table: IdentifierTable) {
-        self.repl_init(source_info, ident_table);
-        self.repl_set_main();
-    }
-
-    pub fn repl_init(&mut self, source_info: SourceInfo, ident_table: IdentifierTable) {
         self.source_info = source_info;
         self.ident_table = ident_table;
+        self.init_builtin();
+    }
 
+    pub fn init_builtin(&mut self) {
         let id = self.ident_table.get_ident_id(&"puts".to_string());
         let info = MethodInfo::BuiltinFunc {
             name: "puts".to_string(),
@@ -110,10 +112,11 @@ impl Evaluator {
         self.method_table.insert(id, info);
     }
 
-    pub fn repl_set_main(&mut self) {
+    pub fn init_context(&mut self) {
         let id = self.ident_table.get_ident_id(&"main".to_string());
         let classref = self.new_class(id, Node::new_comp_stmt(Loc(0, 0)));
         self.class_stack.push(classref);
+        self.self_value = Value::Class(classref);
     }
 
     pub fn error_unimplemented(&self, msg: impl Into<String>, loc: Loc) -> RuntimeError {
@@ -170,6 +173,46 @@ impl Evaluator {
         &mut self.scope_stack.last_mut().unwrap().lvar_table
     }
 
+    pub fn get_instance_method(
+        &mut self,
+        instance: InstanceRef,
+        method: &Node,
+    ) -> Result<MethodInfo, RuntimeError> {
+        let id = match method.kind {
+            NodeKind::Ident(id) => id,
+            _ => {
+                return Err(self.error_unimplemented(format!("Expected identifier."), method.loc()))
+            }
+        };
+        let info = self.instance_table.get(instance);
+        let class_info = self.class_table.get(info.class_id);
+        match class_info.get_instance_method(id) {
+            Some(info) => Ok(info.clone()),
+            None => {
+                return Err(self.error_nomethod(format!("No instance method found."), method.loc()))
+            }
+        }
+    }
+
+    pub fn get_class_method(
+        &mut self,
+        class: ClassRef,
+        method: &Node,
+    ) -> Result<MethodInfo, RuntimeError> {
+        let id = match method.kind {
+            NodeKind::Ident(id) => id,
+            _ => {
+                return Err(self.error_unimplemented(format!("Expected identifier."), method.loc()))
+            }
+        };
+        match self.class_table.get(class).get_class_method(id) {
+            Some(info) => Ok(info.clone()),
+            None => {
+                return Err(self.error_nomethod(format!("No class method found."), method.loc()));
+            }
+        }
+    }
+
     pub fn eval(&mut self, node: &Node) -> EvalResult {
         match self.eval_node(node) {
             Ok(res) => Ok(res),
@@ -193,11 +236,13 @@ impl Evaluator {
             NodeKind::Number(num) => Ok(Value::FixNum(*num)),
             NodeKind::String(s) => Ok(Value::String(s.clone())),
             NodeKind::SelfValue => {
+                /*
                 let classref = self
                     .class_stack
                     .last()
                     .unwrap_or_else(|| panic!("Evaluator#eval_node: class stack is empty"));
-                Ok(Value::Class(*classref))
+                    */
+                Ok(self.self_value.clone())
             }
             NodeKind::Ident(id) => match self.lvar_table().get(&id) {
                 Some(val) => Ok(val.clone()),
@@ -332,12 +377,15 @@ impl Evaluator {
                 Ok(Value::Nil)
             }
             NodeKind::ClassDecl(id, body) => {
-                let info = self.new_class(*id, *body.clone());
-                let val = Value::Class(info);
+                let classref = self.new_class(*id, *body.clone());
+                let val = Value::Class(classref);
                 self.const_table.insert(*id, val);
                 self.scope_stack.push(LocalScope::new());
-                self.class_stack.push(info);
+                self.class_stack.push(classref);
+                let self_old = self.self_value.clone();
+                self.self_value = Value::Class(classref);
                 self.eval_node(body)?;
+                self.self_value = self_old;
                 self.class_stack.pop();
                 self.scope_stack.pop();
                 Ok(Value::Nil)
@@ -367,30 +415,8 @@ impl Evaluator {
                         }
                     },
                     Some(rec) => match rec {
-                        Value::Instance(instance) => {
-                            let info = self.instance_table.get(instance);
-                            let class_info = self.class_table.get(info.class_id);
-                            match class_info.get_instance_method(id) {
-                                Some(info) => info.clone(),
-                                None => {
-                                    return Err(self.error_nomethod(
-                                        format!("No instance method found."),
-                                        method.loc(),
-                                    ))
-                                }
-                            }
-                        }
-                        Value::Class(class) => {
-                            match self.class_table.get(class).get_class_method(id) {
-                                Some(info) => info.clone(),
-                                None => {
-                                    return Err(self.error_nomethod(
-                                        format!("No class method found."),
-                                        method.loc(),
-                                    ));
-                                }
-                            }
-                        }
+                        Value::Instance(instance) => self.get_instance_method(instance, method)?,
+                        Value::Class(class) => self.get_class_method(class, method)?,
                         _ => {
                             return Err(self.error_unimplemented(
                                 format!("Receiver must be a class or instance. {:?}", rec),
@@ -420,7 +446,10 @@ impl Evaluator {
                                 panic!("Illegal parameter.");
                             }
                         }
+                        let self_old = self.self_value.clone();
+                        self.self_value = receiver_val;
                         let val = self.eval_node(&body.clone());
+                        self.self_value = self_old;
                         self.scope_stack.pop();
                         val
                     }
@@ -456,7 +485,9 @@ impl Evaluator {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs == rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '=='", loc)),
+            (Value::Class(lhs), Value::Class(rhs)) => Ok(Value::Bool(lhs == rhs)),
+            (Value::Instance(lhs), Value::Instance(rhs)) => Ok(Value::Bool(lhs == rhs)),
+            _ => Err(self.error_nomethod("NoMethodError: '=='", loc)),
         }
     }
 
@@ -464,6 +495,8 @@ impl Evaluator {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs != rhs)),
+            (Value::Class(lhs), Value::Class(rhs)) => Ok(Value::Bool(lhs != rhs)),
+            (Value::Instance(lhs), Value::Instance(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '!='", loc)),
         }
     }

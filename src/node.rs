@@ -10,6 +10,7 @@ pub enum NodeKind {
     CompStmt(NodeVec),
     If(Box<Node>, Box<Node>, Box<Node>),
     Ident(IdentId),
+    InstanceVar(IdentId),
     Const(IdentId),
     Param(IdentId),
     FuncDecl(IdentId, NodeVec, Box<Node>),
@@ -63,6 +64,10 @@ impl Node {
 
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Ident(id), loc)
+    }
+
+    pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::InstanceVar(id), loc)
     }
 
     pub fn new_const(id: IdentId, loc: Loc) -> Self {

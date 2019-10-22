@@ -1,14 +1,10 @@
-
-class Foo
-    puts("this")
-end
-
-class Bar
-    puts("that")
-
-    def pr
-        puts ("print")
+class Vec
+    def len(x,y)
+        def sq(x)
+            x*x
+        end
+        sq(x)+sq(y)
     end
 end
 
-Bar.new.pr()
+Vec.new.len(3,4)

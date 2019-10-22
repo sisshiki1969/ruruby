@@ -113,7 +113,7 @@ impl Lexer {
             };
 
             let token = if ch.is_ascii_alphabetic() || ch == '_' {
-                self.lex_identifier(ch)?
+                self.lex_identifier(ch, false)?
             } else if ch.is_numeric() {
                 self.lex_number_literal(ch)?
             } else if ch.is_ascii_punctuation() {
@@ -186,10 +186,14 @@ impl Lexer {
                             self.new_punct(Punct::Or)
                         }
                     }
+                    '@' => {
+                        let ch = self.get()?;
+                        self.lex_identifier(ch, true)?
+                    }
                     _ => unimplemented!("{}", ch),
                 }
             } else {
-                self.lex_identifier(ch)?
+                self.lex_identifier(ch, false)?
             };
             if token.kind != TokenKind::Nop {
                 tokens.push(token);
@@ -199,7 +203,7 @@ impl Lexer {
         Ok(LexerResult::new(tokens))
     }
 
-    fn lex_identifier(&mut self, ch: char) -> Result<Token, ParseError> {
+    fn lex_identifier(&mut self, ch: char, is_instance_var: bool) -> Result<Token, ParseError> {
         // read identifier or reserved keyword
         let is_const = ch.is_ascii_uppercase();
         let mut tok = ch.to_string();
@@ -221,6 +225,8 @@ impl Lexer {
             None => {
                 if is_const {
                     Ok(self.new_const(tok))
+                } else if is_instance_var {
+                    Ok(self.new_instance_var(tok))
                 } else {
                     Ok(self.new_ident(tok))
                 }
@@ -358,6 +364,10 @@ impl Lexer {
         Annot::new(TokenKind::Ident(ident.into()), self.cur_loc())
     }
 
+    fn new_instance_var(&self, ident: impl Into<String>) -> Token {
+        Annot::new(TokenKind::InstanceVar(ident.into()), self.cur_loc())
+    }
+
     fn new_const(&self, ident: impl Into<String>) -> Token {
         Annot::new(TokenKind::Const(ident.into()), self.cur_loc())
     }
@@ -438,6 +448,9 @@ mod test {
         (Ident($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_ident($item, Loc($loc_0, $loc_1))
         };
+        (InstanceVar($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_instance_var($item, Loc($loc_0, $loc_1))
+        };
         (Space, $loc_0:expr, $loc_1:expr) => {
             Token::new_space(Loc($loc_0, $loc_1))
         };
@@ -457,6 +470,20 @@ mod test {
             Token::new_eof($pos)
         };
     );
+
+    #[test]
+    fn identifier1() {
+        let program = "amber";
+        let ans = vec![Token![Ident("amber"), 0, 4], Token![EOF, 5]];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn identifier2() {
+        let program = "@amber";
+        let ans = vec![Token![InstanceVar("amber"), 0, 5], Token![EOF, 6]];
+        assert_tokens(program, ans);
+    }
 
     #[test]
     fn cmp1() {

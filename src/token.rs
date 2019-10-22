@@ -30,6 +30,7 @@ pub enum TokenKind {
     Nop,
     EOF,
     Ident(String),
+    InstanceVar(String),
     Const(String),
     NumLit(i64),
     StringLit(String),
@@ -90,6 +91,10 @@ pub enum Punct {
 impl Token {
     pub fn new_ident(ident: impl Into<String>, loc: Loc) -> Self {
         Annot::new(TokenKind::Ident(ident.into()), loc)
+    }
+
+    pub fn new_instance_var(ident: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::InstanceVar(ident.into()), loc)
     }
 
     pub fn new_const(ident: impl Into<String>, loc: Loc) -> Self {

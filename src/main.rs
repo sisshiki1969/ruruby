@@ -42,9 +42,7 @@ fn repl() {
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
-    let mut eval = Evaluator::new();
-    eval.repl_init(parser.lexer.source_info.clone(), parser.ident_table.clone());
-    eval.repl_set_main();
+    let mut eval = Evaluator::new(parser.lexer.source_info.clone(), parser.ident_table.clone());
     let mut level = parser.get_context_depth();
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
@@ -62,7 +60,7 @@ fn repl() {
         match parser.parse_program(program.clone()) {
             Ok(node) => {
                 //println!("{:?}", node);
-                eval.repl_init(parser.lexer.source_info.clone(), parser.ident_table.clone());
+                eval.init(parser.lexer.source_info.clone(), parser.ident_table.clone());
                 match eval.eval(&node) {
                     Ok(result) => {
                         parser.lexer.source_info = eval.source_info.clone();
@@ -128,8 +126,7 @@ fn file_read(file_name: impl Into<String>) {
     let res = parser.parse_program(file_body);
     match res {
         Ok(node) => {
-            let mut eval = Evaluator::new();
-            eval.init(parser.lexer.source_info, parser.ident_table);
+            let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
             match eval.eval(&node) {
                 Ok(result) => println!("=> {:?}", &result),
                 Err(_) => {}
