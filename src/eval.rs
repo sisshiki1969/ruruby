@@ -234,6 +234,8 @@ impl Evaluator {
         let loc = node.loc();
         match &node.kind {
             NodeKind::Number(num) => Ok(Value::FixNum(*num)),
+            NodeKind::Bool(b) => Ok(Value::Bool(*b)),
+            NodeKind::Float(num) => Ok(Value::FloatNum(*num)),
             NodeKind::String(s) => Ok(Value::String(s.clone())),
             NodeKind::SelfValue => {
                 /*
@@ -248,10 +250,8 @@ impl Evaluator {
                 Some(val) => Ok(val.clone()),
                 None => {
                     let name = self.ident_table.get_name(*id).clone();
-                    Err(self.error_name(
-                        format!("NameError: undefined local variable `{}'.", name),
-                        node.loc(),
-                    ))
+                    Err(self
+                        .error_name(format!("undefined local variable `{}'.", name), node.loc()))
                 }
             },
             NodeKind::InstanceVar(id) => match self.self_value {
@@ -282,10 +282,7 @@ impl Evaluator {
                     self.source_info.show_loc(&node.loc());
                     println!("{:?}", self.lvar_table());
                     let name = self.ident_table.get_name(*id).clone();
-                    Err(self.error_name(
-                        format!("NameError: uninitialized constant '{}'.", name),
-                        node.loc(),
-                    ))
+                    Err(self.error_name(format!("Uninitialized constant '{}'.", name), node.loc()))
                 }
             },
             NodeKind::BinOp(op, lhs, rhs) => {
@@ -338,6 +335,7 @@ impl Evaluator {
                     BinOp::Add => self.eval_add(lhs, rhs, loc),
                     BinOp::Sub => self.eval_sub(lhs, rhs, loc),
                     BinOp::Mul => self.eval_mul(lhs, rhs, loc),
+                    BinOp::Div => self.eval_div(lhs, rhs, loc),
                     BinOp::Eq => self.eval_eq(lhs, rhs, loc),
                     BinOp::Ne => self.eval_neq(lhs, rhs, loc),
                     BinOp::Ge => self.eval_ge(lhs, rhs, loc),
@@ -511,6 +509,9 @@ impl Evaluator {
     fn eval_add(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs + rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 + rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs + rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs + rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '+'", loc)),
         }
     }
@@ -518,6 +519,9 @@ impl Evaluator {
     fn eval_sub(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs - rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 - rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs - rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs - rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '-'", loc)),
         }
     }
@@ -525,6 +529,19 @@ impl Evaluator {
     fn eval_mul(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs * rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 * rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs * rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs * rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '*'", loc)),
+        }
+    }
+
+    fn eval_div(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs / rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 / rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs / rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs / rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '*'", loc)),
         }
     }
@@ -532,6 +549,7 @@ impl Evaluator {
     pub fn eval_eq(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs == rhs)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Class(lhs), Value::Class(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Instance(lhs), Value::Instance(rhs)) => Ok(Value::Bool(lhs == rhs)),
@@ -542,6 +560,7 @@ impl Evaluator {
     fn eval_neq(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs != rhs)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (Value::Class(lhs), Value::Class(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (Value::Instance(lhs), Value::Instance(rhs)) => Ok(Value::Bool(lhs != rhs)),
@@ -552,6 +571,9 @@ impl Evaluator {
     fn eval_ge(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs >= rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs >= rhs as f64)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs as f64 >= rhs)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs >= rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>='", loc)),
         }
     }
@@ -559,6 +581,9 @@ impl Evaluator {
     fn eval_gt(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs > rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs > rhs as f64)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs as f64 > rhs)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs > rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>'", loc)),
         }
     }
@@ -616,6 +641,7 @@ impl Evaluator {
                 false => "false".to_string(),
             },
             Value::FixNum(i) => i.to_string(),
+            Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
             Value::Class(class) => self.get_class_name(*class),
             Value::Instance(instance) => self.get_instance_name(*instance),

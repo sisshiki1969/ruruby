@@ -1,4 +1,5 @@
 #![feature(test)]
+extern crate ansi_term;
 extern crate clap;
 extern crate rustyline;
 pub mod class;
@@ -12,6 +13,7 @@ pub mod util;
 pub mod value;
 use crate::eval::Evaluator;
 use crate::parser::{ParseErrorKind, Parser};
+use ansi_term::Colour::Red;
 use clap::{App, Arg};
 
 fn main() {
@@ -46,7 +48,8 @@ fn repl() {
     let mut level = parser.get_context_depth();
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
-        let readline = rl.readline(&format!("irb:{:1}{} ", level, prompt).to_string());
+        let readline =
+            rl.readline(&format!("{}{:1}{} ", Red.bold().paint("irb:"), level, prompt).to_string());
         let mut line = match readline {
             Ok(line) => line,
             Err(_) => return,
@@ -133,6 +136,7 @@ fn file_read(file_name: impl Into<String>) {
             }
         }
         Err(err) => {
+            parser.show_tokens();
             parser.show_loc(&err.loc);
             println!("ParseError: {:?}", err.kind);
         }

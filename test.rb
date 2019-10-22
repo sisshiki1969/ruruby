@@ -1,22 +1,12 @@
 class Vec
     @xxx=100
-    def set_xxx(x)
-        @xxx = x
-    end
+    def set_xxx(x); @xxx = x; end
     def len(x,y)
-        def sq(x)
-            @xxx=1
-            x*x
-        end
+        def sq(x); x*x; end
         sq(x)+sq(y)
     end
-    def get_xxx
-        @xxx
-    end
-    def self.get_xxx
-        @xxx = @xxx + 1
-        @xxx
-    end
+    def get_xxx; @xxx; end
+    def self.get_xxx; @xxx = @xxx + 1; @xxx; end
 end
 
 foo1 = Vec.new

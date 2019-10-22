@@ -284,6 +284,7 @@ impl Parser {
         }
     }
 
+    // 4==4==4 => SyntaxError
     fn parse_arg_eq(&mut self) -> Result<Node, ParseError> {
         let lhs = self.parse_arg_comp()?;
         if self.is_line_term() {
@@ -346,6 +347,9 @@ impl Parser {
         if self.get_if_punct(Punct::Mul) {
             let rhs = self.parse_arg_mul()?;
             Ok(Node::new_binop(BinOp::Mul, lhs, rhs))
+        } else if self.get_if_punct(Punct::Div) {
+            let rhs = self.parse_arg_mul()?;
+            Ok(Node::new_binop(BinOp::Div, lhs, rhs))
         } else {
             Ok(lhs)
         }
@@ -396,7 +400,10 @@ impl Parser {
                     let tok = self.get()?.clone();
                     let method = match &tok.kind {
                         TokenKind::Ident(s) => s,
-                        _ => panic!("method name must be an identifier."),
+                        _ => {
+                            return Err(self
+                                .error_unexpected(tok.loc(), "method name must be an identifier."))
+                        }
                     };
                     let id = self.ident_table.get_ident_id(&method);
                     let mut args = vec![];
@@ -454,6 +461,7 @@ impl Parser {
                 Ok(Node::new_const(id, loc))
             }
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
+            TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(Node::new_string(s.clone(), loc)),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
@@ -485,6 +493,8 @@ impl Parser {
                 self.context_stack.pop();
                 Ok(node)
             }
+            TokenKind::Reserved(Reserved::True) => Ok(Node::new_bool(true, loc)),
+            TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::EOF => {
                 return Err(self.error_eof(loc));
             }

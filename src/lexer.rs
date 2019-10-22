@@ -46,8 +46,10 @@ impl Lexer {
             "else" => Reserved::Else,
             "elsif" => Reserved::Elsif,
             "end" => Reserved::End,
+            "for" => Reserved::For,
             "false" => Reserved::False,
             "if" => Reserved::If,
+            "in" => Reserved::In,
             "return" => Reserved::Return,
             "then" => Reserved::Then,
             "true" => Reserved::True
@@ -64,11 +66,13 @@ impl Lexer {
         }
     }
 
-    #[allow(dead_code)]
     fn error_unexpected(&self, pos: usize) -> ParseError {
         let loc = Loc(pos, pos);
         ParseError::new(
-            ParseErrorKind::SyntaxError("Unexpected char,".to_string()),
+            ParseErrorKind::SyntaxError(format!(
+                "Unexpected char. '{}'",
+                self.source_info.code[pos]
+            )),
             loc,
         )
     }
@@ -79,6 +83,19 @@ impl Lexer {
     }
 
     pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, ParseError> {
+        match self.tokenize_main(code_text) {
+            Ok(res) => Ok(res),
+            Err(err) => {
+                self.goto_eol();
+                Err(err)
+            }
+        }
+    }
+
+    pub fn tokenize_main(
+        &mut self,
+        code_text: impl Into<String>,
+    ) -> Result<LexerResult, ParseError> {
         let mut code = code_text.into().chars().collect::<Vec<char>>();
         let pop_flag = match self.source_info.line_pos.last() {
             None => false,
@@ -129,9 +146,25 @@ impl Lexer {
                     '+' => self.new_punct(Punct::Plus),
                     '-' => self.new_punct(Punct::Minus),
                     '*' => self.new_punct(Punct::Mul),
+                    '/' => self.new_punct(Punct::Div),
                     '(' => self.new_punct(Punct::LParen),
                     ')' => self.new_punct(Punct::RParen),
-                    '.' => self.new_punct(Punct::Dot),
+                    '.' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '.' {
+                            self.get()?;
+                            let ch2 = self.peek()?;
+                            if ch2 == '.' {
+                                self.get()?;
+                                self.new_punct(Punct::Range3)
+                            } else {
+                                self.new_punct(Punct::Range2)
+                            }
+                        } else {
+                            self.new_punct(Punct::Dot)
+                        }
+                    }
+                    '?' => self.new_punct(Punct::Question),
                     '=' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
@@ -236,7 +269,8 @@ impl Lexer {
 
     /// Read number literal
     fn lex_number_literal(&mut self, ch: char) -> Result<Token, ParseError> {
-        let mut tok = ch.to_string();
+        let mut int = ch.to_string();
+        let mut decimal_flag = false;
         loop {
             let ch = match self.peek() {
                 Ok(ch) => ch,
@@ -245,15 +279,36 @@ impl Lexer {
                 }
             };
             if ch.is_numeric() {
-                tok.push(self.get()?);
+                int.push(self.get()?);
             } else if ch == '_' {
                 self.get()?;
+            } else if ch == '.' {
+                if decimal_flag {
+                    break;
+                }
+                let ch2 = match self.peek2() {
+                    Ok(ch2) => ch2,
+                    Err(_) => {
+                        break;
+                    }
+                };
+                if !ch2.is_numeric() {
+                    break;
+                }
+
+                decimal_flag = true;
+                int.push(self.get()?);
             } else {
                 break;
             }
         }
-        let i = tok.parse::<i64>().unwrap();
-        Ok(self.new_numlit(i))
+        if decimal_flag {
+            let f = int.parse::<f64>().unwrap();
+            Ok(self.new_floatlit(f))
+        } else {
+            let i = int.parse::<i64>().unwrap();
+            Ok(self.new_numlit(i))
+        }
     }
 
     /// Read string literal
@@ -309,13 +364,23 @@ impl Lexer {
         }
     }
 
-    /// Peek one char and no move.
+    /// Peek the next char and no move.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&mut self) -> Result<char, ParseError> {
         if self.pos >= self.len {
             Err(self.error_eof(self.pos))
         } else {
             Ok(self.source_info.code[self.pos])
+        }
+    }
+
+    /// Peek the char after the next and no move.
+    /// Returns Some(char) or None if the cursor reached EOF.
+    fn peek2(&mut self) -> Result<char, ParseError> {
+        if self.pos + 1 >= self.len {
+            Err(self.error_eof(self.pos))
+        } else {
+            Ok(self.source_info.code[self.pos + 1])
         }
     }
 
@@ -346,9 +411,11 @@ impl Lexer {
 
     fn goto_eol(&mut self) {
         loop {
-            match self.get() {
+            match self.peek() {
                 Ok('\n') | Err(_) => return,
-                _ => {}
+                _ => {
+                    let _ = self.get();
+                }
             }
         }
     }
@@ -361,7 +428,7 @@ impl Lexer {
 
 impl Lexer {
     fn new_ident(&self, ident: impl Into<String>) -> Token {
-        Annot::new(TokenKind::Ident(ident.into()), self.cur_loc())
+        Token::new_ident(ident.into(), self.cur_loc())
     }
 
     fn new_instance_var(&self, ident: impl Into<String>) -> Token {
@@ -377,7 +444,11 @@ impl Lexer {
     }
 
     fn new_numlit(&self, num: i64) -> Token {
-        Annot::new(TokenKind::NumLit(num), self.cur_loc())
+        Token::new_numlit(num, self.cur_loc())
+    }
+
+    fn new_floatlit(&self, num: f64) -> Token {
+        Token::new_floatlit(num, self.cur_loc())
     }
 
     fn new_stringlit(&self, string: String) -> Token {
@@ -396,11 +467,12 @@ impl Lexer {
         Annot::new(TokenKind::LineTerm, self.cur_loc())
     }
 
-    fn new_nop(&self) -> Token {
-        Annot::new(TokenKind::Nop, Loc(0, 0))
-    }
     fn new_eof(&self, pos: usize) -> Token {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
+    }
+
+    fn new_nop(&self) -> Token {
+        Token::new_nop()
     }
 }
 
@@ -600,6 +672,7 @@ mod test {
             Token![Reserved(Reserved::Then), 38, 41],
             Token![LineTerm, 42, 42],
             Token![NumLit(5), 55, 55],
+            Token![LineTerm, 76, 76],
             Token![Reserved(Reserved::Else), 85, 88],
             Token![LineTerm, 89, 89],
             Token![NumLit(10), 102, 103],

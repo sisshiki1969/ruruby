@@ -33,6 +33,7 @@ pub enum TokenKind {
     InstanceVar(String),
     Const(String),
     NumLit(i64),
+    FloatLit(f64),
     StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
@@ -55,8 +56,10 @@ pub enum Reserved {
     Else,
     Elsif,
     End,
+    For,
     False,
     If,
+    In,
     Return,
     Then,
     True,
@@ -70,10 +73,14 @@ pub enum Punct {
     Colon,
     Comma,
     Dot,
+    Question,
+    Range2,
+    Range3,
 
     Plus,
     Minus,
     Mul,
+    Div,
     And,
     Or,
     Assign,
@@ -109,6 +116,10 @@ impl Token {
         Annot::new(TokenKind::NumLit(num), loc)
     }
 
+    pub fn new_floatlit(num: f64, loc: Loc) -> Self {
+        Annot::new(TokenKind::FloatLit(num), loc)
+    }
+
     pub fn new_stringlit(string: String, loc: Loc) -> Self {
         Annot::new(TokenKind::StringLit(string), loc)
     }
@@ -124,8 +135,13 @@ impl Token {
     pub fn new_line_term(loc: Loc) -> Self {
         Annot::new(TokenKind::LineTerm, loc)
     }
+
     pub fn new_eof(pos: usize) -> Self {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
+    }
+
+    pub fn new_nop() -> Self {
+        Annot::new(TokenKind::Nop, Loc(0, 0))
     }
 }
 
