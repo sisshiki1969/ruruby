@@ -30,7 +30,8 @@ for y in 0..count_size
     for dummy in 0..ITER
       tr = zr*zr - zi*zi + cr
       ti = 2*zr*zi + ci
-      zr, zi = tr, ti
+      zr = tr
+      zi = ti
 
       if (zr*zr+zi*zi) > LIMIT_SQUARED
         escape = true
@@ -38,8 +39,8 @@ for y in 0..count_size
       end
     end
 
-    byte_acc = (byte_acc << 1) | (escape ? 0b0 : 0b1)
-    bit_num += 1
+    byte_acc = (byte_acc << 1) | (escape ? 0 : 1)
+    bit_num = bit_num + 1
 
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.
@@ -48,7 +49,7 @@ for y in 0..count_size
       byte_acc = 0
       bit_num = 0
     elsif (x == count_size)
-      byte_acc <<= (8 - bit_num)
+      byte_acc = byte_acc << (8 - bit_num)
       print(byte_acc.chr)
       byte_acc = 0
       bit_num = 0

@@ -150,6 +150,8 @@ impl Lexer {
                     '/' => self.new_punct(Punct::Div),
                     '(' => self.new_punct(Punct::LParen),
                     ')' => self.new_punct(Punct::RParen),
+                    '^' => self.new_punct(Punct::BitXor),
+                    '~' => self.new_punct(Punct::BitNot),
                     '.' => {
                         let ch1 = self.peek()?;
                         if ch1 == '.' {
@@ -180,6 +182,9 @@ impl Lexer {
                         if ch1 == '=' {
                             self.get()?;
                             self.new_punct(Punct::Ge)
+                        } else if ch1 == '>' {
+                            self.get()?;
+                            self.new_punct(Punct::Shr)
                         } else {
                             self.new_punct(Punct::Gt)
                         }
@@ -189,6 +194,9 @@ impl Lexer {
                         if ch1 == '=' {
                             self.get()?;
                             self.new_punct(Punct::Le)
+                        } else if ch1 == '<' {
+                            self.get()?;
+                            self.new_punct(Punct::Shl)
                         } else {
                             self.new_punct(Punct::Lt)
                         }
@@ -208,7 +216,7 @@ impl Lexer {
                             self.get()?;
                             self.new_punct(Punct::LAnd)
                         } else {
-                            self.new_punct(Punct::And)
+                            self.new_punct(Punct::BitAnd)
                         }
                     }
                     '|' => {
@@ -217,7 +225,7 @@ impl Lexer {
                             self.get()?;
                             self.new_punct(Punct::LOr)
                         } else {
-                            self.new_punct(Punct::Or)
+                            self.new_punct(Punct::BitOr)
                         }
                     }
                     '@' => {

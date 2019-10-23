@@ -345,6 +345,13 @@ impl Evaluator {
                     BinOp::Sub => self.eval_sub(lhs, rhs, loc),
                     BinOp::Mul => self.eval_mul(lhs, rhs, loc),
                     BinOp::Div => self.eval_div(lhs, rhs, loc),
+
+                    BinOp::Shl => self.eval_shl(lhs, rhs, loc),
+                    BinOp::Shr => self.eval_shr(lhs, rhs, loc),
+                    BinOp::BitAnd => self.eval_bitand(lhs, rhs, loc),
+                    BinOp::BitOr => self.eval_bitor(lhs, rhs, loc),
+                    BinOp::BitXor => self.eval_bitxor(lhs, rhs, loc),
+
                     BinOp::Eq => self.eval_eq(lhs, rhs, loc),
                     BinOp::Ne => self.eval_neq(lhs, rhs, loc),
                     BinOp::Ge => self.eval_ge(lhs, rhs, loc),
@@ -363,6 +370,11 @@ impl Evaluator {
                 NodeKind::Ident(id) => {
                     let rhs = self.eval_node(&rhs)?;
                     self.lvar_table().insert(id, rhs.clone());
+                    Ok(rhs)
+                }
+                NodeKind::Const(id) => {
+                    let rhs = self.eval_node(&rhs)?;
+                    self.const_table.insert(id, rhs.clone());
                     Ok(rhs)
                 }
                 NodeKind::InstanceVar(id) => {
@@ -552,6 +564,41 @@ impl Evaluator {
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs / rhs as f64)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs / rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '*'", loc)),
+        }
+    }
+
+    fn eval_shl(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs << rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '<<'", loc)),
+        }
+    }
+
+    fn eval_shr(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs >> rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'", loc)),
+        }
+    }
+
+    fn eval_bitand(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs & rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'", loc)),
+        }
+    }
+
+    fn eval_bitor(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs | rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'", loc)),
+        }
+    }
+
+    fn eval_bitxor(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
+        match (lhs, rhs) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs ^ rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'", loc)),
         }
     }
 

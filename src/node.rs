@@ -8,12 +8,14 @@ pub enum NodeKind {
     Float(f64),
     Bool(bool),
     String(String),
-    Range(i64, i64),
+    Range(Box<Node>, Box<Node>),
     BinOp(BinOp, Box<Node>, Box<Node>),
+    UnOp(UnOp, Box<Node>),
     Assign(Box<Node>, Box<Node>),
     CompStmt(NodeVec),
     If(Box<Node>, Box<Node>, Box<Node>),
-    For(Vec<Node>, Box<Node>, Box<Node>), // params, iter, body
+    For(IdentId, Box<Node>, Box<Node>), // params, iter, body
+    Break,
     Ident(IdentId),
     InstanceVar(IdentId),
     Const(IdentId),
@@ -30,6 +32,11 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Shr,
+    Shl,
+    BitAnd,
+    BitOr,
+    BitXor,
     Eq,
     Ne,
     Gt,
@@ -38,6 +45,11 @@ pub enum BinOp {
     Le,
     LAnd,
     LOr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum UnOp {
+    BitNot,
 }
 
 /*
@@ -81,8 +93,18 @@ impl Node {
         Node::new(kind, loc)
     }
 
+    pub fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
+        let loc = loc.merge(lhs.loc());
+        let kind = NodeKind::UnOp(op, Box::new(lhs));
+        Node::new(kind, loc)
+    }
+
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Ident(id), loc)
+    }
+
+    pub fn new_range(start: Node, end: Node, loc: Loc) -> Self {
+        Node::new(NodeKind::Range(Box::new(start), Box::new(end)), loc)
     }
 
     pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {
@@ -118,6 +140,10 @@ impl Node {
             NodeKind::Send(Box::new(receiver), Box::new(method_name), args),
             loc,
         )
+    }
+
+    pub fn new_break(loc: Loc) -> Self {
+        Node::new(NodeKind::Break, loc)
     }
 }
 

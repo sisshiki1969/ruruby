@@ -250,7 +250,7 @@ impl Parser {
     }
 
     fn parse_arg_assign(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.parse_arg_logical_or()?;
+        let lhs = self.parse_arg_ternary()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
@@ -259,6 +259,24 @@ impl Parser {
             Ok(Node::new_assign(lhs, rhs))
         } else {
             Ok(lhs)
+        }
+    }
+
+    fn parse_arg_ternary(&mut self) -> Result<Node, ParseError> {
+        let loc = self.prev_loc();
+        let cond = self.parse_arg_logical_or()?;
+        if self.consume_punct(Punct::Question) {
+            let then_ = self.parse_arg_ternary()?;
+            self.expect_punct(Punct::Colon)?;
+            let else_ = self.parse_arg_ternary()?;
+            let loc = loc.merge(else_.loc());
+            let node = Node::new(
+                NodeKind::If(Box::new(cond), Box::new(then_), Box::new(else_)),
+                loc,
+            );
+            Ok(node)
+        } else {
+            Ok(cond)
         }
     }
 
@@ -306,25 +324,77 @@ impl Parser {
     }
 
     fn parse_arg_comp(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.parse_arg_add()?;
+        let mut lhs = self.parse_arg_bitor()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(Punct::Ge) {
-            let rhs = self.parse_arg_comp()?;
-            Ok(Node::new_binop(BinOp::Ge, lhs, rhs))
-        } else if self.consume_punct(Punct::Gt) {
-            let rhs = self.parse_arg_comp()?;
-            Ok(Node::new_binop(BinOp::Gt, lhs, rhs))
-        } else if self.consume_punct(Punct::Le) {
-            let rhs = self.parse_arg_comp()?;
-            Ok(Node::new_binop(BinOp::Le, lhs, rhs))
-        } else if self.consume_punct(Punct::Lt) {
-            let rhs = self.parse_arg_comp()?;
-            Ok(Node::new_binop(BinOp::Lt, lhs, rhs))
-        } else {
-            Ok(lhs)
+        loop {
+            if self.consume_punct(Punct::Ge) {
+                let rhs = self.parse_arg_bitor()?;
+                lhs = Node::new_binop(BinOp::Ge, lhs, rhs);
+            } else if self.consume_punct(Punct::Gt) {
+                let rhs = self.parse_arg_bitor()?;
+                lhs = Node::new_binop(BinOp::Gt, lhs, rhs);
+            } else if self.consume_punct(Punct::Le) {
+                let rhs = self.parse_arg_bitor()?;
+                lhs = Node::new_binop(BinOp::Le, lhs, rhs);
+            } else if self.consume_punct(Punct::Lt) {
+                let rhs = self.parse_arg_bitor()?;
+                lhs = Node::new_binop(BinOp::Lt, lhs, rhs);
+            } else {
+                break;
+            }
         }
+        Ok(lhs)
+    }
+
+    fn parse_arg_bitor(&mut self) -> Result<Node, ParseError> {
+        let mut lhs = self.parse_arg_bitand()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        loop {
+            if self.consume_punct(Punct::BitOr) {
+                lhs = Node::new_binop(BinOp::BitOr, lhs, self.parse_arg_bitand()?);
+            } else if self.consume_punct(Punct::BitXor) {
+                lhs = Node::new_binop(BinOp::BitXor, lhs, self.parse_arg_bitand()?);
+            } else {
+                break;
+            }
+        }
+        Ok(lhs)
+    }
+
+    fn parse_arg_bitand(&mut self) -> Result<Node, ParseError> {
+        let mut lhs = self.parse_arg_shift()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        loop {
+            if self.consume_punct(Punct::BitAnd) {
+                lhs = Node::new_binop(BinOp::BitAnd, lhs, self.parse_arg_shift()?);
+            } else {
+                break;
+            }
+        }
+        Ok(lhs)
+    }
+
+    fn parse_arg_shift(&mut self) -> Result<Node, ParseError> {
+        let mut lhs = self.parse_arg_add()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        loop {
+            if self.consume_punct(Punct::Shl) {
+                lhs = Node::new_binop(BinOp::Shl, lhs, self.parse_arg_add()?);
+            } else if self.consume_punct(Punct::Shr) {
+                lhs = Node::new_binop(BinOp::Shr, lhs, self.parse_arg_add()?);
+            } else {
+                break;
+            }
+        }
+        Ok(lhs)
     }
 
     fn parse_arg_add(&mut self) -> Result<Node, ParseError> {
@@ -362,9 +432,21 @@ impl Parser {
     fn parse_unary_minus(&mut self) -> Result<Node, ParseError> {
         let loc = self.loc();
         if self.consume_punct(Punct::Minus) {
-            let lhs = self.parse_primary_ext()?;
+            let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
             let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_number(-1, loc));
+            Ok(lhs)
+        } else {
+            let lhs = self.parse_unary_bitnot()?;
+            Ok(lhs)
+        }
+    }
+
+    fn parse_unary_bitnot(&mut self) -> Result<Node, ParseError> {
+        let loc = self.loc();
+        if self.consume_punct(Punct::BitNot) {
+            let lhs = self.parse_unary_bitnot()?;
+            let lhs = Node::new_unop(UnOp::BitNot, lhs, loc);
             Ok(lhs)
         } else {
             let lhs = self.parse_primary_ext()?;
@@ -474,6 +556,24 @@ impl Parser {
                 self.expect_reserved(Reserved::End)?;
                 Ok(node)
             }
+            TokenKind::Reserved(Reserved::For) => {
+                let loc = self.prev_loc();
+                let var = self.expect_ident()?;
+                self.expect_reserved(Reserved::In)?;
+                let start = self.parse_arg()?;
+                self.expect_punct(Punct::Range2)?;
+                let end = self.parse_arg()?;
+                let range_loc = start.loc().merge(end.loc());
+                let iter = Node::new_range(start, end, range_loc);
+                self.parse_do()?;
+                let body = self.parse_comp_stmt()?;
+                self.expect_reserved(Reserved::End)?;
+                let node = Node::new(
+                    NodeKind::For(var, Box::new(iter), Box::new(body)),
+                    loc.merge(self.prev_loc()),
+                );
+                Ok(node)
+            }
             TokenKind::Reserved(Reserved::Def) => {
                 self.context_stack.push(Context::Method);
                 let node = self.parse_def()?;
@@ -491,6 +591,7 @@ impl Parser {
                 self.context_stack.pop();
                 Ok(node)
             }
+            TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
             TokenKind::Reserved(Reserved::True) => Ok(Node::new_bool(true, loc)),
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
@@ -528,9 +629,19 @@ impl Parser {
 
     fn parse_then(&mut self) -> Result<(), ParseError> {
         if self.consume_term() {
+            self.consume_reserved(Reserved::Then);
             return Ok(());
         }
         self.expect_reserved(Reserved::Then)?;
+        Ok(())
+    }
+
+    fn parse_do(&mut self) -> Result<(), ParseError> {
+        if self.consume_term() {
+            self.consume_reserved(Reserved::Do);
+            return Ok(());
+        }
+        self.expect_reserved(Reserved::Do)?;
         Ok(())
     }
 
@@ -668,6 +779,56 @@ mod tests {
     fn expr3() {
         let program = "5.0 / 2";
         let expected = Value::FloatNum(2.5);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr4() {
+        let program = "15<<30";
+        let expected = Value::FixNum(16106127360);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr5() {
+        let program = "23456>>3";
+        let expected = Value::FixNum(2932);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr6() {
+        let program = "24+17 >> 3 == 5";
+        let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+    #[test]
+    fn expr7() {
+        let program = "864 == 3+24<<5";
+        let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr8() {
+        let program = "
+        assert(320, 12745&854)
+        assert(100799, 2486|98331)
+        assert(1033, 8227^9258)
+        assert(201, -275&475)
+        assert(-1301, 487555|-25879)
+        ";
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr9() {
+        let program = "
+        a=19
+        a==17?23*45:14+7
+        ";
+        let expected = Value::FixNum(21);
         eval_script(program, expected);
     }
 
