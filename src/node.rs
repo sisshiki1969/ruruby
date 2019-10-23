@@ -3,14 +3,17 @@ use crate::util::*;
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     SelfValue,
+    Nil,
     Number(i64),
     Float(f64),
     Bool(bool),
     String(String),
+    Range(i64, i64),
     BinOp(BinOp, Box<Node>, Box<Node>),
     Assign(Box<Node>, Box<Node>),
     CompStmt(NodeVec),
     If(Box<Node>, Box<Node>, Box<Node>),
+    For(Vec<Node>, Box<Node>, Box<Node>), // params, iter, body
     Ident(IdentId),
     InstanceVar(IdentId),
     Const(IdentId),
@@ -48,6 +51,10 @@ pub type Node = Annot<NodeKind>;
 pub type NodeVec = Vec<Node>;
 
 impl Node {
+    pub fn new_nil(loc: Loc) -> Self {
+        Node::new(NodeKind::Nil, loc)
+    }
+
     pub fn new_number(num: i64, loc: Loc) -> Self {
         Node::new(NodeKind::Number(num), loc)
     }

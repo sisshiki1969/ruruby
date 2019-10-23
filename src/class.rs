@@ -19,8 +19,8 @@ pub struct ClassInfo {
     pub name: String,
     pub body: Box<Node>,
     pub instance_var: HashMap<IdentId, Value>,
-    pub instance_method_table: MethodTable,
-    pub class_method_table: MethodTable,
+    pub instance_method: MethodTable,
+    pub class_method: MethodTable,
     pub subclass: HashMap<IdentId, ClassRef>,
 }
 
@@ -31,22 +31,22 @@ impl ClassInfo {
             name,
             body: Box::new(body),
             instance_var: HashMap::new(),
-            instance_method_table: HashMap::new(),
-            class_method_table: HashMap::new(),
+            instance_method: HashMap::new(),
+            class_method: HashMap::new(),
             subclass: HashMap::new(),
         }
     }
 
     pub fn get_class_method(&self, id: IdentId) -> Option<&MethodInfo> {
-        self.class_method_table.get(&id)
+        self.class_method.get(&id)
     }
 
     pub fn add_class_method(&mut self, id: IdentId, info: MethodInfo) -> Option<MethodInfo> {
-        self.class_method_table.insert(id, info)
+        self.class_method.insert(id, info)
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodInfo> {
-        self.instance_method_table.get(&id)
+        self.instance_method.get(&id)
     }
 }
 

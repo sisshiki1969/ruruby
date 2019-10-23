@@ -60,6 +60,7 @@ pub enum Reserved {
     False,
     If,
     In,
+    Nil,
     Return,
     Then,
     True,

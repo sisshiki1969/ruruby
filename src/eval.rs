@@ -173,6 +173,14 @@ impl Evaluator {
         &mut self.scope_stack.last_mut().unwrap().lvar_table
     }
 
+    pub fn get_instance_info(&self, instance: InstanceRef) -> &InstanceInfo {
+        self.instance_table.get(instance)
+    }
+
+    pub fn get_class_info(&self, class: ClassRef) -> &ClassInfo {
+        self.class_table.get(class)
+    }
+
     pub fn get_instance_method(
         &mut self,
         instance: InstanceRef,
@@ -184,8 +192,8 @@ impl Evaluator {
                 return Err(self.error_unimplemented(format!("Expected identifier."), method.loc()))
             }
         };
-        let info = self.instance_table.get(instance);
-        let class_info = self.class_table.get(info.class_id);
+        let info = self.get_instance_info(instance);
+        let class_info = self.get_class_info(info.class_id);
         match class_info.get_instance_method(id) {
             Some(info) => Ok(info.clone()),
             None => {
@@ -233,6 +241,7 @@ impl Evaluator {
     pub fn eval_node(&mut self, node: &Node) -> EvalResult {
         let loc = node.loc();
         match &node.kind {
+            NodeKind::Nil => Ok(Value::Nil),
             NodeKind::Number(num) => Ok(Value::FixNum(*num)),
             NodeKind::Bool(b) => Ok(Value::Bool(*b)),
             NodeKind::Float(num) => Ok(Value::FloatNum(*num)),
@@ -256,14 +265,14 @@ impl Evaluator {
             },
             NodeKind::InstanceVar(id) => match self.self_value {
                 Value::Instance(instance) => {
-                    let info = self.instance_table.get(instance);
+                    let info = self.get_instance_info(instance);
                     match info.instance_var.get(id) {
                         Some(v) => Ok(v.clone()),
                         None => Ok(Value::Nil),
                     }
                 }
                 Value::Class(class) => {
-                    let info = self.class_table.get(class);
+                    let info = self.get_class_info(class);
                     match info.instance_var.get(id) {
                         Some(v) => Ok(v.clone()),
                         None => Ok(Value::Nil),
@@ -400,7 +409,7 @@ impl Evaluator {
                     // A method defined in a class definition is registered as a instance method of the class.
                     let class = self.class_stack.last().unwrap();
                     let class_info = self.class_table.get_mut(*class);
-                    class_info.instance_method_table.insert(*id, info);
+                    class_info.instance_method.insert(*id, info);
                 }
                 Ok(Value::Nil)
             }
@@ -418,7 +427,7 @@ impl Evaluator {
                     // A method defined in a class definition is registered as a class method of the class.
                     let class = self.class_stack.last().unwrap();
                     let class_info = self.class_table.get_mut(*class);
-                    class_info.class_method_table.insert(*id, info);
+                    class_info.class_method.insert(*id, info);
                 }
                 Ok(Value::Nil)
             }
@@ -547,13 +556,14 @@ impl Evaluator {
     }
 
     pub fn eval_eq(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
-        match (lhs, rhs) {
+        match (&lhs, &rhs) {
+            (Value::Nil, Value::Nil) => Ok(Value::Bool(true)),
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Class(lhs), Value::Class(rhs)) => Ok(Value::Bool(lhs == rhs)),
             (Value::Instance(lhs), Value::Instance(rhs)) => Ok(Value::Bool(lhs == rhs)),
-            _ => Err(self.error_nomethod("NoMethodError: '=='", loc)),
+            _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs), loc)),
         }
     }
 

@@ -1,4 +1,4 @@
-use crate::lexer::*;
+use crate::lexer::Lexer;
 use crate::node::*;
 use crate::token::*;
 use crate::util::*;
@@ -111,15 +111,11 @@ impl Parser {
 
     /// If next token is an expected kind of Punctuator, get it and return true.
     /// Otherwise, return false.
-    fn get_if_punct(&mut self, expect: Punct) -> bool {
+    fn consume_punct(&mut self, expect: Punct) -> bool {
         match &self.peek().kind {
-            TokenKind::Punct(punct) => {
-                if *punct == expect {
-                    let _ = self.get();
-                    true
-                } else {
-                    false
-                }
+            TokenKind::Punct(punct) if *punct == expect => {
+                let _ = self.get();
+                true
             }
             _ => false,
         }
@@ -127,15 +123,11 @@ impl Parser {
 
     /// If next token is an expected kind of Reserved keyeord, get it and return true.
     /// Otherwise, return false.
-    fn get_if_reserved(&mut self, expect: Reserved) -> bool {
+    fn consume_reserved(&mut self, expect: Reserved) -> bool {
         match &self.peek().kind {
-            TokenKind::Reserved(reserved) => {
-                if *reserved == expect {
-                    let _ = self.get();
-                    true
-                } else {
-                    false
-                }
+            TokenKind::Reserved(reserved) if *reserved == expect => {
+                let _ = self.get();
+                true
             }
             _ => false,
         }
@@ -143,7 +135,7 @@ impl Parser {
 
     /// Get the next token if it is a line terminator or ';' or EOF, and return true,
     /// Otherwise, return false.
-    fn get_if_term(&mut self) -> bool {
+    fn consume_term(&mut self) -> bool {
         if self.peek_no_skip_line_term().is_term() {
             self.get_no_skip_line_term();
             true
@@ -152,17 +144,35 @@ impl Parser {
         }
     }
 
+    /// Get the next token and examine whether it is an expected Reserved.
+    /// If not, return ParseError.
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseError> {
         match &self.get()?.kind {
-            TokenKind::Reserved(reserved) => {
-                if *reserved == expect {
-                    Ok(())
-                } else {
-                    Err(self.error_unexpected(self.prev_loc(), format!("Expect {:?}", expect)))
-                }
-            }
+            TokenKind::Reserved(reserved) if *reserved == expect => Ok(()),
             _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect {:?}", expect))),
         }
+    }
+
+    /// Get the next token and examine whether it is an expected Punct.
+    /// If not, return ParseError.
+    fn expect_punct(&mut self, expect: Punct) -> Result<(), ParseError> {
+        match &self.get()?.kind {
+            TokenKind::Punct(punct) if *punct == expect => Ok(()),
+            _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect '{:?}'", expect))),
+        }
+    }
+
+    /// Get the next token and examine whether it is Ident.
+    /// Return IdentId of the Ident.
+    /// If not, return ParseError.
+    fn expect_ident(&mut self) -> Result<IdentId, ParseError> {
+        let name = match &self.get()?.kind {
+            TokenKind::Ident(s) => s.clone(),
+            _ => {
+                return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
+            }
+        };
+        Ok(self.ident_table.get_ident_id(&name))
     }
 
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseError {
@@ -197,21 +207,15 @@ impl Parser {
         // STMT (TERM EXPR)* [TERM]
 
         fn return_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Result<Node, ParseError> {
-            match nodes.last() {
-                Some(node) => loc = loc.merge(node.loc()),
-                None => {}
-            }
+            if let Some(node) = nodes.last() {
+                loc = loc.merge(node.loc());
+            };
             Ok(Node::new(NodeKind::CompStmt(nodes), loc))
         }
 
         let loc = self.loc();
         let mut nodes = vec![];
-        //nodes.push(self.parse_stmt()?);
-        /*
-        if !self.get_if_term() {
-            return return_comp_stmt(nodes, loc);
-        }
-        */
+
         loop {
             match self.peek().kind {
                 TokenKind::EOF => return return_comp_stmt(nodes, loc),
@@ -225,7 +229,7 @@ impl Parser {
             };
             let node = self.parse_expr()?;
             nodes.push(node);
-            if !self.get_if_term() {
+            if !self.consume_term() {
                 break;
             }
         }
@@ -250,7 +254,7 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::Assign) {
+        if self.consume_punct(Punct::Assign) {
             let rhs = self.parse_arg()?;
             Ok(Node::new_assign(lhs, rhs))
         } else {
@@ -263,7 +267,7 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::LOr) {
+        if self.consume_punct(Punct::LOr) {
             let rhs = self.parse_arg_logical_or()?;
             Ok(Node::new_binop(BinOp::LOr, lhs, rhs))
         } else {
@@ -276,7 +280,7 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::LAnd) {
+        if self.consume_punct(Punct::LAnd) {
             let rhs = self.parse_arg_logical_and()?;
             Ok(Node::new_binop(BinOp::LAnd, lhs, rhs))
         } else {
@@ -290,10 +294,10 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::Eq) {
+        if self.consume_punct(Punct::Eq) {
             let rhs = self.parse_arg_eq()?;
             Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
-        } else if self.get_if_punct(Punct::Ne) {
+        } else if self.consume_punct(Punct::Ne) {
             let rhs = self.parse_arg_eq()?;
             Ok(Node::new_binop(BinOp::Ne, lhs, rhs))
         } else {
@@ -306,16 +310,16 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::Ge) {
+        if self.consume_punct(Punct::Ge) {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Ge, lhs, rhs))
-        } else if self.get_if_punct(Punct::Gt) {
+        } else if self.consume_punct(Punct::Gt) {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Gt, lhs, rhs))
-        } else if self.get_if_punct(Punct::Le) {
+        } else if self.consume_punct(Punct::Le) {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Le, lhs, rhs))
-        } else if self.get_if_punct(Punct::Lt) {
+        } else if self.consume_punct(Punct::Lt) {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Lt, lhs, rhs))
         } else {
@@ -328,10 +332,10 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::Plus) {
+        if self.consume_punct(Punct::Plus) {
             let rhs = self.parse_arg_add()?;
             Ok(Node::new_binop(BinOp::Add, lhs, rhs))
-        } else if self.get_if_punct(Punct::Minus) {
+        } else if self.consume_punct(Punct::Minus) {
             let rhs = self.parse_arg_add()?;
             Ok(Node::new_binop(BinOp::Sub, lhs, rhs))
         } else {
@@ -344,10 +348,10 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.get_if_punct(Punct::Mul) {
+        if self.consume_punct(Punct::Mul) {
             let rhs = self.parse_arg_mul()?;
             Ok(Node::new_binop(BinOp::Mul, lhs, rhs))
-        } else if self.get_if_punct(Punct::Div) {
+        } else if self.consume_punct(Punct::Div) {
             let rhs = self.parse_arg_mul()?;
             Ok(Node::new_binop(BinOp::Div, lhs, rhs))
         } else {
@@ -357,7 +361,7 @@ impl Parser {
 
     fn parse_unary_minus(&mut self) -> Result<Node, ParseError> {
         let loc = self.loc();
-        if self.get_if_punct(Punct::Minus) {
+        if self.consume_punct(Punct::Minus) {
             let lhs = self.parse_primary_ext()?;
             let loc = loc.merge(lhs.loc());
             let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_number(-1, loc));
@@ -425,20 +429,17 @@ impl Parser {
 
     fn parse_parenthesize_args(&mut self) -> Result<Vec<Node>, ParseError> {
         let mut args = vec![];
-        if self.get_if_punct(Punct::RParen) {
+        if self.consume_punct(Punct::RParen) {
             return Ok(args);
         }
         loop {
             args.push(self.parse_arg()?);
-            if !self.get_if_punct(Punct::Comma) {
+            if !self.consume_punct(Punct::Comma) {
                 break;
             }
         }
-        if self.get_if_punct(Punct::RParen) {
-            Ok(args)
-        } else {
-            Err(self.error_unexpected(self.loc(), format!("Expect ')'")))
-        }
+        self.expect_punct(Punct::RParen)?;
+        Ok(args)
     }
 
     fn parse_primary(&mut self) -> Result<Node, ParseError> {
@@ -465,11 +466,8 @@ impl Parser {
             TokenKind::StringLit(s) => Ok(Node::new_string(s.clone(), loc)),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
-                if self.get_if_punct(Punct::RParen) {
-                    Ok(node)
-                } else {
-                    Err(self.error_unexpected(self.loc(), format!("Expect ')'")))
-                }
+                self.expect_punct(Punct::RParen)?;
+                Ok(node)
             }
             TokenKind::Reserved(Reserved::If) => {
                 let node = self.parse_if_then()?;
@@ -495,6 +493,7 @@ impl Parser {
             }
             TokenKind::Reserved(Reserved::True) => Ok(Node::new_bool(true, loc)),
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
+            TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
             TokenKind::EOF => {
                 return Err(self.error_eof(loc));
             }
@@ -515,9 +514,9 @@ impl Parser {
         self.parse_then()?;
         let then_ = self.parse_comp_stmt()?;
         let mut else_ = Node::new_comp_stmt(self.loc());
-        if self.get_if_reserved(Reserved::Elsif) {
+        if self.consume_reserved(Reserved::Elsif) {
             else_ = self.parse_if_then()?;
-        } else if self.get_if_reserved(Reserved::Else) {
+        } else if self.consume_reserved(Reserved::Else) {
             else_ = self.parse_comp_stmt()?;
         }
         loc = loc.merge(else_.loc());
@@ -528,7 +527,7 @@ impl Parser {
     }
 
     fn parse_then(&mut self) -> Result<(), ParseError> {
-        if self.get_if_term() {
+        if self.consume_term() {
             return Ok(());
         }
         self.expect_reserved(Reserved::Then)?;
@@ -543,27 +542,13 @@ impl Parser {
         //      [ensure COMPSTMT]
         //  end
         let mut is_class_method = false;
-        let name = match &self.get()?.kind {
-            TokenKind::Ident(s) => {
-                if s != "self" {
-                    s.clone()
-                } else {
-                    is_class_method = true;
-                    if self.get_if_punct(Punct::Dot) {
-                        let tok = self.get()?;
-                        if let TokenKind::Ident(s) = &tok.kind {
-                            s.clone()
-                        } else {
-                            return Err(self.error_unexpected(self.loc(), "Expect identifier."));
-                        }
-                    } else {
-                        return Err(self.error_unexpected(self.loc(), "Expect \'.\'."));
-                    }
-                }
-            }
-            _ => return Err(self.error_unexpected(self.prev_loc(), format!("Expect identifier."))),
+        let self_id = self.ident_table.get_ident_id(&"self".to_string());
+        let mut id = self.expect_ident()?;
+        if id == self_id {
+            is_class_method = true;
+            self.expect_punct(Punct::Dot)?;
+            id = self.expect_ident()?;
         };
-        let id = self.ident_table.get_ident_id(&name);
         let args = self.parse_params()?;
 
         let body = self.parse_comp_stmt()?;
@@ -576,42 +561,29 @@ impl Parser {
     }
 
     fn parse_params(&mut self) -> Result<Vec<Node>, ParseError> {
-        if self.get_if_term() {
+        if self.consume_term() {
             return Ok(vec![]);
         };
-        if !self.get_if_punct(Punct::LParen) {
-            return Err(self.error_unexpected(self.loc(), "Expect \'(\'."));
-        }
+        self.expect_punct(Punct::LParen)?;
         let mut args = vec![];
-        if self.get_if_punct(Punct::RParen) {
-            if !self.get_if_term() {
+        if self.consume_punct(Punct::RParen) {
+            if !self.consume_term() {
                 return Err(self.error_unexpected(self.loc(), "Expect terminator"));
             }
             return Ok(args);
         }
         loop {
-            let arg = match &self.get()?.kind {
-                TokenKind::Ident(s) => s.clone(),
-                _ => return Err(self.error_unexpected(self.prev_loc(), "Expect identifier.")),
-            };
-            let id = self.ident_table.get_ident_id(&arg);
+            let id = self.expect_ident()?;
             args.push(Node::new(NodeKind::Param(id), self.prev_loc()));
-            if !self.get_if_punct(Punct::Comma) {
+            if !self.consume_punct(Punct::Comma) {
                 break;
             }
         }
-        if self.get_if_punct(Punct::RParen) {
-            if !self.get_if_term() {
-                return Err(self.error_unexpected(self.loc(), "Expect terminator."));
-            }
-            Ok(args)
-        } else {
-            for tok in &self.tokens {
-                println!("{:?}", tok);
-            }
-            println!("{:?}", self.loc());
-            Err(self.error_unexpected(self.loc(), "Expect \')\'."))
+        self.expect_punct(Punct::RParen)?;
+        if !self.consume_term() {
+            return Err(self.error_unexpected(self.loc(), "Expect terminator."));
         }
+        Ok(args)
     }
 
     fn parse_class(&mut self) -> Result<Node, ParseError> {
@@ -658,9 +630,44 @@ mod tests {
     }
 
     #[test]
+    fn bool_lit1() {
+        let program = "(3==3)==true";
+        let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn bool_lit2() {
+        let program = "(3==9)==false";
+        let expected = Value::Bool(true);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn nil_lit1() {
+        let program = "nil";
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
     fn expr1() {
         let program = "4*(4+7*3)-95";
         let expected = Value::FixNum(5);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr2() {
+        let program = "2.0 + 4.0";
+        let expected = Value::FloatNum(6.0);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn expr3() {
+        let program = "5.0 / 2";
+        let expected = Value::FloatNum(2.5);
         eval_script(program, expected);
     }
 
@@ -679,7 +686,7 @@ mod tests {
     }
 
     #[test]
-    fn op19() {
+    fn op9() {
         let program = "4!=4 || 1==1 && 2==3";
         let expected = Value::Bool(false);
         eval_script(program, expected);
@@ -825,6 +832,36 @@ mod tests {
 
         Vec.new.len(3,4)";
         let expected = Value::FixNum(25);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn class2() {
+        let program = "
+        class Vec
+            @xxx=100
+            def set_xxx(x); @xxx = x; end
+            def len(x,y)
+                def sq(x); x*x; end
+                sq(x)+sq(y)
+            end
+            def get_xxx; @xxx; end
+            def self.get_xxx; @xxx = @xxx + 1; @xxx; end
+        end
+
+        foo1 = Vec.new
+        assert(25, foo1.len(3,4))
+        foo1.set_xxx(777)
+        assert(777, foo1.get_xxx)
+        foo2 = Vec.new
+        foo2.set_xxx(999)
+        assert(777, foo1.get_xxx)
+        assert(999, foo2.get_xxx)
+        assert(nil, Vec.new.get_xxx)
+        assert(101, Vec.get_xxx)
+        assert(102, Vec.get_xxx)
+        assert(103, Vec.get_xxx)";
+        let expected = Value::Nil;
         eval_script(program, expected);
     }
 }
