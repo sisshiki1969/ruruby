@@ -398,35 +398,41 @@ impl Parser {
     }
 
     fn parse_arg_add(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.parse_arg_mul()?;
+        let mut lhs = self.parse_arg_mul()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(Punct::Plus) {
-            let rhs = self.parse_arg_add()?;
-            Ok(Node::new_binop(BinOp::Add, lhs, rhs))
-        } else if self.consume_punct(Punct::Minus) {
-            let rhs = self.parse_arg_add()?;
-            Ok(Node::new_binop(BinOp::Sub, lhs, rhs))
-        } else {
-            Ok(lhs)
+        loop {
+            if self.consume_punct(Punct::Plus) {
+                let rhs = self.parse_arg_mul()?;
+                lhs = Node::new_binop(BinOp::Add, lhs, rhs);
+            } else if self.consume_punct(Punct::Minus) {
+                let rhs = self.parse_arg_mul()?;
+                lhs = Node::new_binop(BinOp::Sub, lhs, rhs);
+            } else {
+                break;
+            }
         }
+        Ok(lhs)
     }
 
     fn parse_arg_mul(&mut self) -> Result<Node, ParseError> {
-        let lhs = self.parse_unary_minus()?;
+        let mut lhs = self.parse_unary_minus()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(Punct::Mul) {
-            let rhs = self.parse_arg_mul()?;
-            Ok(Node::new_binop(BinOp::Mul, lhs, rhs))
-        } else if self.consume_punct(Punct::Div) {
-            let rhs = self.parse_arg_mul()?;
-            Ok(Node::new_binop(BinOp::Div, lhs, rhs))
-        } else {
-            Ok(lhs)
+        loop {
+            if self.consume_punct(Punct::Mul) {
+                let rhs = self.parse_unary_minus()?;
+                lhs = Node::new_binop(BinOp::Mul, lhs, rhs);
+            } else if self.consume_punct(Punct::Div) {
+                let rhs = self.parse_unary_minus()?;
+                lhs = Node::new_binop(BinOp::Div, lhs, rhs);
+            } else {
+                break;
+            }
         }
+        Ok(lhs)
     }
 
     fn parse_unary_minus(&mut self) -> Result<Node, ParseError> {
@@ -559,6 +565,7 @@ impl Parser {
             TokenKind::Reserved(Reserved::For) => {
                 let loc = self.prev_loc();
                 let var = self.expect_ident()?;
+                let var = Node::new_identifier(var, self.prev_loc());
                 self.expect_reserved(Reserved::In)?;
                 let start = self.parse_arg()?;
                 self.expect_punct(Punct::Range2)?;
@@ -569,7 +576,7 @@ impl Parser {
                 let body = self.parse_comp_stmt()?;
                 self.expect_reserved(Reserved::End)?;
                 let node = Node::new(
-                    NodeKind::For(var, Box::new(iter), Box::new(body)),
+                    NodeKind::For(Box::new(var), Box::new(iter), Box::new(body)),
                     loc.merge(self.prev_loc()),
                 );
                 Ok(node)
@@ -897,6 +904,31 @@ mod tests {
             5
             end";
         let expected = Value::FixNum(5);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn for1() {
+        let program = "
+            y = 0
+            for x in 0..9
+            y=y+x
+            end
+            y";
+        let expected = Value::FixNum(45);
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn for2() {
+        let program = "
+            y = 0
+            for x in 0..9
+            if x == 5 then break end
+            y=y+x
+            end
+            y";
+        let expected = Value::FixNum(10);
         eval_script(program, expected);
     }
 

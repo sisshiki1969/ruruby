@@ -1,23 +1,30 @@
-class Vec
-    @xxx=100
-    def set_xxx(x); @xxx = x; end
-    def len(x,y)
-        def sq(x); x*x; end
-        sq(x)+sq(y)
-    end
-    def get_xxx; @xxx; end
-    def self.get_xxx; @xxx = @xxx + 1; @xxx; end
+x=47
+y=125
+
+zr = 0.0
+zi = 0.0
+cr = (2.0*x/600)-1.5
+ci = (2.0*y/600)-1.0
+escape = false
+
+tr = 0
+
+# To make use of the for..in code, we use a dummy variable,
+# like one would in C
+for dummy in 0..49
+  puts(dummy)
+  puts(tr)
+  tr = zr*zr - zi*zi + cr
+  puts(tr)
+  ti = 2*zr*zi + ci
+  puts(tr)
+  zr = tr
+  puts(tr)
+  zi = ti
+  if (zr*zr+zi*zi) > 4.0
+    escape = true
+    break
+  end
 end
 
-foo1 = Vec.new
-puts(foo1.len(3,4))
-foo1.set_xxx(777)
-puts(foo1.get_xxx)
-foo2 = Vec.new
-puts(foo2.set_xxx(999))
-puts(foo1.get_xxx)
-puts(foo2.get_xxx)
-puts(Vec.new.get_xxx)
-puts(Vec.get_xxx)
-puts(Vec.get_xxx)
-puts(Vec.get_xxx)
+puts(tr)

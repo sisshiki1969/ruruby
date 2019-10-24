@@ -14,7 +14,7 @@ pub enum NodeKind {
     Assign(Box<Node>, Box<Node>),
     CompStmt(NodeVec),
     If(Box<Node>, Box<Node>, Box<Node>),
-    For(IdentId, Box<Node>, Box<Node>), // params, iter, body
+    For(Box<Node>, Box<Node>, Box<Node>), // params, iter, body
     Break,
     Ident(IdentId),
     InstanceVar(IdentId),

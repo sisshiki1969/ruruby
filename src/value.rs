@@ -10,4 +10,6 @@ pub enum Value {
     String(String),
     Class(ClassRef),
     Instance(InstanceRef),
+    Range(Box<Value>, Box<Value>),
+    Char(u8),
 }

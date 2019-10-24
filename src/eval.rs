@@ -48,6 +48,7 @@ pub enum RuntimeErrKind {
     Unreachable(String),
     Name(String),
     NoMethod(String),
+    Break,
 }
 
 impl RuntimeError {
@@ -104,6 +105,13 @@ impl Evaluator {
         };
         self.method_table.insert(id, info);
 
+        let id = self.ident_table.get_ident_id(&"print".to_string());
+        let info = MethodInfo::BuiltinFunc {
+            name: "print".to_string(),
+            func: Evaluator::builtin_print,
+        };
+        self.method_table.insert(id, info);
+
         let id = self.ident_table.get_ident_id(&"assert".to_string());
         let info = MethodInfo::BuiltinFunc {
             name: "assert".to_string(),
@@ -135,6 +143,20 @@ impl Evaluator {
     pub fn builtin_puts(eval: &mut Evaluator, _receiver: Value, args: Vec<Value>) -> EvalResult {
         for arg in args {
             println!("{}", eval.val_to_s(&arg));
+        }
+        Ok(Value::Nil)
+    }
+
+    /// Built-in function "print".
+    pub fn builtin_print(eval: &mut Evaluator, _receiver: Value, args: Vec<Value>) -> EvalResult {
+        for arg in args {
+            if let Value::Char(ch) = arg {
+                let v = [ch];
+                use std::io::{self, Write};
+                io::stdout().write(&v).unwrap();
+            } else {
+                print!("{}", eval.val_to_s(&arg));
+            }
         }
         Ok(Value::Nil)
     }
@@ -231,6 +253,7 @@ impl Evaluator {
                     RuntimeErrKind::NoMethod(s) => println!("NoMethodError ({})", s),
                     RuntimeErrKind::Unimplemented(s) => println!("Unimplemented ({})", s),
                     RuntimeErrKind::Unreachable(s) => println!("Unreachable ({})", s),
+                    RuntimeErrKind::Break => println!("Break"),
                 }
                 Err(err)
             }
@@ -366,34 +389,10 @@ impl Evaluator {
                     }
                 }
             }
-            NodeKind::Assign(lhs, rhs) => match lhs.kind {
-                NodeKind::Ident(id) => {
-                    let rhs = self.eval_node(&rhs)?;
-                    self.lvar_table().insert(id, rhs.clone());
-                    Ok(rhs)
-                }
-                NodeKind::Const(id) => {
-                    let rhs = self.eval_node(&rhs)?;
-                    self.const_table.insert(id, rhs.clone());
-                    Ok(rhs)
-                }
-                NodeKind::InstanceVar(id) => {
-                    let rhs = self.eval_node(&rhs)?;
-                    match self.self_value {
-                        Value::Instance(instance) => {
-                            let info = self.instance_table.get_mut(instance);
-                            info.instance_var.insert(id, rhs.clone());
-                        }
-                        Value::Class(class) => {
-                            let info = self.class_table.get_mut(class);
-                            info.instance_var.insert(id, rhs.clone());
-                        }
-                        _ => unreachable!("eval: Illegal self value. {:?}", self.self_value),
-                    };
-                    Ok(rhs)
-                }
-                _ => unimplemented!(),
-            },
+            NodeKind::Assign(lhs, rhs) => {
+                let rhs = self.eval_node(rhs)?;
+                self.eval_assign(lhs, &rhs)
+            }
             NodeKind::CompStmt(nodes) => {
                 let mut val = Value::Nil;
                 for node in nodes {
@@ -408,6 +407,45 @@ impl Evaluator {
                 } else {
                     self.eval_node(&else_)
                 }
+            }
+            NodeKind::For(id, iter, body) => {
+                let (start, end) = match &iter.kind {
+                    NodeKind::Range(start, end) => (start, end),
+                    _ => {
+                        return Err(self.error_unimplemented(
+                            "Currently, loop iterator must be Range.",
+                            iter.loc(),
+                        ))
+                    }
+                };
+                let start_v = self.eval_node(start)?;
+                self.eval_assign(id, &start_v)?;
+                loop {
+                    let var_v = self.eval_node(id)?;
+                    let end_v = self.eval_node(&*end)?;
+                    let cond = self.eval_gt(var_v, end_v, end.loc())?;
+                    if self.val_to_bool(&cond) {
+                        break;
+                    };
+                    match self.eval_node(body) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            if let RuntimeErrKind::Break = err.kind {
+                                break;
+                            } else {
+                                return Err(err);
+                            }
+                        }
+                    };
+                    let var_v = self.eval_node(id)?;
+                    let new_v = self.eval_add(var_v, Value::FixNum(1), id.loc())?;
+                    self.eval_assign(id, &new_v)?;
+                }
+                let (start, end) = (self.eval_node(&*start)?, self.eval_node(&*end)?);
+                Ok(Value::Range(Box::new(start), Box::new(end)))
+            }
+            NodeKind::Break => {
+                return Err(RuntimeError::new(RuntimeErrKind::Break, loc));
             }
             NodeKind::MethodDecl(id, params, body) => {
                 let info = MethodInfo::RubyFunc {
@@ -472,8 +510,10 @@ impl Evaluator {
                 } else {
                     Some(self.eval_node(receiver)?)
                 };
-                let args_val: Vec<Value> =
-                    args.iter().map(|x| self.eval_node(x).unwrap()).collect();
+                let mut args_val = vec![];
+                for arg in args {
+                    args_val.push(self.eval_node(arg)?);
+                }
                 let info = match rec {
                     None => match self.method_table.get(&id) {
                         Some(info) => info.clone(),
@@ -484,6 +524,25 @@ impl Evaluator {
                     Some(rec) => match rec {
                         Value::Instance(instance) => self.get_instance_method(instance, method)?,
                         Value::Class(class) => self.get_class_method(class, method)?,
+                        Value::FixNum(i) => {
+                            let id = match method.kind {
+                                NodeKind::Ident(id) => id,
+                                _ => {
+                                    return Err(self.error_unimplemented(
+                                        format!("Expected identifier."),
+                                        method.loc(),
+                                    ))
+                                }
+                            };
+                            if self.ident_table.get_name(id) == "chr" {
+                                return Ok(Value::Char(i as u8));
+                            } else {
+                                return Err(self.error_unimplemented(
+                                    format!("Expected identifier."),
+                                    method.loc(),
+                                ));
+                            }
+                        }
                         _ => {
                             return Err(self.error_unimplemented(
                                 format!("Receiver must be a class or instance. {:?}", rec),
@@ -560,8 +619,8 @@ impl Evaluator {
     fn eval_div(&mut self, lhs: Value, rhs: Value, loc: Loc) -> EvalResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs / rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 / rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs / rhs as f64)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum((lhs as f64) / rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs / (rhs as f64))),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs / rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '*'", loc)),
         }
@@ -644,6 +703,34 @@ impl Evaluator {
             (_, _) => Err(self.error_nomethod("NoMethodError: '>'", loc)),
         }
     }
+
+    fn eval_assign(&mut self, lhs: &Node, rhs: &Value) -> EvalResult {
+        match lhs.kind {
+            NodeKind::Ident(id) => {
+                self.lvar_table().insert(id, rhs.clone());
+                Ok(rhs.clone())
+            }
+            NodeKind::Const(id) => {
+                self.const_table.insert(id, rhs.clone());
+                Ok(rhs.clone())
+            }
+            NodeKind::InstanceVar(id) => {
+                match self.self_value {
+                    Value::Instance(instance) => {
+                        let info = self.instance_table.get_mut(instance);
+                        info.instance_var.insert(id, rhs.clone());
+                    }
+                    Value::Class(class) => {
+                        let info = self.class_table.get_mut(class);
+                        info.instance_var.insert(id, rhs.clone());
+                    }
+                    _ => unreachable!("eval: Illegal self value. {:?}", self.self_value),
+                };
+                Ok(rhs.clone())
+            }
+            _ => unimplemented!(),
+        }
+    }
 }
 
 impl Evaluator {
@@ -682,11 +769,8 @@ impl Evaluator {
 impl Evaluator {
     pub fn val_to_bool(&self, val: &Value) -> bool {
         match val {
-            Value::Nil => false,
-            Value::Bool(b) => *b,
-            Value::FixNum(_) => true,
-            Value::String(_) => true,
-            _ => unimplemented!(),
+            Value::Nil | Value::Bool(false) => false,
+            _ => true,
         }
     }
 
@@ -702,6 +786,12 @@ impl Evaluator {
             Value::String(s) => format!("{}", s),
             Value::Class(class) => self.get_class_name(*class),
             Value::Instance(instance) => self.get_instance_name(*instance),
+            Value::Range(start, end) => {
+                let start = self.val_to_s(start);
+                let end = self.val_to_s(end);
+                format!("({}..{})", start, end)
+            }
+            Value::Char(c) => format!("{:x}", c),
         }
     }
 }

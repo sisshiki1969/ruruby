@@ -6,7 +6,8 @@
 
 size = 600 # ARGV[0].to_i
 
-puts("P4\n#{size} #{size}")
+#puts("P4\n#{size} #{size}")
+puts("P4\n600 600")
 
 ITER = 49                           # Iterations - 1 for easy for..in looping
 LIMIT_SQUARED = 4.0                 # Presquared limit
@@ -46,11 +47,13 @@ for y in 0..count_size
     # ensures we skip the shifting when it's unnecessary, which is most cases.
     if (bit_num == 8)
       print(byte_acc.chr)
+      #print(byte_acc)
       byte_acc = 0
       bit_num = 0
     elsif (x == count_size)
       byte_acc = byte_acc << (8 - bit_num)
       print(byte_acc.chr)
+      #print(byte_acc)
       byte_acc = 0
       bit_num = 0
     end
