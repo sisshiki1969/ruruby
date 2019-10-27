@@ -105,6 +105,15 @@ impl std::hash::Hash for IdentId {
     }
 }
 
+impl IdentId {
+    pub fn from_usize(id: usize) -> Self {
+        IdentId(id)
+    }
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdentifierTable {
     table: HashMap<String, usize>,

@@ -264,6 +264,7 @@ impl Evaluator {
     pub fn eval_node(&mut self, node: &Node) -> EvalResult {
         let loc = node.loc();
         match &node.kind {
+            NodeKind::TopLevel(node, _) => Ok(self.eval_node(node)?),
             NodeKind::Nil => Ok(Value::Nil),
             NodeKind::Number(num) => Ok(Value::FixNum(*num)),
             NodeKind::Bool(b) => Ok(Value::Bool(*b)),

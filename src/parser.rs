@@ -2,6 +2,7 @@ use crate::lexer::Lexer;
 use crate::node::*;
 use crate::token::*;
 use crate::util::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
@@ -12,6 +13,51 @@ pub struct Parser {
     context_stack: Vec<Context>,
     //pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
+
+    lvar_collector: Vec<LvarCollector>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LvarId(usize);
+
+impl std::ops::Deref for LvarId {
+    type Target = usize;
+    fn deref(&self) -> &usize {
+        &self.0
+    }
+}
+
+impl std::hash::Hash for LvarId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LvarCollector {
+    id: usize,
+    table: HashMap<IdentId, LvarId>,
+}
+
+impl LvarCollector {
+    fn new() -> Self {
+        LvarCollector {
+            id: 0,
+            table: HashMap::new(),
+        }
+    }
+
+    fn insert(&mut self, val: IdentId) -> LvarId {
+        match self.table.get(&val) {
+            Some(id) => *id,
+            None => {
+                let id = self.id;
+                self.table.insert(val, LvarId(id));
+                self.id += 1;
+                LvarId(id)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,11 +85,24 @@ impl Parser {
             prev_cursor: 0,
             context_stack: vec![Context::Class],
             ident_table: IdentifierTable::new(),
+            lvar_collector: vec![],
         }
     }
 
     pub fn get_context_depth(&self) -> usize {
         self.context_stack.len()
+    }
+
+    fn add_local_var(&mut self, id: IdentId) {
+        self.lvar_collector.last_mut().unwrap().insert(id);
+    }
+
+    fn get_ident_id(&mut self, method: &String) -> IdentId {
+        self.ident_table.get_ident_id(&method)
+    }
+
+    fn get_ident_name(&mut self, id: IdentId) -> &String {
+        self.ident_table.get_name(id)
     }
 
     pub fn show_tokens(&self) {
@@ -172,7 +231,7 @@ impl Parser {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
             }
         };
-        Ok(self.ident_table.get_ident_id(&name))
+        Ok(self.get_ident_id(&name))
     }
 
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseError {
@@ -194,10 +253,21 @@ impl Parser {
         self.tokens = self.lexer.tokenize(program.clone())?.tokens;
         self.cursor = 0;
         self.prev_cursor = 0;
+        self.lvar_collector.push(LvarCollector::new());
         let node = self.parse_comp_stmt()?;
+        let lvar = self.lvar_collector.pop().unwrap();
+        let list = lvar
+            .table
+            .clone()
+            .into_iter()
+            .collect::<Vec<(IdentId, LvarId)>>();
+        for l in list {
+            let name = self.get_ident_name(l.0);
+            eprintln!("({}, {:?})", name, l.1);
+        }
         let tok = self.peek();
         if tok.kind == TokenKind::EOF {
-            Ok(node)
+            Ok(Node::new_top_level(node, lvar))
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
         }
@@ -256,6 +326,12 @@ impl Parser {
         }
         if self.consume_punct(Punct::Assign) {
             let rhs = self.parse_arg()?;
+            match lhs.kind {
+                NodeKind::Ident(id) => {
+                    self.add_local_var(id);
+                }
+                _ => {}
+            };
             Ok(Node::new_assign(lhs, rhs))
         } else {
             Ok(lhs)
@@ -497,7 +573,7 @@ impl Parser {
                                 .error_unexpected(tok.loc(), "method name must be an identifier."))
                         }
                     };
-                    let id = self.ident_table.get_ident_id(&method);
+                    let id = self.get_ident_id(&method);
                     let mut args = vec![];
                     if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
                         self.get()?;
@@ -535,18 +611,18 @@ impl Parser {
         let loc = tok.loc();
         match &tok.kind {
             TokenKind::Ident(name) => {
-                let id = self.ident_table.get_ident_id(name);
+                let id = self.get_ident_id(name);
                 if name == "self" {
                     return Ok(Node::new(NodeKind::SelfValue, loc));
                 };
                 return Ok(Node::new_identifier(id, loc));
             }
             TokenKind::InstanceVar(name) => {
-                let id = self.ident_table.get_ident_id(name);
+                let id = self.get_ident_id(name);
                 return Ok(Node::new_instance_var(id, loc));
             }
             TokenKind::Const(name) => {
-                let id = self.ident_table.get_ident_id(name);
+                let id = self.get_ident_id(name);
                 Ok(Node::new_const(id, loc))
             }
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
@@ -566,6 +642,9 @@ impl Parser {
                 let loc = self.prev_loc();
                 let var = self.expect_ident()?;
                 let var = Node::new_identifier(var, self.prev_loc());
+                if let NodeKind::Ident(id) = var.kind {
+                    self.add_local_var(id);
+                }
                 self.expect_reserved(Reserved::In)?;
                 let start = self.parse_arg()?;
                 self.expect_punct(Punct::Range2)?;
@@ -660,7 +739,7 @@ impl Parser {
         //      [ensure COMPSTMT]
         //  end
         let mut is_class_method = false;
-        let self_id = self.ident_table.get_ident_id(&"self".to_string());
+        let self_id = self.get_ident_id(&"self".to_string());
         let mut id = self.expect_ident()?;
         if id == self_id {
             is_class_method = true;
@@ -713,7 +792,7 @@ impl Parser {
             TokenKind::Const(s) => s.clone(),
             _ => return Err(self.error_unexpected(loc.dec(), "Expect class name.")),
         };
-        let id = self.ident_table.get_ident_id(&name);
+        let id = self.get_ident_id(&name);
 
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
@@ -724,7 +803,7 @@ impl Parser {
 
 #[cfg(test)]
 #[allow(unused_imports, dead_code)]
-mod tests {
+mod eval_tests {
     extern crate test;
 
     use crate::eval::Evaluator;
@@ -735,7 +814,13 @@ mod tests {
 
     fn eval_script(script: impl Into<String>, expected: Value) {
         let mut parser = Parser::new();
-        let node = parser.parse_program(script.into()).unwrap();
+        let node = match parser.parse_program(script.into()) {
+            Ok(node) => node,
+            Err(err) => {
+                parser.lexer.source_info.show_loc(&err.loc);
+                panic!("Got parse error: {:?}", err);
+            }
+        };
         let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
         match eval.eval_node(&node) {
             Ok(res) => {
@@ -743,7 +828,10 @@ mod tests {
                     panic!("Expected:{:?} Got:{:?}", expected, res);
                 }
             }
-            Err(err) => panic!("Got runtime error: {:?}", err),
+            Err(err) => {
+                eval.source_info.show_loc(&err.loc);
+                panic!("Got runtime error: {:?}", err);
+            }
         }
     }
 
@@ -1029,7 +1117,7 @@ mod tests {
     }
 
     #[test]
-    fn class2() {
+    fn eval_class2() {
         let program = "
         class Vec
             @xxx=100

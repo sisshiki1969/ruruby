@@ -67,6 +67,7 @@ impl Lexer {
         }
     }
 
+    #[allow(dead_code)]
     fn error_unexpected(&self, pos: usize) -> ParseError {
         let loc = Loc(pos, pos);
         ParseError::new(
