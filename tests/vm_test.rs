@@ -244,6 +244,16 @@ fn local_var1() {
 }
 
 #[test]
+fn const1() {
+    let program = "
+            Ruby = 777
+            Ruby = Ruby * 2
+            Ruby / 111";
+    let expected = Value::FixNum(14);
+    eval_script(program, expected);
+}
+
+#[test]
 fn func1() {
     let program = "
             def func(a,b,c)

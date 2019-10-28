@@ -104,6 +104,9 @@ impl Inst {
     const SEND: u8 = 23;
     const PUSH_SELF: u8 = 24;
     const CREATE_RANGE: u8 = 25;
+    const GET_CONST: u8 = 26;
+    const SET_CONST: u8 = 27;
+    const PUSH_STRING: u8 = 28;
 }
 
 impl VM {
@@ -205,6 +208,12 @@ impl VM {
                     #[cfg(debug_assertions)]
                     println!("PUSH_FLOAT {}", num);
                 }
+                Inst::PUSH_STRING => {
+                    let id = read_id(&self.iseq, pc);
+                    let string = self.ident_table.get_name(id).clone();
+                    stack.push(Value::String(string));
+                    pc += 5;
+                }
 
                 Inst::ADD => {
                     let val = self.eval_add(stack.pop().unwrap(), stack.pop().unwrap())?;
@@ -298,7 +307,7 @@ impl VM {
                     println!("GE");
                 }
                 Inst::SET_LOCAL => {
-                    let id = IdentId::from_usize(read32(&self.iseq, pc + 1) as usize);
+                    let id = read_id(&self.iseq, pc);
                     let val = stack.last().unwrap().clone();
                     self.lvar_table().insert(id, val);
                     pc += 5;
@@ -306,7 +315,7 @@ impl VM {
                     println!("SET_LOCAL {}", self.ident_table.get_name(id));
                 }
                 Inst::GET_LOCAL => {
-                    let id = IdentId::from_usize(read32(&self.iseq, pc + 1) as usize);
+                    let id = read_id(&self.iseq, pc);
                     let val = match self.lvar_table().get(&id) {
                         Some(val) => val,
                         None => return Err(self.error_nomethod("undefined local variable.")),
@@ -315,6 +324,30 @@ impl VM {
                     pc += 5;
                     #[cfg(debug_assertions)]
                     println!("GET_LOCAL {}", self.ident_table.get_name(id));
+                }
+                Inst::SET_CONST => {
+                    let id = read_id(&self.iseq, pc);
+                    let val = stack.last().unwrap().clone();
+                    self.const_table.insert(id, val);
+                    pc += 5;
+                    #[cfg(debug_assertions)]
+                    println!("SET_CONST {}", self.ident_table.get_name(id));
+                }
+                Inst::GET_CONST => {
+                    let id = read_id(&self.iseq, pc);
+                    match self.const_table.get(&id) {
+                        Some(val) => stack.push(val.clone()),
+                        None => {
+                            let name = self.ident_table.get_name(id).clone();
+                            return Err(self.error_unimplemented(format!(
+                                "Uninitialized constant '{}'.",
+                                name
+                            )));
+                        }
+                    }
+                    pc += 5;
+                    #[cfg(debug_assertions)]
+                    println!("GET_CONST {}", self.ident_table.get_name(id));
                 }
                 Inst::CREATE_RANGE => {
                     let start = stack.pop().unwrap();
@@ -346,10 +379,15 @@ impl VM {
                 }
                 Inst::SEND => {
                     let receiver = stack.pop().unwrap();
-                    let method_id = IdentId::from_usize(read32(&self.iseq, pc + 1) as usize);
-                    let info = match self.method_table.get(&method_id) {
-                        Some(info) => info,
-                        None => return Err(self.error_unimplemented("method not defined.")),
+                    //println!("RECV {:?}", receiver);
+                    let method_id = read_id(&self.iseq, pc);
+                    //println!("METHOD {}", self.ident_table.get_name(method_id));
+                    let info = match receiver {
+                        Value::Nil | Value::FixNum(_) => match self.method_table.get(&method_id) {
+                            Some(info) => info,
+                            None => return Err(self.error_unimplemented("method not defined.")),
+                        },
+                        _ => unimplemented!(),
                     };
                     let args_num = read32(&self.iseq, pc + 5);
                     let mut args = vec![];
@@ -372,6 +410,9 @@ impl VM {
             }
         }
 
+        fn read_id(iseq: &ISeq, pc: usize) -> IdentId {
+            IdentId::from_usize(read32(iseq, pc + 1) as usize)
+        }
         fn read64(iseq: &ISeq, pc: usize) -> u64 {
             let mut num: u64 = (iseq[pc] as u64) << 56;
             num += (iseq[pc + 1] as u64) << 48;
@@ -426,6 +467,11 @@ impl VM {
         self.push32(id.as_usize() as u32);
     }
 
+    fn gen_set_const(&mut self, id: IdentId) {
+        self.iseq.push(Inst::SET_CONST);
+        self.push32(id.as_usize() as u32);
+    }
+
     fn gen_fixnum(&mut self, num: i64) {
         self.iseq.push(Inst::PUSH_FIXNUM);
         self.push64(num as u64);
@@ -433,6 +479,11 @@ impl VM {
 
     fn gen_get_local(&mut self, id: IdentId) {
         self.iseq.push(Inst::GET_LOCAL);
+        self.push32(id.as_usize() as u32);
+    }
+
+    fn gen_get_const(&mut self, id: IdentId) {
+        self.iseq.push(Inst::GET_CONST);
         self.push32(id.as_usize() as u32);
     }
 
@@ -493,6 +544,11 @@ impl VM {
                 self.iseq.push(Inst::PUSH_FLONUM);
                 unsafe { self.push64(std::mem::transmute(*num)) };
             }
+            NodeKind::String(s) => {
+                self.iseq.push(Inst::PUSH_STRING);
+                let id = self.ident_table.get_ident_id(s);
+                self.push32(id.as_usize() as u32);
+            }
             NodeKind::SelfValue => {
                 self.iseq.push(Inst::PUSH_SELF);
             }
@@ -508,6 +564,9 @@ impl VM {
             }
             NodeKind::Ident(id) => {
                 self.gen_get_local(*id);
+            }
+            NodeKind::Const(id) => {
+                self.gen_get_const(*id);
             }
             NodeKind::BinOp(op, lhs, rhs) => match op {
                 BinOp::Add => {
@@ -659,6 +718,9 @@ impl VM {
                     NodeKind::Ident(id) => {
                         self.gen_set_local(id);
                     }
+                    NodeKind::Const(id) => {
+                        self.gen_set_const(id);
+                    }
                     _ => (),
                 }
             }
@@ -699,7 +761,7 @@ impl VM {
             }
             /*
 
-            NodeKind::String(s) => Ok(Value::String(s.clone())),
+
             NodeKind::SelfValue => {
                 /*
                 let classref = self
@@ -1045,6 +1107,13 @@ impl VM {
 
 impl VM {
     pub fn init_builtin(&mut self) {
+        let id = self.ident_table.get_ident_id(&"chr".to_string());
+        let info = MethodInfo::BuiltinFunc {
+            name: "chr".to_string(),
+            func: builtin_chr,
+        };
+        self.method_table.insert(id, info);
+
         let id = self.ident_table.get_ident_id(&"puts".to_string());
         let info = MethodInfo::BuiltinFunc {
             name: "puts".to_string(),
@@ -1065,6 +1134,14 @@ impl VM {
             func: builtin_assert,
         };
         self.method_table.insert(id, info);
+
+        /// Built-in function "chr".
+        pub fn builtin_chr(_eval: &mut VM, receiver: Value, _args: Vec<Value>) -> EvalResult {
+            match receiver {
+                Value::FixNum(i) => Ok(Value::Char(i as u8)),
+                _ => unimplemented!(),
+            }
+        }
 
         /// Built-in function "puts".
         pub fn builtin_puts(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> EvalResult {
