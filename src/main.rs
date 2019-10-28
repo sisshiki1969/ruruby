@@ -21,7 +21,7 @@ fn main() {
     let vm_flag = app_matches.is_present("vm");
     match app_matches.value_of("file") {
         Some(file_name) => {
-            file_read(file_name);
+            file_read(file_name, vm_flag);
             return;
         }
         None => {
@@ -90,7 +90,7 @@ fn repl() {
     }
 }
 
-fn file_read(file_name: impl Into<String>) {
+fn file_read(file_name: impl Into<String>, vm_flag: bool) {
     use std::fs::*;
     use std::io::Read;
     let file_name = file_name.into();
@@ -122,18 +122,37 @@ fn file_read(file_name: impl Into<String>) {
 
     let mut parser = Parser::new();
     let res = parser.parse_program(file_body);
-    match res {
-        Ok(node) => {
-            let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
-            match eval.eval(&node) {
-                Ok(result) => println!("=> {:?}", &result),
-                Err(_) => {}
+    if vm_flag {
+        match res {
+            Ok(node) => {
+                let mut eval = VM::new(parser.lexer.source_info, parser.ident_table);
+                eval.init_builtin();
+                match eval.run(&node) {
+                    Ok(result) => println!("=> {:?}", &result),
+                    Err(_) => {}
+                }
+            }
+            Err(err) => {
+                parser.show_tokens();
+                parser.show_loc(&err.loc);
+                println!("ParseError: {:?}", err.kind);
             }
         }
-        Err(err) => {
-            parser.show_tokens();
-            parser.show_loc(&err.loc);
-            println!("ParseError: {:?}", err.kind);
+        println!("Executed by VM.");
+    } else {
+        match res {
+            Ok(node) => {
+                let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
+                match eval.eval(&node) {
+                    Ok(result) => println!("=> {:?}", &result),
+                    Err(_) => {}
+                }
+            }
+            Err(err) => {
+                parser.show_tokens();
+                parser.show_loc(&err.loc);
+                println!("ParseError: {:?}", err.kind);
+            }
         }
     }
 }

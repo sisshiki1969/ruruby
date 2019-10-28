@@ -9,7 +9,7 @@ pub enum NodeKind {
     Float(f64),
     Bool(bool),
     String(String),
-    Range(Box<Node>, Box<Node>),
+    Range(Box<Node>, Box<Node>, bool), // start, end, exclude_end
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
     Assign(Box<Node>, Box<Node>),
@@ -17,6 +17,7 @@ pub enum NodeKind {
     If(Box<Node>, Box<Node>, Box<Node>),
     For(Box<Node>, Box<Node>, Box<Node>), // params, iter, body
     Break,
+    Next,
     Ident(IdentId),
     InstanceVar(IdentId),
     Const(IdentId),
@@ -110,8 +111,11 @@ impl Node {
         Node::new(NodeKind::Ident(id), loc)
     }
 
-    pub fn new_range(start: Node, end: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::Range(Box::new(start), Box::new(end)), loc)
+    pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
+        Node::new(
+            NodeKind::Range(Box::new(start), Box::new(end), exclude_end),
+            loc,
+        )
     }
 
     pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {
@@ -151,6 +155,10 @@ impl Node {
 
     pub fn new_break(loc: Loc) -> Self {
         Node::new(NodeKind::Break, loc)
+    }
+
+    pub fn new_next(loc: Loc) -> Self {
+        Node::new(NodeKind::Next, loc)
     }
 }
 

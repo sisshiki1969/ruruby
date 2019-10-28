@@ -199,12 +199,37 @@ fn for1() {
 fn for2() {
     let program = "
             y = 0
+            for x in 0...9
+            y=y+x
+            end
+            y";
+    let expected = Value::FixNum(36);
+    eval_script(program, expected);
+}
+
+#[test]
+fn for3() {
+    let program = "
+            y = 0
             for x in 0..9
             if x == 5 then break end
             y=y+x
             end
             y";
     let expected = Value::FixNum(10);
+    eval_script(program, expected);
+}
+
+#[test]
+fn for4() {
+    let program = "
+            y = 0
+            for x in 0..9
+            if x == 5 then next end
+            y=y+x
+            end
+            y";
+    let expected = Value::FixNum(40);
     eval_script(program, expected);
 }
 

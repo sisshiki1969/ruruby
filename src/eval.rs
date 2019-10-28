@@ -410,8 +410,8 @@ impl Evaluator {
                 }
             }
             NodeKind::For(id, iter, body) => {
-                let (start, end) = match &iter.kind {
-                    NodeKind::Range(start, end) => (start, end),
+                let (start, end, exclude) = match &iter.kind {
+                    NodeKind::Range(start, end, exclude) => (start, end, exclude),
                     _ => {
                         return Err(self.error_unimplemented(
                             "Currently, loop iterator must be Range.",
@@ -424,7 +424,11 @@ impl Evaluator {
                 loop {
                     let var_v = self.eval_node(id)?;
                     let end_v = self.eval_node(&*end)?;
-                    let cond = self.eval_gt(var_v, end_v, end.loc())?;
+                    let cond = if *exclude {
+                        self.eval_ge(var_v, end_v, end.loc())?
+                    } else {
+                        self.eval_gt(var_v, end_v, end.loc())?
+                    };
                     if self.val_to_bool(&cond) {
                         break;
                     };
@@ -443,7 +447,7 @@ impl Evaluator {
                     self.eval_assign(id, &new_v)?;
                 }
                 let (start, end) = (self.eval_node(&*start)?, self.eval_node(&*end)?);
-                Ok(Value::Range(Box::new(start), Box::new(end)))
+                Ok(Value::Range(Box::new(start), Box::new(end), *exclude))
             }
             NodeKind::Break => {
                 return Err(RuntimeError::new(RuntimeErrKind::Break, loc));
@@ -787,10 +791,11 @@ impl Evaluator {
             Value::String(s) => format!("{}", s),
             Value::Class(class) => self.get_class_name(*class),
             Value::Instance(instance) => self.get_instance_name(*instance),
-            Value::Range(start, end) => {
+            Value::Range(start, end, exclude) => {
                 let start = self.val_to_s(start);
                 let end = self.val_to_s(end);
-                format!("({}..{})", start, end)
+                let sym = if *exclude { "..." } else { ".." };
+                format!("({}{}{})", start, sym, end)
             }
             Value::Char(c) => format!("{:x}", c),
         }

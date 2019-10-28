@@ -256,14 +256,17 @@ impl Parser {
         self.lvar_collector.push(LvarCollector::new());
         let node = self.parse_comp_stmt()?;
         let lvar = self.lvar_collector.pop().unwrap();
-        let list = lvar
-            .table
-            .clone()
-            .into_iter()
-            .collect::<Vec<(IdentId, LvarId)>>();
-        for l in list {
-            let name = self.get_ident_name(l.0);
-            eprintln!("({}, {:?})", name, l.1);
+        #[cfg(debug_assertions)]
+        {
+            let list = lvar
+                .table
+                .clone()
+                .into_iter()
+                .collect::<Vec<(IdentId, LvarId)>>();
+            for l in list {
+                let name = self.get_ident_name(l.0);
+                eprintln!("({}, {:?})", name, l.1);
+            }
         }
         let tok = self.peek();
         if tok.kind == TokenKind::EOF {
@@ -340,7 +343,7 @@ impl Parser {
 
     fn parse_arg_ternary(&mut self) -> Result<Node, ParseError> {
         let loc = self.prev_loc();
-        let cond = self.parse_arg_logical_or()?;
+        let cond = self.parse_arg_range()?;
         if self.consume_punct(Punct::Question) {
             let then_ = self.parse_arg_ternary()?;
             self.expect_punct(Punct::Colon)?;
@@ -353,6 +356,24 @@ impl Parser {
             Ok(node)
         } else {
             Ok(cond)
+        }
+    }
+
+    fn parse_arg_range(&mut self) -> Result<Node, ParseError> {
+        let lhs = self.parse_arg_logical_or()?;
+        if self.is_line_term() {
+            return Ok(lhs);
+        }
+        if self.consume_punct(Punct::Range2) {
+            let rhs = self.parse_arg_logical_or()?;
+            let loc = lhs.loc.merge(rhs.loc);
+            Ok(Node::new_range(lhs, rhs, false, loc))
+        } else if self.consume_punct(Punct::Range3) {
+            let rhs = self.parse_arg_logical_or()?;
+            let loc = lhs.loc.merge(rhs.loc);
+            Ok(Node::new_range(lhs, rhs, true, loc))
+        } else {
+            Ok(lhs)
         }
     }
 
@@ -646,11 +667,7 @@ impl Parser {
                     self.add_local_var(id);
                 }
                 self.expect_reserved(Reserved::In)?;
-                let start = self.parse_arg()?;
-                self.expect_punct(Punct::Range2)?;
-                let end = self.parse_arg()?;
-                let range_loc = start.loc().merge(end.loc());
-                let iter = Node::new_range(start, end, range_loc);
+                let iter = self.parse_expr()?;
                 self.parse_do()?;
                 let body = self.parse_comp_stmt()?;
                 self.expect_reserved(Reserved::End)?;
@@ -678,6 +695,7 @@ impl Parser {
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
+            TokenKind::Reserved(Reserved::Next) => Ok(Node::new_next(loc)),
             TokenKind::Reserved(Reserved::True) => Ok(Node::new_bool(true, loc)),
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),

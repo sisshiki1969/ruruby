@@ -50,6 +50,7 @@ impl Lexer {
             "false" => Reserved::False,
             "if" => Reserved::If,
             "in" => Reserved::In,
+            "next" => Reserved::Next,
             "nil" => Reserved::Nil,
             "return" => Reserved::Return,
             "then" => Reserved::Then,
