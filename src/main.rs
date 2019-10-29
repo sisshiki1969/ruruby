@@ -6,8 +6,9 @@ extern crate rustyline;
 
 use ansi_term::Colour::Red;
 use clap::{App, Arg};
+use ruruby::error::{ParseErrKind, RubyErrorKind};
 use ruruby::eval::Evaluator;
-use ruruby::parser::{ParseErrorKind, Parser};
+use ruruby::parser::Parser;
 use ruruby::vm::VM;
 
 fn main() {
@@ -74,7 +75,7 @@ fn repl() {
                 program = String::new();
             }
             Err(err) => {
-                if ParseErrorKind::UnexpectedEOF == err.kind {
+                if RubyErrorKind::ParseErr(ParseErrKind::UnexpectedEOF) == err.kind {
                     level = parser.get_context_depth();
                     parser = parser_save;
                     continue;
@@ -82,7 +83,7 @@ fn repl() {
                 parser.show_tokens();
                 level = parser.get_context_depth();
                 parser.show_loc(&err.loc());
-                println!("ParseError: {:?}", err.kind);
+                println!("RubyError: {:?}", err.kind);
                 parser = parser_save;
                 program = String::new();
             }
@@ -122,37 +123,32 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
 
     let mut parser = Parser::new();
     let res = parser.parse_program(file_body);
-    if vm_flag {
-        match res {
-            Ok(node) => {
+
+    match res {
+        Ok(node) => {
+            if vm_flag {
                 let mut eval = VM::new(parser.lexer.source_info, parser.ident_table);
                 eval.init_builtin();
                 match eval.run(&node) {
                     Ok(result) => println!("=> {:?}", &result),
-                    Err(_) => {}
-                }
-            }
-            Err(err) => {
-                parser.show_tokens();
-                parser.show_loc(&err.loc);
-                println!("ParseError: {:?}", err.kind);
-            }
-        }
-        println!("Executed by VM.");
-    } else {
-        match res {
-            Ok(node) => {
+                    Err(err) => {
+                        eval.source_info.show_loc(&err.loc());
+                        println!("{:?}", err.kind);
+                    }
+                };
+                println!("Executed by VM.");
+            } else {
                 let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
                 match eval.eval(&node) {
                     Ok(result) => println!("=> {:?}", &result),
                     Err(_) => {}
                 }
             }
-            Err(err) => {
-                parser.show_tokens();
-                parser.show_loc(&err.loc);
-                println!("ParseError: {:?}", err.kind);
-            }
+        }
+        Err(err) => {
+            parser.show_tokens();
+            parser.show_loc(&err.loc());
+            println!("{:?}", err.kind);
         }
     }
 }
@@ -188,16 +184,17 @@ fn repl_vm() {
                         parser.ident_table = vm.ident_table.clone();
                         println!("=> {:?}", result);
                     }
-                    Err(_) => {
+                    Err(err) => {
                         parser = parser_save;
-                        //println!("{}", program);
+                        vm.source_info.show_loc(&err.loc());
+                        println!("{:?}", err.kind);
                     }
                 }
                 level = parser.get_context_depth();
                 program = String::new();
             }
             Err(err) => {
-                if ParseErrorKind::UnexpectedEOF == err.kind {
+                if RubyErrorKind::ParseErr(ParseErrKind::UnexpectedEOF) == err.kind {
                     level = parser.get_context_depth();
                     parser = parser_save;
                     continue;
@@ -205,7 +202,7 @@ fn repl_vm() {
                 parser.show_tokens();
                 level = parser.get_context_depth();
                 parser.show_loc(&err.loc());
-                println!("ParseError: {:?}", err.kind);
+                println!("RubyError: {:?}", err.kind);
                 parser = parser_save;
                 program = String::new();
             }

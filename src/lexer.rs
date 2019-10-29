@@ -1,4 +1,4 @@
-use crate::parser::*;
+use crate::error::{RubyError, ParseErrKind};
 use crate::token::*;
 use crate::util::*;
 use std::collections::HashMap;
@@ -69,10 +69,10 @@ impl Lexer {
     }
 
     #[allow(dead_code)]
-    fn error_unexpected(&self, pos: usize) -> ParseError {
+    fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
-        ParseError::new(
-            ParseErrorKind::SyntaxError(format!(
+        RubyError::new_parse_err(
+            ParseErrKind::SyntaxError(format!(
                 "Unexpected char. '{}'",
                 self.source_info.code[pos]
             )),
@@ -80,12 +80,12 @@ impl Lexer {
         )
     }
 
-    fn error_eof(&self, pos: usize) -> ParseError {
+    fn error_eof(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
-        ParseError::new(ParseErrorKind::UnexpectedEOF, loc)
+        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, loc)
     }
 
-    pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, ParseError> {
+    pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, RubyError> {
         match self.tokenize_main(code_text) {
             Ok(res) => Ok(res),
             Err(err) => {
@@ -98,7 +98,7 @@ impl Lexer {
     pub fn tokenize_main(
         &mut self,
         code_text: impl Into<String>,
-    ) -> Result<LexerResult, ParseError> {
+    ) -> Result<LexerResult, RubyError> {
         let mut code = code_text.into().chars().collect::<Vec<char>>();
         let pop_flag = match self.source_info.line_pos.last() {
             None => false,
@@ -247,7 +247,7 @@ impl Lexer {
         Ok(LexerResult::new(tokens))
     }
 
-    fn lex_identifier(&mut self, ch: char, is_instance_var: bool) -> Result<Token, ParseError> {
+    fn lex_identifier(&mut self, ch: char, is_instance_var: bool) -> Result<Token, RubyError> {
         // read identifier or reserved keyword
         let is_const = ch.is_ascii_uppercase();
         let mut tok = ch.to_string();
@@ -279,7 +279,7 @@ impl Lexer {
     }
 
     /// Read number literal
-    fn lex_number_literal(&mut self, ch: char) -> Result<Token, ParseError> {
+    fn lex_number_literal(&mut self, ch: char) -> Result<Token, RubyError> {
         let mut int = ch.to_string();
         let mut decimal_flag = false;
         loop {
@@ -323,7 +323,7 @@ impl Lexer {
     }
 
     /// Read string literal
-    fn lex_string_literal_double(&mut self) -> Result<Token, ParseError> {
+    fn lex_string_literal_double(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -335,7 +335,7 @@ impl Lexer {
         Ok(self.new_stringlit(s))
     }
 
-    fn read_escaped_char(&mut self) -> Result<char, ParseError> {
+    fn read_escaped_char(&mut self) -> Result<char, RubyError> {
         let c = self.get()?;
         let ch = match c {
             '\'' | '"' | '?' | '\\' => c,
@@ -355,7 +355,7 @@ impl Lexer {
 impl Lexer {
     /// Get one char and move to the next.
     /// Returns Some(char) or None if the cursor reached EOF.
-    fn get(&mut self) -> Result<char, ParseError> {
+    fn get(&mut self) -> Result<char, RubyError> {
         if self.pos >= self.len {
             self.source_info
                 .line_pos
@@ -377,7 +377,7 @@ impl Lexer {
 
     /// Peek the next char and no move.
     /// Returns Some(char) or None if the cursor reached EOF.
-    fn peek(&mut self) -> Result<char, ParseError> {
+    fn peek(&mut self) -> Result<char, RubyError> {
         if self.pos >= self.len {
             Err(self.error_eof(self.pos))
         } else {
@@ -387,7 +387,7 @@ impl Lexer {
 
     /// Peek the char after the next and no move.
     /// Returns Some(char) or None if the cursor reached EOF.
-    fn peek2(&mut self) -> Result<char, ParseError> {
+    fn peek2(&mut self) -> Result<char, RubyError> {
         if self.pos + 1 >= self.len {
             Err(self.error_eof(self.pos))
         } else {

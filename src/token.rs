@@ -5,21 +5,21 @@ pub type Token = Annot<TokenKind>;
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
-            TokenKind::EOF => write!(f, "Token![{:?}, {}],", self.kind, self.loc.0),
+            TokenKind::EOF => write!(f, "Token![{:?}, {}],", self.kind, self.loc().0),
             TokenKind::Punct(punct) => write!(
                 f,
                 "Token![Punct(Punct::{:?}), {}, {}],",
-                punct, self.loc.0, self.loc.1
+                punct, self.loc().0, self.loc().1
             ),
             TokenKind::Reserved(reserved) => write!(
                 f,
                 "Token![Reserved(Reserved::{:?}), {}, {}],",
-                reserved, self.loc.0, self.loc.1
+                reserved, self.loc().0, self.loc().1
             ),
             _ => write!(
                 f,
                 "Token![{:?}, {}, {}],",
-                self.kind, self.loc.0, self.loc.1
+                self.kind, self.loc().0, self.loc().1
             ),
         }
     }

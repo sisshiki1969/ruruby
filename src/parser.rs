@@ -1,3 +1,4 @@
+use crate::error::{ParseErrKind, RubyError};
 use crate::lexer::Lexer;
 use crate::node::*;
 use crate::token::*;
@@ -18,7 +19,7 @@ pub struct Parser {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LvarId(usize);
+pub struct LvarId(usize);
 
 impl std::ops::Deref for LvarId {
     type Target = usize;
@@ -33,10 +34,20 @@ impl std::hash::Hash for LvarId {
     }
 }
 
+impl LvarId {
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+
+    pub fn from_usize(id: usize) -> Self {
+        LvarId(id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LvarCollector {
     id: usize,
-    table: HashMap<IdentId, LvarId>,
+    pub table: HashMap<IdentId, LvarId>,
 }
 
 impl LvarCollector {
@@ -65,15 +76,6 @@ enum Context {
     Class,
     Method,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParseErrorKind {
-    UnexpectedEOF,
-    UnexpectedToken,
-    SyntaxError(String),
-}
-
-pub type ParseError = Annot<ParseErrorKind>;
 
 impl Parser {
     pub fn new() -> Self {
@@ -143,8 +145,8 @@ impl Parser {
     }
 
     /// Get next token (skipping line terminators).
-    /// Return ParseError if it was EOF.
-    fn get(&mut self) -> Result<&Token, ParseError> {
+    /// Return RubyError if it was EOF.
+    fn get(&mut self) -> Result<&Token, RubyError> {
         loop {
             let token = &self.tokens[self.cursor];
             if token.is_eof() {
@@ -204,8 +206,8 @@ impl Parser {
     }
 
     /// Get the next token and examine whether it is an expected Reserved.
-    /// If not, return ParseError.
-    fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseError> {
+    /// If not, return RubyError.
+    fn expect_reserved(&mut self, expect: Reserved) -> Result<(), RubyError> {
         match &self.get()?.kind {
             TokenKind::Reserved(reserved) if *reserved == expect => Ok(()),
             _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect {:?}", expect))),
@@ -213,8 +215,8 @@ impl Parser {
     }
 
     /// Get the next token and examine whether it is an expected Punct.
-    /// If not, return ParseError.
-    fn expect_punct(&mut self, expect: Punct) -> Result<(), ParseError> {
+    /// If not, return RubyError.
+    fn expect_punct(&mut self, expect: Punct) -> Result<(), RubyError> {
         match &self.get()?.kind {
             TokenKind::Punct(punct) if *punct == expect => Ok(()),
             _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect '{:?}'", expect))),
@@ -223,8 +225,8 @@ impl Parser {
 
     /// Get the next token and examine whether it is Ident.
     /// Return IdentId of the Ident.
-    /// If not, return ParseError.
-    fn expect_ident(&mut self) -> Result<IdentId, ParseError> {
+    /// If not, return RubyError.
+    fn expect_ident(&mut self) -> Result<IdentId, RubyError> {
         let name = match &self.get()?.kind {
             TokenKind::Ident(s) => s.clone(),
             _ => {
@@ -234,12 +236,12 @@ impl Parser {
         Ok(self.get_ident_id(&name))
     }
 
-    fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseError {
-        ParseError::new(ParseErrorKind::SyntaxError(msg.into()), loc)
+    fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
+        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
     }
 
-    fn error_eof(&self, loc: Loc) -> ParseError {
-        ParseError::new(ParseErrorKind::UnexpectedEOF, loc)
+    fn error_eof(&self, loc: Loc) -> RubyError {
+        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, loc)
     }
 
     pub fn show_loc(&self, loc: &Loc) {
@@ -248,7 +250,7 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse_program(&mut self, program: String) -> Result<Node, ParseError> {
+    pub fn parse_program(&mut self, program: String) -> Result<Node, RubyError> {
         //println!("{:?}", program);
         self.tokens = self.lexer.tokenize(program.clone())?.tokens;
         self.cursor = 0;
@@ -276,10 +278,10 @@ impl Parser {
         }
     }
 
-    fn parse_comp_stmt(&mut self) -> Result<Node, ParseError> {
+    fn parse_comp_stmt(&mut self) -> Result<Node, RubyError> {
         // STMT (TERM EXPR)* [TERM]
 
-        fn return_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Result<Node, ParseError> {
+        fn return_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Result<Node, RubyError> {
             if let Some(node) = nodes.last() {
                 loc = loc.merge(node.loc());
             };
@@ -310,19 +312,19 @@ impl Parser {
         return_comp_stmt(nodes, loc)
     }
     /*
-        fn parse_stmt(&mut self) -> Result<Node, ParseError> {
+        fn parse_stmt(&mut self) -> Result<Node, RubyError> {
             self.parse_expr()
         }
     */
-    fn parse_expr(&mut self) -> Result<Node, ParseError> {
+    fn parse_expr(&mut self) -> Result<Node, RubyError> {
         self.parse_arg()
     }
 
-    fn parse_arg(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg(&mut self) -> Result<Node, RubyError> {
         self.parse_arg_assign()
     }
 
-    fn parse_arg_assign(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_assign(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_ternary()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -341,7 +343,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_ternary(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
         let cond = self.parse_arg_range()?;
         if self.consume_punct(Punct::Question) {
@@ -359,25 +361,25 @@ impl Parser {
         }
     }
 
-    fn parse_arg_range(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_range(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_logical_or()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
         if self.consume_punct(Punct::Range2) {
             let rhs = self.parse_arg_logical_or()?;
-            let loc = lhs.loc.merge(rhs.loc);
+            let loc = lhs.loc().merge(rhs.loc());
             Ok(Node::new_range(lhs, rhs, false, loc))
         } else if self.consume_punct(Punct::Range3) {
             let rhs = self.parse_arg_logical_or()?;
-            let loc = lhs.loc.merge(rhs.loc);
+            let loc = lhs.loc().merge(rhs.loc());
             Ok(Node::new_range(lhs, rhs, true, loc))
         } else {
             Ok(lhs)
         }
     }
 
-    fn parse_arg_logical_or(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_logical_or(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_logical_and()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -390,7 +392,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_logical_and(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_logical_and(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_eq()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -404,7 +406,7 @@ impl Parser {
     }
 
     // 4==4==4 => SyntaxError
-    fn parse_arg_eq(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_eq(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_comp()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -420,7 +422,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_comp(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_comp(&mut self) -> Result<Node, RubyError> {
         let mut lhs = self.parse_arg_bitor()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -445,7 +447,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_bitor(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_bitor(&mut self) -> Result<Node, RubyError> {
         let mut lhs = self.parse_arg_bitand()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -462,7 +464,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_bitand(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_bitand(&mut self) -> Result<Node, RubyError> {
         let mut lhs = self.parse_arg_shift()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -477,7 +479,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_shift(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_shift(&mut self) -> Result<Node, RubyError> {
         let mut lhs = self.parse_arg_add()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -494,7 +496,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_add(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_add(&mut self) -> Result<Node, RubyError> {
         let mut lhs = self.parse_arg_mul()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -513,7 +515,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_mul(&mut self) -> Result<Node, ParseError> {
+    fn parse_arg_mul(&mut self) -> Result<Node, RubyError> {
         let mut lhs = self.parse_unary_minus()?;
         if self.is_line_term() {
             return Ok(lhs);
@@ -532,7 +534,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_unary_minus(&mut self) -> Result<Node, ParseError> {
+    fn parse_unary_minus(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
         if self.consume_punct(Punct::Minus) {
             let lhs = self.parse_unary_minus()?;
@@ -545,7 +547,7 @@ impl Parser {
         }
     }
 
-    fn parse_unary_bitnot(&mut self) -> Result<Node, ParseError> {
+    fn parse_unary_bitnot(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
         if self.consume_punct(Punct::BitNot) {
             let lhs = self.parse_unary_bitnot()?;
@@ -557,7 +559,7 @@ impl Parser {
         }
     }
 
-    fn parse_primary_ext(&mut self) -> Result<Node, ParseError> {
+    fn parse_primary_ext(&mut self) -> Result<Node, RubyError> {
         // FUNCTION : OPERATION [`(' [CALL_ARGS] `)']
         //        | PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
         //        | PRIMARY `::' FNAME `(' [CALL_ARGS] `)'
@@ -612,7 +614,7 @@ impl Parser {
         }
     }
 
-    fn parse_parenthesize_args(&mut self) -> Result<Vec<Node>, ParseError> {
+    fn parse_parenthesize_args(&mut self) -> Result<Vec<Node>, RubyError> {
         let mut args = vec![];
         if self.consume_punct(Punct::RParen) {
             return Ok(args);
@@ -627,7 +629,7 @@ impl Parser {
         Ok(args)
     }
 
-    fn parse_primary(&mut self) -> Result<Node, ParseError> {
+    fn parse_primary(&mut self) -> Result<Node, RubyError> {
         let tok = self.get()?.clone();
         let loc = tok.loc();
         match &tok.kind {
@@ -708,7 +710,7 @@ impl Parser {
         }
     }
 
-    fn parse_if_then(&mut self) -> Result<Node, ParseError> {
+    fn parse_if_then(&mut self) -> Result<Node, RubyError> {
         //  if EXPR THEN
         //      COMPSTMT
         //      (elsif EXPR THEN COMPSTMT)*
@@ -731,7 +733,7 @@ impl Parser {
         ))
     }
 
-    fn parse_then(&mut self) -> Result<(), ParseError> {
+    fn parse_then(&mut self) -> Result<(), RubyError> {
         if self.consume_term() {
             self.consume_reserved(Reserved::Then);
             return Ok(());
@@ -740,7 +742,7 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_do(&mut self) -> Result<(), ParseError> {
+    fn parse_do(&mut self) -> Result<(), RubyError> {
         if self.consume_term() {
             self.consume_reserved(Reserved::Do);
             return Ok(());
@@ -749,7 +751,7 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_def(&mut self) -> Result<Node, ParseError> {
+    fn parse_def(&mut self) -> Result<Node, RubyError> {
         //  def FNAME ARGDECL
         //      COMPSTMT
         //      [rescue [ARGS] [`=>' LHS] THEN COMPSTMT]+
@@ -775,7 +777,7 @@ impl Parser {
         }
     }
 
-    fn parse_params(&mut self) -> Result<Vec<Node>, ParseError> {
+    fn parse_params(&mut self) -> Result<Vec<Node>, RubyError> {
         if self.consume_term() {
             return Ok(vec![]);
         };
@@ -801,7 +803,7 @@ impl Parser {
         Ok(args)
     }
 
-    fn parse_class(&mut self) -> Result<Node, ParseError> {
+    fn parse_class(&mut self) -> Result<Node, RubyError> {
         //  class identifier [`<' identifier]
         //      COMPSTMT
         //  end
@@ -835,7 +837,7 @@ mod eval_tests {
         let node = match parser.parse_program(script.into()) {
             Ok(node) => node,
             Err(err) => {
-                parser.lexer.source_info.show_loc(&err.loc);
+                parser.lexer.source_info.show_loc(&err.loc());
                 panic!("Got parse error: {:?}", err);
             }
         };
@@ -847,7 +849,7 @@ mod eval_tests {
                 }
             }
             Err(err) => {
-                eval.source_info.show_loc(&err.loc);
+                eval.source_info.show_loc(&err.loc());
                 panic!("Got runtime error: {:?}", err);
             }
         }

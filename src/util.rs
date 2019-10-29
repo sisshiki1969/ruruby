@@ -3,7 +3,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
     pub kind: T,
-    pub loc: Loc,
+    loc: Loc,
 }
 
 impl<T> Annot<T> {

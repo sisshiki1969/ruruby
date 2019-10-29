@@ -247,7 +247,7 @@ impl Evaluator {
         match self.eval_node(node) {
             Ok(res) => Ok(res),
             Err(err) => {
-                self.source_info.show_loc(&err.loc);
+                self.source_info.show_loc(&err.loc());
                 match &err.kind {
                     RuntimeErrKind::Name(s) => println!("NameError ({})", s),
                     RuntimeErrKind::NoMethod(s) => println!("NoMethodError ({})", s),

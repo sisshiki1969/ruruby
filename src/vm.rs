@@ -1,13 +1,14 @@
 use crate::class::*;
-use crate::eval::{RuntimeErrKind, RuntimeError};
+use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::instance::*;
 use crate::node::*;
+use crate::parser::LvarId;
 use crate::util::*;
 use crate::value::*;
 use std::collections::HashMap;
 
 pub type ValueTable = HashMap<IdentId, Value>;
-pub type BuiltinFunc = fn(eval: &mut VM, receiver: Value, args: Vec<Value>) -> EvalResult;
+pub type BuiltinFunc = fn(eval: &mut VM, receiver: Value, args: Vec<Value>) -> VMResult;
 pub type ISeq = Vec<u8>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +57,7 @@ pub enum EscapeKind {
     Next,
 }
 
-pub type EvalResult = Result<Value, RuntimeError>;
+pub type VMResult = Result<Value, RubyError>;
 
 #[derive(Debug, Clone)]
 pub struct VM {
@@ -70,6 +71,7 @@ pub struct VM {
     // Codegen State
     pub class_stack: Vec<ClassRef>,
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
+    pub lvar_table: HashMap<IdentId, LvarId>,
     pub loc: Loc,
     // VM state
     pub iseq: ISeq,
@@ -119,7 +121,7 @@ impl VM {
             instance_table: GlobalInstanceTable::new(),
             method_table: HashMap::new(),
             const_table: HashMap::new(),
-            // for codegen
+            lvar_table: HashMap::new(),
             class_stack: vec![],
             scope_stack: vec![LocalScope::new()],
             loop_stack: vec![],
@@ -138,31 +140,18 @@ impl VM {
         &mut self.scope_stack.last_mut().unwrap().lvar_table
     }
 
-    pub fn run(&mut self, node: &Node) -> EvalResult {
+    pub fn run(&mut self, node: &Node) -> VMResult {
         self.iseq.clear();
         //println!("{:?}", node);
-        match self.gen(node) {
-            Ok(_) => {}
-            Err(err) => {
-                self.source_info.show_loc(&err.loc);
-                println!("{:?}", err);
-                return Err(err);
-            }
-        }
+        self.gen(node)?;
         self.iseq.push(Inst::END);
-        let val = match self.vm_run() {
-            Ok(v) => v,
-            Err(err) => {
-                self.source_info.show_loc(&err.loc);
-                println!("{:?}", err);
-                return Err(err);
-            }
-        };
+        let val = self.vm_run()?;
         Ok(val)
     }
 
-    pub fn vm_run(&mut self) -> EvalResult {
+    pub fn vm_run(&mut self) -> VMResult {
         let mut stack: Vec<Value> = vec![];
+        let mut local_var: Vec<Value> = vec![Value::Nil; 64];
         let mut pc = 0;
         loop {
             match self.iseq[pc] {
@@ -307,23 +296,26 @@ impl VM {
                     println!("GE");
                 }
                 Inst::SET_LOCAL => {
-                    let id = read_id(&self.iseq, pc);
-                    let val = stack.last().unwrap().clone();
-                    self.lvar_table().insert(id, val);
-                    pc += 5;
+                    let id = read_lvar_id(&self.iseq, pc);
                     #[cfg(debug_assertions)]
-                    println!("SET_LOCAL {}", self.ident_table.get_name(id));
+                    println!("SET_LOCAL {:?}", id);
+                    let val = stack.last().unwrap().clone();
+                    //self.lvar_table().insert(id, val);
+                    local_var[id.as_usize()] = val;
+                    pc += 5;
                 }
                 Inst::GET_LOCAL => {
-                    let id = read_id(&self.iseq, pc);
+                    let id = read_lvar_id(&self.iseq, pc);
+                    #[cfg(debug_assertions)]
+                    println!("GET_LOCAL {:?}", id);
+                    /*
                     let val = match self.lvar_table().get(&id) {
                         Some(val) => val,
                         None => return Err(self.error_nomethod("undefined local variable.")),
-                    };
+                    };*/
+                    let val = local_var[id.as_usize()].clone();
                     stack.push(val.clone());
                     pc += 5;
-                    #[cfg(debug_assertions)]
-                    println!("GET_LOCAL {}", self.ident_table.get_name(id));
                 }
                 Inst::SET_CONST => {
                     let id = read_id(&self.iseq, pc);
@@ -413,6 +405,11 @@ impl VM {
         fn read_id(iseq: &ISeq, pc: usize) -> IdentId {
             IdentId::from_usize(read32(iseq, pc + 1) as usize)
         }
+
+        fn read_lvar_id(iseq: &ISeq, pc: usize) -> LvarId {
+            LvarId::from_usize(read32(iseq, pc + 1) as usize)
+        }
+
         fn read64(iseq: &ISeq, pc: usize) -> u64 {
             let mut num: u64 = (iseq[pc] as u64) << 56;
             num += (iseq[pc + 1] as u64) << 48;
@@ -434,6 +431,7 @@ impl VM {
         }
     }
 
+    // Codegen
     pub fn current(&self) -> ISeqPos {
         ISeqPos(self.iseq.len())
     }
@@ -464,7 +462,8 @@ impl VM {
 
     fn gen_set_local(&mut self, id: IdentId) {
         self.iseq.push(Inst::SET_LOCAL);
-        self.push32(id.as_usize() as u32);
+        let lvar_id = self.lvar_table.get(&id).unwrap().as_usize();
+        self.push32(lvar_id as u32);
     }
 
     fn gen_set_const(&mut self, id: IdentId) {
@@ -479,7 +478,9 @@ impl VM {
 
     fn gen_get_local(&mut self, id: IdentId) {
         self.iseq.push(Inst::GET_LOCAL);
-        self.push32(id.as_usize() as u32);
+        println!("{:?}", id);
+        let lvar_id = self.lvar_table.get(&id).unwrap().as_usize();
+        self.push32(lvar_id as u32);
     }
 
     fn gen_get_const(&mut self, id: IdentId) {
@@ -525,10 +526,13 @@ impl VM {
     }
 
     /// Generate ISeq.
-    pub fn gen(&mut self, node: &Node) -> Result<(), RuntimeError> {
+    pub fn gen(&mut self, node: &Node) -> Result<(), RubyError> {
         self.loc = node.loc();
         match &node.kind {
-            NodeKind::TopLevel(node, _) => self.gen(node)?,
+            NodeKind::TopLevel(node, lvar_collector) => {
+                self.lvar_table = lvar_collector.table.clone();
+                self.gen(node)?
+            }
             NodeKind::Nil => self.iseq.push(Inst::PUSH_NIL),
             NodeKind::Bool(b) => {
                 if *b {
@@ -680,11 +684,11 @@ impl VM {
             NodeKind::For(id, iter, body) => {
                 let id = match id.kind {
                     NodeKind::Ident(id) => id,
-                    _ => return Err(self.error_nomethod("Expected an identifier.")),
+                    _ => return Err(self.error_syntax("Expected an identifier.", id.loc())),
                 };
                 let (start, end, exclude) = match &iter.kind {
                     NodeKind::Range(start, end, exclude) => (start, end, exclude),
-                    _ => return Err(self.error_nomethod("Expected Range.")),
+                    _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
                 };
                 self.loop_stack.push(vec![]);
                 self.gen(start)?;
@@ -727,7 +731,9 @@ impl VM {
             NodeKind::Send(receiver, method, args) => {
                 let id = match method.kind {
                     NodeKind::Ident(id) => id,
-                    _ => return Err(self.error_unimplemented(format!("Expected identifier."))),
+                    _ => {
+                        return Err(self.error_syntax(format!("Expected identifier."), method.loc()))
+                    }
                 };
                 for arg in args.iter().rev() {
                     self.gen(arg)?;
@@ -743,7 +749,9 @@ impl VM {
                         x.push((src, EscapeKind::Break));
                     }
                     None => {
-                        return Err(self.error_unimplemented("Can't escape from eval with break."));
+                        return Err(
+                            self.error_syntax("Can't escape from eval with break.", self.loc)
+                        );
                     }
                 }
             }
@@ -755,7 +763,9 @@ impl VM {
                         x.push((src, EscapeKind::Next));
                     }
                     None => {
-                        return Err(self.error_unimplemented("Can't escape from eval with next."));
+                        return Err(
+                            self.error_syntax("Can't escape from eval with next.", self.loc)
+                        );
                     }
                 }
             }
@@ -792,15 +802,6 @@ impl VM {
                         format!("Instance variable can be referred only in instance method."),
                         node.loc(),
                     ))
-                }
-            },
-            NodeKind::Const(id) => match self.const_table.get(&id) {
-                Some(val) => Ok(val.clone()),
-                None => {
-                    self.source_info.show_loc(&node.loc());
-                    println!("{:?}", self.lvar_table());
-                    let name = self.ident_table.get_name(*id).clone();
-                    Err(self.error_name(format!("Uninitialized constant '{}'.", name), node.loc()))
                 }
             },
 
@@ -946,16 +947,22 @@ impl VM {
 }
 
 impl VM {
-    pub fn error_nomethod(&self, msg: impl Into<String>) -> RuntimeError {
-        RuntimeError::new(RuntimeErrKind::NoMethod(msg.into()), self.loc)
+    pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), self.loc)
     }
-    pub fn error_unimplemented(&self, msg: impl Into<String>) -> RuntimeError {
-        RuntimeError::new(RuntimeErrKind::Unimplemented(msg.into()), self.loc)
+    pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), self.loc)
+    }
+    pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.loc)
+    }
+    pub fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
+        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
     }
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_add(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs + rhs)),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 + rhs)),
@@ -964,7 +971,7 @@ impl VM {
             (_, _) => Err(self.error_nomethod("NoMethodError: '-'")),
         }
     }
-    fn eval_sub(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_sub(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs - rhs)),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 - rhs)),
@@ -974,7 +981,7 @@ impl VM {
         }
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_mul(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs * rhs)),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 * rhs)),
@@ -984,7 +991,7 @@ impl VM {
         }
     }
 
-    fn eval_div(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs / rhs)),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum((lhs as f64) / rhs)),
@@ -994,42 +1001,42 @@ impl VM {
         }
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs << rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '<<'")),
         }
     }
 
-    fn eval_shr(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs >> rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs & rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs | rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs ^ rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    pub fn eval_eq(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    pub fn eval_eq(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (&lhs, &rhs) {
             (Value::Nil, Value::Nil) => Ok(Value::Bool(true)),
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs == rhs)),
@@ -1041,7 +1048,7 @@ impl VM {
         }
     }
 
-    fn eval_neq(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_neq(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs != rhs)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::Bool(lhs != rhs)),
@@ -1052,7 +1059,7 @@ impl VM {
         }
     }
 
-    fn eval_ge(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_ge(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs >= rhs)),
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs >= rhs as f64)),
@@ -1062,7 +1069,7 @@ impl VM {
         }
     }
 
-    fn eval_gt(&mut self, rhs: Value, lhs: Value) -> EvalResult {
+    fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs > rhs)),
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::Bool(lhs > rhs as f64)),
@@ -1136,7 +1143,7 @@ impl VM {
         self.method_table.insert(id, info);
 
         /// Built-in function "chr".
-        pub fn builtin_chr(_eval: &mut VM, receiver: Value, _args: Vec<Value>) -> EvalResult {
+        pub fn builtin_chr(_eval: &mut VM, receiver: Value, _args: Vec<Value>) -> VMResult {
             match receiver {
                 Value::FixNum(i) => Ok(Value::Char(i as u8)),
                 _ => unimplemented!(),
@@ -1144,7 +1151,7 @@ impl VM {
         }
 
         /// Built-in function "puts".
-        pub fn builtin_puts(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> EvalResult {
+        pub fn builtin_puts(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> VMResult {
             for arg in args {
                 println!("{}", eval.val_to_s(&arg));
             }
@@ -1152,7 +1159,7 @@ impl VM {
         }
 
         /// Built-in function "print".
-        pub fn builtin_print(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> EvalResult {
+        pub fn builtin_print(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> VMResult {
             for arg in args {
                 if let Value::Char(ch) = arg {
                     let v = [ch];
@@ -1166,7 +1173,7 @@ impl VM {
         }
 
         /// Built-in function "assert".
-        pub fn builtin_assert(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> EvalResult {
+        pub fn builtin_assert(eval: &mut VM, _receiver: Value, args: Vec<Value>) -> VMResult {
             if args.len() != 2 {
                 panic!("Invalid number of arguments.");
             }
@@ -1181,7 +1188,7 @@ impl VM {
         }
         /*
         /// Built-in function "new".
-        pub fn builtin_new(eval: &mut VM, receiver: Value, _args: Vec<Value>) -> EvalResult {
+        pub fn builtin_new(eval: &mut VM, receiver: Value, _args: Vec<Value>) -> VMResult {
             match receiver {
                 Value::Class(class_ref) => {
                     let instance = eval.new_instance(class_ref);
