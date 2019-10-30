@@ -49,7 +49,6 @@ pub type VMResult = Result<Value, RubyError>;
 #[derive(Debug, Clone)]
 pub struct VM {
     // Global info
-    pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
     pub class_table: GlobalClassTable,
     pub instance_table: GlobalInstanceTable,
@@ -60,6 +59,7 @@ pub struct VM {
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
     pub lvar_table: HashMap<IdentId, LvarId>,
     pub loc: Loc,
+    pub iseq_info: Vec<(ISeqPos, Loc)>,
     // VM state
     pub iseq: ISeq,
     pub lvar_stack: Vec<Vec<Value>>,
@@ -100,10 +100,9 @@ impl Inst {
 }
 
 impl VM {
-    pub fn new(source_info: SourceInfo, ident_table: IdentifierTable) -> Self {
+    pub fn new(ident_table: IdentifierTable) -> Self {
         let vm = VM {
             iseq: vec![],
-            source_info,
             ident_table,
             class_table: GlobalClassTable::new(),
             instance_table: GlobalInstanceTable::new(),
@@ -114,13 +113,13 @@ impl VM {
             lvar_stack: vec![vec![Value::Nil; 64]],
             loop_stack: vec![],
             loc: Loc(0, 0),
+            iseq_info: vec![],
             exec_stack: vec![],
         };
         vm
     }
 
-    pub fn init(&mut self, source_info: SourceInfo, ident_table: IdentifierTable) {
-        self.source_info = source_info;
+    pub fn init(&mut self, ident_table: IdentifierTable) {
         self.ident_table = ident_table;
     }
 
@@ -488,13 +487,15 @@ impl VM {
         self.push64(num as u64);
     }
 
-    fn gen_get_local(&mut self, id: IdentId) {
+    fn gen_get_local(&mut self, id: IdentId) -> Result<(), RubyError> {
         self.iseq.push(Inst::GET_LOCAL);
         let lvar_id = match self.lvar_table.get(&id) {
             Some(x) => x,
-            None => panic!("Illegal local var.")
-        }.as_usize();
+            None => return Err(self.error_name("undefined local variable.")),
+        }
+        .as_usize();
         self.push32(lvar_id as u32);
+        Ok(())
     }
 
     fn gen_get_const(&mut self, id: IdentId) {
@@ -538,6 +539,9 @@ impl VM {
         self.iseq.push((num >> 8) as u8);
         self.iseq.push(num as u8);
     }
+    fn save_loc(&mut self) {
+        self.iseq_info.push((ISeqPos(self.iseq.len()), self.loc));
+    }
 
     /// Generate ISeq.
     pub fn gen(&mut self, node: &Node) -> Result<(), RubyError> {
@@ -579,10 +583,12 @@ impl VM {
                 };
                 self.gen(end)?;
                 self.gen(start)?;
+                self.save_loc();
                 self.iseq.push(Inst::CREATE_RANGE);
             }
             NodeKind::Ident(id) => {
-                self.gen_get_local(*id);
+                self.save_loc();
+                self.gen_get_local(*id)?;
             }
             NodeKind::Const(id) => {
                 self.gen_get_const(*id);
@@ -710,12 +716,12 @@ impl VM {
                 self.gen_set_local(id);
                 let loop_start = self.current();
                 self.gen(end)?;
-                self.gen_get_local(id);
+                self.gen_get_local(id)?;
                 self.iseq.push(if *exclude { Inst::GT } else { Inst::GE });
                 let src = self.gen_jmp_if_false();
                 self.gen(body)?;
                 let loop_continue = self.current();
-                self.gen_get_local(id);
+                self.gen_get_local(id)?;
                 self.gen_fixnum(1);
                 self.iseq.push(Inst::ADD);
                 self.gen_set_local(id);
@@ -754,6 +760,7 @@ impl VM {
                     self.gen(arg)?;
                 }
                 self.gen(receiver)?;
+                self.save_loc();
                 self.gen_send(id, args.len());
             }
             NodeKind::Break => {

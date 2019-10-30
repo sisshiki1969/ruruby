@@ -11,7 +11,7 @@ use test::Bencher;
 fn eval_script(script: impl Into<String>, expected: Value) {
     let mut parser = Parser::new();
     let node = parser.parse_program(script.into(), None).unwrap();
-    let mut eval = VM::new(parser.lexer.source_info, parser.ident_table);
+    let mut eval = VM::new(parser.ident_table);
     eval.init_builtin();
     match eval.run(&node) {
         Ok(res) => {

@@ -12,7 +12,6 @@ pub struct Parser {
     cursor: usize,
     prev_cursor: usize,
     context_stack: Vec<Context>,
-    //pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
     lvar_collector: Vec<LvarCollector>,
 }
