@@ -39,19 +39,6 @@ impl std::fmt::Debug for MethodInfo {
 pub type MethodTable = HashMap<IdentId, MethodInfo>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct LocalScope {
-    lvar_table: ValueTable,
-}
-
-impl LocalScope {
-    pub fn new() -> Self {
-        LocalScope {
-            lvar_table: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum EscapeKind {
     Break,
     Next,
@@ -75,7 +62,8 @@ pub struct VM {
     pub loc: Loc,
     // VM state
     pub iseq: ISeq,
-    pub scope_stack: Vec<LocalScope>,
+    pub lvar_stack: Vec<Vec<Value>>,
+    pub exec_stack: Vec<Value>,
 }
 
 pub struct Inst;
@@ -123,9 +111,10 @@ impl VM {
             const_table: HashMap::new(),
             lvar_table: HashMap::new(),
             class_stack: vec![],
-            scope_stack: vec![LocalScope::new()],
+            lvar_stack: vec![vec![Value::Nil; 64]],
             loop_stack: vec![],
             loc: Loc(0, 0),
+            exec_stack: vec![],
         };
         vm
     }
@@ -136,8 +125,8 @@ impl VM {
     }
 
     /// Get local variable table.
-    pub fn lvar_table(&mut self) -> &mut ValueTable {
-        &mut self.scope_stack.last_mut().unwrap().lvar_table
+    pub fn lvar(&mut self) -> &mut [Value] {
+        self.lvar_stack.last_mut().unwrap()
     }
 
     pub fn run(&mut self, node: &Node) -> VMResult {
@@ -150,35 +139,33 @@ impl VM {
     }
 
     pub fn vm_run(&mut self) -> VMResult {
-        let mut stack: Vec<Value> = vec![];
-        let mut local_var: Vec<Value> = vec![Value::Nil; 64];
         let mut pc = 0;
         loop {
             match self.iseq[pc] {
-                Inst::END => match stack.pop() {
+                Inst::END => match self.exec_stack.pop() {
                     Some(v) => return Ok(v),
                     None => return Ok(Value::Nil),
                 },
                 Inst::PUSH_NIL => {
-                    stack.push(Value::Nil);
+                    self.exec_stack.push(Value::Nil);
                     pc += 1;
                     #[cfg(debug_assertions)]
                     println!("PUSH_NIL");
                 }
                 Inst::PUSH_TRUE => {
-                    stack.push(Value::Bool(true));
+                    self.exec_stack.push(Value::Bool(true));
                     pc += 1;
                     #[cfg(debug_assertions)]
                     println!("PUSH_TRUE");
                 }
                 Inst::PUSH_FALSE => {
-                    stack.push(Value::Bool(false));
+                    self.exec_stack.push(Value::Bool(false));
                     pc += 1;
                     #[cfg(debug_assertions)]
                     println!("PUSH_FALSE");
                 }
                 Inst::PUSH_SELF => {
-                    stack.push(Value::Nil);
+                    self.exec_stack.push(Value::Nil);
                     pc += 1;
                     #[cfg(debug_assertions)]
                     println!("PUSH_SELF");
@@ -186,112 +173,138 @@ impl VM {
                 Inst::PUSH_FIXNUM => {
                     let num = read64(&self.iseq, pc + 1);
                     pc += 9;
-                    stack.push(Value::FixNum(num as i64));
+                    self.exec_stack.push(Value::FixNum(num as i64));
                     #[cfg(debug_assertions)]
                     println!("PUSH_FIXNUM {}", num as i64);
                 }
                 Inst::PUSH_FLONUM => {
                     let num = unsafe { std::mem::transmute(read64(&self.iseq, pc + 1)) };
                     pc += 9;
-                    stack.push(Value::FloatNum(num));
+                    self.exec_stack.push(Value::FloatNum(num));
                     #[cfg(debug_assertions)]
                     println!("PUSH_FLOAT {}", num);
                 }
                 Inst::PUSH_STRING => {
                     let id = read_id(&self.iseq, pc);
                     let string = self.ident_table.get_name(id).clone();
-                    stack.push(Value::String(string));
+                    self.exec_stack.push(Value::String(string));
                     pc += 5;
                 }
 
                 Inst::ADD => {
-                    let val = self.eval_add(stack.pop().unwrap(), stack.pop().unwrap())?;
-                    stack.push(val);
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_add(lhs, rhs)?;
+                    self.exec_stack.push(val);
                     pc += 1;
                     #[cfg(debug_assertions)]
                     println!("ADD");
                 }
                 Inst::SUB => {
-                    let val = self.eval_sub(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_sub(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("SUB");
                 }
                 Inst::MUL => {
-                    let val = self.eval_mul(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_mul(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("MUL");
                 }
                 Inst::DIV => {
-                    let val = self.eval_div(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_div(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("DIV");
                 }
                 Inst::SHR => {
-                    let val = self.eval_shr(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_shr(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("SHR");
                 }
                 Inst::SHL => {
-                    let val = self.eval_shl(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_shl(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("SHL");
                 }
                 Inst::BIT_AND => {
-                    let val = self.eval_bitand(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_bitand(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("BIT_AND");
                 }
                 Inst::BIT_OR => {
-                    let val = self.eval_bitor(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_bitor(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("BIT_OR");
                 }
                 Inst::BIT_XOR => {
-                    let val = self.eval_bitxor(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_bitxor(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("BIT_XOR");
                 }
                 Inst::EQ => {
-                    let val = self.eval_eq(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_eq(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("EQ");
                 }
                 Inst::NE => {
-                    let val = self.eval_neq(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_neq(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("NE");
                 }
                 Inst::GT => {
-                    let val = self.eval_gt(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_gt(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("GT");
                 }
                 Inst::GE => {
-                    let val = self.eval_ge(stack.pop().unwrap(), stack.pop().unwrap())?;
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_ge(lhs, rhs)?;
                     pc += 1;
-                    stack.push(val);
+                    self.exec_stack.push(val);
                     #[cfg(debug_assertions)]
                     println!("GE");
                 }
@@ -299,9 +312,8 @@ impl VM {
                     let id = read_lvar_id(&self.iseq, pc);
                     #[cfg(debug_assertions)]
                     println!("SET_LOCAL {:?}", id);
-                    let val = stack.last().unwrap().clone();
-                    //self.lvar_table().insert(id, val);
-                    local_var[id.as_usize()] = val;
+                    let val = self.exec_stack.last().unwrap().clone();
+                    self.lvar()[id.as_usize()] = val;
                     pc += 5;
                 }
                 Inst::GET_LOCAL => {
@@ -313,13 +325,13 @@ impl VM {
                         Some(val) => val,
                         None => return Err(self.error_nomethod("undefined local variable.")),
                     };*/
-                    let val = local_var[id.as_usize()].clone();
-                    stack.push(val.clone());
+                    let val = self.lvar()[id.as_usize()].clone();
+                    self.exec_stack.push(val.clone());
                     pc += 5;
                 }
                 Inst::SET_CONST => {
                     let id = read_id(&self.iseq, pc);
-                    let val = stack.last().unwrap().clone();
+                    let val = self.exec_stack.last().unwrap().clone();
                     self.const_table.insert(id, val);
                     pc += 5;
                     #[cfg(debug_assertions)]
@@ -328,7 +340,7 @@ impl VM {
                 Inst::GET_CONST => {
                     let id = read_id(&self.iseq, pc);
                     match self.const_table.get(&id) {
-                        Some(val) => stack.push(val.clone()),
+                        Some(val) => self.exec_stack.push(val.clone()),
                         None => {
                             let name = self.ident_table.get_name(id).clone();
                             return Err(self.error_unimplemented(format!(
@@ -342,12 +354,12 @@ impl VM {
                     println!("GET_CONST {}", self.ident_table.get_name(id));
                 }
                 Inst::CREATE_RANGE => {
-                    let start = stack.pop().unwrap();
-                    let end = stack.pop().unwrap();
-                    let exclude = stack.pop().unwrap();
+                    let start = self.exec_stack.pop().unwrap();
+                    let end = self.exec_stack.pop().unwrap();
+                    let exclude = self.exec_stack.pop().unwrap();
                     let range =
                         Value::Range(Box::new(start), Box::new(end), self.val_to_bool(&exclude));
-                    stack.push(range);
+                    self.exec_stack.push(range);
                     pc += 1;
                 }
                 Inst::JMP => {
@@ -357,7 +369,7 @@ impl VM {
                     println!("JMP {}", disp);
                 }
                 Inst::JMP_IF_FALSE => {
-                    let val = stack.pop().unwrap();
+                    let val = self.exec_stack.pop().unwrap();
                     if self.val_to_bool(&val) {
                         pc += 5;
                         #[cfg(debug_assertions)]
@@ -370,7 +382,7 @@ impl VM {
                     }
                 }
                 Inst::SEND => {
-                    let receiver = stack.pop().unwrap();
+                    let receiver = self.exec_stack.pop().unwrap();
                     //println!("RECV {:?}", receiver);
                     let method_id = read_id(&self.iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
@@ -384,14 +396,14 @@ impl VM {
                     let args_num = read32(&self.iseq, pc + 5);
                     let mut args = vec![];
                     for _ in 0..args_num {
-                        args.push(stack.pop().unwrap());
+                        args.push(self.exec_stack.pop().unwrap());
                     }
                     match info {
                         MethodInfo::BuiltinFunc { name, func } => {
                             #[cfg(debug_assertions)]
                             println!("SEND BuiltinFunc {} args:{}", name, args_num);
                             let val = func(self, receiver, args)?;
-                            stack.push(val);
+                            self.exec_stack.push(val);
                         }
                         _ => return Err(self.error_unimplemented("ruby func.")),
                     }
@@ -478,8 +490,10 @@ impl VM {
 
     fn gen_get_local(&mut self, id: IdentId) {
         self.iseq.push(Inst::GET_LOCAL);
-        println!("{:?}", id);
-        let lvar_id = self.lvar_table.get(&id).unwrap().as_usize();
+        let lvar_id = match self.lvar_table.get(&id) {
+            Some(x) => x,
+            None => panic!("Illegal local var.")
+        }.as_usize();
         self.push32(lvar_id as u32);
     }
 
@@ -531,6 +545,7 @@ impl VM {
         match &node.kind {
             NodeKind::TopLevel(node, lvar_collector) => {
                 self.lvar_table = lvar_collector.table.clone();
+                println!("{:?}", self.lvar_table);
                 self.gen(node)?
             }
             NodeKind::Nil => self.iseq.push(Inst::PUSH_NIL),

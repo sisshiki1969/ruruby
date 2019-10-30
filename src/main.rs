@@ -8,7 +8,8 @@ use ansi_term::Colour::Red;
 use clap::{App, Arg};
 use ruruby::error::{ParseErrKind, RubyErrorKind};
 use ruruby::eval::Evaluator;
-use ruruby::parser::Parser;
+use ruruby::node::NodeKind;
+use ruruby::parser::{LvarCollector, Parser};
 use ruruby::vm::VM;
 
 fn main() {
@@ -56,7 +57,7 @@ fn repl() {
         program = format!("{}{}", program, line);
 
         let parser_save = parser.clone();
-        match parser.parse_program(program.clone()) {
+        match parser.parse_program(program.clone(), None) {
             Ok(node) => {
                 //println!("{:?}", node);
                 eval.init(parser.lexer.source_info.clone(), parser.ident_table.clone());
@@ -122,7 +123,7 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
     };
 
     let mut parser = Parser::new();
-    let res = parser.parse_program(file_body);
+    let res = parser.parse_program(file_body, None);
 
     match res {
         Ok(node) => {
@@ -159,6 +160,7 @@ fn repl_vm() {
     let mut parser = Parser::new();
     let mut vm = VM::new(parser.lexer.source_info.clone(), parser.ident_table.clone());
     let mut level = parser.get_context_depth();
+    let mut lvar_collector = LvarCollector::new();
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline =
@@ -173,9 +175,14 @@ fn repl_vm() {
         program = format!("{}{}", program, line);
 
         let parser_save = parser.clone();
-        match parser.parse_program(program.clone()) {
+        match parser.parse_program(program.clone(), Some(lvar_collector.clone())) {
             Ok(node) => {
                 //println!("{:?}", node);
+                if let NodeKind::TopLevel(_, lvar) = &node.kind {
+                    lvar_collector = lvar.clone();
+                } else {
+                    panic!()
+                };
                 vm.init(parser.lexer.source_info.clone(), parser.ident_table.clone());
                 vm.init_builtin();
                 match vm.run(&node) {

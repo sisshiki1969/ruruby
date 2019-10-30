@@ -14,7 +14,6 @@ pub struct Parser {
     context_stack: Vec<Context>,
     //pub source_info: SourceInfo,
     pub ident_table: IdentifierTable,
-
     lvar_collector: Vec<LvarCollector>,
 }
 
@@ -51,7 +50,7 @@ pub struct LvarCollector {
 }
 
 impl LvarCollector {
-    fn new() -> Self {
+    pub fn new() -> Self {
         LvarCollector {
             id: 0,
             table: HashMap::new(),
@@ -250,12 +249,17 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse_program(&mut self, program: String) -> Result<Node, RubyError> {
+    pub fn parse_program(
+        &mut self,
+        program: String,
+        lvar_collector: Option<LvarCollector>,
+    ) -> Result<Node, RubyError> {
         //println!("{:?}", program);
         self.tokens = self.lexer.tokenize(program.clone())?.tokens;
         self.cursor = 0;
         self.prev_cursor = 0;
-        self.lvar_collector.push(LvarCollector::new());
+        self.lvar_collector
+            .push(lvar_collector.unwrap_or(LvarCollector::new()));
         let node = self.parse_comp_stmt()?;
         let lvar = self.lvar_collector.pop().unwrap();
         #[cfg(debug_assertions)]
@@ -834,7 +838,7 @@ mod eval_tests {
 
     fn eval_script(script: impl Into<String>, expected: Value) {
         let mut parser = Parser::new();
-        let node = match parser.parse_program(script.into()) {
+        let node = match parser.parse_program(script.into(), None) {
             Ok(node) => node,
             Err(err) => {
                 parser.lexer.source_info.show_loc(&err.loc());
