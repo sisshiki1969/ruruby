@@ -1,5 +1,4 @@
-use crate::parser::LvarCollector;
-use crate::util::*;
+use crate::util::{Annot, IdentId, Loc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
@@ -26,7 +25,6 @@ pub enum NodeKind {
     ClassMethodDecl(IdentId, NodeVec, Box<Node>), // id, params, body
     ClassDecl(IdentId, Box<Node>),
     Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
-    TopLevel(Box<Node>, LvarCollector),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,11 +64,6 @@ pub type Node = Annot<NodeKind>;
 pub type NodeVec = Vec<Node>;
 
 impl Node {
-    pub fn new_top_level(node: Node, lvar: LvarCollector) -> Self {
-        let loc = node.loc();
-        Node::new(NodeKind::TopLevel(Box::new(node), lvar), loc)
-    }
-
     pub fn new_nil(loc: Loc) -> Self {
         Node::new(NodeKind::Nil, loc)
     }

@@ -1,29 +1,12 @@
 use crate::class::*;
+use crate::error::*;
 use crate::instance::*;
 use crate::node::*;
-use crate::util::*;
+use crate::util::{Annot, IdentId, IdentifierTable, Loc, MethodInfo, MethodTable, SourceInfo};
 use crate::value::*;
 use std::collections::HashMap;
 
 pub type ValueTable = HashMap<IdentId, Value>;
-pub type BuiltinFunc = fn(eval: &mut Evaluator, receiver: Value, args: Vec<Value>) -> EvalResult;
-
-#[derive(Clone)]
-pub enum MethodInfo {
-    RubyFunc { params: Vec<Node>, body: Box<Node> },
-    BuiltinFunc { name: String, func: BuiltinFunc },
-}
-
-impl std::fmt::Debug for MethodInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MethodInfo::RubyFunc { params, body } => write!(f, "RubyFunc {:?} {:?}", params, body),
-            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
-        }
-    }
-}
-
-pub type MethodTable = HashMap<IdentId, MethodInfo>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalScope {
@@ -38,22 +21,40 @@ impl LocalScope {
     }
 }
 
-pub type EvalResult = Result<Value, RuntimeError>;
+pub type EvalResult = Result<Value, EvalError>;
 
-pub type RuntimeError = Annot<RuntimeErrKind>;
+pub type EvalError = Annot<EvalErrKind>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum RuntimeErrKind {
-    Unimplemented(String),
-    Unreachable(String),
-    Name(String),
-    NoMethod(String),
+pub enum EvalErrKind {
+    RuntimeError(RuntimeErrKind),
     Break,
 }
 
-impl RuntimeError {
+impl EvalError {
     pub fn nomethod(msg: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(RuntimeErrKind::NoMethod(msg.into()), loc)
+        Annot::new(
+            EvalErrKind::RuntimeError(RuntimeErrKind::NoMethod(msg.into())),
+            loc,
+        )
+    }
+
+    pub fn unimplemented(msg: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(
+            EvalErrKind::RuntimeError(RuntimeErrKind::Unimplemented(msg.into())),
+            loc,
+        )
+    }
+
+    pub fn name(msg: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(
+            EvalErrKind::RuntimeError(RuntimeErrKind::Name(msg.into())),
+            loc,
+        )
+    }
+
+    pub fn raise_break(loc: Loc) -> Self {
+        Annot::new(EvalErrKind::Break, loc)
     }
 }
 
@@ -127,16 +128,20 @@ impl Evaluator {
         self.self_value = Value::Class(classref);
     }
 
-    pub fn error_unimplemented(&self, msg: impl Into<String>, loc: Loc) -> RuntimeError {
-        Annot::new(RuntimeErrKind::Unimplemented(msg.into()), loc)
+    pub fn error_unimplemented(&self, msg: impl Into<String>, loc: Loc) -> EvalError {
+        EvalError::unimplemented(msg.into(), loc)
     }
 
-    pub fn error_name(&self, msg: impl Into<String>, loc: Loc) -> RuntimeError {
-        Annot::new(RuntimeErrKind::Name(msg.into()), loc)
+    pub fn error_name(&self, msg: impl Into<String>, loc: Loc) -> EvalError {
+        EvalError::name(msg.into(), loc)
     }
 
-    pub fn error_nomethod(&self, msg: impl Into<String>, loc: Loc) -> RuntimeError {
-        Annot::new(RuntimeErrKind::NoMethod(msg.into()), loc)
+    pub fn error_nomethod(&self, msg: impl Into<String>, loc: Loc) -> EvalError {
+        EvalError::nomethod(msg.into(), loc)
+    }
+
+    pub fn error_break(&self, loc: Loc) -> EvalError {
+        EvalError::raise_break(loc)
     }
 
     /// Built-in function "puts".
@@ -207,7 +212,7 @@ impl Evaluator {
         &mut self,
         instance: InstanceRef,
         method: &Node,
-    ) -> Result<MethodInfo, RuntimeError> {
+    ) -> Result<MethodInfo, EvalError> {
         let id = match method.kind {
             NodeKind::Ident(id) => id,
             _ => {
@@ -228,7 +233,7 @@ impl Evaluator {
         &mut self,
         class: ClassRef,
         method: &Node,
-    ) -> Result<MethodInfo, RuntimeError> {
+    ) -> Result<MethodInfo, EvalError> {
         let id = match method.kind {
             NodeKind::Ident(id) => id,
             _ => {
@@ -249,11 +254,13 @@ impl Evaluator {
             Err(err) => {
                 self.source_info.show_loc(&err.loc());
                 match &err.kind {
-                    RuntimeErrKind::Name(s) => println!("NameError ({})", s),
-                    RuntimeErrKind::NoMethod(s) => println!("NoMethodError ({})", s),
-                    RuntimeErrKind::Unimplemented(s) => println!("Unimplemented ({})", s),
-                    RuntimeErrKind::Unreachable(s) => println!("Unreachable ({})", s),
-                    RuntimeErrKind::Break => println!("Break"),
+                    EvalErrKind::RuntimeError(kind) => match kind {
+                        RuntimeErrKind::Name(s) => println!("NameError ({})", s),
+                        RuntimeErrKind::NoMethod(s) => println!("NoMethodError ({})", s),
+                        RuntimeErrKind::Unimplemented(s) => println!("Unimplemented ({})", s),
+                        RuntimeErrKind::Unreachable(s) => println!("Unreachable ({})", s),
+                    },
+                    EvalErrKind::Break => println!("Break"),
                 }
                 Err(err)
             }
@@ -264,7 +271,6 @@ impl Evaluator {
     pub fn eval_node(&mut self, node: &Node) -> EvalResult {
         let loc = node.loc();
         match &node.kind {
-            NodeKind::TopLevel(node, _) => Ok(self.eval_node(node)?),
             NodeKind::Nil => Ok(Value::Nil),
             NodeKind::Number(num) => Ok(Value::FixNum(*num)),
             NodeKind::Bool(b) => Ok(Value::Bool(*b)),
@@ -435,7 +441,7 @@ impl Evaluator {
                     match self.eval_node(body) {
                         Ok(_) => {}
                         Err(err) => {
-                            if let RuntimeErrKind::Break = err.kind {
+                            if let EvalErrKind::Break = err.kind {
                                 break;
                             } else {
                                 return Err(err);
@@ -450,7 +456,7 @@ impl Evaluator {
                 Ok(Value::Range(Box::new(start), Box::new(end), *exclude))
             }
             NodeKind::Break => {
-                return Err(RuntimeError::new(RuntimeErrKind::Break, loc));
+                return Err(EvalError::raise_break(loc));
             }
             NodeKind::MethodDecl(id, params, body) => {
                 let info = MethodInfo::RubyFunc {

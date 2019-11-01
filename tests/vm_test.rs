@@ -3,17 +3,17 @@
 extern crate ruruby;
 extern crate test;
 use ruruby::lexer::Lexer;
-use ruruby::parser::Parser;
+use ruruby::parser::{LvarCollector, Parser};
 use ruruby::value::Value;
 use ruruby::vm::VM;
 use test::Bencher;
 
 fn eval_script(script: impl Into<String>, expected: Value) {
     let mut parser = Parser::new();
-    let node = parser.parse_program(script.into(), None).unwrap();
-    let mut eval = VM::new(parser.ident_table);
+    let result = parser.parse_program(script.into(), None).unwrap();
+    let mut eval = VM::new(Some(result.ident_table), Some(result.lvar_collector));
     eval.init_builtin();
-    match eval.run(&node) {
+    match eval.run(&result.node) {
         Ok(res) => {
             if res != expected {
                 panic!("Expected:{:?} Got:{:?}", expected, res);

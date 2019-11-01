@@ -1,4 +1,4 @@
-use crate::eval::{MethodInfo, MethodTable};
+use crate::util::{MethodInfo, MethodTable};
 use crate::node::Node;
 use crate::util::*;
 use crate::value::Value;

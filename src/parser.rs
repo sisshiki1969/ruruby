@@ -16,6 +16,25 @@ pub struct Parser {
     lvar_collector: Vec<LvarCollector>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseResult {
+    pub node: Node,
+    pub ident_table: IdentifierTable,
+    pub lvar_collector: LvarCollector,
+    pub source_info: SourceInfo,
+}
+
+impl ParseResult {
+    pub fn default(node: Node, lvar_collector: LvarCollector) -> Self {
+        ParseResult {
+            node,
+            ident_table: IdentifierTable::new(),
+            lvar_collector,
+            source_info: SourceInfo::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LvarId(usize);
 
@@ -252,7 +271,7 @@ impl Parser {
         &mut self,
         program: String,
         lvar_collector: Option<LvarCollector>,
-    ) -> Result<Node, RubyError> {
+    ) -> Result<ParseResult, RubyError> {
         //println!("{:?}", program);
         self.tokens = self.lexer.tokenize(program.clone())?.tokens;
         self.cursor = 0;
@@ -275,7 +294,10 @@ impl Parser {
         }
         let tok = self.peek();
         if tok.kind == TokenKind::EOF {
-            Ok(Node::new_top_level(node, lvar))
+            let mut result = ParseResult::default(node, lvar);
+            std::mem::swap(&mut result.ident_table, &mut self.ident_table);
+            std::mem::swap(&mut result.source_info, &mut self.lexer.source_info);
+            Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
         }
@@ -837,15 +859,15 @@ mod eval_tests {
 
     fn eval_script(script: impl Into<String>, expected: Value) {
         let mut parser = Parser::new();
-        let node = match parser.parse_program(script.into(), None) {
-            Ok(node) => node,
+        let result = match parser.parse_program(script.into(), None) {
+            Ok(result) => result,
             Err(err) => {
                 parser.lexer.source_info.show_loc(&err.loc());
                 panic!("Got parse error: {:?}", err);
             }
         };
-        let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
-        match eval.eval_node(&node) {
+        let mut eval = Evaluator::new(result.source_info, result.ident_table);
+        match eval.eval_node(&result.node) {
             Ok(res) => {
                 if res != expected {
                     panic!("Expected:{:?} Got:{:?}", expected, res);

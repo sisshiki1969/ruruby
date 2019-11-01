@@ -8,7 +8,6 @@ use ansi_term::Colour::Red;
 use clap::{App, Arg};
 use ruruby::error::{ParseErrKind, RubyErrorKind};
 use ruruby::eval::Evaluator;
-use ruruby::node::NodeKind;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::vm::VM;
 
@@ -58,10 +57,10 @@ fn repl() {
 
         let parser_save = parser.clone();
         match parser.parse_program(program.clone(), None) {
-            Ok(node) => {
+            Ok(result) => {
                 //println!("{:?}", node);
-                eval.init(parser.lexer.source_info.clone(), parser.ident_table.clone());
-                match eval.eval(&node) {
+                eval.init(result.source_info, result.ident_table.clone());
+                match eval.eval(&result.node) {
                     Ok(result) => {
                         parser.lexer.source_info = eval.source_info.clone();
                         parser.ident_table = eval.ident_table.clone();
@@ -126,11 +125,11 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
     let res = parser.parse_program(file_body, None);
 
     match res {
-        Ok(node) => {
+        Ok(result) => {
             if vm_flag {
-                let mut eval = VM::new(parser.ident_table);
+                let mut eval = VM::new(Some(result.ident_table), Some(result.lvar_collector));
                 eval.init_builtin();
-                match eval.run(&node) {
+                match eval.run(&result.node) {
                     Ok(result) => println!("=> {:?}", &result),
                     Err(err) => {
                         parser.lexer.source_info.show_loc(&err.loc());
@@ -139,8 +138,8 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
                 };
                 println!("Executed by VM.");
             } else {
-                let mut eval = Evaluator::new(parser.lexer.source_info, parser.ident_table);
-                match eval.eval(&node) {
+                let mut eval = Evaluator::new(result.source_info, result.ident_table);
+                match eval.eval(&result.node) {
                     Ok(result) => println!("=> {:?}", &result),
                     Err(_) => {}
                 }
@@ -158,7 +157,7 @@ fn repl_vm() {
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
-    let mut vm = VM::new(parser.ident_table.clone());
+    let mut vm = VM::new(None, None);
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
     loop {
@@ -176,24 +175,24 @@ fn repl_vm() {
 
         let parser_save = parser.clone();
         match parser.parse_program(program.clone(), Some(lvar_collector.clone())) {
-            Ok(node) => {
+            Ok(parse_result) => {
                 //println!("{:?}", node);
-                if let NodeKind::TopLevel(_, lvar) = &node.kind {
-                    lvar_collector = lvar.clone();
-                } else {
-                    panic!()
-                };
-                vm.init(parser.ident_table.clone());
+                vm.init(
+                    parse_result.ident_table,
+                    parse_result.lvar_collector.clone(),
+                );
                 vm.init_builtin();
-                match vm.run(&node) {
+                match vm.run(&parse_result.node) {
                     Ok(result) => {
                         parser.ident_table = vm.ident_table.clone();
+                        parser.lexer.source_info = parse_result.source_info;
+                        lvar_collector = parse_result.lvar_collector;
                         println!("=> {:?}", result);
                     }
                     Err(err) => {
-                        parser = parser_save;
                         parser.lexer.source_info.show_loc(&err.loc());
                         println!("{:?}", err.kind);
+                        parser = parser_save;
                     }
                 }
                 level = parser.get_context_depth();

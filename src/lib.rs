@@ -1,4 +1,5 @@
 #![feature(test)]
+pub mod builtin;
 pub mod class;
 pub mod error;
 pub mod eval;
