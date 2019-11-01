@@ -1,7 +1,8 @@
+use crate::codegen::{MethodInfo, MethodTable};
 use crate::util::IdentifierTable;
 use crate::value::Value;
+use crate::vm::VMResult;
 use crate::vm::VM;
-use crate::vm::{MethodInfo, MethodTable, VMResult};
 
 pub struct Builtin {}
 

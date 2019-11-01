@@ -458,7 +458,7 @@ impl Evaluator {
             NodeKind::Break => {
                 return Err(EvalError::raise_break(loc));
             }
-            NodeKind::MethodDecl(id, params, body) => {
+            NodeKind::MethodDecl(id, params, body, _) => {
                 let info = MethodInfo::RubyFunc {
                     params: params.clone(),
                     body: body.clone(),
@@ -474,7 +474,7 @@ impl Evaluator {
                 }
                 Ok(Value::Nil)
             }
-            NodeKind::ClassMethodDecl(id, params, body) => {
+            NodeKind::ClassMethodDecl(id, params, body, _) => {
                 let info = MethodInfo::RubyFunc {
                     params: params.clone(),
                     body: body.clone(),

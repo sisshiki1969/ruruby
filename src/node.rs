@@ -1,3 +1,4 @@
+use crate::parser::LvarCollector;
 use crate::util::{Annot, IdentId, Loc};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,8 +22,8 @@ pub enum NodeKind {
     InstanceVar(IdentId),
     Const(IdentId),
     Param(IdentId),
-    MethodDecl(IdentId, NodeVec, Box<Node>), // id, params, body
-    ClassMethodDecl(IdentId, NodeVec, Box<Node>), // id, params, body
+    MethodDecl(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
+    ClassMethodDecl(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassDecl(IdentId, Box<Node>),
     Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
 }
@@ -124,14 +125,27 @@ impl Node {
         Node::new(NodeKind::Assign(Box::new(lhs), Box::new(rhs)), loc)
     }
 
-    pub fn new_method_decl(id: IdentId, params: Vec<Node>, body: Node) -> Self {
+    pub fn new_method_decl(
+        id: IdentId,
+        params: Vec<Node>,
+        body: Node,
+        lvar: LvarCollector,
+    ) -> Self {
         let loc = Loc::new(body.loc());
-        Node::new(NodeKind::MethodDecl(id, params, Box::new(body)), loc)
+        Node::new(NodeKind::MethodDecl(id, params, Box::new(body), lvar), loc)
     }
 
-    pub fn new_class_method_decl(id: IdentId, params: Vec<Node>, body: Node) -> Self {
+    pub fn new_class_method_decl(
+        id: IdentId,
+        params: Vec<Node>,
+        body: Node,
+        lvar: LvarCollector,
+    ) -> Self {
         let loc = Loc::new(body.loc());
-        Node::new(NodeKind::ClassMethodDecl(id, params, Box::new(body)), loc)
+        Node::new(
+            NodeKind::ClassMethodDecl(id, params, Box::new(body), lvar),
+            loc,
+        )
     }
 
     pub fn new_class_decl(id: IdentId, body: Node) -> Self {
@@ -176,7 +190,7 @@ impl std::fmt::Display for Node {
                 write!(f, "]")?;
                 Ok(())
             }
-            NodeKind::MethodDecl(id, args, body) => {
+            NodeKind::MethodDecl(id, args, body, _) => {
                 write!(f, "[ MethodDecl {:?}: PARAM(", id)?;
                 for arg in args {
                     write!(f, "({}) ", arg)?;

@@ -1,48 +1,14 @@
 use crate::class::*;
+use crate::codegen::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::instance::*;
 use crate::node::*;
 use crate::parser::{LvarCollector, LvarId};
-use crate::util::*;
+use crate::util::{IdentId, IdentifierTable, Loc};
 use crate::value::*;
 use std::collections::HashMap;
 
 pub type ValueTable = HashMap<IdentId, Value>;
-pub type BuiltinFunc = fn(eval: &mut VM, receiver: Value, args: Vec<Value>) -> VMResult;
-pub type ISeq = Vec<u8>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ISeqPos(usize);
-
-impl ISeqPos {
-    fn disp(&self, dist: ISeqPos) -> i32 {
-        let dist = dist.0 as i64;
-        (dist - (self.0 as i64)) as i32
-    }
-}
-
-#[derive(Clone)]
-pub enum MethodInfo {
-    RubyFunc { params: Vec<Node>, body: Box<Node> },
-    BuiltinFunc { name: String, func: BuiltinFunc },
-}
-
-impl std::fmt::Debug for MethodInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MethodInfo::RubyFunc { params, body } => write!(f, "RubyFunc {:?} {:?}", params, body),
-            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
-        }
-    }
-}
-
-pub type MethodTable = HashMap<IdentId, MethodInfo>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum EscapeKind {
-    Break,
-    Next,
-}
 
 pub type VMResult = Result<Value, RubyError>;
 
@@ -54,12 +20,7 @@ pub struct VM {
     pub instance_table: GlobalInstanceTable,
     pub method_table: MethodTable,
     pub const_table: ValueTable,
-    // Codegen State
-    pub class_stack: Vec<ClassRef>,
-    pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
-    pub lvar_table: HashMap<IdentId, LvarId>,
-    pub loc: Loc,
-    pub iseq_info: Vec<(ISeqPos, Loc)>,
+    pub codegen: Codegen,
     // VM state
     pub iseq: ISeq,
     pub lvar_stack: Vec<Vec<Value>>,
@@ -68,36 +29,36 @@ pub struct VM {
 
 pub struct Inst;
 impl Inst {
-    const END: u8 = 0;
-    const PUSH_FIXNUM: u8 = 1;
-    const PUSH_FLONUM: u8 = 2;
-    const ADD: u8 = 3;
-    const SUB: u8 = 4;
-    const MUL: u8 = 5;
-    const DIV: u8 = 6;
-    const EQ: u8 = 7;
-    const NE: u8 = 8;
-    const GT: u8 = 9;
-    const GE: u8 = 10;
-    const PUSH_TRUE: u8 = 11;
-    const PUSH_FALSE: u8 = 12;
-    const PUSH_NIL: u8 = 13;
-    const SHR: u8 = 14;
-    const SHL: u8 = 15;
-    const BIT_OR: u8 = 16;
-    const BIT_AND: u8 = 17;
-    const BIT_XOR: u8 = 18;
-    const JMP: u8 = 19;
-    const JMP_IF_FALSE: u8 = 20;
-    const SET_LOCAL: u8 = 21;
-    const GET_LOCAL: u8 = 22;
-    const SEND: u8 = 23;
-    const PUSH_SELF: u8 = 24;
-    const CREATE_RANGE: u8 = 25;
-    const GET_CONST: u8 = 26;
-    const SET_CONST: u8 = 27;
-    const PUSH_STRING: u8 = 28;
-    const POP: u8 = 29;
+    pub const END: u8 = 0;
+    pub const PUSH_FIXNUM: u8 = 1;
+    pub const PUSH_FLONUM: u8 = 2;
+    pub const ADD: u8 = 3;
+    pub const SUB: u8 = 4;
+    pub const MUL: u8 = 5;
+    pub const DIV: u8 = 6;
+    pub const EQ: u8 = 7;
+    pub const NE: u8 = 8;
+    pub const GT: u8 = 9;
+    pub const GE: u8 = 10;
+    pub const PUSH_TRUE: u8 = 11;
+    pub const PUSH_FALSE: u8 = 12;
+    pub const PUSH_NIL: u8 = 13;
+    pub const SHR: u8 = 14;
+    pub const SHL: u8 = 15;
+    pub const BIT_OR: u8 = 16;
+    pub const BIT_AND: u8 = 17;
+    pub const BIT_XOR: u8 = 18;
+    pub const JMP: u8 = 19;
+    pub const JMP_IF_FALSE: u8 = 20;
+    pub const SET_LOCAL: u8 = 21;
+    pub const GET_LOCAL: u8 = 22;
+    pub const SEND: u8 = 23;
+    pub const PUSH_SELF: u8 = 24;
+    pub const CREATE_RANGE: u8 = 25;
+    pub const GET_CONST: u8 = 26;
+    pub const SET_CONST: u8 = 27;
+    pub const PUSH_STRING: u8 = 28;
+    pub const POP: u8 = 29;
 }
 
 impl VM {
@@ -106,7 +67,6 @@ impl VM {
         lvar_collector: Option<LvarCollector>,
     ) -> Self {
         let vm = VM {
-            iseq: vec![],
             ident_table: match ident_table {
                 Some(table) => table,
                 None => IdentifierTable::new(),
@@ -115,15 +75,10 @@ impl VM {
             instance_table: GlobalInstanceTable::new(),
             method_table: HashMap::new(),
             const_table: HashMap::new(),
-            lvar_table: match lvar_collector {
-                Some(collector) => collector.table,
-                None => HashMap::new(),
-            },
-            class_stack: vec![],
+            codegen: Codegen::new(lvar_collector),
+
+            iseq: ISeq::new(),
             lvar_stack: vec![vec![Value::Nil; 64]],
-            loop_stack: vec![],
-            loc: Loc(0, 0),
-            iseq_info: vec![],
             exec_stack: vec![],
         };
         vm
@@ -131,7 +86,7 @@ impl VM {
 
     pub fn init(&mut self, ident_table: IdentifierTable, lvar_collector: LvarCollector) {
         self.ident_table = ident_table;
-        self.lvar_table = lvar_collector.table;
+        self.codegen.lvar_table = lvar_collector.table;
     }
 
     /// Get local variable table.
@@ -142,8 +97,12 @@ impl VM {
     pub fn run(&mut self, node: &Node) -> VMResult {
         self.iseq.clear();
         //println!("{:?}", node);
-        self.gen(node)?;
-        self.iseq.push(Inst::END);
+        std::mem::swap(&mut self.codegen.ident_table, &mut self.ident_table);
+        std::mem::swap(&mut self.codegen.method_table, &mut self.method_table);
+        let iseq = self.codegen.gen_iseq(node)?;
+        self.iseq = iseq;
+        std::mem::swap(&mut self.codegen.ident_table, &mut self.ident_table);
+        std::mem::swap(&mut self.codegen.method_table, &mut self.method_table);
         let val = self.vm_run()?;
         eprintln!("stack:{}", self.exec_stack.len());
         Ok(val)
@@ -362,7 +321,18 @@ impl VM {
                             let val = func(self, receiver, args)?;
                             self.exec_stack.push(val);
                         }
-                        _ => return Err(self.error_unimplemented("ruby func.")),
+                        MethodInfo::RubyFunc { params, iseq } => {
+                            self.lvar_stack.push(vec![Value::Nil; 64]);
+                            let mut iseq = iseq.clone();
+                            for (i, id) in params.clone().iter().enumerate() {
+                                self.lvar()[id.as_usize()] = args[i].clone();
+                            }
+                            std::mem::swap(&mut self.iseq, &mut iseq);
+                            let res_value = self.vm_run()?;
+                            std::mem::swap(&mut self.iseq, &mut iseq);
+                            self.lvar_stack.pop().unwrap();
+                            self.exec_stack.push(res_value);
+                        }
                     }
                     pc += 9;
                 }
@@ -403,559 +373,17 @@ impl VM {
             num
         }
     }
-
-    // Codegen
-    pub fn current(&self) -> ISeqPos {
-        ISeqPos(self.iseq.len())
-    }
-
-    fn gen_push_nil(&mut self) {
-        self.iseq.push(Inst::PUSH_NIL);
-    }
-
-    fn gen_fixnum(&mut self, num: i64) {
-        self.iseq.push(Inst::PUSH_FIXNUM);
-        self.push64(num as u64);
-    }
-
-    fn gen_jmp_if_false(&mut self) -> ISeqPos {
-        self.iseq.push(Inst::JMP_IF_FALSE);
-        self.iseq.push(0);
-        self.iseq.push(0);
-        self.iseq.push(0);
-        self.iseq.push(0);
-        ISeqPos(self.iseq.len())
-    }
-
-    fn gen_jmp_back(&mut self, pos: ISeqPos) {
-        let disp = self.current().disp(pos) - 5;
-        self.iseq.push(Inst::JMP);
-        self.push32(disp as u32);
-    }
-
-    fn gen_jmp(&mut self) -> ISeqPos {
-        self.iseq.push(Inst::JMP);
-        self.iseq.push(0);
-        self.iseq.push(0);
-        self.iseq.push(0);
-        self.iseq.push(0);
-        ISeqPos(self.iseq.len())
-    }
-
-    fn gen_set_local(&mut self, id: IdentId) {
-        self.iseq.push(Inst::SET_LOCAL);
-        let lvar_id = self.lvar_table.get(&id).unwrap().as_usize();
-        self.push32(lvar_id as u32);
-    }
-
-    fn gen_set_const(&mut self, id: IdentId) {
-        self.iseq.push(Inst::SET_CONST);
-        self.push32(id.as_usize() as u32);
-    }
-
-    fn gen_get_local(&mut self, id: IdentId) -> Result<(), RubyError> {
-        self.iseq.push(Inst::GET_LOCAL);
-        let lvar_id = match self.lvar_table.get(&id) {
-            Some(x) => x,
-            None => return Err(self.error_name("undefined local variable.")),
-        }
-        .as_usize();
-        self.push32(lvar_id as u32);
-        Ok(())
-    }
-
-    fn gen_get_const(&mut self, id: IdentId) {
-        self.iseq.push(Inst::GET_CONST);
-        self.push32(id.as_usize() as u32);
-    }
-
-    fn gen_send(&mut self, method: IdentId, args_num: usize) {
-        self.iseq.push(Inst::SEND);
-        self.push32(method.as_usize() as u32);
-        self.push32(args_num as u32);
-    }
-
-    fn gen_pop(&mut self) {
-        self.iseq.push(Inst::POP);
-    }
-
-    fn write_disp_from_cur(&mut self, src: ISeqPos) {
-        let dest = self.current();
-        self.write_disp(src, dest);
-    }
-
-    fn write_disp(&mut self, src: ISeqPos, dest: ISeqPos) {
-        let num = src.disp(dest) as u32;
-        self.iseq[src.0 - 4] = (num >> 24) as u8;
-        self.iseq[src.0 - 3] = (num >> 16) as u8;
-        self.iseq[src.0 - 2] = (num >> 8) as u8;
-        self.iseq[src.0 - 1] = num as u8;
-    }
-
-    fn push32(&mut self, num: u32) {
-        self.iseq.push((num >> 24) as u8);
-        self.iseq.push((num >> 16) as u8);
-        self.iseq.push((num >> 8) as u8);
-        self.iseq.push(num as u8);
-    }
-
-    fn push64(&mut self, num: u64) {
-        self.iseq.push((num >> 56) as u8);
-        self.iseq.push((num >> 48) as u8);
-        self.iseq.push((num >> 40) as u8);
-        self.iseq.push((num >> 32) as u8);
-        self.iseq.push((num >> 24) as u8);
-        self.iseq.push((num >> 16) as u8);
-        self.iseq.push((num >> 8) as u8);
-        self.iseq.push(num as u8);
-    }
-    fn save_loc(&mut self) {
-        self.iseq_info.push((ISeqPos(self.iseq.len()), self.loc));
-    }
-
-    /// Generate ISeq.
-    pub fn gen(&mut self, node: &Node) -> Result<(), RubyError> {
-        self.loc = node.loc();
-        match &node.kind {
-            NodeKind::Nil => self.gen_push_nil(),
-            NodeKind::Bool(b) => {
-                if *b {
-                    self.iseq.push(Inst::PUSH_TRUE)
-                } else {
-                    self.iseq.push(Inst::PUSH_FALSE)
-                }
-            }
-            NodeKind::Number(num) => {
-                self.gen_fixnum(*num);
-            }
-            NodeKind::Float(num) => {
-                self.iseq.push(Inst::PUSH_FLONUM);
-                unsafe { self.push64(std::mem::transmute(*num)) };
-            }
-            NodeKind::String(s) => {
-                self.iseq.push(Inst::PUSH_STRING);
-                let id = self.ident_table.get_ident_id(s);
-                self.push32(id.as_usize() as u32);
-            }
-            NodeKind::SelfValue => {
-                self.iseq.push(Inst::PUSH_SELF);
-            }
-            NodeKind::Range(start, end, exclude) => {
-                if *exclude {
-                    self.iseq.push(Inst::PUSH_TRUE);
-                } else {
-                    self.iseq.push(Inst::PUSH_FALSE)
-                };
-                self.gen(end)?;
-                self.gen(start)?;
-                self.save_loc();
-                self.iseq.push(Inst::CREATE_RANGE);
-            }
-            NodeKind::Ident(id) => {
-                self.save_loc();
-                self.gen_get_local(*id)?;
-            }
-            NodeKind::Const(id) => {
-                self.gen_get_const(*id);
-            }
-            NodeKind::BinOp(op, lhs, rhs) => match op {
-                BinOp::Add => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::ADD);
-                }
-                BinOp::Sub => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::SUB);
-                }
-                BinOp::Mul => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::MUL);
-                }
-                BinOp::Div => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::DIV);
-                }
-                BinOp::Shr => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::SHR);
-                }
-                BinOp::Shl => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::SHL);
-                }
-                BinOp::BitOr => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::BIT_OR);
-                }
-                BinOp::BitAnd => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::BIT_AND);
-                }
-                BinOp::BitXor => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::BIT_XOR);
-                }
-                BinOp::Eq => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::EQ);
-                }
-                BinOp::Ne => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::NE);
-                }
-                BinOp::Ge => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::GE);
-                }
-                BinOp::Gt => {
-                    self.gen(lhs)?;
-                    self.gen(rhs)?;
-                    self.iseq.push(Inst::GT);
-                }
-                BinOp::Le => {
-                    self.gen(rhs)?;
-                    self.gen(lhs)?;
-                    self.iseq.push(Inst::GE);
-                }
-                BinOp::Lt => {
-                    self.gen(rhs)?;
-                    self.gen(lhs)?;
-                    self.iseq.push(Inst::GT);
-                }
-                BinOp::LAnd => {
-                    self.gen(lhs)?;
-                    let src1 = self.gen_jmp_if_false();
-                    self.gen(rhs)?;
-                    let src2 = self.gen_jmp();
-                    self.write_disp_from_cur(src1);
-                    self.iseq.push(Inst::PUSH_FALSE);
-                    self.write_disp_from_cur(src2);
-                }
-                BinOp::LOr => {
-                    self.gen(lhs)?;
-                    let src1 = self.gen_jmp_if_false();
-                    self.iseq.push(Inst::PUSH_TRUE);
-                    let src2 = self.gen_jmp();
-                    self.write_disp_from_cur(src1);
-                    self.gen(rhs)?;
-                    self.write_disp_from_cur(src2);
-                }
-            },
-            NodeKind::CompStmt(nodes) => match nodes.len() {
-                0 => self.gen_push_nil(),
-                1 => self.gen(&nodes[0])?,
-                _ => {
-                    let mut flag = false;
-                    for node in nodes {
-                        if flag {
-                            self.gen_pop();
-                        } else {
-                            flag = true;
-                        };
-                        self.gen(&node)?;
-                    }
-                }
-            },
-            NodeKind::If(cond_, then_, else_) => {
-                self.gen(&cond_)?;
-                let src1 = self.gen_jmp_if_false();
-                self.gen(&then_)?;
-                let src2 = self.gen_jmp();
-                self.write_disp_from_cur(src1);
-                self.gen(&else_)?;
-                self.write_disp_from_cur(src2);
-            }
-            NodeKind::For(id, iter, body) => {
-                let id = match id.kind {
-                    NodeKind::Ident(id) => id,
-                    _ => return Err(self.error_syntax("Expected an identifier.", id.loc())),
-                };
-                let (start, end, exclude) = match &iter.kind {
-                    NodeKind::Range(start, end, exclude) => (start, end, exclude),
-                    _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
-                };
-                self.loop_stack.push(vec![]);
-                self.gen(start)?;
-                self.gen_set_local(id);
-                self.gen_pop();
-                let loop_start = self.current();
-                self.gen(end)?;
-                self.gen_get_local(id)?;
-                self.iseq.push(if *exclude { Inst::GT } else { Inst::GE });
-                let src = self.gen_jmp_if_false();
-                self.gen(body)?;
-                self.gen_pop();
-                let loop_continue = self.current();
-                self.gen_get_local(id)?;
-                self.gen_fixnum(1);
-                self.iseq.push(Inst::ADD);
-                self.gen_set_local(id);
-                self.gen_pop();
-
-                self.gen_jmp_back(loop_start);
-                self.write_disp_from_cur(src);
-                self.gen(iter)?;
-                for p in self.loop_stack.pop().unwrap() {
-                    match p.1 {
-                        EscapeKind::Break => {
-                            self.write_disp_from_cur(p.0);
-                        }
-                        EscapeKind::Next => self.write_disp(p.0, loop_continue),
-                    }
-                }
-            }
-            NodeKind::Assign(lhs, rhs) => {
-                self.gen(rhs)?;
-                match lhs.kind {
-                    NodeKind::Ident(id) => {
-                        self.gen_set_local(id);
-                    }
-                    NodeKind::Const(id) => {
-                        self.gen_set_const(id);
-                    }
-                    _ => (),
-                }
-            }
-            NodeKind::Send(receiver, method, args) => {
-                let id = match method.kind {
-                    NodeKind::Ident(id) => id,
-                    _ => {
-                        return Err(self.error_syntax(format!("Expected identifier."), method.loc()))
-                    }
-                };
-                for arg in args.iter().rev() {
-                    self.gen(arg)?;
-                }
-                self.gen(receiver)?;
-                self.save_loc();
-                self.gen_send(id, args.len());
-            }
-            NodeKind::Break => {
-                self.gen_push_nil();
-                let src = self.gen_jmp();
-                match self.loop_stack.last_mut() {
-                    Some(x) => {
-                        x.push((src, EscapeKind::Break));
-                    }
-                    None => {
-                        return Err(
-                            self.error_syntax("Can't escape from eval with break.", self.loc)
-                        );
-                    }
-                }
-            }
-            NodeKind::Next => {
-                self.gen_push_nil();
-                let src = self.gen_jmp();
-                match self.loop_stack.last_mut() {
-                    Some(x) => {
-                        x.push((src, EscapeKind::Next));
-                    }
-                    None => {
-                        return Err(
-                            self.error_syntax("Can't escape from eval with next.", self.loc)
-                        );
-                    }
-                }
-            }
-            /*
-
-
-            NodeKind::SelfValue => {
-                /*
-                let classref = self
-                    .class_stack
-                    .last()
-                    .unwrap_or_else(|| panic!("Evaluator#eval_node: class stack is empty"));
-                    */
-                Ok(self.self_value.clone())
-            }
-
-            NodeKind::InstanceVar(id) => match self.self_value {
-                Value::Instance(instance) => {
-                    let info = self.get_instance_info(instance);
-                    match info.instance_var.get(id) {
-                        Some(v) => Ok(v.clone()),
-                        None => Ok(Value::Nil),
-                    }
-                }
-                Value::Class(class) => {
-                    let info = self.get_class_info(class);
-                    match info.instance_var.get(id) {
-                        Some(v) => Ok(v.clone()),
-                        None => Ok(Value::Nil),
-                    }
-                }
-                _ => {
-                    return Err(self.error_unimplemented(
-                        format!("Instance variable can be referred only in instance method."),
-                        node.loc(),
-                    ))
-                }
-            },
-
-            NodeKind::MethodDecl(id, params, body) => {
-                let info = MethodInfo::RubyFunc {
-                    params: params.clone(),
-                    body: body.clone(),
-                };
-                if self.class_stack.len() == 1 {
-                    // A method defined in "top level" is registered to the global method table.
-                    self.method_table.insert(*id, info);
-                } else {
-                    // A method defined in a class definition is registered as a instance method of the class.
-                    let class = self.class_stack.last().unwrap();
-                    let class_info = self.class_table.get_mut(*class);
-                    class_info.instance_method.insert(*id, info);
-                }
-                Ok(Value::Nil)
-            }
-            NodeKind::ClassMethodDecl(id, params, body) => {
-                let info = MethodInfo::RubyFunc {
-                    params: params.clone(),
-                    body: body.clone(),
-                };
-                if self.class_stack.len() == 1 {
-                    return Err(self.error_unimplemented(
-                        "Currently, class method definition in the top level is not allowed.",
-                        node.loc(),
-                    ));
-                } else {
-                    // A method defined in a class definition is registered as a class method of the class.
-                    let class = self.class_stack.last().unwrap();
-                    let class_info = self.class_table.get_mut(*class);
-                    class_info.class_method.insert(*id, info);
-                }
-                Ok(Value::Nil)
-            }
-            NodeKind::ClassDecl(id, body) => {
-                let classref = self.new_class(*id, *body.clone());
-                let val = Value::Class(classref);
-                self.const_table.insert(*id, val);
-                self.scope_stack.push(LocalScope::new());
-                self.class_stack.push(classref);
-                let self_old = self.self_value.clone();
-                self.self_value = Value::Class(classref);
-                self.eval_node(body)?;
-                self.self_value = self_old;
-                self.class_stack.pop();
-                self.scope_stack.pop();
-                Ok(Value::Nil)
-            }
-            NodeKind::Send(receiver, method, args) => {
-                let id = match method.kind {
-                    NodeKind::Ident(id) => id,
-                    _ => {
-                        return Err(
-                            self.error_unimplemented(format!("Expected identifier."), method.loc())
-                        )
-                    }
-                };
-                let receiver_val = self.eval_node(receiver)?;
-                let rec = if receiver.kind == NodeKind::SelfValue {
-                    None
-                } else {
-                    Some(self.eval_node(receiver)?)
-                };
-                let mut args_val = vec![];
-                for arg in args {
-                    args_val.push(self.eval_node(arg)?);
-                }
-                let info = match rec {
-                    None => match self.method_table.get(&id) {
-                        Some(info) => info.clone(),
-                        None => {
-                            return Err(self.error_nomethod("undefined method.", receiver.loc()))
-                        }
-                    },
-                    Some(rec) => match rec {
-                        Value::Instance(instance) => self.get_instance_method(instance, method)?,
-                        Value::Class(class) => self.get_class_method(class, method)?,
-                        Value::FixNum(i) => {
-                            let id = match method.kind {
-                                NodeKind::Ident(id) => id,
-                                _ => {
-                                    return Err(self.error_unimplemented(
-                                        format!("Expected identifier."),
-                                        method.loc(),
-                                    ))
-                                }
-                            };
-                            if self.ident_table.get_name(id) == "chr" {
-                                return Ok(Value::Char(i as u8));
-                            } else {
-                                return Err(self.error_unimplemented(
-                                    format!("Expected identifier."),
-                                    method.loc(),
-                                ));
-                            }
-                        }
-                        _ => {
-                            return Err(self.error_unimplemented(
-                                format!("Receiver must be a class or instance. {:?}", rec),
-                                receiver.loc(),
-                            ))
-                        }
-                    },
-                };
-
-                match info {
-                    MethodInfo::RubyFunc { params, body } => {
-                        let args_len = args.len();
-                        self.scope_stack.push(LocalScope::new());
-                        for (i, param) in params.clone().iter().enumerate() {
-                            if let Node {
-                                kind: NodeKind::Param(param_id),
-                                ..
-                            } = param.clone()
-                            {
-                                let arg = if args_len > i {
-                                    args_val[i].clone()
-                                } else {
-                                    Value::Nil
-                                };
-                                self.lvar_table().insert(param_id, arg);
-                            } else {
-                                panic!("Illegal parameter.");
-                            }
-                        }
-                        let self_old = self.self_value.clone();
-                        self.self_value = receiver_val;
-                        let val = self.eval_node(&body.clone());
-                        self.self_value = self_old;
-                        self.scope_stack.pop();
-                        val
-                    }
-                    MethodInfo::BuiltinFunc { func, .. } => func(self, receiver_val, args_val),
-                }
-            }*/
-            _ => unimplemented!("{:?}", node.kind),
-        };
-        Ok(())
-    }
 }
 
 impl VM {
     pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), self.loc)
+        RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), self.codegen.loc)
     }
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), self.loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), self.codegen.loc)
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.codegen.loc)
     }
     pub fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
         RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)

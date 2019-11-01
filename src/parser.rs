@@ -787,14 +787,15 @@ impl Parser {
             self.expect_punct(Punct::Dot)?;
             id = self.expect_ident()?;
         };
+        self.lvar_collector.push(LvarCollector::new());
         let args = self.parse_params()?;
-
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
+        let lvar = self.lvar_collector.pop().unwrap();
         if is_class_method {
-            Ok(Node::new_class_method_decl(id, args, body))
+            Ok(Node::new_class_method_decl(id, args, body, lvar))
         } else {
-            Ok(Node::new_method_decl(id, args, body))
+            Ok(Node::new_method_decl(id, args, body, lvar))
         }
     }
 
@@ -813,6 +814,7 @@ impl Parser {
         loop {
             let id = self.expect_ident()?;
             args.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+            self.add_local_var(id);
             if !self.consume_punct(Punct::Comma) {
                 break;
             }

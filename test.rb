@@ -1,6 +1,7 @@
-for x in 0..10000
-    for y in 0..10000
-    z = 1000 /65 * 1000
+def fibo(x)
+    if x == 0 || x ==1 then x
+    else fibo(x-1) + fibo(x-2)
     end
 end
-puts(100)
+
+puts(fibo(30))

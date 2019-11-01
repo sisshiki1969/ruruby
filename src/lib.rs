@@ -1,6 +1,7 @@
 #![feature(test)]
 pub mod builtin;
 pub mod class;
+pub mod codegen;
 pub mod error;
 pub mod eval;
 pub mod instance;
