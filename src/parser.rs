@@ -120,10 +120,6 @@ impl Parser {
         self.ident_table.get_ident_id(&method)
     }
 
-    fn get_ident_name(&mut self, id: IdentId) -> &String {
-        self.ident_table.get_name(id)
-    }
-
     pub fn show_tokens(&self) {
         for tok in &self.tokens {
             println!("{:?}", tok);
@@ -280,7 +276,7 @@ impl Parser {
             .push(lvar_collector.unwrap_or(LvarCollector::new()));
         let node = self.parse_comp_stmt()?;
         let lvar = self.lvar_collector.pop().unwrap();
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "trace_iseq")]
         {
             let list = lvar
                 .table

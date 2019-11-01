@@ -97,6 +97,7 @@ impl Inst {
     const GET_CONST: u8 = 26;
     const SET_CONST: u8 = 27;
     const PUSH_STRING: u8 = 28;
+    const POP: u8 = 29;
 }
 
 impl VM {
@@ -144,6 +145,7 @@ impl VM {
         self.gen(node)?;
         self.iseq.push(Inst::END);
         let val = self.vm_run()?;
+        eprintln!("stack:{}", self.exec_stack.len());
         Ok(val)
     }
 
@@ -153,45 +155,33 @@ impl VM {
             match self.iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
                     Some(v) => return Ok(v),
-                    None => return Ok(Value::Nil),
+                    None => panic!("Illegal exec stack length."),
                 },
                 Inst::PUSH_NIL => {
                     self.exec_stack.push(Value::Nil);
                     pc += 1;
-                    #[cfg(debug_assertions)]
-                    println!("PUSH_NIL");
                 }
                 Inst::PUSH_TRUE => {
                     self.exec_stack.push(Value::Bool(true));
                     pc += 1;
-                    #[cfg(debug_assertions)]
-                    println!("PUSH_TRUE");
                 }
                 Inst::PUSH_FALSE => {
                     self.exec_stack.push(Value::Bool(false));
                     pc += 1;
-                    #[cfg(debug_assertions)]
-                    println!("PUSH_FALSE");
                 }
                 Inst::PUSH_SELF => {
                     self.exec_stack.push(Value::Nil);
                     pc += 1;
-                    #[cfg(debug_assertions)]
-                    println!("PUSH_SELF");
                 }
                 Inst::PUSH_FIXNUM => {
                     let num = read64(&self.iseq, pc + 1);
                     pc += 9;
                     self.exec_stack.push(Value::FixNum(num as i64));
-                    #[cfg(debug_assertions)]
-                    println!("PUSH_FIXNUM {}", num as i64);
                 }
                 Inst::PUSH_FLONUM => {
                     let num = unsafe { std::mem::transmute(read64(&self.iseq, pc + 1)) };
                     pc += 9;
                     self.exec_stack.push(Value::FloatNum(num));
-                    #[cfg(debug_assertions)]
-                    println!("PUSH_FLOAT {}", num);
                 }
                 Inst::PUSH_STRING => {
                     let id = read_id(&self.iseq, pc);
@@ -206,8 +196,6 @@ impl VM {
                     let val = self.eval_add(lhs, rhs)?;
                     self.exec_stack.push(val);
                     pc += 1;
-                    #[cfg(debug_assertions)]
-                    println!("ADD");
                 }
                 Inst::SUB => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -215,8 +203,6 @@ impl VM {
                     let val = self.eval_sub(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("SUB");
                 }
                 Inst::MUL => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -224,8 +210,6 @@ impl VM {
                     let val = self.eval_mul(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("MUL");
                 }
                 Inst::DIV => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -233,8 +217,6 @@ impl VM {
                     let val = self.eval_div(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("DIV");
                 }
                 Inst::SHR => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -242,8 +224,6 @@ impl VM {
                     let val = self.eval_shr(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("SHR");
                 }
                 Inst::SHL => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -251,8 +231,6 @@ impl VM {
                     let val = self.eval_shl(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("SHL");
                 }
                 Inst::BIT_AND => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -260,8 +238,6 @@ impl VM {
                     let val = self.eval_bitand(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("BIT_AND");
                 }
                 Inst::BIT_OR => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -269,8 +245,6 @@ impl VM {
                     let val = self.eval_bitor(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("BIT_OR");
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -278,8 +252,6 @@ impl VM {
                     let val = self.eval_bitxor(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("BIT_XOR");
                 }
                 Inst::EQ => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -287,8 +259,6 @@ impl VM {
                     let val = self.eval_eq(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("EQ");
                 }
                 Inst::NE => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -296,8 +266,6 @@ impl VM {
                     let val = self.eval_neq(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("NE");
                 }
                 Inst::GT => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -305,8 +273,6 @@ impl VM {
                     let val = self.eval_gt(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("GT");
                 }
                 Inst::GE => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -314,21 +280,15 @@ impl VM {
                     let val = self.eval_ge(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
-                    #[cfg(debug_assertions)]
-                    println!("GE");
                 }
                 Inst::SET_LOCAL => {
                     let id = read_lvar_id(&self.iseq, pc);
-                    #[cfg(debug_assertions)]
-                    println!("SET_LOCAL {:?}", id);
                     let val = self.exec_stack.last().unwrap().clone();
                     self.lvar()[id.as_usize()] = val;
                     pc += 5;
                 }
                 Inst::GET_LOCAL => {
                     let id = read_lvar_id(&self.iseq, pc);
-                    #[cfg(debug_assertions)]
-                    println!("GET_LOCAL {:?}", id);
                     /*
                     let val = match self.lvar_table().get(&id) {
                         Some(val) => val,
@@ -343,8 +303,6 @@ impl VM {
                     let val = self.exec_stack.last().unwrap().clone();
                     self.const_table.insert(id, val);
                     pc += 5;
-                    #[cfg(debug_assertions)]
-                    println!("SET_CONST {}", self.ident_table.get_name(id));
                 }
                 Inst::GET_CONST => {
                     let id = read_id(&self.iseq, pc);
@@ -359,8 +317,6 @@ impl VM {
                         }
                     }
                     pc += 5;
-                    #[cfg(debug_assertions)]
-                    println!("GET_CONST {}", self.ident_table.get_name(id));
                 }
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap();
@@ -374,20 +330,14 @@ impl VM {
                 Inst::JMP => {
                     let disp = read32(&self.iseq, pc + 1) as i32 as i64;
                     pc = ((pc as i64) + 5 + disp) as usize;
-                    #[cfg(debug_assertions)]
-                    println!("JMP {}", disp);
                 }
                 Inst::JMP_IF_FALSE => {
                     let val = self.exec_stack.pop().unwrap();
                     if self.val_to_bool(&val) {
                         pc += 5;
-                        #[cfg(debug_assertions)]
-                        println!("JMP_IF_FALSE: NO JMP");
                     } else {
                         let disp = read32(&self.iseq, pc + 1) as i32 as i64;
                         pc = ((pc as i64) + 5 + disp) as usize;
-                        #[cfg(debug_assertions)]
-                        println!("JMP_IF_FALSE: JMP{}", disp);
                     }
                 }
                 Inst::SEND => {
@@ -408,15 +358,17 @@ impl VM {
                         args.push(self.exec_stack.pop().unwrap());
                     }
                     match info {
-                        MethodInfo::BuiltinFunc { name, func } => {
-                            #[cfg(debug_assertions)]
-                            println!("SEND BuiltinFunc {} args:{}", name, args_num);
+                        MethodInfo::BuiltinFunc { func, .. } => {
                             let val = func(self, receiver, args)?;
                             self.exec_stack.push(val);
                         }
                         _ => return Err(self.error_unimplemented("ruby func.")),
                     }
                     pc += 9;
+                }
+                Inst::POP => {
+                    self.exec_stack.pop().unwrap();
+                    pc += 1;
                 }
 
                 _ => unimplemented!("Illegal instruction."),
@@ -457,6 +409,15 @@ impl VM {
         ISeqPos(self.iseq.len())
     }
 
+    fn gen_push_nil(&mut self) {
+        self.iseq.push(Inst::PUSH_NIL);
+    }
+
+    fn gen_fixnum(&mut self, num: i64) {
+        self.iseq.push(Inst::PUSH_FIXNUM);
+        self.push64(num as u64);
+    }
+
     fn gen_jmp_if_false(&mut self) -> ISeqPos {
         self.iseq.push(Inst::JMP_IF_FALSE);
         self.iseq.push(0);
@@ -492,11 +453,6 @@ impl VM {
         self.push32(id.as_usize() as u32);
     }
 
-    fn gen_fixnum(&mut self, num: i64) {
-        self.iseq.push(Inst::PUSH_FIXNUM);
-        self.push64(num as u64);
-    }
-
     fn gen_get_local(&mut self, id: IdentId) -> Result<(), RubyError> {
         self.iseq.push(Inst::GET_LOCAL);
         let lvar_id = match self.lvar_table.get(&id) {
@@ -517,6 +473,10 @@ impl VM {
         self.iseq.push(Inst::SEND);
         self.push32(method.as_usize() as u32);
         self.push32(args_num as u32);
+    }
+
+    fn gen_pop(&mut self) {
+        self.iseq.push(Inst::POP);
     }
 
     fn write_disp_from_cur(&mut self, src: ISeqPos) {
@@ -557,7 +517,7 @@ impl VM {
     pub fn gen(&mut self, node: &Node) -> Result<(), RubyError> {
         self.loc = node.loc();
         match &node.kind {
-            NodeKind::Nil => self.iseq.push(Inst::PUSH_NIL),
+            NodeKind::Nil => self.gen_push_nil(),
             NodeKind::Bool(b) => {
                 if *b {
                     self.iseq.push(Inst::PUSH_TRUE)
@@ -693,11 +653,21 @@ impl VM {
                     self.write_disp_from_cur(src2);
                 }
             },
-            NodeKind::CompStmt(nodes) => {
-                for node in nodes {
-                    self.gen(&node)?;
+            NodeKind::CompStmt(nodes) => match nodes.len() {
+                0 => self.gen_push_nil(),
+                1 => self.gen(&nodes[0])?,
+                _ => {
+                    let mut flag = false;
+                    for node in nodes {
+                        if flag {
+                            self.gen_pop();
+                        } else {
+                            flag = true;
+                        };
+                        self.gen(&node)?;
+                    }
                 }
-            }
+            },
             NodeKind::If(cond_, then_, else_) => {
                 self.gen(&cond_)?;
                 let src1 = self.gen_jmp_if_false();
@@ -719,20 +689,24 @@ impl VM {
                 self.loop_stack.push(vec![]);
                 self.gen(start)?;
                 self.gen_set_local(id);
+                self.gen_pop();
                 let loop_start = self.current();
                 self.gen(end)?;
                 self.gen_get_local(id)?;
                 self.iseq.push(if *exclude { Inst::GT } else { Inst::GE });
                 let src = self.gen_jmp_if_false();
                 self.gen(body)?;
+                self.gen_pop();
                 let loop_continue = self.current();
                 self.gen_get_local(id)?;
                 self.gen_fixnum(1);
                 self.iseq.push(Inst::ADD);
                 self.gen_set_local(id);
+                self.gen_pop();
 
                 self.gen_jmp_back(loop_start);
                 self.write_disp_from_cur(src);
+                self.gen(iter)?;
                 for p in self.loop_stack.pop().unwrap() {
                     match p.1 {
                         EscapeKind::Break => {
@@ -769,7 +743,7 @@ impl VM {
                 self.gen_send(id, args.len());
             }
             NodeKind::Break => {
-                self.iseq.push(Inst::PUSH_NIL);
+                self.gen_push_nil();
                 let src = self.gen_jmp();
                 match self.loop_stack.last_mut() {
                     Some(x) => {
@@ -783,7 +757,7 @@ impl VM {
                 }
             }
             NodeKind::Next => {
-                self.iseq.push(Inst::PUSH_NIL);
+                self.gen_push_nil();
                 let src = self.gen_jmp();
                 match self.loop_stack.last_mut() {
                     Some(x) => {
