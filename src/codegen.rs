@@ -25,8 +25,15 @@ pub type MethodTable = HashMap<IdentId, MethodInfo>;
 
 #[derive(Clone)]
 pub enum MethodInfo {
-    RubyFunc { params: Vec<LvarId>, iseq: ISeq },
-    BuiltinFunc { name: String, func: BuiltinFunc },
+    RubyFunc {
+        params: Vec<LvarId>,
+        iseq: ISeq,
+        lvars: usize,
+    },
+    BuiltinFunc {
+        name: String,
+        func: BuiltinFunc,
+    },
 }
 
 impl std::fmt::Debug for MethodInfo {
@@ -221,10 +228,12 @@ impl Codegen {
         self.gen(&mut iseq, node)?;
         std::mem::swap(&mut self.lvar_table, &mut new_lvar);
         iseq.push(Inst::END);
+        let lvars = lvar_collector.table.len();
         //println!("{:?}", iseq);
         Ok(MethodInfo::RubyFunc {
             iseq,
             params: params_lvar,
+            lvars,
         })
     }
 
