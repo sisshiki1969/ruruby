@@ -22,7 +22,6 @@ pub struct VM {
     pub const_table: ValueTable,
     pub codegen: Codegen,
     // VM state
-    pub iseq: ISeq,
     pub lvar_stack: Vec<Vec<PackedValue>>,
     pub exec_stack: Vec<Value>,
 }
@@ -77,7 +76,6 @@ impl VM {
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
 
-            iseq: ISeq::new(),
             lvar_stack: vec![vec![PackedValue::nil(); 64]],
             exec_stack: vec![],
         };
@@ -90,28 +88,29 @@ impl VM {
     }
 
     /// Get local variable table.
-    pub fn lvar(&mut self) -> &mut [PackedValue] {
-        self.lvar_stack.last_mut().unwrap()
+    pub fn lvar_mut(&mut self, id: LvarId) -> &mut PackedValue {
+        &mut self.lvar_stack.last_mut().unwrap()[id.as_usize()]
     }
 
     pub fn run(&mut self, node: &Node) -> VMResult {
-        self.iseq.clear();
         //println!("{:?}", node);
         std::mem::swap(&mut self.codegen.ident_table, &mut self.ident_table);
         std::mem::swap(&mut self.codegen.method_table, &mut self.method_table);
         let iseq = self.codegen.gen_iseq(node)?;
-        self.iseq = iseq;
         std::mem::swap(&mut self.codegen.ident_table, &mut self.ident_table);
         std::mem::swap(&mut self.codegen.method_table, &mut self.method_table);
-        let val = self.vm_run()?;
-        eprintln!("stack:{}", self.exec_stack.len());
+        let val = self.vm_run(&iseq)?;
+        let stack_len = self.exec_stack.len();
+        if stack_len != 0 {
+            eprintln!("Error: stack length is illegal. {}", stack_len);
+        };
         Ok(val)
     }
 
-    pub fn vm_run(&mut self) -> VMResult {
+    pub fn vm_run(&mut self, iseq: &ISeq) -> VMResult {
         let mut pc = 0;
         loop {
-            match self.iseq[pc] {
+            match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
                     Some(v) => return Ok(v),
                     None => panic!("Illegal exec stack length."),
@@ -133,17 +132,17 @@ impl VM {
                     pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
-                    let num = read64(&self.iseq, pc + 1);
+                    let num = read64(iseq, pc + 1);
                     pc += 9;
                     self.exec_stack.push(Value::FixNum(num as i64));
                 }
                 Inst::PUSH_FLONUM => {
-                    let num = unsafe { std::mem::transmute(read64(&self.iseq, pc + 1)) };
+                    let num = unsafe { std::mem::transmute(read64(iseq, pc + 1)) };
                     pc += 9;
                     self.exec_stack.push(Value::FloatNum(num));
                 }
                 Inst::PUSH_STRING => {
-                    let id = read_id(&self.iseq, pc);
+                    let id = read_id(iseq, pc);
                     let string = self.ident_table.get_name(id).clone();
                     self.exec_stack.push(Value::String(string));
                     pc += 5;
@@ -241,30 +240,25 @@ impl VM {
                     self.exec_stack.push(val);
                 }
                 Inst::SET_LOCAL => {
-                    let id = read_lvar_id(&self.iseq, pc);
+                    let id = read_lvar_id(iseq, pc);
                     let val = self.exec_stack.last().unwrap().clone();
-                    self.lvar()[id.as_usize()] = val.pack();
+                    *self.lvar_mut(id) = val.pack();
                     pc += 5;
                 }
                 Inst::GET_LOCAL => {
-                    let id = read_lvar_id(&self.iseq, pc);
-                    /*
-                    let val = match self.lvar_table().get(&id) {
-                        Some(val) => val,
-                        None => return Err(self.error_nomethod("undefined local variable.")),
-                    };*/
-                    let val = self.lvar()[id.as_usize()];
-                    self.exec_stack.push(*val.unpack());
+                    let id = read_lvar_id(iseq, pc);
+                    let val = *self.lvar_mut(id).unpack();
+                    self.exec_stack.push(val);
                     pc += 5;
                 }
                 Inst::SET_CONST => {
-                    let id = read_id(&self.iseq, pc);
+                    let id = read_id(iseq, pc);
                     let val = self.exec_stack.last().unwrap().clone();
                     self.const_table.insert(id, val);
                     pc += 5;
                 }
                 Inst::GET_CONST => {
-                    let id = read_id(&self.iseq, pc);
+                    let id = read_id(iseq, pc);
                     match self.const_table.get(&id) {
                         Some(val) => self.exec_stack.push(val.clone()),
                         None => {
@@ -287,7 +281,7 @@ impl VM {
                     pc += 1;
                 }
                 Inst::JMP => {
-                    let disp = read32(&self.iseq, pc + 1) as i32 as i64;
+                    let disp = read32(iseq, pc + 1) as i32 as i64;
                     pc = ((pc as i64) + 5 + disp) as usize;
                 }
                 Inst::JMP_IF_FALSE => {
@@ -295,14 +289,14 @@ impl VM {
                     if self.val_to_bool(&val) {
                         pc += 5;
                     } else {
-                        let disp = read32(&self.iseq, pc + 1) as i32 as i64;
+                        let disp = read32(iseq, pc + 1) as i32 as i64;
                         pc = ((pc as i64) + 5 + disp) as usize;
                     }
                 }
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
                     //println!("RECV {:?}", receiver);
-                    let method_id = read_id(&self.iseq, pc);
+                    let method_id = read_id(iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
                     let info = match receiver {
                         Value::Nil | Value::FixNum(_) => match self.method_table.get(&method_id) {
@@ -311,7 +305,7 @@ impl VM {
                         },
                         _ => unimplemented!(),
                     };
-                    let args_num = read32(&self.iseq, pc + 5);
+                    let args_num = read32(iseq, pc + 5);
                     let mut args = vec![];
                     for _ in 0..args_num {
                         args.push(self.exec_stack.pop().unwrap());
@@ -321,15 +315,18 @@ impl VM {
                             let val = func(self, receiver, args)?;
                             self.exec_stack.push(val);
                         }
-                        MethodInfo::RubyFunc { params, iseq } => {
-                            self.lvar_stack.push(vec![PackedValue::nil(); 64]);
-                            let mut iseq = iseq.clone();
+                        MethodInfo::RubyFunc {
+                            params,
+                            iseq,
+                            lvars,
+                        } => {
+                            let func_iseq = iseq.clone();
+                            self.lvar_stack.push(vec![PackedValue::nil(); *lvars]);
                             for (i, id) in params.clone().iter().enumerate() {
-                                self.lvar()[id.as_usize()] = args[i].clone().pack();
+                                *self.lvar_mut(*id) = args[i].clone().pack();
                             }
-                            std::mem::swap(&mut self.iseq, &mut iseq);
-                            let res_value = self.vm_run()?;
-                            std::mem::swap(&mut self.iseq, &mut iseq);
+
+                            let res_value = self.vm_run(&func_iseq)?;
                             self.lvar_stack.pop().unwrap();
                             self.exec_stack.push(res_value);
                         }
