@@ -321,8 +321,8 @@ impl VM {
                             let val = func(self, receiver, args)?;
                             self.exec_stack.push(val);
                         }
-                        MethodInfo::RubyFunc { params, iseq } => {
-                            self.lvar_stack.push(vec![Value::Nil; 64]);
+                        MethodInfo::RubyFunc { params, iseq, lvars } => {
+                            self.lvar_stack.push(vec![Value::Nil; *lvars]);
                             let mut iseq = iseq.clone();
                             for (i, id) in params.clone().iter().enumerate() {
                                 self.lvar()[id.as_usize()] = args[i].clone();
