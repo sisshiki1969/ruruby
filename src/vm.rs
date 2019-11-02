@@ -23,7 +23,7 @@ pub struct VM {
     pub codegen: Codegen,
     // VM state
     pub iseq: ISeq,
-    pub lvar_stack: Vec<Vec<Value>>,
+    pub lvar_stack: Vec<Vec<PackedValue>>,
     pub exec_stack: Vec<Value>,
 }
 
@@ -78,7 +78,7 @@ impl VM {
             codegen: Codegen::new(lvar_collector),
 
             iseq: ISeq::new(),
-            lvar_stack: vec![vec![Value::Nil; 64]],
+            lvar_stack: vec![vec![PackedValue::nil(); 64]],
             exec_stack: vec![],
         };
         vm
@@ -90,7 +90,7 @@ impl VM {
     }
 
     /// Get local variable table.
-    pub fn lvar(&mut self) -> &mut [Value] {
+    pub fn lvar(&mut self) -> &mut [PackedValue] {
         self.lvar_stack.last_mut().unwrap()
     }
 
@@ -243,7 +243,7 @@ impl VM {
                 Inst::SET_LOCAL => {
                     let id = read_lvar_id(&self.iseq, pc);
                     let val = self.exec_stack.last().unwrap().clone();
-                    self.lvar()[id.as_usize()] = val;
+                    self.lvar()[id.as_usize()] = val.pack();
                     pc += 5;
                 }
                 Inst::GET_LOCAL => {
@@ -253,8 +253,8 @@ impl VM {
                         Some(val) => val,
                         None => return Err(self.error_nomethod("undefined local variable.")),
                     };*/
-                    let val = self.lvar()[id.as_usize()].clone();
-                    self.exec_stack.push(val.clone());
+                    let val = self.lvar()[id.as_usize()];
+                    self.exec_stack.push(*val.unpack());
                     pc += 5;
                 }
                 Inst::SET_CONST => {
@@ -322,10 +322,10 @@ impl VM {
                             self.exec_stack.push(val);
                         }
                         MethodInfo::RubyFunc { params, iseq } => {
-                            self.lvar_stack.push(vec![Value::Nil; 64]);
+                            self.lvar_stack.push(vec![PackedValue::nil(); 64]);
                             let mut iseq = iseq.clone();
                             for (i, id) in params.clone().iter().enumerate() {
-                                self.lvar()[id.as_usize()] = args[i].clone();
+                                self.lvar()[id.as_usize()] = args[i].clone().pack();
                             }
                             std::mem::swap(&mut self.iseq, &mut iseq);
                             let res_value = self.vm_run()?;
