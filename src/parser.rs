@@ -671,7 +671,7 @@ impl Parser {
             }
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
-            TokenKind::StringLit(s) => Ok(Node::new_string(s.clone(), loc)),
+            TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
                 self.expect_punct(Punct::RParen)?;
@@ -729,6 +729,16 @@ impl Parser {
                 return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
             }
         }
+    }
+
+    fn parse_string_literal(&mut self, s: &String) -> Result<Node, RubyError> {
+        let loc = self.prev_loc();
+        let mut s = s.clone();
+        while let TokenKind::StringLit(next_s) = &self.peek().clone().kind {
+            self.get()?;
+            s = format!("{}{}", s, next_s);
+        }
+        Ok(Node::new_string(s, loc))
     }
 
     fn parse_if_then(&mut self) -> Result<Node, RubyError> {

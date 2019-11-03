@@ -1,8 +1,8 @@
 use crate::eval::EvalResult;
-use std::collections::HashMap;
-use crate::value::Value;
+use crate::eval::Evaluator;
 use crate::node::Node;
-use crate::eval::{Evaluator};
+use crate::value::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -61,6 +61,8 @@ impl SourceInfo {
             if line.2 < loc.0 || line.1 > loc.1 {
                 continue;
             }
+            println!("line {:?}", line);
+            println!("loc {:?}", loc);
             println!(
                 "{}",
                 self.code[(line.1)..(line.2)].iter().collect::<String>()
@@ -74,11 +76,11 @@ impl SourceInfo {
                     .map(|x| calc_width(x))
                     .sum()
             };
-            let length = self.code[max(loc.0, line.1)..=min(loc.1, line.2)]
+            let length: usize = self.code[max(loc.0, line.1)..min(loc.1, line.2)]
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
-            println!("{}{}", " ".repeat(read), "^".repeat(length));
+            println!("{}{}", " ".repeat(read), "^".repeat(length + 1));
         }
 
         fn calc_width(ch: &char) -> usize {
@@ -172,4 +174,3 @@ impl std::fmt::Debug for MethodInfo {
 }
 
 pub type MethodTable = HashMap<IdentId, MethodInfo>;
-

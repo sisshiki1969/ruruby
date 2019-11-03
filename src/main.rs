@@ -16,20 +16,24 @@ fn main() {
         .version("0.0.1")
         .author("monochrome")
         .about("A toy Ruby interpreter")
-        .arg(Arg::with_name("vm").help("Execute using VM").long("vm"))
+        .arg(
+            Arg::with_name("eval")
+                .help("Execute using AST evaluator")
+                .long("eval"),
+        )
         .arg(Arg::with_name("file").help("Input file name").index(1));
     let app_matches = app.get_matches();
-    let vm_flag = app_matches.is_present("vm");
+    let eval_flag = app_matches.is_present("eval");
     match app_matches.value_of("file") {
         Some(file_name) => {
-            file_read(file_name, vm_flag);
+            file_read(file_name, !eval_flag);
             return;
         }
         None => {
-            if vm_flag {
-                repl_vm()
+            if eval_flag {
+                repl()
             } else {
-                repl();
+                repl_vm();
             };
             return;
         }

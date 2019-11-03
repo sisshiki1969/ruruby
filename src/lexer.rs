@@ -1,4 +1,4 @@
-use crate::error::{RubyError, ParseErrKind};
+use crate::error::{ParseErrKind, RubyError};
 use crate::token::*;
 use crate::util::*;
 use std::collections::HashMap;
@@ -72,10 +72,7 @@ impl Lexer {
     fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(format!(
-                "Unexpected char. '{}'",
-                self.source_info.code[pos]
-            )),
+            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos])),
             loc,
         )
     }
@@ -360,7 +357,7 @@ impl Lexer {
             self.source_info
                 .line_pos
                 .push((self.line, self.line_top_pos, self.len));
-            Err(self.error_eof(self.pos))
+            Err(self.error_eof(self.len))
         } else {
             let ch = self.source_info.code[self.pos];
             if ch == '\n' {
