@@ -4,6 +4,7 @@ use crate::instance::InstanceRef;
 const NIL_VALUE: u64 = 0x08;
 const TRUE_VALUE: u64 = 0x14;
 const FALSE_VALUE: u64 = 0x00;
+const ZERO: u64 = (0b1000 << 60) | 0b10;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -35,6 +36,9 @@ impl Value {
     }
 
     fn pack_flonum(num: f64) -> u64 {
+        if num == 0.0 {
+            return ZERO;
+        }
         let unum: u64 = unsafe { std::mem::transmute(num) };
         let exp = (unum >> 60) & 0b111;
         //eprintln!("before   pack:{:064b}", unum);
@@ -65,17 +69,9 @@ impl std::ops::Deref for PackedValue {
 impl PackedValue {
     pub fn unpack(self) -> Value {
         if self.0 & 0b1 == 1 {
-            Value::FixNum((self.0 as i64) >> 1)
+            Value::FixNum(self.as_packed_fixnum())
         } else if self.0 & 0b11 == 0b10 {
-            //eprintln!("before unpack:{:064b}", self.0);
-            let num = if self.0 & (0b1000u64 << 60) == 0 {
-                self.0 //(self.0 & !(0b0011u64)) | 0b10
-            } else {
-                (self.0 & !(0b0011u64)) | 0b01
-            }
-            .rotate_right(3);
-            //eprintln!("after  unpack:{:064b}", num);
-            Value::FloatNum(unsafe { std::mem::transmute(num) })
+            Value::FloatNum(self.as_packed_flonum())
         } else if self.0 == NIL_VALUE {
             Value::Nil
         } else if self.0 == TRUE_VALUE {
@@ -100,6 +96,9 @@ impl PackedValue {
     }
 
     pub fn as_packed_flonum(&self) -> f64 {
+        if self.0 == ZERO {
+            return 0.0;
+        }
         let num = if self.0 & (0b1000u64 << 60) == 0 {
             self.0 //(self.0 & !(0b0011u64)) | 0b10
         } else {
