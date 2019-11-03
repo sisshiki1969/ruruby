@@ -149,25 +149,25 @@ impl VM {
                 }
 
                 Inst::ADD => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_add(lhs, rhs)?;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                     pc += 1;
                 }
                 Inst::SUB => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_sub(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::MUL => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_mul(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::DIV => {
                     let lhs = self.exec_stack.pop().unwrap().unpack();
@@ -388,31 +388,67 @@ impl VM {
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs + rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 + rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs + rhs as f64)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs + rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '-'")),
+    fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(PackedValue::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2));
+        };
+        if rhs.is_packed_num() && lhs.is_packed_num() {
+            if rhs.is_packed_fixnum() {
+                return Ok(PackedValue::flonum(
+                    rhs.as_packed_fixnum() as f64 + lhs.as_packed_flonum(),
+                ));
+            } else if lhs.is_packed_fixnum() {
+                return Ok(PackedValue::flonum(
+                    rhs.as_packed_flonum() + lhs.as_packed_fixnum() as f64,
+                ));
+            } else {
+                return Ok(PackedValue::flonum(
+                    rhs.as_packed_flonum() + lhs.as_packed_flonum(),
+                ));
+            }
+        }
+        match (lhs.unpack(), rhs.unpack()) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs + rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 + rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs + rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs + rhs)),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '+'")),
         }
     }
-    fn eval_sub(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs - rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 - rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs - rhs as f64)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs - rhs)),
+    fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(PackedValue::fixnum(((*lhs as i64) - (*rhs as i64)) / 2));
+        };
+        if lhs.is_packed_num() && rhs.is_packed_num() {
+            if lhs.is_packed_fixnum() {
+                return Ok(PackedValue::flonum(
+                    lhs.as_packed_fixnum() as f64 - rhs.as_packed_flonum(),
+                ));
+            } else if rhs.is_packed_fixnum() {
+                return Ok(PackedValue::flonum(
+                    rhs.as_packed_flonum() - lhs.as_packed_fixnum() as f64,
+                ));
+            } else {
+                return Ok(PackedValue::flonum(
+                    lhs.as_packed_flonum() - rhs.as_packed_flonum(),
+                ));
+            }
+        }
+        match (lhs.unpack(), rhs.unpack()) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs - rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 - rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs - rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs - rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '-'")),
         }
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs * rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs as f64 * rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(Value::FloatNum(lhs * rhs as f64)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs * rhs)),
+    fn eval_mul(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+        match (lhs.unpack(), rhs.unpack()) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs * rhs)),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 * rhs)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs * rhs as f64)),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs * rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '*'")),
         }
     }

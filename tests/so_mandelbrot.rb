@@ -25,7 +25,7 @@ for y in 0..count_size
     cr = (2.0*x/size)-1.5
     ci = (2.0*y/size)-1.0
     escape = false
-
+    #puts(zr, zi, cr, ci)
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
     for dummy in 0..ITER

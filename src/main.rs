@@ -130,19 +130,19 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
                 let mut eval = VM::new(Some(result.ident_table), Some(result.lvar_collector));
                 eval.init_builtin();
                 match eval.run(&result.node) {
-                    Ok(result) => eprintln!("=> {:?}", &result),
+                    Ok(_result) => {}
                     Err(err) => {
                         parser.lexer.source_info.show_loc(&err.loc());
                         println!("{:?}", err.kind);
                     }
                 };
-                eprintln!("Executed by VM.");
             } else {
                 let mut eval = Evaluator::new(result.source_info, result.ident_table);
                 match eval.eval(&result.node) {
-                    Ok(result) => eprintln!("=> {:?}", &result),
+                    Ok(_result) => {}
                     Err(_) => {}
                 }
+                eprintln!("Executed by AST Evaluator.");
             }
         }
         Err(err) => {

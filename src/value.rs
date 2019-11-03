@@ -55,6 +55,13 @@ impl Value {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PackedValue(u64);
 
+impl std::ops::Deref for PackedValue {
+    type Target = u64;
+    fn deref(&self) -> &u64 {
+        &self.0
+    }
+}
+
 impl PackedValue {
     pub fn unpack(self) -> Value {
         if self.0 & 0b1 == 1 {
@@ -78,6 +85,29 @@ impl PackedValue {
         } else {
             unsafe { (*(self.0 as *mut Value)).clone() }
         }
+    }
+
+    pub fn is_packed_fixnum(&self) -> bool {
+        self.0 & 0b1 == 1
+    }
+
+    pub fn is_packed_num(&self) -> bool {
+        self.0 & 0b11 != 0
+    }
+
+    pub fn as_packed_fixnum(&self) -> i64 {
+        (self.0 as i64) >> 1
+    }
+
+    pub fn as_packed_flonum(&self) -> f64 {
+        let num = if self.0 & (0b1000u64 << 60) == 0 {
+            self.0 //(self.0 & !(0b0011u64)) | 0b10
+        } else {
+            (self.0 & !(0b0011u64)) | 0b01
+        }
+        .rotate_right(3);
+        //eprintln!("after  unpack:{:064b}", num);
+        unsafe { std::mem::transmute(num) }
     }
 
     pub fn nil() -> Self {
