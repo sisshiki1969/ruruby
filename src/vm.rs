@@ -58,6 +58,8 @@ impl Inst {
     pub const SET_CONST: u8 = 27;
     pub const PUSH_STRING: u8 = 28;
     pub const POP: u8 = 29;
+    pub const CONCAT_STRING: u8 = 30;
+    pub const TO_S: u8 = 31;
 }
 
 impl VM {
@@ -239,6 +241,18 @@ impl VM {
                     pc += 1;
                     self.exec_stack.push(val.pack());
                 }
+                Inst::CONCAT_STRING => {
+                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap().unpack();
+                    let val = match (lhs, rhs) {
+                        (Value::String(lhs), Value::String(rhs)) => {
+                            Value::String(format!("{}{}", lhs, rhs))
+                        }
+                        (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
+                    };
+                    pc += 1;
+                    self.exec_stack.push(val.pack());
+                }
                 Inst::SET_LOCAL => {
                     let id = read_lvar_id(iseq, pc);
                     let val = self.exec_stack.last().unwrap().clone();
@@ -333,11 +347,16 @@ impl VM {
                     }
                     pc += 9;
                 }
+                Inst::TO_S => {
+                    let val = self.exec_stack.pop().unwrap().unpack();
+                    let res = Value::String(self.val_to_s(&val)).pack();
+                    self.exec_stack.push(res);
+                    pc += 1;
+                }
                 Inst::POP => {
                     self.exec_stack.pop().unwrap();
                     pc += 1;
                 }
-
                 _ => unimplemented!("Illegal instruction."),
             }
         }

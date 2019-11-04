@@ -314,7 +314,9 @@ impl Parser {
 
         loop {
             match self.peek().kind {
-                TokenKind::EOF => return return_comp_stmt(nodes, loc),
+                TokenKind::EOF
+                | TokenKind::IntermediateDoubleQuote(_)
+                | TokenKind::CloseDoubleQuote(_) => return return_comp_stmt(nodes, loc),
                 TokenKind::Reserved(reserved) => match reserved {
                     Reserved::Else | Reserved::Elsif | Reserved::End => {
                         return return_comp_stmt(nodes, loc);
@@ -672,6 +674,7 @@ impl Parser {
             TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
+            TokenKind::OpenDoubleQuote(s) => Ok(self.parse_interporated_string_literal(s)?),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
                 self.expect_punct(Punct::RParen)?;
@@ -734,11 +737,44 @@ impl Parser {
     fn parse_string_literal(&mut self, s: &String) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
         let mut s = s.clone();
-        while let TokenKind::StringLit(next_s) = &self.peek().clone().kind {
+        while let TokenKind::StringLit(next_s) = &self.peek_no_skip_line_term().clone().kind {
             self.get()?;
             s = format!("{}{}", s, next_s);
         }
         Ok(Node::new_string(s, loc))
+    }
+
+    fn parse_interporated_string_literal(&mut self, s: &String) -> Result<Node, RubyError> {
+        let start_loc = self.prev_loc();
+        let mut nodes = vec![Node::new_string(s.clone(), start_loc)];
+        loop {
+            match &self.peek().kind {
+                TokenKind::CloseDoubleQuote(s) => {
+                    let end_loc = self.loc();
+                    nodes.push(Node::new_string(s.clone(), end_loc));
+                    self.get()?;
+                    return Ok(Node::new_interporated_string(
+                        nodes,
+                        start_loc.merge(end_loc),
+                    ));
+                }
+                TokenKind::IntermediateDoubleQuote(s) => {
+                    nodes.push(Node::new_string(s.clone(), self.loc()));
+                    self.get()?;
+                }
+                TokenKind::OpenDoubleQuote(s) => {
+                    let s = s.clone();
+                    self.get()?;
+                    self.parse_interporated_string_literal(&s)?;
+                }
+                TokenKind::EOF => {
+                    return Err(self.error_unexpected(self.loc(), "Unexpectd EOF."));
+                }
+                _ => {
+                    nodes.push(self.parse_comp_stmt()?);
+                }
+            }
+        }
     }
 
     fn parse_if_then(&mut self) -> Result<Node, RubyError> {

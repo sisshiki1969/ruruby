@@ -99,6 +99,12 @@ impl Codegen {
         self.push64(iseq, num as u64);
     }
 
+    fn gen_string(&mut self, iseq: &mut ISeq, s: &String) {
+        iseq.push(Inst::PUSH_STRING);
+        let id = self.ident_table.get_ident_id(&s);
+        self.push32(iseq, id.as_usize() as u32);
+    }
+
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_IF_FALSE);
         iseq.push(0);
@@ -158,6 +164,29 @@ impl Codegen {
 
     fn gen_pop(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::POP);
+    }
+
+    fn gen_concat(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::CONCAT_STRING);
+    }
+
+    fn gen_comp_stmt(&mut self, iseq: &mut ISeq, nodes: &Vec<Node>) -> Result<(), RubyError> {
+        match nodes.len() {
+            0 => self.gen_push_nil(iseq),
+            1 => self.gen(iseq, &nodes[0])?,
+            _ => {
+                let mut flag = false;
+                for node in nodes {
+                    if flag {
+                        self.gen_pop(iseq);
+                    } else {
+                        flag = true;
+                    };
+                    self.gen(iseq, &node)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn write_disp_from_cur(&mut self, iseq: &mut ISeq, src: ISeqPos) {
@@ -256,9 +285,23 @@ impl Codegen {
                 unsafe { self.push64(iseq, std::mem::transmute(*num)) };
             }
             NodeKind::String(s) => {
-                iseq.push(Inst::PUSH_STRING);
-                let id = self.ident_table.get_ident_id(s);
-                self.push32(iseq, id.as_usize() as u32);
+                self.gen_string(iseq, s);
+            }
+            NodeKind::InterporatedString(nodes) => {
+                self.gen_string(iseq, &"".to_string());
+                for node in nodes {
+                    match &node.kind {
+                        NodeKind::String(s) => {
+                            self.gen_string(iseq, &s);
+                        }
+                        NodeKind::CompStmt(nodes) => {
+                            self.gen_comp_stmt(iseq, nodes)?;
+                            iseq.push(Inst::TO_S);
+                        }
+                        _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
+                    }
+                    self.gen_concat(iseq);
+                }
             }
             NodeKind::SelfValue => {
                 iseq.push(Inst::PUSH_SELF);
@@ -376,21 +419,7 @@ impl Codegen {
                     self.write_disp_from_cur(iseq, src2);
                 }
             },
-            NodeKind::CompStmt(nodes) => match nodes.len() {
-                0 => self.gen_push_nil(iseq),
-                1 => self.gen(iseq, &nodes[0])?,
-                _ => {
-                    let mut flag = false;
-                    for node in nodes {
-                        if flag {
-                            self.gen_pop(iseq);
-                        } else {
-                            flag = true;
-                        };
-                        self.gen(iseq, &node)?;
-                    }
-                }
-            },
+            NodeKind::CompStmt(nodes) => self.gen_comp_stmt(iseq, nodes)?,
             NodeKind::If(cond_, then_, else_) => {
                 self.gen(iseq, &cond_)?;
                 let src1 = self.gen_jmp_if_false(iseq);

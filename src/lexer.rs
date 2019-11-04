@@ -162,7 +162,6 @@ impl Lexer {
                     '}' => match self.quote_state.last() {
                         Some(QuoteState::Expr) => {
                             self.quote_state.pop().unwrap();
-                            println!("POP Expr");
                             self.lex_string_literal_double()?
                         }
                         _ => return Err(self.error_unexpected(self.pos - 1)),
@@ -348,14 +347,11 @@ impl Lexer {
                         match self.quote_state.last() {
                             None => {
                                 self.quote_state.push(QuoteState::DoubleQuote);
-                                println!("PUSH DQ");
                                 self.quote_state.push(QuoteState::Expr);
-                                println!("PUSH Expr");
                                 return Ok(self.new_open_dq(s));
                             }
                             Some(QuoteState::DoubleQuote) => {
                                 self.quote_state.push(QuoteState::Expr);
-                                println!("PUSH Expr");
                                 return Ok(self.new_inter_dq(s));
                             }
                             _ => return Err(self.error_unexpected(self.pos - 1)),
@@ -372,7 +368,6 @@ impl Lexer {
             None => Ok(self.new_stringlit(s)),
             Some(QuoteState::DoubleQuote) => {
                 self.quote_state.pop().unwrap();
-                println!("POP DQ");
                 Ok(self.new_close_dq(s))
             }
             _ => Err(self.error_unexpected(self.pos - 1)),

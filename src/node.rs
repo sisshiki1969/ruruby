@@ -9,6 +9,7 @@ pub enum NodeKind {
     Float(f64),
     Bool(bool),
     String(String),
+    InterporatedString(Vec<Node>),
     Range(Box<Node>, Box<Node>, bool), // start, end, exclude_end
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
@@ -83,6 +84,10 @@ impl Node {
 
     pub fn new_string(s: String, loc: Loc) -> Self {
         Node::new(NodeKind::String(s), loc)
+    }
+
+    pub fn new_interporated_string(nodes: Vec<Node>, loc: Loc) -> Self {
+        Node::new(NodeKind::InterporatedString(nodes), loc)
     }
 
     pub fn new_comp_stmt(loc: Loc) -> Self {
