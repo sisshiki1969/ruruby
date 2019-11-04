@@ -9,17 +9,23 @@ impl std::fmt::Display for Token {
             TokenKind::Punct(punct) => write!(
                 f,
                 "Token![Punct(Punct::{:?}), {}, {}],",
-                punct, self.loc().0, self.loc().1
+                punct,
+                self.loc().0,
+                self.loc().1
             ),
             TokenKind::Reserved(reserved) => write!(
                 f,
                 "Token![Reserved(Reserved::{:?}), {}, {}],",
-                reserved, self.loc().0, self.loc().1
+                reserved,
+                self.loc().0,
+                self.loc().1
             ),
             _ => write!(
                 f,
                 "Token![{:?}, {}, {}],",
-                self.kind, self.loc().0, self.loc().1
+                self.kind,
+                self.loc().0,
+                self.loc().1
             ),
         }
     }
@@ -37,6 +43,9 @@ pub enum TokenKind {
     StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
+    OpenDoubleQuote(String),
+    IntermediateDoubleQuote(String),
+    CloseDoubleQuote(String),
     Space,
     LineTerm,
 }
@@ -126,8 +135,19 @@ impl Token {
         Annot::new(TokenKind::FloatLit(num), loc)
     }
 
-    pub fn new_stringlit(string: String, loc: Loc) -> Self {
-        Annot::new(TokenKind::StringLit(string), loc)
+    pub fn new_stringlit(string: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::StringLit(string.into()), loc)
+    }
+
+    pub fn new_open_dq(s: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::OpenDoubleQuote(s.into()), loc)
+    }
+
+    pub fn new_inter_dq(s: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::IntermediateDoubleQuote(s.into()), loc)
+    }
+    pub fn new_close_dq(s: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::CloseDoubleQuote(s.into()), loc)
     }
 
     pub fn new_punct(punct: Punct, loc: Loc) -> Self {

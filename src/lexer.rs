@@ -12,7 +12,14 @@ pub struct Lexer {
     line: usize,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
+    quote_state: Vec<QuoteState>,
     pub source_info: SourceInfo,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum QuoteState {
+    DoubleQuote,
+    Expr,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +71,7 @@ impl Lexer {
             line: 1,
             reserved,
             reserved_rev,
+            quote_state: vec![],
             source_info: SourceInfo::new(),
         }
     }
@@ -151,6 +159,14 @@ impl Lexer {
                     ')' => self.new_punct(Punct::RParen),
                     '^' => self.new_punct(Punct::BitXor),
                     '~' => self.new_punct(Punct::BitNot),
+                    '}' => match self.quote_state.last() {
+                        Some(QuoteState::Expr) => {
+                            self.quote_state.pop().unwrap();
+                            println!("POP Expr");
+                            self.lex_string_literal_double()?
+                        }
+                        _ => return Err(self.error_unexpected(self.pos - 1)),
+                    },
                     '.' => {
                         let ch1 = self.peek()?;
                         if ch1 == '.' {
@@ -326,10 +342,41 @@ impl Lexer {
             match self.get()? {
                 '"' => break,
                 '\\' => s.push(self.read_escaped_char()?),
+                '#' => {
+                    if self.peek()? == '{' {
+                        self.get()?;
+                        match self.quote_state.last() {
+                            None => {
+                                self.quote_state.push(QuoteState::DoubleQuote);
+                                println!("PUSH DQ");
+                                self.quote_state.push(QuoteState::Expr);
+                                println!("PUSH Expr");
+                                return Ok(self.new_open_dq(s));
+                            }
+                            Some(QuoteState::DoubleQuote) => {
+                                self.quote_state.push(QuoteState::Expr);
+                                println!("PUSH Expr");
+                                return Ok(self.new_inter_dq(s));
+                            }
+                            _ => return Err(self.error_unexpected(self.pos - 1)),
+                        }
+                    } else {
+                        s.push('#');
+                    }
+                }
                 c => s.push(c),
             }
         }
-        Ok(self.new_stringlit(s))
+
+        match self.quote_state.last() {
+            None => Ok(self.new_stringlit(s)),
+            Some(QuoteState::DoubleQuote) => {
+                self.quote_state.pop().unwrap();
+                println!("POP DQ");
+                Ok(self.new_close_dq(s))
+            }
+            _ => Err(self.error_unexpected(self.pos - 1)),
+        }
     }
 
     fn read_escaped_char(&mut self) -> Result<char, RubyError> {
@@ -351,7 +398,7 @@ impl Lexer {
 
 impl Lexer {
     /// Get one char and move to the next.
-    /// Returns Some(char) or None if the cursor reached EOF.
+    /// Returns Ok(char) or RubyError if the cursor reached EOF.
     fn get(&mut self) -> Result<char, RubyError> {
         if self.pos >= self.len {
             self.source_info
@@ -459,12 +506,24 @@ impl Lexer {
         Token::new_floatlit(num, self.cur_loc())
     }
 
-    fn new_stringlit(&self, string: String) -> Token {
-        Annot::new(TokenKind::StringLit(string), self.cur_loc())
+    fn new_stringlit(&self, string: impl Into<String>) -> Token {
+        Annot::new(TokenKind::StringLit(string.into()), self.cur_loc())
     }
 
     fn new_punct(&self, punc: Punct) -> Token {
         Annot::new(TokenKind::Punct(punc), self.cur_loc())
+    }
+
+    fn new_open_dq(&self, s: String) -> Token {
+        Token::new_open_dq(s, self.cur_loc())
+    }
+
+    fn new_inter_dq(&self, s: String) -> Token {
+        Token::new_inter_dq(s, self.cur_loc())
+    }
+
+    fn new_close_dq(&self, s: String) -> Token {
+        Token::new_close_dq(s, self.cur_loc())
     }
 
     fn new_space(&self) -> Token {
@@ -543,6 +602,18 @@ mod test {
         (NumLit($num:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_numlit($num, Loc($loc_0, $loc_1))
         };
+        (StringLit($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_stringlit($item, Loc($loc_0, $loc_1))
+        };
+        (OpenDoubleQuote($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_open_dq($item, Loc($loc_0, $loc_1))
+        };
+        (IntermediateDoubleQuote($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_inter_dq($item, Loc($loc_0, $loc_1))
+        };
+        (CloseDoubleQuote($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_close_dq($item, Loc($loc_0, $loc_1))
+        };
         (LineTerm, $loc_0:expr, $loc_1:expr) => {
             Token::new_line_term(Loc($loc_0, $loc_1))
         };
@@ -550,6 +621,34 @@ mod test {
             Token::new_eof($pos)
         };
     );
+
+    #[test]
+    fn string_literal1() {
+        let program = r#""""#;
+        let ans = vec![Token![StringLit(""), 0, 1], Token![EOF, 2]];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn string_literal2() {
+        let program = r#""flower""#;
+        let ans = vec![Token![StringLit("flower"), 0, 7], Token![EOF, 8]];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn string_literal3() {
+        let program = r#""this is #{item1} and #{item2}. ""#;
+        let ans = vec![
+            Token![OpenDoubleQuote("this is "), 0, 10],
+            Token![Ident("item1"), 11, 15],
+            Token![IntermediateDoubleQuote(" and "), 16, 23],
+            Token![Ident("item2"), 24, 28],
+            Token![CloseDoubleQuote(". "), 29, 32],
+            Token![EOF, 33],
+        ];
+        assert_tokens(program, ans);
+    }
 
     #[test]
     fn identifier1() {
