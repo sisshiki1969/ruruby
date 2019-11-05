@@ -2,11 +2,31 @@ use crate::class::*;
 use crate::error::*;
 use crate::instance::*;
 use crate::node::*;
-use crate::util::{Annot, IdentId, IdentifierTable, Loc, MethodInfo, MethodTable, SourceInfo};
+use crate::util::{Annot, IdentId, IdentifierTable, Loc, SourceInfo};
 use crate::value::*;
 use std::collections::HashMap;
 
 pub type ValueTable = HashMap<IdentId, Value>;
+
+pub type BuiltinFunc = fn(eval: &mut Evaluator, receiver: Value, args: Vec<Value>) -> EvalResult;
+
+#[derive(Clone)]
+pub enum MethodInfo {
+    RubyFunc { params: Vec<Node>, body: Box<Node> },
+    BuiltinFunc { name: String, func: BuiltinFunc },
+}
+
+impl std::fmt::Debug for MethodInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MethodInfo::RubyFunc { params, body } => write!(f, "RubyFunc {:?} {:?}", params, body),
+            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
+        }
+    }
+}
+
+pub type MethodTable = HashMap<IdentId, MethodInfo>;
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalScope {

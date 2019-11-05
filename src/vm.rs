@@ -22,8 +22,21 @@ pub struct VM {
     pub const_table: ValueTable,
     pub codegen: Codegen,
     // VM state
-    pub lvar_stack: Vec<Vec<PackedValue>>,
+    pub context_stack: Vec<Context>,
     pub exec_stack: Vec<PackedValue>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Context {
+    pub lvar_scope: Vec<PackedValue>,
+}
+
+impl Context {
+    pub fn new(lvar_num: usize) ->Self {
+        Context {
+            lvar_scope: vec![PackedValue::nil(); lvar_num],
+        }
+    }
 }
 
 pub struct Inst;
@@ -78,7 +91,7 @@ impl VM {
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
 
-            lvar_stack: vec![vec![PackedValue::nil(); 64]],
+            context_stack: vec![Context::new(64)],
             exec_stack: vec![],
         };
         vm
@@ -91,7 +104,7 @@ impl VM {
 
     /// Get local variable table.
     pub fn lvar_mut(&mut self, id: LvarId) -> &mut PackedValue {
-        &mut self.lvar_stack.last_mut().unwrap()[id.as_usize()]
+        &mut self.context_stack.last_mut().unwrap().lvar_scope[id.as_usize()]
     }
 
     pub fn run(&mut self, node: &Node) -> VMResult {
@@ -335,13 +348,13 @@ impl VM {
                             lvars,
                         } => {
                             let func_iseq = iseq.clone();
-                            self.lvar_stack.push(vec![PackedValue::nil(); *lvars]);
+                            self.context_stack.push(Context::new(*lvars));
                             for (i, id) in params.clone().iter().enumerate() {
                                 *self.lvar_mut(*id) = args[i].clone().pack();
                             }
 
                             let res_value = self.vm_run(&func_iseq)?.pack();
-                            self.lvar_stack.pop().unwrap();
+                            self.context_stack.pop().unwrap();
                             self.exec_stack.push(res_value);
                         }
                     }

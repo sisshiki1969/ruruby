@@ -1,7 +1,3 @@
-use crate::eval::EvalResult;
-use crate::eval::Evaluator;
-use crate::node::Node;
-use crate::value::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,24 +149,3 @@ impl IdentifierTable {
         self.table_rev.get(&id).unwrap()
     }
 }
-
-//------------------------------------------------------------
-
-pub type BuiltinFunc = fn(eval: &mut Evaluator, receiver: Value, args: Vec<Value>) -> EvalResult;
-
-#[derive(Clone)]
-pub enum MethodInfo {
-    RubyFunc { params: Vec<Node>, body: Box<Node> },
-    BuiltinFunc { name: String, func: BuiltinFunc },
-}
-
-impl std::fmt::Debug for MethodInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MethodInfo::RubyFunc { params, body } => write!(f, "RubyFunc {:?} {:?}", params, body),
-            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
-        }
-    }
-}
-
-pub type MethodTable = HashMap<IdentId, MethodInfo>;
