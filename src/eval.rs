@@ -1,10 +1,14 @@
-use crate::class::*;
+mod class;
+mod instance;
+pub mod value;
+
 use crate::error::*;
-use crate::instance::*;
 use crate::node::*;
 use crate::util::{Annot, IdentId, IdentifierTable, Loc, SourceInfo};
-use crate::value::*;
+use class::*;
+use instance::*;
 use std::collections::HashMap;
+use value::*;
 
 pub type ValueTable = HashMap<IdentId, Value>;
 
@@ -26,7 +30,6 @@ impl std::fmt::Debug for MethodInfo {
 }
 
 pub type MethodTable = HashMap<IdentId, MethodInfo>;
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalScope {
@@ -512,7 +515,7 @@ impl Evaluator {
                 }
                 Ok(Value::Nil)
             }
-            NodeKind::ClassDecl(id, body) => {
+            NodeKind::ClassDecl(id, body, _) => {
                 let classref = self.new_class(*id, *body.clone());
                 let val = Value::Class(classref);
                 self.const_table.insert(*id, val);

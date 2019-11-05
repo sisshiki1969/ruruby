@@ -1,16 +1,14 @@
-use crate::class::*;
+use super::class::*;
+use super::value::Value;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind};
 use crate::parser::{LvarCollector, LvarId};
-use crate::util::{IdentId, IdentifierTable, Loc};
-use crate::value::Value;
-use crate::vm::{Inst, VMResult, VM};
+use crate::util::{IdentId, Loc};
+use crate::vm::{Globals, Inst, VMResult, VM};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Codegen {
-    pub ident_table: IdentifierTable,
-    pub method_table: MethodTable,
     // Codegen State
     pub class_stack: Vec<ClassRef>,
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
@@ -70,8 +68,6 @@ impl ISeqPos {
 impl Codegen {
     pub fn new(lvar_collector: Option<LvarCollector>) -> Self {
         Codegen {
-            ident_table: IdentifierTable::new(),
-            method_table: MethodTable::new(),
             lvar_table: match lvar_collector {
                 Some(collector) => collector.table,
                 None => HashMap::new(),
@@ -99,10 +95,10 @@ impl Codegen {
         self.push64(iseq, num as u64);
     }
 
-    fn gen_string(&mut self, iseq: &mut ISeq, s: &String) {
+    fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &String) {
         iseq.push(Inst::PUSH_STRING);
-        let id = self.ident_table.get_ident_id(&s);
-        self.push32(iseq, id.as_usize() as u32);
+        let id = globals.get_ident_id(&s);
+        self.push32(iseq, id.into());
     }
 
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
@@ -137,7 +133,7 @@ impl Codegen {
 
     fn gen_set_const(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_CONST);
-        self.push32(iseq, id.as_usize() as u32);
+        self.push32(iseq, id.into());
     }
 
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
@@ -153,12 +149,12 @@ impl Codegen {
 
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::GET_CONST);
-        self.push32(iseq, id.as_usize() as u32);
+        self.push32(iseq, id.into());
     }
 
     fn gen_send(&mut self, iseq: &mut ISeq, method: IdentId, args_num: usize) {
         iseq.push(Inst::SEND);
-        self.push32(iseq, method.as_usize() as u32);
+        self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
     }
 
@@ -170,10 +166,15 @@ impl Codegen {
         iseq.push(Inst::CONCAT_STRING);
     }
 
-    fn gen_comp_stmt(&mut self, iseq: &mut ISeq, nodes: &Vec<Node>) -> Result<(), RubyError> {
+    fn gen_comp_stmt(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        nodes: &Vec<Node>,
+    ) -> Result<(), RubyError> {
         match nodes.len() {
             0 => self.gen_push_nil(iseq),
-            1 => self.gen(iseq, &nodes[0])?,
+            1 => self.gen(globals, iseq, &nodes[0])?,
             _ => {
                 let mut flag = false;
                 for node in nodes {
@@ -182,7 +183,7 @@ impl Codegen {
                     } else {
                         flag = true;
                     };
-                    self.gen(iseq, &node)?;
+                    self.gen(globals, iseq, &node)?;
                 }
             }
         }
@@ -224,15 +225,16 @@ impl Codegen {
     }
 
     /// Generate ISeq.
-    pub fn gen_iseq(&mut self, node: &Node) -> Result<ISeq, RubyError> {
+    pub fn gen_iseq(&mut self, globals: &mut Globals, node: &Node) -> Result<ISeq, RubyError> {
         let mut iseq = ISeq::new();
-        self.gen(&mut iseq, node)?;
+        self.gen(globals, &mut iseq, node)?;
         iseq.push(Inst::END);
         Ok(iseq)
     }
 
     pub fn gen_method_iseq(
         &mut self,
+        globals: &mut Globals,
         params: &Vec<Node>,
         node: &Node,
         lvar_collector: &LvarCollector,
@@ -254,7 +256,7 @@ impl Codegen {
         let mut iseq = ISeq::new();
         let mut new_lvar = lvar_collector.table.clone();
         std::mem::swap(&mut self.lvar_table, &mut new_lvar);
-        self.gen(&mut iseq, node)?;
+        self.gen(globals, &mut iseq, node)?;
         std::mem::swap(&mut self.lvar_table, &mut new_lvar);
         iseq.push(Inst::END);
         let lvars = lvar_collector.table.len();
@@ -266,7 +268,12 @@ impl Codegen {
         })
     }
 
-    pub fn gen(&mut self, iseq: &mut ISeq, node: &Node) -> Result<(), RubyError> {
+    pub fn gen(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        node: &Node,
+    ) -> Result<(), RubyError> {
         self.loc = node.loc();
         match &node.kind {
             NodeKind::Nil => self.gen_push_nil(iseq),
@@ -285,17 +292,17 @@ impl Codegen {
                 unsafe { self.push64(iseq, std::mem::transmute(*num)) };
             }
             NodeKind::String(s) => {
-                self.gen_string(iseq, s);
+                self.gen_string(globals, iseq, s);
             }
             NodeKind::InterporatedString(nodes) => {
-                self.gen_string(iseq, &"".to_string());
+                self.gen_string(globals, iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
-                            self.gen_string(iseq, &s);
+                            self.gen_string(globals, iseq, &s);
                         }
                         NodeKind::CompStmt(nodes) => {
-                            self.gen_comp_stmt(iseq, nodes)?;
+                            self.gen_comp_stmt(globals, iseq, nodes)?;
                             iseq.push(Inst::TO_S);
                         }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
@@ -312,8 +319,8 @@ impl Codegen {
                 } else {
                     iseq.push(Inst::PUSH_FALSE)
                 };
-                self.gen(iseq, end)?;
-                self.gen(iseq, start)?;
+                self.gen(globals, iseq, end)?;
+                self.gen(globals, iseq, start)?;
                 self.save_loc(iseq);
                 iseq.push(Inst::CREATE_RANGE);
             }
@@ -326,107 +333,107 @@ impl Codegen {
             }
             NodeKind::BinOp(op, lhs, rhs) => match op {
                 BinOp::Add => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::ADD);
                 }
                 BinOp::Sub => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::SUB);
                 }
                 BinOp::Mul => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::MUL);
                 }
                 BinOp::Div => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::DIV);
                 }
                 BinOp::Shr => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::SHR);
                 }
                 BinOp::Shl => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::SHL);
                 }
                 BinOp::BitOr => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::BIT_OR);
                 }
                 BinOp::BitAnd => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::BIT_AND);
                 }
                 BinOp::BitXor => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::BIT_XOR);
                 }
                 BinOp::Eq => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::EQ);
                 }
                 BinOp::Ne => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::NE);
                 }
                 BinOp::Ge => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::GE);
                 }
                 BinOp::Gt => {
-                    self.gen(iseq, lhs)?;
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     iseq.push(Inst::GT);
                 }
                 BinOp::Le => {
-                    self.gen(iseq, rhs)?;
-                    self.gen(iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
                     iseq.push(Inst::GE);
                 }
                 BinOp::Lt => {
-                    self.gen(iseq, rhs)?;
-                    self.gen(iseq, lhs)?;
+                    self.gen(globals, iseq, rhs)?;
+                    self.gen(globals, iseq, lhs)?;
                     iseq.push(Inst::GT);
                 }
                 BinOp::LAnd => {
-                    self.gen(iseq, lhs)?;
+                    self.gen(globals, iseq, lhs)?;
                     let src1 = self.gen_jmp_if_false(iseq);
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     let src2 = self.gen_jmp(iseq);
                     self.write_disp_from_cur(iseq, src1);
                     iseq.push(Inst::PUSH_FALSE);
                     self.write_disp_from_cur(iseq, src2);
                 }
                 BinOp::LOr => {
-                    self.gen(iseq, lhs)?;
+                    self.gen(globals, iseq, lhs)?;
                     let src1 = self.gen_jmp_if_false(iseq);
                     iseq.push(Inst::PUSH_TRUE);
                     let src2 = self.gen_jmp(iseq);
                     self.write_disp_from_cur(iseq, src1);
-                    self.gen(iseq, rhs)?;
+                    self.gen(globals, iseq, rhs)?;
                     self.write_disp_from_cur(iseq, src2);
                 }
             },
-            NodeKind::CompStmt(nodes) => self.gen_comp_stmt(iseq, nodes)?,
+            NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes)?,
             NodeKind::If(cond_, then_, else_) => {
-                self.gen(iseq, &cond_)?;
+                self.gen(globals, iseq, &cond_)?;
                 let src1 = self.gen_jmp_if_false(iseq);
-                self.gen(iseq, &then_)?;
+                self.gen(globals, iseq, &then_)?;
                 let src2 = self.gen_jmp(iseq);
                 self.write_disp_from_cur(iseq, src1);
-                self.gen(iseq, &else_)?;
+                self.gen(globals, iseq, &else_)?;
                 self.write_disp_from_cur(iseq, src2);
             }
             NodeKind::For(id, iter, body) => {
@@ -439,15 +446,15 @@ impl Codegen {
                     _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
                 };
                 self.loop_stack.push(vec![]);
-                self.gen(iseq, start)?;
+                self.gen(globals, iseq, start)?;
                 self.gen_set_local(iseq, id);
                 self.gen_pop(iseq);
                 let loop_start = Codegen::current(iseq);
-                self.gen(iseq, end)?;
+                self.gen(globals, iseq, end)?;
                 self.gen_get_local(iseq, id)?;
                 iseq.push(if *exclude { Inst::GT } else { Inst::GE });
                 let src = self.gen_jmp_if_false(iseq);
-                self.gen(iseq, body)?;
+                self.gen(globals, iseq, body)?;
                 self.gen_pop(iseq);
                 let loop_continue = Codegen::current(iseq);
                 self.gen_get_local(iseq, id)?;
@@ -458,7 +465,7 @@ impl Codegen {
 
                 self.gen_jmp_back(iseq, loop_start);
                 self.write_disp_from_cur(iseq, src);
-                self.gen(iseq, iter)?;
+                self.gen(globals, iseq, iter)?;
                 for p in self.loop_stack.pop().unwrap() {
                     match p.1 {
                         EscapeKind::Break => {
@@ -469,7 +476,7 @@ impl Codegen {
                 }
             }
             NodeKind::Assign(lhs, rhs) => {
-                self.gen(iseq, rhs)?;
+                self.gen(globals, iseq, rhs)?;
                 match lhs.kind {
                     NodeKind::Ident(id) => {
                         self.gen_set_local(iseq, id);
@@ -488,17 +495,17 @@ impl Codegen {
                     }
                 };
                 for arg in args.iter().rev() {
-                    self.gen(iseq, arg)?;
+                    self.gen(globals, iseq, arg)?;
                 }
-                self.gen(iseq, receiver)?;
+                self.gen(globals, iseq, receiver)?;
                 self.save_loc(iseq);
                 self.gen_send(iseq, id, args.len());
             }
             NodeKind::MethodDecl(id, params, body, lvar_collector) => {
-                let info = self.gen_method_iseq(params, body, lvar_collector)?;
+                let info = self.gen_method_iseq(globals, params, body, lvar_collector)?;
                 //if self.class_stack.len() == 1 {
                 // A method defined in "top level" is registered to the global method table.
-                self.method_table.insert(*id, info);
+                globals.add_method(*id, info);
                 //} else {
                 /*
                 // A method defined in a class definition is registered as a instance method of the class.
@@ -507,6 +514,19 @@ impl Codegen {
                 class_info.instance_method.insert(*id, info);
                 */
                 //}
+                self.gen_push_nil(iseq);
+            }
+            NodeKind::ClassDecl(id, node, lvar) => {
+                let mut class_iseq = ISeq::new();
+                let mut new_lvar = lvar.table.clone();
+                std::mem::swap(&mut self.lvar_table, &mut new_lvar);
+                self.gen(globals, &mut class_iseq, node)?;
+                std::mem::swap(&mut self.lvar_table, &mut new_lvar);
+                class_iseq.push(Inst::END);
+
+                let classref = self.new_class(globals, *id, class_iseq, lvar.clone());
+                iseq.push(Inst::DEF_CLASS);
+                self.push32(iseq, classref.into());
                 self.gen_push_nil(iseq);
             }
             NodeKind::Break => {
@@ -549,5 +569,29 @@ impl Codegen {
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.loc)
+    }
+}
+
+impl Codegen {
+    pub fn new_class(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        iseq: ISeq,
+        lvar: LvarCollector,
+    ) -> ClassRef {
+        let name = globals.get_ident_name(id).clone();
+        let class_ref = globals.class_table.new_class(id, name, iseq, lvar);
+        //let id = self.ident_table.get_ident_id(&"new".to_string());
+        /*
+        let info = MethodInfo::BuiltinFunc {
+            name: "new".to_string(),
+            func: builtin::builtin_new,
+        };
+        self.class_table
+            .get_mut(class_ref)
+            .add_class_method(id, info);
+            */
+        class_ref
     }
 }

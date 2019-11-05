@@ -188,7 +188,7 @@ fn repl_vm() {
                 vm.init_builtin();
                 match vm.run(&parse_result.node) {
                     Ok(result) => {
-                        parser.ident_table = vm.ident_table.clone();
+                        parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
                         println!("=> {:?}", result);

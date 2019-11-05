@@ -1,6 +1,6 @@
-use crate::codegen::{MethodInfo, MethodTable};
+use super::codegen::{MethodInfo, MethodTable};
+use super::value::Value;
 use crate::util::IdentifierTable;
-use crate::value::Value;
 use crate::vm::VMResult;
 use crate::vm::VM;
 
@@ -80,6 +80,7 @@ impl Builtin {
                 Ok(Value::Nil)
             }
         }
+
         /*
         /// Built-in function "new".
         pub fn builtin_new(eval: &mut VM, receiver: Value, _args: Vec<Value>) -> VMResult {
@@ -93,6 +94,7 @@ impl Builtin {
                     eval.loc,
                 )),
             }
-        }*/
+        }
+        */
     }
 }

@@ -1,7 +1,7 @@
+use super::value::Value;
 use crate::eval::{MethodInfo, MethodTable};
 use crate::node::Node;
 use crate::util::*;
-use crate::value::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

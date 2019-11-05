@@ -1,12 +1,18 @@
-use crate::class::*;
-use crate::codegen::*;
+mod builtin;
+mod class;
+mod codegen;
+mod instance;
+pub mod value;
+
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
-use crate::instance::*;
 use crate::node::*;
 use crate::parser::{LvarCollector, LvarId};
 use crate::util::{IdentId, IdentifierTable, Loc};
-use crate::value::*;
+use class::*;
+use codegen::*;
+use instance::*;
 use std::collections::HashMap;
+use value::*;
 
 pub type ValueTable = HashMap<IdentId, Value>;
 
@@ -15,10 +21,8 @@ pub type VMResult = Result<Value, RubyError>;
 #[derive(Debug, Clone)]
 pub struct VM {
     // Global info
-    pub ident_table: IdentifierTable,
-    pub class_table: GlobalClassTable,
+    pub globals: Globals,
     pub instance_table: GlobalInstanceTable,
-    pub method_table: MethodTable,
     pub const_table: ValueTable,
     pub codegen: Codegen,
     // VM state
@@ -27,12 +31,45 @@ pub struct VM {
 }
 
 #[derive(Debug, Clone)]
+pub struct Globals {
+    // Global info
+    pub ident_table: IdentifierTable,
+    pub class_table: GlobalClassTable,
+    pub method_table: MethodTable,
+}
+
+impl Globals {
+    fn new(ident_table: Option<IdentifierTable>) -> Self {
+        Globals {
+            ident_table: match ident_table {
+                Some(table) => table,
+                None => IdentifierTable::new(),
+            },
+            class_table: GlobalClassTable::new(),
+            method_table: MethodTable::new(),
+        }
+    }
+
+    fn get_ident_name(&mut self, id: IdentId) -> &String {
+        self.ident_table.get_name(id)
+    }
+
+    fn get_ident_id(&mut self, name: &String) -> IdentId {
+        self.ident_table.get_ident_id(name)
+    }
+
+    fn add_method(&mut self, id: IdentId, info: MethodInfo) {
+        self.method_table.insert(id, info);
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Context {
     pub lvar_scope: Vec<PackedValue>,
 }
 
 impl Context {
-    pub fn new(lvar_num: usize) ->Self {
+    pub fn new(lvar_num: usize) -> Self {
         Context {
             lvar_scope: vec![PackedValue::nil(); lvar_num],
         }
@@ -73,6 +110,7 @@ impl Inst {
     pub const POP: u8 = 29;
     pub const CONCAT_STRING: u8 = 30;
     pub const TO_S: u8 = 31;
+    pub const DEF_CLASS: u8 = 32;
 }
 
 impl VM {
@@ -81,13 +119,8 @@ impl VM {
         lvar_collector: Option<LvarCollector>,
     ) -> Self {
         let vm = VM {
-            ident_table: match ident_table {
-                Some(table) => table,
-                None => IdentifierTable::new(),
-            },
-            class_table: GlobalClassTable::new(),
+            globals: Globals::new(ident_table),
             instance_table: GlobalInstanceTable::new(),
-            method_table: HashMap::new(),
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
 
@@ -98,7 +131,7 @@ impl VM {
     }
 
     pub fn init(&mut self, ident_table: IdentifierTable, lvar_collector: LvarCollector) {
-        self.ident_table = ident_table;
+        self.globals.ident_table = ident_table;
         self.codegen.lvar_table = lvar_collector.table;
     }
 
@@ -108,12 +141,7 @@ impl VM {
     }
 
     pub fn run(&mut self, node: &Node) -> VMResult {
-        //println!("{:?}", node);
-        std::mem::swap(&mut self.codegen.ident_table, &mut self.ident_table);
-        std::mem::swap(&mut self.codegen.method_table, &mut self.method_table);
-        let iseq = self.codegen.gen_iseq(node)?;
-        std::mem::swap(&mut self.codegen.ident_table, &mut self.ident_table);
-        std::mem::swap(&mut self.codegen.method_table, &mut self.method_table);
+        let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
         let val = self.vm_run(&iseq)?;
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
@@ -158,7 +186,7 @@ impl VM {
                 }
                 Inst::PUSH_STRING => {
                     let id = read_id(iseq, pc);
-                    let string = self.ident_table.get_name(id).clone();
+                    let string = self.globals.get_ident_name(id).clone();
                     self.exec_stack.push(Value::String(string).pack());
                     pc += 5;
                 }
@@ -289,7 +317,7 @@ impl VM {
                     match self.const_table.get(&id) {
                         Some(val) => self.exec_stack.push(val.clone().pack()),
                         None => {
-                            let name = self.ident_table.get_name(id).clone();
+                            let name = self.globals.get_ident_name(id).clone();
                             return Err(self.error_unimplemented(format!(
                                 "Uninitialized constant '{}'.",
                                 name
@@ -326,10 +354,12 @@ impl VM {
                     let method_id = read_id(iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
                     let info = match receiver {
-                        Value::Nil | Value::FixNum(_) => match self.method_table.get(&method_id) {
-                            Some(info) => info,
-                            None => return Err(self.error_unimplemented("method not defined.")),
-                        },
+                        Value::Nil | Value::FixNum(_) => {
+                            match self.globals.method_table.get(&method_id) {
+                                Some(info) => info,
+                                None => return Err(self.error_unimplemented("method not defined.")),
+                            }
+                        }
                         _ => unimplemented!(),
                     };
                     let args_num = read32(iseq, pc + 5);
@@ -359,6 +389,16 @@ impl VM {
                         }
                     }
                     pc += 9;
+                }
+                Inst::DEF_CLASS => {
+                    let classref: ClassRef = ClassRef::from(read32(iseq, pc + 1));
+                    let info = self.globals.class_table.get(classref).clone();
+                    let val = Value::Class(classref);
+                    self.const_table.insert(info.id, val);
+                    self.context_stack.push(Context::new(info.lvar.table.len()));
+                    let _ = self.vm_run(&info.iseq)?;
+                    self.context_stack.pop().unwrap();
+                    pc += 5;
                 }
                 Inst::TO_S => {
                     let val = self.exec_stack.pop().unwrap().unpack();
@@ -608,6 +648,9 @@ impl VM {
 
 impl VM {
     pub fn init_builtin(&mut self) {
-        crate::builtin::Builtin::init_builtin(&mut self.ident_table, &mut self.method_table);
+        builtin::Builtin::init_builtin(
+            &mut self.globals.ident_table,
+            &mut self.globals.method_table,
+        );
     }
 }

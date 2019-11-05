@@ -1,5 +1,5 @@
-use crate::class::ClassRef;
-use crate::instance::InstanceRef;
+use super::class::ClassRef;
+use super::instance::InstanceRef;
 
 const NIL_VALUE: u64 = 0x08;
 const TRUE_VALUE: u64 = 0x14;
@@ -22,11 +22,11 @@ pub enum Value {
 impl Value {
     pub fn pack(self) -> PackedValue {
         match self {
-            Value::Nil => PackedValue(NIL_VALUE),
-            Value::Bool(b) if b => PackedValue(TRUE_VALUE),
-            Value::Bool(_) => PackedValue(FALSE_VALUE),
-            Value::FixNum(num) => PackedValue(Value::pack_fixnum(num)),
-            Value::FloatNum(num) => PackedValue(Value::pack_flonum(num)),
+            Value::Nil => PackedValue::nil(),
+            Value::Bool(b) if b => PackedValue::true_val(),
+            Value::Bool(_) => PackedValue::false_val(),
+            Value::FixNum(num) => PackedValue::fixnum(num),
+            Value::FloatNum(num) => PackedValue::flonum(num),
             _ => PackedValue(Value::pack_as_boxed(self)),
         }
     }
@@ -68,9 +68,9 @@ impl std::ops::Deref for PackedValue {
 
 impl PackedValue {
     pub fn unpack(self) -> Value {
-        if self.0 & 0b1 == 1 {
+        if self.is_packed_fixnum() {
             Value::FixNum(self.as_packed_fixnum())
-        } else if self.0 & 0b11 == 0b10 {
+        } else if self.is_packed_num() {
             Value::FloatNum(self.as_packed_flonum())
         } else if self.0 == NIL_VALUE {
             Value::Nil

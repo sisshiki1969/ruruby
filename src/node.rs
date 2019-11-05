@@ -25,7 +25,7 @@ pub enum NodeKind {
     Param(IdentId),
     MethodDecl(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDecl(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassDecl(IdentId, Box<Node>),
+    ClassDecl(IdentId, Box<Node>, LvarCollector),
     Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
 }
 
@@ -153,9 +153,9 @@ impl Node {
         )
     }
 
-    pub fn new_class_decl(id: IdentId, body: Node) -> Self {
+    pub fn new_class_decl(id: IdentId, body: Node, lvar: LvarCollector) -> Self {
         let loc = Loc::new(body.loc());
-        Node::new(NodeKind::ClassDecl(id, Box::new(body)), loc)
+        Node::new(NodeKind::ClassDecl(id, Box::new(body), lvar), loc)
     }
 
     pub fn new_send(receiver: Node, method_name: Node, args: Vec<Node>, loc: Loc) -> Self {

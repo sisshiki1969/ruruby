@@ -882,11 +882,11 @@ impl Parser {
             _ => return Err(self.error_unexpected(loc.dec(), "Expect class name.")),
         };
         let id = self.get_ident_id(&name);
-
+        self.lvar_collector.push(LvarCollector::new());
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
-
-        Ok(Node::new_class_decl(id, body))
+        let lvar = self.lvar_collector.pop().unwrap();
+        Ok(Node::new_class_decl(id, body, lvar))
     }
 }
 
@@ -895,10 +895,10 @@ impl Parser {
 mod eval_tests {
     extern crate test;
 
+    use crate::eval::value::Value;
     use crate::eval::Evaluator;
     use crate::lexer::Lexer;
     use crate::parser::Parser;
-    use crate::value::Value;
     use test::Bencher;
 
     fn eval_script(script: impl Into<String>, expected: Value) {

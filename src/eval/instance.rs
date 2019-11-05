@@ -1,6 +1,6 @@
-use crate::class::*;
+use super::class::ClassRef;
+use super::value::Value;
 use crate::util::*;
-use crate::value::Value;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]

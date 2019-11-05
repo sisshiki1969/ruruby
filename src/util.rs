@@ -111,8 +111,17 @@ impl IdentId {
     pub fn from_usize(id: usize) -> Self {
         IdentId(id)
     }
-    pub fn as_usize(&self) -> usize {
+}
+
+impl Into<usize> for IdentId {
+    fn into(self) -> usize {
         self.0
+    }
+}
+
+impl Into<u32> for IdentId {
+    fn into(self) -> u32 {
+        self.0 as u32
     }
 }
 
