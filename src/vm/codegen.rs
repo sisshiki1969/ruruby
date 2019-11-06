@@ -1,6 +1,6 @@
+use super::builtin::Builtin;
 use super::class::*;
 use super::value::Value;
-use super::builtin::Builtin;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind};
 use crate::vm::*;
@@ -502,20 +502,22 @@ impl Codegen {
             }
             NodeKind::MethodDecl(id, params, body, lvar_collector) => {
                 let info = self.gen_method_iseq(globals, params, body, lvar_collector)?;
-                //if self.class_stack.len() == 1 {
-                // A method defined in "top level" is registered to the global method table.
-                globals.add_method(*id, info);
-                //} else {
-                /*
-                // A method defined in a class definition is registered as a instance method of the class.
-                let class = self.class_stack.last().unwrap();
-                let class_info = self.class_table.get_mut(*class);
-                class_info.instance_method.insert(*id, info);
-                */
-                //}
+                if self.class_stack.len() == 0 {
+                    // A method defined in "top level" is registered to the global method table.
+                    globals.add_method(*id, info);
+                } else {
+                    // A method defined in a class definition is registered as a instance method of the class.
+                    let classref = self.class_stack.last().unwrap();
+                    globals
+                        .get_mut_class_info(*classref)
+                        .add_instance_method(*id, info);
+                }
                 self.gen_push_nil(iseq);
             }
             NodeKind::ClassDecl(id, node, lvar) => {
+                let classref = globals.add_class(*id, lvar.clone());
+                self.class_stack.push(classref);
+
                 let mut class_iseq = ISeq::new();
                 let mut new_lvar = lvar.table.clone();
                 std::mem::swap(&mut self.lvar_table, &mut new_lvar);
@@ -523,10 +525,22 @@ impl Codegen {
                 std::mem::swap(&mut self.lvar_table, &mut new_lvar);
                 class_iseq.push(Inst::END);
 
-                let classref = self.new_class(globals, *id, class_iseq, lvar.clone());
+                let id_for_new = globals.get_ident_id(&"new".to_string());
+                let new_func_info = MethodInfo::BuiltinFunc {
+                    name: "new".to_string(),
+                    func: Builtin::builtin_new,
+                };
+
+                let class_info = globals.get_mut_class_info(classref);
+                class_info.iseq = class_iseq;
+
+                class_info.add_class_method(id_for_new, new_func_info);
+
                 iseq.push(Inst::DEF_CLASS);
                 self.push32(iseq, classref.into());
                 self.gen_push_nil(iseq);
+
+                self.class_stack.pop().unwrap();
             }
             NodeKind::Break => {
                 self.gen_push_nil(iseq);
@@ -568,28 +582,5 @@ impl Codegen {
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.loc)
-    }
-}
-
-impl Codegen {
-    pub fn new_class(
-        &mut self,
-        globals: &mut Globals,
-        id: IdentId,
-        iseq: ISeq,
-        lvar: LvarCollector,
-    ) -> ClassRef {
-        let name = globals.get_ident_name(id).clone();
-        let class_ref = globals.add_class(id, name, iseq, lvar);
-        let id = globals.get_ident_id(&"new".to_string());
-        
-        let info = MethodInfo::BuiltinFunc {
-            name: "new".to_string(),
-            func: Builtin::builtin_new,
-        };
-        globals.get_mut_class_info(class_ref)
-            .add_class_method(id, info);
-
-        class_ref
     }
 }

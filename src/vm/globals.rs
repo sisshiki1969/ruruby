@@ -38,20 +38,25 @@ impl Globals {
         self.method_table.get(&id)
     }
 
-    pub fn add_class(
-        &mut self,
-        id: IdentId,
-        name: String,
-        iseq: ISeq,
-        lvar: LvarCollector,
-    ) -> ClassRef {
-        self.class_table.new_class(id, name, iseq, lvar)
+    pub fn new_classref(&mut self) -> ClassRef {
+        self.class_table.new_classref()
     }
+
+    pub fn add_class(&mut self, id: IdentId, lvar: LvarCollector) -> ClassRef {
+        let name = self.get_ident_name(id).clone();
+        self.class_table.add_class(id, name, lvar)
+    }
+
     pub fn get_class_info(&self, class: ClassRef) -> &ClassInfo {
         self.class_table.get(class)
     }
+
     pub fn get_mut_class_info(&mut self, class: ClassRef) -> &mut ClassInfo {
         self.class_table.get_mut(class)
+    }
+
+    pub fn get_instance_info(&self, instance: InstanceRef) -> &InstanceInfo {
+        self.instance_table.get(instance)
     }
 
     pub fn new_instance(&mut self, class_id: ClassRef) -> InstanceRef {

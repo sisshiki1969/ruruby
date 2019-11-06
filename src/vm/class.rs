@@ -57,6 +57,10 @@ impl ClassInfo {
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodInfo> {
         self.instance_method.get(&id)
     }
+
+    pub fn add_instance_method(&mut self, id: IdentId, info: MethodInfo) -> Option<MethodInfo> {
+        self.instance_method.insert(id, info)
+    }
 }
 
 impl From<u32> for ClassRef {
@@ -78,19 +82,19 @@ impl GlobalClassTable {
             class_id: 0,
         }
     }
-
-    pub fn new_class(
-        &mut self,
-        id: IdentId,
-        name: String,
-        iseq: ISeq,
-        lvar: LvarCollector,
-    ) -> ClassRef {
-        let info = ClassInfo::new(id, name, iseq, lvar);
+    pub fn new_classref(&mut self) -> ClassRef {
         let new_class = ClassRef(self.class_id);
         self.class_id += 1;
-        self.table.insert(new_class, info);
         new_class
+    }
+
+    pub fn add_class(&mut self, id: IdentId, name: String, lvar: LvarCollector) -> ClassRef {
+        let classref = ClassRef(self.class_id);
+        self.class_id += 1;
+
+        let info = ClassInfo::new(id, name, vec![], lvar);
+        self.table.insert(classref, info);
+        classref
     }
 
     pub fn get(&self, class_ref: ClassRef) -> &ClassInfo {

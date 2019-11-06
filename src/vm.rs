@@ -12,7 +12,7 @@ pub use crate::util::*;
 pub use class::*;
 use codegen::*;
 pub use globals::Globals;
-pub use instance::{GlobalInstanceTable, InstanceRef};
+pub use instance::*;
 use std::collections::HashMap;
 use value::*;
 
@@ -323,13 +323,14 @@ impl VM {
                     let method_id = read_id(iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
                     let info = match receiver {
-                        Value::Nil | Value::FixNum(_) => {
-                            match self.globals.get_method(method_id) {
-                                Some(info) => info.clone(),
-                                None => return Err(self.error_unimplemented("method not defined.")),
-                            }
-                        }
+                        Value::Nil | Value::FixNum(_) => match self.globals.get_method(method_id) {
+                            Some(info) => info.clone(),
+                            None => return Err(self.error_unimplemented("method not defined.")),
+                        },
                         Value::Class(class) => self.get_class_method(class, method_id)?.clone(),
+                        Value::Instance(instance) => {
+                            self.get_instance_method(instance, method_id)?.clone()
+                        }
                         _ => unimplemented!(),
                     };
                     let args_num = read32(iseq, pc + 5);
@@ -618,15 +619,13 @@ impl VM {
 
 impl VM {
     pub fn init_builtin(&mut self) {
-        builtin::Builtin::init_builtin(
-            &mut self.globals,
-        );
+        builtin::Builtin::init_builtin(&mut self.globals);
     }
 }
 
 impl VM {
     pub fn get_class_method(
-        &mut self,
+        &self,
         class: ClassRef,
         method: IdentId,
     ) -> Result<&MethodInfo, RubyError> {
@@ -634,6 +633,24 @@ impl VM {
             Some(info) => Ok(info),
             None => {
                 return Err(self.error_nomethod("No class method found."));
+            }
+        }
+    }
+
+    pub fn get_instance_method(
+        &self,
+        instance: InstanceRef,
+        method: IdentId,
+    ) -> Result<&MethodInfo, RubyError> {
+        let classref = self.globals.get_instance_info(instance).get_classref();
+        match self
+            .globals
+            .get_class_info(classref)
+            .get_instance_method(method)
+        {
+            Some(info) => Ok(info),
+            None => {
+                return Err(self.error_nomethod("No instance method found."));
             }
         }
     }

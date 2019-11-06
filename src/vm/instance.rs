@@ -5,18 +5,22 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InstanceInfo {
-    pub class_id: ClassRef,
+    pub classref: ClassRef,
     pub class_name: String,
     pub instance_var: HashMap<IdentId, Value>,
 }
 
 impl InstanceInfo {
-    pub fn new(class_id: ClassRef, class_name: String) -> Self {
+    pub fn new(classref: ClassRef, class_name: String) -> Self {
         InstanceInfo {
-            class_id,
+            classref,
             class_name,
             instance_var: HashMap::new(),
         }
+    }
+
+    pub fn get_classref(&self) -> ClassRef {
+        self.classref
     }
 }
 
@@ -43,8 +47,8 @@ impl GlobalInstanceTable {
         }
     }
 
-    pub fn new_instance(&mut self, class_id: ClassRef, class_name: String) -> InstanceRef {
-        let info = InstanceInfo::new(class_id, class_name);
+    pub fn new_instance(&mut self, classref: ClassRef, class_name: String) -> InstanceRef {
+        let info = InstanceInfo::new(classref, class_name);
         let new_instance = InstanceRef(self.instance_id);
         self.instance_id += 1;
         self.table.insert(new_instance, info);
