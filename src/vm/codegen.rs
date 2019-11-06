@@ -1,10 +1,9 @@
 use super::class::*;
 use super::value::Value;
+use super::builtin::Builtin;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind};
-use crate::parser::{LvarCollector, LvarId};
-use crate::util::{IdentId, Loc};
-use crate::vm::{Globals, Inst, VMResult, VM};
+use crate::vm::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -582,16 +581,16 @@ impl Codegen {
     ) -> ClassRef {
         let name = globals.get_ident_name(id).clone();
         let class_ref = globals.class_table.new_class(id, name, iseq, lvar);
-        //let id = self.ident_table.get_ident_id(&"new".to_string());
-        /*
+        let id = globals.get_ident_id(&"new".to_string());
+        
         let info = MethodInfo::BuiltinFunc {
             name: "new".to_string(),
-            func: builtin::builtin_new,
+            func: Builtin::builtin_new,
         };
-        self.class_table
+        globals.class_table
             .get_mut(class_ref)
             .add_class_method(id, info);
-            */
+
         class_ref
     }
 }

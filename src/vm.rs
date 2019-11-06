@@ -1,16 +1,18 @@
 mod builtin;
 mod class;
 mod codegen;
+mod globals;
 mod instance;
 pub mod value;
 
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::*;
-use crate::parser::{LvarCollector, LvarId};
-use crate::util::{IdentId, IdentifierTable, Loc};
-use class::*;
+pub use crate::parser::{LvarCollector, LvarId};
+pub use crate::util::*;
+pub use class::*;
 use codegen::*;
-use instance::*;
+pub use globals::Globals;
+pub use instance::{GlobalInstanceTable, InstanceRef};
 use std::collections::HashMap;
 use value::*;
 
@@ -28,39 +30,6 @@ pub struct VM {
     // VM state
     pub context_stack: Vec<Context>,
     pub exec_stack: Vec<PackedValue>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Globals {
-    // Global info
-    pub ident_table: IdentifierTable,
-    pub class_table: GlobalClassTable,
-    pub method_table: MethodTable,
-}
-
-impl Globals {
-    fn new(ident_table: Option<IdentifierTable>) -> Self {
-        Globals {
-            ident_table: match ident_table {
-                Some(table) => table,
-                None => IdentifierTable::new(),
-            },
-            class_table: GlobalClassTable::new(),
-            method_table: MethodTable::new(),
-        }
-    }
-
-    fn get_ident_name(&mut self, id: IdentId) -> &String {
-        self.ident_table.get_name(id)
-    }
-
-    fn get_ident_id(&mut self, name: &String) -> IdentId {
-        self.ident_table.get_ident_id(name)
-    }
-
-    fn add_method(&mut self, id: IdentId, info: MethodInfo) {
-        self.method_table.insert(id, info);
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -356,10 +325,11 @@ impl VM {
                     let info = match receiver {
                         Value::Nil | Value::FixNum(_) => {
                             match self.globals.method_table.get(&method_id) {
-                                Some(info) => info,
+                                Some(info) => info.clone(),
                                 None => return Err(self.error_unimplemented("method not defined.")),
                             }
                         }
+                        Value::Class(class) => self.get_class_method(class, method_id)?.clone(),
                         _ => unimplemented!(),
                     };
                     let args_num = read32(iseq, pc + 5);
@@ -378,7 +348,7 @@ impl VM {
                             lvars,
                         } => {
                             let func_iseq = iseq.clone();
-                            self.context_stack.push(Context::new(*lvars));
+                            self.context_stack.push(Context::new(lvars));
                             for (i, id) in params.clone().iter().enumerate() {
                                 *self.lvar_mut(*id) = args[i].clone().pack();
                             }
@@ -652,5 +622,20 @@ impl VM {
             &mut self.globals.ident_table,
             &mut self.globals.method_table,
         );
+    }
+}
+
+impl VM {
+    pub fn get_class_method(
+        &mut self,
+        class: ClassRef,
+        method: IdentId,
+    ) -> Result<&MethodInfo, RubyError> {
+        match self.globals.class_table.get(class).get_class_method(method) {
+            Some(info) => Ok(info),
+            None => {
+                return Err(self.error_nomethod("No class method found."));
+            }
+        }
     }
 }
