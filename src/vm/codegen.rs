@@ -580,15 +580,14 @@ impl Codegen {
         lvar: LvarCollector,
     ) -> ClassRef {
         let name = globals.get_ident_name(id).clone();
-        let class_ref = globals.class_table.new_class(id, name, iseq, lvar);
+        let class_ref = globals.add_class(id, name, iseq, lvar);
         let id = globals.get_ident_id(&"new".to_string());
         
         let info = MethodInfo::BuiltinFunc {
             name: "new".to_string(),
             func: Builtin::builtin_new,
         };
-        globals.class_table
-            .get_mut(class_ref)
+        globals.get_mut_class_info(class_ref)
             .add_class_method(id, info);
 
         class_ref

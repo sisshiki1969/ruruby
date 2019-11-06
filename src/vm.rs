@@ -324,7 +324,7 @@ impl VM {
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
                     let info = match receiver {
                         Value::Nil | Value::FixNum(_) => {
-                            match self.globals.method_table.get(&method_id) {
+                            match self.globals.get_method(method_id) {
                                 Some(info) => info.clone(),
                                 None => return Err(self.error_unimplemented("method not defined.")),
                             }
@@ -362,7 +362,7 @@ impl VM {
                 }
                 Inst::DEF_CLASS => {
                     let classref: ClassRef = ClassRef::from(read32(iseq, pc + 1));
-                    let info = self.globals.class_table.get(classref).clone();
+                    let info = self.globals.get_class_info(classref).clone();
                     let val = Value::Class(classref);
                     self.const_table.insert(info.id, val);
                     self.context_stack.push(Context::new(info.lvar.table.len()));
@@ -619,8 +619,7 @@ impl VM {
 impl VM {
     pub fn init_builtin(&mut self) {
         builtin::Builtin::init_builtin(
-            &mut self.globals.ident_table,
-            &mut self.globals.method_table,
+            &mut self.globals,
         );
     }
 }
@@ -631,7 +630,7 @@ impl VM {
         class: ClassRef,
         method: IdentId,
     ) -> Result<&MethodInfo, RubyError> {
-        match self.globals.class_table.get(class).get_class_method(method) {
+        match self.globals.get_class_info(class).get_class_method(method) {
             Some(info) => Ok(info),
             None => {
                 return Err(self.error_nomethod("No class method found."));
