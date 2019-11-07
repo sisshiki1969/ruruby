@@ -481,7 +481,7 @@ impl Evaluator {
             NodeKind::Break => {
                 return Err(EvalError::raise_break(loc));
             }
-            NodeKind::MethodDecl(id, params, body, _) => {
+            NodeKind::MethodDef(id, params, body, _) => {
                 let info = MethodInfo::RubyFunc {
                     params: params.clone(),
                     body: body.clone(),
@@ -497,7 +497,7 @@ impl Evaluator {
                 }
                 Ok(Value::Nil)
             }
-            NodeKind::ClassMethodDecl(id, params, body, _) => {
+            NodeKind::ClassMethodDef(id, params, body, _) => {
                 let info = MethodInfo::RubyFunc {
                     params: params.clone(),
                     body: body.clone(),
@@ -515,7 +515,7 @@ impl Evaluator {
                 }
                 Ok(Value::Nil)
             }
-            NodeKind::ClassDecl(id, body, _) => {
+            NodeKind::ClassDef(id, body, _) => {
                 let classref = self.new_class(*id, *body.clone());
                 let val = Value::Class(classref);
                 self.const_table.insert(*id, val);

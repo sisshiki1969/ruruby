@@ -22,6 +22,14 @@ impl InstanceInfo {
     pub fn get_classref(&self) -> ClassRef {
         self.classref
     }
+
+    pub fn get_instance_var(&self, id: IdentId) -> Option<&Value> {
+        self.instance_var.get(&id)
+    }
+
+    pub fn get_mut_instance_var(&mut self, id: IdentId) -> Option<&mut Value> {
+        self.instance_var.get_mut(&id)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

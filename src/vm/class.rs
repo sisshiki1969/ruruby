@@ -1,5 +1,4 @@
-use super::codegen::*;
-use super::codegen::{MethodInfo, MethodTable};
+use super::codegen::{ISeq, MethodInfo, MethodTable};
 use super::value::Value;
 use crate::parser::LvarCollector;
 use crate::util::*;

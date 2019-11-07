@@ -1,4 +1,3 @@
-use super::codegen::{MethodInfo};
 use super::value::Value;
 use crate::vm::VMResult;
 use crate::vm::*;
@@ -7,33 +6,10 @@ pub struct Builtin {}
 
 impl Builtin {
     pub fn init_builtin(globals: &mut Globals) {
-        let id = globals.get_ident_id(&"chr".to_string());
-        let info = MethodInfo::BuiltinFunc {
-            name: "chr".to_string(),
-            func: builtin_chr,
-        };
-        globals.add_method(id, info);
-
-        let id = globals.get_ident_id(&"puts".to_string());
-        let info = MethodInfo::BuiltinFunc {
-            name: "puts".to_string(),
-            func: builtin_puts,
-        };
-        globals.add_method(id, info);
-
-        let id = globals.get_ident_id(&"print".to_string());
-        let info = MethodInfo::BuiltinFunc {
-            name: "print".to_string(),
-            func: builtin_print,
-        };
-        globals.add_method(id, info);
-
-        let id = globals.get_ident_id(&"assert".to_string());
-        let info = MethodInfo::BuiltinFunc {
-            name: "assert".to_string(),
-            func: builtin_assert,
-        };
-        globals.add_method(id, info);
+        globals.add_builtin_method("chr", builtin_chr);
+        globals.add_builtin_method("puts", builtin_puts);
+        globals.add_builtin_method("print", builtin_print);
+        globals.add_builtin_method("assert", builtin_assert);
 
         /// Built-in function "chr".
         pub fn builtin_chr(_vm: &mut VM, receiver: Value, _args: Vec<Value>) -> VMResult {

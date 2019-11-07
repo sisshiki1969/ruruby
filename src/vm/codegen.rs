@@ -146,6 +146,16 @@ impl Codegen {
         Ok(())
     }
 
+    fn gen_get_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::GET_INSTANCE_VAR);
+        self.push32(iseq, id.into());
+    }
+
+    fn gen_set_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::SET_INSTANCE_VAR);
+        self.push32(iseq, id.into());
+    }
+
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::GET_CONST);
         self.push32(iseq, id.into());
@@ -327,9 +337,8 @@ impl Codegen {
                 self.save_loc(iseq);
                 self.gen_get_local(iseq, *id)?;
             }
-            NodeKind::Const(id) => {
-                self.gen_get_const(iseq, *id);
-            }
+            NodeKind::Const(id) => self.gen_get_const(iseq, *id),
+            NodeKind::InstanceVar(id) => self.gen_get_instance_var(iseq, *id),
             NodeKind::BinOp(op, lhs, rhs) => match op {
                 BinOp::Add => {
                     self.gen(globals, iseq, lhs)?;
@@ -477,12 +486,9 @@ impl Codegen {
             NodeKind::Assign(lhs, rhs) => {
                 self.gen(globals, iseq, rhs)?;
                 match lhs.kind {
-                    NodeKind::Ident(id) => {
-                        self.gen_set_local(iseq, id);
-                    }
-                    NodeKind::Const(id) => {
-                        self.gen_set_const(iseq, id);
-                    }
+                    NodeKind::Ident(id) => self.gen_set_local(iseq, id),
+                    NodeKind::Const(id) => self.gen_set_const(iseq, id),
+                    NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, id),
                     _ => (),
                 }
             }
@@ -500,7 +506,7 @@ impl Codegen {
                 self.save_loc(iseq);
                 self.gen_send(iseq, id, args.len());
             }
-            NodeKind::MethodDecl(id, params, body, lvar_collector) => {
+            NodeKind::MethodDef(id, params, body, lvar_collector) => {
                 let info = self.gen_method_iseq(globals, params, body, lvar_collector)?;
                 if self.class_stack.len() == 0 {
                     // A method defined in "top level" is registered to the global method table.
@@ -514,7 +520,7 @@ impl Codegen {
                 }
                 self.gen_push_nil(iseq);
             }
-            NodeKind::ClassDecl(id, node, lvar) => {
+            NodeKind::ClassDef(id, node, lvar) => {
                 let classref = globals.add_class(*id, lvar.clone());
                 self.class_stack.push(classref);
 

@@ -4,6 +4,13 @@
 #  contributed by Karl von Laudermann
 #  modified by Jeremy Echols
 
+class Complex
+  def init(r,i)
+    @r=r
+    @i=i
+  end
+end
+
 size = 800 # ARGV[0].to_i
 
 puts("P4\n#{size} #{size}")

@@ -21,6 +21,12 @@ impl Globals {
             instance_table: GlobalInstanceTable::new(),
         }
     }
+    pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
+        let name = name.into();
+        let id = self.get_ident_id(&name.clone());
+        let info = MethodInfo::BuiltinFunc { name, func };
+        self.add_method(id, info);
+    }
 
     pub fn get_ident_name(&mut self, id: IdentId) -> &String {
         self.ident_table.get_name(id)
@@ -34,7 +40,7 @@ impl Globals {
         self.method_table.insert(id, info);
     }
 
-    pub fn get_method(&mut self, id: IdentId) -> Option<&MethodInfo> {
+    pub fn get_method(&self, id: IdentId) -> Option<&MethodInfo> {
         self.method_table.get(&id)
     }
 
@@ -57,6 +63,10 @@ impl Globals {
 
     pub fn get_instance_info(&self, instance: InstanceRef) -> &InstanceInfo {
         self.instance_table.get(instance)
+    }
+
+    pub fn get_mut_instance_info(&mut self, instance: InstanceRef) -> &mut InstanceInfo {
+        self.instance_table.get_mut(instance)
     }
 
     pub fn new_instance(&mut self, class_id: ClassRef) -> InstanceRef {

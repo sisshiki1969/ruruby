@@ -11,10 +11,10 @@ pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
 pub use class::*;
 use codegen::*;
-pub use globals::Globals;
+pub use globals::*;
 pub use instance::*;
 use std::collections::HashMap;
-use value::*;
+pub use value::*;
 
 pub type ValueTable = HashMap<IdentId, Value>;
 
@@ -24,7 +24,6 @@ pub type VMResult = Result<Value, RubyError>;
 pub struct VM {
     // Global info
     pub globals: Globals,
-    pub instance_table: GlobalInstanceTable,
     pub const_table: ValueTable,
     pub codegen: Codegen,
     // VM state
@@ -34,12 +33,14 @@ pub struct VM {
 
 #[derive(Debug, Clone)]
 pub struct Context {
+    pub self_value: Value,
     pub lvar_scope: Vec<PackedValue>,
 }
 
 impl Context {
-    pub fn new(lvar_num: usize) -> Self {
+    pub fn new(lvar_num: usize, self_value: Value) -> Self {
         Context {
+            self_value,
             lvar_scope: vec![PackedValue::nil(); lvar_num],
         }
     }
@@ -80,6 +81,8 @@ impl Inst {
     pub const CONCAT_STRING: u8 = 30;
     pub const TO_S: u8 = 31;
     pub const DEF_CLASS: u8 = 32;
+    pub const GET_INSTANCE_VAR: u8 = 33;
+    pub const SET_INSTANCE_VAR: u8 = 34;
 }
 
 impl VM {
@@ -87,13 +90,14 @@ impl VM {
         ident_table: Option<IdentifierTable>,
         lvar_collector: Option<LvarCollector>,
     ) -> Self {
+        let mut globals = Globals::new(ident_table);
+        let main_id = globals.get_ident_id(&"main".to_string());
+        let main_class = globals.add_class(main_id, LvarCollector::new());
         let vm = VM {
-            globals: Globals::new(ident_table),
-            instance_table: GlobalInstanceTable::new(),
+            globals,
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
-
-            context_stack: vec![Context::new(64)],
+            context_stack: vec![Context::new(64, Value::Class(main_class))],
             exec_stack: vec![],
         };
         vm
@@ -140,7 +144,8 @@ impl VM {
                     pc += 1;
                 }
                 Inst::PUSH_SELF => {
-                    self.exec_stack.push(PackedValue::nil());
+                    let self_value = self.context_stack.last().unwrap().self_value.clone();
+                    self.exec_stack.push(self_value.pack());
                     pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
@@ -295,6 +300,48 @@ impl VM {
                     }
                     pc += 5;
                 }
+                Inst::SET_INSTANCE_VAR => {
+                    let var_id = read_id(iseq, pc);
+                    let self_var = &self.context_stack.last().unwrap().self_value;
+                    let new_val = self.exec_stack.last().unwrap().unpack();
+                    match self_var {
+                        Value::Instance(id) => self
+                            .globals
+                            .get_mut_instance_info(*id)
+                            .instance_var
+                            .insert(var_id, new_val),
+                        Value::Class(id) => self
+                            .globals
+                            .get_mut_class_info(*id)
+                            .instance_var
+                            .insert(var_id, new_val),
+                        _ => unreachable!(),
+                    };
+                    pc += 5;
+                }
+                Inst::GET_INSTANCE_VAR => {
+                    let var_id = read_id(iseq, pc);
+                    let self_var = &self.context_stack.last().unwrap().self_value;
+                    let val = match self_var {
+                        Value::Instance(id) => self
+                            .globals
+                            .get_instance_info(*id)
+                            .instance_var
+                            .get(&var_id),
+                        Value::Class(id) => {
+                            self.globals.get_class_info(*id).instance_var.get(&var_id)
+                        }
+                        _ => unreachable!(),
+                    };
+                    let val = match val {
+                        Some(val) => val,
+                        None => return Err(self.error_name("Undefined instance variable.")),
+                    }
+                    .clone()
+                    .pack();
+                    self.exec_stack.push(val);
+                    pc += 5;
+                }
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap().unpack();
                     let end = self.exec_stack.pop().unwrap().unpack();
@@ -349,7 +396,8 @@ impl VM {
                             lvars,
                         } => {
                             let func_iseq = iseq.clone();
-                            self.context_stack.push(Context::new(lvars));
+                            self.context_stack
+                                .push(Context::new(lvars, receiver.clone()));
                             for (i, id) in params.clone().iter().enumerate() {
                                 *self.lvar_mut(*id) = args[i].clone().pack();
                             }
@@ -366,7 +414,8 @@ impl VM {
                     let info = self.globals.get_class_info(classref).clone();
                     let val = Value::Class(classref);
                     self.const_table.insert(info.id, val);
-                    self.context_stack.push(Context::new(info.lvar.table.len()));
+                    self.context_stack
+                        .push(Context::new(info.lvar.table.len(), Value::Class(classref)));
                     let _ = self.vm_run(&info.iseq)?;
                     self.context_stack.pop().unwrap();
                     pc += 5;
@@ -612,7 +661,8 @@ impl VM {
                 format!("({}{}{})", start, sym, end)
             }
             Value::Char(c) => format!("{:x}", c),
-            _ => "".to_string(),
+            Value::Class(id) => format! {"Class({:?})", *id},
+            Value::Instance(id) => format! {"Instance({:?})", *id},
         }
     }
 }
@@ -631,9 +681,10 @@ impl VM {
     ) -> Result<&MethodInfo, RubyError> {
         match self.globals.get_class_info(class).get_class_method(method) {
             Some(info) => Ok(info),
-            None => {
-                return Err(self.error_nomethod("No class method found."));
-            }
+            None => match self.globals.get_method(method) {
+                None => return Err(self.error_nomethod("No class method found.")),
+                Some(info) => Ok(info),
+            },
         }
     }
 
@@ -649,9 +700,10 @@ impl VM {
             .get_instance_method(method)
         {
             Some(info) => Ok(info),
-            None => {
-                return Err(self.error_nomethod("No instance method found."));
-            }
+            None => match self.globals.get_method(method) {
+                None => return Err(self.error_nomethod("No instance method found.")),
+                Some(info) => Ok(info),
+            },
         }
     }
 }

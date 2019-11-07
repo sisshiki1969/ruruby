@@ -9,7 +9,7 @@ use clap::{App, Arg};
 use ruruby::error::{ParseErrKind, RubyErrorKind};
 use ruruby::eval::Evaluator;
 use ruruby::parser::{LvarCollector, Parser};
-use ruruby::vm::VM;
+use ruruby::vm::*;
 
 fn main() {
     let app = App::new("ruruby")
@@ -162,6 +162,8 @@ fn repl_vm() {
     let mut program = String::new();
     let mut parser = Parser::new();
     let mut vm = VM::new(None, None);
+    vm.init_builtin();
+    parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
     loop {
@@ -185,13 +187,22 @@ fn repl_vm() {
                     parse_result.ident_table,
                     parse_result.lvar_collector.clone(),
                 );
-                vm.init_builtin();
                 match vm.run(&parse_result.node) {
                     Ok(result) => {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
-                        println!("=> {:?}", result);
+                        match result {
+                            Value::Class(id) => {
+                                let info = vm.globals.get_class_info(id);
+                                println!("=> {:?}", info);
+                            }
+                            Value::Instance(id) => {
+                                let info = vm.globals.get_instance_info(id);
+                                println!("=> {:?}", info);
+                            }
+                            _ => println!("=> {:?}", result),
+                        }
                     }
                     Err(err) => {
                         parser.lexer.source_info.show_loc(&err.loc());

@@ -23,9 +23,9 @@ pub enum NodeKind {
     InstanceVar(IdentId),
     Const(IdentId),
     Param(IdentId),
-    MethodDecl(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassMethodDecl(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassDecl(IdentId, Box<Node>, LvarCollector),
+    MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
+    ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
+    ClassDef(IdentId, Box<Node>, LvarCollector),
     Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
 }
 
@@ -137,7 +137,7 @@ impl Node {
         lvar: LvarCollector,
     ) -> Self {
         let loc = Loc::new(body.loc());
-        Node::new(NodeKind::MethodDecl(id, params, Box::new(body), lvar), loc)
+        Node::new(NodeKind::MethodDef(id, params, Box::new(body), lvar), loc)
     }
 
     pub fn new_class_method_decl(
@@ -148,14 +148,14 @@ impl Node {
     ) -> Self {
         let loc = Loc::new(body.loc());
         Node::new(
-            NodeKind::ClassMethodDecl(id, params, Box::new(body), lvar),
+            NodeKind::ClassMethodDef(id, params, Box::new(body), lvar),
             loc,
         )
     }
 
     pub fn new_class_decl(id: IdentId, body: Node, lvar: LvarCollector) -> Self {
         let loc = Loc::new(body.loc());
-        Node::new(NodeKind::ClassDecl(id, Box::new(body), lvar), loc)
+        Node::new(NodeKind::ClassDef(id, Box::new(body), lvar), loc)
     }
 
     pub fn new_send(receiver: Node, method_name: Node, args: Vec<Node>, loc: Loc) -> Self {
@@ -195,8 +195,8 @@ impl std::fmt::Display for Node {
                 write!(f, "]")?;
                 Ok(())
             }
-            NodeKind::MethodDecl(id, args, body, _) => {
-                write!(f, "[ MethodDecl {:?}: PARAM(", id)?;
+            NodeKind::MethodDef(id, args, body, _) => {
+                write!(f, "[ MethodDef {:?}: PARAM(", id)?;
                 for arg in args {
                     write!(f, "({}) ", arg)?;
                 }
