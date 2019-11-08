@@ -1,5 +1,3 @@
-use super::builtin::Builtin;
-use super::class::*;
 use super::value::Value;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind};
@@ -9,7 +7,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Codegen {
     // Codegen State
-    pub class_stack: Vec<ClassRef>,
+    //pub class_stack: Vec<IdentId>,
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
     pub lvar_table: HashMap<IdentId, LvarId>,
     pub loc: Loc,
@@ -17,30 +15,6 @@ pub struct Codegen {
 }
 
 pub type BuiltinFunc = fn(vm: &mut VM, receiver: Value, args: Vec<Value>) -> VMResult;
-
-pub type MethodTable = HashMap<IdentId, MethodInfo>;
-
-#[derive(Clone)]
-pub enum MethodInfo {
-    RubyFunc {
-        params: Vec<LvarId>,
-        iseq: ISeq,
-        lvars: usize,
-    },
-    BuiltinFunc {
-        name: String,
-        func: BuiltinFunc,
-    },
-}
-
-impl std::fmt::Debug for MethodInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MethodInfo::RubyFunc { params, .. } => write!(f, "RubyFunc {:?}", params),
-            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EscapeKind {
@@ -71,7 +45,7 @@ impl Codegen {
                 Some(collector) => collector.table,
                 None => HashMap::new(),
             },
-            class_stack: vec![],
+            //class_stack: vec![],
             loop_stack: vec![],
             loc: Loc(0, 0),
             iseq_info: vec![],
@@ -506,49 +480,19 @@ impl Codegen {
                 self.save_loc(iseq);
                 self.gen_send(iseq, id, args.len());
             }
-            NodeKind::MethodDef(id, params, body, lvar_collector) => {
-                let info = self.gen_method_iseq(globals, params, body, lvar_collector)?;
-                if self.class_stack.len() == 0 {
-                    // A method defined in "top level" is registered to the global method table.
-                    globals.add_method(*id, info);
-                } else {
-                    // A method defined in a class definition is registered as a instance method of the class.
-                    let classref = self.class_stack.last().unwrap();
-                    globals
-                        .get_mut_class_info(*classref)
-                        .add_instance_method(*id, info);
-                }
-                self.gen_push_nil(iseq);
+            NodeKind::MethodDef(id, params, body, lvar) => {
+                let info = self.gen_method_iseq(globals, params, body, lvar)?;
+                let methodref = globals.add_method(info);
+                iseq.push(Inst::DEF_METHOD);
+                self.push32(iseq, (*id).into());
+                self.push32(iseq, methodref.into());
             }
             NodeKind::ClassDef(id, node, lvar) => {
-                let classref = globals.add_class(*id);
-                self.class_stack.push(classref);
-
-                let mut class_iseq = ISeq::new();
-                let mut new_lvar = lvar.table.clone();
-                std::mem::swap(&mut self.lvar_table, &mut new_lvar);
-                self.gen(globals, &mut class_iseq, node)?;
-                std::mem::swap(&mut self.lvar_table, &mut new_lvar);
-                class_iseq.push(Inst::END);
-
-                let id_for_new = globals.get_ident_id(&"new".to_string());
-                let new_func_info = MethodInfo::BuiltinFunc {
-                    name: "new".to_string(),
-                    func: Builtin::builtin_new,
-                };
-
-                let class_info = globals.get_mut_class_info(classref);
-                let def_method_id = class_info.iseq_info.len();
-                class_info.iseq_info.push(ISeqInfo::new(class_iseq, lvar.clone()));
-
-                class_info.add_class_method(id_for_new, new_func_info);
-
+                let info = self.gen_method_iseq(globals, &vec![], node, lvar)?;
+                let methodref = globals.add_method(info);
                 iseq.push(Inst::DEF_CLASS);
-                self.push32(iseq, classref.into());
-                self.push32(iseq, def_method_id as u32);
-                self.gen_push_nil(iseq);
-
-                self.class_stack.pop().unwrap();
+                self.push32(iseq, (*id).into());
+                self.push32(iseq, methodref.into());
             }
             NodeKind::Break => {
                 self.gen_push_nil(iseq);

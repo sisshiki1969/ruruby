@@ -3,16 +3,19 @@ mod class;
 mod codegen;
 mod globals;
 mod instance;
+mod method;
 pub mod value;
 
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::*;
 pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
+pub use builtin::*;
 pub use class::*;
 use codegen::*;
 pub use globals::*;
 pub use instance::*;
+pub use method::*;
 use std::collections::HashMap;
 pub use value::*;
 
@@ -28,6 +31,7 @@ pub struct VM {
     pub codegen: Codegen,
     // VM state
     pub context_stack: Vec<Context>,
+    pub class_stack: Vec<ClassRef>,
     pub exec_stack: Vec<PackedValue>,
 }
 
@@ -83,6 +87,7 @@ impl Inst {
     pub const DEF_CLASS: u8 = 32;
     pub const GET_INSTANCE_VAR: u8 = 33;
     pub const SET_INSTANCE_VAR: u8 = 34;
+    pub const DEF_METHOD: u8 = 35;
 }
 
 impl VM {
@@ -97,6 +102,7 @@ impl VM {
             globals,
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
+            class_stack: vec![],
             context_stack: vec![Context::new(64, Value::Class(main_class))],
             exec_stack: vec![],
         };
@@ -370,10 +376,12 @@ impl VM {
                     let method_id = read_id(iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
                     let info = match receiver {
-                        Value::Nil | Value::FixNum(_) => match self.globals.get_method(method_id) {
-                            Some(info) => info.clone(),
-                            None => return Err(self.error_unimplemented("method not defined.")),
-                        },
+                        Value::Nil | Value::FixNum(_) => {
+                            match self.globals.get_toplevel_method(method_id) {
+                                Some(info) => info.clone(),
+                                None => return Err(self.error_unimplemented("method not defined.")),
+                            }
+                        }
                         Value::Class(class) => self.get_class_method(class, method_id)?.clone(),
                         Value::Instance(instance) => {
                             self.get_instance_method(instance, method_id)?.clone()
@@ -410,17 +418,47 @@ impl VM {
                     pc += 9;
                 }
                 Inst::DEF_CLASS => {
-                    let classref: ClassRef = ClassRef::from(read32(iseq, pc + 1));
-                    let def_method_id = read32(iseq, pc + 5) as usize;
-                    let info = self.globals.get_class_info(classref).clone();
+                    let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
+                    let methodref = MethodRef::from(read32(iseq, pc + 5));
+                    let method_info = self.globals.get_method_info(methodref).clone();
+                    let classref = self.globals.add_class(id);
                     let val = Value::Class(classref);
-                    self.const_table.insert(info.id, val);
-                    self.context_stack.push(Context::new(
-                        info.iseq_info[def_method_id].lvar.table.len(),
-                        Value::Class(classref),
-                    ));
-                    let _ = self.vm_run(&info.iseq_info[def_method_id].iseq)?;
+                    self.const_table.insert(id, val.clone());
+
+                    let (iseq, lvars) = match &method_info {
+                        MethodInfo::RubyFunc { iseq, lvars, .. } => (iseq, lvars),
+                        MethodInfo::BuiltinFunc { .. } => unreachable!(),
+                    };
+                    self.context_stack.push(Context::new(*lvars, val));
+                    let _ = self.vm_run(iseq)?;
                     self.context_stack.pop().unwrap();
+
+                    let id_for_new = self.globals.get_ident_id(&"new".to_string());
+                    let class_info = self.globals.get_mut_class_info(classref);
+                    let new_func_info = MethodInfo::BuiltinFunc {
+                        name: "new".to_string(),
+                        func: Builtin::builtin_new,
+                    };
+                    class_info.add_class_method(id_for_new, new_func_info);
+
+                    self.exec_stack.push(PackedValue::nil());
+                    pc += 9;
+                }
+                Inst::DEF_METHOD => {
+                    let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
+                    let methodref = MethodRef::from(read32(iseq, pc + 5));
+                    let info = self.globals.get_method_info(methodref).clone();
+                    if self.class_stack.len() == 0 {
+                        // A method defined in "top level" is registered to the global method table.
+                        self.globals.add_toplevel_method(id, info);
+                    } else {
+                        // A method defined in a class definition is registered as a instance method of the class.
+                        let classref = self.class_stack.last().unwrap();
+                        self.globals
+                            .get_mut_class_info(*classref)
+                            .add_instance_method(id, info);
+                    }
+                    self.exec_stack.push(PackedValue::nil());
                     pc += 9;
                 }
                 Inst::TO_S => {
@@ -684,7 +722,7 @@ impl VM {
     ) -> Result<&MethodInfo, RubyError> {
         match self.globals.get_class_info(class).get_class_method(method) {
             Some(info) => Ok(info),
-            None => match self.globals.get_method(method) {
+            None => match self.globals.get_toplevel_method(method) {
                 None => return Err(self.error_nomethod("No class method found.")),
                 Some(info) => Ok(info),
             },
@@ -703,7 +741,7 @@ impl VM {
             .get_instance_method(method)
         {
             Some(info) => Ok(info),
-            None => match self.globals.get_method(method) {
+            None => match self.globals.get_toplevel_method(method) {
                 None => return Err(self.error_nomethod("No instance method found.")),
                 Some(info) => Ok(info),
             },

@@ -6,7 +6,8 @@ pub struct Globals {
     pub ident_table: IdentifierTable,
     class_table: GlobalClassTable,
     instance_table: GlobalInstanceTable,
-    method_table: MethodTable,
+    method_table: GlobalMethodTable,
+    toplevel_method: MethodTable,
 }
 
 impl Globals {
@@ -17,15 +18,16 @@ impl Globals {
                 None => IdentifierTable::new(),
             },
             class_table: GlobalClassTable::new(),
-            method_table: MethodTable::new(),
             instance_table: GlobalInstanceTable::new(),
+            method_table: GlobalMethodTable::new(),
+            toplevel_method: MethodTable::new(),
         }
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
         let name = name.into();
         let id = self.get_ident_id(&name.clone());
         let info = MethodInfo::BuiltinFunc { name, func };
-        self.add_method(id, info);
+        self.add_toplevel_method(id, info);
     }
 
     pub fn get_ident_name(&mut self, id: IdentId) -> &String {
@@ -36,12 +38,12 @@ impl Globals {
         self.ident_table.get_ident_id(name)
     }
 
-    pub fn add_method(&mut self, id: IdentId, info: MethodInfo) {
-        self.method_table.insert(id, info);
+    pub fn add_toplevel_method(&mut self, id: IdentId, info: MethodInfo) {
+        self.toplevel_method.insert(id, info);
     }
 
-    pub fn get_method(&self, id: IdentId) -> Option<&MethodInfo> {
-        self.method_table.get(&id)
+    pub fn get_toplevel_method(&self, id: IdentId) -> Option<&MethodInfo> {
+        self.toplevel_method.get(&id)
     }
 
     pub fn new_classref(&mut self) -> ClassRef {
@@ -73,5 +75,13 @@ impl Globals {
         let class_info = self.class_table.get(class_id);
         let class_name = class_info.name.clone();
         self.instance_table.new_instance(class_id, class_name)
+    }
+
+    pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
+        self.method_table.add_method(info)
+    }
+
+    pub fn get_method_info(&self, method: MethodRef) -> &MethodInfo {
+        self.method_table.get_method(method)
     }
 }

@@ -1,7 +1,8 @@
-use super::codegen::{ISeq, MethodInfo, MethodTable};
+use super::codegen::ISeq;
 use super::value::Value;
 use crate::parser::LvarCollector;
 use crate::util::*;
+use crate::vm::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
