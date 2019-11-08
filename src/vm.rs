@@ -92,7 +92,7 @@ impl VM {
     ) -> Self {
         let mut globals = Globals::new(ident_table);
         let main_id = globals.get_ident_id(&"main".to_string());
-        let main_class = globals.add_class(main_id, LvarCollector::new());
+        let main_class = globals.add_class(main_id);
         let vm = VM {
             globals,
             const_table: HashMap::new(),
@@ -411,14 +411,17 @@ impl VM {
                 }
                 Inst::DEF_CLASS => {
                     let classref: ClassRef = ClassRef::from(read32(iseq, pc + 1));
+                    let def_method_id = read32(iseq, pc + 5) as usize;
                     let info = self.globals.get_class_info(classref).clone();
                     let val = Value::Class(classref);
                     self.const_table.insert(info.id, val);
-                    self.context_stack
-                        .push(Context::new(info.lvar.table.len(), Value::Class(classref)));
-                    let _ = self.vm_run(&info.iseq)?;
+                    self.context_stack.push(Context::new(
+                        info.iseq_info[def_method_id].lvar.table.len(),
+                        Value::Class(classref),
+                    ));
+                    let _ = self.vm_run(&info.iseq_info[def_method_id].iseq)?;
                     self.context_stack.pop().unwrap();
-                    pc += 5;
+                    pc += 9;
                 }
                 Inst::TO_S => {
                     let val = self.exec_stack.pop().unwrap().unpack();

@@ -20,11 +20,22 @@ impl Into<u32> for ClassRef {
 }
 
 #[derive(Debug, Clone)]
+pub struct ISeqInfo {
+    pub iseq: ISeq,
+    pub lvar: LvarCollector,
+}
+
+impl ISeqInfo {
+    pub fn new(iseq: ISeq, lvar: LvarCollector) -> Self {
+        ISeqInfo { iseq, lvar }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ClassInfo {
     pub id: IdentId,
     pub name: String,
-    pub iseq: ISeq,
-    pub lvar: LvarCollector,
+    pub iseq_info: Vec<ISeqInfo>,
     pub instance_var: HashMap<IdentId, Value>,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
@@ -32,12 +43,11 @@ pub struct ClassInfo {
 }
 
 impl ClassInfo {
-    pub fn new(id: IdentId, name: String, iseq: ISeq, lvar: LvarCollector) -> Self {
+    pub fn new(id: IdentId, name: String) -> Self {
         ClassInfo {
             id,
             name,
-            iseq,
-            lvar,
+            iseq_info: vec![],
             instance_var: HashMap::new(),
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
@@ -87,11 +97,11 @@ impl GlobalClassTable {
         new_class
     }
 
-    pub fn add_class(&mut self, id: IdentId, name: String, lvar: LvarCollector) -> ClassRef {
+    pub fn add_class(&mut self, id: IdentId, name: String) -> ClassRef {
         let classref = ClassRef(self.class_id);
         self.class_id += 1;
 
-        let info = ClassInfo::new(id, name, vec![], lvar);
+        let info = ClassInfo::new(id, name);
         self.table.insert(classref, info);
         classref
     }

@@ -521,7 +521,7 @@ impl Codegen {
                 self.gen_push_nil(iseq);
             }
             NodeKind::ClassDef(id, node, lvar) => {
-                let classref = globals.add_class(*id, lvar.clone());
+                let classref = globals.add_class(*id);
                 self.class_stack.push(classref);
 
                 let mut class_iseq = ISeq::new();
@@ -538,12 +538,14 @@ impl Codegen {
                 };
 
                 let class_info = globals.get_mut_class_info(classref);
-                class_info.iseq = class_iseq;
+                let def_method_id = class_info.iseq_info.len();
+                class_info.iseq_info.push(ISeqInfo::new(class_iseq, lvar.clone()));
 
                 class_info.add_class_method(id_for_new, new_func_info);
 
                 iseq.push(Inst::DEF_CLASS);
                 self.push32(iseq, classref.into());
+                self.push32(iseq, def_method_id as u32);
                 self.gen_push_nil(iseq);
 
                 self.class_stack.pop().unwrap();
