@@ -1,5 +1,4 @@
 use super::codegen::ISeq;
-use super::value::Value;
 use crate::parser::LvarCollector;
 use crate::util::*;
 use crate::vm::*;
@@ -36,8 +35,7 @@ impl ISeqInfo {
 pub struct ClassInfo {
     pub id: IdentId,
     pub name: String,
-    pub iseq_info: Vec<ISeqInfo>,
-    pub instance_var: HashMap<IdentId, Value>,
+    pub instance_var: ValueTable,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub subclass: HashMap<IdentId, ClassRef>,
@@ -48,7 +46,6 @@ impl ClassInfo {
         ClassInfo {
             id,
             name,
-            iseq_info: vec![],
             instance_var: HashMap::new(),
             instance_method: HashMap::new(),
             class_method: HashMap::new(),

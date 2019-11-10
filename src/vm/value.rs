@@ -15,7 +15,7 @@ pub enum Value {
     String(String),
     Class(ClassRef),
     Instance(InstanceRef),
-    Range(Box<Value>, Box<Value>, bool),
+    Range(PackedValue, PackedValue, bool),
     Char(u8),
 }
 
@@ -119,6 +119,14 @@ impl PackedValue {
 
     pub fn false_val() -> Self {
         PackedValue(FALSE_VALUE)
+    }
+
+    pub fn bool(b: bool) -> Self {
+        if b {
+            PackedValue(TRUE_VALUE)
+        } else {
+            PackedValue(FALSE_VALUE)
+        }
     }
 
     pub fn fixnum(num: i64) -> Self {
@@ -235,8 +243,8 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let from = Box::new(Value::FixNum(7));
-        let to = Box::new(Value::FixNum(36));
+        let from = Value::FixNum(7).pack();
+        let to = Value::FixNum(36).pack();
         let expect = Value::Range(from, to, false);
         let got = expect.clone().pack().unpack();
         if expect != got {

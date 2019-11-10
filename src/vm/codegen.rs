@@ -14,7 +14,7 @@ pub struct Codegen {
     pub iseq_info: Vec<(ISeqPos, Loc)>,
 }
 
-pub type BuiltinFunc = fn(vm: &mut VM, receiver: Value, args: Vec<Value>) -> VMResult;
+pub type BuiltinFunc = fn(vm: &mut VM, receiver: Value, args: Vec<PackedValue>) -> VMResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EscapeKind {
@@ -484,6 +484,13 @@ impl Codegen {
                 let info = self.gen_method_iseq(globals, params, body, lvar)?;
                 let methodref = globals.add_method(info);
                 iseq.push(Inst::DEF_METHOD);
+                self.push32(iseq, (*id).into());
+                self.push32(iseq, methodref.into());
+            }
+            NodeKind::ClassMethodDef(id, params, body, lvar) => {
+                let info = self.gen_method_iseq(globals, params, body, lvar)?;
+                let methodref = globals.add_method(info);
+                iseq.push(Inst::DEF_CLASS_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
             }

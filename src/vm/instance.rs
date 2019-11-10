@@ -1,13 +1,12 @@
 use super::class::ClassRef;
-use super::value::Value;
-use crate::util::*;
+use crate::vm::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InstanceInfo {
     pub classref: ClassRef,
     pub class_name: String,
-    pub instance_var: HashMap<IdentId, Value>,
+    pub instance_var: ValueTable,
 }
 
 impl InstanceInfo {
@@ -21,14 +20,6 @@ impl InstanceInfo {
 
     pub fn get_classref(&self) -> ClassRef {
         self.classref
-    }
-
-    pub fn get_instance_var(&self, id: IdentId) -> Option<&Value> {
-        self.instance_var.get(&id)
-    }
-
-    pub fn get_mut_instance_var(&mut self, id: IdentId) -> Option<&mut Value> {
-        self.instance_var.get_mut(&id)
     }
 }
 

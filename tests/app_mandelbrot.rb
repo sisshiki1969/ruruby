@@ -4,11 +4,25 @@
 #  contributed by Karl von Laudermann
 #  modified by Jeremy Echols
 
-class Complex
-  def init(r,i)
-    @r=r
-    @i=i
+class Complexe
+  def initialize
   end
+  def init(r,i)
+    @r=r; @i=i; self
+  end
+  def r; @r; end
+  def i; @i; end
+  def sq
+    x = Complexe.new
+    x.init(@r*@r - @i*@i, 2*@r*@i)
+    x
+  end
+  def add(c)
+    x = Complexe.new
+    x.init(@r + c.r, @i + c.i)
+    x
+  end
+  def abs2; @r*@r + @i*@i; end
 end
 
 size = 800 # ARGV[0].to_i
@@ -26,21 +40,16 @@ count_size = size - 1               # Precomputed size for easy for..in looping
 # For..in loops are faster than .upto, .downto, .times, etc.
 for y in 0..count_size
   for x in 0..count_size
-    zr = 0.0
-    zi = 0.0
-    cr = (2.0*x/size)-1.5
-    ci = (2.0*y/size)-1.0
+    z = Complexe.new
+    z.init(0.0, 0.0)
+    c = Complexe.new
+    c.init((2.0*x/size)-1.5, (2.0*y/size)-1.0)
     escape = false
-    #puts(zr, zi, cr, ci)
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
     for dummy in 0..ITER
-      tr = zr*zr - zi*zi + cr
-      ti = 2*zr*zi + ci
-      zr = tr
-      zi = ti
-
-      if (zr*zr+zi*zi) > LIMIT_SQUARED
+      z = z.sq.add(c)
+      if z.abs2 > LIMIT_SQUARED
         escape = true
         break
       end
