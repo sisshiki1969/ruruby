@@ -27,7 +27,8 @@ impl Globals {
         let name = name.into();
         let id = self.get_ident_id(&name.clone());
         let info = MethodInfo::BuiltinFunc { name, func };
-        self.add_toplevel_method(id, info);
+        let methodref = self.add_method(info);
+        self.add_toplevel_method(id, methodref);
     }
 
     pub fn get_ident_name(&mut self, id: IdentId) -> &String {
@@ -38,11 +39,11 @@ impl Globals {
         self.ident_table.get_ident_id(name)
     }
 
-    pub fn add_toplevel_method(&mut self, id: IdentId, info: MethodInfo) {
+    pub fn add_toplevel_method(&mut self, id: IdentId, info: MethodRef) {
         self.toplevel_method.insert(id, info);
     }
 
-    pub fn get_toplevel_method(&self, id: IdentId) -> Option<&MethodInfo> {
+    pub fn get_toplevel_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.toplevel_method.get(&id)
     }
 
@@ -83,5 +84,9 @@ impl Globals {
 
     pub fn get_method_info(&self, method: MethodRef) -> &MethodInfo {
         self.method_table.get_method(method)
+    }
+
+    pub fn get_mut_method_info(&mut self, method: MethodRef) -> &mut MethodInfo {
+        self.method_table.get_mut_method(method)
     }
 }

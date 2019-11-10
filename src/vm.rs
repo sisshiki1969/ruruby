@@ -127,15 +127,15 @@ impl VM {
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        Ok(val)
+        Ok(val.unpack())
     }
 
-    pub fn vm_run(&mut self, iseq: &ISeq) -> VMResult {
+    pub fn vm_run(&mut self, iseq: &ISeq) -> Result<PackedValue, RubyError> {
         let mut pc = 0;
         loop {
             match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
-                    Some(v) => return Ok(v.unpack()),
+                    Some(v) => return Ok(v),
                     None => panic!("Illegal exec stack length."),
                 },
                 Inst::PUSH_NIL => {
@@ -373,7 +373,7 @@ impl VM {
                     //println!("RECV {:?}", receiver);
                     let method_id = read_id(iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
-                    let info = match receiver.unpack() {
+                    let methodref = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => {
                             match self.globals.get_toplevel_method(method_id) {
                                 Some(info) => info,
@@ -392,7 +392,7 @@ impl VM {
                     for _ in 0..args_num {
                         args.push(self.exec_stack.pop().unwrap());
                     }
-                    let val = self.eval_send(&info, receiver, args)?;
+                    let val = self.eval_send(&methodref, receiver, args)?;
                     self.exec_stack.push(val);
                     pc += 9;
                 }
@@ -415,28 +415,30 @@ impl VM {
                     self.class_stack.pop().unwrap();
 
                     let id_for_new = self.globals.get_ident_id(&"new".to_string());
-                    let class_info = self.globals.get_mut_class_info(classref);
+
                     let new_func_info = MethodInfo::BuiltinFunc {
                         name: "new".to_string(),
                         func: Builtin::builtin_new,
                     };
-                    class_info.add_class_method(id_for_new, new_func_info);
+                    let new_func_ref = self.globals.add_method(new_func_info);
+                    let class_info = self.globals.get_mut_class_info(classref);
+                    class_info.add_class_method(id_for_new, new_func_ref);
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
                 }
                 Inst::DEF_METHOD => {
                     let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
-                    let info = self.globals.get_method_info(methodref).clone();
+                    //let info = self.globals.get_method_info(methodref).clone();
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered to the global method table.
-                        self.globals.add_toplevel_method(id, info);
+                        self.globals.add_toplevel_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a instance method of the class.
                         let classref = self.class_stack.last().unwrap();
                         self.globals
                             .get_mut_class_info(*classref)
-                            .add_instance_method(id, info);
+                            .add_instance_method(id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
@@ -444,16 +446,15 @@ impl VM {
                 Inst::DEF_CLASS_METHOD => {
                     let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
-                    let info = self.globals.get_method_info(methodref).clone();
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered to the global method table.
-                        self.globals.add_toplevel_method(id, info);
+                        self.globals.add_toplevel_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a class method of the class.
                         let classref = self.class_stack.last().unwrap();
                         self.globals
                             .get_mut_class_info(*classref)
-                            .add_class_method(id, info);
+                            .add_class_method(id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
@@ -702,6 +703,7 @@ impl VM {
             }
         }
         match (lhs.unpack(), rhs.unpack()) {
+            (Value::Nil, Value::Nil) => Ok(PackedValue::false_val()),
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
@@ -775,10 +777,7 @@ impl VM {
 
 impl VM {
     pub fn val_to_bool(&self, val: PackedValue) -> bool {
-        match val.unpack() {
-            Value::Nil | Value::Bool(false) => false,
-            _ => true,
-        }
+        !val.is_nil() && !val.is_false_val()
     }
 
     pub fn val_to_s(&mut self, val: PackedValue) -> String {
@@ -813,10 +812,11 @@ impl VM {
 
     pub fn eval_send(
         &mut self,
-        info: &MethodInfo,
+        methodref: &MethodRef,
         receiver: PackedValue,
         args: Vec<PackedValue>,
     ) -> Result<PackedValue, RubyError> {
+        let info = self.globals.get_method_info(*methodref);
         match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 let val = func(self, receiver, args)?.pack();
@@ -838,7 +838,7 @@ impl VM {
                     };
                 }
 
-                let res_value = self.vm_run(&func_iseq)?.pack();
+                let res_value = self.vm_run(&func_iseq)?;
                 self.context_stack.pop().unwrap();
                 Ok(res_value)
             }
@@ -851,9 +851,9 @@ impl VM {
         &self,
         class: ClassRef,
         method: IdentId,
-    ) -> Result<&MethodInfo, RubyError> {
+    ) -> Result<&MethodRef, RubyError> {
         match self.globals.get_class_info(class).get_class_method(method) {
-            Some(info) => Ok(info),
+            Some(methodref) => Ok(methodref),
             None => match self.globals.get_toplevel_method(method) {
                 None => return Err(self.error_nomethod("No class method found.")),
                 Some(info) => Ok(info),
@@ -865,14 +865,14 @@ impl VM {
         &self,
         instance: InstanceRef,
         method: IdentId,
-    ) -> Result<&MethodInfo, RubyError> {
+    ) -> Result<&MethodRef, RubyError> {
         let classref = self.globals.get_instance_info(instance).get_classref();
         match self
             .globals
             .get_class_info(classref)
             .get_instance_method(method)
         {
-            Some(info) => Ok(info),
+            Some(methodref) => Ok(methodref),
             None => match self.globals.get_toplevel_method(method) {
                 None => return Err(self.error_nomethod("No instance method found.")),
                 Some(info) => Ok(info),

@@ -84,10 +84,10 @@ impl Builtin {
                     .get_class_info(class_ref)
                     .get_instance_method(init)
                 {
-                    Some(info) => {
-                        let info = info.clone();
+                    Some(methodref) => {
+                        let methodref = methodref.clone();
                         let receiver = Value::Instance(instance).pack();
-                        let _ = vm.eval_send(&info, receiver, args)?;
+                        let _ = vm.eval_send(&methodref, receiver, args)?;
                     }
                     None => {}
                 };

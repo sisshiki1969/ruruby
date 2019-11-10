@@ -156,6 +156,32 @@ fn op2() {
 }
 
 #[test]
+fn op3() {
+    let program = "
+        assert(true, nil==nil)
+        assert(true, 4.0==4)
+        assert(true, 4==4.0)
+        assert(true, 12345678==12345678)
+        assert(true, 1234.5678==1234.5678)
+        ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn op4() {
+    let program = "
+        assert(false, nil!=nil)
+        assert(false, 4.0!=4)
+        assert(false, 4!=4.0)
+        assert(false, 12345678!=12345678)
+        assert(false, 1234.5678!=1234.5678)
+        ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn op9() {
     let program = "4!=4 || 1==1 && 2==3";
     let expected = Value::Bool(false);

@@ -53,19 +53,19 @@ impl ClassInfo {
         }
     }
 
-    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodInfo> {
+    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.class_method.get(&id)
     }
 
-    pub fn add_class_method(&mut self, id: IdentId, info: MethodInfo) -> Option<MethodInfo> {
+    pub fn add_class_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
         self.class_method.insert(id, info)
     }
 
-    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodInfo> {
+    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.instance_method.get(&id)
     }
 
-    pub fn add_instance_method(&mut self, id: IdentId, info: MethodInfo) -> Option<MethodInfo> {
+    pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
         self.instance_method.insert(id, info)
     }
 }

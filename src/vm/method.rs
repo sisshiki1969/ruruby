@@ -2,7 +2,7 @@ use crate::vm::*;
 
 pub type BuiltinFunc = fn(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult;
 
-pub type MethodTable = HashMap<IdentId, MethodInfo>;
+pub type MethodTable = HashMap<IdentId, MethodRef>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MethodRef(usize);

@@ -32,7 +32,12 @@ impl Value {
     }
 
     fn pack_fixnum(num: i64) -> u64 {
-        ((num << 1) as u64) | 0b1
+        let top = ((num as u64) >> 62) & 0b11;
+        if top == 0 || top == 3 {
+            ((num << 1) as u64) | 0b1
+        } else {
+            Value::pack_as_boxed(Value::FixNum(num))
+        }
     }
 
     fn pack_flonum(num: f64) -> u64 {
@@ -42,14 +47,12 @@ impl Value {
         let unum: u64 = unsafe { std::mem::transmute(num) };
         let exp = (unum >> 60) & 0b111;
         //eprintln!("before   pack:{:064b}", unum);
-        let res = if exp == 4 || exp == 3 {
+        if exp == 4 || exp == 3 {
             ((unum & !(0b0110u64 << 60)) | (0b0100u64 << 60)).rotate_left(3)
         } else {
             //eprintln!("{}", num);
             Value::pack_as_boxed(Value::FloatNum(num))
-        };
-        //eprintln!("after    pack:{:064b}", res);
-        res
+        }
     }
     fn pack_as_boxed(val: Value) -> u64 {
         Box::into_raw(Box::new(val)) as u64
@@ -113,12 +116,24 @@ impl PackedValue {
         PackedValue(NIL_VALUE)
     }
 
+    pub fn is_nil(&self) -> bool {
+        self.0 == NIL_VALUE
+    }
+
     pub fn true_val() -> Self {
         PackedValue(TRUE_VALUE)
     }
 
+    pub fn is_true_val(&self) -> bool {
+        self.0 == TRUE_VALUE
+    }
+
     pub fn false_val() -> Self {
         PackedValue(FALSE_VALUE)
+    }
+
+    pub fn is_false_val(&self) -> bool {
+        self.0 == FALSE_VALUE
     }
 
     pub fn bool(b: bool) -> Self {
@@ -181,6 +196,24 @@ mod tests {
     #[test]
     fn pack_integer2() {
         let expect = Value::FixNum(-58993);
+        let got = expect.clone().pack().unpack();
+        if expect != got {
+            panic!("Expect:{:?} Got:{:?}", expect, got)
+        }
+    }
+
+    #[test]
+    fn pack_integer3() {
+        let expect = Value::FixNum(0x8000_0000_0000_0000 as u64 as i64);
+        let got = expect.clone().pack().unpack();
+        if expect != got {
+            panic!("Expect:{:?} Got:{:?}", expect, got)
+        }
+    }
+
+    #[test]
+    fn pack_integer4() {
+        let expect = Value::FixNum(0x4000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
