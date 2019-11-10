@@ -37,12 +37,12 @@ pub struct VM {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub self_value: Value,
+    pub self_value: PackedValue,
     pub lvar_scope: Vec<PackedValue>,
 }
 
 impl Context {
-    pub fn new(lvar_num: usize, self_value: Value) -> Self {
+    pub fn new(lvar_num: usize, self_value: PackedValue) -> Self {
         Context {
             self_value,
             lvar_scope: vec![PackedValue::nil(); lvar_num],
@@ -104,7 +104,7 @@ impl VM {
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
             class_stack: vec![],
-            context_stack: vec![Context::new(64, Value::Class(main_class))],
+            context_stack: vec![Context::new(64, Value::Class(main_class).pack())],
             exec_stack: vec![],
         };
         vm
@@ -152,7 +152,7 @@ impl VM {
                 }
                 Inst::PUSH_SELF => {
                     let self_value = self.context_stack.last().unwrap().self_value.clone();
-                    self.exec_stack.push(self_value.pack());
+                    self.exec_stack.push(self_value);
                     pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
@@ -309,7 +309,7 @@ impl VM {
                 }
                 Inst::SET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, pc);
-                    let self_var = &self.context_stack.last().unwrap().self_value;
+                    let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let new_val = self.exec_stack.last().unwrap();
                     match self_var {
                         Value::Instance(id) => self
@@ -328,7 +328,7 @@ impl VM {
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, pc);
-                    let self_var = &self.context_stack.last().unwrap().self_value;
+                    let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let val = match self_var {
                         Value::Instance(id) => {
                             let info = self.globals.get_instance_info(*id);
@@ -369,50 +369,31 @@ impl VM {
                     }
                 }
                 Inst::SEND => {
-                    let receiver = self.exec_stack.pop().unwrap().unpack();
+                    let receiver = self.exec_stack.pop().unwrap();
                     //println!("RECV {:?}", receiver);
                     let method_id = read_id(iseq, pc);
                     //println!("METHOD {}", self.ident_table.get_name(method_id));
-                    let info = match receiver {
+                    let info = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => {
                             match self.globals.get_toplevel_method(method_id) {
-                                Some(info) => info.clone(),
+                                Some(info) => info,
                                 None => return Err(self.error_unimplemented("method not defined.")),
                             }
                         }
-                        Value::Class(class) => self.get_class_method(class, method_id)?.clone(),
+                        Value::Class(class) => self.get_class_method(class, method_id)?,
                         Value::Instance(instance) => {
-                            self.get_instance_method(instance, method_id)?.clone()
+                            self.get_instance_method(instance, method_id)?
                         }
                         _ => unimplemented!(),
-                    };
+                    }
+                    .clone();
                     let args_num = read32(iseq, pc + 5);
                     let mut args = vec![];
                     for _ in 0..args_num {
                         args.push(self.exec_stack.pop().unwrap());
                     }
-                    match info {
-                        MethodInfo::BuiltinFunc { func, .. } => {
-                            let val = func(self, receiver, args)?.pack();
-                            self.exec_stack.push(val);
-                        }
-                        MethodInfo::RubyFunc {
-                            params,
-                            iseq,
-                            lvars,
-                        } => {
-                            let func_iseq = iseq.clone();
-                            self.context_stack
-                                .push(Context::new(lvars, receiver.clone()));
-                            for (i, id) in params.clone().iter().enumerate() {
-                                *self.lvar_mut(*id) = args[i].clone();
-                            }
-
-                            let res_value = self.vm_run(&func_iseq)?.pack();
-                            self.context_stack.pop().unwrap();
-                            self.exec_stack.push(res_value);
-                        }
-                    }
+                    let val = self.eval_send(&info, receiver, args)?;
+                    self.exec_stack.push(val);
                     pc += 9;
                 }
                 Inst::DEF_CLASS => {
@@ -428,7 +409,7 @@ impl VM {
                         MethodInfo::BuiltinFunc { .. } => unreachable!(),
                     };
                     self.class_stack.push(classref);
-                    self.context_stack.push(Context::new(*lvars, val.unpack()));
+                    self.context_stack.push(Context::new(*lvars, val));
                     let _ = self.vm_run(iseq)?;
                     self.context_stack.pop().unwrap();
                     self.class_stack.pop().unwrap();
@@ -828,6 +809,40 @@ impl VM {
 impl VM {
     pub fn init_builtin(&mut self) {
         builtin::Builtin::init_builtin(&mut self.globals);
+    }
+
+    pub fn eval_send(
+        &mut self,
+        info: &MethodInfo,
+        receiver: PackedValue,
+        args: Vec<PackedValue>,
+    ) -> Result<PackedValue, RubyError> {
+        match info {
+            MethodInfo::BuiltinFunc { func, .. } => {
+                let val = func(self, receiver, args)?.pack();
+                Ok(val)
+            }
+            MethodInfo::RubyFunc {
+                params,
+                iseq,
+                lvars,
+            } => {
+                let func_iseq = iseq.clone();
+                self.context_stack.push(Context::new(*lvars, receiver));
+                let arg_len = args.len();
+                for (i, id) in params.clone().iter().enumerate() {
+                    *self.lvar_mut(*id) = if i < arg_len {
+                        args[i]
+                    } else {
+                        PackedValue::nil()
+                    };
+                }
+
+                let res_value = self.vm_run(&func_iseq)?.pack();
+                self.context_stack.pop().unwrap();
+                Ok(res_value)
+            }
+        }
     }
 }
 

@@ -12,15 +12,23 @@ impl Builtin {
         globals.add_builtin_method("assert", builtin_assert);
 
         /// Built-in function "chr".
-        pub fn builtin_chr(_vm: &mut VM, receiver: Value, _args: Vec<PackedValue>) -> VMResult {
-            match receiver {
+        pub fn builtin_chr(
+            _vm: &mut VM,
+            receiver: PackedValue,
+            _args: Vec<PackedValue>,
+        ) -> VMResult {
+            match receiver.unpack() {
                 Value::FixNum(i) => Ok(Value::Char(i as u8)),
                 _ => unimplemented!(),
             }
         }
 
         /// Built-in function "puts".
-        pub fn builtin_puts(vm: &mut VM, _receiver: Value, args: Vec<PackedValue>) -> VMResult {
+        pub fn builtin_puts(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: Vec<PackedValue>,
+        ) -> VMResult {
             for arg in args {
                 println!("{}", vm.val_to_s(arg));
             }
@@ -28,7 +36,11 @@ impl Builtin {
         }
 
         /// Built-in function "print".
-        pub fn builtin_print(vm: &mut VM, _receiver: Value, args: Vec<PackedValue>) -> VMResult {
+        pub fn builtin_print(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: Vec<PackedValue>,
+        ) -> VMResult {
             for arg in args {
                 if let Value::Char(ch) = arg.unpack() {
                     let v = [ch];
@@ -42,7 +54,11 @@ impl Builtin {
         }
 
         /// Built-in function "assert".
-        pub fn builtin_assert(vm: &mut VM, _receiver: Value, args: Vec<PackedValue>) -> VMResult {
+        pub fn builtin_assert(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: Vec<PackedValue>,
+        ) -> VMResult {
             if args.len() != 2 {
                 panic!("Invalid number of arguments.");
             }
@@ -58,10 +74,23 @@ impl Builtin {
         }
     }
     /// Built-in function "new".
-    pub fn builtin_new(vm: &mut VM, receiver: Value, _args: Vec<PackedValue>) -> VMResult {
-        match receiver {
+    pub fn builtin_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+        match receiver.clone().unpack() {
             Value::Class(class_ref) => {
                 let instance = vm.globals.new_instance(class_ref);
+                let init = vm.globals.get_ident_id(&"initialize".to_string());
+                match vm
+                    .globals
+                    .get_class_info(class_ref)
+                    .get_instance_method(init)
+                {
+                    Some(info) => {
+                        let info = info.clone();
+                        let receiver = Value::Instance(instance).pack();
+                        let _ = vm.eval_send(&info, receiver, args)?;
+                    }
+                    None => {}
+                };
                 Ok(Value::Instance(instance))
             }
             _ => Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver))),

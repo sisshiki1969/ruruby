@@ -394,3 +394,30 @@ fn class2() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+
+#[test]
+fn initialize() {
+    let program = "
+    class Vec
+        def initialize(x,y)
+            @x=x;@y=y
+        end
+        def add(v)
+            Vec.new(@x + v.x, @y + v.y)
+        end
+        def x; @x; end
+        def y; @y; end
+    end
+
+    v = Vec.new
+    assert(nil, v.x)
+    assert(nil, v.y)
+    v1 = Vec.new(3, 5.9)
+    assert(3, v1.x)
+    assert(5.9, v1.y)
+    v2 = v1.add(Vec.new(4.7, 8))
+    assert(7.7, v2.x)
+    assert(13.9, v2.y)";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}

@@ -5,22 +5,16 @@
 #  modified by Jeremy Echols
 
 class Complexe
-  def initialize
-  end
-  def init(r,i)
-    @r=r; @i=i; self
+  def initialize(r,i)
+    @r=r; @i=i;
   end
   def r; @r; end
   def i; @i; end
   def sq
-    x = Complexe.new
-    x.init(@r*@r - @i*@i, 2*@r*@i)
-    x
+    Complexe.new(@r*@r - @i*@i, 2*@r*@i)
   end
   def add(c)
-    x = Complexe.new
-    x.init(@r + c.r, @i + c.i)
-    x
+    Complexe.new(@r + c.r, @i + c.i)
   end
   def abs2; @r*@r + @i*@i; end
 end
@@ -40,10 +34,8 @@ count_size = size - 1               # Precomputed size for easy for..in looping
 # For..in loops are faster than .upto, .downto, .times, etc.
 for y in 0..count_size
   for x in 0..count_size
-    z = Complexe.new
-    z.init(0.0, 0.0)
-    c = Complexe.new
-    c.init((2.0*x/size)-1.5, (2.0*y/size)-1.0)
+    z = Complexe.new(0.0, 0.0)
+    c = Complexe.new((2.0*x/size)-1.5, (2.0*y/size)-1.0)
     escape = false
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C

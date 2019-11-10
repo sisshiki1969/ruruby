@@ -1,4 +1,3 @@
-use super::value::Value;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind};
 use crate::vm::*;
@@ -13,8 +12,6 @@ pub struct Codegen {
     pub loc: Loc,
     pub iseq_info: Vec<(ISeqPos, Loc)>,
 }
-
-pub type BuiltinFunc = fn(vm: &mut VM, receiver: Value, args: Vec<PackedValue>) -> VMResult;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EscapeKind {
