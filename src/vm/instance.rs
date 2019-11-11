@@ -32,6 +32,18 @@ impl std::hash::Hash for InstanceRef {
     }
 }
 
+impl Into<u32> for InstanceRef {
+    fn into(self) -> u32 {
+        self.0 as u32
+    }
+}
+
+impl From<u32> for InstanceRef {
+    fn from(x: u32) -> Self {
+        InstanceRef(x as usize)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GlobalInstanceTable {
     table: HashMap<InstanceRef, InstanceInfo>,

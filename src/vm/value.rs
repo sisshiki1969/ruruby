@@ -27,6 +27,8 @@ impl Value {
             Value::Bool(_) => PackedValue::false_val(),
             Value::FixNum(num) => PackedValue::fixnum(num),
             Value::FloatNum(num) => PackedValue::flonum(num),
+            Value::Class(r) => PackedValue::class(r),
+            Value::Instance(r) => PackedValue::instance(r),
             _ => PackedValue(Value::pack_as_boxed(self)),
         }
     }
@@ -54,6 +56,17 @@ impl Value {
             Value::pack_as_boxed(Value::FloatNum(num))
         }
     }
+
+    fn pack_class(classref: ClassRef) -> u64 {
+        let class: u32 = classref.into();
+        (class as u64) << 32 | 0x0C
+    }
+
+    fn pack_instance(instanceref: InstanceRef) -> u64 {
+        let instance: u32 = instanceref.into();
+        (instance as u64) << 32 | 0x1C
+    }
+
     fn pack_as_boxed(val: Value) -> u64 {
         Box::into_raw(Box::new(val)) as u64
     }
@@ -75,6 +88,10 @@ impl PackedValue {
             Value::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
             Value::FloatNum(self.as_packed_flonum())
+        } else if self.is_packed_class() {
+            Value::Class(self.as_packed_class())
+        } else if self.is_packed_instance() {
+            Value::Instance(self.as_packed_instance())
         } else if self.0 == NIL_VALUE {
             Value::Nil
         } else if self.0 == TRUE_VALUE {
@@ -92,6 +109,26 @@ impl PackedValue {
 
     pub fn is_packed_num(&self) -> bool {
         self.0 & 0b11 != 0
+    }
+
+    pub fn is_nil(&self) -> bool {
+        self.0 == NIL_VALUE
+    }
+
+    pub fn is_true_val(&self) -> bool {
+        self.0 == TRUE_VALUE
+    }
+
+    pub fn is_false_val(&self) -> bool {
+        self.0 == FALSE_VALUE
+    }
+
+    pub fn is_packed_class(&self) -> bool {
+        self.0 & 0xff == 0x0c
+    }
+
+    pub fn is_packed_instance(&self) -> bool {
+        self.0 & 0xff == 0x1c
     }
 
     pub fn as_packed_fixnum(&self) -> i64 {
@@ -112,28 +149,24 @@ impl PackedValue {
         unsafe { std::mem::transmute(num) }
     }
 
-    pub fn nil() -> Self {
-        PackedValue(NIL_VALUE)
+    pub fn as_packed_class(&self) -> ClassRef {
+        ClassRef::from((self.0 >> 32) as u32)
     }
 
-    pub fn is_nil(&self) -> bool {
-        self.0 == NIL_VALUE
+    pub fn as_packed_instance(&self) -> InstanceRef {
+        InstanceRef::from((self.0 >> 32) as u32)
+    }
+
+    pub fn nil() -> Self {
+        PackedValue(NIL_VALUE)
     }
 
     pub fn true_val() -> Self {
         PackedValue(TRUE_VALUE)
     }
 
-    pub fn is_true_val(&self) -> bool {
-        self.0 == TRUE_VALUE
-    }
-
     pub fn false_val() -> Self {
         PackedValue(FALSE_VALUE)
-    }
-
-    pub fn is_false_val(&self) -> bool {
-        self.0 == FALSE_VALUE
     }
 
     pub fn bool(b: bool) -> Self {
@@ -151,11 +184,19 @@ impl PackedValue {
     pub fn flonum(num: f64) -> Self {
         PackedValue(Value::pack_flonum(num))
     }
+
+    pub fn class(classref: ClassRef) -> Self {
+        PackedValue(Value::pack_class(classref))
+    }
+
+    pub fn instance(instanceref: InstanceRef) -> Self {
+        PackedValue(Value::pack_instance(instanceref))
+    }
 }
 
 #[allow(unused_imports)]
 mod tests {
-    use super::Value;
+    use crate::vm::*;
 
     #[test]
     fn pack_bool1() {
@@ -279,6 +320,24 @@ mod tests {
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
         let expect = Value::Range(from, to, false);
+        let got = expect.clone().pack().unpack();
+        if expect != got {
+            panic!("Expect:{:?} Got:{:?}", expect, got)
+        }
+    }
+
+    #[test]
+    fn pack_class() {
+        let expect = Value::Class(ClassRef::from(17000));
+        let got = expect.clone().pack().unpack();
+        if expect != got {
+            panic!("Expect:{:?} Got:{:?}", expect, got)
+        }
+    }
+
+    #[test]
+    fn pack_instance() {
+        let expect = Value::Instance(InstanceRef::from(25000));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

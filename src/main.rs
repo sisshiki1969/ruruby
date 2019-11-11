@@ -158,6 +158,10 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
 }
 
 fn repl_vm() {
+    println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
+    println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
+    println!("Value: {}", std::mem::size_of::<Value>());
+
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();

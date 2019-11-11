@@ -19,6 +19,12 @@ impl Into<u32> for ClassRef {
     }
 }
 
+impl From<u32> for ClassRef {
+    fn from(num: u32) -> Self {
+        ClassRef(num as usize)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
     pub iseq: ISeq,
@@ -67,12 +73,6 @@ impl ClassInfo {
 
     pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
         self.instance_method.insert(id, info)
-    }
-}
-
-impl From<u32> for ClassRef {
-    fn from(num: u32) -> Self {
-        ClassRef(num as usize)
     }
 }
 
