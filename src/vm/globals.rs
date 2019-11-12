@@ -47,10 +47,6 @@ impl Globals {
         self.toplevel_method.get(&id)
     }
 
-    pub fn new_classref(&mut self) -> ClassRef {
-        self.class_table.new_classref()
-    }
-
     pub fn add_class(&mut self, id: IdentId) -> ClassRef {
         let name = self.get_ident_name(id).clone();
         self.class_table.add_class(id, name)

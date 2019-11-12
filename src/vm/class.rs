@@ -78,41 +78,31 @@ impl ClassInfo {
 
 #[derive(Debug, Clone)]
 pub struct GlobalClassTable {
-    table: HashMap<ClassRef, ClassInfo>,
+    table: Vec<ClassInfo>,
     class_id: usize,
 }
 
 impl GlobalClassTable {
     pub fn new() -> Self {
         GlobalClassTable {
-            table: HashMap::new(),
+            table: vec![],
             class_id: 0,
         }
-    }
-    pub fn new_classref(&mut self) -> ClassRef {
-        let new_class = ClassRef(self.class_id);
-        self.class_id += 1;
-        new_class
     }
 
     pub fn add_class(&mut self, id: IdentId, name: String) -> ClassRef {
         let classref = ClassRef(self.class_id);
         self.class_id += 1;
 
-        let info = ClassInfo::new(id, name);
-        self.table.insert(classref, info);
+        self.table.push(ClassInfo::new(id, name));
         classref
     }
 
     pub fn get(&self, class_ref: ClassRef) -> &ClassInfo {
-        self.table
-            .get(&class_ref)
-            .unwrap_or_else(|| panic!("GlobalClassTable#get(): ClassRef is not valid."))
+        &self.table[class_ref.0]
     }
 
     pub fn get_mut(&mut self, class_ref: ClassRef) -> &mut ClassInfo {
-        self.table
-            .get_mut(&class_ref)
-            .unwrap_or_else(|| panic!("GlobalClassTable#get_mut(): ClassRef is not valid."))
+        &mut self.table[class_ref.0]
     }
 }

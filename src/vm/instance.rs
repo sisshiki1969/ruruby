@@ -46,14 +46,14 @@ impl From<u32> for InstanceRef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GlobalInstanceTable {
-    table: HashMap<InstanceRef, InstanceInfo>,
+    table: Vec<InstanceInfo>,
     instance_id: usize,
 }
 
 impl GlobalInstanceTable {
     pub fn new() -> Self {
         GlobalInstanceTable {
-            table: HashMap::new(),
+            table: vec![],
             instance_id: 0,
         }
     }
@@ -62,19 +62,15 @@ impl GlobalInstanceTable {
         let info = InstanceInfo::new(classref, class_name);
         let new_instance = InstanceRef(self.instance_id);
         self.instance_id += 1;
-        self.table.insert(new_instance, info);
+        self.table.push(info);
         new_instance
     }
 
     pub fn get(&self, instance_ref: InstanceRef) -> &InstanceInfo {
-        self.table
-            .get(&instance_ref)
-            .unwrap_or_else(|| panic!("GlobalInstanceTable#get(): InstanceRef is not valid."))
+        &self.table[instance_ref.0]
     }
 
     pub fn get_mut(&mut self, instance_ref: InstanceRef) -> &mut InstanceInfo {
-        self.table
-            .get_mut(&instance_ref)
-            .unwrap_or_else(|| panic!("GlobalInstanceTable#get_mut(): InstanceRef is not valid."))
+        &mut self.table[instance_ref.0]
     }
 }

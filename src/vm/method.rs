@@ -49,29 +49,29 @@ impl std::fmt::Debug for MethodInfo {
 
 #[derive(Debug, Clone)]
 pub struct GlobalMethodTable {
-    table: HashMap<MethodRef, MethodInfo>,
+    table: Vec<MethodInfo>,
     method_id: usize,
 }
 
 impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
-            table: HashMap::new(),
+            table: vec![],
             method_id: 0,
         }
     }
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
         let new_method = MethodRef(self.method_id);
         self.method_id += 1;
-        self.table.insert(new_method, info);
+        self.table.push(info);
         new_method
     }
 
     pub fn get_method(&self, method: MethodRef) -> &MethodInfo {
-        self.table.get(&method).unwrap()
+        &self.table[method.0]
     }
 
     pub fn get_mut_method(&mut self, method: MethodRef) -> &mut MethodInfo {
-        self.table.get_mut(&method).unwrap()
+        &mut self.table[method.0]
     }
 }
