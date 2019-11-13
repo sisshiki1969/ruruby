@@ -1,5 +1,3 @@
-use super::codegen::ISeq;
-use crate::parser::LvarCollector;
 use crate::util::*;
 use crate::vm::*;
 use std::collections::HashMap;
@@ -22,18 +20,6 @@ impl Into<u32> for ClassRef {
 impl From<u32> for ClassRef {
     fn from(num: u32) -> Self {
         ClassRef(num as usize)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ISeqInfo {
-    pub iseq: ISeq,
-    pub lvar: LvarCollector,
-}
-
-impl ISeqInfo {
-    pub fn new(iseq: ISeq, lvar: LvarCollector) -> Self {
-        ISeqInfo { iseq, lvar }
     }
 }
 

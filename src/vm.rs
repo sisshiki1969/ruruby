@@ -122,7 +122,7 @@ impl VM {
 
     pub fn run(&mut self, node: &Node) -> VMResult {
         let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
-        let val = self.vm_run(&iseq)?;
+        let val = self.vm_run(iseq)?;
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
@@ -130,7 +130,8 @@ impl VM {
         Ok(val.unpack())
     }
 
-    pub fn vm_run(&mut self, iseq: &ISeq) -> Result<PackedValue, RubyError> {
+    pub fn vm_run(&mut self, iseq: ISeqRef) -> Result<PackedValue, RubyError> {
+        let iseq = &*iseq;
         let mut pc = 0;
         loop {
             match iseq[pc] {
@@ -410,7 +411,7 @@ impl VM {
                     };
                     self.class_stack.push(classref);
                     self.context_stack.push(Context::new(*lvars, val));
-                    let _ = self.vm_run(iseq)?;
+                    let _ = self.vm_run(*iseq)?;
                     self.context_stack.pop().unwrap();
                     self.class_stack.pop().unwrap();
 
@@ -827,7 +828,7 @@ impl VM {
                 iseq,
                 lvars,
             } => {
-                let func_iseq = iseq.clone();
+                let iseq = iseq.clone();
                 self.context_stack.push(Context::new(*lvars, receiver));
                 let arg_len = args.len();
                 for (i, id) in params.clone().iter().enumerate() {
@@ -838,7 +839,7 @@ impl VM {
                     };
                 }
 
-                let res_value = self.vm_run(&func_iseq)?;
+                let res_value = self.vm_run(iseq)?;
                 self.context_stack.pop().unwrap();
                 Ok(res_value)
             }

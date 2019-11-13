@@ -29,7 +29,7 @@ impl From<u32> for MethodRef {
 pub enum MethodInfo {
     RubyFunc {
         params: Vec<LvarId>,
-        iseq: ISeq,
+        iseq: ISeqRef,
         lvars: usize,
     },
     BuiltinFunc {
@@ -44,6 +44,35 @@ impl std::fmt::Debug for MethodInfo {
             MethodInfo::RubyFunc { params, .. } => write!(f, "RubyFunc {:?}", params),
             MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ISeqRef(*mut ISeq);
+
+impl ISeqRef {
+    pub fn new(iseq: ISeq) -> Self {
+        let boxed = Box::into_raw(Box::new(iseq)) as *mut ISeq;
+        ISeqRef(boxed)
+    }
+}
+
+impl std::ops::Deref for ISeqRef {
+    type Target = ISeq;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ISeqInfo {
+    pub iseq: ISeq,
+    pub lvar: LvarCollector,
+}
+
+impl ISeqInfo {
+    pub fn new(iseq: ISeq, lvar: LvarCollector) -> Self {
+        ISeqInfo { iseq, lvar }
     }
 }
 

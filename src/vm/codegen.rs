@@ -205,11 +205,11 @@ impl Codegen {
     }
 
     /// Generate ISeq.
-    pub fn gen_iseq(&mut self, globals: &mut Globals, node: &Node) -> Result<ISeq, RubyError> {
+    pub fn gen_iseq(&mut self, globals: &mut Globals, node: &Node) -> Result<ISeqRef, RubyError> {
         let mut iseq = ISeq::new();
         self.gen(globals, &mut iseq, node)?;
         iseq.push(Inst::END);
-        Ok(iseq)
+        Ok(ISeqRef::new(iseq))
     }
 
     pub fn gen_method_iseq(
@@ -242,7 +242,7 @@ impl Codegen {
         let lvars = lvar_collector.table.len();
         //println!("{:?}", iseq);
         Ok(MethodInfo::RubyFunc {
-            iseq,
+            iseq: ISeqRef::new(iseq),
             params: params_lvar,
             lvars,
         })
