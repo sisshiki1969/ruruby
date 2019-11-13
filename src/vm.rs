@@ -398,7 +398,7 @@ impl VM {
                     pc += 9;
                 }
                 Inst::DEF_CLASS => {
-                    let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
+                    let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
                     let method_info = self.globals.get_method_info(methodref).clone();
                     let classref = self.globals.add_class(id);
@@ -428,7 +428,7 @@ impl VM {
                     pc += 9;
                 }
                 Inst::DEF_METHOD => {
-                    let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
+                    let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
                     //let info = self.globals.get_method_info(methodref).clone();
                     if self.class_stack.len() == 0 {
@@ -445,7 +445,7 @@ impl VM {
                     pc += 9;
                 }
                 Inst::DEF_CLASS_METHOD => {
-                    let id = IdentId::from_usize(read32(iseq, pc + 1) as usize);
+                    let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered to the global method table.
@@ -475,7 +475,7 @@ impl VM {
         }
 
         fn read_id(iseq: &ISeq, pc: usize) -> IdentId {
-            IdentId::from_usize(read32(iseq, pc + 1) as usize)
+            IdentId::from(read32(iseq, pc + 1))
         }
 
         fn read_lvar_id(iseq: &ISeq, pc: usize) -> LvarId {

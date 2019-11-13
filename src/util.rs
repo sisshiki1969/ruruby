@@ -107,12 +107,6 @@ impl std::hash::Hash for IdentId {
     }
 }
 
-impl IdentId {
-    pub fn from_usize(id: usize) -> Self {
-        IdentId(id)
-    }
-}
-
 impl Into<usize> for IdentId {
     fn into(self) -> usize {
         self.0
@@ -122,6 +116,12 @@ impl Into<usize> for IdentId {
 impl Into<u32> for IdentId {
     fn into(self) -> u32 {
         self.0 as u32
+    }
+}
+
+impl From<u32> for IdentId {
+    fn from(id: u32) -> Self {
+        IdentId(id as usize)
     }
 }
 
