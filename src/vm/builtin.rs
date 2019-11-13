@@ -1,5 +1,4 @@
 use super::value::*;
-use crate::vm::VMResult;
 use crate::vm::*;
 
 pub struct Builtin {}
@@ -18,7 +17,7 @@ impl Builtin {
             _args: Vec<PackedValue>,
         ) -> VMResult {
             match receiver.unpack() {
-                Value::FixNum(i) => Ok(Value::Char(i as u8)),
+                Value::FixNum(i) => Ok(Value::Char(i as u8).pack()),
                 _ => unimplemented!(),
             }
         }
@@ -32,7 +31,7 @@ impl Builtin {
             for arg in args {
                 println!("{}", vm.val_to_s(arg));
             }
-            Ok(Value::Nil)
+            Ok(PackedValue::nil())
         }
 
         /// Built-in function "print".
@@ -50,7 +49,7 @@ impl Builtin {
                     print!("{}", vm.val_to_s(arg));
                 }
             }
-            Ok(Value::Nil)
+            Ok(PackedValue::nil())
         }
 
         /// Built-in function "assert".
@@ -69,31 +68,31 @@ impl Builtin {
                 );
             } else {
                 println!("Assert OK: {:?}", args[0]);
-                Ok(Value::Nil)
+                Ok(PackedValue::nil())
             }
         }
     }
     /// Built-in function "new".
     pub fn builtin_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-        match receiver.clone().unpack() {
-            Value::Class(class_ref) => {
-                let instance = vm.globals.new_instance(class_ref);
-                let init = vm.globals.get_ident_id(&"initialize".to_string());
-                match vm
-                    .globals
-                    .get_class_info(class_ref)
-                    .get_instance_method(init)
-                {
-                    Some(methodref) => {
-                        let methodref = methodref.clone();
-                        let receiver = Value::Instance(instance).pack();
-                        let _ = vm.eval_send(&methodref, receiver, args)?;
-                    }
-                    None => {}
-                };
-                Ok(Value::Instance(instance))
-            }
-            _ => Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver))),
+        if receiver.is_packed_class() {
+            let class_ref = receiver.as_packed_class();
+            let instance = vm.globals.new_instance(class_ref);
+            let init = IdentId::from(IdentifierTable::INITIALIZE as u32);
+            match vm
+                .globals
+                .get_class_info(class_ref)
+                .get_instance_method(init)
+            {
+                Some(methodref) => {
+                    let methodref = methodref.clone();
+                    let receiver = PackedValue::instance(instance);
+                    let _ = vm.eval_send(&methodref, receiver, args)?;
+                }
+                None => {}
+            };
+            Ok(PackedValue::instance(instance))
+        } else {
+            Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver)))
         }
     }
 }

@@ -15,7 +15,7 @@ fn eval_script(script: impl Into<String>, expected: Value) {
     eval.init_builtin();
     match eval.run(&result.node) {
         Ok(res) => {
-            if res != expected {
+            if res.unpack() != expected {
                 panic!("Expected:{:?} Got:{:?}", expected, res);
             }
         }

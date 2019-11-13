@@ -67,7 +67,7 @@ impl Codegen {
 
     fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &String) {
         iseq.push(Inst::PUSH_STRING);
-        let id = globals.get_ident_id(&s);
+        let id = globals.get_ident_id(s.clone());
         self.push32(iseq, id.into());
     }
 

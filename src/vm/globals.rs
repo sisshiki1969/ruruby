@@ -12,7 +12,7 @@ pub struct Globals {
 
 impl Globals {
     pub fn new(ident_table: Option<IdentifierTable>) -> Self {
-        Globals {
+        let mut globals = Globals {
             ident_table: match ident_table {
                 Some(table) => table,
                 None => IdentifierTable::new(),
@@ -21,7 +21,9 @@ impl Globals {
             instance_table: GlobalInstanceTable::new(),
             method_table: GlobalMethodTable::new(),
             toplevel_method: MethodTable::new(),
-        }
+        };
+        globals.get_ident_id("initialize");
+        globals
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
         let name = name.into();
@@ -35,8 +37,8 @@ impl Globals {
         self.ident_table.get_name(id)
     }
 
-    pub fn get_ident_id(&mut self, name: &String) -> IdentId {
-        self.ident_table.get_ident_id(name)
+    pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
+        self.ident_table.get_ident_id(&name.into())
     }
 
     pub fn add_toplevel_method(&mut self, id: IdentId, info: MethodRef) {

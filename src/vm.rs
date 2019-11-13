@@ -21,7 +21,7 @@ pub use value::*;
 
 pub type ValueTable = HashMap<IdentId, PackedValue>;
 
-pub type VMResult = Result<Value, RubyError>;
+pub type VMResult = Result<PackedValue, RubyError>;
 
 #[derive(Debug, Clone)]
 pub struct VM {
@@ -127,10 +127,10 @@ impl VM {
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        Ok(val.unpack())
+        Ok(val)
     }
 
-    pub fn vm_run(&mut self, iseq: ISeqRef) -> Result<PackedValue, RubyError> {
+    pub fn vm_run(&mut self, iseq: ISeqRef) -> VMResult {
         let iseq = &*iseq;
         let mut pc = 0;
         loop {
@@ -206,35 +206,35 @@ impl VM {
                     let rhs = self.exec_stack.pop().unwrap().unpack();
                     let val = self.eval_shr(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::SHL => {
                     let lhs = self.exec_stack.pop().unwrap().unpack();
                     let rhs = self.exec_stack.pop().unwrap().unpack();
                     let val = self.eval_shl(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::BIT_AND => {
                     let lhs = self.exec_stack.pop().unwrap().unpack();
                     let rhs = self.exec_stack.pop().unwrap().unpack();
                     let val = self.eval_bitand(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::BIT_OR => {
                     let lhs = self.exec_stack.pop().unwrap().unpack();
                     let rhs = self.exec_stack.pop().unwrap().unpack();
                     let val = self.eval_bitor(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.exec_stack.pop().unwrap().unpack();
                     let rhs = self.exec_stack.pop().unwrap().unpack();
                     let val = self.eval_bitxor(lhs, rhs)?;
                     pc += 1;
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                 }
                 Inst::EQ => {
                     let lhs = self.exec_stack.pop().unwrap();
@@ -520,7 +520,7 @@ impl VM {
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2));
         };
@@ -547,7 +547,7 @@ impl VM {
             (_, _) => Err(self.error_nomethod("NoMethodError: '+'")),
         }
     }
-    fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::fixnum(((*lhs as i64) - (*rhs as i64)) / 2));
         };
@@ -575,7 +575,7 @@ impl VM {
         }
     }
 
-    fn eval_mul(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_mul(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::fixnum(
                 lhs.as_packed_fixnum() * rhs.as_packed_fixnum(),
@@ -605,7 +605,7 @@ impl VM {
         }
     }
 
-    fn eval_div(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_div(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs / rhs).pack()),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
@@ -621,44 +621,40 @@ impl VM {
 
     fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs << rhs)),
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs << rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '<<'")),
         }
     }
 
     fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs >> rhs)),
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs >> rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs & rhs)),
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs & rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
     fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs | rhs)),
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs | rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs, rhs) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs ^ rhs)),
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs ^ rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    pub fn eval_eq(
-        &mut self,
-        rhs: PackedValue,
-        lhs: PackedValue,
-    ) -> Result<PackedValue, RubyError> {
+    pub fn eval_eq(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::bool(*lhs == *rhs));
         }
@@ -686,7 +682,7 @@ impl VM {
         }
     }
 
-    fn eval_neq(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_neq(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::bool(*lhs != *rhs));
         }
@@ -714,7 +710,7 @@ impl VM {
         }
     }
 
-    fn eval_ge(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_ge(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::bool(
                 lhs.as_packed_fixnum() >= rhs.as_packed_fixnum(),
@@ -744,7 +740,7 @@ impl VM {
         }
     }
 
-    fn eval_gt(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<PackedValue, RubyError> {
+    fn eval_gt(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::bool(
                 lhs.as_packed_fixnum() > rhs.as_packed_fixnum(),
@@ -816,11 +812,11 @@ impl VM {
         methodref: &MethodRef,
         receiver: PackedValue,
         args: Vec<PackedValue>,
-    ) -> Result<PackedValue, RubyError> {
+    ) -> VMResult {
         let info = self.globals.get_method_info(*methodref);
         match info {
             MethodInfo::BuiltinFunc { func, .. } => {
-                let val = func(self, receiver, args)?.pack();
+                let val = func(self, receiver, args)?;
                 Ok(val)
             }
             MethodInfo::RubyFunc {

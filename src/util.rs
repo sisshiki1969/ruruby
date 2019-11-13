@@ -134,11 +134,19 @@ pub struct IdentifierTable {
 
 impl IdentifierTable {
     pub fn new() -> Self {
-        IdentifierTable {
+        let mut table = IdentifierTable {
             table: HashMap::new(),
             table_rev: HashMap::new(),
-            ident_id: 0,
-        }
+            ident_id: 20,
+        };
+        table.set_ident_id("initialize", Self::INITIALIZE);
+        table
+    }
+
+    fn set_ident_id(&mut self, name: impl Into<String>, id: usize) {
+        let name = name.into();
+        self.table.insert(name.clone(), id);
+        self.table_rev.insert(id, name);
     }
 
     pub fn get_ident_id(&mut self, name: &String) -> IdentId {
@@ -157,4 +165,8 @@ impl IdentifierTable {
     pub fn get_name(&mut self, id: IdentId) -> &String {
         self.table_rev.get(&id).unwrap()
     }
+}
+
+impl IdentifierTable {
+    pub const INITIALIZE: usize = 0;
 }
