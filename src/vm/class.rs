@@ -3,7 +3,7 @@ use crate::vm::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ClassRef(usize);
+pub struct ClassRef(*mut ClassInfo);
 
 impl std::hash::Hash for ClassRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -11,15 +11,23 @@ impl std::hash::Hash for ClassRef {
     }
 }
 
-impl Into<u32> for ClassRef {
-    fn into(self) -> u32 {
-        self.0 as u32
+impl ClassRef {
+    pub fn new(info: ClassInfo) -> Self {
+        let boxed = Box::into_raw(Box::new(info));
+        ClassRef(boxed)
     }
 }
 
-impl From<u32> for ClassRef {
-    fn from(num: u32) -> Self {
-        ClassRef(num as usize)
+impl std::ops::Deref for ClassRef {
+    type Target = ClassInfo;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
+}
+
+impl std::ops::DerefMut for ClassRef {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.0 }
     }
 }
 
@@ -59,36 +67,5 @@ impl ClassInfo {
 
     pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
         self.instance_method.insert(id, info)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct GlobalClassTable {
-    table: Vec<ClassInfo>,
-    class_id: usize,
-}
-
-impl GlobalClassTable {
-    pub fn new() -> Self {
-        GlobalClassTable {
-            table: vec![],
-            class_id: 0,
-        }
-    }
-
-    pub fn add_class(&mut self, id: IdentId, name: String) -> ClassRef {
-        let classref = ClassRef(self.class_id);
-        self.class_id += 1;
-
-        self.table.push(ClassInfo::new(id, name));
-        classref
-    }
-
-    pub fn get(&self, class_ref: ClassRef) -> &ClassInfo {
-        &self.table[class_ref.0]
-    }
-
-    pub fn get_mut(&mut self, class_ref: ClassRef) -> &mut ClassInfo {
-        &mut self.table[class_ref.0]
     }
 }

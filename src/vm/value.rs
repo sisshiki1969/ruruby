@@ -27,8 +27,6 @@ impl Value {
             Value::Bool(_) => PackedValue::false_val(),
             Value::FixNum(num) => PackedValue::fixnum(num),
             Value::FloatNum(num) => PackedValue::flonum(num),
-            Value::Class(r) => PackedValue::class(r),
-            Value::Instance(r) => PackedValue::instance(r),
             _ => PackedValue(Value::pack_as_boxed(self)),
         }
     }
@@ -57,16 +55,6 @@ impl Value {
         }
     }
 
-    fn pack_class(classref: ClassRef) -> u64 {
-        let class: u32 = classref.into();
-        (class as u64) << 32 | 0x0C
-    }
-
-    fn pack_instance(instanceref: InstanceRef) -> u64 {
-        let val = Value::Instance(instanceref);
-        Box::into_raw(Box::new(val)) as u64
-    }
-
     fn pack_as_boxed(val: Value) -> u64 {
         Box::into_raw(Box::new(val)) as u64
     }
@@ -88,8 +76,6 @@ impl PackedValue {
             Value::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
             Value::FloatNum(self.as_packed_flonum())
-        } else if self.is_packed_class() {
-            Value::Class(self.as_packed_class())
         } else if self.0 == NIL_VALUE {
             Value::Nil
         } else if self.0 == TRUE_VALUE {
@@ -121,10 +107,6 @@ impl PackedValue {
         self.0 == FALSE_VALUE
     }
 
-    pub fn is_packed_class(&self) -> bool {
-        self.0 & 0xff == 0x0c
-    }
-
     pub fn as_packed_fixnum(&self) -> i64 {
         (self.0 as i64) >> 1
     }
@@ -141,10 +123,6 @@ impl PackedValue {
         .rotate_right(3);
         //eprintln!("after  unpack:{:064b}", num);
         unsafe { std::mem::transmute(num) }
-    }
-
-    pub fn as_packed_class(&self) -> ClassRef {
-        ClassRef::from((self.0 >> 32) as u32)
     }
 
     pub fn nil() -> Self {
@@ -175,12 +153,12 @@ impl PackedValue {
         PackedValue(Value::pack_flonum(num))
     }
 
-    pub fn class(classref: ClassRef) -> Self {
-        PackedValue(Value::pack_class(classref))
+    pub fn class(class_ref: ClassRef) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::Class(class_ref)))
     }
 
-    pub fn instance(instanceref: InstanceRef) -> Self {
-        PackedValue(Value::pack_instance(instanceref))
+    pub fn instance(instance_ref: InstanceRef) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::Instance(instance_ref)))
     }
 }
 
@@ -318,7 +296,8 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let expect = Value::Class(ClassRef::from(17000));
+        let info = ClassInfo::new(IdentId::from(0), "".to_string());
+        let expect = Value::Class(ClassRef::new(info));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -327,7 +306,9 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let info = InstanceInfo::new(ClassRef::from(100), "".to_string());
+        let class_info = ClassInfo::new(IdentId::from(0), "".to_string());
+        let class_ref = ClassRef::new(class_info);
+        let info = InstanceInfo::new(class_ref, "".to_string());
         let expect = Value::Instance(InstanceRef::new(info));
         let got = expect.clone().pack().unpack();
         if expect != got {

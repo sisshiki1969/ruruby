@@ -202,36 +202,36 @@ impl VM {
                     self.exec_stack.push(val);
                 }
                 Inst::SHR => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_shr(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::SHL => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_shl(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::BIT_AND => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitand(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::BIT_OR => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitor(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::BIT_XOR => {
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitxor(lhs, rhs)?;
                     pc += 1;
                     self.exec_stack.push(val);
@@ -314,11 +314,7 @@ impl VM {
                     let new_val = self.exec_stack.last().unwrap();
                     match self_var {
                         Value::Instance(id) => id.clone().instance_var.insert(var_id, *new_val),
-                        Value::Class(id) => self
-                            .globals
-                            .get_mut_class_info(*id)
-                            .instance_var
-                            .insert(var_id, *new_val),
+                        Value::Class(id) => id.clone().instance_var.insert(var_id, *new_val),
                         _ => unreachable!(),
                     };
                     pc += 5;
@@ -328,10 +324,7 @@ impl VM {
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let val = match self_var {
                         Value::Instance(id) => id.instance_var.get(&var_id),
-                        Value::Class(id) => {
-                            let info = self.globals.get_class_info(*id);
-                            info.instance_var.get(&var_id)
-                        }
+                        Value::Class(id) => id.instance_var.get(&var_id),
                         _ => unreachable!(),
                     };
                     let val = match val {
@@ -370,7 +363,7 @@ impl VM {
                     let methodref = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => {
                             match self.globals.get_toplevel_method(method_id) {
-                                Some(info) => info,
+                                Some(info) => info.clone(),
                                 None => return Err(self.error_unimplemented("method not defined.")),
                             }
                         }
@@ -379,14 +372,13 @@ impl VM {
                             self.get_instance_method(instance, method_id)?
                         }
                         _ => unimplemented!(),
-                    }
-                    .clone();
+                    };
                     let args_num = read32(iseq, pc + 5);
                     let mut args = vec![];
                     for _ in 0..args_num {
                         args.push(self.exec_stack.pop().unwrap());
                     }
-                    let val = self.eval_send(&methodref, receiver, args)?;
+                    let val = self.eval_send(methodref, receiver, args)?;
                     self.exec_stack.push(val);
                     pc += 9;
                 }
@@ -394,8 +386,8 @@ impl VM {
                     let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
                     let method_info = self.globals.get_method_info(methodref).clone();
-                    let classref = self.globals.add_class(id);
-                    let val = Value::Class(classref).pack();
+                    let mut classref = self.globals.add_class(id).clone();
+                    let val = PackedValue::class(classref);
                     self.const_table.insert(id, val);
 
                     let (iseq, lvars) = match &method_info {
@@ -415,8 +407,7 @@ impl VM {
                         func: Builtin::builtin_new,
                     };
                     let new_func_ref = self.globals.add_method(new_func_info);
-                    let class_info = self.globals.get_mut_class_info(classref);
-                    class_info.add_class_method(id_for_new, new_func_ref);
+                    classref.add_class_method(id_for_new, new_func_ref);
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
                 }
@@ -429,10 +420,8 @@ impl VM {
                         self.globals.add_toplevel_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a instance method of the class.
-                        let classref = self.class_stack.last().unwrap();
-                        self.globals
-                            .get_mut_class_info(*classref)
-                            .add_instance_method(id, methodref);
+                        let mut classref = self.class_stack.last().unwrap().clone();
+                        classref.add_instance_method(id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
@@ -445,10 +434,8 @@ impl VM {
                         self.globals.add_toplevel_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a class method of the class.
-                        let classref = self.class_stack.last().unwrap();
-                        self.globals
-                            .get_mut_class_info(*classref)
-                            .add_class_method(id, methodref);
+                        let mut classref = self.class_stack.last().unwrap().clone();
+                        classref.add_class_method(id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
@@ -612,36 +599,36 @@ impl VM {
         }
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
+    fn eval_shl(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+        match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs << rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '<<'")),
         }
     }
 
-    fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
+    fn eval_shr(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+        match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs >> rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
+    fn eval_bitand(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+        match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs & rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
+    fn eval_bitor(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+        match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs | rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
     }
 
-    fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs, rhs) {
+    fn eval_bitxor(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+        match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs ^ rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
         }
@@ -726,7 +713,9 @@ impl VM {
         }
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::bool(lhs >= rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::bool(lhs >= rhs as f64)),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => {
+                Ok(PackedValue::bool(lhs >= (rhs as f64)))
+            }
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::bool(lhs as f64 >= rhs)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::bool(lhs >= rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '>='")),
@@ -756,7 +745,7 @@ impl VM {
         }
         let b = match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::bool(lhs > rhs),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::bool(lhs > rhs as f64),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::bool(lhs > (rhs as f64)),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::bool(lhs as f64 > rhs),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::bool(lhs > rhs),
             (_, _) => return Err(self.error_nomethod("NoMethodError: '>'")),
@@ -802,11 +791,11 @@ impl VM {
 
     pub fn eval_send(
         &mut self,
-        methodref: &MethodRef,
+        methodref: MethodRef,
         receiver: PackedValue,
         args: Vec<PackedValue>,
     ) -> VMResult {
-        let info = self.globals.get_method_info(*methodref);
+        let info = self.globals.get_method_info(methodref);
         match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 let val = func(self, receiver, args)?;
@@ -841,12 +830,12 @@ impl VM {
         &self,
         class: ClassRef,
         method: IdentId,
-    ) -> Result<&MethodRef, RubyError> {
-        match self.globals.get_class_info(class).get_class_method(method) {
-            Some(methodref) => Ok(methodref),
+    ) -> Result<MethodRef, RubyError> {
+        match class.get_class_method(method) {
+            Some(methodref) => Ok(methodref.clone()),
             None => match self.globals.get_toplevel_method(method) {
                 None => return Err(self.error_nomethod("No class method found.")),
-                Some(info) => Ok(info),
+                Some(methodref) => Ok(methodref.clone()),
             },
         }
     }
@@ -855,17 +844,13 @@ impl VM {
         &self,
         instance: InstanceRef,
         method: IdentId,
-    ) -> Result<&MethodRef, RubyError> {
-        let classref = (*instance).get_classref();
-        match self
-            .globals
-            .get_class_info(classref)
-            .get_instance_method(method)
-        {
-            Some(methodref) => Ok(methodref),
+    ) -> Result<MethodRef, RubyError> {
+        let classref = instance.get_classref();
+        match classref.get_instance_method(method) {
+            Some(methodref) => Ok(methodref.clone()),
             None => match self.globals.get_toplevel_method(method) {
                 None => return Err(self.error_nomethod("No instance method found.")),
-                Some(info) => Ok(info),
+                Some(methodref) => Ok(methodref.clone()),
             },
         }
     }

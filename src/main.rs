@@ -161,6 +161,8 @@ fn repl_vm() {
     println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
     println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
     println!("Value: {}", std::mem::size_of::<Value>());
+    println!("InstanceInfo: {}", std::mem::size_of::<InstanceInfo>());
+    println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
 
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
@@ -198,14 +200,12 @@ fn repl_vm() {
                         lvar_collector = parse_result.lvar_collector;
                         match result.unpack() {
                             Value::Class(id) => {
-                                let info = vm.globals.get_class_info(id);
-                                println!("=> {:?}", info);
+                                println!("=> {:?}", id);
                             }
                             Value::Instance(id) => {
-                                let info = &*id;
-                                println!("=> {:?}", info);
+                                println!("=> {:?}", id);
                             }
-                            _ => println!("=> {:?}", result),
+                            val => println!("=> {:?}", val),
                         }
                     }
                     Err(err) => {

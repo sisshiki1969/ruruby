@@ -74,27 +74,19 @@ impl Builtin {
     }
     /// Built-in function "new".
     pub fn builtin_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-        if receiver.is_packed_class() {
-            let class_ref = receiver.as_packed_class();
-            let class_name = vm.globals.get_class_info(class_ref).name.clone();
-            let info = InstanceInfo::new(class_ref, class_name);
-            let instance = InstanceRef::new(info);
-            let init = IdentId::from(IdentifierTable::INITIALIZE as u32);
-            match vm
-                .globals
-                .get_class_info(class_ref)
-                .get_instance_method(init)
-            {
-                Some(methodref) => {
-                    let methodref = methodref.clone();
-                    let receiver = PackedValue::instance(instance);
-                    let _ = vm.eval_send(&methodref, receiver, args)?;
-                }
-                None => {}
-            };
-            Ok(PackedValue::instance(instance))
-        } else {
-            Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver)))
+        match receiver.unpack() {
+            Value::Class(class_ref) => {
+                let class_name = class_ref.name.clone();
+                let info = InstanceInfo::new(class_ref, class_name);
+                let instance = InstanceRef::new(info);
+                let init = IdentId::from(IdentifierTable::INITIALIZE as u32);
+                let new_instance = PackedValue::instance(instance);
+                if let Some(methodref) = class_ref.get_instance_method(init) {
+                    let _ = vm.eval_send(methodref.clone(), new_instance, args)?;
+                };
+                Ok(new_instance)
+            }
+            _ => Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver))),
         }
     }
 }
