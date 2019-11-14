@@ -76,7 +76,9 @@ impl Builtin {
     pub fn builtin_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
         if receiver.is_packed_class() {
             let class_ref = receiver.as_packed_class();
-            let instance = vm.globals.new_instance(class_ref);
+            let class_name = vm.globals.get_class_info(class_ref).name.clone();
+            let info = InstanceInfo::new(class_ref, class_name);
+            let instance = InstanceRef::new(info);
             let init = IdentId::from(IdentifierTable::INITIALIZE as u32);
             match vm
                 .globals

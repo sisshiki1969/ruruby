@@ -313,11 +313,7 @@ impl VM {
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let new_val = self.exec_stack.last().unwrap();
                     match self_var {
-                        Value::Instance(id) => self
-                            .globals
-                            .get_mut_instance_info(*id)
-                            .instance_var
-                            .insert(var_id, *new_val),
+                        Value::Instance(id) => id.clone().instance_var.insert(var_id, *new_val),
                         Value::Class(id) => self
                             .globals
                             .get_mut_class_info(*id)
@@ -331,10 +327,7 @@ impl VM {
                     let var_id = read_id(iseq, pc);
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let val = match self_var {
-                        Value::Instance(id) => {
-                            let info = self.globals.get_instance_info(*id);
-                            info.instance_var.get(&var_id)
-                        }
+                        Value::Instance(id) => id.instance_var.get(&var_id),
                         Value::Class(id) => {
                             let info = self.globals.get_class_info(*id);
                             info.instance_var.get(&var_id)
@@ -863,7 +856,7 @@ impl VM {
         instance: InstanceRef,
         method: IdentId,
     ) -> Result<&MethodRef, RubyError> {
-        let classref = self.globals.get_instance_info(instance).get_classref();
+        let classref = (*instance).get_classref();
         match self
             .globals
             .get_class_info(classref)

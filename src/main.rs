@@ -202,7 +202,7 @@ fn repl_vm() {
                                 println!("=> {:?}", info);
                             }
                             Value::Instance(id) => {
-                                let info = vm.globals.get_instance_info(id);
+                                let info = &*id;
                                 println!("=> {:?}", info);
                             }
                             _ => println!("=> {:?}", result),
