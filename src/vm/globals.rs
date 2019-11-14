@@ -5,7 +5,6 @@ pub struct Globals {
     // Global info
     pub ident_table: IdentifierTable,
     class_table: GlobalClassTable,
-    instance_table: GlobalInstanceTable,
     method_table: GlobalMethodTable,
     toplevel_method: MethodTable,
 }
@@ -18,7 +17,6 @@ impl Globals {
                 None => IdentifierTable::new(),
             },
             class_table: GlobalClassTable::new(),
-            instance_table: GlobalInstanceTable::new(),
             method_table: GlobalMethodTable::new(),
             toplevel_method: MethodTable::new(),
         };
@@ -60,20 +58,6 @@ impl Globals {
 
     pub fn get_mut_class_info(&mut self, class: ClassRef) -> &mut ClassInfo {
         self.class_table.get_mut(class)
-    }
-
-    pub fn get_instance_info(&self, instance: InstanceRef) -> &InstanceInfo {
-        self.instance_table.get(instance)
-    }
-
-    pub fn get_mut_instance_info(&mut self, instance: InstanceRef) -> &mut InstanceInfo {
-        self.instance_table.get_mut(instance)
-    }
-
-    pub fn new_instance(&mut self, class_id: ClassRef) -> InstanceRef {
-        let class_info = self.class_table.get(class_id);
-        let class_name = class_info.name.clone();
-        self.instance_table.new_instance(class_id, class_name)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {

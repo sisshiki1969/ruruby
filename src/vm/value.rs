@@ -63,8 +63,8 @@ impl Value {
     }
 
     fn pack_instance(instanceref: InstanceRef) -> u64 {
-        let instance: u32 = instanceref.into();
-        (instance as u64) << 32 | 0x1C
+        let val = Value::Instance(instanceref);
+        Box::into_raw(Box::new(val)) as u64
     }
 
     fn pack_as_boxed(val: Value) -> u64 {
@@ -90,8 +90,6 @@ impl PackedValue {
             Value::FloatNum(self.as_packed_flonum())
         } else if self.is_packed_class() {
             Value::Class(self.as_packed_class())
-        } else if self.is_packed_instance() {
-            Value::Instance(self.as_packed_instance())
         } else if self.0 == NIL_VALUE {
             Value::Nil
         } else if self.0 == TRUE_VALUE {
@@ -127,10 +125,6 @@ impl PackedValue {
         self.0 & 0xff == 0x0c
     }
 
-    pub fn is_packed_instance(&self) -> bool {
-        self.0 & 0xff == 0x1c
-    }
-
     pub fn as_packed_fixnum(&self) -> i64 {
         (self.0 as i64) >> 1
     }
@@ -151,10 +145,6 @@ impl PackedValue {
 
     pub fn as_packed_class(&self) -> ClassRef {
         ClassRef::from((self.0 >> 32) as u32)
-    }
-
-    pub fn as_packed_instance(&self) -> InstanceRef {
-        InstanceRef::from((self.0 >> 32) as u32)
     }
 
     pub fn nil() -> Self {
@@ -337,7 +327,8 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let expect = Value::Instance(InstanceRef::from(25000));
+        let info = InstanceInfo::new(ClassRef::from(100), "".to_string());
+        let expect = Value::Instance(InstanceRef::new(info));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
