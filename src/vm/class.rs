@@ -12,9 +12,33 @@ impl std::hash::Hash for ClassRef {
 }
 
 impl ClassRef {
-    pub fn new(info: ClassInfo) -> Self {
+    pub fn new(id: IdentId, name: String) -> Self {
+        let info = ClassInfo {
+            id,
+            name,
+            instance_var: HashMap::new(),
+            instance_method: HashMap::new(),
+            class_method: HashMap::new(),
+            subclass: HashMap::new(),
+        };
         let boxed = Box::into_raw(Box::new(info));
         ClassRef(boxed)
+    }
+
+    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
+        self.class_method.get(&id)
+    }
+
+    pub fn add_class_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
+        self.class_method.insert(id, info)
+    }
+
+    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
+        self.instance_method.get(&id)
+    }
+
+    pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
+        self.instance_method.insert(id, info)
     }
 }
 
@@ -39,33 +63,4 @@ pub struct ClassInfo {
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub subclass: HashMap<IdentId, ClassRef>,
-}
-
-impl ClassInfo {
-    pub fn new(id: IdentId, name: String) -> Self {
-        ClassInfo {
-            id,
-            name,
-            instance_var: HashMap::new(),
-            instance_method: HashMap::new(),
-            class_method: HashMap::new(),
-            subclass: HashMap::new(),
-        }
-    }
-
-    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.class_method.get(&id)
-    }
-
-    pub fn add_class_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
-        self.class_method.insert(id, info)
-    }
-
-    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.instance_method.get(&id)
-    }
-
-    pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
-        self.instance_method.insert(id, info)
-    }
 }

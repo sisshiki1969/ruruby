@@ -845,7 +845,7 @@ impl VM {
         instance: InstanceRef,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let classref = instance.get_classref();
+        let classref = instance.classref;
         match classref.get_instance_method(method) {
             Some(methodref) => Ok(methodref.clone()),
             None => match self.globals.get_toplevel_method(method) {

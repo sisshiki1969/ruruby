@@ -77,8 +77,7 @@ impl Builtin {
         match receiver.unpack() {
             Value::Class(class_ref) => {
                 let class_name = class_ref.name.clone();
-                let info = InstanceInfo::new(class_ref, class_name);
-                let instance = InstanceRef::new(info);
+                let instance = InstanceRef::new(class_ref, class_name);
                 let init = IdentId::from(IdentifierTable::INITIALIZE as u32);
                 let new_instance = PackedValue::instance(instance);
                 if let Some(methodref) = class_ref.get_instance_method(init) {

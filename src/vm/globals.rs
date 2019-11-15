@@ -47,8 +47,7 @@ impl Globals {
 
     pub fn add_class(&mut self, id: IdentId) -> ClassRef {
         let name = self.get_ident_name(id).clone();
-        let info = ClassInfo::new(id, name);
-        ClassRef::new(info)
+        ClassRef::new(id, name)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {

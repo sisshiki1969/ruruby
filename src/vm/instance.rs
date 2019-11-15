@@ -9,20 +9,6 @@ pub struct InstanceInfo {
     pub instance_var: ValueTable,
 }
 
-impl InstanceInfo {
-    pub fn new(classref: ClassRef, class_name: String) -> Self {
-        InstanceInfo {
-            classref,
-            class_name,
-            instance_var: HashMap::new(),
-        }
-    }
-
-    pub fn get_classref(&self) -> ClassRef {
-        self.classref
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InstanceRef(*mut InstanceInfo);
 
@@ -33,7 +19,12 @@ impl std::hash::Hash for InstanceRef {
 }
 
 impl InstanceRef {
-    pub fn new(info: InstanceInfo) -> Self {
+    pub fn new(classref: ClassRef, class_name: String) -> Self {
+        let info = InstanceInfo {
+            classref,
+            class_name,
+            instance_var: HashMap::new(),
+        };
         let boxed = Box::into_raw(Box::new(info));
         InstanceRef(boxed)
     }
