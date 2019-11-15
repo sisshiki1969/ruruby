@@ -12,10 +12,9 @@ impl std::hash::Hash for ClassRef {
 }
 
 impl ClassRef {
-    pub fn new(id: IdentId, name: String) -> Self {
+    pub fn new(id: IdentId) -> Self {
         let info = ClassInfo {
             id,
-            name,
             instance_var: HashMap::new(),
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
@@ -58,7 +57,6 @@ impl std::ops::DerefMut for ClassRef {
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
     pub id: IdentId,
-    pub name: String,
     pub instance_var: ValueTable,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,

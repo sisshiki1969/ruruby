@@ -5,13 +5,9 @@
 #  modified by Jeremy Echols
 
 class Complexe
+  attr_accessor(:r, :i)
   def initialize(r,i)
     @r=r; @i=i;
-  end
-  def r; @r; end
-  def i; @i; end
-  def sq
-    Complexe.new(@r*@r - @i*@i, 2*@r*@i)
   end
   def *(c)
     Complexe.new(@r*c.r - @i*c.i, @r*c.i + @i*c.r)

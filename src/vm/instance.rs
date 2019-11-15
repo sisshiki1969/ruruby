@@ -5,7 +5,6 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct InstanceInfo {
     pub classref: ClassRef,
-    pub class_name: String,
     pub instance_var: ValueTable,
 }
 
@@ -19,10 +18,9 @@ impl std::hash::Hash for InstanceRef {
 }
 
 impl InstanceRef {
-    pub fn new(classref: ClassRef, class_name: String) -> Self {
+    pub fn new(classref: ClassRef) -> Self {
         let info = InstanceInfo {
             classref,
-            class_name,
             instance_var: HashMap::new(),
         };
         let boxed = Box::into_raw(Box::new(info));

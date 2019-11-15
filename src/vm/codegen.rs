@@ -128,8 +128,9 @@ impl Codegen {
     }
 
     fn gen_set_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        self.gen_symbol(iseq, id);
         iseq.push(Inst::SET_INSTANCE_VAR);
-        self.push32(iseq, id.into());
+        //self.push32(iseq, id.into());
     }
 
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -464,11 +465,25 @@ impl Codegen {
             }
             NodeKind::Assign(lhs, rhs) => {
                 self.gen(globals, iseq, rhs)?;
-                match lhs.kind {
-                    NodeKind::Ident(id) => self.gen_set_local(iseq, id),
-                    NodeKind::Const(id) => self.gen_set_const(iseq, id),
-                    NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, id),
-                    _ => (),
+                match &lhs.kind {
+                    NodeKind::Ident(id) => self.gen_set_local(iseq, *id),
+                    NodeKind::Const(id) => self.gen_set_const(iseq, *id),
+                    NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
+                    NodeKind::Send(receiver, method, _args) => {
+                        let id = match method.kind {
+                            NodeKind::Ident(id) => id,
+                            _ => {
+                                return Err(self
+                                    .error_syntax(format!("Expected identifier."), method.loc()))
+                            }
+                        };
+                        let name = globals.get_ident_name(id).clone() + "=";
+                        let assign_id = globals.get_ident_id(name);
+                        self.gen(globals, iseq, &receiver)?;
+                        self.save_loc(iseq);
+                        self.gen_send(iseq, assign_id, 1);
+                    }
+                    _ => unimplemented!("Unimplemented LHS form."),
                 }
             }
             NodeKind::Send(receiver, method, args) => {

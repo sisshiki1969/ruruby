@@ -1,25 +1,10 @@
 class Vec
-    def initialize(x,y)
-        @x=x;@y=y
-    end
-    def add(v)
-        Vec.new(@x + v.x, @y + v.y)
-    end
-    def x; @x; end
-    def y; @y; end
-end
-
-class Vec
+    attr_accessor(:x, :y)
     def initialize(x,y)
         @x=x
         @y=y
     end
-    def x
-        @x
-    end
-    def y
-        @y
-    end
+
     def +(other)
         Vec.new(@x + other.x, @y + other.y)
     end

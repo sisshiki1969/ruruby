@@ -315,7 +315,12 @@ impl VM {
                     pc += 5;
                 }
                 Inst::SET_INSTANCE_VAR => {
-                    let var_id = read_id(iseq, pc);
+                    let symbol = self.exec_stack.pop().unwrap();
+                    let var_id = if symbol.is_packed_symbol() {
+                        symbol.as_packed_symbol()
+                    } else {
+                        unreachable!("SET_INSTANCE_VAR#Illegal instance symbol value.");
+                    };
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let new_val = self.exec_stack.last().unwrap();
                     match self_var {
@@ -323,7 +328,7 @@ impl VM {
                         Value::Class(id) => id.clone().instance_var.insert(var_id, *new_val),
                         _ => unreachable!(),
                     };
-                    pc += 5;
+                    pc += 1;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, pc);
@@ -396,7 +401,7 @@ impl VM {
 
                     let (iseq, lvars) = match &method_info {
                         MethodInfo::RubyFunc { iseq, lvars, .. } => (iseq, lvars),
-                        MethodInfo::BuiltinFunc { .. } => unreachable!(),
+                        _ => unreachable!(),
                     };
 
                     self.globals
@@ -681,7 +686,9 @@ impl VM {
             (Value::Nil, Value::Nil) => Ok(PackedValue::true_val()),
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
+            (Value::String(lhs), Value::String(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
+            (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
             (Value::Class(lhs), Value::Class(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
             (Value::Instance(lhs), Value::Instance(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
             _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
@@ -805,8 +812,10 @@ impl VM {
                 format!("({}{}{})", start, sym, end)
             }
             Value::Char(c) => format!("{:x}", c),
-            Value::Class(id) => format! {"Class({:?})", id.name},
-            Value::Instance(id) => format! {"Instance({:?})", id},
+            Value::Class(cref) => format! {"Class({})", self.globals.get_ident_name(cref.id)},
+            Value::Instance(iref) => {
+                format! {"Instance({}:{:?})", self.globals.get_ident_name(iref.classref.id), iref}
+            }
         }
     }
 }
@@ -828,6 +837,20 @@ impl VM {
                 let val = func(self, receiver, args)?;
                 Ok(val)
             }
+            MethodInfo::AttrReader { id } => match receiver.unpack() {
+                Value::Instance(instanceref) => match instanceref.instance_var.get(id) {
+                    Some(v) => Ok(v.clone()),
+                    None => Ok(PackedValue::nil()),
+                },
+                _ => unreachable!("AttrReader must be used only for class instance."),
+            },
+            MethodInfo::AttrWriter { id } => match receiver.unpack() {
+                Value::Instance(mut instanceref) => {
+                    instanceref.instance_var.insert(*id, args[0]);
+                    Ok(args[0])
+                }
+                _ => unreachable!("AttrReader must be used only for class instance."),
+            },
             MethodInfo::RubyFunc {
                 params,
                 iseq,
@@ -876,7 +899,12 @@ impl VM {
         match classref.get_instance_method(method) {
             Some(methodref) => Ok(methodref.clone()),
             None => match self.globals.get_toplevel_method(method) {
-                None => return Err(self.error_nomethod("No instance method found.")),
+                None => {
+                    let method_name = self.globals.get_ident_name(method);
+                    return Err(
+                        self.error_nomethod(format!("No instance method found. {}", method_name))
+                    );
+                }
                 Some(methodref) => Ok(methodref.clone()),
             },
         }

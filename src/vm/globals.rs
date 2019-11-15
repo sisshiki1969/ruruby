@@ -29,7 +29,7 @@ impl Globals {
         self.add_toplevel_method(id, methodref);
     }
 
-    pub fn get_ident_name(&mut self, id: IdentId) -> &String {
+    pub fn get_ident_name(&self, id: IdentId) -> &String {
         self.ident_table.get_name(id)
     }
 
@@ -46,8 +46,7 @@ impl Globals {
     }
 
     pub fn add_class(&mut self, id: IdentId) -> ClassRef {
-        let name = self.get_ident_name(id).clone();
-        ClassRef::new(id, name)
+        ClassRef::new(id)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {

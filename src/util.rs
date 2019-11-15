@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+const INITIALIZE: usize = 0;
+const NEW: usize = 1;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
     pub kind: T,
@@ -125,6 +128,11 @@ impl From<u32> for IdentId {
     }
 }
 
+impl IdentId {
+    pub const INITIALIZE: IdentId = IdentId(INITIALIZE);
+    pub const NEW: IdentId = IdentId(NEW);
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdentifierTable {
     table: HashMap<String, usize>,
@@ -139,7 +147,8 @@ impl IdentifierTable {
             table_rev: HashMap::new(),
             ident_id: 20,
         };
-        table.set_ident_id("initialize", Self::INITIALIZE);
+        table.set_ident_id("initialize", INITIALIZE);
+        table.set_ident_id("new", NEW);
         table
     }
 
@@ -162,11 +171,7 @@ impl IdentifierTable {
         }
     }
 
-    pub fn get_name(&mut self, id: IdentId) -> &String {
+    pub fn get_name(&self, id: IdentId) -> &String {
         self.table_rev.get(&id).unwrap()
     }
-}
-
-impl IdentifierTable {
-    pub const INITIALIZE: usize = 0;
 }

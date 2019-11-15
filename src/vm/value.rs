@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let expect = Value::Class(ClassRef::new(IdentId::from(0), "".to_string()));
+        let expect = Value::Class(ClassRef::new(IdentId::from(0)));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -324,8 +324,8 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let class_ref = ClassRef::new(IdentId::from(0), "".to_string());
-        let expect = Value::Instance(InstanceRef::new(class_ref, "".to_string()));
+        let class_ref = ClassRef::new(IdentId::from(0));
+        let expect = Value::Instance(InstanceRef::new(class_ref));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

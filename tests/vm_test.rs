@@ -447,3 +447,21 @@ fn initialize() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+
+#[test]
+fn attr_accessor() {
+    let program = "
+    class Foo
+    attr_accessor(:car, :cdr)
+    end
+    bar = Foo.new
+    assert(nil, bar.car)
+    assert(nil, bar.cdr)
+    bar.car = 1000
+    bar.cdr = :something
+    assert(1000, bar.car)
+    assert(:something, bar.cdr)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}

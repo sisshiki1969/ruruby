@@ -32,6 +32,12 @@ pub enum MethodInfo {
         iseq: ISeqRef,
         lvars: usize,
     },
+    AttrReader {
+        id: IdentId,
+    },
+    AttrWriter {
+        id: IdentId,
+    },
     BuiltinFunc {
         name: String,
         func: BuiltinFunc,
@@ -42,6 +48,8 @@ impl std::fmt::Debug for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MethodInfo::RubyFunc { params, .. } => write!(f, "RubyFunc {:?}", params),
+            MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
+            MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
             MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
         }
     }
