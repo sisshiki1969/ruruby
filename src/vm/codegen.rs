@@ -71,6 +71,11 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
+    fn gen_symbol(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::PUSH_SYMBOL);
+        self.push32(iseq, id.into());
+    }
+
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_IF_FALSE);
         iseq.push(0);
@@ -273,6 +278,9 @@ impl Codegen {
             }
             NodeKind::String(s) => {
                 self.gen_string(globals, iseq, s);
+            }
+            NodeKind::Symbol(id) => {
+                self.gen_symbol(iseq, *id);
             }
             NodeKind::InterporatedString(nodes) => {
                 self.gen_string(globals, iseq, &"".to_string());

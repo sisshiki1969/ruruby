@@ -680,6 +680,10 @@ impl Parser {
                 self.expect_punct(Punct::RParen)?;
                 Ok(node)
             }
+            TokenKind::Punct(punct) if *punct == Punct::Colon => {
+                let ident = self.expect_ident()?;
+                Ok(Node::new_symbol(ident, loc.merge(self.prev_loc())))
+            }
             TokenKind::Reserved(Reserved::If) => {
                 let node = self.parse_if_then()?;
                 self.expect_reserved(Reserved::End)?;

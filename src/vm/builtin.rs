@@ -88,4 +88,8 @@ impl Builtin {
             _ => Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver))),
         }
     }
+    /// Built-in function "attr_accessor".
+    pub fn builtin_attr(_vm: &mut VM, _receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+        Ok(PackedValue::nil())
+    }
 }

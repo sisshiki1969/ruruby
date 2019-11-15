@@ -1,10 +1,12 @@
 use super::class::ClassRef;
 use super::instance::InstanceRef;
+use crate::util::IdentId;
 
 const NIL_VALUE: u64 = 0x08;
 const TRUE_VALUE: u64 = 0x14;
 const FALSE_VALUE: u64 = 0x00;
 const ZERO: u64 = (0b1000 << 60) | 0b10;
+const TAG_SYMBOL: u64 = 0x0c;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -13,6 +15,7 @@ pub enum Value {
     FixNum(i64),
     FloatNum(f64),
     String(String),
+    Symbol(IdentId),
     Class(ClassRef),
     Instance(InstanceRef),
     Range(PackedValue, PackedValue, bool),
@@ -27,6 +30,7 @@ impl Value {
             Value::Bool(_) => PackedValue::false_val(),
             Value::FixNum(num) => PackedValue::fixnum(num),
             Value::FloatNum(num) => PackedValue::flonum(num),
+            Value::Symbol(id) => PackedValue::symbol(id),
             _ => PackedValue(Value::pack_as_boxed(self)),
         }
     }
@@ -76,6 +80,8 @@ impl PackedValue {
             Value::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
             Value::FloatNum(self.as_packed_flonum())
+        } else if self.is_packed_symbol() {
+            Value::Symbol(self.as_packed_symbol())
         } else if self.0 == NIL_VALUE {
             Value::Nil
         } else if self.0 == TRUE_VALUE {
@@ -93,6 +99,10 @@ impl PackedValue {
 
     pub fn is_packed_num(&self) -> bool {
         self.0 & 0b11 != 0
+    }
+
+    pub fn is_packed_symbol(&self) -> bool {
+        self.0 & 0xff == TAG_SYMBOL
     }
 
     pub fn is_nil(&self) -> bool {
@@ -125,6 +135,10 @@ impl PackedValue {
         unsafe { std::mem::transmute(num) }
     }
 
+    pub fn as_packed_symbol(&self) -> IdentId {
+        IdentId::from((self.0 >> 32) as u32)
+    }
+
     pub fn nil() -> Self {
         PackedValue(NIL_VALUE)
     }
@@ -151,6 +165,11 @@ impl PackedValue {
 
     pub fn flonum(num: f64) -> Self {
         PackedValue(Value::pack_flonum(num))
+    }
+
+    pub fn symbol(id: IdentId) -> Self {
+        let id: u32 = id.into();
+        PackedValue((id as u64) << 32 | TAG_SYMBOL)
     }
 
     pub fn class(class_ref: ClassRef) -> Self {
@@ -307,6 +326,15 @@ mod tests {
     fn pack_instance() {
         let class_ref = ClassRef::new(IdentId::from(0), "".to_string());
         let expect = Value::Instance(InstanceRef::new(class_ref, "".to_string()));
+        let got = expect.clone().pack().unpack();
+        if expect != got {
+            panic!("Expect:{:?} Got:{:?}", expect, got)
+        }
+    }
+
+    #[test]
+    fn pack_symbol() {
+        let expect = Value::Symbol(IdentId::from(12345));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

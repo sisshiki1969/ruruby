@@ -22,6 +22,7 @@ pub enum NodeKind {
     Ident(IdentId),
     InstanceVar(IdentId),
     Const(IdentId),
+    Symbol(IdentId),
     Param(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
@@ -108,6 +109,10 @@ impl Node {
 
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Ident(id), loc)
+    }
+
+    pub fn new_symbol(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::Symbol(id), loc)
     }
 
     pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {

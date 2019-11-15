@@ -61,4 +61,17 @@ impl Globals {
     pub fn get_mut_method_info(&mut self, method: MethodRef) -> &mut MethodInfo {
         self.method_table.get_mut_method(method)
     }
+
+    pub fn add_builtin_class_method(
+        &mut self,
+        classref: ClassRef,
+        name: impl Into<String>,
+        func: BuiltinFunc,
+    ) {
+        let name = name.into();
+        let id = self.get_ident_id(&name);
+        let info = MethodInfo::BuiltinFunc { name, func };
+        let func_ref = self.add_method(info);
+        classref.clone().add_class_method(id, func_ref);
+    }
 }

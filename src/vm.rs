@@ -89,6 +89,7 @@ impl Inst {
     pub const SET_INSTANCE_VAR: u8 = 34;
     pub const DEF_METHOD: u8 = 35;
     pub const DEF_CLASS_METHOD: u8 = 36;
+    pub const PUSH_SYMBOL: u8 = 37;
 }
 
 impl VM {
@@ -170,6 +171,11 @@ impl VM {
                     let id = read_id(iseq, pc);
                     let string = self.globals.get_ident_name(id).clone();
                     self.exec_stack.push(Value::String(string).pack());
+                    pc += 5;
+                }
+                Inst::PUSH_SYMBOL => {
+                    let id = read_id(iseq, pc);
+                    self.exec_stack.push(PackedValue::symbol(id));
                     pc += 5;
                 }
 
@@ -384,7 +390,7 @@ impl VM {
                     let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
                     let method_info = self.globals.get_method_info(methodref).clone();
-                    let mut classref = self.globals.add_class(id).clone();
+                    let classref = self.globals.add_class(id).clone();
                     let val = PackedValue::class(classref);
                     self.const_table.insert(id, val);
 
@@ -392,20 +398,21 @@ impl VM {
                         MethodInfo::RubyFunc { iseq, lvars, .. } => (iseq, lvars),
                         MethodInfo::BuiltinFunc { .. } => unreachable!(),
                     };
+
+                    self.globals
+                        .add_builtin_class_method(classref, "new", Builtin::builtin_new);
+                    self.globals.add_builtin_class_method(
+                        classref,
+                        "attr_accessor",
+                        Builtin::builtin_attr,
+                    );
+
                     self.class_stack.push(classref);
                     self.context_stack.push(Context::new(*lvars, val));
                     let _ = self.vm_run(*iseq)?;
                     self.context_stack.pop().unwrap();
                     self.class_stack.pop().unwrap();
 
-                    let id_for_new = self.globals.get_ident_id(&"new".to_string());
-
-                    let new_func_info = MethodInfo::BuiltinFunc {
-                        name: "new".to_string(),
-                        func: Builtin::builtin_new,
-                    };
-                    let new_func_ref = self.globals.add_method(new_func_info);
-                    classref.add_class_method(id_for_new, new_func_ref);
                     self.exec_stack.push(PackedValue::nil());
                     pc += 9;
                 }
@@ -788,6 +795,7 @@ impl VM {
             Value::FixNum(i) => i.to_string(),
             Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
+            Value::Symbol(i) => format!(":{}", self.globals.get_ident_name(i)),
             //Value::Class(class) => self.get_class_name(*class),
             //Value::Instance(instance) => self.get_instance_name(*instance),
             Value::Range(start, end, exclude) => {
@@ -797,7 +805,7 @@ impl VM {
                 format!("({}{}{})", start, sym, end)
             }
             Value::Char(c) => format!("{:x}", c),
-            Value::Class(id) => format! {"Class({:?})", id},
+            Value::Class(id) => format! {"Class({:?})", id.name},
             Value::Instance(id) => format! {"Instance({:?})", id},
         }
     }
