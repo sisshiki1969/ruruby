@@ -13,7 +13,10 @@ class Complexe
   def sq
     Complexe.new(@r*@r - @i*@i, 2*@r*@i)
   end
-  def add(c)
+  def *(c)
+    Complexe.new(@r*c.r - @i*c.i, @r*c.i + @i*c.r)
+  end
+  def +(c)
     Complexe.new(@r + c.r, @i + c.i)
   end
   def abs2; @r*@r + @i*@i; end
@@ -35,12 +38,12 @@ count_size = size - 1               # Precomputed size for easy for..in looping
 for y in 0..count_size
   for x in 0..count_size
     z = Complexe.new(0.0, 0.0)
-    c = Complexe.new((2.0*x/size)-1.5, (2.0*y/size)-1.0)
+    c = Complexe.new(2.0*x/size-1.5, 2.0*y/size-1.0)
     escape = false
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
     for dummy in 0..ITER
-      z = z.sq.add(c)
+      z = z * z + c
       if z.abs2 > LIMIT_SQUARED
         escape = true
         break

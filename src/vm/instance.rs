@@ -28,6 +28,10 @@ impl InstanceRef {
         let boxed = Box::into_raw(Box::new(info));
         InstanceRef(boxed)
     }
+
+    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
+        self.classref.instance_method.get(&id)
+    }
 }
 
 impl std::ops::Deref for InstanceRef {

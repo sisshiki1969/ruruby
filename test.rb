@@ -9,9 +9,33 @@ class Vec
     def y; @y; end
 end
 
-v = Vec.new
-puts("#{v.x} #{v.y}")
-v1 = Vec.new(3,5)
-puts("#{v1.x} #{v1.y}")
-v2 = v1.add(Vec.new(4,8))
-puts("#{v2.x} #{v2.y}")
+class Vec
+    def initialize(x,y)
+        @x=x
+        @y=y
+    end
+    def x
+        @x
+    end
+    def y
+        @y
+    end
+    def +(other)
+        Vec.new(@x + other.x, @y + other.y)
+    end
+    def -(other)
+        Vec.new(@x - other.x, @y - other.y)
+    end
+    def *(other)
+        Vec.new(@x * other.x, @y * other.y)
+    end
+end
+
+v1 = Vec.new(3,4)
+v2 = Vec.new(6,14)
+v = v1 + v2
+puts("(#{v.x}, #{v.y})")
+v = v1 - v2
+puts("(#{v.x}, #{v.y})")
+v = v1 * v2
+puts("(#{v.x}, #{v.y})")

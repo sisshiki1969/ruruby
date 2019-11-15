@@ -357,9 +357,7 @@ impl VM {
                 }
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
-                    //println!("RECV {:?}", receiver);
                     let method_id = read_id(iseq, pc);
-                    //println!("METHOD {}", self.ident_table.get_name(method_id));
                     let methodref = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => {
                             match self.globals.get_toplevel_method(method_id) {
@@ -524,7 +522,14 @@ impl VM {
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 + rhs)),
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs + rhs as f64)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs + rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '+'")),
+            (Value::Instance(l_ref), _) => {
+                let method = self.globals.get_ident_id("@add");
+                match l_ref.get_instance_method(method) {
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
+                    None => Err(self.error_nomethod("'+'")),
+                }
+            }
+            (_, _) => Err(self.error_nomethod("'+'")),
         }
     }
     fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
@@ -551,7 +556,14 @@ impl VM {
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 - rhs)),
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs - rhs as f64)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs - rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '-'")),
+            (Value::Instance(l_ref), _) => {
+                let method = self.globals.get_ident_id("@sub");
+                match l_ref.get_instance_method(method) {
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
+                    None => Err(self.error_nomethod("'-'")),
+                }
+            }
+            (_, _) => Err(self.error_nomethod("'-'")),
         }
     }
 
@@ -581,7 +593,14 @@ impl VM {
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 * rhs)),
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs * rhs as f64)),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs * rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '*'")),
+            (Value::Instance(l_ref), _) => {
+                let method = self.globals.get_ident_id("@mul");
+                match l_ref.get_instance_method(method) {
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
+                    None => Err(self.error_nomethod("'*'")),
+                }
+            }
+            (_, _) => Err(self.error_nomethod("'*'")),
         }
     }
 

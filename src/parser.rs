@@ -827,7 +827,22 @@ impl Parser {
         //  end
         let mut is_class_method = false;
         let self_id = self.get_ident_id(&"self".to_string());
-        let mut id = self.expect_ident()?;
+        let mut id = match self.peek().kind {
+            TokenKind::Ident(_) => self.expect_ident()?,
+            TokenKind::Punct(Punct::Plus) => {
+                self.get()?;
+                self.get_ident_id(&"@add".to_string())
+            }
+            TokenKind::Punct(Punct::Minus) => {
+                self.get()?;
+                self.get_ident_id(&"@sub".to_string())
+            }
+            TokenKind::Punct(Punct::Mul) => {
+                self.get()?;
+                self.get_ident_id(&"@mul".to_string())
+            }
+            _ => return Err(self.error_unexpected(self.loc(), "Expected identifier or operator.")),
+        };
         if id == self_id {
             is_class_method = true;
             self.expect_punct(Punct::Dot)?;
