@@ -11,6 +11,7 @@ pub enum NodeKind {
     String(String),
     InterporatedString(Vec<Node>),
     Range(Box<Node>, Box<Node>, bool), // start, end, exclude_end
+    Array(NodeVec),
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
     Assign(Box<Node>, Box<Node>),

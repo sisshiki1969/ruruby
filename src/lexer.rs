@@ -159,6 +159,8 @@ impl Lexer {
                     ')' => self.new_punct(Punct::RParen),
                     '^' => self.new_punct(Punct::BitXor),
                     '~' => self.new_punct(Punct::BitNot),
+                    '[' => self.new_punct(Punct::LBracket),
+                    ']' => self.new_punct(Punct::RBracket),
                     '}' => match self.quote_state.last() {
                         Some(QuoteState::Expr) => {
                             self.quote_state.pop().unwrap();

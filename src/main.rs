@@ -136,7 +136,7 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
                 match eval.run(&result.node) {
                     Ok(_result) => {}
                     Err(err) => {
-                        parser.lexer.source_info.show_loc(&err.loc());
+                        result.source_info.show_loc(&err.loc());
                         println!("{:?}", err.kind);
                     }
                 };
@@ -202,7 +202,7 @@ fn repl_vm() {
                         println!("=> {}", res_str);
                     }
                     Err(err) => {
-                        parser.lexer.source_info.show_loc(&err.loc());
+                        parse_result.source_info.show_loc(&err.loc());
                         println!("{:?}", err.kind);
                         parser = parser_save;
                     }

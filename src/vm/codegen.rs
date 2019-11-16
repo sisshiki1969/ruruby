@@ -313,6 +313,14 @@ impl Codegen {
                 self.save_loc(iseq);
                 iseq.push(Inst::CREATE_RANGE);
             }
+            NodeKind::Array(nodes) => {
+                let len = nodes.len() as u32;
+                for node in nodes {
+                    self.gen(globals, iseq, node)?;
+                }
+                iseq.push(Inst::CREATE_ARRAY);
+                self.push32(iseq, len);
+            }
             NodeKind::Ident(id) => {
                 self.save_loc(iseq);
                 self.gen_get_local(iseq, *id)?;
@@ -483,7 +491,8 @@ impl Codegen {
                         self.save_loc(iseq);
                         self.gen_send(iseq, assign_id, 1);
                     }
-                    _ => unimplemented!("Unimplemented LHS form."),
+                    _ =>  return Err(self
+                                    .error_syntax(format!("Unimplemented LHS form."), lhs.loc()))
                 }
             }
             NodeKind::Send(receiver, method, args) => {
@@ -549,7 +558,7 @@ impl Codegen {
                     }
                 }
             }
-            _ => unimplemented!("{:?}", node.kind),
+            _ => return Err(self.error_syntax("Unimplemented syntax.", self.loc)),
         };
         Ok(())
     }

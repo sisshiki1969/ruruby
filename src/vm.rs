@@ -1,3 +1,4 @@
+mod array;
 mod builtin;
 mod class;
 mod codegen;
@@ -10,6 +11,7 @@ use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::*;
 pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
+pub use array::*;
 pub use builtin::*;
 pub use class::*;
 use codegen::*;
@@ -55,41 +57,49 @@ impl Inst {
     pub const END: u8 = 0;
     pub const PUSH_FIXNUM: u8 = 1;
     pub const PUSH_FLONUM: u8 = 2;
-    pub const ADD: u8 = 3;
-    pub const SUB: u8 = 4;
-    pub const MUL: u8 = 5;
-    pub const DIV: u8 = 6;
-    pub const EQ: u8 = 7;
-    pub const NE: u8 = 8;
-    pub const GT: u8 = 9;
-    pub const GE: u8 = 10;
-    pub const PUSH_TRUE: u8 = 11;
-    pub const PUSH_FALSE: u8 = 12;
-    pub const PUSH_NIL: u8 = 13;
-    pub const SHR: u8 = 14;
-    pub const SHL: u8 = 15;
-    pub const BIT_OR: u8 = 16;
-    pub const BIT_AND: u8 = 17;
-    pub const BIT_XOR: u8 = 18;
-    pub const JMP: u8 = 19;
-    pub const JMP_IF_FALSE: u8 = 20;
-    pub const SET_LOCAL: u8 = 21;
-    pub const GET_LOCAL: u8 = 22;
-    pub const SEND: u8 = 23;
-    pub const PUSH_SELF: u8 = 24;
-    pub const CREATE_RANGE: u8 = 25;
-    pub const GET_CONST: u8 = 26;
-    pub const SET_CONST: u8 = 27;
-    pub const PUSH_STRING: u8 = 28;
-    pub const POP: u8 = 29;
-    pub const CONCAT_STRING: u8 = 30;
-    pub const TO_S: u8 = 31;
-    pub const DEF_CLASS: u8 = 32;
-    pub const GET_INSTANCE_VAR: u8 = 33;
-    pub const SET_INSTANCE_VAR: u8 = 34;
-    pub const DEF_METHOD: u8 = 35;
-    pub const DEF_CLASS_METHOD: u8 = 36;
-    pub const PUSH_SYMBOL: u8 = 37;
+    pub const PUSH_TRUE: u8 = 3;
+    pub const PUSH_FALSE: u8 = 4;
+    pub const PUSH_NIL: u8 = 5;
+    pub const PUSH_STRING: u8 = 6;
+    pub const PUSH_SYMBOL: u8 = 7;
+    pub const PUSH_SELF: u8 = 8;
+
+    pub const ADD: u8 = 9;
+    pub const SUB: u8 = 10;
+    pub const MUL: u8 = 11;
+    pub const DIV: u8 = 12;
+    pub const EQ: u8 = 13;
+    pub const NE: u8 = 14;
+    pub const GT: u8 = 15;
+    pub const GE: u8 = 16;
+    pub const SHR: u8 = 17;
+    pub const SHL: u8 = 18;
+    pub const BIT_OR: u8 = 19;
+    pub const BIT_AND: u8 = 20;
+    pub const BIT_XOR: u8 = 21;
+
+    pub const JMP: u8 = 25;
+    pub const JMP_IF_FALSE: u8 = 26;
+
+    pub const SET_LOCAL: u8 = 30;
+    pub const GET_LOCAL: u8 = 31;
+    pub const GET_CONST: u8 = 32;
+    pub const SET_CONST: u8 = 33;
+    pub const GET_INSTANCE_VAR: u8 = 34;
+    pub const SET_INSTANCE_VAR: u8 = 35;
+
+    pub const SEND: u8 = 40;
+
+    pub const CREATE_RANGE: u8 = 50;
+    pub const CREATE_ARRAY: u8 = 51;
+
+    pub const POP: u8 = 60;
+    pub const CONCAT_STRING: u8 = 61;
+    pub const TO_S: u8 = 62;
+
+    pub const DEF_CLASS: u8 = 70;
+    pub const DEF_METHOD: u8 = 71;
+    pub const DEF_CLASS_METHOD: u8 = 72;
 }
 
 impl VM {
@@ -245,14 +255,14 @@ impl VM {
                 Inst::EQ => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    let val = self.eval_eq(lhs, rhs)?;
+                    let val = PackedValue::bool(self.eval_eq(lhs, rhs)?);
                     pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::NE => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    let val = self.eval_neq(lhs, rhs)?;
+                    let val = PackedValue::bool(!self.eval_eq(lhs, rhs)?);
                     pc += 1;
                     self.exec_stack.push(val);
                 }
@@ -353,6 +363,17 @@ impl VM {
                     self.exec_stack.push(range.pack());
                     pc += 1;
                 }
+                Inst::CREATE_ARRAY => {
+                    let len = read32(iseq, pc + 1);
+                    let mut elems = vec![];
+                    for _ in 0..len {
+                        elems.push(self.exec_stack.pop().unwrap());
+                    }
+                    elems.reverse();
+                    let array = PackedValue::array(ArrayRef::new(elems));
+                    self.exec_stack.push(array);
+                    pc += 5;
+                }
                 Inst::JMP => {
                     let disp = read32(iseq, pc + 1) as i32 as i64;
                     pc = ((pc as i64) + 5 + disp) as usize;
@@ -373,14 +394,16 @@ impl VM {
                         Value::Nil | Value::FixNum(_) => {
                             match self.globals.get_toplevel_method(method_id) {
                                 Some(info) => info.clone(),
-                                None => return Err(self.error_unimplemented("method not defined.")),
+                                None => return Err(self.error_unimplemented("Method not defined.")),
                             }
                         }
                         Value::Class(class) => self.get_class_method(class, method_id)?,
                         Value::Instance(instance) => {
                             self.get_instance_method(instance, method_id)?
                         }
-                        _ => unimplemented!(),
+                        _ => {
+                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
+                        }
                     };
                     let args_num = read32(iseq, pc + 5);
                     let mut args = vec![];
@@ -665,61 +688,42 @@ impl VM {
         }
     }
 
-    pub fn eval_eq(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+    pub fn eval_eq(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<bool, RubyError> {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(PackedValue::bool(*lhs == *rhs));
+            return Ok(*lhs == *rhs);
         }
         if lhs.is_packed_num() && rhs.is_packed_num() {
             if lhs.is_packed_fixnum() {
-                return Ok(PackedValue::bool(
-                    lhs.as_packed_fixnum() as f64 == rhs.as_packed_flonum(),
-                ));
+                return Ok(lhs.as_packed_fixnum() as f64 == rhs.as_packed_flonum());
             } else if rhs.is_packed_fixnum() {
-                return Ok(PackedValue::bool(
-                    lhs.as_packed_flonum() == rhs.as_packed_fixnum() as f64,
-                ));
+                return Ok(lhs.as_packed_flonum() == rhs.as_packed_fixnum() as f64);
             } else {
-                return Ok(PackedValue::bool(*lhs == *rhs));
+                return Ok(*lhs == *rhs);
             }
         }
         match (&lhs.unpack(), &rhs.unpack()) {
-            (Value::Nil, Value::Nil) => Ok(PackedValue::true_val()),
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            (Value::String(lhs), Value::String(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            (Value::Bool(lhs), Value::Bool(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            (Value::Class(lhs), Value::Class(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            (Value::Instance(lhs), Value::Instance(rhs)) => Ok(PackedValue::bool(lhs == rhs)),
-            _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
-        }
-    }
-
-    fn eval_neq(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(PackedValue::bool(*lhs != *rhs));
-        }
-        if lhs.is_packed_num() && rhs.is_packed_num() {
-            if lhs.is_packed_fixnum() {
-                return Ok(PackedValue::bool(
-                    lhs.as_packed_fixnum() as f64 != rhs.as_packed_flonum(),
-                ));
-            } else if rhs.is_packed_fixnum() {
-                return Ok(PackedValue::bool(
-                    lhs.as_packed_flonum() != rhs.as_packed_fixnum() as f64,
-                ));
-            } else {
-                return Ok(PackedValue::bool(*lhs != *rhs));
+            (Value::Nil, Value::Nil) => Ok(true),
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(lhs == rhs),
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(lhs == rhs),
+            (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
+            (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
+            (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
+            (Value::Class(lhs), Value::Class(rhs)) => Ok(lhs == rhs),
+            (Value::Instance(lhs), Value::Instance(rhs)) => Ok(lhs == rhs),
+            (Value::Array(lhs), Value::Array(rhs)) => {
+                let lhs = &lhs.elements;
+                let rhs = &rhs.elements;
+                if lhs.len() != rhs.len() {
+                    return Ok(false);
+                }
+                for i in 0..lhs.len() {
+                    if !self.eval_eq(lhs[i], rhs[i])? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
             }
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (Value::Nil, Value::Nil) => Ok(PackedValue::false_val()),
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
-            (Value::Bool(lhs), Value::Bool(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
-            (Value::Class(lhs), Value::Class(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
-            (Value::Instance(lhs), Value::Instance(rhs)) => Ok(PackedValue::bool(lhs != rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '!='")),
+            _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
         }
     }
 
@@ -816,6 +820,17 @@ impl VM {
             Value::Instance(iref) => {
                 format! {"Instance({}:{:?})", self.globals.get_ident_name(iref.classref.id), iref}
             }
+            Value::Array(aref) => match aref.elements.len() {
+                0 => "[]".to_string(),
+                1 => format!("[{}]", self.val_to_s(aref.elements[0])),
+                len => {
+                    let mut result = self.val_to_s(aref.elements[0]);
+                    for i in 1..len {
+                        result = format!("{},{}", result, self.val_to_s(aref.elements[i]));
+                    }
+                    format! {"[{}]", result}
+                }
+            },
         }
     }
 }

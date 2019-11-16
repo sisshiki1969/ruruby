@@ -5,7 +5,7 @@ extern crate test;
 use ruruby::lexer::Lexer;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::vm::value::Value;
-use ruruby::vm::VM;
+use ruruby::vm::*;
 use test::Bencher;
 
 fn eval_script(script: impl Into<String>, expected: Value) {
@@ -15,7 +15,8 @@ fn eval_script(script: impl Into<String>, expected: Value) {
     eval.init_builtin();
     match eval.run(&result.node) {
         Ok(res) => {
-            if res.unpack() != expected {
+            let res = res.unpack();
+            if res != expected {
                 panic!("Expected:{:?} Got:{:?}", expected, res);
             }
         }
@@ -67,6 +68,15 @@ fn interpolated_string_lit1() {
     "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;} fibo(#{x}) = #{fibo(x)}"
     "###;
     let expected = Value::String("fibonacci  fibo(20) = 6765".to_string());
+    eval_script(program, expected);
+}
+
+#[test]
+fn array1() {
+    let program = "
+        assert([1,2,3], [1,2,3])
+    ";
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 
