@@ -1,4 +1,5 @@
 use super::class::ClassRef;
+use super::array::ArrayRef;
 use super::instance::InstanceRef;
 use crate::util::IdentId;
 
@@ -18,6 +19,7 @@ pub enum Value {
     Symbol(IdentId),
     Class(ClassRef),
     Instance(InstanceRef),
+    Array(ArrayRef),
     Range(PackedValue, PackedValue, bool),
     Char(u8),
 }
@@ -178,6 +180,10 @@ impl PackedValue {
 
     pub fn instance(instance_ref: InstanceRef) -> Self {
         PackedValue(Value::pack_as_boxed(Value::Instance(instance_ref)))
+    }
+
+        pub fn array(array_ref: ArrayRef) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::Array(array_ref)))
     }
 }
 

@@ -60,8 +60,6 @@ impl SourceInfo {
             if line.2 < loc.0 || line.1 > loc.1 {
                 continue;
             }
-            println!("line {:?}", line);
-            println!("loc {:?}", loc);
             println!(
                 "{}",
                 self.code[(line.1)..(line.2)].iter().collect::<String>()

@@ -80,6 +80,8 @@ pub enum Reserved {
 pub enum Punct {
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Semi,
     Colon,
     Comma,
