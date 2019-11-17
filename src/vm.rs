@@ -74,6 +74,14 @@ struct Perf {
 
 #[cfg(feature = "perf")]
 impl Perf {
+    fn new() -> Self {
+        Perf {
+            counter: vec![PerfCounter::new(); 256],
+            timer: Instant::now(),
+            prev_inst: 255,
+        }
+    }
+
     fn get_perf(&mut self, next_inst: u8) {
         let prev = self.prev_inst;
         if prev != 255 {
@@ -86,7 +94,9 @@ impl Perf {
 
     fn get_perf_no_count(&mut self, next_inst: u8) {
         self.get_perf(next_inst);
-        self.counter[next_inst as usize].count -= 1;
+        if next_inst != 255 {
+            self.counter[next_inst as usize].count -= 1;
+        }
     }
 }
 
@@ -121,11 +131,7 @@ impl VM {
             context_stack: vec![Context::new(64, Value::Class(main_class).pack())],
             exec_stack: vec![],
             #[cfg(feature = "perf")]
-            perf: Perf {
-                counter: vec![PerfCounter::new(); 256],
-                timer: Instant::now(),
-                prev_inst: 255,
-            },
+            perf: Perf::new(),
         };
         vm
     }
@@ -172,7 +178,13 @@ impl VM {
             }
             match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
-                    Some(v) => return Ok(v),
+                    Some(v) => {
+                        #[cfg(feature = "perf")]
+                        {
+                            self.perf.get_perf(255);
+                        }
+                        return Ok(v);
+                    }
                     None => panic!("Illegal exec stack length."),
                 },
                 Inst::PUSH_NIL => {
@@ -205,7 +217,7 @@ impl VM {
                 Inst::PUSH_STRING => {
                     let id = read_id(iseq, pc);
                     let string = self.globals.get_ident_name(id).clone();
-                    self.exec_stack.push(Value::String(string).pack());
+                    self.exec_stack.push(PackedValue::string(string));
                     pc += 5;
                 }
                 Inst::PUSH_SYMBOL => {
@@ -415,19 +427,18 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = read_id(iseq, pc);
-                    let methodref = match receiver.unpack() {
-                        Value::Nil | Value::FixNum(_) => {
-                            match self.globals.get_toplevel_method(method_id) {
-                                Some(info) => info.clone(),
-                                None => return Err(self.error_unimplemented("Method not defined.")),
+                    let methodref = if let Some(instance) = receiver.as_instance() {
+                        self.get_instance_method(instance, method_id)?
+                    } else if let Some(class) = receiver.as_class() {
+                        self.get_class_method(class, method_id)?
+                    } else {
+                        match receiver.unpack() {
+                            Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
+                            _ => {
+                                return Err(
+                                    self.error_unimplemented("Unimplemented type of receiver.")
+                                )
                             }
-                        }
-                        Value::Class(class) => self.get_class_method(class, method_id)?,
-                        Value::Instance(instance) => {
-                            self.get_instance_method(instance, method_id)?
-                        }
-                        _ => {
-                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
                         }
                     };
                     let args_num = read32(iseq, pc + 5);
@@ -442,15 +453,10 @@ impl VM {
                 Inst::DEF_CLASS => {
                     let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
-                    let method_info = self.globals.get_method_info(methodref).clone();
+
                     let classref = self.globals.add_class(id).clone();
                     let val = PackedValue::class(classref);
                     self.const_table.insert(id, val);
-
-                    let (iseq, lvars) = match &method_info {
-                        MethodInfo::RubyFunc { iseq, lvars, .. } => (iseq, lvars),
-                        _ => unreachable!(),
-                    };
 
                     self.globals
                         .add_builtin_class_method(classref, "new", Builtin::builtin_new);
@@ -461,9 +467,7 @@ impl VM {
                     );
 
                     self.class_stack.push(classref);
-                    self.context_stack.push(Context::new(*lvars, val));
-                    let _ = self.vm_run(*iseq)?;
-                    self.context_stack.pop().unwrap();
+                    let _ = self.eval_send(methodref, val, vec![])?;
                     self.class_stack.pop().unwrap();
 
                     self.exec_stack.push(PackedValue::nil());
@@ -500,7 +504,7 @@ impl VM {
                 }
                 Inst::TO_S => {
                     let val = self.exec_stack.pop().unwrap();
-                    let res = Value::String(self.val_to_s(val)).pack();
+                    let res = PackedValue::string(self.val_to_s(val));
                     self.exec_stack.push(res);
                     pc += 1;
                 }
@@ -872,6 +876,12 @@ impl VM {
         args: Vec<PackedValue>,
     ) -> VMResult {
         let info = self.globals.get_method_info(methodref);
+        #[allow(unused_variables, unused_mut)]
+        let mut inst = 0;
+        #[cfg(feature = "perf")]
+        {
+            inst = self.perf.prev_inst;
+        }
         match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 #[cfg(feature = "perf")]
@@ -881,7 +891,7 @@ impl VM {
                 let val = func(self, receiver, args)?;
                 #[cfg(feature = "perf")]
                 {
-                    self.perf.get_perf_no_count(Inst::SEND);
+                    self.perf.get_perf_no_count(inst);
                 }
                 Ok(val)
             }
@@ -918,7 +928,7 @@ impl VM {
                 let res_value = self.vm_run(iseq)?;
                 #[cfg(feature = "perf")]
                 {
-                    self.perf.get_perf_no_count(Inst::SEND);
+                    self.perf.get_perf_no_count(inst);
                 }
                 self.context_stack.pop().unwrap();
                 Ok(res_value)
@@ -959,6 +969,13 @@ impl VM {
                 }
                 Some(methodref) => Ok(methodref.clone()),
             },
+        }
+    }
+
+    pub fn get_toplevel_method(&self, method: IdentId) -> Result<MethodRef, RubyError> {
+        match self.globals.get_toplevel_method(method) {
+            Some(info) => Ok(info.clone()),
+            None => return Err(self.error_unimplemented("Method not defined.")),
         }
     }
 }

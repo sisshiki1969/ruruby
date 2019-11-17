@@ -120,6 +120,24 @@ impl PackedValue {
         self.0 == FALSE_VALUE
     }
 
+    pub fn as_class(&self) -> Option<ClassRef> {
+        unsafe {
+            match *(self.0 as *mut Value) {
+                Value::Class(cref) => Some(cref),
+                _ => None,
+            }
+        }
+    }
+
+    pub fn as_instance(&self) -> Option<InstanceRef> {
+        unsafe {
+            match *(self.0 as *mut Value) {
+                Value::Instance(iref) => Some(iref),
+                _ => None,
+            }
+        }
+    }
+
     pub fn as_packed_fixnum(&self) -> i64 {
         (self.0 as i64) >> 1
     }
@@ -168,6 +186,10 @@ impl PackedValue {
 
     pub fn flonum(num: f64) -> Self {
         PackedValue(Value::pack_flonum(num))
+    }
+
+    pub fn string(string: String) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::String(string)))
     }
 
     pub fn symbol(id: IdentId) -> Self {

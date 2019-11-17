@@ -134,7 +134,7 @@ impl Inst {
                 } else if *c > 10000 {
                     format!("{:>9}K", c / 1000)
                 } else {
-                    format!("{:>9}K", *c)
+                    format!("{:>10}", *c)
                 },
                 d.as_secs_f64() * 100.0 / sum.as_secs_f64(),
                 d.as_nanos() / (*c as u128)

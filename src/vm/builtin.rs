@@ -16,9 +16,14 @@ impl Builtin {
             receiver: PackedValue,
             _args: Vec<PackedValue>,
         ) -> VMResult {
-            match receiver.unpack() {
-                Value::FixNum(i) => Ok(Value::Char(i as u8).pack()),
-                _ => unimplemented!(),
+            if receiver.is_packed_fixnum() {
+                let i = receiver.as_packed_fixnum();
+                Ok(Value::Char(i as u8).pack())
+            } else {
+                match receiver.unpack() {
+                    Value::FixNum(i) => Ok(Value::Char(i as u8).pack()),
+                    _ => unimplemented!(),
+                }
             }
         }
 
@@ -75,8 +80,8 @@ impl Builtin {
     }
     /// Built-in function "new".
     pub fn builtin_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-        match receiver.unpack() {
-            Value::Class(class_ref) => {
+        match receiver.as_class() {
+            Some(class_ref) => {
                 let instance = InstanceRef::new(class_ref);
                 let new_instance = PackedValue::instance(instance);
                 if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
@@ -84,31 +89,36 @@ impl Builtin {
                 };
                 Ok(new_instance)
             }
-            _ => Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver))),
+            None => {
+                Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver)))
+            }
         }
     }
     /// Built-in function "attr_accessor".
     pub fn builtin_attr(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-        if let Value::Class(classref) = receiver.unpack() {
-            for arg in args {
-                if arg.is_packed_symbol() {
-                    let id = arg.as_packed_symbol();
-                    let info = MethodInfo::AttrReader { id };
-                    let methodref = vm.globals.add_method(info);
-                    classref.clone().add_instance_method(id, methodref);
+        match receiver.as_class() {
+            Some(classref) => {
+                for arg in args {
+                    if arg.is_packed_symbol() {
+                        let id = arg.as_packed_symbol();
+                        let info = MethodInfo::AttrReader { id };
+                        let methodref = vm.globals.add_method(info);
+                        classref.clone().add_instance_method(id, methodref);
 
-                    let assign_name = vm.globals.get_ident_name(id).clone() + "=";
-                    let assign_id = vm.globals.get_ident_id(assign_name);
-                    let info = MethodInfo::AttrWriter { id };
-                    let methodref = vm.globals.add_method(info);
-                    classref.clone().add_instance_method(assign_id, methodref);
-                } else {
-                    return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
+                        let assign_name = vm.globals.get_ident_name(id).clone() + "=";
+                        let assign_id = vm.globals.get_ident_id(assign_name);
+                        let info = MethodInfo::AttrWriter { id };
+                        let methodref = vm.globals.add_method(info);
+                        classref.clone().add_instance_method(assign_id, methodref);
+                    } else {
+                        return Err(
+                            vm.error_name("Each of args for attr_accessor must be a symbol.")
+                        );
+                    }
                 }
             }
-        } else {
-            unreachable!("Illegal attr_accesor in non-class object.");
-        };
+            None => unreachable!("Illegal attr_accesor in non-class object."),
+        }
         Ok(PackedValue::nil())
     }
 }
