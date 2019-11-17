@@ -1,3 +1,4 @@
+use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind};
 use crate::vm::*;
@@ -491,8 +492,9 @@ impl Codegen {
                         self.save_loc(iseq);
                         self.gen_send(iseq, assign_id, 1);
                     }
-                    _ =>  return Err(self
-                                    .error_syntax(format!("Unimplemented LHS form."), lhs.loc()))
+                    _ => {
+                        return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()))
+                    }
                 }
             }
             NodeKind::Send(receiver, method, args) => {

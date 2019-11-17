@@ -1,6 +1,7 @@
-use super::class::ClassRef;
 use super::array::ArrayRef;
+use super::class::ClassRef;
 use super::instance::InstanceRef;
+use super::range::RangeRef;
 use crate::util::IdentId;
 
 const NIL_VALUE: u64 = 0x08;
@@ -20,7 +21,7 @@ pub enum Value {
     Class(ClassRef),
     Instance(InstanceRef),
     Array(ArrayRef),
-    Range(PackedValue, PackedValue, bool),
+    Range(RangeRef),
     Char(u8),
 }
 
@@ -182,8 +183,13 @@ impl PackedValue {
         PackedValue(Value::pack_as_boxed(Value::Instance(instance_ref)))
     }
 
-        pub fn array(array_ref: ArrayRef) -> Self {
+    pub fn array(array_ref: ArrayRef) -> Self {
         PackedValue(Value::pack_as_boxed(Value::Array(array_ref)))
+    }
+
+    pub fn range(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+        let rref = RangeRef::new(start, end, exclude);
+        PackedValue(Value::pack_as_boxed(Value::Range(rref)))
     }
 }
 
@@ -312,7 +318,7 @@ mod tests {
     fn pack_range() {
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
-        let expect = Value::Range(from, to, false);
+        let expect = Value::Range(RangeRef::new(from, to, false));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

@@ -18,7 +18,7 @@ class Complexe
   def abs2; @r*@r + @i*@i; end
 end
 
-size = 800 # ARGV[0].to_i
+size = 400 # ARGV[0].to_i
 
 puts("P4\n#{size} #{size}")
 

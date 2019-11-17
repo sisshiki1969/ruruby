@@ -5,7 +5,9 @@ mod codegen;
 mod globals;
 mod instance;
 mod method;
+mod range;
 pub mod value;
+mod vm_inst;
 
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::*;
@@ -18,8 +20,12 @@ use codegen::*;
 pub use globals::*;
 pub use instance::*;
 pub use method::*;
+pub use range::*;
 use std::collections::HashMap;
+#[cfg(feature = "perf")]
+use std::time::{Duration, Instant};
 pub use value::*;
+use vm_inst::*;
 
 pub type ValueTable = HashMap<IdentId, PackedValue>;
 
@@ -35,6 +41,53 @@ pub struct VM {
     pub context_stack: Vec<Context>,
     pub class_stack: Vec<ClassRef>,
     pub exec_stack: Vec<PackedValue>,
+    #[cfg(feature = "perf")]
+    perf: Perf,
+}
+
+#[cfg(feature = "perf")]
+#[derive(Debug, Clone)]
+pub struct PerfCounter {
+    count: u32,
+    duration: Duration,
+    duration2: Duration,
+}
+
+#[cfg(feature = "perf")]
+impl PerfCounter {
+    fn new() -> Self {
+        PerfCounter {
+            count: 0,
+            duration: Duration::from_secs(0),
+            duration2: Duration::from_secs(0),
+        }
+    }
+}
+
+#[cfg(feature = "perf")]
+#[derive(Debug, Clone)]
+struct Perf {
+    counter: Vec<PerfCounter>,
+    timer: Instant,
+    prev_inst: u8,
+}
+
+#[cfg(feature = "perf")]
+impl Perf {
+    fn get_perf(&mut self, next_inst: u8) {
+        let prev = self.prev_inst;
+        if prev != 255 {
+            self.counter[prev as usize].count += 1;
+            self.counter[prev as usize].duration += self.timer.elapsed();
+        }
+        self.timer = Instant::now();
+        self.prev_inst = next_inst;
+    }
+
+    fn get_perf_no_count(&mut self, next_inst: u8) {
+        self.get_perf(next_inst);
+        self.counter[next_inst as usize].count -= 1;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -52,56 +105,6 @@ impl Context {
     }
 }
 
-pub struct Inst;
-impl Inst {
-    pub const END: u8 = 0;
-    pub const PUSH_FIXNUM: u8 = 1;
-    pub const PUSH_FLONUM: u8 = 2;
-    pub const PUSH_TRUE: u8 = 3;
-    pub const PUSH_FALSE: u8 = 4;
-    pub const PUSH_NIL: u8 = 5;
-    pub const PUSH_STRING: u8 = 6;
-    pub const PUSH_SYMBOL: u8 = 7;
-    pub const PUSH_SELF: u8 = 8;
-
-    pub const ADD: u8 = 9;
-    pub const SUB: u8 = 10;
-    pub const MUL: u8 = 11;
-    pub const DIV: u8 = 12;
-    pub const EQ: u8 = 13;
-    pub const NE: u8 = 14;
-    pub const GT: u8 = 15;
-    pub const GE: u8 = 16;
-    pub const SHR: u8 = 17;
-    pub const SHL: u8 = 18;
-    pub const BIT_OR: u8 = 19;
-    pub const BIT_AND: u8 = 20;
-    pub const BIT_XOR: u8 = 21;
-
-    pub const JMP: u8 = 25;
-    pub const JMP_IF_FALSE: u8 = 26;
-
-    pub const SET_LOCAL: u8 = 30;
-    pub const GET_LOCAL: u8 = 31;
-    pub const GET_CONST: u8 = 32;
-    pub const SET_CONST: u8 = 33;
-    pub const GET_INSTANCE_VAR: u8 = 34;
-    pub const SET_INSTANCE_VAR: u8 = 35;
-
-    pub const SEND: u8 = 40;
-
-    pub const CREATE_RANGE: u8 = 50;
-    pub const CREATE_ARRAY: u8 = 51;
-
-    pub const POP: u8 = 60;
-    pub const CONCAT_STRING: u8 = 61;
-    pub const TO_S: u8 = 62;
-
-    pub const DEF_CLASS: u8 = 70;
-    pub const DEF_METHOD: u8 = 71;
-    pub const DEF_CLASS_METHOD: u8 = 72;
-}
-
 impl VM {
     pub fn new(
         ident_table: Option<IdentifierTable>,
@@ -117,6 +120,12 @@ impl VM {
             class_stack: vec![],
             context_stack: vec![Context::new(64, Value::Class(main_class).pack())],
             exec_stack: vec![],
+            #[cfg(feature = "perf")]
+            perf: Perf {
+                counter: vec![PerfCounter::new(); 256],
+                timer: Instant::now(),
+                prev_inst: 255,
+            },
         };
         vm
     }
@@ -132,12 +141,24 @@ impl VM {
     }
 
     pub fn run(&mut self, node: &Node) -> VMResult {
+        #[cfg(feature = "perf")]
+        {
+            self.perf.prev_inst = 255;
+        }
         let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
         let val = self.vm_run(iseq)?;
+        #[cfg(feature = "perf")]
+        {
+            self.perf.get_perf(255);
+        }
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
+        #[cfg(feature = "perf")]
+        {
+            Inst::print_perf(&mut self.perf.counter);
+        }
         Ok(val)
     }
 
@@ -145,6 +166,10 @@ impl VM {
         let iseq = &*iseq;
         let mut pc = 0;
         loop {
+            #[cfg(feature = "perf")]
+            {
+                self.perf.get_perf(iseq[pc]);
+            }
             match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
                     Some(v) => return Ok(v),
@@ -359,8 +384,8 @@ impl VM {
                     let start = self.exec_stack.pop().unwrap();
                     let end = self.exec_stack.pop().unwrap();
                     let exclude = self.exec_stack.pop().unwrap();
-                    let range = Value::Range(start, end, self.val_to_bool(exclude));
-                    self.exec_stack.push(range.pack());
+                    let range = PackedValue::range(start, end, self.val_to_bool(exclude));
+                    self.exec_stack.push(range);
                     pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
@@ -809,10 +834,10 @@ impl VM {
             Value::Symbol(i) => format!(":{}", self.globals.get_ident_name(i)),
             //Value::Class(class) => self.get_class_name(*class),
             //Value::Instance(instance) => self.get_instance_name(*instance),
-            Value::Range(start, end, exclude) => {
-                let start = self.val_to_s(start);
-                let end = self.val_to_s(end);
-                let sym = if exclude { "..." } else { ".." };
+            Value::Range(rref) => {
+                let start = self.val_to_s(rref.start);
+                let end = self.val_to_s(rref.end);
+                let sym = if rref.exclude { "..." } else { ".." };
                 format!("({}{}{})", start, sym, end)
             }
             Value::Char(c) => format!("{:x}", c),
@@ -849,7 +874,15 @@ impl VM {
         let info = self.globals.get_method_info(methodref);
         match info {
             MethodInfo::BuiltinFunc { func, .. } => {
+                #[cfg(feature = "perf")]
+                {
+                    self.perf.get_perf(255);
+                }
                 let val = func(self, receiver, args)?;
+                #[cfg(feature = "perf")]
+                {
+                    self.perf.get_perf_no_count(Inst::SEND);
+                }
                 Ok(val)
             }
             MethodInfo::AttrReader { id } => match receiver.unpack() {
@@ -883,6 +916,10 @@ impl VM {
                 }
 
                 let res_value = self.vm_run(iseq)?;
+                #[cfg(feature = "perf")]
+                {
+                    self.perf.get_perf_no_count(Inst::SEND);
+                }
                 self.context_stack.pop().unwrap();
                 Ok(res_value)
             }

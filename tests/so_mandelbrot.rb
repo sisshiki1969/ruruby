@@ -4,7 +4,7 @@
 #  contributed by Karl von Laudermann
 #  modified by Jeremy Echols
 
-size = 800 # ARGV[0].to_i
+size = 600 # ARGV[0].to_i
 
 puts("P4\n#{size} #{size}")
 
