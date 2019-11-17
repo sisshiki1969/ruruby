@@ -130,9 +130,24 @@ impl PackedValue {
     }
 
     pub fn as_instance(&self) -> Option<InstanceRef> {
+        if self.0 & 0b0111 != 0 || self.0 <= 0x20 {
+            return None;
+        }
         unsafe {
             match *(self.0 as *mut Value) {
                 Value::Instance(iref) => Some(iref),
+                _ => None,
+            }
+        }
+    }
+
+    pub fn as_array(&self) -> Option<ArrayRef> {
+        if self.0 & 0b0111 != 0 || self.0 <= 0x20 {
+            return None;
+        }
+        unsafe {
+            match *(self.0 as *mut Value) {
+                Value::Array(aref) => Some(aref),
                 _ => None,
             }
         }

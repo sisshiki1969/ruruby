@@ -77,6 +77,16 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
+    fn gen_get_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
+        iseq.push(Inst::GET_ARRAY_ELEM);
+        self.push32(iseq, num_args as u32);
+    }
+
+    fn gen_set_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
+        iseq.push(Inst::SET_ARRAY_ELEM);
+        self.push32(iseq, num_args as u32);
+    }
+
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_IF_FALSE);
         iseq.push(0);
@@ -423,6 +433,15 @@ impl Codegen {
                     self.write_disp_from_cur(iseq, src2);
                 }
             },
+            NodeKind::ArrayMember(array, index) => {
+                // number of index elements must be 1 or 2 (ensured by parser).
+                self.gen(globals, iseq, array)?;
+                let num_args = index.len();
+                for i in index {
+                    self.gen(globals, iseq, i)?;
+                }
+                self.gen_get_array_elem(iseq, num_args);
+            }
             NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes)?,
             NodeKind::If(cond_, then_, else_) => {
                 self.gen(globals, iseq, &cond_)?;
@@ -492,6 +511,16 @@ impl Codegen {
                         self.save_loc(iseq);
                         self.gen_send(iseq, assign_id, 1);
                     }
+                    NodeKind::ArrayMember(array, index) => {
+                        self.gen(globals, iseq, array)?;
+                        if index.len() != 1 {
+                            return Err(
+                                self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())
+                            );
+                        }
+                        self.gen(globals, iseq, &index[0])?;
+                        self.gen_set_array_elem(iseq, 1);
+                    }
                     _ => {
                         return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()))
                     }
@@ -560,7 +589,7 @@ impl Codegen {
                     }
                 }
             }
-            _ => return Err(self.error_syntax("Unimplemented syntax.", self.loc)),
+            _ => return Err(self.error_syntax("Codegen: Unimplemented syntax.", self.loc)),
         };
         Ok(())
     }

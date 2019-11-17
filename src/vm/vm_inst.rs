@@ -36,6 +36,8 @@ impl Inst {
     pub const SET_CONST: u8 = 33;
     pub const GET_INSTANCE_VAR: u8 = 34;
     pub const SET_INSTANCE_VAR: u8 = 35;
+    pub const GET_ARRAY_ELEM: u8 = 36;
+    pub const SET_ARRAY_ELEM: u8 = 37;
 
     pub const SEND: u8 = 40;
 
@@ -85,6 +87,8 @@ impl Inst {
             Inst::SET_CONST => "SET_CONST",
             Inst::GET_INSTANCE_VAR => "GET_INST_VAR",
             Inst::SET_INSTANCE_VAR => "SET_INST_VAR",
+            Inst::GET_ARRAY_ELEM => "GET_ARY_ELEM",
+            Inst::SET_ARRAY_ELEM => "SET_ARY_ELEM",
             Inst::SEND => "SEND",
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",

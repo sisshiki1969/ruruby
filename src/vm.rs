@@ -176,6 +176,7 @@ impl VM {
             {
                 self.perf.get_perf(iseq[pc]);
             }
+            //            println!("{}", Inst::inst_name(iseq[pc]));
             match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
                     Some(v) => {
@@ -392,6 +393,79 @@ impl VM {
                     self.exec_stack.push(val);
                     pc += 5;
                 }
+                Inst::SET_ARRAY_ELEM => {
+                    let arg_num = read32(iseq, pc + 1);
+                    let mut args = vec![];
+                    for _ in 0..arg_num {
+                        args.push(self.exec_stack.pop().unwrap());
+                    }
+                    args.reverse();
+                    match self.exec_stack.pop().unwrap().as_array() {
+                        Some(mut aref) => {
+                            let index = if args[0].is_packed_fixnum() {
+                                args[0].as_packed_fixnum()
+                            } else {
+                                return Err(self.error_unimplemented("Index must be an integer."));
+                            };
+                            let len = aref.elements.len();
+                            let index = if index < 0 {
+                                let i = len as i64 + index;
+                                if i < 0 {
+                                    return Err(self.error_unimplemented("Index out of range."));
+                                };
+                                i as usize
+                            } else if index < len as i64 {
+                                index as usize
+                            } else {
+                                return Err(self.error_unimplemented("Index out of range."));
+                            };
+                            let val = self.exec_stack.last().unwrap();
+                            aref.elements[index] = val.clone();
+                        }
+                        None => {
+                            return Err(self.error_unimplemented(
+                                "Currently, []= is supported only for array.",
+                            ))
+                        }
+                    }
+                    pc += 5;
+                }
+                Inst::GET_ARRAY_ELEM => {
+                    let arg_num = read32(iseq, pc + 1);
+                    let mut args = vec![];
+                    for _ in 0..arg_num {
+                        args.push(self.exec_stack.pop().unwrap());
+                    }
+                    args.reverse();
+                    match self.exec_stack.pop().unwrap().as_array() {
+                        Some(aref) => {
+                            let index = if args[0].is_packed_fixnum() {
+                                args[0].as_packed_fixnum()
+                            } else {
+                                return Err(self.error_unimplemented("Index must be an integer."));
+                            };
+                            let len = aref.elements.len();
+                            let index = if index < 0 {
+                                let i = len as i64 + index;
+                                if i < 0 {
+                                    return Err(self.error_unimplemented("Index out of range."));
+                                };
+                                i as usize
+                            } else if index < len as i64 {
+                                index as usize
+                            } else {
+                                return Err(self.error_unimplemented("Index out of range."));
+                            };
+                            let elem = aref.elements[index];
+                            self.exec_stack.push(elem);
+                        }
+                        None => {
+                            return Err(self
+                                .error_unimplemented("Currently, [] is supported only for array."))
+                        }
+                    }
+                    pc += 5;
+                }
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap();
                     let end = self.exec_stack.pop().unwrap();
@@ -427,18 +501,12 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = read_id(iseq, pc);
-                    let methodref = if let Some(instance) = receiver.as_instance() {
-                        self.get_instance_method(instance, method_id)?
-                    } else if let Some(class) = receiver.as_class() {
-                        self.get_class_method(class, method_id)?
-                    } else {
-                        match receiver.unpack() {
-                            Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
-                            _ => {
-                                return Err(
-                                    self.error_unimplemented("Unimplemented type of receiver.")
-                                )
-                            }
+                    let methodref = match receiver.unpack() {
+                        Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
+                        Value::Class(cref) => self.get_class_method(cref, method_id)?,
+                        Value::Instance(iref) => self.get_instance_method(iref, method_id)?,
+                        _ => {
+                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
                         }
                     };
                     let args_num = read32(iseq, pc + 5);
@@ -512,7 +580,7 @@ impl VM {
                     self.exec_stack.pop().unwrap();
                     pc += 1;
                 }
-                _ => unimplemented!("Illegal instruction."),
+                _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
             }
         }
 

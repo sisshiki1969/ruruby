@@ -229,7 +229,7 @@ impl Parser {
 
     /// Get the next token and examine whether it is an expected Punct.
     /// If not, return RubyError.
-    fn expect_punct(&mut self, expect:&Punct) -> Result<(), RubyError> {
+    fn expect_punct(&mut self, expect: &Punct) -> Result<(), RubyError> {
         match &self.get()?.kind {
             TokenKind::Punct(punct) if punct == expect => Ok(()),
             _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect '{:?}'", expect))),
@@ -608,6 +608,7 @@ impl Parser {
             let tok = self.peek_no_skip_line_term();
             node = match tok.kind {
                 TokenKind::Punct(Punct::Dot) => {
+                    // FUNCTION:
                     // PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
                     // PRIMARY `.' FNAME
                     self.get()?;
@@ -631,6 +632,20 @@ impl Parser {
                         args,
                         loc.merge(self.loc()),
                     )
+                }
+                TokenKind::Punct(Punct::LBracket) => {
+                    // PRIMARY: PRIMARY `[' [ARGS] `]'
+                    let loc = self.loc();
+                    self.get()?;
+                    let args = self.parse_args(&Punct::RBracket)?;
+                    let len = args.len();
+                    if len < 1 || len > 2 {
+                        return Err(self.error_unexpected(
+                            loc.merge(self.prev_loc()),
+                            "Wrong number of arguments (expected 1 or 2)",
+                        ));
+                    }
+                    Node::new_array_member(node, args)
                 }
                 _ => return Ok(node),
             }

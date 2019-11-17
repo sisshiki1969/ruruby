@@ -14,6 +14,7 @@ pub enum NodeKind {
     Array(NodeVec),
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
+    ArrayMember(Box<Node>, Vec<Node>),
     Assign(Box<Node>, Box<Node>),
     CompStmt(NodeVec),
     If(Box<Node>, Box<Node>, Box<Node>),
@@ -105,6 +106,15 @@ impl Node {
     pub fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
         let loc = loc.merge(lhs.loc());
         let kind = NodeKind::UnOp(op, Box::new(lhs));
+        Node::new(kind, loc)
+    }
+
+    pub fn new_array_member(array: Node, index: Vec<Node>) -> Self {
+        // index must be 1 or 2
+        let start_loc = index[0].loc();
+        let end_loc = index[index.len() - 1].loc();
+        let loc = array.loc().merge(start_loc).merge(end_loc);
+        let kind = NodeKind::ArrayMember(Box::new(array), index);
         Node::new(kind, loc)
     }
 
