@@ -72,7 +72,7 @@ fn interpolated_string_lit1() {
 }
 
 #[test]
-fn array1() {
+fn array_lit1() {
     let program = "
         assert([1,2,3], [1,2,3])
     ";
@@ -312,6 +312,28 @@ fn const1() {
             Ruby = Ruby * 2
             Ruby / 111";
     let expected = Value::FixNum(14);
+    eval_script(program, expected);
+}
+
+#[test]
+fn array() {
+    let program = "
+    a=[1,2,3,4]
+    assert(3, a[2]);
+    a[1] = 14
+    assert(a, [1,14,3,4])
+    a.pop()
+    assert(a, [1,14,3])
+    a.push(7,8,9)
+    assert(a, [1,14,3,7,8,9])
+    a=[1,2,3,4]
+    b=Array.new(a)
+    assert(a,b)
+    b[2] = 100
+    assert(a, [1,2,3,4])
+    assert(b, [1,2,100,4])
+    ";
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 

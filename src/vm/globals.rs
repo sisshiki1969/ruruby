@@ -6,6 +6,7 @@ pub struct Globals {
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
     toplevel_method: MethodTable,
+    pub array_class: Option<ClassRef>,
 }
 
 impl Globals {
@@ -17,13 +18,14 @@ impl Globals {
             },
             method_table: GlobalMethodTable::new(),
             toplevel_method: MethodTable::new(),
+            array_class: None,
         };
         globals.get_ident_id("initialize");
         globals
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
         let name = name.into();
-        let id = self.get_ident_id(&name.clone());
+        let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let methodref = self.add_method(info);
         self.add_toplevel_method(id, methodref);
@@ -68,5 +70,18 @@ impl Globals {
         let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
         classref.clone().add_class_method(id, func_ref);
+    }
+
+    pub fn add_builtin_instance_method(
+        &mut self,
+        classref: ClassRef,
+        name: impl Into<String>,
+        func: BuiltinFunc,
+    ) {
+        let name = name.into();
+        let id = self.get_ident_id(&name);
+        let info = MethodInfo::BuiltinFunc { name, func };
+        let methodref = self.add_method(info);
+        classref.clone().add_instance_method(id, methodref);
     }
 }

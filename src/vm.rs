@@ -119,9 +119,10 @@ impl VM {
         lvar_collector: Option<LvarCollector>,
     ) -> Self {
         let mut globals = Globals::new(ident_table);
-        let main_id = globals.get_ident_id(&"main".to_string());
+        let main_id = globals.get_ident_id("main");
         let main_class = ClassRef::from(main_id);
-        let vm = VM {
+
+        let mut vm = VM {
             globals,
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
@@ -131,6 +132,7 @@ impl VM {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
+        array::init_array(&mut vm);
         vm
     }
 
@@ -468,7 +470,16 @@ impl VM {
                     let methodref = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
                         Value::Class(cref) => self.get_class_method(cref, method_id)?,
-                        Value::Instance(iref) => self.get_instance_method(iref, method_id)?,
+                        Value::Instance(iref) => {
+                            self.get_instance_method(iref.classref, method_id)?
+                        }
+                        Value::Array(_) => {
+                            let array_class = self
+                                .globals
+                                .array_class
+                                .ok_or(self.error_unimplemented("Array class is not defined."))?;
+                            self.get_instance_method(array_class, method_id)?
+                        }
                         _ => {
                             return Err(self.error_unimplemented("Unimplemented type of receiver."))
                         }
@@ -983,10 +994,9 @@ impl VM {
 
     pub fn get_instance_method(
         &self,
-        instance: InstanceRef,
+        classref: ClassRef,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let classref = instance.classref;
         match classref.get_instance_method(method) {
             Some(methodref) => Ok(methodref.clone()),
             None => match self.globals.get_toplevel_method(method) {
