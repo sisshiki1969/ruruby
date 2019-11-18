@@ -533,7 +533,7 @@ impl Codegen {
                         return Err(self.error_syntax(format!("Expected identifier."), method.loc()))
                     }
                 };
-                for arg in args.iter().rev() {
+                for arg in args {
                     self.gen(globals, iseq, arg)?;
                 }
                 self.gen(globals, iseq, receiver)?;

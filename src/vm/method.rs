@@ -55,22 +55,7 @@ impl std::fmt::Debug for MethodInfo {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ISeqRef(*mut ISeq);
-
-impl ISeqRef {
-    pub fn new(iseq: ISeq) -> Self {
-        let boxed = Box::into_raw(Box::new(iseq)) as *mut ISeq;
-        ISeqRef(boxed)
-    }
-}
-
-impl std::ops::Deref for ISeqRef {
-    type Target = ISeq;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.0 }
-    }
-}
+pub type ISeqRef = Ref<ISeq>;
 
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {

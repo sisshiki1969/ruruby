@@ -8,23 +8,20 @@ pub struct InstanceInfo {
     pub instance_var: ValueTable,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InstanceRef(*mut InstanceInfo);
-
-impl std::hash::Hash for InstanceRef {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+impl InstanceInfo {
+    pub fn new(classref: ClassRef) -> Self {
+        InstanceInfo {
+            classref,
+            instance_var: HashMap::new(),
+        }
     }
 }
 
+pub type InstanceRef = Ref<InstanceInfo>;
+
 impl InstanceRef {
-    pub fn new(classref: ClassRef) -> Self {
-        let info = InstanceInfo {
-            classref,
-            instance_var: HashMap::new(),
-        };
-        let boxed = Box::into_raw(Box::new(info));
-        InstanceRef(boxed)
+    pub fn from(classref: ClassRef) -> Self {
+        InstanceRef::new(InstanceInfo::new(classref))
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
@@ -32,15 +29,3 @@ impl InstanceRef {
     }
 }
 
-impl std::ops::Deref for InstanceRef {
-    type Target = InstanceInfo;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &*self.0 }
-    }
-}
-
-impl std::ops::DerefMut for InstanceRef {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.0 }
-    }
-}

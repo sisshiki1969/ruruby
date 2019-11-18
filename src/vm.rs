@@ -122,7 +122,7 @@ impl VM {
     ) -> Self {
         let mut globals = Globals::new(ident_table);
         let main_id = globals.get_ident_id(&"main".to_string());
-        let main_class = globals.add_class(main_id);
+        let main_class = ClassRef::from(main_id);
         let vm = VM {
             globals,
             const_table: HashMap::new(),
@@ -394,12 +394,8 @@ impl VM {
                     pc += 5;
                 }
                 Inst::SET_ARRAY_ELEM => {
-                    let arg_num = read32(iseq, pc + 1);
-                    let mut args = vec![];
-                    for _ in 0..arg_num {
-                        args.push(self.exec_stack.pop().unwrap());
-                    }
-                    args.reverse();
+                    let arg_num = read32(iseq, pc + 1) as usize;
+                    let args = self.pop_args(arg_num);
                     match self.exec_stack.pop().unwrap().as_array() {
                         Some(mut aref) => {
                             let index = if args[0].is_packed_fixnum() {
@@ -407,18 +403,7 @@ impl VM {
                             } else {
                                 return Err(self.error_unimplemented("Index must be an integer."));
                             };
-                            let len = aref.elements.len();
-                            let index = if index < 0 {
-                                let i = len as i64 + index;
-                                if i < 0 {
-                                    return Err(self.error_unimplemented("Index out of range."));
-                                };
-                                i as usize
-                            } else if index < len as i64 {
-                                index as usize
-                            } else {
-                                return Err(self.error_unimplemented("Index out of range."));
-                            };
+                            let index = self.get_array_index(index, aref.elements.len())?;
                             let val = self.exec_stack.last().unwrap();
                             aref.elements[index] = val.clone();
                         }
@@ -431,12 +416,8 @@ impl VM {
                     pc += 5;
                 }
                 Inst::GET_ARRAY_ELEM => {
-                    let arg_num = read32(iseq, pc + 1);
-                    let mut args = vec![];
-                    for _ in 0..arg_num {
-                        args.push(self.exec_stack.pop().unwrap());
-                    }
-                    args.reverse();
+                    let arg_num = read32(iseq, pc + 1) as usize;
+                    let args = self.pop_args(arg_num);
                     match self.exec_stack.pop().unwrap().as_array() {
                         Some(aref) => {
                             let index = if args[0].is_packed_fixnum() {
@@ -444,18 +425,7 @@ impl VM {
                             } else {
                                 return Err(self.error_unimplemented("Index must be an integer."));
                             };
-                            let len = aref.elements.len();
-                            let index = if index < 0 {
-                                let i = len as i64 + index;
-                                if i < 0 {
-                                    return Err(self.error_unimplemented("Index out of range."));
-                                };
-                                i as usize
-                            } else if index < len as i64 {
-                                index as usize
-                            } else {
-                                return Err(self.error_unimplemented("Index out of range."));
-                            };
+                            let index = self.get_array_index(index, aref.elements.len())?;
                             let elem = aref.elements[index];
                             self.exec_stack.push(elem);
                         }
@@ -475,13 +445,9 @@ impl VM {
                     pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
-                    let len = read32(iseq, pc + 1);
-                    let mut elems = vec![];
-                    for _ in 0..len {
-                        elems.push(self.exec_stack.pop().unwrap());
-                    }
-                    elems.reverse();
-                    let array = PackedValue::array(ArrayRef::new(elems));
+                    let arg_num = read32(iseq, pc + 1) as usize;
+                    let elems = self.pop_args(arg_num);
+                    let array = PackedValue::array(ArrayRef::from(elems));
                     self.exec_stack.push(array);
                     pc += 5;
                 }
@@ -509,11 +475,8 @@ impl VM {
                             return Err(self.error_unimplemented("Unimplemented type of receiver."))
                         }
                     };
-                    let args_num = read32(iseq, pc + 5);
-                    let mut args = vec![];
-                    for _ in 0..args_num {
-                        args.push(self.exec_stack.pop().unwrap());
-                    }
+                    let args_num = read32(iseq, pc + 5) as usize;
+                    let args = self.pop_args(args_num);
                     let val = self.eval_send(methodref, receiver, args)?;
                     self.exec_stack.push(val);
                     pc += 9;
@@ -522,7 +485,7 @@ impl VM {
                     let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
 
-                    let classref = self.globals.add_class(id).clone();
+                    let classref = ClassRef::from(id);
                     let val = PackedValue::class(classref);
                     self.const_table.insert(id, val);
 
@@ -805,7 +768,7 @@ impl VM {
             (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
             (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
-            (Value::Class(lhs), Value::Class(rhs)) => Ok(lhs == rhs),
+            (Value::Class(lhs), Value::Class(rhs)) => Ok(*lhs == *rhs),
             (Value::Instance(lhs), Value::Instance(rhs)) => Ok(lhs == rhs),
             (Value::Array(lhs), Value::Array(rhs)) => {
                 let lhs = &lhs.elements;
@@ -1045,5 +1008,28 @@ impl VM {
             Some(info) => Ok(info.clone()),
             None => return Err(self.error_unimplemented("Method not defined.")),
         }
+    }
+
+    fn get_array_index(&self, idx_arg: i64, len: usize) -> Result<usize, RubyError> {
+        if idx_arg < 0 {
+            let i = len as i64 + idx_arg;
+            if i < 0 {
+                return Err(self.error_unimplemented("Index out of range."));
+            };
+            Ok(i as usize)
+        } else if idx_arg < len as i64 {
+            Ok(idx_arg as usize)
+        } else {
+            return Err(self.error_unimplemented("Index out of range."));
+        }
+    }
+
+    fn pop_args(&mut self, arg_num: usize) -> Vec<PackedValue> {
+        let mut args = vec![];
+        for _ in 0..arg_num {
+            args.push(self.exec_stack.pop().unwrap());
+        }
+        args.reverse();
+        args
     }
 }

@@ -40,6 +40,53 @@ impl Loc {
 
 //------------------------------------------------------------
 
+#[derive(Debug)]
+pub struct Ref<T>(*mut T);
+
+impl<T> Ref<T> {
+    pub fn new(info: T) -> Self {
+        let boxed = Box::into_raw(Box::new(info));
+        Ref(boxed)
+    }
+}
+
+impl<T> Copy for Ref<T> {}
+
+impl<T> Clone for Ref<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> PartialEq for Ref<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T> Eq for Ref<T> {}
+
+impl<T> std::hash::Hash for Ref<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T> std::ops::Deref for Ref<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        unsafe { &*self.0 }
+    }
+}
+
+impl<T> std::ops::DerefMut for Ref<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { &mut *self.0 }
+    }
+}
+
+//------------------------------------------------------------
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceInfo {
     pub code: Vec<char>,

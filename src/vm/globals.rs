@@ -45,10 +45,6 @@ impl Globals {
         self.toplevel_method.get(&id)
     }
 
-    pub fn add_class(&mut self, id: IdentId) -> ClassRef {
-        ClassRef::new(id)
-    }
-
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
         self.method_table.add_method(info)
     }
