@@ -105,7 +105,7 @@ impl Inst {
 
 #[cfg(feature = "perf")]
 impl Inst {
-    pub fn print_perf(counter: &mut Vec<PerfCounter>) {
+    pub fn print_perf(counter: &Vec<PerfCounter>) {
         eprintln!("Performance analysis for Inst:");
         eprintln!("------------------------------------------");
         eprintln!(
@@ -114,8 +114,8 @@ impl Inst {
         );
         eprintln!("{:<12} {:>10} {:>8} {:>8}", "", "", "", "/inst");
         eprintln!("------------------------------------------");
-        let mut sum = std::time::Duration::from_micros(0);
-        for c in counter.clone() {
+        let mut sum = std::time::Duration::from_secs(0);
+        for c in counter {
             sum += c.duration;
         }
         for (
@@ -123,7 +123,6 @@ impl Inst {
             PerfCounter {
                 count: c,
                 duration: d,
-                duration2: _,
             },
         ) in counter.iter().enumerate()
         {
@@ -140,7 +139,7 @@ impl Inst {
                 } else {
                     format!("{:>10}", *c)
                 },
-                d.as_secs_f64() * 100.0 / sum.as_secs_f64(),
+                (d.as_micros() as f64) * 100.0 / (sum.as_micros() as f64),
                 d.as_nanos() / (*c as u128)
             );
         }

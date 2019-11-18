@@ -48,9 +48,8 @@ pub struct VM {
 #[cfg(feature = "perf")]
 #[derive(Debug, Clone)]
 pub struct PerfCounter {
-    count: u32,
+    count: u64,
     duration: Duration,
-    duration2: Duration,
 }
 
 #[cfg(feature = "perf")]
@@ -59,7 +58,6 @@ impl PerfCounter {
         PerfCounter {
             count: 0,
             duration: Duration::from_secs(0),
-            duration2: Duration::from_secs(0),
         }
     }
 }
@@ -149,7 +147,7 @@ impl VM {
     pub fn run(&mut self, node: &Node) -> VMResult {
         #[cfg(feature = "perf")]
         {
-            self.perf.prev_inst = 255;
+            self.perf.prev_inst = 253;
         }
         let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
         let val = self.vm_run(iseq)?;
@@ -908,7 +906,7 @@ impl VM {
     ) -> VMResult {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
-        let mut inst = 0;
+        let mut inst: u8;
         #[cfg(feature = "perf")]
         {
             inst = self.perf.prev_inst;
@@ -917,7 +915,7 @@ impl VM {
             MethodInfo::BuiltinFunc { func, .. } => {
                 #[cfg(feature = "perf")]
                 {
-                    self.perf.get_perf(255);
+                    self.perf.get_perf(254);
                 }
                 let val = func(self, receiver, args)?;
                 #[cfg(feature = "perf")]
