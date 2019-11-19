@@ -104,8 +104,8 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
         Ok(path) => path,
         Err(ioerr) => {
             let msg = format!("{}", ioerr);
-            println!("No such file or directory --- {} (LoadError)", &file_name);
-            println!("{}", msg);
+            eprintln!("No such file or directory --- {} (LoadError)", &file_name);
+            eprintln!("{}", msg);
             return;
         }
     };
@@ -119,8 +119,8 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
             .expect("cannot read file"),
         Err(ioerr) => {
             let msg = format!("{}", ioerr);
-            println!("Error: Cannot find module file. '{}'", &file_name);
-            println!("{}", msg);
+            eprintln!("Error: Cannot find module file. '{}'", &file_name);
+            eprintln!("{}", msg);
             return;
         }
     };
@@ -137,7 +137,7 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
                     Ok(_result) => {}
                     Err(err) => {
                         result.source_info.show_loc(&err.loc());
-                        println!("{:?}", err.kind);
+                        eprintln!("{:?}", err.kind);
                     }
                 };
             } else {
@@ -152,7 +152,7 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
         Err(err) => {
             parser.show_tokens();
             parser.show_loc(&err.loc());
-            println!("{:?}", err.kind);
+            eprintln!("{:?}", err.kind);
         }
     }
 }
@@ -207,6 +207,7 @@ fn repl_vm() {
                         parser = parser_save;
                     }
                 }
+                vm.codegen.iseq_info.clear();
                 level = parser.get_context_depth();
                 program = String::new();
             }
@@ -219,7 +220,7 @@ fn repl_vm() {
                 parser.show_tokens();
                 level = parser.get_context_depth();
                 parser.show_loc(&err.loc());
-                println!("RubyError: {:?}", err.kind);
+                eprintln!("RubyError: {:?}", err.kind);
                 parser = parser_save;
                 program = String::new();
             }

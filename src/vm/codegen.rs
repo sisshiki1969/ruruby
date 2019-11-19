@@ -26,7 +26,7 @@ pub type ISeq = Vec<u8>;
 pub struct ISeqPos(usize);
 
 impl ISeqPos {
-    fn from_usize(pos: usize) -> Self {
+    pub fn from_usize(pos: usize) -> Self {
         ISeqPos(pos)
     }
 
@@ -145,11 +145,13 @@ impl Codegen {
     }
 
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
+        self.save_loc(iseq);
         iseq.push(Inst::GET_CONST);
         self.push32(iseq, id.into());
     }
 
     fn gen_send(&mut self, iseq: &mut ISeq, method: IdentId, args_num: usize) {
+        self.save_loc(iseq);
         iseq.push(Inst::SEND);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
@@ -321,7 +323,6 @@ impl Codegen {
                 };
                 self.gen(globals, iseq, end)?;
                 self.gen(globals, iseq, start)?;
-                self.save_loc(iseq);
                 iseq.push(Inst::CREATE_RANGE);
             }
             NodeKind::Array(nodes) => {
@@ -333,7 +334,6 @@ impl Codegen {
                 self.push32(iseq, len);
             }
             NodeKind::Ident(id) => {
-                self.save_loc(iseq);
                 self.gen_get_local(iseq, *id)?;
             }
             NodeKind::Const(id) => self.gen_get_const(iseq, *id),
@@ -508,7 +508,7 @@ impl Codegen {
                         let name = globals.get_ident_name(id).clone() + "=";
                         let assign_id = globals.get_ident_id(name);
                         self.gen(globals, iseq, &receiver)?;
-                        self.save_loc(iseq);
+                        self.loc = lhs.loc();
                         self.gen_send(iseq, assign_id, 1);
                     }
                     NodeKind::ArrayMember(array, index) => {
@@ -527,6 +527,7 @@ impl Codegen {
                 }
             }
             NodeKind::Send(receiver, method, args) => {
+                let loc = self.loc;
                 let id = match method.kind {
                     NodeKind::Ident(id) => id,
                     _ => {
@@ -537,7 +538,7 @@ impl Codegen {
                     self.gen(globals, iseq, arg)?;
                 }
                 self.gen(globals, iseq, receiver)?;
-                self.save_loc(iseq);
+                self.loc = loc;
                 self.gen_send(iseq, id, args.len());
             }
             NodeKind::MethodDef(id, params, body, lvar) => {

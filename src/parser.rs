@@ -122,7 +122,7 @@ impl Parser {
 
     pub fn show_tokens(&self) {
         for tok in &self.tokens {
-            println!("{:?}", tok);
+            eprintln!("{:?}", tok);
         }
     }
 

@@ -9,7 +9,7 @@ mod range;
 pub mod value;
 mod vm_inst;
 
-use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
+use crate::error::{RubyError, RuntimeErrKind};
 use crate::node::*;
 pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
@@ -41,6 +41,7 @@ pub struct VM {
     pub context_stack: Vec<Context>,
     pub class_stack: Vec<ClassRef>,
     pub exec_stack: Vec<PackedValue>,
+    pub pc: usize,
     #[cfg(feature = "perf")]
     perf: Perf,
 }
@@ -129,6 +130,7 @@ impl VM {
             class_stack: vec![],
             context_stack: vec![Context::new(64, Value::Class(main_class).pack())],
             exec_stack: vec![],
+            pc: 0,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
@@ -177,6 +179,7 @@ impl VM {
                 self.perf.get_perf(iseq[pc]);
             }
             //            println!("{}", Inst::inst_name(iseq[pc]));
+            self.pc = pc;
             match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
                     Some(v) => {
@@ -354,10 +357,9 @@ impl VM {
                         Some(val) => self.exec_stack.push(val.clone()),
                         None => {
                             let name = self.globals.get_ident_name(id).clone();
-                            return Err(self.error_unimplemented(format!(
-                                "Uninitialized constant '{}'.",
-                                name
-                            )));
+                            return Err(
+                                self.error_name(format!("Uninitialized constant '{}'.", name))
+                            );
                         }
                     }
                     pc += 5;
@@ -588,16 +590,25 @@ impl VM {
 
 impl VM {
     pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), self.codegen.loc)
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), loc)
     }
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), self.codegen.loc)
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), loc)
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.codegen.loc)
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), loc)
     }
-    pub fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
+
+    fn get_loc(&self) -> Loc {
+        self.codegen
+            .iseq_info
+            .iter()
+            .find(|x| x.0 == ISeqPos::from_usize(self.pc))
+            .unwrap_or(&(ISeqPos::from_usize(0), Loc(0, 0)))
+            .1
     }
 }
 

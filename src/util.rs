@@ -107,7 +107,7 @@ impl SourceInfo {
             if line.2 < loc.0 || line.1 > loc.1 {
                 continue;
             }
-            println!(
+            eprintln!(
                 "{}",
                 self.code[(line.1)..(line.2)].iter().collect::<String>()
             );
@@ -124,7 +124,7 @@ impl SourceInfo {
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
-            println!("{}{}", " ".repeat(read), "^".repeat(length + 1));
+            eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
         }
 
         fn calc_width(ch: &char) -> usize {
