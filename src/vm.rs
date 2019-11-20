@@ -358,7 +358,7 @@ impl VM {
                         None => {
                             let name = self.globals.get_ident_name(id).clone();
                             return Err(
-                                self.error_name(format!("Uninitialized constant '{}'.", name))
+                                self.error_name(format!("uninitialized constant {}.", name))
                             );
                         }
                     }
@@ -593,6 +593,21 @@ impl VM {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), loc)
     }
+    pub fn error_undefined_method(
+        &self,
+        method_name: impl Into<String>,
+        class_name: impl Into<String>,
+    ) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(
+            RuntimeErrKind::NoMethod(format!(
+                "undefined method `{}' for {}",
+                method_name.into(),
+                class_name.into()
+            )),
+            loc,
+        )
+    }
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), loc)
@@ -641,10 +656,10 @@ impl VM {
                 let method = self.globals.get_ident_id("@add");
                 match l_ref.get_instance_method(method) {
                     Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
-                    None => Err(self.error_nomethod("'+'")),
+                    None => Err(self.error_undefined_method("+", self.globals.get_class_name(lhs))),
                 }
             }
-            (_, _) => Err(self.error_nomethod("'+'")),
+            (_, _) => Err(self.error_undefined_method("+", self.globals.get_class_name(lhs))),
         }
     }
     fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
@@ -876,7 +891,7 @@ impl VM {
         !val.is_nil() && !val.is_false_val()
     }
 
-    pub fn val_to_s(&mut self, val: PackedValue) -> String {
+    pub fn val_to_s(&self, val: PackedValue) -> String {
         match val.unpack() {
             Value::Nil => "".to_string(),
             Value::Bool(b) => match b {
@@ -887,8 +902,6 @@ impl VM {
             Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
             Value::Symbol(i) => format!(":{}", self.globals.get_ident_name(i)),
-            //Value::Class(class) => self.get_class_name(*class),
-            //Value::Instance(instance) => self.get_instance_name(*instance),
             Value::Range(rref) => {
                 let start = self.val_to_s(rref.start);
                 let end = self.val_to_s(rref.end);
@@ -911,6 +924,18 @@ impl VM {
                     format! {"[{}]", result}
                 }
             },
+        }
+    }
+
+    pub fn val_pp(&self, val: PackedValue) -> String {
+        match val.unpack() {
+            Value::Nil => "nil".to_string(),
+            Value::String(s) => format!("\"{}\"", s),
+            Value::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.id)},
+            Value::Instance(iref) => {
+                format! {"#<{}:{:?}>", self.globals.get_ident_name(iref.classref.id), iref}
+            }
+            _ => self.val_to_s(val),
         }
     }
 }
@@ -1013,9 +1038,11 @@ impl VM {
             None => match self.globals.get_toplevel_method(method) {
                 None => {
                     let method_name = self.globals.get_ident_name(method);
-                    return Err(
-                        self.error_nomethod(format!("No instance method found. {}", method_name))
-                    );
+                    let class_name = self.globals.get_ident_name(classref.id);
+                    return Err(self.error_nomethod(format!(
+                        "undefined method `{}' for {}",
+                        method_name, class_name
+                    )));
                 }
                 Some(methodref) => Ok(methodref.clone()),
             },

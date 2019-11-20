@@ -6,7 +6,7 @@ extern crate rustyline;
 
 use ansi_term::Colour::Red;
 use clap::{App, Arg};
-use ruruby::error::{ParseErrKind, RubyErrorKind};
+use ruruby::error::*;
 use ruruby::eval::Evaluator;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::vm::*;
@@ -198,12 +198,28 @@ fn repl_vm() {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
-                        let res_str = vm.val_to_s(result);
+                        let res_str = vm.val_pp(result);
                         println!("=> {}", res_str);
                     }
                     Err(err) => {
                         parse_result.source_info.show_loc(&err.loc());
-                        println!("{:?}", err.kind);
+                        match err.kind {
+                            RubyErrorKind::ParseErr(e) => {
+                                println!("parse error: {:?}", e);
+                            }
+                            RubyErrorKind::RuntimeErr(e) => match e {
+                                RuntimeErrKind::Name(n) => {
+                                    println!("runtime error: NoNameError ({})", n)
+                                }
+                                RuntimeErrKind::NoMethod(n) => {
+                                    println!("runtime error: NoMethodError ({})", n)
+                                }
+                                RuntimeErrKind::Unimplemented(n) => {
+                                    println!("runtime error: UnimplementedError ({})", n)
+                                }
+                                _ => {}
+                            },
+                        }
                         parser = parser_save;
                     }
                 }

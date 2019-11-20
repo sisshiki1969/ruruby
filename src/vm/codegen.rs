@@ -338,101 +338,112 @@ impl Codegen {
             }
             NodeKind::Const(id) => self.gen_get_const(iseq, *id),
             NodeKind::InstanceVar(id) => self.gen_get_instance_var(iseq, *id),
-            NodeKind::BinOp(op, lhs, rhs) => match op {
-                BinOp::Add => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::ADD);
+            NodeKind::BinOp(op, lhs, rhs) => {
+                let loc = self.loc;
+                match op {
+                    BinOp::Add => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        self.loc = loc;
+                        self.save_loc(iseq);
+                        iseq.push(Inst::ADD);
+                    }
+                    BinOp::Sub => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        self.loc = loc;
+                        self.save_loc(iseq);
+                        iseq.push(Inst::SUB);
+                    }
+                    BinOp::Mul => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        self.loc = loc;
+                        self.save_loc(iseq);
+                        iseq.push(Inst::MUL);
+                    }
+                    BinOp::Div => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        self.loc = loc;
+                        self.save_loc(iseq);
+                        iseq.push(Inst::DIV);
+                    }
+                    BinOp::Shr => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::SHR);
+                    }
+                    BinOp::Shl => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::SHL);
+                    }
+                    BinOp::BitOr => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::BIT_OR);
+                    }
+                    BinOp::BitAnd => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::BIT_AND);
+                    }
+                    BinOp::BitXor => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::BIT_XOR);
+                    }
+                    BinOp::Eq => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::EQ);
+                    }
+                    BinOp::Ne => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::NE);
+                    }
+                    BinOp::Ge => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::GE);
+                    }
+                    BinOp::Gt => {
+                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs)?;
+                        iseq.push(Inst::GT);
+                    }
+                    BinOp::Le => {
+                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs)?;
+                        iseq.push(Inst::GE);
+                    }
+                    BinOp::Lt => {
+                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs)?;
+                        iseq.push(Inst::GT);
+                    }
+                    BinOp::LAnd => {
+                        self.gen(globals, iseq, lhs)?;
+                        let src1 = self.gen_jmp_if_false(iseq);
+                        self.gen(globals, iseq, rhs)?;
+                        let src2 = self.gen_jmp(iseq);
+                        self.write_disp_from_cur(iseq, src1);
+                        iseq.push(Inst::PUSH_FALSE);
+                        self.write_disp_from_cur(iseq, src2);
+                    }
+                    BinOp::LOr => {
+                        self.gen(globals, iseq, lhs)?;
+                        let src1 = self.gen_jmp_if_false(iseq);
+                        iseq.push(Inst::PUSH_TRUE);
+                        let src2 = self.gen_jmp(iseq);
+                        self.write_disp_from_cur(iseq, src1);
+                        self.gen(globals, iseq, rhs)?;
+                        self.write_disp_from_cur(iseq, src2);
+                    }
                 }
-                BinOp::Sub => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::SUB);
-                }
-                BinOp::Mul => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::MUL);
-                }
-                BinOp::Div => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::DIV);
-                }
-                BinOp::Shr => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::SHR);
-                }
-                BinOp::Shl => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::SHL);
-                }
-                BinOp::BitOr => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::BIT_OR);
-                }
-                BinOp::BitAnd => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::BIT_AND);
-                }
-                BinOp::BitXor => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::BIT_XOR);
-                }
-                BinOp::Eq => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::EQ);
-                }
-                BinOp::Ne => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::NE);
-                }
-                BinOp::Ge => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::GE);
-                }
-                BinOp::Gt => {
-                    self.gen(globals, iseq, lhs)?;
-                    self.gen(globals, iseq, rhs)?;
-                    iseq.push(Inst::GT);
-                }
-                BinOp::Le => {
-                    self.gen(globals, iseq, rhs)?;
-                    self.gen(globals, iseq, lhs)?;
-                    iseq.push(Inst::GE);
-                }
-                BinOp::Lt => {
-                    self.gen(globals, iseq, rhs)?;
-                    self.gen(globals, iseq, lhs)?;
-                    iseq.push(Inst::GT);
-                }
-                BinOp::LAnd => {
-                    self.gen(globals, iseq, lhs)?;
-                    let src1 = self.gen_jmp_if_false(iseq);
-                    self.gen(globals, iseq, rhs)?;
-                    let src2 = self.gen_jmp(iseq);
-                    self.write_disp_from_cur(iseq, src1);
-                    iseq.push(Inst::PUSH_FALSE);
-                    self.write_disp_from_cur(iseq, src2);
-                }
-                BinOp::LOr => {
-                    self.gen(globals, iseq, lhs)?;
-                    let src1 = self.gen_jmp_if_false(iseq);
-                    iseq.push(Inst::PUSH_TRUE);
-                    let src2 = self.gen_jmp(iseq);
-                    self.write_disp_from_cur(iseq, src1);
-                    self.gen(globals, iseq, rhs)?;
-                    self.write_disp_from_cur(iseq, src2);
-                }
-            },
+            }
             NodeKind::ArrayMember(array, index) => {
                 // number of index elements must be 1 or 2 (ensured by parser).
                 self.gen(globals, iseq, array)?;

@@ -84,4 +84,23 @@ impl Globals {
         let methodref = self.add_method(info);
         classref.clone().add_instance_method(id, methodref);
     }
+
+    pub fn get_class_name(&self, val:PackedValue) -> String {
+        match val.unpack() {
+            Value::Nil => "NilClass".to_string(),
+            Value::Bool(true) => "TrueClass".to_string(),
+            Value::Bool(false) => "FalseClass".to_string(),
+            Value::FixNum(_) => "Integer".to_string(),
+            Value::FloatNum(_) => "Float".to_string(),
+            Value::String(_) => "String".to_string(),
+            Value::Symbol(_) => "Symbol".to_string(),
+            Value::Array(_) => "Array".to_string(),
+            Value::Range(_) => "Range".to_string(),
+            Value::Class(_) => "Class".to_string(),
+            Value::Instance(iref) => {
+                self.get_ident_name(iref.classref.id).clone()
+            }
+            Value::Char(_) => "Char".to_string(),
+        }
+    }
 }
