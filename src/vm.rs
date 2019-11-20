@@ -103,13 +103,15 @@ impl Perf {
 pub struct Context {
     pub self_value: PackedValue,
     pub lvar_scope: Vec<PackedValue>,
+    pub iseq_ref: ISeqRef,
 }
 
 impl Context {
-    pub fn new(lvar_num: usize, self_value: PackedValue) -> Self {
+    pub fn new(lvar_num: usize, self_value: PackedValue, iseq_ref: ISeqRef) -> Self {
         Context {
             self_value,
             lvar_scope: vec![PackedValue::nil(); lvar_num],
+            iseq_ref,
         }
     }
 }
@@ -122,13 +124,14 @@ impl VM {
         let mut globals = Globals::new(ident_table);
         let main_id = globals.get_ident_id("main");
         let main_class = ClassRef::from(main_id);
+        globals.main_class = Some(main_class);
 
         let mut vm = VM {
             globals,
             const_table: HashMap::new(),
             codegen: Codegen::new(lvar_collector),
             class_stack: vec![],
-            context_stack: vec![Context::new(64, Value::Class(main_class).pack())],
+            context_stack: vec![],
             exec_stack: vec![],
             pc: 0,
             #[cfg(feature = "perf")]
@@ -140,7 +143,7 @@ impl VM {
 
     pub fn init(&mut self, ident_table: IdentifierTable, lvar_collector: LvarCollector) {
         self.globals.ident_table = ident_table;
-        self.codegen.lvar_table = lvar_collector.table;
+        self.codegen.lvar_stack = vec![lvar_collector.table];
     }
 
     /// Get local variable table.
@@ -154,7 +157,10 @@ impl VM {
             self.perf.prev_inst = 253;
         }
         let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
-        let val = self.vm_run(iseq)?;
+        let main_object = PackedValue::class(self.globals.main_class.unwrap());
+        self.context_stack.push(Context::new(64, main_object, iseq));
+        let val = self.vm_run()?;
+        self.context_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(255);
@@ -170,8 +176,36 @@ impl VM {
         Ok(val)
     }
 
-    pub fn vm_run(&mut self, iseq: ISeqRef) -> VMResult {
-        let iseq = &*iseq;
+    pub fn run_repl(&mut self, node: &Node) -> VMResult {
+        #[cfg(feature = "perf")]
+        {
+            self.perf.prev_inst = 253;
+        }
+        let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
+        if self.context_stack.len() == 0 {
+            let main_object = PackedValue::class(self.globals.main_class.unwrap());
+            self.context_stack.push(Context::new(64, main_object, iseq));
+        } else {
+            self.context_stack.last_mut().unwrap().iseq_ref = iseq;
+        }
+        let val = self.vm_run()?;
+        #[cfg(feature = "perf")]
+        {
+            self.perf.get_perf(255);
+        }
+        let stack_len = self.exec_stack.len();
+        if stack_len != 0 {
+            eprintln!("Error: stack length is illegal. {}", stack_len);
+        };
+        #[cfg(feature = "perf")]
+        {
+            Inst::print_perf(&mut self.perf.counter);
+        }
+        Ok(val)
+    }
+
+    pub fn vm_run(&mut self) -> VMResult {
+        let iseq = &*self.context_stack.last().unwrap().iseq_ref.clone();
         let mut pc = 0;
         loop {
             #[cfg(feature = "perf")]
@@ -991,7 +1025,8 @@ impl VM {
                 lvars,
             } => {
                 let iseq = iseq.clone();
-                self.context_stack.push(Context::new(*lvars, receiver));
+                self.context_stack
+                    .push(Context::new(*lvars, receiver, iseq));
                 let arg_len = args.len();
                 for (i, id) in params.clone().iter().enumerate() {
                     *self.lvar_mut(*id) = if i < arg_len {
@@ -1001,7 +1036,7 @@ impl VM {
                     };
                 }
 
-                let res_value = self.vm_run(iseq)?;
+                let res_value = self.vm_run()?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);

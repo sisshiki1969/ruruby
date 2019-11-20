@@ -9,7 +9,7 @@ pub struct Codegen {
     // Codegen State
     //pub class_stack: Vec<IdentId>,
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
-    pub lvar_table: HashMap<IdentId, LvarId>,
+    pub lvar_stack: Vec<HashMap<IdentId, LvarId>>,
     pub loc: Loc,
     pub iseq_info: Vec<(ISeqPos, Loc)>,
 }
@@ -39,9 +39,9 @@ impl ISeqPos {
 impl Codegen {
     pub fn new(lvar_collector: Option<LvarCollector>) -> Self {
         Codegen {
-            lvar_table: match lvar_collector {
-                Some(collector) => collector.table,
-                None => HashMap::new(),
+            lvar_stack: match lvar_collector {
+                Some(collector) => vec![collector.table],
+                None => vec![HashMap::new()],
             },
             //class_stack: vec![],
             loop_stack: vec![],
@@ -113,7 +113,7 @@ impl Codegen {
 
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_LOCAL);
-        let lvar_id = self.lvar_table.get(&id).unwrap().as_usize();
+        let lvar_id = self.lvar_stack.last().unwrap().get(&id).unwrap().as_usize();
         self.push32(iseq, lvar_id as u32);
     }
 
@@ -124,7 +124,7 @@ impl Codegen {
 
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
         iseq.push(Inst::GET_LOCAL);
-        let lvar_id = match self.lvar_table.get(&id) {
+        let lvar_id = match self.lvar_stack.last_mut().unwrap().get(&id) {
             Some(x) => x,
             None => return Err(self.error_name("undefined local variable.")),
         }
@@ -238,28 +238,22 @@ impl Codegen {
         node: &Node,
         lvar_collector: &LvarCollector,
     ) -> Result<MethodInfo, RubyError> {
-        //println!("PARAMS: {:?}", params);
-        //println!("LVARS: {:?}", lvar_collector);
         let mut params_lvar = vec![];
         for param in params {
             match param.kind {
                 NodeKind::Param(id) => {
-                    //println!("param IdentId:{:?}", id);
                     let lvar = lvar_collector.table.get(&id).unwrap();
-                    //println!("param LvarId:{:?}", lvar);
                     params_lvar.push(*lvar);
                 }
                 _ => return Err(self.error_syntax("Parameters should be identifier.", self.loc)),
             }
         }
         let mut iseq = ISeq::new();
-        let mut new_lvar = lvar_collector.table.clone();
-        std::mem::swap(&mut self.lvar_table, &mut new_lvar);
+        self.lvar_stack.push(lvar_collector.table.clone());
         self.gen(globals, &mut iseq, node)?;
-        std::mem::swap(&mut self.lvar_table, &mut new_lvar);
+        self.lvar_stack.pop().unwrap();
         iseq.push(Inst::END);
         let lvars = lvar_collector.table.len();
-        //println!("{:?}", iseq);
         Ok(MethodInfo::RubyFunc {
             iseq: ISeqRef::new(iseq),
             params: params_lvar,

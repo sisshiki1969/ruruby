@@ -6,6 +6,7 @@ pub struct Globals {
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
     toplevel_method: MethodTable,
+    pub main_class: Option<ClassRef>,
     pub array_class: Option<ClassRef>,
 }
 
@@ -18,6 +19,7 @@ impl Globals {
             },
             method_table: GlobalMethodTable::new(),
             toplevel_method: MethodTable::new(),
+            main_class: None,
             array_class: None,
         };
         globals.get_ident_id("initialize");
@@ -85,7 +87,7 @@ impl Globals {
         classref.clone().add_instance_method(id, methodref);
     }
 
-    pub fn get_class_name(&self, val:PackedValue) -> String {
+    pub fn get_class_name(&self, val: PackedValue) -> String {
         match val.unpack() {
             Value::Nil => "NilClass".to_string(),
             Value::Bool(true) => "TrueClass".to_string(),
@@ -97,9 +99,7 @@ impl Globals {
             Value::Array(_) => "Array".to_string(),
             Value::Range(_) => "Range".to_string(),
             Value::Class(_) => "Class".to_string(),
-            Value::Instance(iref) => {
-                self.get_ident_name(iref.classref.id).clone()
-            }
+            Value::Instance(iref) => self.get_ident_name(iref.classref.id).clone(),
             Value::Char(_) => "Char".to_string(),
         }
     }

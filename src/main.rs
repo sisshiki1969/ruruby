@@ -193,7 +193,7 @@ fn repl_vm() {
                     parse_result.ident_table,
                     parse_result.lvar_collector.clone(),
                 );
-                match vm.run(&parse_result.node) {
+                match vm.run_repl(&parse_result.node) {
                     Ok(result) => {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
