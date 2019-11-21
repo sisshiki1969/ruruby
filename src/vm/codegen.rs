@@ -9,9 +9,26 @@ pub struct Codegen {
     // Codegen State
     //pub class_stack: Vec<IdentId>,
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
-    pub lvar_stack: Vec<HashMap<IdentId, LvarId>>,
+    context_stack: Vec<Context>,
     pub loc: Loc,
     pub iseq_info: Vec<(ISeqPos, Loc)>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Context {
+    lvar_info: HashMap<IdentId, LvarId>,
+}
+
+impl Context {
+    fn new() -> Self {
+        Context {
+            lvar_info: HashMap::new(),
+        }
+    }
+
+    fn from(lvar_info: HashMap<IdentId, LvarId>) -> Self {
+        Context { lvar_info }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,15 +56,19 @@ impl ISeqPos {
 impl Codegen {
     pub fn new(lvar_collector: Option<LvarCollector>) -> Self {
         Codegen {
-            lvar_stack: match lvar_collector {
-                Some(collector) => vec![collector.table],
-                None => vec![HashMap::new()],
+            context_stack: match lvar_collector {
+                Some(collector) => vec![Context::from(collector.table)],
+                None => vec![Context::new()],
             },
             //class_stack: vec![],
             loop_stack: vec![],
             loc: Loc(0, 0),
             iseq_info: vec![],
         }
+    }
+
+    pub fn set_context(&mut self, lvar_table: HashMap<IdentId, LvarId>) {
+        self.context_stack = vec![Context::from(lvar_table)];
     }
 
     pub fn current(iseq: &ISeq) -> ISeqPos {
@@ -113,7 +134,14 @@ impl Codegen {
 
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_LOCAL);
-        let lvar_id = self.lvar_stack.last().unwrap().get(&id).unwrap().as_usize();
+        let lvar_id = self
+            .context_stack
+            .last()
+            .unwrap()
+            .lvar_info
+            .get(&id)
+            .unwrap()
+            .as_usize();
         self.push32(iseq, lvar_id as u32);
     }
 
@@ -124,7 +152,7 @@ impl Codegen {
 
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
         iseq.push(Inst::GET_LOCAL);
-        let lvar_id = match self.lvar_stack.last_mut().unwrap().get(&id) {
+        let lvar_id = match self.context_stack.last_mut().unwrap().lvar_info.get(&id) {
             Some(x) => x,
             None => return Err(self.error_name("undefined local variable.")),
         }
@@ -249,9 +277,10 @@ impl Codegen {
             }
         }
         let mut iseq = ISeq::new();
-        self.lvar_stack.push(lvar_collector.table.clone());
+        self.context_stack
+            .push(Context::from(lvar_collector.table.clone()));
         self.gen(globals, &mut iseq, node)?;
-        self.lvar_stack.pop().unwrap();
+        self.context_stack.pop().unwrap();
         iseq.push(Inst::END);
         let lvars = lvar_collector.table.len();
         Ok(MethodInfo::RubyFunc {

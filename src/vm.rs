@@ -143,7 +143,7 @@ impl VM {
 
     pub fn init(&mut self, ident_table: IdentifierTable, lvar_collector: LvarCollector) {
         self.globals.ident_table = ident_table;
-        self.codegen.lvar_stack = vec![lvar_collector.table];
+        self.codegen.set_context(lvar_collector.table);
     }
 
     /// Get local variable table.
