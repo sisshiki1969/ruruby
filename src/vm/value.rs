@@ -79,7 +79,9 @@ impl std::ops::Deref for PackedValue {
 
 impl PackedValue {
     pub fn unpack(self) -> Value {
-        if self.is_packed_fixnum() {
+        if !self.is_packed_value() {
+            unsafe { (*(self.0 as *mut Value)).clone() }
+        } else if self.is_packed_fixnum() {
             Value::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
             Value::FloatNum(self.as_packed_flonum())
@@ -92,7 +94,7 @@ impl PackedValue {
         } else if self.0 == FALSE_VALUE {
             Value::Bool(false)
         } else {
-            unsafe { (*(self.0 as *mut Value)).clone() }
+            unreachable!("Illegal packed value.")
         }
     }
 
