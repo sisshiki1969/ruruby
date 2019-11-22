@@ -131,9 +131,9 @@ fn file_read(file_name: impl Into<String>, vm_flag: bool) {
     match res {
         Ok(result) => {
             if vm_flag {
-                let mut eval = VM::new(Some(result.ident_table), Some(result.lvar_collector));
+                let mut eval = VM::new(Some(result.ident_table));
                 eval.init_builtin();
-                match eval.run(&result.node) {
+                match eval.run(&result.node, &result.lvar_collector) {
                     Ok(_result) => {}
                     Err(err) => {
                         result.source_info.show_loc(&err.loc());
@@ -167,7 +167,7 @@ fn repl_vm() {
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
-    let mut vm = VM::new(None, None);
+    let mut vm = VM::new(None);
     vm.init_builtin();
     parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
@@ -189,11 +189,8 @@ fn repl_vm() {
         match parser.parse_program(program.clone(), Some(lvar_collector.clone())) {
             Ok(parse_result) => {
                 //println!("{:?}", node);
-                vm.init(
-                    parse_result.ident_table,
-                    parse_result.lvar_collector.clone(),
-                );
-                match vm.run_repl(&parse_result.node) {
+                vm.init(parse_result.ident_table);
+                match vm.run_repl(&parse_result.node, &parse_result.lvar_collector) {
                     Ok(result) => {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
@@ -223,7 +220,6 @@ fn repl_vm() {
                         parser = parser_save;
                     }
                 }
-                vm.codegen.iseq_info.clear();
                 level = parser.get_context_depth();
                 program = String::new();
             }

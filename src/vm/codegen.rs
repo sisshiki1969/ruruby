@@ -9,25 +9,29 @@ pub struct Codegen {
     // Codegen State
     //pub class_stack: Vec<IdentId>,
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
-    context_stack: Vec<Context>,
+    pub context_stack: Vec<Context>,
     pub loc: Loc,
-    pub iseq_info: Vec<(ISeqPos, Loc)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Context {
+pub struct Context {
     lvar_info: HashMap<IdentId, LvarId>,
+    pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
 }
 
 impl Context {
     fn new() -> Self {
         Context {
             lvar_info: HashMap::new(),
+            iseq_sourcemap: vec![],
         }
     }
 
     fn from(lvar_info: HashMap<IdentId, LvarId>) -> Self {
-        Context { lvar_info }
+        Context {
+            lvar_info,
+            iseq_sourcemap: vec![],
+        }
     }
 }
 
@@ -54,16 +58,12 @@ impl ISeqPos {
 }
 
 impl Codegen {
-    pub fn new(lvar_collector: Option<LvarCollector>) -> Self {
+    pub fn new() -> Self {
         Codegen {
-            context_stack: match lvar_collector {
-                Some(collector) => vec![Context::from(collector.table)],
-                None => vec![Context::new()],
-            },
+            context_stack: vec![Context::new()],
             //class_stack: vec![],
             loop_stack: vec![],
             loc: Loc(0, 0),
-            iseq_info: vec![],
         }
     }
 
@@ -248,15 +248,27 @@ impl Codegen {
         iseq.push(num as u8);
     }
     fn save_loc(&mut self, iseq: &mut ISeq) {
-        self.iseq_info.push((ISeqPos(iseq.len()), self.loc));
+        self.context_stack
+            .last_mut()
+            .unwrap()
+            .iseq_sourcemap
+            .push((ISeqPos(iseq.len()), self.loc));
     }
 
     /// Generate ISeq.
-    pub fn gen_iseq(&mut self, globals: &mut Globals, node: &Node) -> Result<ISeqRef, RubyError> {
-        let mut iseq = ISeq::new();
-        self.gen(globals, &mut iseq, node)?;
-        iseq.push(Inst::END);
-        Ok(ISeqRef::new(iseq))
+    pub fn gen_iseq(
+        &mut self,
+        globals: &mut Globals,
+        node: &Node,
+        lvar_collector: &LvarCollector,
+    ) -> Result<(MethodRef, ISeqRef), RubyError> {
+        let methodinfo = self.gen_method_iseq(globals, &vec![], node, lvar_collector)?;
+        let iseq = match methodinfo {
+            MethodInfo::RubyFunc { iseq, .. } => iseq,
+            _ => unreachable!("Illegal method_info."),
+        };
+        let methodref = globals.add_method(methodinfo);
+        Ok((methodref, iseq))
     }
 
     pub fn gen_method_iseq(
@@ -280,13 +292,15 @@ impl Codegen {
         self.context_stack
             .push(Context::from(lvar_collector.table.clone()));
         self.gen(globals, &mut iseq, node)?;
-        self.context_stack.pop().unwrap();
+        let context = self.context_stack.pop().unwrap();
+        let iseq_sourcemap = context.iseq_sourcemap;
         iseq.push(Inst::END);
         let lvars = lvar_collector.table.len();
         Ok(MethodInfo::RubyFunc {
             iseq: ISeqRef::new(iseq),
             params: params_lvar,
             lvars,
+            iseq_sourcemap,
         })
     }
 

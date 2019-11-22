@@ -104,23 +104,27 @@ pub struct Context {
     pub self_value: PackedValue,
     pub lvar_scope: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
+    pub methodref: MethodRef,
 }
 
 impl Context {
-    pub fn new(lvar_num: usize, self_value: PackedValue, iseq_ref: ISeqRef) -> Self {
+    pub fn new(
+        lvar_num: usize,
+        self_value: PackedValue,
+        iseq_ref: ISeqRef,
+        methodref: MethodRef,
+    ) -> Self {
         Context {
             self_value,
             lvar_scope: vec![PackedValue::nil(); lvar_num],
             iseq_ref,
+            methodref,
         }
     }
 }
 
 impl VM {
-    pub fn new(
-        ident_table: Option<IdentifierTable>,
-        lvar_collector: Option<LvarCollector>,
-    ) -> Self {
+    pub fn new(ident_table: Option<IdentifierTable>) -> Self {
         let mut globals = Globals::new(ident_table);
         let main_id = globals.get_ident_id("main");
         let main_class = ClassRef::from(main_id);
@@ -129,7 +133,7 @@ impl VM {
         let mut vm = VM {
             globals,
             const_table: HashMap::new(),
-            codegen: Codegen::new(lvar_collector),
+            codegen: Codegen::new(),
             class_stack: vec![],
             context_stack: vec![],
             exec_stack: vec![],
@@ -141,9 +145,8 @@ impl VM {
         vm
     }
 
-    pub fn init(&mut self, ident_table: IdentifierTable, lvar_collector: LvarCollector) {
+    pub fn init(&mut self, ident_table: IdentifierTable) {
         self.globals.ident_table = ident_table;
-        self.codegen.set_context(lvar_collector.table);
     }
 
     /// Get local variable table.
@@ -151,14 +154,17 @@ impl VM {
         &mut self.context_stack.last_mut().unwrap().lvar_scope[id.as_usize()]
     }
 
-    pub fn run(&mut self, node: &Node) -> VMResult {
+    pub fn run(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
         #[cfg(feature = "perf")]
         {
             self.perf.prev_inst = 253;
         }
-        let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
+        let (methodref, iseq) = self
+            .codegen
+            .gen_iseq(&mut self.globals, node, lvar_collector)?;
         let main_object = PackedValue::class(self.globals.main_class.unwrap());
-        self.context_stack.push(Context::new(64, main_object, iseq));
+        self.context_stack
+            .push(Context::new(64, main_object, iseq, methodref));
         let val = self.vm_run()?;
         self.context_stack.pop().unwrap();
         #[cfg(feature = "perf")]
@@ -176,15 +182,18 @@ impl VM {
         Ok(val)
     }
 
-    pub fn run_repl(&mut self, node: &Node) -> VMResult {
+    pub fn run_repl(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
         #[cfg(feature = "perf")]
         {
             self.perf.prev_inst = 253;
         }
-        let iseq = self.codegen.gen_iseq(&mut self.globals, node)?;
+        let (methodref, iseq) = self
+            .codegen
+            .gen_iseq(&mut self.globals, node, lvar_collector)?;
         if self.context_stack.len() == 0 {
             let main_object = PackedValue::class(self.globals.main_class.unwrap());
-            self.context_stack.push(Context::new(64, main_object, iseq));
+            self.context_stack
+                .push(Context::new(64, main_object, iseq, methodref));
         } else {
             self.context_stack.last_mut().unwrap().iseq_ref = iseq;
         }
@@ -652,8 +661,12 @@ impl VM {
     }
 
     fn get_loc(&self) -> Loc {
-        self.codegen
-            .iseq_info
+        let method = self.context_stack.last().unwrap().methodref;
+        let sourcemap = match self.globals.get_method_info(method) {
+            MethodInfo::RubyFunc { iseq_sourcemap, .. } => iseq_sourcemap,
+            _ => unreachable!("Illegal method_info."),
+        };
+        sourcemap
             .iter()
             .find(|x| x.0 == ISeqPos::from_usize(self.pc))
             .unwrap_or(&(ISeqPos::from_usize(0), Loc(0, 0)))
@@ -1023,10 +1036,11 @@ impl VM {
                 params,
                 iseq,
                 lvars,
+                ..
             } => {
                 let iseq = iseq.clone();
                 self.context_stack
-                    .push(Context::new(*lvars, receiver, iseq));
+                    .push(Context::new(*lvars, receiver, iseq, methodref));
                 let arg_len = args.len();
                 for (i, id) in params.clone().iter().enumerate() {
                     *self.lvar_mut(*id) = if i < arg_len {

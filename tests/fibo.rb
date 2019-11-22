@@ -4,4 +4,4 @@ def fibo(x)
     end
 end
 
-puts(fibo(40))
+puts(fibo(35))

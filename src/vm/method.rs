@@ -31,6 +31,7 @@ pub enum MethodInfo {
         params: Vec<LvarId>,
         iseq: ISeqRef,
         lvars: usize,
+        iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     },
     AttrReader {
         id: IdentId,

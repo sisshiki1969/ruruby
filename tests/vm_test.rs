@@ -11,9 +11,9 @@ use test::Bencher;
 fn eval_script(script: impl Into<String>, expected: Value) {
     let mut parser = Parser::new();
     let result = parser.parse_program(script.into(), None).unwrap();
-    let mut eval = VM::new(Some(result.ident_table), Some(result.lvar_collector));
+    let mut eval = VM::new(Some(result.ident_table));
     eval.init_builtin();
-    match eval.run(&result.node) {
+    match eval.run(&result.node, &result.lvar_collector) {
         Ok(res) => {
             let res = res.unpack();
             if res != expected {
