@@ -19,18 +19,13 @@ impl ArrayRef {
     }
 }
 
-pub fn init_array(vm: &mut VM) {
-    let array_id = vm.globals.get_ident_id("Array");
-    let array_class = ClassRef::from(array_id);
-    vm.globals
-        .add_builtin_instance_method(array_class, "push", array::array_push);
-    vm.globals
-        .add_builtin_instance_method(array_class, "pop", array::array_pop);
-    vm.globals
-        .add_builtin_class_method(array_class, "new", array::array_new);
-    vm.globals.array_class = Some(array_class);
-    vm.const_table
-        .insert(array_id, PackedValue::class(array_class));
+pub fn init_array(globals: &mut Globals) -> ClassRef {
+    let array_id = globals.get_ident_id("Array");
+    let array_class = ClassRef::from(array_id, globals.object_class);
+    globals.add_builtin_instance_method(array_class, "push", array::array_push);
+    globals.add_builtin_instance_method(array_class, "pop", array::array_pop);
+    globals.add_builtin_class_method(array_class, "new", array::array_new);
+    array_class
 }
 
 // Class methods

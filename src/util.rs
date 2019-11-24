@@ -203,8 +203,9 @@ impl IdentifierTable {
         self.table_rev.insert(id, name);
     }
 
-    pub fn get_ident_id(&mut self, name: &String) -> IdentId {
-        match self.table.get(name) {
+    pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
+        let name = name.into();
+        match self.table.get(&name) {
             Some(id) => IdentId(*id),
             None => {
                 let id = self.ident_id;

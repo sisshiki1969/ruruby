@@ -78,47 +78,4 @@ impl Builtin {
             }
         }
     }
-    /// Built-in function "new".
-    pub fn builtin_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-        match receiver.as_class() {
-            Some(class_ref) => {
-                let instance = InstanceRef::from(class_ref);
-                let new_instance = PackedValue::instance(instance);
-                if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
-                    let _ = vm.eval_send(methodref.clone(), new_instance, args)?;
-                };
-                Ok(new_instance)
-            }
-            None => {
-                Err(vm.error_unimplemented(format!("Receiver must be a class! {:?}", receiver)))
-            }
-        }
-    }
-    /// Built-in function "attr_accessor".
-    pub fn builtin_attr(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-        match receiver.as_class() {
-            Some(classref) => {
-                for arg in args {
-                    if arg.is_packed_symbol() {
-                        let id = arg.as_packed_symbol();
-                        let info = MethodInfo::AttrReader { id };
-                        let methodref = vm.globals.add_method(info);
-                        classref.clone().add_instance_method(id, methodref);
-
-                        let assign_name = vm.globals.get_ident_name(id).clone() + "=";
-                        let assign_id = vm.globals.get_ident_id(assign_name);
-                        let info = MethodInfo::AttrWriter { id };
-                        let methodref = vm.globals.add_method(info);
-                        classref.clone().add_instance_method(assign_id, methodref);
-                    } else {
-                        return Err(
-                            vm.error_name("Each of args for attr_accessor must be a symbol.")
-                        );
-                    }
-                }
-            }
-            None => unreachable!("Illegal attr_accesor in non-class object."),
-        }
-        Ok(PackedValue::nil())
-    }
 }

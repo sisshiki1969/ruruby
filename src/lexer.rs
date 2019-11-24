@@ -76,6 +76,10 @@ impl Lexer {
         }
     }
 
+    pub fn get_string_from_reserved(&self, reserved: Reserved) -> &String {
+        self.reserved_rev.get(&reserved).unwrap()
+    }
+
     #[allow(dead_code)]
     fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);

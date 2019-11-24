@@ -117,7 +117,7 @@ impl Parser {
     }
 
     fn get_ident_id(&mut self, method: &String) -> IdentId {
-        self.ident_table.get_ident_id(&method)
+        self.ident_table.get_ident_id(method)
     }
 
     pub fn show_tokens(&self) {
@@ -664,11 +664,16 @@ impl Parser {
                     let tok = self.get()?.clone();
                     let method = match &tok.kind {
                         TokenKind::Ident(s) => s,
+                        TokenKind::Reserved(r) => {
+                            let string = self.lexer.get_string_from_reserved(*r);
+                            string
+                        }
                         _ => {
                             return Err(self
                                 .error_unexpected(tok.loc(), "method name must be an identifier."))
                         }
-                    };
+                    }
+                    .clone();
                     let id = self.get_ident_id(&method);
                     let mut args = vec![];
                     if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {

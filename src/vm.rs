@@ -3,8 +3,8 @@ mod builtin;
 mod class;
 mod codegen;
 mod globals;
-mod instance;
 mod method;
+mod object;
 #[cfg(feature = "perf")]
 mod perf;
 mod range;
@@ -20,8 +20,8 @@ pub use builtin::*;
 pub use class::*;
 use codegen::*;
 pub use globals::*;
-pub use instance::*;
 pub use method::*;
+pub use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
 pub use range::*;
@@ -75,13 +75,22 @@ impl Context {
 impl VM {
     pub fn new(ident_table: Option<IdentifierTable>) -> Self {
         let mut globals = Globals::new(ident_table);
-        let main_id = globals.get_ident_id("main");
-        let main_class = ClassRef::from(main_id);
-        globals.main_class = Some(main_class);
-
-        let mut vm = VM {
+        let mut const_table = HashMap::new();
+        const_table.insert(
+            globals.get_ident_id("Object"),
+            PackedValue::class(globals.object_class),
+        );
+        const_table.insert(
+            globals.get_ident_id("Class"),
+            PackedValue::class(globals.class_class),
+        );
+        const_table.insert(
+            globals.get_ident_id("Array"),
+            PackedValue::class(globals.array_class),
+        );
+        VM {
             globals,
-            const_table: HashMap::new(),
+            const_table,
             codegen: Codegen::new(),
             class_stack: vec![],
             context_stack: vec![],
@@ -89,9 +98,7 @@ impl VM {
             pc: 0,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
-        };
-        array::init_array(&mut vm);
-        vm
+        }
     }
 
     pub fn init(&mut self, ident_table: IdentifierTable) {
@@ -111,7 +118,7 @@ impl VM {
         let (methodref, iseq) = self
             .codegen
             .gen_iseq(&mut self.globals, node, lvar_collector)?;
-        let main_object = PackedValue::class(self.globals.main_class.unwrap());
+        let main_object = PackedValue::class(self.globals.main_class);
         self.context_stack
             .push(Context::new(64, main_object, iseq, methodref));
         let val = self.vm_run()?;
@@ -140,7 +147,7 @@ impl VM {
             .codegen
             .gen_iseq(&mut self.globals, node, lvar_collector)?;
         if self.context_stack.len() == 0 {
-            let main_object = PackedValue::class(self.globals.main_class.unwrap());
+            let main_object = PackedValue::class(self.globals.main_class);
             self.context_stack
                 .push(Context::new(64, main_object, iseq, methodref));
         } else {
@@ -471,11 +478,7 @@ impl VM {
                             self.get_instance_method(iref.classref, method_id)?
                         }
                         Value::Array(_) => {
-                            let array_class = self
-                                .globals
-                                .array_class
-                                .ok_or(self.error_unimplemented("Array class is not defined."))?;
-                            self.get_instance_method(array_class, method_id)?
+                            self.get_instance_method(self.globals.array_class, method_id)?
                         }
                         _ => {
                             return Err(self.error_unimplemented("Unimplemented type of receiver."))
@@ -491,17 +494,9 @@ impl VM {
                     let id = IdentId::from(read32(iseq, pc + 1));
                     let methodref = MethodRef::from(read32(iseq, pc + 5));
 
-                    let classref = ClassRef::from(id);
+                    let classref = ClassRef::from(id, self.globals.object_class);
                     let val = PackedValue::class(classref);
                     self.const_table.insert(id, val);
-
-                    self.globals
-                        .add_builtin_class_method(classref, "new", Builtin::builtin_new);
-                    self.globals.add_builtin_class_method(
-                        classref,
-                        "attr_accessor",
-                        Builtin::builtin_attr,
-                    );
 
                     self.class_stack.push(classref);
                     let _ = self.eval_send(methodref, val, vec![])?;
@@ -1030,32 +1025,28 @@ impl VM {
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
         match class.get_class_method(method) {
-            Some(methodref) => Ok(methodref.clone()),
-            None => match self.globals.get_toplevel_method(method) {
-                None => return Err(self.error_nomethod("No class method found.")),
-                Some(methodref) => Ok(methodref.clone()),
-            },
+            Some(methodref) => Ok(*methodref),
+            None => self.get_instance_method(self.globals.class_class, method),
         }
     }
 
     pub fn get_instance_method(
         &self,
-        classref: ClassRef,
+        mut class: ClassRef,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        match classref.get_instance_method(method) {
-            Some(methodref) => Ok(methodref.clone()),
-            None => match self.globals.get_toplevel_method(method) {
-                None => {
-                    let method_name = self.globals.get_ident_name(method);
-                    let class_name = self.globals.get_ident_name(classref.id);
-                    return Err(self.error_nomethod(format!(
-                        "undefined method `{}' for {}",
-                        method_name, class_name
-                    )));
-                }
-                Some(methodref) => Ok(methodref.clone()),
-            },
+        loop {
+            match class.get_instance_method(method) {
+                Some(methodref) => return Ok(*methodref),
+                None => match class.superclass {
+                    Some(superclass) => class = superclass,
+                    None => {
+                        let method_name = self.globals.get_ident_name(method);
+                        let class_name = self.globals.get_ident_name(class.id);
+                        return Err(self.error_undefined_method(method_name, class_name));
+                    }
+                },
+            };
         }
     }
 

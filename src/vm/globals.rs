@@ -5,23 +5,33 @@ pub struct Globals {
     // Global info
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
-    toplevel_method: MethodTable,
-    pub main_class: Option<ClassRef>,
-    pub array_class: Option<ClassRef>,
+    pub main_class: ClassRef,
+    pub array_class: ClassRef,
+    pub class_class: ClassRef,
+    pub object_class: ClassRef,
 }
 
 impl Globals {
     pub fn new(ident_table: Option<IdentifierTable>) -> Self {
-        let mut globals = Globals {
-            ident_table: match ident_table {
-                Some(table) => table,
-                None => IdentifierTable::new(),
-            },
-            method_table: GlobalMethodTable::new(),
-            toplevel_method: MethodTable::new(),
-            main_class: None,
-            array_class: None,
+        let mut ident_table = match ident_table {
+            Some(table) => table,
+            None => IdentifierTable::new(),
         };
+        let object_id = ident_table.get_ident_id("Object");
+        let object_class = ClassRef::from_no_superclass(object_id);
+        let main_id = ident_table.get_ident_id("main");
+        let main_class = ClassRef::from(main_id, object_class);
+        let mut globals = Globals {
+            ident_table,
+            method_table: GlobalMethodTable::new(),
+            main_class,
+            array_class: object_class,
+            class_class: object_class,
+            object_class,
+        };
+        object::init_object(&mut globals);
+        globals.array_class = array::init_array(&mut globals);
+        globals.class_class = class::init_class(&mut globals);
         globals.get_ident_id("initialize");
         globals
     }
@@ -42,11 +52,11 @@ impl Globals {
     }
 
     pub fn add_toplevel_method(&mut self, id: IdentId, info: MethodRef) {
-        self.toplevel_method.insert(id, info);
+        self.object_class.add_instance_method(id, info);
     }
 
     pub fn get_toplevel_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.toplevel_method.get(&id)
+        self.object_class.get_instance_method(id)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {

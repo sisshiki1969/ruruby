@@ -1,6 +1,6 @@
 use super::array::ArrayRef;
 use super::class::ClassRef;
-use super::instance::InstanceRef;
+use super::object::InstanceRef;
 use super::range::RangeRef;
 use crate::util::IdentId;
 
@@ -414,7 +414,7 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let expect = Value::Class(ClassRef::from(IdentId::from(0)));
+        let expect = Value::Class(ClassRef::from_no_superclass(IdentId::from(0)));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let class_ref = ClassRef::from(IdentId::from(0));
+        let class_ref = ClassRef::from_no_superclass(IdentId::from(0));
         let expect = Value::Instance(InstanceRef::from(class_ref));
         let got = expect.clone().pack().unpack();
         if expect != got {
