@@ -47,6 +47,7 @@ impl Inst {
     pub const POP: u8 = 60;
     pub const CONCAT_STRING: u8 = 61;
     pub const TO_S: u8 = 62;
+    pub const DUP: u8 = 63;
 
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
@@ -93,6 +94,7 @@ impl Inst {
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
             Inst::POP => "POP",
+            Inst::DUP => "DUP",
             Inst::CONCAT_STRING => "CONCAT_STR",
             Inst::TO_S => "TO_S",
             Inst::DEF_CLASS => "DEF_CLASS",

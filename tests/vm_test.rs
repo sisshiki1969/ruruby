@@ -306,6 +306,41 @@ fn local_var1() {
 }
 
 #[test]
+fn mul_assign1() {
+    let program = "
+            a,b,c = 1,2,3
+            assert(1,a)
+            assert(2,b)
+            assert(3,c)
+            ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn mul_assign2() {
+    let program = "
+            d,e = 1,2,3,4
+            assert(1,d)
+            assert(2,e)
+            ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn mul_assign3() {
+    let program = "
+            f,g,h = 1,2
+            assert(1,f)
+            assert(2,g)
+            assert(nil,h)
+            ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn const1() {
     let program = "
             Ruby = 777

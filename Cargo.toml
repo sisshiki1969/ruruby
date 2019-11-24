@@ -9,6 +9,7 @@ edition = "2018"
 [features]
 default = []
 perf = []
+trace = []
 
 [dependencies]
 rustyline = "5.0.3"

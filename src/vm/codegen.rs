@@ -98,6 +98,11 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
+    fn gen_create_array(&mut self, iseq: &mut ISeq, len: usize) {
+        iseq.push(Inst::CREATE_ARRAY);
+        self.push32(iseq, len as u32);
+    }
+
     fn gen_get_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
         iseq.push(Inst::GET_ARRAY_ELEM);
         self.push32(iseq, num_args as u32);
@@ -185,8 +190,49 @@ impl Codegen {
         self.push32(iseq, args_num as u32);
     }
 
+    fn gen_assign(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        lhs: &Node,
+    ) -> Result<(), RubyError> {
+        match &lhs.kind {
+            NodeKind::Ident(id) => self.gen_set_local(iseq, *id),
+            NodeKind::Const(id) => self.gen_set_const(iseq, *id),
+            NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
+            NodeKind::Send(receiver, method, _args) => {
+                let id = match method.kind {
+                    NodeKind::Ident(id) => id,
+                    _ => {
+                        return Err(self.error_syntax(format!("Expected identifier."), method.loc()))
+                    }
+                };
+                let name = globals.get_ident_name(id).clone() + "=";
+                let assign_id = globals.get_ident_id(name);
+                self.gen(globals, iseq, &receiver)?;
+                self.loc = lhs.loc();
+                self.gen_send(iseq, assign_id, 1);
+            }
+            NodeKind::ArrayMember(array, index) => {
+                self.gen(globals, iseq, array)?;
+                if index.len() != 1 {
+                    return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()));
+                }
+                self.gen(globals, iseq, &index[0])?;
+                self.gen_set_array_elem(iseq, 1);
+            }
+            _ => return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())),
+        }
+        Ok(())
+    }
+
     fn gen_pop(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::POP);
+    }
+
+    fn gen_dup(&mut self, iseq: &mut ISeq, len: usize) {
+        iseq.push(Inst::DUP);
+        self.push32(iseq, len as u32);
     }
 
     fn gen_concat(&mut self, iseq: &mut ISeq) {
@@ -363,12 +409,11 @@ impl Codegen {
                 iseq.push(Inst::CREATE_RANGE);
             }
             NodeKind::Array(nodes) => {
-                let len = nodes.len() as u32;
+                let len = nodes.len();
                 for node in nodes {
                     self.gen(globals, iseq, node)?;
                 }
-                iseq.push(Inst::CREATE_ARRAY);
-                self.push32(iseq, len);
+                self.gen_create_array(iseq, len);
             }
             NodeKind::Ident(id) => {
                 self.gen_get_local(iseq, *id)?;
@@ -541,38 +586,30 @@ impl Codegen {
             }
             NodeKind::Assign(lhs, rhs) => {
                 self.gen(globals, iseq, rhs)?;
-                match &lhs.kind {
-                    NodeKind::Ident(id) => self.gen_set_local(iseq, *id),
-                    NodeKind::Const(id) => self.gen_set_const(iseq, *id),
-                    NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
-                    NodeKind::Send(receiver, method, _args) => {
-                        let id = match method.kind {
-                            NodeKind::Ident(id) => id,
-                            _ => {
-                                return Err(self
-                                    .error_syntax(format!("Expected identifier."), method.loc()))
-                            }
-                        };
-                        let name = globals.get_ident_name(id).clone() + "=";
-                        let assign_id = globals.get_ident_id(name);
-                        self.gen(globals, iseq, &receiver)?;
-                        self.loc = lhs.loc();
-                        self.gen_send(iseq, assign_id, 1);
-                    }
-                    NodeKind::ArrayMember(array, index) => {
-                        self.gen(globals, iseq, array)?;
-                        if index.len() != 1 {
-                            return Err(
-                                self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())
-                            );
-                        }
-                        self.gen(globals, iseq, &index[0])?;
-                        self.gen_set_array_elem(iseq, 1);
-                    }
-                    _ => {
-                        return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()))
+                self.gen_assign(globals, iseq, lhs)?;
+            }
+            NodeKind::MulAssign(mlhs, mrhs) => {
+                let lhs_len = mlhs.len();
+                let rhs_len = mrhs.len();
+                for rhs in mrhs {
+                    self.gen(globals, iseq, rhs)?;
+                }
+                self.gen_dup(iseq, rhs_len);
+                if rhs_len < lhs_len {
+                    for _ in 0..lhs_len - rhs_len {
+                        self.gen_push_nil(iseq);
                     }
                 }
+                if lhs_len < rhs_len {
+                    for _ in 0..rhs_len - lhs_len {
+                        self.gen_pop(iseq);
+                    }
+                }
+                for lhs in mlhs.iter().rev() {
+                    self.gen_assign(globals, iseq, lhs)?;
+                    self.gen_pop(iseq);
+                }
+                self.gen_create_array(iseq, rhs_len);
             }
             NodeKind::Send(receiver, method, args) => {
                 let loc = self.loc;

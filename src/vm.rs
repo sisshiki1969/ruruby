@@ -221,8 +221,11 @@ impl VM {
             {
                 self.perf.get_perf(iseq[pc]);
             }
-            //            println!("{}", Inst::inst_name(iseq[pc]));
             self.pc = pc;
+            #[cfg(feature = "trace")]
+            {
+                println!("{}", Inst::inst_name(iseq[pc]));
+            }
             match iseq[pc] {
                 Inst::END => match self.exec_stack.pop() {
                     Some(v) => {
@@ -596,6 +599,15 @@ impl VM {
                 Inst::POP => {
                     self.exec_stack.pop().unwrap();
                     pc += 1;
+                }
+                Inst::DUP => {
+                    let len = read32(iseq, pc + 1) as usize;
+                    let stack_len = self.exec_stack.len();
+                    for i in stack_len - len..stack_len {
+                        let val = self.exec_stack[i];
+                        self.exec_stack.push(val);
+                    }
+                    pc += 5;
                 }
                 _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
             }

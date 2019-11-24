@@ -16,6 +16,7 @@ pub enum NodeKind {
     UnOp(UnOp, Box<Node>),
     ArrayMember(Box<Node>, Vec<Node>),
     Assign(Box<Node>, Box<Node>),
+    MulAssign(Vec<Node>, Vec<Node>),
     CompStmt(NodeVec),
     If(Box<Node>, Box<Node>, Box<Node>),
     For(Box<Node>, Box<Node>, Box<Node>), // params, iter, body
@@ -142,8 +143,13 @@ impl Node {
     }
 
     pub fn new_assign(lhs: Node, rhs: Node) -> Self {
-        let loc = Loc::new(lhs.loc()).merge(rhs.loc());
+        let loc = lhs.loc().merge(rhs.loc());
         Node::new(NodeKind::Assign(Box::new(lhs), Box::new(rhs)), loc)
+    }
+
+    pub fn new_mul_assign(lhs: Vec<Node>, rhs: Vec<Node>) -> Self {
+        let loc = lhs[0].loc().merge(rhs[rhs.len() - 1].loc());
+        Node::new(NodeKind::MulAssign(lhs, rhs), loc)
     }
 
     pub fn new_method_decl(

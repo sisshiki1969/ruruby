@@ -340,7 +340,46 @@ impl Parser {
         }
     */
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
-        self.parse_arg()
+        let node = self.parse_arg()?;
+        if TokenKind::Punct(Punct::Comma) == self.peek_no_skip_line_term().kind {
+            if let NodeKind::Ident(id) = node.kind {
+                self.add_local_var(id);
+            };
+            let mut mlhs = vec![node];
+            self.get()?;
+            loop {
+                let node = self.parse_primary_ext()?;
+                if let NodeKind::Ident(id) = node.kind {
+                    self.add_local_var(id);
+                };
+                mlhs.push(node);
+                if TokenKind::Punct(Punct::Comma) != self.peek_no_skip_line_term().kind {
+                    break;
+                } else {
+                    self.get()?;
+                }
+            }
+
+            if TokenKind::Punct(Punct::Assign) != self.peek_no_skip_line_term().kind {
+                return Err(self.error_unexpected(self.loc(), "Expected '='."));
+            } else {
+                self.get()?;
+            }
+
+            let mut mrhs = vec![];
+            loop {
+                mrhs.push(self.parse_arg()?);
+                if TokenKind::Punct(Punct::Comma) != self.peek_no_skip_line_term().kind {
+                    break;
+                } else {
+                    self.get()?;
+                }
+            }
+
+            Ok(Node::new_mul_assign(mlhs, mrhs))
+        } else {
+            Ok(node)
+        }
     }
 
     fn parse_arg(&mut self) -> Result<Node, RubyError> {
@@ -354,11 +393,8 @@ impl Parser {
         }
         if self.consume_punct(&Punct::Assign) {
             let rhs = self.parse_arg()?;
-            match lhs.kind {
-                NodeKind::Ident(id) => {
-                    self.add_local_var(id);
-                }
-                _ => {}
+            if let NodeKind::Ident(id) = lhs.kind {
+                self.add_local_var(id);
             };
             Ok(Node::new_assign(lhs, rhs))
         } else {
