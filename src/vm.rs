@@ -5,6 +5,8 @@ mod codegen;
 mod globals;
 mod instance;
 mod method;
+#[cfg(feature = "perf")]
+mod perf;
 mod range;
 pub mod value;
 mod vm_inst;
@@ -20,10 +22,10 @@ use codegen::*;
 pub use globals::*;
 pub use instance::*;
 pub use method::*;
+#[cfg(feature = "perf")]
+use perf::*;
 pub use range::*;
 use std::collections::HashMap;
-#[cfg(feature = "perf")]
-use std::time::{Duration, Instant};
 pub use value::*;
 use vm_inst::*;
 
@@ -44,59 +46,6 @@ pub struct VM {
     pub pc: usize,
     #[cfg(feature = "perf")]
     perf: Perf,
-}
-
-#[cfg(feature = "perf")]
-#[derive(Debug, Clone)]
-pub struct PerfCounter {
-    count: u64,
-    duration: Duration,
-}
-
-#[cfg(feature = "perf")]
-impl PerfCounter {
-    fn new() -> Self {
-        PerfCounter {
-            count: 0,
-            duration: Duration::from_secs(0),
-        }
-    }
-}
-
-#[cfg(feature = "perf")]
-#[derive(Debug, Clone)]
-struct Perf {
-    counter: Vec<PerfCounter>,
-    timer: Instant,
-    prev_inst: u8,
-}
-
-#[cfg(feature = "perf")]
-impl Perf {
-    fn new() -> Self {
-        Perf {
-            counter: vec![PerfCounter::new(); 256],
-            timer: Instant::now(),
-            prev_inst: 255,
-        }
-    }
-
-    fn get_perf(&mut self, next_inst: u8) {
-        let prev = self.prev_inst;
-        if prev != 255 {
-            self.counter[prev as usize].count += 1;
-            self.counter[prev as usize].duration += self.timer.elapsed();
-        }
-        self.timer = Instant::now();
-        self.prev_inst = next_inst;
-    }
-
-    fn get_perf_no_count(&mut self, next_inst: u8) {
-        self.get_perf(next_inst);
-        if next_inst != 255 {
-            self.counter[next_inst as usize].count -= 1;
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -157,7 +106,7 @@ impl VM {
     pub fn run(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
         #[cfg(feature = "perf")]
         {
-            self.perf.prev_inst = 253;
+            self.perf.set_prev_inst(Perf::CODEGEN);
         }
         let (methodref, iseq) = self
             .codegen
@@ -169,7 +118,7 @@ impl VM {
         self.context_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
-            self.perf.get_perf(255);
+            self.perf.get_perf(Perf::INVALID);
         }
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
@@ -177,7 +126,7 @@ impl VM {
         };
         #[cfg(feature = "perf")]
         {
-            Inst::print_perf(&mut self.perf.counter);
+            self.perf.print_perf();
         }
         Ok(val)
     }
@@ -185,7 +134,7 @@ impl VM {
     pub fn run_repl(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
         #[cfg(feature = "perf")]
         {
-            self.perf.prev_inst = 253;
+            self.perf.set_prev_inst(Perf::CODEGEN);
         }
         let (methodref, iseq) = self
             .codegen
@@ -200,7 +149,7 @@ impl VM {
         let val = self.vm_run()?;
         #[cfg(feature = "perf")]
         {
-            self.perf.get_perf(255);
+            self.perf.get_perf(Perf::INVALID);
         }
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
@@ -208,7 +157,7 @@ impl VM {
         };
         #[cfg(feature = "perf")]
         {
-            Inst::print_perf(&mut self.perf.counter);
+            self.perf.print_perf();
         }
         Ok(val)
     }
@@ -231,7 +180,7 @@ impl VM {
                     Some(v) => {
                         #[cfg(feature = "perf")]
                         {
-                            self.perf.get_perf(255);
+                            self.perf.get_perf(Perf::INVALID);
                         }
                         return Ok(v);
                     }
@@ -1015,13 +964,13 @@ impl VM {
         let mut inst: u8;
         #[cfg(feature = "perf")]
         {
-            inst = self.perf.prev_inst;
+            inst = self.perf.get_prev_inst();
         }
         match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 #[cfg(feature = "perf")]
                 {
-                    self.perf.get_perf(254);
+                    self.perf.get_perf(Perf::EXTERN);
                 }
                 let val = func(self, receiver, args)?;
                 #[cfg(feature = "perf")]

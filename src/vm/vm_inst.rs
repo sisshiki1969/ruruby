@@ -1,6 +1,3 @@
-#[cfg(feature = "perf")]
-use crate::vm::PerfCounter;
-
 pub struct Inst;
 impl Inst {
     pub const END: u8 = 0;
@@ -101,49 +98,6 @@ impl Inst {
             Inst::DEF_METHOD => "DEF_METHOD",
             Inst::DEF_CLASS_METHOD => "DEF_CLASS_METHOD",
             _ => "undefined",
-        }
-    }
-}
-
-#[cfg(feature = "perf")]
-impl Inst {
-    pub fn print_perf(counter: &Vec<PerfCounter>) {
-        eprintln!("Performance analysis for Inst:");
-        eprintln!("------------------------------------------");
-        eprintln!(
-            "{:<12} {:>10} {:>8} {:>8}",
-            "Inst name", "count", "%time", "nsec"
-        );
-        eprintln!("{:<12} {:>10} {:>8} {:>8}", "", "", "", "/inst");
-        eprintln!("------------------------------------------");
-        let mut sum = std::time::Duration::from_secs(0);
-        for c in counter {
-            sum += c.duration;
-        }
-        for (
-            i,
-            PerfCounter {
-                count: c,
-                duration: d,
-            },
-        ) in counter.iter().enumerate()
-        {
-            if *c == 0 {
-                continue;
-            }
-            eprintln!(
-                "{:<12} {:>10} {:>8.2} {:>8}",
-                Inst::inst_name(i as u8),
-                if *c > 10000_000 {
-                    format!("{:>9}M", c / 1000_000)
-                } else if *c > 10000 {
-                    format!("{:>9}K", c / 1000)
-                } else {
-                    format!("{:>10}", *c)
-                },
-                (d.as_micros() as f64) * 100.0 / (sum.as_micros() as f64),
-                d.as_nanos() / (*c as u128)
-            );
         }
     }
 }
