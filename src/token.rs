@@ -76,7 +76,7 @@ pub enum Reserved {
     True,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Punct {
     LParen,
     RParen,

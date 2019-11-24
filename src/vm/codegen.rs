@@ -609,7 +609,9 @@ impl Codegen {
                     self.gen_assign(globals, iseq, lhs)?;
                     self.gen_pop(iseq);
                 }
-                self.gen_create_array(iseq, rhs_len);
+                if rhs_len != 1 {
+                    self.gen_create_array(iseq, rhs_len);
+                }
             }
             NodeKind::Send(receiver, method, args) => {
                 let loc = self.loc;

@@ -185,13 +185,22 @@ impl Parser {
 
     /// If next token is an expected kind of Punctuator, get it and return true.
     /// Otherwise, return false.
-    fn consume_punct(&mut self, expect: &Punct) -> bool {
+    fn consume_punct(&mut self, expect: Punct) -> bool {
         match &self.peek().kind {
-            TokenKind::Punct(punct) if punct == expect => {
+            TokenKind::Punct(punct) if *punct == expect => {
                 let _ = self.get();
                 true
             }
             _ => false,
+        }
+    }
+
+    fn consume_punct_no_skip_line_term(&mut self, expect: Punct) -> bool {
+        if TokenKind::Punct(expect) == self.peek_no_skip_line_term().kind {
+            let _ = self.get();
+            true
+        } else {
+            false
         }
     }
 
@@ -229,9 +238,9 @@ impl Parser {
 
     /// Get the next token and examine whether it is an expected Punct.
     /// If not, return RubyError.
-    fn expect_punct(&mut self, expect: &Punct) -> Result<(), RubyError> {
+    fn expect_punct(&mut self, expect: Punct) -> Result<(), RubyError> {
         match &self.get()?.kind {
-            TokenKind::Punct(punct) if punct == expect => Ok(()),
+            TokenKind::Punct(punct) if *punct == expect => Ok(()),
             _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect '{:?}'", expect))),
         }
     }
@@ -341,38 +350,31 @@ impl Parser {
     */
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
         let node = self.parse_arg()?;
-        if TokenKind::Punct(Punct::Comma) == self.peek_no_skip_line_term().kind {
+        if self.consume_punct_no_skip_line_term(Punct::Comma) {
             if let NodeKind::Ident(id) = node.kind {
                 self.add_local_var(id);
             };
             let mut mlhs = vec![node];
-            self.get()?;
             loop {
                 let node = self.parse_primary_ext()?;
                 if let NodeKind::Ident(id) = node.kind {
                     self.add_local_var(id);
                 };
                 mlhs.push(node);
-                if TokenKind::Punct(Punct::Comma) != self.peek_no_skip_line_term().kind {
+                if !self.consume_punct_no_skip_line_term(Punct::Comma) {
                     break;
-                } else {
-                    self.get()?;
                 }
             }
 
-            if TokenKind::Punct(Punct::Assign) != self.peek_no_skip_line_term().kind {
+            if !self.consume_punct_no_skip_line_term(Punct::Assign) {
                 return Err(self.error_unexpected(self.loc(), "Expected '='."));
-            } else {
-                self.get()?;
             }
 
             let mut mrhs = vec![];
             loop {
                 mrhs.push(self.parse_arg()?);
-                if TokenKind::Punct(Punct::Comma) != self.peek_no_skip_line_term().kind {
+                if !self.consume_punct_no_skip_line_term(Punct::Comma) {
                     break;
-                } else {
-                    self.get()?;
                 }
             }
 
@@ -391,12 +393,23 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(&Punct::Assign) {
+        if self.consume_punct(Punct::Assign) {
             let rhs = self.parse_arg()?;
             if let NodeKind::Ident(id) = lhs.kind {
                 self.add_local_var(id);
             };
-            Ok(Node::new_assign(lhs, rhs))
+            if self.consume_punct_no_skip_line_term(Punct::Comma) {
+                let mut mrhs = vec![rhs];
+                loop {
+                    mrhs.push(self.parse_arg()?);
+                    if !self.consume_punct_no_skip_line_term(Punct::Comma) {
+                        break;
+                    }
+                }
+                Ok(Node::new_mul_assign(vec![lhs], mrhs))
+            } else {
+                Ok(Node::new_assign(lhs, rhs))
+            }
         } else {
             Ok(lhs)
         }
@@ -405,9 +418,9 @@ impl Parser {
     fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
         let cond = self.parse_arg_range()?;
-        if self.consume_punct(&Punct::Question) {
+        if self.consume_punct(Punct::Question) {
             let then_ = self.parse_arg_ternary()?;
-            self.expect_punct(&Punct::Colon)?;
+            self.expect_punct(Punct::Colon)?;
             let else_ = self.parse_arg_ternary()?;
             let loc = loc.merge(else_.loc());
             let node = Node::new(
@@ -425,11 +438,11 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(&Punct::Range2) {
+        if self.consume_punct(Punct::Range2) {
             let rhs = self.parse_arg_logical_or()?;
             let loc = lhs.loc().merge(rhs.loc());
             Ok(Node::new_range(lhs, rhs, false, loc))
-        } else if self.consume_punct(&Punct::Range3) {
+        } else if self.consume_punct(Punct::Range3) {
             let rhs = self.parse_arg_logical_or()?;
             let loc = lhs.loc().merge(rhs.loc());
             Ok(Node::new_range(lhs, rhs, true, loc))
@@ -443,7 +456,7 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(&Punct::LOr) {
+        if self.consume_punct(Punct::LOr) {
             let rhs = self.parse_arg_logical_or()?;
             Ok(Node::new_binop(BinOp::LOr, lhs, rhs))
         } else {
@@ -456,7 +469,7 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(&Punct::LAnd) {
+        if self.consume_punct(Punct::LAnd) {
             let rhs = self.parse_arg_logical_and()?;
             Ok(Node::new_binop(BinOp::LAnd, lhs, rhs))
         } else {
@@ -470,10 +483,10 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(&Punct::Eq) {
+        if self.consume_punct(Punct::Eq) {
             let rhs = self.parse_arg_eq()?;
             Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
-        } else if self.consume_punct(&Punct::Ne) {
+        } else if self.consume_punct(Punct::Ne) {
             let rhs = self.parse_arg_eq()?;
             Ok(Node::new_binop(BinOp::Ne, lhs, rhs))
         } else {
@@ -487,16 +500,16 @@ impl Parser {
             return Ok(lhs);
         }
         loop {
-            if self.consume_punct(&Punct::Ge) {
+            if self.consume_punct(Punct::Ge) {
                 let rhs = self.parse_arg_bitor()?;
                 lhs = Node::new_binop(BinOp::Ge, lhs, rhs);
-            } else if self.consume_punct(&Punct::Gt) {
+            } else if self.consume_punct(Punct::Gt) {
                 let rhs = self.parse_arg_bitor()?;
                 lhs = Node::new_binop(BinOp::Gt, lhs, rhs);
-            } else if self.consume_punct(&Punct::Le) {
+            } else if self.consume_punct(Punct::Le) {
                 let rhs = self.parse_arg_bitor()?;
                 lhs = Node::new_binop(BinOp::Le, lhs, rhs);
-            } else if self.consume_punct(&Punct::Lt) {
+            } else if self.consume_punct(Punct::Lt) {
                 let rhs = self.parse_arg_bitor()?;
                 lhs = Node::new_binop(BinOp::Lt, lhs, rhs);
             } else {
@@ -512,9 +525,9 @@ impl Parser {
             return Ok(lhs);
         }
         loop {
-            if self.consume_punct(&Punct::BitOr) {
+            if self.consume_punct(Punct::BitOr) {
                 lhs = Node::new_binop(BinOp::BitOr, lhs, self.parse_arg_bitand()?);
-            } else if self.consume_punct(&Punct::BitXor) {
+            } else if self.consume_punct(Punct::BitXor) {
                 lhs = Node::new_binop(BinOp::BitXor, lhs, self.parse_arg_bitand()?);
             } else {
                 break;
@@ -529,7 +542,7 @@ impl Parser {
             return Ok(lhs);
         }
         loop {
-            if self.consume_punct(&Punct::BitAnd) {
+            if self.consume_punct(Punct::BitAnd) {
                 lhs = Node::new_binop(BinOp::BitAnd, lhs, self.parse_arg_shift()?);
             } else {
                 break;
@@ -544,9 +557,9 @@ impl Parser {
             return Ok(lhs);
         }
         loop {
-            if self.consume_punct(&Punct::Shl) {
+            if self.consume_punct(Punct::Shl) {
                 lhs = Node::new_binop(BinOp::Shl, lhs, self.parse_arg_add()?);
-            } else if self.consume_punct(&Punct::Shr) {
+            } else if self.consume_punct(Punct::Shr) {
                 lhs = Node::new_binop(BinOp::Shr, lhs, self.parse_arg_add()?);
             } else {
                 break;
@@ -561,10 +574,10 @@ impl Parser {
             return Ok(lhs);
         }
         loop {
-            if self.consume_punct(&Punct::Plus) {
+            if self.consume_punct(Punct::Plus) {
                 let rhs = self.parse_arg_mul()?;
                 lhs = Node::new_binop(BinOp::Add, lhs, rhs);
-            } else if self.consume_punct(&Punct::Minus) {
+            } else if self.consume_punct(Punct::Minus) {
                 let rhs = self.parse_arg_mul()?;
                 lhs = Node::new_binop(BinOp::Sub, lhs, rhs);
             } else {
@@ -580,10 +593,10 @@ impl Parser {
             return Ok(lhs);
         }
         loop {
-            if self.consume_punct(&Punct::Mul) {
+            if self.consume_punct(Punct::Mul) {
                 let rhs = self.parse_unary_minus()?;
                 lhs = Node::new_binop(BinOp::Mul, lhs, rhs);
-            } else if self.consume_punct(&Punct::Div) {
+            } else if self.consume_punct(Punct::Div) {
                 let rhs = self.parse_unary_minus()?;
                 lhs = Node::new_binop(BinOp::Div, lhs, rhs);
             } else {
@@ -595,7 +608,7 @@ impl Parser {
 
     fn parse_unary_minus(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
-        if self.consume_punct(&Punct::Minus) {
+        if self.consume_punct(Punct::Minus) {
             let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
             let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_number(-1, loc));
@@ -608,7 +621,7 @@ impl Parser {
 
     fn parse_unary_bitnot(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
-        if self.consume_punct(&Punct::BitNot) {
+        if self.consume_punct(Punct::BitNot) {
             let lhs = self.parse_unary_bitnot()?;
             let lhs = Node::new_unop(UnOp::BitNot, lhs, loc);
             Ok(lhs)
@@ -630,7 +643,7 @@ impl Parser {
         if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
             // OPERATION `(' [CALL_ARGS] `)'
             self.get()?;
-            let args = self.parse_args(&Punct::RParen)?;
+            let args = self.parse_args(Punct::RParen)?;
             let end_loc = self.loc();
 
             return Ok(Node::new_send(
@@ -660,7 +673,7 @@ impl Parser {
                     let mut args = vec![];
                     if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
                         self.get()?;
-                        args = self.parse_args(&Punct::RParen)?;
+                        args = self.parse_args(Punct::RParen)?;
                     }
                     Node::new_send(
                         node,
@@ -673,7 +686,7 @@ impl Parser {
                     // PRIMARY: PRIMARY `[' [ARGS] `]'
                     let loc = self.loc();
                     self.get()?;
-                    let args = self.parse_args(&Punct::RBracket)?;
+                    let args = self.parse_args(Punct::RBracket)?;
                     let len = args.len();
                     if len < 1 || len > 2 {
                         return Err(self.error_unexpected(
@@ -688,14 +701,14 @@ impl Parser {
         }
     }
 
-    fn parse_args(&mut self, punct: &Punct) -> Result<Vec<Node>, RubyError> {
+    fn parse_args(&mut self, punct: Punct) -> Result<Vec<Node>, RubyError> {
         let mut args = vec![];
         if self.consume_punct(punct) {
             return Ok(args);
         }
         loop {
             args.push(self.parse_arg()?);
-            if !self.consume_punct(&Punct::Comma) {
+            if !self.consume_punct(Punct::Comma) {
                 break;
             }
         }
@@ -728,11 +741,11 @@ impl Parser {
             TokenKind::OpenDoubleQuote(s) => Ok(self.parse_interporated_string_literal(s)?),
             TokenKind::Punct(punct) if *punct == Punct::LParen => {
                 let node = self.parse_comp_stmt()?;
-                self.expect_punct(&Punct::RParen)?;
+                self.expect_punct(Punct::RParen)?;
                 Ok(node)
             }
             TokenKind::Punct(punct) if *punct == Punct::LBracket => {
-                let nodes = self.parse_args(&Punct::RBracket)?;
+                let nodes = self.parse_args(Punct::RBracket)?;
                 Ok(Node::new(
                     NodeKind::Array(nodes),
                     loc.merge(self.prev_loc()),
@@ -907,7 +920,7 @@ impl Parser {
         };
         if id == self_id {
             is_class_method = true;
-            self.expect_punct(&Punct::Dot)?;
+            self.expect_punct(Punct::Dot)?;
             id = self.expect_ident()?;
         };
         self.lvar_collector.push(LvarCollector::new());
@@ -926,9 +939,9 @@ impl Parser {
         if self.consume_term() {
             return Ok(vec![]);
         };
-        self.expect_punct(&Punct::LParen)?;
+        self.expect_punct(Punct::LParen)?;
         let mut args = vec![];
-        if self.consume_punct(&Punct::RParen) {
+        if self.consume_punct(Punct::RParen) {
             if !self.consume_term() {
                 return Err(self.error_unexpected(self.loc(), "Expect terminator"));
             }
@@ -938,11 +951,11 @@ impl Parser {
             let id = self.expect_ident()?;
             args.push(Node::new(NodeKind::Param(id), self.prev_loc()));
             self.add_local_var(id);
-            if !self.consume_punct(&Punct::Comma) {
+            if !self.consume_punct(Punct::Comma) {
                 break;
             }
         }
-        self.expect_punct(&Punct::RParen)?;
+        self.expect_punct(Punct::RParen)?;
         if !self.consume_term() {
             return Err(self.error_unexpected(self.loc(), "Expect terminator."));
         }
