@@ -342,14 +342,25 @@ impl Codegen {
         let iseq_sourcemap = context.iseq_sourcemap;
         iseq.push(Inst::END);
         let lvars = lvar_collector.table.len();
+        //#[cfg(feature = "emit-iseq")]
+        {
+            eprintln!("-----------------------------------------");
+            eprintln!("Method",);
+            let iseq = iseq.clone();
+            let mut pc = 0;
+            while iseq[pc] != Inst::END {
+                eprintln!("{}", Inst::inst_name(iseq[pc]));
+                pc += Inst::inst_size(iseq[pc]);
+            }
+            eprintln!("{}", Inst::inst_name(iseq[pc]));
+        }
         let method = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(iseq),
             params: params_lvar,
             lvars,
             iseq_sourcemap,
         };
-        #[cfg(feature = "emit-iseq")]
-        eprintln!("{:?}", method);
+
         Ok(method)
     }
 
