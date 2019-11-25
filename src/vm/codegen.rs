@@ -301,28 +301,14 @@ impl Codegen {
     }
 
     /// Generate ISeq.
-    pub fn gen_iseq(
-        &mut self,
-        globals: &mut Globals,
-        node: &Node,
-        lvar_collector: &LvarCollector,
-    ) -> Result<(MethodRef, ISeqRef), RubyError> {
-        let methodinfo = self.gen_method_iseq(globals, &vec![], node, lvar_collector)?;
-        let iseq = match methodinfo {
-            MethodInfo::RubyFunc { iseq, .. } => iseq,
-            _ => unreachable!("Illegal method_info."),
-        };
-        let methodref = globals.add_method(methodinfo);
-        Ok((methodref, iseq))
-    }
 
-    pub fn gen_method_iseq(
+    pub fn gen_iseq(
         &mut self,
         globals: &mut Globals,
         params: &Vec<Node>,
         node: &Node,
         lvar_collector: &LvarCollector,
-    ) -> Result<MethodInfo, RubyError> {
+    ) -> Result<MethodRef, RubyError> {
         let mut params_lvar = vec![];
         for param in params {
             match param.kind {
@@ -468,7 +454,7 @@ impl Codegen {
                     .to_owned()
             }
         }
-        let method = MethodInfo::RubyFunc {
+        let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
                 params_lvar,
                 iseq,
@@ -477,7 +463,7 @@ impl Codegen {
             )),
         };
 
-        Ok(method)
+        Ok(globals.add_method(info))
     }
 
     pub fn gen(
@@ -771,22 +757,19 @@ impl Codegen {
                 self.gen_send(iseq, id, args.len());
             }
             NodeKind::MethodDef(id, params, body, lvar) => {
-                let info = self.gen_method_iseq(globals, params, body, lvar)?;
-                let methodref = globals.add_method(info);
+                let methodref = self.gen_iseq(globals, params, body, lvar)?;
                 iseq.push(Inst::DEF_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
             }
             NodeKind::ClassMethodDef(id, params, body, lvar) => {
-                let info = self.gen_method_iseq(globals, params, body, lvar)?;
-                let methodref = globals.add_method(info);
+                let methodref = self.gen_iseq(globals, params, body, lvar)?;
                 iseq.push(Inst::DEF_CLASS_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
             }
             NodeKind::ClassDef(id, node, lvar) => {
-                let info = self.gen_method_iseq(globals, &vec![], node, lvar)?;
-                let methodref = globals.add_method(info);
+                let methodref = self.gen_iseq(globals, &vec![], node, lvar)?;
                 iseq.push(Inst::DEF_CLASS);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());

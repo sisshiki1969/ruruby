@@ -115,9 +115,14 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let (methodref, iseq) = self
+        let methodref = self
             .codegen
-            .gen_iseq(&mut self.globals, node, lvar_collector)?;
+            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector)?;
+        let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
+            iseq.clone()
+        } else {
+            return Err(self.error_unimplemented("Methodref is illegal."));
+        };
         let main_object = PackedValue::class(self.globals.main_class);
         self.context_stack
             .push(Context::new(64, main_object, iseq, methodref));
@@ -143,9 +148,14 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let (methodref, iseq) = self
+        let methodref = self
             .codegen
-            .gen_iseq(&mut self.globals, node, lvar_collector)?;
+            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector)?;
+        let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
+            iseq.clone()
+        } else {
+            return Err(self.error_unimplemented("Methodref is illegal."));
+        };
         if self.context_stack.len() == 0 {
             let main_object = PackedValue::class(self.globals.main_class);
             self.context_stack
