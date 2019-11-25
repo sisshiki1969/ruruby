@@ -342,12 +342,15 @@ impl Codegen {
         let iseq_sourcemap = context.iseq_sourcemap;
         iseq.push(Inst::END);
         let lvars = lvar_collector.table.len();
-        Ok(MethodInfo::RubyFunc {
+        let method = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(iseq),
             params: params_lvar,
             lvars,
             iseq_sourcemap,
-        })
+        };
+        #[cfg(feature = "emit-iseq")]
+        eprintln!("{:?}", method);
+        Ok(method)
     }
 
     pub fn gen(
@@ -425,17 +428,27 @@ impl Codegen {
                 match op {
                     BinOp::Add => {
                         self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
                         self.loc = loc;
                         self.save_loc(iseq);
-                        iseq.push(Inst::ADD);
+                        if let NodeKind::Number(num) = rhs.kind {
+                            iseq.push(Inst::ADDI);
+                            self.push64(iseq, num as u64);
+                        } else {
+                            self.gen(globals, iseq, rhs)?;
+                            iseq.push(Inst::ADD);
+                        }
                     }
                     BinOp::Sub => {
                         self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
                         self.loc = loc;
                         self.save_loc(iseq);
-                        iseq.push(Inst::SUB);
+                        if let NodeKind::Number(num) = rhs.kind {
+                            iseq.push(Inst::SUBI);
+                            self.push64(iseq, num as u64);
+                        } else {
+                            self.gen(globals, iseq, rhs)?;
+                            iseq.push(Inst::SUB);
+                        };
                     }
                     BinOp::Mul => {
                         self.gen(globals, iseq, lhs)?;
@@ -567,8 +580,10 @@ impl Codegen {
                 self.gen_pop(iseq);
                 let loop_continue = Codegen::current(iseq);
                 self.gen_get_local(iseq, id)?;
-                self.gen_fixnum(iseq, 1);
-                iseq.push(Inst::ADD);
+
+                iseq.push(Inst::ADDI);
+                self.push64(iseq, 1u64);
+
                 self.gen_set_local(iseq, id);
                 self.gen_pop(iseq);
 

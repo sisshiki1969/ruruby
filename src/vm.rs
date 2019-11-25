@@ -239,11 +239,25 @@ impl VM {
                     self.exec_stack.push(val);
                     pc += 1;
                 }
+                Inst::ADDI => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = read64(iseq, pc + 1) as i64;
+                    let val = self.eval_addi(rhs, lhs)?;
+                    pc += 9;
+                    self.exec_stack.push(val);
+                }
                 Inst::SUB => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_sub(lhs, rhs)?;
                     pc += 1;
+                    self.exec_stack.push(val);
+                }
+                Inst::SUBI => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = read64(iseq, pc + 1) as i64;
+                    let val = self.eval_subi(rhs, lhs)?;
+                    pc += 9;
                     self.exec_stack.push(val);
                 }
                 Inst::MUL => {
@@ -665,6 +679,28 @@ impl VM {
             (_, _) => Err(self.error_undefined_method("+", self.globals.get_class_name(lhs))),
         }
     }
+
+    fn eval_addi(&mut self, rhs: i64, lhs: PackedValue) -> VMResult {
+        if lhs.is_packed_fixnum() {
+            return Ok(PackedValue::fixnum(lhs.as_packed_fixnum() + rhs));
+        };
+        if lhs.is_packed_num() {
+            return Ok(PackedValue::flonum(lhs.as_packed_flonum() + rhs as f64));
+        };
+        match lhs.unpack() {
+            Value::FixNum(lhs) => Ok(PackedValue::fixnum(lhs + rhs)),
+            Value::FloatNum(lhs) => Ok(PackedValue::flonum(lhs + rhs as f64)),
+            Value::Instance(l_ref) => {
+                let method = self.globals.get_ident_id("@add");
+                match l_ref.get_instance_method(method) {
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)]),
+                    None => Err(self.error_nomethod("'+'")),
+                }
+            }
+            _ => Err(self.error_nomethod("'+'")),
+        }
+    }
+
     fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(PackedValue::fixnum(((*lhs as i64) - (*rhs as i64)) / 2));
@@ -697,6 +733,27 @@ impl VM {
                 }
             }
             (_, _) => Err(self.error_nomethod("'-'")),
+        }
+    }
+
+    fn eval_subi(&mut self, rhs: i64, lhs: PackedValue) -> VMResult {
+        if lhs.is_packed_fixnum() {
+            return Ok(PackedValue::fixnum(lhs.as_packed_fixnum() - rhs));
+        };
+        if lhs.is_packed_num() {
+            return Ok(PackedValue::flonum(lhs.as_packed_flonum() - rhs as f64));
+        };
+        match lhs.unpack() {
+            Value::FixNum(lhs) => Ok(PackedValue::fixnum(lhs - rhs)),
+            Value::FloatNum(lhs) => Ok(PackedValue::flonum(lhs - rhs as f64)),
+            Value::Instance(l_ref) => {
+                let method = self.globals.get_ident_id("@sub");
+                match l_ref.get_instance_method(method) {
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)]),
+                    None => Err(self.error_nomethod("'-'")),
+                }
+            }
+            _ => Err(self.error_nomethod("'-'")),
         }
     }
 

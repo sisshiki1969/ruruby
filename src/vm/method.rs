@@ -48,7 +48,12 @@ pub enum MethodInfo {
 impl std::fmt::Debug for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MethodInfo::RubyFunc { params, .. } => write!(f, "RubyFunc {:?}", params),
+            MethodInfo::RubyFunc {
+                params,
+                iseq,
+                iseq_sourcemap,
+                ..
+            } => write!(f, "RubyFunc {:?} {:?} {:?}", params, *iseq, iseq_sourcemap),
             MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
             MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
             MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),

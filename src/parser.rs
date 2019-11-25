@@ -285,18 +285,7 @@ impl Parser {
             .push(lvar_collector.unwrap_or(LvarCollector::new()));
         let node = self.parse_comp_stmt()?;
         let lvar = self.lvar_collector.pop().unwrap();
-        #[cfg(feature = "trace_iseq")]
-        {
-            let list = lvar
-                .table
-                .clone()
-                .into_iter()
-                .collect::<Vec<(IdentId, LvarId)>>();
-            for l in list {
-                let name = self.get_ident_name(l.0);
-                eprintln!("({}, {:?})", name, l.1);
-            }
-        }
+
         let tok = self.peek();
         if tok.kind == TokenKind::EOF {
             let mut result = ParseResult::default(node, lvar);
