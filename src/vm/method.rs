@@ -27,33 +27,16 @@ impl From<u32> for MethodRef {
 
 #[derive(Clone)]
 pub enum MethodInfo {
-    RubyFunc {
-        params: Vec<LvarId>,
-        iseq: ISeqRef,
-        lvars: usize,
-        iseq_sourcemap: Vec<(ISeqPos, Loc)>,
-    },
-    AttrReader {
-        id: IdentId,
-    },
-    AttrWriter {
-        id: IdentId,
-    },
-    BuiltinFunc {
-        name: String,
-        func: BuiltinFunc,
-    },
+    RubyFunc { iseq: ISeqRef },
+    AttrReader { id: IdentId },
+    AttrWriter { id: IdentId },
+    BuiltinFunc { name: String, func: BuiltinFunc },
 }
 
 impl std::fmt::Debug for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MethodInfo::RubyFunc {
-                params,
-                iseq,
-                iseq_sourcemap,
-                ..
-            } => write!(f, "RubyFunc {:?} {:?} {:?}", params, *iseq, iseq_sourcemap),
+            MethodInfo::RubyFunc { iseq } => write!(f, "RubyFunc {:?}", *iseq),
             MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
             MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
             MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
@@ -61,17 +44,32 @@ impl std::fmt::Debug for MethodInfo {
     }
 }
 
-pub type ISeqRef = Ref<ISeq>;
+pub type ISeqRef = Ref<ISeqInfo>;
 
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
+    pub params: Vec<LvarId>,
     pub iseq: ISeq,
     pub lvar: LvarCollector,
+    pub lvars: usize,
+    pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
 }
 
 impl ISeqInfo {
-    pub fn new(iseq: ISeq, lvar: LvarCollector) -> Self {
-        ISeqInfo { iseq, lvar }
+    pub fn new(
+        params: Vec<LvarId>,
+        iseq: ISeq,
+        lvar: LvarCollector,
+        iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+    ) -> Self {
+        let lvars = lvar.table.len();
+        ISeqInfo {
+            params,
+            iseq,
+            lvar,
+            lvars,
+            iseq_sourcemap,
+        }
     }
 }
 

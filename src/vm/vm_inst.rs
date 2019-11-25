@@ -1,5 +1,3 @@
-use crate::vm::codegen::ISeq;
-
 pub struct Inst;
 impl Inst {
     pub const END: u8 = 0;
@@ -109,58 +107,6 @@ impl Inst {
         }
     }
 
-    pub fn inst_info(iseq: &ISeq, pc: usize) -> String {
-        match iseq[pc] {
-            Inst::END
-            | Inst::PUSH_NIL
-            | Inst::PUSH_TRUE
-            | Inst::PUSH_FALSE
-            | Inst::PUSH_SELF
-            | Inst::ADD
-            | Inst::SUB
-            | Inst::MUL
-            | Inst::DIV
-            | Inst::EQ
-            | Inst::NE
-            | Inst::GT
-            | Inst::GE
-            | Inst::SHR
-            | Inst::SHL
-            | Inst::BIT_OR
-            | Inst::BIT_AND
-            | Inst::BIT_XOR
-            | Inst::CONCAT_STRING
-            | Inst::SET_INSTANCE_VAR
-            | Inst::CREATE_RANGE
-            | Inst::TO_S
-            | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
-
-            Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM "),
-            Inst::PUSH_FLONUM => format!("PUSH_FLONUM "),
-            Inst::PUSH_STRING => format!("PUSH_STRING "),
-            Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL "),
-            Inst::SUBI => format!("SUBI"),
-            Inst::ADDI => format!("ADDI"),
-
-            Inst::JMP => format!("JMP"),
-            Inst::JMP_IF_FALSE => format!("JMP_IF_FALSE"),
-            Inst::SET_LOCAL => format!("SET_LOCAL"),
-            Inst::GET_LOCAL => format!("GET_LOCAL"),
-            Inst::GET_CONST => format!("GET_CONST"),
-            Inst::SET_CONST => format!("SET_CONST"),
-            Inst::GET_INSTANCE_VAR => format!("GET_INST_VAR"),
-            Inst::GET_ARRAY_ELEM => format!("GET_ARY_ELEM"),
-            Inst::SET_ARRAY_ELEM => format!("SET_ARY_ELEM"),
-            Inst::SEND => format!("SEND"),
-            Inst::CREATE_ARRAY => format!("CREATE_ARRAY"),
-            Inst::DUP => format!("DUP"),
-            Inst::DEF_CLASS => format!("DEF_CLASS"),
-            Inst::DEF_METHOD => format!("DEF_METHOD"),
-            Inst::DEF_CLASS_METHOD => format!("DEF_CLASS_METHOD"),
-            _ => format!("undefined"),
-        }
-    }
-
     pub fn inst_size(inst: u8) -> usize {
         match inst {
             Inst::END
@@ -182,7 +128,6 @@ impl Inst {
             | Inst::BIT_AND
             | Inst::BIT_XOR
             | Inst::CONCAT_STRING
-            | Inst::SET_INSTANCE_VAR
             | Inst::CREATE_RANGE
             | Inst::TO_S
             | Inst::POP => 1,
@@ -194,6 +139,7 @@ impl Inst {
             | Inst::GET_CONST
             | Inst::SET_CONST
             | Inst::GET_INSTANCE_VAR
+            | Inst::SET_INSTANCE_VAR
             | Inst::GET_ARRAY_ELEM
             | Inst::SET_ARRAY_ELEM
             | Inst::CREATE_ARRAY

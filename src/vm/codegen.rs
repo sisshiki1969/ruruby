@@ -172,9 +172,8 @@ impl Codegen {
     }
 
     fn gen_set_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.gen_symbol(iseq, id);
         iseq.push(Inst::SET_INSTANCE_VAR);
-        //self.push32(iseq, id.into());
+        self.push32(iseq, id.into());
     }
 
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -341,24 +340,141 @@ impl Codegen {
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
         iseq.push(Inst::END);
-        let lvars = lvar_collector.table.len();
-        //#[cfg(feature = "emit-iseq")]
+        #[cfg(feature = "emit-iseq")]
         {
             eprintln!("-----------------------------------------");
             eprintln!("Method",);
             let iseq = iseq.clone();
             let mut pc = 0;
             while iseq[pc] != Inst::END {
-                eprintln!("{}", Inst::inst_name(iseq[pc]));
+                eprintln!(
+                    "  {:>05} {}",
+                    pc,
+                    inst_info(globals, &lvar_collector.table, &iseq, pc)
+                );
                 pc += Inst::inst_size(iseq[pc]);
             }
-            eprintln!("{}", Inst::inst_name(iseq[pc]));
+            eprintln!(
+                "  {:>05} {}",
+                pc,
+                inst_info(globals, &lvar_collector.table, &iseq, pc)
+            );
+
+            fn inst_info(
+                globals: &mut Globals,
+                lvar_table: &HashMap<IdentId, LvarId>,
+                iseq: &ISeq,
+                pc: usize,
+            ) -> String {
+                match iseq[pc] {
+                    Inst::END
+                    | Inst::PUSH_NIL
+                    | Inst::PUSH_TRUE
+                    | Inst::PUSH_FALSE
+                    | Inst::PUSH_SELF
+                    | Inst::ADD
+                    | Inst::SUB
+                    | Inst::MUL
+                    | Inst::DIV
+                    | Inst::EQ
+                    | Inst::NE
+                    | Inst::GT
+                    | Inst::GE
+                    | Inst::SHR
+                    | Inst::SHL
+                    | Inst::BIT_OR
+                    | Inst::BIT_AND
+                    | Inst::BIT_XOR
+                    | Inst::CONCAT_STRING
+                    | Inst::CREATE_RANGE
+                    | Inst::TO_S
+                    | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
+                    Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", read64(iseq, pc + 1) as i64),
+                    Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", unsafe {
+                        std::mem::transmute::<u64, f64>(read64(iseq, pc + 1))
+                    }),
+                    Inst::PUSH_STRING => format!("PUSH_STRING "),
+                    Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL "),
+                    Inst::SUBI => format!("SUBI {}", read64(iseq, pc + 1) as i64),
+                    Inst::ADDI => format!("ADDI {}", read64(iseq, pc + 1) as i64),
+                    Inst::JMP => format!("JMP {:>05}", pc as i32 + 5 + read32(iseq, pc + 1) as i32),
+                    Inst::JMP_IF_FALSE => format!(
+                        "JMP_IF_FALSE {:>05}",
+                        pc as i32 + 5 + read32(iseq, pc + 1) as i32
+                    ),
+                    Inst::SET_LOCAL => {
+                        let id = lvar_table
+                            .iter()
+                            .find(|(_, &v)| v == LvarId::from_u32(read32(iseq, pc + 1)))
+                            .unwrap()
+                            .0;
+                        format!("SET_LOCAL '{}'", globals.get_ident_name(*id))
+                    }
+                    Inst::GET_LOCAL => {
+                        let id = lvar_table
+                            .iter()
+                            .find(|(_, &v)| v == LvarId::from_u32(read32(iseq, pc + 1)))
+                            .unwrap()
+                            .0;
+                        format!("GET_LOCAL '{}'", globals.get_ident_name(*id))
+                    }
+                    Inst::GET_CONST => format!("GET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
+                    Inst::SET_CONST => format!("SET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
+                    Inst::GET_INSTANCE_VAR => {
+                        format!("GET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
+                    }
+                    Inst::SET_INSTANCE_VAR => {
+                        format!("SET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
+                    }
+                    Inst::GET_ARRAY_ELEM => format!("GET_ARY_ELEM {} items", read32(iseq, pc + 1)),
+                    Inst::SET_ARRAY_ELEM => format!("SET_ARY_ELEM {} items", read32(iseq, pc + 1)),
+                    Inst::SEND => format!(
+                        "SEND '{}' {} items",
+                        ident_name(globals, iseq, pc + 1),
+                        read32(iseq, pc + 5)
+                    ),
+                    Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", read32(iseq, pc + 1)),
+                    Inst::DUP => format!("DUP {}", read32(iseq, pc + 1)),
+                    Inst::DEF_CLASS => format!("DEF_CLASS"),
+                    Inst::DEF_METHOD => format!("DEF_METHOD"),
+                    Inst::DEF_CLASS_METHOD => format!("DEF_CLASS_METHOD"),
+                    _ => format!("undefined"),
+                }
+            }
+
+            fn read64(iseq: &ISeq, pc: usize) -> u64 {
+                let mut num: u64 = (iseq[pc] as u64) << 56;
+                num += (iseq[pc + 1] as u64) << 48;
+                num += (iseq[pc + 2] as u64) << 40;
+                num += (iseq[pc + 3] as u64) << 32;
+                num += (iseq[pc + 4] as u64) << 24;
+                num += (iseq[pc + 5] as u64) << 16;
+                num += (iseq[pc + 6] as u64) << 8;
+                num += iseq[pc + 7] as u64;
+                num
+            }
+
+            fn read32(iseq: &ISeq, pc: usize) -> u32 {
+                let mut num: u32 = (iseq[pc] as u32) << 24;
+                num += (iseq[pc + 1] as u32) << 16;
+                num += (iseq[pc + 2] as u32) << 8;
+                num += iseq[pc + 3] as u32;
+                num
+            }
+
+            fn ident_name(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
+                globals
+                    .get_ident_name(IdentId::from(read32(iseq, pc)))
+                    .to_owned()
+            }
         }
         let method = MethodInfo::RubyFunc {
-            iseq: ISeqRef::new(iseq),
-            params: params_lvar,
-            lvars,
-            iseq_sourcemap,
+            iseq: ISeqRef::new(ISeqInfo::new(
+                params_lvar,
+                iseq,
+                lvar_collector.clone(),
+                iseq_sourcemap,
+            )),
         };
 
         Ok(method)

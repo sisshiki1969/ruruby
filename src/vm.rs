@@ -170,7 +170,7 @@ impl VM {
     }
 
     pub fn vm_run(&mut self) -> VMResult {
-        let iseq = &*self.context_stack.last().unwrap().iseq_ref.clone();
+        let iseq = &*self.context_stack.last().unwrap().iseq_ref.clone().iseq;
         let mut pc = 0;
         loop {
             #[cfg(feature = "perf")]
@@ -381,12 +381,7 @@ impl VM {
                     pc += 5;
                 }
                 Inst::SET_INSTANCE_VAR => {
-                    let symbol = self.exec_stack.pop().unwrap();
-                    let var_id = if symbol.is_packed_symbol() {
-                        symbol.as_packed_symbol()
-                    } else {
-                        unreachable!("SET_INSTANCE_VAR#Illegal instance symbol value.");
-                    };
+                    let var_id = read_id(iseq, pc);
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let new_val = self.exec_stack.last().unwrap();
                     match self_var {
@@ -394,7 +389,7 @@ impl VM {
                         Value::Class(id) => id.clone().instance_var.insert(var_id, *new_val),
                         _ => unreachable!(),
                     };
-                    pc += 1;
+                    pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, pc);
@@ -571,15 +566,15 @@ impl VM {
             }
         }
 
-        fn read_id(iseq: &ISeq, pc: usize) -> IdentId {
+        fn read_id(iseq: &[u8], pc: usize) -> IdentId {
             IdentId::from(read32(iseq, pc + 1))
         }
 
-        fn read_lvar_id(iseq: &ISeq, pc: usize) -> LvarId {
+        fn read_lvar_id(iseq: &[u8], pc: usize) -> LvarId {
             LvarId::from_usize(read32(iseq, pc + 1) as usize)
         }
 
-        fn read64(iseq: &ISeq, pc: usize) -> u64 {
+        fn read64(iseq: &[u8], pc: usize) -> u64 {
             let mut num: u64 = (iseq[pc] as u64) << 56;
             num += (iseq[pc + 1] as u64) << 48;
             num += (iseq[pc + 2] as u64) << 40;
@@ -591,7 +586,7 @@ impl VM {
             num
         }
 
-        fn read32(iseq: &ISeq, pc: usize) -> u32 {
+        fn read32(iseq: &[u8], pc: usize) -> u32 {
             let mut num: u32 = (iseq[pc] as u32) << 24;
             num += (iseq[pc + 1] as u32) << 16;
             num += (iseq[pc + 2] as u32) << 8;
@@ -633,7 +628,7 @@ impl VM {
     fn get_loc(&self) -> Loc {
         let method = self.context_stack.last().unwrap().methodref;
         let sourcemap = match self.globals.get_method_info(method) {
-            MethodInfo::RubyFunc { iseq_sourcemap, .. } => iseq_sourcemap,
+            MethodInfo::RubyFunc { iseq } => &iseq.iseq_sourcemap,
             _ => unreachable!("Illegal method_info."),
         };
         sourcemap
@@ -1045,17 +1040,12 @@ impl VM {
                 }
                 _ => unreachable!("AttrReader must be used only for class instance."),
             },
-            MethodInfo::RubyFunc {
-                params,
-                iseq,
-                lvars,
-                ..
-            } => {
+            MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
                 self.context_stack
-                    .push(Context::new(*lvars, receiver, iseq, methodref));
+                    .push(Context::new(iseq.lvars, receiver, iseq, methodref));
                 let arg_len = args.len();
-                for (i, id) in params.clone().iter().enumerate() {
+                for (i, id) in iseq.params.clone().iter().enumerate() {
                     *self.lvar_mut(*id) = if i < arg_len {
                         args[i]
                     } else {

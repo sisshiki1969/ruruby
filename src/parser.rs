@@ -59,6 +59,10 @@ impl LvarId {
     pub fn from_usize(id: usize) -> Self {
         LvarId(id)
     }
+
+    pub fn from_u32(id: u32) -> Self {
+        LvarId(id as usize)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
