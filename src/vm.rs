@@ -133,10 +133,8 @@ impl VM {
             return Err(self.error_unimplemented("Methodref is illegal."));
         };
         let main_object = PackedValue::class(self.globals.main_class);
-        self.context_stack
-            .push(Context::new(iseq.lvars, main_object, iseq, methodref));
-        let val = self.vm_run()?;
-        self.context_stack.pop().unwrap();
+        self.vm_run(Context::new(iseq.lvars, main_object, iseq, methodref))?;
+        let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -165,14 +163,23 @@ impl VM {
         } else {
             return Err(self.error_unimplemented("Methodref is illegal."));
         };
-        if self.context_stack.len() == 0 {
-            let main_object = PackedValue::class(self.globals.main_class);
-            self.context_stack
-                .push(Context::new(iseq.lvars, main_object, iseq, methodref));
+        let main_object = PackedValue::class(self.globals.main_class);
+        let context = if self.context_stack.len() == 0 {
+            Context::new(iseq.lvars, main_object, iseq, methodref)
         } else {
-            self.context_stack.last_mut().unwrap().iseq_ref = iseq;
-        }
-        let val = self.vm_run()?;
+            let mut cxt = self.context_stack.pop().unwrap();
+            cxt.iseq_ref = iseq;
+            cxt.methodref = methodref;
+            if cxt.lvar_scope.len() < iseq.lvars {
+                for _ in 0..iseq.lvars - cxt.lvar_scope.len() {
+                    cxt.lvar_scope.push(PackedValue::nil());
+                }
+            }
+            cxt
+        };
+        let ret_context = self.vm_run(context)?;
+        self.context_stack.push(ret_context);
+        let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -188,8 +195,9 @@ impl VM {
         Ok(val)
     }
 
-    pub fn vm_run(&mut self) -> VMResult {
-        let iseq = &*self.context_stack.last().unwrap().iseq_ref.clone().iseq;
+    pub fn vm_run(&mut self, context: Context) -> Result<Context, RubyError> {
+        let iseq = &context.iseq_ref.clone().iseq;
+        self.context_stack.push(context);
         let mut pc = 0;
         loop {
             #[cfg(feature = "perf")]
@@ -202,16 +210,13 @@ impl VM {
                 println!("{}", Inst::inst_name(iseq[pc]));
             }
             match iseq[pc] {
-                Inst::END => match self.exec_stack.pop() {
-                    Some(v) => {
-                        #[cfg(feature = "perf")]
-                        {
-                            self.perf.get_perf(Perf::INVALID);
-                        }
-                        return Ok(v);
+                Inst::END => {
+                    #[cfg(feature = "perf")]
+                    {
+                        self.perf.get_perf(Perf::INVALID);
                     }
-                    None => panic!("Illegal exec stack length."),
-                },
+                    return Ok(self.context_stack.pop().unwrap());
+                }
                 Inst::PUSH_NIL => {
                     self.exec_stack.push(PackedValue::nil());
                     pc += 1;
@@ -1071,24 +1076,21 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                self.context_stack
-                    .push(Context::new(iseq.lvars, receiver, iseq, methodref));
+                let mut context = Context::new(iseq.lvars, receiver, iseq, methodref);
                 let arg_len = args.len();
                 for (i, id) in iseq.params.clone().iter().enumerate() {
-                    *self.lvar_mut(*id) = if i < arg_len {
+                    context.lvar_scope[id.as_usize()] = if i < arg_len {
                         args[i]
                     } else {
                         PackedValue::nil()
                     };
                 }
-
-                let res_value = self.vm_run()?;
+                self.vm_run(context)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
-                self.context_stack.pop().unwrap();
-                res_value
+                return Ok(());
             }
         };
         self.exec_stack.push(val);
