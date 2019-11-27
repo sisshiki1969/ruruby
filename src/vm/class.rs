@@ -81,7 +81,8 @@ pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> 
             let instance = InstanceRef::from(class_ref);
             let new_instance = PackedValue::instance(instance);
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
-                let _ = vm.eval_send(methodref.clone(), new_instance, args)?;
+                vm.eval_send(methodref.clone(), new_instance, args)?;
+                vm.exec_stack.pop().unwrap();
             };
             Ok(new_instance)
         }

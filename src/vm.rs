@@ -54,6 +54,13 @@ pub struct Context {
     pub lvar_scope: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
     pub methodref: MethodRef,
+    pub pc: usize,
+    pub callmode: CallMode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CallMode {
+    Send,
 }
 
 impl Context {
@@ -68,6 +75,8 @@ impl Context {
             lvar_scope: vec![PackedValue::nil(); lvar_num],
             iseq_ref,
             methodref,
+            pc: 0,
+            callmode: CallMode::Send,
         }
     }
 }
@@ -125,7 +134,7 @@ impl VM {
         };
         let main_object = PackedValue::class(self.globals.main_class);
         self.context_stack
-            .push(Context::new(64, main_object, iseq, methodref));
+            .push(Context::new(iseq.lvars, main_object, iseq, methodref));
         let val = self.vm_run()?;
         self.context_stack.pop().unwrap();
         #[cfg(feature = "perf")]
@@ -159,7 +168,7 @@ impl VM {
         if self.context_stack.len() == 0 {
             let main_object = PackedValue::class(self.globals.main_class);
             self.context_stack
-                .push(Context::new(64, main_object, iseq, methodref));
+                .push(Context::new(iseq.lvars, main_object, iseq, methodref));
         } else {
             self.context_stack.last_mut().unwrap().iseq_ref = iseq;
         }
@@ -505,8 +514,7 @@ impl VM {
                     };
                     let args_num = read32(iseq, pc + 5) as usize;
                     let args = self.pop_args(args_num);
-                    let val = self.eval_send(methodref, receiver, args)?;
-                    self.exec_stack.push(val);
+                    self.eval_send(methodref, receiver, args)?;
                     pc += 9;
                 }
                 Inst::DEF_CLASS => {
@@ -518,10 +526,8 @@ impl VM {
                     self.const_table.insert(id, val);
 
                     self.class_stack.push(classref);
-                    let _ = self.eval_send(methodref, val, vec![])?;
+                    self.eval_send(methodref, val, vec![])?;
                     self.class_stack.pop().unwrap();
-
-                    self.exec_stack.push(PackedValue::nil());
                     pc += 9;
                 }
                 Inst::DEF_METHOD => {
@@ -677,9 +683,14 @@ impl VM {
             (Value::Instance(l_ref), _) => {
                 let method = self.globals.get_ident_id("@add");
                 match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
-                    None => Err(self.error_undefined_method("+", self.globals.get_class_name(lhs))),
-                }
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs])?,
+                    None => {
+                        return Err(
+                            self.error_undefined_method("+", self.globals.get_class_name(lhs))
+                        )
+                    }
+                };
+                Ok(self.exec_stack.pop().unwrap())
             }
             (_, _) => Err(self.error_undefined_method("+", self.globals.get_class_name(lhs))),
         }
@@ -698,9 +709,12 @@ impl VM {
             Value::Instance(l_ref) => {
                 let method = self.globals.get_ident_id("@add");
                 match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)]),
-                    None => Err(self.error_nomethod("'+'")),
-                }
+                    Some(mref) => {
+                        self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)])?
+                    }
+                    None => return Err(self.error_nomethod("'+'")),
+                };
+                Ok(self.exec_stack.pop().unwrap())
             }
             _ => Err(self.error_nomethod("'+'")),
         }
@@ -733,9 +747,10 @@ impl VM {
             (Value::Instance(l_ref), _) => {
                 let method = self.globals.get_ident_id("@sub");
                 match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
-                    None => Err(self.error_nomethod("'-'")),
-                }
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs])?,
+                    None => return Err(self.error_nomethod("'-'")),
+                };
+                Ok(self.exec_stack.pop().unwrap())
             }
             (_, _) => Err(self.error_nomethod("'-'")),
         }
@@ -754,9 +769,12 @@ impl VM {
             Value::Instance(l_ref) => {
                 let method = self.globals.get_ident_id("@sub");
                 match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)]),
-                    None => Err(self.error_nomethod("'-'")),
-                }
+                    Some(mref) => {
+                        self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)])?
+                    }
+                    None => return Err(self.error_nomethod("'-'")),
+                };
+                Ok(self.exec_stack.pop().unwrap())
             }
             _ => Err(self.error_nomethod("'-'")),
         }
@@ -791,9 +809,10 @@ impl VM {
             (Value::Instance(l_ref), _) => {
                 let method = self.globals.get_ident_id("@mul");
                 match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs]),
-                    None => Err(self.error_nomethod("'*'")),
-                }
+                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs])?,
+                    None => return Err(self.error_nomethod("'*'")),
+                };
+                Ok(self.exec_stack.pop().unwrap())
             }
             (_, _) => Err(self.error_nomethod("'*'")),
         }
@@ -1015,7 +1034,7 @@ impl VM {
         methodref: MethodRef,
         receiver: PackedValue,
         args: Vec<PackedValue>,
-    ) -> VMResult {
+    ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
@@ -1023,7 +1042,7 @@ impl VM {
         {
             inst = self.perf.get_prev_inst();
         }
-        match info {
+        let val = match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 #[cfg(feature = "perf")]
                 {
@@ -1034,19 +1053,19 @@ impl VM {
                 {
                     self.perf.get_perf_no_count(inst);
                 }
-                Ok(val)
+                val
             }
             MethodInfo::AttrReader { id } => match receiver.unpack() {
                 Value::Instance(instanceref) => match instanceref.instance_var.get(id) {
-                    Some(v) => Ok(v.clone()),
-                    None => Ok(PackedValue::nil()),
+                    Some(v) => v.clone(),
+                    None => PackedValue::nil(),
                 },
                 _ => unreachable!("AttrReader must be used only for class instance."),
             },
             MethodInfo::AttrWriter { id } => match receiver.unpack() {
                 Value::Instance(mut instanceref) => {
                     instanceref.instance_var.insert(*id, args[0]);
-                    Ok(args[0])
+                    args[0]
                 }
                 _ => unreachable!("AttrReader must be used only for class instance."),
             },
@@ -1069,9 +1088,11 @@ impl VM {
                     self.perf.get_perf_no_count(inst);
                 }
                 self.context_stack.pop().unwrap();
-                Ok(res_value)
+                res_value
             }
-        }
+        };
+        self.exec_stack.push(val);
+        Ok(())
     }
 }
 
