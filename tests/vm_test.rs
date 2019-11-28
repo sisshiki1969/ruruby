@@ -527,6 +527,30 @@ fn initialize() {
 }
 
 #[test]
+fn define_binop() {
+    let program = "
+    class Vec
+        def initialize(x,y)
+            @x=x;@y=y
+        end
+        def +(v)
+            Vec.new(@x + v.x, @y + v.y)
+        end
+        def x; @x; end
+        def y; @y; end
+    end
+
+    v1 = Vec.new(2,4)
+    v2 = Vec.new(3,5)
+    v = v1 + v2;
+    assert(v.x, 5)
+    assert(v.y, 9)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn attr_accessor() {
     let program = "
     class Foo

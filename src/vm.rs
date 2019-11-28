@@ -43,6 +43,7 @@ pub struct VM {
     pub context_stack: Vec<Context>,
     pub class_stack: Vec<ClassRef>,
     pub exec_stack: Vec<PackedValue>,
+    pub iseq_ref: ISeqRef,
     pub pc: usize,
     #[cfg(feature = "perf")]
     perf: Perf,
@@ -60,7 +61,9 @@ pub struct Context {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CallMode {
-    Send,
+    Ordinary,
+    FromNative,
+    ClassDef,
 }
 
 impl Context {
@@ -69,6 +72,7 @@ impl Context {
         self_value: PackedValue,
         iseq_ref: ISeqRef,
         methodref: MethodRef,
+        callmode: CallMode,
     ) -> Self {
         Context {
             self_value,
@@ -76,7 +80,7 @@ impl Context {
             iseq_ref,
             methodref,
             pc: 0,
-            callmode: CallMode::Send,
+            callmode,
         }
     }
 }
@@ -97,6 +101,12 @@ impl VM {
             globals.get_ident_id("Array"),
             PackedValue::class(globals.array_class),
         );
+        let iseq_ref = ISeqRef::new(ISeqInfo::new(
+            vec![],
+            ISeq::new(),
+            LvarCollector::new(),
+            vec![],
+        ));
         VM {
             globals,
             const_table,
@@ -104,6 +114,7 @@ impl VM {
             class_stack: vec![],
             context_stack: vec![],
             exec_stack: vec![],
+            iseq_ref,
             pc: 0,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
@@ -133,7 +144,13 @@ impl VM {
             return Err(self.error_unimplemented("Methodref is illegal."));
         };
         let main_object = PackedValue::class(self.globals.main_class);
-        self.vm_run(Context::new(iseq.lvars, main_object, iseq, methodref))?;
+        self.vm_run(Context::new(
+            iseq.lvars,
+            main_object,
+            iseq,
+            methodref,
+            CallMode::Ordinary,
+        ))?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -165,7 +182,7 @@ impl VM {
         };
         let main_object = PackedValue::class(self.globals.main_class);
         let context = if self.context_stack.len() == 0 {
-            Context::new(iseq.lvars, main_object, iseq, methodref)
+            Context::new(iseq.lvars, main_object, iseq, methodref, CallMode::Ordinary)
         } else {
             let mut cxt = self.context_stack.pop().unwrap();
             cxt.iseq_ref = iseq;
@@ -196,169 +213,171 @@ impl VM {
     }
 
     pub fn vm_run(&mut self, context: Context) -> Result<Context, RubyError> {
-        let iseq = &context.iseq_ref.clone().iseq;
+        self.iseq_ref = context.iseq_ref.clone();
+        self.pc = context.pc;
         self.context_stack.push(context);
-        let mut pc = 0;
         loop {
             #[cfg(feature = "perf")]
             {
-                self.perf.get_perf(iseq[pc]);
+                self.perf.get_perf(self.iseq_ref.iseq[self.c]);
             }
-            self.pc = pc;
             #[cfg(feature = "trace")]
             {
-                println!("{}", Inst::inst_name(iseq[pc]));
+                println!(
+                    "{} stack:{}",
+                    Inst::inst_name(self.iseq_ref.iseq[self.pc]),
+                    self.exec_stack.len()
+                );
             }
-            match iseq[pc] {
+            match self.iseq_ref.iseq[self.pc] {
                 Inst::END => {
-                    #[cfg(feature = "perf")]
-                    {
-                        self.perf.get_perf(Perf::INVALID);
+                    let old_context = self.context_stack.pop().unwrap();
+                    if self.context_stack.len() == 0 {
+                        #[cfg(feature = "perf")]
+                        {
+                            self.perf.get_perf(Perf::INVALID);
+                        }
+                        return Ok(old_context);
+                    } else {
+                        let context = self.context_stack.last().unwrap();
+                        self.iseq_ref = context.iseq_ref.clone();
+                        self.pc = context.pc;
+                        match old_context.callmode {
+                            CallMode::ClassDef => {
+                                self.class_stack.pop().unwrap();
+                            }
+                            CallMode::FromNative => {
+                                return Ok(old_context);
+                            }
+                            _ => {}
+                        };
                     }
-                    return Ok(self.context_stack.pop().unwrap());
                 }
                 Inst::PUSH_NIL => {
                     self.exec_stack.push(PackedValue::nil());
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::PUSH_TRUE => {
                     self.exec_stack.push(PackedValue::true_val());
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::PUSH_FALSE => {
                     self.exec_stack.push(PackedValue::false_val());
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::PUSH_SELF => {
                     let self_value = self.context_stack.last().unwrap().self_value.clone();
                     self.exec_stack.push(self_value);
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
-                    let num = read64(iseq, pc + 1);
-                    pc += 9;
+                    let num = self.read64(1);
+                    self.pc += 9;
                     self.exec_stack.push(PackedValue::fixnum(num as i64));
                 }
                 Inst::PUSH_FLONUM => {
-                    let num = unsafe { std::mem::transmute(read64(iseq, pc + 1)) };
-                    pc += 9;
+                    let num = unsafe { std::mem::transmute(self.read64(1)) };
+                    self.pc += 9;
                     self.exec_stack.push(PackedValue::flonum(num));
                 }
                 Inst::PUSH_STRING => {
-                    let id = read_id(iseq, pc);
+                    let id = self.read_id();
                     let string = self.globals.get_ident_name(id).clone();
                     self.exec_stack.push(PackedValue::string(string));
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::PUSH_SYMBOL => {
-                    let id = read_id(iseq, pc);
+                    let id = self.read_id();
                     self.exec_stack.push(PackedValue::symbol(id));
-                    pc += 5;
+                    self.pc += 5;
                 }
 
                 Inst::ADD => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    let val = self.eval_add(lhs, rhs)?;
-                    self.exec_stack.push(val);
-                    pc += 1;
-                }
-                Inst::ADDI => {
-                    let lhs = self.exec_stack.pop().unwrap();
-                    let rhs = read64(iseq, pc + 1) as i64;
-                    let val = self.eval_addi(rhs, lhs)?;
-                    pc += 9;
-                    self.exec_stack.push(val);
+                    self.pc += 1;
+                    self.eval_add(lhs, rhs)?;
                 }
                 Inst::SUB => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    let val = self.eval_sub(lhs, rhs)?;
-                    pc += 1;
-                    self.exec_stack.push(val);
-                }
-                Inst::SUBI => {
-                    let lhs = self.exec_stack.pop().unwrap();
-                    let rhs = read64(iseq, pc + 1) as i64;
-                    let val = self.eval_subi(rhs, lhs)?;
-                    pc += 9;
-                    self.exec_stack.push(val);
+                    self.pc += 1;
+                    self.eval_sub(lhs, rhs)?;
                 }
                 Inst::MUL => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    let val = self.eval_mul(lhs, rhs)?;
-                    pc += 1;
-                    self.exec_stack.push(val);
+                    self.pc += 1;
+                    self.eval_mul(lhs, rhs)?;
                 }
                 Inst::DIV => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_div(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::SHR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_shr(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::SHL => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_shl(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::BIT_AND => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitand(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::BIT_OR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitor(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitxor(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::EQ => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = PackedValue::bool(self.eval_eq(lhs, rhs)?);
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::NE => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = PackedValue::bool(!self.eval_eq(lhs, rhs)?);
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::GT => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_gt(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::GE => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_ge(lhs, rhs)?;
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val);
                 }
                 Inst::CONCAT_STRING => {
@@ -370,29 +389,29 @@ impl VM {
                         }
                         (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
                     };
-                    pc += 1;
+                    self.pc += 1;
                     self.exec_stack.push(val.pack());
                 }
                 Inst::SET_LOCAL => {
-                    let id = read_lvar_id(iseq, pc);
+                    let id = self.read_lvar_id();
                     let val = self.exec_stack.last().unwrap().clone();
                     *self.lvar_mut(id) = val;
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::GET_LOCAL => {
-                    let id = read_lvar_id(iseq, pc);
+                    let id = self.read_lvar_id();
                     let val = self.lvar_mut(id).clone();
                     self.exec_stack.push(val);
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::SET_CONST => {
-                    let id = read_id(iseq, pc);
+                    let id = self.read_id();
                     let val = self.exec_stack.last().unwrap();
                     self.const_table.insert(id, *val);
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::GET_CONST => {
-                    let id = read_id(iseq, pc);
+                    let id = self.read_id();
                     match self.const_table.get(&id) {
                         Some(val) => self.exec_stack.push(val.clone()),
                         None => {
@@ -402,10 +421,10 @@ impl VM {
                             );
                         }
                     }
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::SET_INSTANCE_VAR => {
-                    let var_id = read_id(iseq, pc);
+                    let var_id = self.read_id();
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let new_val = self.exec_stack.last().unwrap();
                     match self_var {
@@ -413,10 +432,10 @@ impl VM {
                         Value::Class(id) => id.clone().instance_var.insert(var_id, *new_val),
                         _ => unreachable!(),
                     };
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
-                    let var_id = read_id(iseq, pc);
+                    let var_id = self.read_id();
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let val = match self_var {
                         Value::Instance(id) => id.instance_var.get(&var_id),
@@ -428,10 +447,10 @@ impl VM {
                         None => PackedValue::nil(),
                     };
                     self.exec_stack.push(val);
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::SET_ARRAY_ELEM => {
-                    let arg_num = read32(iseq, pc + 1) as usize;
+                    let arg_num = self.read32(1) as usize;
                     let args = self.pop_args(arg_num);
                     match self.exec_stack.pop().unwrap().as_array() {
                         Some(mut aref) => {
@@ -450,10 +469,10 @@ impl VM {
                             ))
                         }
                     }
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::GET_ARRAY_ELEM => {
-                    let arg_num = read32(iseq, pc + 1) as usize;
+                    let arg_num = self.read32(1) as usize;
                     let args = self.pop_args(arg_num);
                     match self.exec_stack.pop().unwrap().as_array() {
                         Some(aref) => {
@@ -471,7 +490,7 @@ impl VM {
                                 .error_unimplemented("Currently, [] is supported only for array."))
                         }
                     }
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap();
@@ -479,31 +498,31 @@ impl VM {
                     let exclude = self.exec_stack.pop().unwrap();
                     let range = PackedValue::range(start, end, self.val_to_bool(exclude));
                     self.exec_stack.push(range);
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
-                    let arg_num = read32(iseq, pc + 1) as usize;
+                    let arg_num = self.read32(1) as usize;
                     let elems = self.pop_args(arg_num);
                     let array = PackedValue::array(ArrayRef::from(elems));
                     self.exec_stack.push(array);
-                    pc += 5;
+                    self.pc += 5;
                 }
                 Inst::JMP => {
-                    let disp = read32(iseq, pc + 1) as i32 as i64;
-                    pc = ((pc as i64) + 5 + disp) as usize;
+                    let disp = self.read32(1) as i32 as i64;
+                    self.pc = ((self.pc as i64) + 5 + disp) as usize;
                 }
                 Inst::JMP_IF_FALSE => {
                     let val = self.exec_stack.pop().unwrap();
                     if self.val_to_bool(val) {
-                        pc += 5;
+                        self.pc += 5;
                     } else {
-                        let disp = read32(iseq, pc + 1) as i32 as i64;
-                        pc = ((pc as i64) + 5 + disp) as usize;
+                        let disp = self.read32(1) as i32 as i64;
+                        self.pc = ((self.pc as i64) + 5 + disp) as usize;
                     }
                 }
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
-                    let method_id = read_id(iseq, pc);
+                    let method_id = self.read_id();
                     let methodref = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
                         Value::Class(cref) => self.get_class_method(cref, method_id)?,
@@ -517,27 +536,26 @@ impl VM {
                             return Err(self.error_unimplemented("Unimplemented type of receiver."))
                         }
                     };
-                    let args_num = read32(iseq, pc + 5) as usize;
+                    let args_num = self.read32(5) as usize;
                     let args = self.pop_args(args_num);
-                    self.eval_send(methodref, receiver, args)?;
-                    pc += 9;
+                    self.pc += 9;
+                    self.eval_send(methodref, receiver, args, CallMode::Ordinary)?;
                 }
                 Inst::DEF_CLASS => {
-                    let id = IdentId::from(read32(iseq, pc + 1));
-                    let methodref = MethodRef::from(read32(iseq, pc + 5));
+                    let id = IdentId::from(self.read32(1));
+                    let methodref = MethodRef::from(self.read32(5));
 
                     let classref = ClassRef::from(id, self.globals.object_class);
                     let val = PackedValue::class(classref);
                     self.const_table.insert(id, val);
 
                     self.class_stack.push(classref);
-                    self.eval_send(methodref, val, vec![])?;
-                    self.class_stack.pop().unwrap();
-                    pc += 9;
+                    self.pc += 9;
+                    self.eval_send(methodref, val, vec![], CallMode::ClassDef)?;
                 }
                 Inst::DEF_METHOD => {
-                    let id = IdentId::from(read32(iseq, pc + 1));
-                    let methodref = MethodRef::from(read32(iseq, pc + 5));
+                    let id = IdentId::from(self.read32(1));
+                    let methodref = MethodRef::from(self.read32(5));
                     //let info = self.globals.get_method_info(methodref).clone();
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered to the global method table.
@@ -548,11 +566,11 @@ impl VM {
                         classref.add_instance_method(id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
-                    pc += 9;
+                    self.pc += 9;
                 }
                 Inst::DEF_CLASS_METHOD => {
-                    let id = IdentId::from(read32(iseq, pc + 1));
-                    let methodref = MethodRef::from(read32(iseq, pc + 5));
+                    let id = IdentId::from(self.read32(1));
+                    let methodref = MethodRef::from(self.read32(5));
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered to the global method table.
                         self.globals.add_toplevel_method(id, methodref);
@@ -562,58 +580,62 @@ impl VM {
                         classref.add_class_method(id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
-                    pc += 9;
+                    self.pc += 9;
                 }
                 Inst::TO_S => {
                     let val = self.exec_stack.pop().unwrap();
                     let res = PackedValue::string(self.val_to_s(val));
                     self.exec_stack.push(res);
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::POP => {
                     self.exec_stack.pop().unwrap();
-                    pc += 1;
+                    self.pc += 1;
                 }
                 Inst::DUP => {
-                    let len = read32(iseq, pc + 1) as usize;
+                    let len = self.read32(1) as usize;
                     let stack_len = self.exec_stack.len();
                     for i in stack_len - len..stack_len {
                         let val = self.exec_stack[i];
                         self.exec_stack.push(val);
                     }
-                    pc += 5;
+                    self.pc += 5;
                 }
                 _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
             }
         }
+    }
 
-        fn read_id(iseq: &[u8], pc: usize) -> IdentId {
-            IdentId::from(read32(iseq, pc + 1))
-        }
+    fn read_id(&self) -> IdentId {
+        IdentId::from(self.read32(1))
+    }
 
-        fn read_lvar_id(iseq: &[u8], pc: usize) -> LvarId {
-            LvarId::from_usize(read32(iseq, pc + 1) as usize)
-        }
+    fn read_lvar_id(&self) -> LvarId {
+        LvarId::from_usize(self.read32(1) as usize)
+    }
 
-        fn read64(iseq: &[u8], pc: usize) -> u64 {
-            let mut num: u64 = (iseq[pc] as u64) << 56;
-            num += (iseq[pc + 1] as u64) << 48;
-            num += (iseq[pc + 2] as u64) << 40;
-            num += (iseq[pc + 3] as u64) << 32;
-            num += (iseq[pc + 4] as u64) << 24;
-            num += (iseq[pc + 5] as u64) << 16;
-            num += (iseq[pc + 6] as u64) << 8;
-            num += iseq[pc + 7] as u64;
-            num
-        }
+    fn read64(&self, offset: usize) -> u64 {
+        let iseq = &self.iseq_ref.iseq;
+        let pc = self.pc + offset;
+        let mut num: u64 = (iseq[pc] as u64) << 56;
+        num += (iseq[pc + 1] as u64) << 48;
+        num += (iseq[pc + 2] as u64) << 40;
+        num += (iseq[pc + 3] as u64) << 32;
+        num += (iseq[pc + 4] as u64) << 24;
+        num += (iseq[pc + 5] as u64) << 16;
+        num += (iseq[pc + 6] as u64) << 8;
+        num += iseq[pc + 7] as u64;
+        num
+    }
 
-        fn read32(iseq: &[u8], pc: usize) -> u32 {
-            let mut num: u32 = (iseq[pc] as u32) << 24;
-            num += (iseq[pc + 1] as u32) << 16;
-            num += (iseq[pc + 2] as u32) << 8;
-            num += iseq[pc + 3] as u32;
-            num
-        }
+    fn read32(&self, offset: usize) -> u32 {
+        let iseq = &self.iseq_ref.iseq;
+        let pc = self.pc + offset;
+        let mut num: u32 = (iseq[pc] as u32) << 24;
+        num += (iseq[pc + 1] as u32) << 16;
+        num += (iseq[pc + 2] as u32) << 8;
+        num += iseq[pc + 3] as u32;
+        num
     }
 }
 
@@ -661,166 +683,112 @@ impl VM {
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(PackedValue::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2));
-        };
-        if rhs.is_packed_num() && lhs.is_packed_num() {
+    fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            PackedValue::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2)
+        } else if rhs.is_packed_num() && lhs.is_packed_num() {
             if rhs.is_packed_fixnum() {
-                return Ok(PackedValue::flonum(
-                    rhs.as_packed_fixnum() as f64 + lhs.as_packed_flonum(),
-                ));
+                PackedValue::flonum(rhs.as_packed_fixnum() as f64 + lhs.as_packed_flonum())
             } else if lhs.is_packed_fixnum() {
-                return Ok(PackedValue::flonum(
-                    rhs.as_packed_flonum() + lhs.as_packed_fixnum() as f64,
-                ));
+                PackedValue::flonum(rhs.as_packed_flonum() + lhs.as_packed_fixnum() as f64)
             } else {
-                return Ok(PackedValue::flonum(
-                    rhs.as_packed_flonum() + lhs.as_packed_flonum(),
-                ));
+                PackedValue::flonum(rhs.as_packed_flonum() + lhs.as_packed_flonum())
             }
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs + rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 + rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs + rhs as f64)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs + rhs)),
-            (Value::Instance(l_ref), _) => {
-                let method = self.globals.get_ident_id("@add");
-                match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs])?,
-                    None => {
-                        return Err(
-                            self.error_undefined_method("+", self.globals.get_class_name(lhs))
-                        )
-                    }
-                };
-                Ok(self.exec_stack.pop().unwrap())
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs + rhs),
+                (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 + rhs),
+                (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs + rhs as f64),
+                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
+                (Value::Instance(l_ref), _) => {
+                    let method = self.globals.get_ident_id("@add");
+                    match l_ref.get_instance_method(method) {
+                        Some(mref) => {
+                            self.eval_send(mref.clone(), lhs, vec![rhs], CallMode::Ordinary)?;
+                        }
+                        None => {
+                            return Err(
+                                self.error_undefined_method("+", self.globals.get_class_name(lhs))
+                            )
+                        }
+                    };
+                    return Ok(());
+                }
+                (_, _) => {
+                    return Err(self.error_undefined_method("+", self.globals.get_class_name(lhs)))
+                }
             }
-            (_, _) => Err(self.error_undefined_method("+", self.globals.get_class_name(lhs))),
-        }
+        };
+        self.exec_stack.push(val);
+        Ok(())
     }
 
-    fn eval_addi(&mut self, rhs: i64, lhs: PackedValue) -> VMResult {
-        if lhs.is_packed_fixnum() {
-            return Ok(PackedValue::fixnum(lhs.as_packed_fixnum() + rhs));
-        };
-        if lhs.is_packed_num() {
-            return Ok(PackedValue::flonum(lhs.as_packed_flonum() + rhs as f64));
-        };
-        match lhs.unpack() {
-            Value::FixNum(lhs) => Ok(PackedValue::fixnum(lhs + rhs)),
-            Value::FloatNum(lhs) => Ok(PackedValue::flonum(lhs + rhs as f64)),
-            Value::Instance(l_ref) => {
-                let method = self.globals.get_ident_id("@add");
-                match l_ref.get_instance_method(method) {
-                    Some(mref) => {
-                        self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)])?
-                    }
-                    None => return Err(self.error_nomethod("'+'")),
-                };
-                Ok(self.exec_stack.pop().unwrap())
-            }
-            _ => Err(self.error_nomethod("'+'")),
-        }
-    }
-
-    fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(PackedValue::fixnum(((*lhs as i64) - (*rhs as i64)) / 2));
-        };
-        if lhs.is_packed_num() && rhs.is_packed_num() {
+    fn eval_sub(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            PackedValue::fixnum(((*lhs as i64) - (*rhs as i64)) / 2)
+        } else if lhs.is_packed_num() && rhs.is_packed_num() {
             if lhs.is_packed_fixnum() {
-                return Ok(PackedValue::flonum(
-                    lhs.as_packed_fixnum() as f64 - rhs.as_packed_flonum(),
-                ));
+                PackedValue::flonum(lhs.as_packed_fixnum() as f64 - rhs.as_packed_flonum())
             } else if rhs.is_packed_fixnum() {
-                return Ok(PackedValue::flonum(
-                    lhs.as_packed_flonum() - rhs.as_packed_fixnum() as f64,
-                ));
+                PackedValue::flonum(lhs.as_packed_flonum() - rhs.as_packed_fixnum() as f64)
             } else {
-                return Ok(PackedValue::flonum(
-                    lhs.as_packed_flonum() - rhs.as_packed_flonum(),
-                ));
+                PackedValue::flonum(lhs.as_packed_flonum() - rhs.as_packed_flonum())
             }
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs - rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 - rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs - rhs as f64)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs - rhs)),
-            (Value::Instance(l_ref), _) => {
-                let method = self.globals.get_ident_id("@sub");
-                match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs])?,
-                    None => return Err(self.error_nomethod("'-'")),
-                };
-                Ok(self.exec_stack.pop().unwrap())
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs - rhs),
+                (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 - rhs),
+                (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs - rhs as f64),
+                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs - rhs),
+                (Value::Instance(l_ref), _) => {
+                    let method = self.globals.get_ident_id("@sub");
+                    match l_ref.get_instance_method(method) {
+                        Some(mref) => {
+                            self.eval_send(mref.clone(), lhs, vec![rhs], CallMode::Ordinary)?;
+                        }
+                        None => return Err(self.error_nomethod("'-'")),
+                    };
+                    return Ok(());
+                }
+                (_, _) => return Err(self.error_nomethod("'-'")),
             }
-            (_, _) => Err(self.error_nomethod("'-'")),
-        }
+        };
+        self.exec_stack.push(val);
+        Ok(())
     }
 
-    fn eval_subi(&mut self, rhs: i64, lhs: PackedValue) -> VMResult {
-        if lhs.is_packed_fixnum() {
-            return Ok(PackedValue::fixnum(lhs.as_packed_fixnum() - rhs));
-        };
-        if lhs.is_packed_num() {
-            return Ok(PackedValue::flonum(lhs.as_packed_flonum() - rhs as f64));
-        };
-        match lhs.unpack() {
-            Value::FixNum(lhs) => Ok(PackedValue::fixnum(lhs - rhs)),
-            Value::FloatNum(lhs) => Ok(PackedValue::flonum(lhs - rhs as f64)),
-            Value::Instance(l_ref) => {
-                let method = self.globals.get_ident_id("@sub");
-                match l_ref.get_instance_method(method) {
-                    Some(mref) => {
-                        self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(rhs)])?
-                    }
-                    None => return Err(self.error_nomethod("'-'")),
-                };
-                Ok(self.exec_stack.pop().unwrap())
-            }
-            _ => Err(self.error_nomethod("'-'")),
-        }
-    }
-
-    fn eval_mul(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(PackedValue::fixnum(
-                lhs.as_packed_fixnum() * rhs.as_packed_fixnum(),
-            ));
-        };
-        if lhs.is_packed_num() && rhs.is_packed_num() {
+    fn eval_mul(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            PackedValue::fixnum(lhs.as_packed_fixnum() * rhs.as_packed_fixnum())
+        } else if lhs.is_packed_num() && rhs.is_packed_num() {
             if lhs.is_packed_fixnum() {
-                return Ok(PackedValue::flonum(
-                    lhs.as_packed_fixnum() as f64 * rhs.as_packed_flonum(),
-                ));
+                PackedValue::flonum(lhs.as_packed_fixnum() as f64 * rhs.as_packed_flonum())
             } else if rhs.is_packed_fixnum() {
-                return Ok(PackedValue::flonum(
-                    lhs.as_packed_flonum() * rhs.as_packed_fixnum() as f64,
-                ));
+                PackedValue::flonum(lhs.as_packed_flonum() * rhs.as_packed_fixnum() as f64)
             } else {
-                return Ok(PackedValue::flonum(
-                    lhs.as_packed_flonum() * rhs.as_packed_flonum(),
-                ));
+                PackedValue::flonum(lhs.as_packed_flonum() * rhs.as_packed_flonum())
             }
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs * rhs)),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs as f64 * rhs)),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::flonum(lhs * rhs as f64)),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(PackedValue::flonum(lhs * rhs)),
-            (Value::Instance(l_ref), _) => {
-                let method = self.globals.get_ident_id("@mul");
-                match l_ref.get_instance_method(method) {
-                    Some(mref) => self.eval_send(mref.clone(), lhs, vec![rhs])?,
-                    None => return Err(self.error_nomethod("'*'")),
-                };
-                Ok(self.exec_stack.pop().unwrap())
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs * rhs),
+                (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 * rhs),
+                (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs * rhs as f64),
+                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
+                (Value::Instance(l_ref), _) => {
+                    let method = self.globals.get_ident_id("@mul");
+                    match l_ref.get_instance_method(method) {
+                        Some(mref) => {
+                            self.eval_send(mref.clone(), lhs, vec![rhs], CallMode::Ordinary)?;
+                        }
+                        None => return Err(self.error_nomethod("'*'")),
+                    };
+                    return Ok(());
+                }
+                (_, _) => return Err(self.error_nomethod("'*'")),
             }
-            (_, _) => Err(self.error_nomethod("'*'")),
-        }
+        };
+        self.exec_stack.push(val);
+        Ok(())
     }
 
     fn eval_div(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
@@ -1039,6 +1007,7 @@ impl VM {
         methodref: MethodRef,
         receiver: PackedValue,
         args: Vec<PackedValue>,
+        callmode: CallMode,
     ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
@@ -1076,7 +1045,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                let mut context = Context::new(iseq.lvars, receiver, iseq, methodref);
+                let mut context = Context::new(iseq.lvars, receiver, iseq, methodref, callmode);
                 let arg_len = args.len();
                 for (i, id) in iseq.params.clone().iter().enumerate() {
                     context.lvar_scope[id.as_usize()] = if i < arg_len {
@@ -1085,7 +1054,10 @@ impl VM {
                         PackedValue::nil()
                     };
                 }
-                self.vm_run(context)?;
+                self.context_stack.last_mut().unwrap().pc = self.pc;
+                self.iseq_ref = context.iseq_ref.clone();
+                self.pc = context.pc;
+                self.context_stack.push(context);
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);

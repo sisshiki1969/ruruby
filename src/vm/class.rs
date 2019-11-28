@@ -1,4 +1,5 @@
 use crate::util::*;
+use crate::vm::Context;
 use crate::vm::*;
 use std::collections::HashMap;
 
@@ -81,7 +82,28 @@ pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> 
             let instance = InstanceRef::from(class_ref);
             let new_instance = PackedValue::instance(instance);
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
-                vm.eval_send(methodref.clone(), new_instance, args)?;
+                let info = vm.globals.get_method_info(*methodref);
+                let iseq = match info {
+                    MethodInfo::RubyFunc { iseq } => iseq,
+                    _ => panic!(),
+                };
+                let mut context = Context::new(
+                    iseq.lvars,
+                    new_instance,
+                    *iseq,
+                    methodref.clone(),
+                    CallMode::FromNative,
+                );
+                let arg_len = args.len();
+                for (i, id) in iseq.params.clone().iter().enumerate() {
+                    context.lvar_scope[id.as_usize()] = if i < arg_len {
+                        args[i]
+                    } else {
+                        PackedValue::nil()
+                    };
+                }
+                vm.context_stack.last_mut().unwrap().pc = vm.pc;
+                vm.vm_run(context)?;
                 vm.exec_stack.pop().unwrap();
             };
             Ok(new_instance)
