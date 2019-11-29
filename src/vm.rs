@@ -205,7 +205,7 @@ impl VM {
         loop {
             #[cfg(feature = "perf")]
             {
-                self.perf.get_perf(self.iseq_ref.iseq[self.c]);
+                self.perf.get_perf(self.iseq_ref.iseq[self.pc]);
             }
             #[cfg(feature = "trace")]
             {
@@ -603,25 +603,15 @@ impl VM {
     fn read64(&self, offset: usize) -> u64 {
         let iseq = &self.iseq_ref.iseq;
         let pc = self.pc + offset;
-        let mut num: u64 = (iseq[pc] as u64) << 56;
-        num += (iseq[pc + 1] as u64) << 48;
-        num += (iseq[pc + 2] as u64) << 40;
-        num += (iseq[pc + 3] as u64) << 32;
-        num += (iseq[pc + 4] as u64) << 24;
-        num += (iseq[pc + 5] as u64) << 16;
-        num += (iseq[pc + 6] as u64) << 8;
-        num += iseq[pc + 7] as u64;
-        num
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
+        unsafe { *ptr }
     }
 
     fn read32(&self, offset: usize) -> u32 {
         let iseq = &self.iseq_ref.iseq;
         let pc = self.pc + offset;
-        let mut num: u32 = (iseq[pc] as u32) << 24;
-        num += (iseq[pc + 1] as u32) << 16;
-        num += (iseq[pc + 2] as u32) << 8;
-        num += iseq[pc + 3] as u32;
-        num
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
+        unsafe { *ptr }
     }
 }
 

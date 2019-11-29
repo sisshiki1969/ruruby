@@ -269,28 +269,28 @@ impl Codegen {
 
     fn write_disp(&mut self, iseq: &mut ISeq, src: ISeqPos, dest: ISeqPos) {
         let num = src.disp(dest) as u32;
-        iseq[src.0 - 4] = (num >> 24) as u8;
-        iseq[src.0 - 3] = (num >> 16) as u8;
-        iseq[src.0 - 2] = (num >> 8) as u8;
-        iseq[src.0 - 1] = num as u8;
+        iseq[src.0 - 4] = (num >> 0) as u8;
+        iseq[src.0 - 3] = (num >> 8) as u8;
+        iseq[src.0 - 2] = (num >> 16) as u8;
+        iseq[src.0 - 1] = (num >> 24) as u8;
     }
 
     fn push32(&mut self, iseq: &mut ISeq, num: u32) {
-        iseq.push((num >> 24) as u8);
-        iseq.push((num >> 16) as u8);
-        iseq.push((num >> 8) as u8);
         iseq.push(num as u8);
+        iseq.push((num >> 8) as u8);
+        iseq.push((num >> 16) as u8);
+        iseq.push((num >> 24) as u8);
     }
 
     fn push64(&mut self, iseq: &mut ISeq, num: u64) {
-        iseq.push((num >> 56) as u8);
-        iseq.push((num >> 48) as u8);
-        iseq.push((num >> 40) as u8);
-        iseq.push((num >> 32) as u8);
-        iseq.push((num >> 24) as u8);
-        iseq.push((num >> 16) as u8);
-        iseq.push((num >> 8) as u8);
         iseq.push(num as u8);
+        iseq.push((num >> 8) as u8);
+        iseq.push((num >> 16) as u8);
+        iseq.push((num >> 24) as u8);
+        iseq.push((num >> 32) as u8);
+        iseq.push((num >> 40) as u8);
+        iseq.push((num >> 48) as u8);
+        iseq.push((num >> 56) as u8);
     }
     fn save_loc(&mut self, iseq: &mut ISeq) {
         self.context_stack
@@ -427,23 +427,13 @@ impl Codegen {
             }
 
             fn read64(iseq: &ISeq, pc: usize) -> u64 {
-                let mut num: u64 = (iseq[pc] as u64) << 56;
-                num += (iseq[pc + 1] as u64) << 48;
-                num += (iseq[pc + 2] as u64) << 40;
-                num += (iseq[pc + 3] as u64) << 32;
-                num += (iseq[pc + 4] as u64) << 24;
-                num += (iseq[pc + 5] as u64) << 16;
-                num += (iseq[pc + 6] as u64) << 8;
-                num += iseq[pc + 7] as u64;
-                num
+                let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
+                unsafe { *ptr }
             }
 
             fn read32(iseq: &ISeq, pc: usize) -> u32 {
-                let mut num: u32 = (iseq[pc] as u32) << 24;
-                num += (iseq[pc + 1] as u32) << 16;
-                num += (iseq[pc + 2] as u32) << 8;
-                num += iseq[pc + 3] as u32;
-                num
+                let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
+                unsafe { *ptr }
             }
 
             fn ident_name(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
