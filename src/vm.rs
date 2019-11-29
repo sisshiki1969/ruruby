@@ -54,7 +54,6 @@ pub struct Context {
     pub self_value: PackedValue,
     pub lvar_scope: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
-    pub methodref: MethodRef,
     pub pc: usize,
     pub callmode: CallMode,
 }
@@ -67,18 +66,12 @@ pub enum CallMode {
 }
 
 impl Context {
-    pub fn new(
-        lvar_num: usize,
-        self_value: PackedValue,
-        iseq_ref: ISeqRef,
-        methodref: MethodRef,
-        callmode: CallMode,
-    ) -> Self {
+    pub fn new(self_value: PackedValue, iseq_ref: ISeqRef, callmode: CallMode) -> Self {
+        let lvar_num = iseq_ref.lvars;
         Context {
             self_value,
             lvar_scope: vec![PackedValue::nil(); lvar_num],
             iseq_ref,
-            methodref,
             pc: 0,
             callmode,
         }
@@ -144,13 +137,7 @@ impl VM {
             return Err(self.error_unimplemented("Methodref is illegal."));
         };
         let main_object = PackedValue::class(self.globals.main_class);
-        self.vm_run(Context::new(
-            iseq.lvars,
-            main_object,
-            iseq,
-            methodref,
-            CallMode::Ordinary,
-        ))?;
+        self.vm_run(Context::new(main_object, iseq, CallMode::Ordinary))?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -182,11 +169,10 @@ impl VM {
         };
         let main_object = PackedValue::class(self.globals.main_class);
         let context = if self.context_stack.len() == 0 {
-            Context::new(iseq.lvars, main_object, iseq, methodref, CallMode::Ordinary)
+            Context::new(main_object, iseq, CallMode::Ordinary)
         } else {
             let mut cxt = self.context_stack.pop().unwrap();
             cxt.iseq_ref = iseq;
-            cxt.methodref = methodref;
             if cxt.lvar_scope.len() < iseq.lvars {
                 for _ in 0..iseq.lvars - cxt.lvar_scope.len() {
                     cxt.lvar_scope.push(PackedValue::nil());
@@ -669,11 +655,7 @@ impl VM {
     }
 
     fn get_loc(&self) -> Loc {
-        let method = self.context_stack.last().unwrap().methodref;
-        let sourcemap = match self.globals.get_method_info(method) {
-            MethodInfo::RubyFunc { iseq } => &iseq.iseq_sourcemap,
-            _ => unreachable!("Illegal method_info."),
-        };
+        let sourcemap = &self.iseq_ref.iseq_sourcemap;
         sourcemap
             .iter()
             .find(|x| x.0 == ISeqPos::from_usize(self.pc))
@@ -1045,7 +1027,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                let mut context = Context::new(iseq.lvars, receiver, iseq, methodref, callmode);
+                let mut context = Context::new(receiver, iseq, callmode);
                 let arg_len = args.len();
                 for (i, id) in iseq.params.clone().iter().enumerate() {
                     context.lvar_scope[id.as_usize()] = if i < arg_len {

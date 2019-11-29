@@ -87,13 +87,7 @@ pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> 
                     MethodInfo::RubyFunc { iseq } => iseq,
                     _ => panic!(),
                 };
-                let mut context = Context::new(
-                    iseq.lvars,
-                    new_instance,
-                    *iseq,
-                    methodref.clone(),
-                    CallMode::FromNative,
-                );
+                let mut context = Context::new(new_instance, *iseq, CallMode::FromNative);
                 let arg_len = args.len();
                 for (i, id) in iseq.params.clone().iter().enumerate() {
                     context.lvar_scope[id.as_usize()] = if i < arg_len {
