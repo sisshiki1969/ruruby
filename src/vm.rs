@@ -130,7 +130,7 @@ impl VM {
         }
         let methodref = self
             .codegen
-            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector)?;
+            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
         let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
             iseq.clone()
         } else {
@@ -161,7 +161,7 @@ impl VM {
         }
         let methodref = self
             .codegen
-            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector)?;
+            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
         let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
             iseq.clone()
         } else {
@@ -380,7 +380,7 @@ impl VM {
                 }
                 Inst::SET_LOCAL => {
                     let id = self.read_lvar_id();
-                    let val = self.exec_stack.last().unwrap().clone();
+                    let val = self.exec_stack.pop().unwrap();
                     *self.lvar_mut(id) = val;
                     self.pc += 5;
                 }
@@ -392,8 +392,8 @@ impl VM {
                 }
                 Inst::SET_CONST => {
                     let id = self.read_id();
-                    let val = self.exec_stack.last().unwrap();
-                    self.const_table.insert(id, *val);
+                    let val = self.exec_stack.pop().unwrap();
+                    self.const_table.insert(id, val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
@@ -412,10 +412,10 @@ impl VM {
                 Inst::SET_INSTANCE_VAR => {
                     let var_id = self.read_id();
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
-                    let new_val = self.exec_stack.last().unwrap();
+                    let new_val = self.exec_stack.pop().unwrap();
                     match self_var {
-                        Value::Instance(id) => id.clone().instance_var.insert(var_id, *new_val),
-                        Value::Class(id) => id.clone().instance_var.insert(var_id, *new_val),
+                        Value::Instance(id) => id.clone().instance_var.insert(var_id, new_val),
+                        Value::Class(id) => id.clone().instance_var.insert(var_id, new_val),
                         _ => unreachable!(),
                     };
                     self.pc += 5;
@@ -446,8 +446,8 @@ impl VM {
                                 return Err(self.error_unimplemented("Index must be an integer."));
                             };
                             let index = self.get_array_index(index, aref.elements.len())?;
-                            let val = self.exec_stack.last().unwrap();
-                            aref.elements[index] = val.clone();
+                            let val = self.exec_stack.pop().unwrap();
+                            aref.elements[index] = val;
                         }
                         None => {
                             return Err(self.error_unimplemented(

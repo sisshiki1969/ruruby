@@ -208,16 +208,17 @@ impl Codegen {
                 };
                 let name = globals.get_ident_name(id).clone() + "=";
                 let assign_id = globals.get_ident_id(name);
-                self.gen(globals, iseq, &receiver)?;
+                self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
                 self.gen_send(iseq, assign_id, 1);
+                self.gen_pop(iseq);
             }
             NodeKind::ArrayMember(array, index) => {
-                self.gen(globals, iseq, array)?;
+                self.gen(globals, iseq, array, true)?;
                 if index.len() != 1 {
                     return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()));
                 }
-                self.gen(globals, iseq, &index[0])?;
+                self.gen(globals, iseq, &index[0], true)?;
                 self.gen_set_array_elem(iseq, 1);
             }
             _ => return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())),
@@ -243,20 +244,22 @@ impl Codegen {
         globals: &mut Globals,
         iseq: &mut ISeq,
         nodes: &Vec<Node>,
+        use_value: bool,
     ) -> Result<(), RubyError> {
         match nodes.len() {
-            0 => self.gen_push_nil(iseq),
-            1 => self.gen(globals, iseq, &nodes[0])?,
-            _ => {
-                let mut flag = false;
-                for node in nodes {
-                    if flag {
-                        self.gen_pop(iseq);
-                    } else {
-                        flag = true;
-                    };
-                    self.gen(globals, iseq, &node)?;
+            0 => {
+                if use_value {
+                    self.gen_push_nil(iseq)
                 }
+            }
+            1 => {
+                self.gen(globals, iseq, &nodes[0], use_value)?;
+            }
+            _ => {
+                for i in 0..nodes.len() - 1 {
+                    self.gen(globals, iseq, &nodes[i], false)?;
+                }
+                self.gen(globals, iseq, &nodes[nodes.len() - 1], use_value)?;
             }
         }
         Ok(())
@@ -308,6 +311,7 @@ impl Codegen {
         params: &Vec<Node>,
         node: &Node,
         lvar_collector: &LvarCollector,
+        use_value: bool,
     ) -> Result<MethodRef, RubyError> {
         let mut params_lvar = vec![];
         for param in params {
@@ -322,7 +326,7 @@ impl Codegen {
         let mut iseq = ISeq::new();
         self.context_stack
             .push(Context::from(lvar_collector.table.clone()));
-        self.gen(globals, &mut iseq, node)?;
+        self.gen(globals, &mut iseq, node, use_value)?;
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
         iseq.push(Inst::END);
@@ -459,8 +463,21 @@ impl Codegen {
         globals: &mut Globals,
         iseq: &mut ISeq,
         node: &Node,
+        use_value: bool,
     ) -> Result<(), RubyError> {
         self.loc = node.loc();
+        if !use_value {
+            match &node.kind {
+                NodeKind::Nil
+                | NodeKind::Bool(_)
+                | NodeKind::Number(_)
+                | NodeKind::Float(_)
+                | NodeKind::String(_)
+                | NodeKind::Symbol(_)
+                | NodeKind::SelfValue => return Ok(()),
+                _ => {}
+            }
+        };
         match &node.kind {
             NodeKind::Nil => self.gen_push_nil(iseq),
             NodeKind::Bool(b) => {
@@ -491,13 +508,16 @@ impl Codegen {
                             self.gen_string(globals, iseq, &s);
                         }
                         NodeKind::CompStmt(nodes) => {
-                            self.gen_comp_stmt(globals, iseq, nodes)?;
+                            self.gen_comp_stmt(globals, iseq, nodes, true)?;
                             iseq.push(Inst::TO_S);
                         }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
                     }
                     self.gen_concat(iseq);
                 }
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::SelfValue => {
                 iseq.push(Inst::PUSH_SELF);
@@ -508,145 +528,170 @@ impl Codegen {
                 } else {
                     iseq.push(Inst::PUSH_FALSE)
                 };
-                self.gen(globals, iseq, end)?;
-                self.gen(globals, iseq, start)?;
+                self.gen(globals, iseq, end, true)?;
+                self.gen(globals, iseq, start, true)?;
                 iseq.push(Inst::CREATE_RANGE);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::Array(nodes) => {
                 let len = nodes.len();
                 for node in nodes {
-                    self.gen(globals, iseq, node)?;
+                    self.gen(globals, iseq, node, true)?;
                 }
                 self.gen_create_array(iseq, len);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::Ident(id) => {
                 self.gen_get_local(iseq, *id)?;
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
-            NodeKind::Const(id) => self.gen_get_const(iseq, *id),
-            NodeKind::InstanceVar(id) => self.gen_get_instance_var(iseq, *id),
+            NodeKind::Const(id) => {
+                self.gen_get_const(iseq, *id);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
+            NodeKind::InstanceVar(id) => {
+                self.gen_get_instance_var(iseq, *id);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
             NodeKind::BinOp(op, lhs, rhs) => {
                 let loc = self.loc;
                 match op {
                     BinOp::Add => {
-                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;
                         self.save_loc(iseq);
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::ADD);
                     }
                     BinOp::Sub => {
-                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;
                         self.save_loc(iseq);
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::SUB);
                     }
                     BinOp::Mul => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         self.loc = loc;
                         self.save_loc(iseq);
                         iseq.push(Inst::MUL);
                     }
                     BinOp::Div => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         self.loc = loc;
                         self.save_loc(iseq);
                         iseq.push(Inst::DIV);
                     }
                     BinOp::Shr => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::SHR);
                     }
                     BinOp::Shl => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::SHL);
                     }
                     BinOp::BitOr => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::BIT_OR);
                     }
                     BinOp::BitAnd => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::BIT_AND);
                     }
                     BinOp::BitXor => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::BIT_XOR);
                     }
                     BinOp::Eq => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::EQ);
                     }
                     BinOp::Ne => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::NE);
                     }
                     BinOp::Ge => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::GE);
                     }
                     BinOp::Gt => {
-                        self.gen(globals, iseq, lhs)?;
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         iseq.push(Inst::GT);
                     }
                     BinOp::Le => {
-                        self.gen(globals, iseq, rhs)?;
-                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.gen(globals, iseq, lhs, true)?;
                         iseq.push(Inst::GE);
                     }
                     BinOp::Lt => {
-                        self.gen(globals, iseq, rhs)?;
-                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.gen(globals, iseq, lhs, true)?;
                         iseq.push(Inst::GT);
                     }
                     BinOp::LAnd => {
-                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
                         let src1 = self.gen_jmp_if_false(iseq);
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         let src2 = self.gen_jmp(iseq);
                         self.write_disp_from_cur(iseq, src1);
                         iseq.push(Inst::PUSH_FALSE);
                         self.write_disp_from_cur(iseq, src2);
                     }
                     BinOp::LOr => {
-                        self.gen(globals, iseq, lhs)?;
+                        self.gen(globals, iseq, lhs, true)?;
                         let src1 = self.gen_jmp_if_false(iseq);
                         iseq.push(Inst::PUSH_TRUE);
                         let src2 = self.gen_jmp(iseq);
                         self.write_disp_from_cur(iseq, src1);
-                        self.gen(globals, iseq, rhs)?;
+                        self.gen(globals, iseq, rhs, true)?;
                         self.write_disp_from_cur(iseq, src2);
                     }
                 }
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::ArrayMember(array, index) => {
                 // number of index elements must be 1 or 2 (ensured by parser).
-                self.gen(globals, iseq, array)?;
+                self.gen(globals, iseq, array, true)?;
                 let num_args = index.len();
                 for i in index {
-                    self.gen(globals, iseq, i)?;
+                    self.gen(globals, iseq, i, true)?;
                 }
                 self.gen_get_array_elem(iseq, num_args);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
-            NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes)?,
+            NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes, use_value)?,
             NodeKind::If(cond_, then_, else_) => {
-                self.gen(globals, iseq, &cond_)?;
+                self.gen(globals, iseq, &cond_, true)?;
                 let src1 = self.gen_jmp_if_false(iseq);
-                self.gen(globals, iseq, &then_)?;
+                self.gen(globals, iseq, &then_, use_value)?;
                 let src2 = self.gen_jmp(iseq);
                 self.write_disp_from_cur(iseq, src1);
-                self.gen(globals, iseq, &else_)?;
+                self.gen(globals, iseq, &else_, use_value)?;
                 self.write_disp_from_cur(iseq, src2);
             }
             NodeKind::For(id, iter, body) => {
@@ -659,27 +704,26 @@ impl Codegen {
                     _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
                 };
                 self.loop_stack.push(vec![]);
-                self.gen(globals, iseq, start)?;
+                self.gen(globals, iseq, start, true)?;
                 self.gen_set_local(iseq, id);
-                self.gen_pop(iseq);
                 let loop_start = Codegen::current(iseq);
-                self.gen(globals, iseq, end)?;
+                self.gen(globals, iseq, end, true)?;
                 self.gen_get_local(iseq, id)?;
                 iseq.push(if *exclude { Inst::GT } else { Inst::GE });
                 let src = self.gen_jmp_if_false(iseq);
-                self.gen(globals, iseq, body)?;
-                self.gen_pop(iseq);
+                self.gen(globals, iseq, body, false)?;
                 let loop_continue = Codegen::current(iseq);
                 self.gen_get_local(iseq, id)?;
                 self.gen_fixnum(iseq, 1);
                 iseq.push(Inst::ADD);
 
                 self.gen_set_local(iseq, id);
-                self.gen_pop(iseq);
 
                 self.gen_jmp_back(iseq, loop_start);
                 self.write_disp_from_cur(iseq, src);
-                self.gen(globals, iseq, iter)?;
+                if use_value {
+                    self.gen(globals, iseq, iter, true)?;
+                }
                 for p in self.loop_stack.pop().unwrap() {
                     match p.1 {
                         EscapeKind::Break => {
@@ -690,16 +734,21 @@ impl Codegen {
                 }
             }
             NodeKind::Assign(lhs, rhs) => {
-                self.gen(globals, iseq, rhs)?;
+                self.gen(globals, iseq, rhs, true)?;
+                if use_value {
+                    self.gen_dup(iseq, 1);
+                };
                 self.gen_assign(globals, iseq, lhs)?;
             }
             NodeKind::MulAssign(mlhs, mrhs) => {
                 let lhs_len = mlhs.len();
                 let rhs_len = mrhs.len();
                 for rhs in mrhs {
-                    self.gen(globals, iseq, rhs)?;
+                    self.gen(globals, iseq, rhs, true)?;
                 }
-                self.gen_dup(iseq, rhs_len);
+                if use_value {
+                    self.gen_dup(iseq, rhs_len);
+                };
                 if rhs_len < lhs_len {
                     for _ in 0..lhs_len - rhs_len {
                         self.gen_push_nil(iseq);
@@ -712,10 +761,11 @@ impl Codegen {
                 }
                 for lhs in mlhs.iter().rev() {
                     self.gen_assign(globals, iseq, lhs)?;
-                    self.gen_pop(iseq);
                 }
-                if rhs_len != 1 {
-                    self.gen_create_array(iseq, rhs_len);
+                if use_value {
+                    if rhs_len != 1 {
+                        self.gen_create_array(iseq, rhs_len);
+                    }
                 }
             }
             NodeKind::Send(receiver, method, args) => {
@@ -727,32 +777,46 @@ impl Codegen {
                     }
                 };
                 for arg in args {
-                    self.gen(globals, iseq, arg)?;
+                    self.gen(globals, iseq, arg, true)?;
                 }
-                self.gen(globals, iseq, receiver)?;
+                self.gen(globals, iseq, receiver, true)?;
                 self.loc = loc;
                 self.gen_send(iseq, id, args.len());
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::MethodDef(id, params, body, lvar) => {
-                let methodref = self.gen_iseq(globals, params, body, lvar)?;
+                let methodref = self.gen_iseq(globals, params, body, lvar, true)?;
                 iseq.push(Inst::DEF_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::ClassMethodDef(id, params, body, lvar) => {
-                let methodref = self.gen_iseq(globals, params, body, lvar)?;
+                let methodref = self.gen_iseq(globals, params, body, lvar, true)?;
                 iseq.push(Inst::DEF_CLASS_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::ClassDef(id, node, lvar) => {
-                let methodref = self.gen_iseq(globals, &vec![], node, lvar)?;
+                let methodref = self.gen_iseq(globals, &vec![], node, lvar, true)?;
                 iseq.push(Inst::DEF_CLASS);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::Break => {
-                self.gen_push_nil(iseq);
+                if use_value {
+                    self.gen_push_nil(iseq);
+                };
                 let src = self.gen_jmp(iseq);
                 match self.loop_stack.last_mut() {
                     Some(x) => {
@@ -766,7 +830,9 @@ impl Codegen {
                 }
             }
             NodeKind::Next => {
-                self.gen_push_nil(iseq);
+                if use_value {
+                    self.gen_push_nil(iseq);
+                }
                 let src = self.gen_jmp(iseq);
                 match self.loop_stack.last_mut() {
                     Some(x) => {
