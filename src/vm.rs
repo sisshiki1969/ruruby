@@ -128,9 +128,9 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let methodref = self
-            .codegen
-            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
+        let methodref =
+            self.codegen
+                .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
         let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
             iseq.clone()
         } else {
@@ -159,9 +159,9 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let methodref = self
-            .codegen
-            .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
+        let methodref =
+            self.codegen
+                .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
         let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
             iseq.clone()
         } else {
@@ -173,6 +173,7 @@ impl VM {
         } else {
             let mut cxt = self.context_stack.pop().unwrap();
             cxt.iseq_ref = iseq;
+            cxt.pc = 0;
             if cxt.lvar_scope.len() < iseq.lvars {
                 for _ in 0..iseq.lvars - cxt.lvar_scope.len() {
                     cxt.lvar_scope.push(PackedValue::nil());

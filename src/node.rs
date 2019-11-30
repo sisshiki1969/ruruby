@@ -194,6 +194,13 @@ impl Node {
     pub fn new_next(loc: Loc) -> Self {
         Node::new(NodeKind::Next, loc)
     }
+
+    pub fn is_operation(&self) -> bool {
+        match self.kind {
+            NodeKind::Const(_) | NodeKind::Ident(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for Node {

@@ -344,12 +344,13 @@ impl Parser {
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
         let node = self.parse_arg()?;
         if self.consume_punct_no_skip_line_term(Punct::Comma) {
+            // EXPR : MLHS `=' MRHS
             if let NodeKind::Ident(id) = node.kind {
                 self.add_local_var(id);
             };
             let mut mlhs = vec![node];
             loop {
-                let node = self.parse_primary_ext()?;
+                let node = self.parse_function()?;
                 if let NodeKind::Ident(id) = node.kind {
                     self.add_local_var(id);
                 };
@@ -372,8 +373,61 @@ impl Parser {
             }
 
             Ok(Node::new_mul_assign(mlhs, mrhs))
+        } else if node.is_operation() && self.is_command() {
+            // EXPR : COMMAND
+            Ok(self.parse_command(node)?)
         } else {
             Ok(node)
+        }
+    }
+
+    fn parse_command(&mut self, operation: Node) -> Result<Node, RubyError> {
+        // COMMAND : OPERATION CALL_ARGS
+        let loc = operation.loc();
+        let first_arg = self.parse_arg()?;
+
+        if first_arg.is_operation() && self.is_command() {
+            let end_loc = self.loc();
+            return Ok(Node::new_send(
+                Node::new(NodeKind::SelfValue, loc),
+                operation,
+                vec![self.parse_command(first_arg)?],
+                loc.merge(end_loc),
+            ));
+        }
+
+        let mut args = vec![first_arg];
+        if self.consume_punct(Punct::Comma) {
+            loop {
+                args.push(self.parse_arg()?);
+                if !self.consume_punct(Punct::Comma) {
+                    break;
+                }
+            }
+        }
+        let end_loc = self.loc();
+        Ok(Node::new_send(
+            Node::new(NodeKind::SelfValue, loc),
+            operation,
+            args,
+            loc.merge(end_loc),
+        ))
+    }
+
+    fn is_command(&mut self) -> bool {
+        let tok = self.peek_no_skip_line_term();
+        match tok.kind {
+            TokenKind::Ident(_)
+            | TokenKind::InstanceVar(_)
+            | TokenKind::Const(_)
+            | TokenKind::NumLit(_)
+            | TokenKind::FloatLit(_)
+            | TokenKind::StringLit(_)
+            | TokenKind::OpenDoubleQuote(_)
+            | TokenKind::Punct(Punct::LParen)
+            | TokenKind::Punct(Punct::LBracket)
+            | TokenKind::Punct(Punct::Colon) => true,
+            _ => false,
         }
     }
 
@@ -619,12 +673,12 @@ impl Parser {
             let lhs = Node::new_unop(UnOp::BitNot, lhs, loc);
             Ok(lhs)
         } else {
-            let lhs = self.parse_primary_ext()?;
+            let lhs = self.parse_function()?;
             Ok(lhs)
         }
     }
 
-    fn parse_primary_ext(&mut self) -> Result<Node, RubyError> {
+    fn parse_function(&mut self) -> Result<Node, RubyError> {
         // FUNCTION : OPERATION [`(' [CALL_ARGS] `)']
         //        | PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
         //        | PRIMARY `::' FNAME `(' [CALL_ARGS] `)'
@@ -633,7 +687,9 @@ impl Parser {
         //        | super [`(' [CALL_ARGS] `)']
         let loc = self.loc();
         let mut node = self.parse_primary()?;
-        if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
+        if node.is_operation()
+            && self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen)
+        {
             // OPERATION `(' [CALL_ARGS] `)'
             self.get()?;
             let args = self.parse_args(Punct::RParen)?;
