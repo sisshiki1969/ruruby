@@ -10,16 +10,35 @@ pub enum NodeKind {
     Bool(bool),
     String(String),
     InterporatedString(Vec<Node>),
-    Range(Box<Node>, Box<Node>, bool), // start, end, exclude_end
+    Range {
+        start: Box<Node>,
+        end: Box<Node>,
+        exclude_end: bool,
+    }, // start, end, exclude_end
     Array(NodeVec),
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
-    ArrayMember(Box<Node>, Vec<Node>),
+    ArrayMember {
+        array: Box<Node>,
+        index: Vec<Node>,
+    },
     Assign(Box<Node>, Box<Node>),
     MulAssign(Vec<Node>, Vec<Node>),
     CompStmt(NodeVec),
-    If(Box<Node>, Box<Node>, Box<Node>),
-    For(Box<Node>, Box<Node>, Box<Node>), // params, iter, body
+    If {
+        cond: Box<Node>,
+        then_: Box<Node>,
+        else_: Box<Node>,
+    },
+    For {
+        param: Box<Node>,
+        iter: Box<Node>,
+        body: Box<Node>,
+    }, // param, iter, body
+    Proc {
+        params: NodeVec,
+        body: Box<Node>,
+    },
     Break,
     Next,
     Ident(IdentId),
@@ -115,7 +134,10 @@ impl Node {
         let start_loc = index[0].loc();
         let end_loc = index[index.len() - 1].loc();
         let loc = array.loc().merge(start_loc).merge(end_loc);
-        let kind = NodeKind::ArrayMember(Box::new(array), index);
+        let kind = NodeKind::ArrayMember {
+            array: Box::new(array),
+            index,
+        };
         Node::new(kind, loc)
     }
 
@@ -129,7 +151,11 @@ impl Node {
 
     pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
         Node::new(
-            NodeKind::Range(Box::new(start), Box::new(end), exclude_end),
+            NodeKind::Range {
+                start: Box::new(start),
+                end: Box::new(end),
+                exclude_end,
+            },
             loc,
         )
     }
@@ -195,6 +221,17 @@ impl Node {
         Node::new(NodeKind::Next, loc)
     }
 
+    pub fn new_proc(params: NodeVec, body: Node, loc: Loc) -> Self {
+        let loc = loc.merge(body.loc());
+        Node::new(
+            NodeKind::Proc {
+                params,
+                body: Box::new(body),
+            },
+            loc,
+        )
+    }
+
     pub fn is_operation(&self) -> bool {
         match self.kind {
             NodeKind::Const(_) | NodeKind::Ident(_) => true,
@@ -232,8 +269,8 @@ impl std::fmt::Display for Node {
                 write!(f, ") BODY({})]", body)?;
                 Ok(())
             }
-            NodeKind::If(cond_, then_, else_) => {
-                write!(f, "[ If COND({}) THEN({}) ELSE({}) ]", cond_, then_, else_)
+            NodeKind::If { cond, then_, else_ } => {
+                write!(f, "[ If COND({}) THEN({}) ELSE({}) ]", cond, then_, else_)
             }
             _ => write!(f, "[{:?}]", self.kind),
         }

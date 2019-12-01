@@ -6,7 +6,7 @@
 
 size = 600 # ARGV[0].to_i
 
-puts("P4\n#{size} #{size}")
+puts "P4\n#{size} #{size}"
 
 ITER = 49                           # Iterations - 1 for easy for..in looping
 LIMIT_SQUARED = 4.0                 # Presquared limit
@@ -20,16 +20,15 @@ count_size = size - 1               # Precomputed size for easy for..in looping
 for y in 0..count_size
   for x in 0..count_size
     zr, zi = 0.0, 0.0
-    cr, ci = (2.0*x/size)-1.5, (2.0*y/size)-1.0
+    cr, ci = 2.0*x/size - 1.5, 2.0*y/size - 1.0
     escape = false
-    #puts(zr, zi, cr, ci)
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
     for dummy in 0..ITER
       tr, ti = zr*zr - zi*zi + cr, 2*zr*zi + ci
       zr, zi = tr, ti
 
-      if (zr*zr+zi*zi) > LIMIT_SQUARED
+      if zr*zr+zi*zi > LIMIT_SQUARED
         escape = true
         break
       end
@@ -40,13 +39,13 @@ for y in 0..count_size
 
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.
-    if (bit_num == 8)
-      print(byte_acc.chr)
+    if bit_num == 8
+      print byte_acc.chr
       byte_acc = 0
       bit_num = 0
-    elsif (x == count_size)
+    elsif x == count_size
       byte_acc = byte_acc << (8 - bit_num)
-      print(byte_acc.chr)
+      print byte_acc.chr
       byte_acc = 0
       bit_num = 0
     end

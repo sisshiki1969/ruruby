@@ -471,7 +471,11 @@ impl Parser {
             let else_ = self.parse_arg_ternary()?;
             let loc = loc.merge(else_.loc());
             let node = Node::new(
-                NodeKind::If(Box::new(cond), Box::new(then_), Box::new(else_)),
+                NodeKind::If {
+                    cond: Box::new(cond),
+                    then_: Box::new(then_),
+                    else_: Box::new(else_),
+                },
                 loc,
             );
             Ok(node)
@@ -793,21 +797,44 @@ impl Parser {
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
             TokenKind::OpenDoubleQuote(s) => Ok(self.parse_interporated_string_literal(s)?),
-            TokenKind::Punct(punct) if *punct == Punct::LParen => {
+            TokenKind::Punct(Punct::LParen) => {
                 let node = self.parse_comp_stmt()?;
                 self.expect_punct(Punct::RParen)?;
                 Ok(node)
             }
-            TokenKind::Punct(punct) if *punct == Punct::LBracket => {
+            TokenKind::Punct(Punct::LBracket) => {
                 let nodes = self.parse_args(Punct::RBracket)?;
                 Ok(Node::new(
                     NodeKind::Array(nodes),
                     loc.merge(self.prev_loc()),
                 ))
             }
-            TokenKind::Punct(punct) if *punct == Punct::Colon => {
+            TokenKind::Punct(Punct::Colon) => {
                 let ident = self.expect_ident()?;
                 Ok(Node::new_symbol(ident, loc.merge(self.prev_loc())))
+            }
+            TokenKind::Punct(Punct::Arrow) => {
+                let mut params = vec![];
+                if self.consume_punct(Punct::LParen) {
+                    if !self.consume_punct(Punct::RParen) {
+                        loop {
+                            let id = self.expect_ident()?;
+                            params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                            //self.add_local_var(id);
+                            if !self.consume_punct(Punct::Comma) {
+                                break;
+                            }
+                        }
+                        self.expect_punct(Punct::RParen)?;
+                    }
+                } else if let TokenKind::Ident(_) = self.peek().kind {
+                    let id = self.expect_ident()?;
+                    params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                };
+                self.expect_punct(Punct::LBrace)?;
+                let body = self.parse_comp_stmt()?;
+                self.expect_punct(Punct::RBrace)?;
+                Ok(Node::new_proc(params, body, loc))
             }
             TokenKind::Reserved(Reserved::If) => {
                 let node = self.parse_if_then()?;
@@ -827,7 +854,11 @@ impl Parser {
                 let body = self.parse_comp_stmt()?;
                 self.expect_reserved(Reserved::End)?;
                 let node = Node::new(
-                    NodeKind::For(Box::new(var), Box::new(iter), Box::new(body)),
+                    NodeKind::For {
+                        param: Box::new(var),
+                        iter: Box::new(iter),
+                        body: Box::new(body),
+                    },
                     loc.merge(self.prev_loc()),
                 );
                 Ok(node)
@@ -924,7 +955,11 @@ impl Parser {
         }
         loc = loc.merge(else_.loc());
         Ok(Node::new(
-            NodeKind::If(Box::new(cond), Box::new(then_), Box::new(else_)),
+            NodeKind::If {
+                cond: Box::new(cond),
+                then_: Box::new(then_),
+                else_: Box::new(else_),
+            },
             loc,
         ))
     }

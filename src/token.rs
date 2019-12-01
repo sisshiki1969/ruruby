@@ -82,6 +82,8 @@ pub enum Punct {
     RParen,
     LBracket,
     RBracket,
+    LBrace,
+    RBrace,
     Semi,
     Colon,
     Comma,
@@ -109,6 +111,8 @@ pub enum Punct {
     Le,
     LAnd,
     LOr,
+
+    Arrow,
 }
 
 #[allow(unused)]

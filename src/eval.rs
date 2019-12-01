@@ -430,17 +430,21 @@ impl Evaluator {
                 }
                 Ok(val)
             }
-            NodeKind::If(cond_, then_, else_) => {
-                let cond_val = self.eval_node(&cond_)?;
+            NodeKind::If { cond, then_, else_ } => {
+                let cond_val = self.eval_node(&cond)?;
                 if self.val_to_bool(&cond_val) {
                     self.eval_node(&then_)
                 } else {
                     self.eval_node(&else_)
                 }
             }
-            NodeKind::For(id, iter, body) => {
+            NodeKind::For { param, iter, body } => {
                 let (start, end, exclude) = match &iter.kind {
-                    NodeKind::Range(start, end, exclude) => (start, end, exclude),
+                    NodeKind::Range {
+                        start,
+                        end,
+                        exclude_end,
+                    } => (start, end, exclude_end),
                     _ => {
                         return Err(self.error_unimplemented(
                             "Currently, loop iterator must be Range.",
@@ -449,9 +453,9 @@ impl Evaluator {
                     }
                 };
                 let start_v = self.eval_node(start)?;
-                self.eval_assign(id, &start_v)?;
+                self.eval_assign(param, &start_v)?;
                 loop {
-                    let var_v = self.eval_node(id)?;
+                    let var_v = self.eval_node(param)?;
                     let end_v = self.eval_node(&*end)?;
                     let cond = if *exclude {
                         self.eval_ge(var_v, end_v, end.loc())?
@@ -471,9 +475,9 @@ impl Evaluator {
                             }
                         }
                     };
-                    let var_v = self.eval_node(id)?;
-                    let new_v = self.eval_add(var_v, Value::FixNum(1), id.loc())?;
-                    self.eval_assign(id, &new_v)?;
+                    let var_v = self.eval_node(param)?;
+                    let new_v = self.eval_add(var_v, Value::FixNum(1), param.loc())?;
+                    self.eval_assign(param, &new_v)?;
                 }
                 let (start, end) = (self.eval_node(&*start)?, self.eval_node(&*end)?);
                 Ok(Value::Range(Box::new(start), Box::new(end), *exclude))

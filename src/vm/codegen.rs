@@ -213,7 +213,7 @@ impl Codegen {
                 self.gen_send(iseq, assign_id, 1);
                 self.gen_pop(iseq);
             }
-            NodeKind::ArrayMember(array, index) => {
+            NodeKind::ArrayMember { array, index } => {
                 self.gen(globals, iseq, array, true)?;
                 if index.len() != 1 {
                     return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()));
@@ -522,8 +522,12 @@ impl Codegen {
             NodeKind::SelfValue => {
                 iseq.push(Inst::PUSH_SELF);
             }
-            NodeKind::Range(start, end, exclude) => {
-                if *exclude {
+            NodeKind::Range {
+                start,
+                end,
+                exclude_end,
+            } => {
+                if *exclude_end {
                     iseq.push(Inst::PUSH_TRUE);
                 } else {
                     iseq.push(Inst::PUSH_FALSE)
@@ -672,7 +676,7 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::ArrayMember(array, index) => {
+            NodeKind::ArrayMember { array, index } => {
                 // number of index elements must be 1 or 2 (ensured by parser).
                 self.gen(globals, iseq, array, true)?;
                 let num_args = index.len();
@@ -685,8 +689,8 @@ impl Codegen {
                 };
             }
             NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes, use_value)?,
-            NodeKind::If(cond_, then_, else_) => {
-                self.gen(globals, iseq, &cond_, true)?;
+            NodeKind::If { cond, then_, else_ } => {
+                self.gen(globals, iseq, &cond, true)?;
                 let src1 = self.gen_jmp_if_false(iseq);
                 self.gen(globals, iseq, &then_, use_value)?;
                 let src2 = self.gen_jmp(iseq);
@@ -694,13 +698,17 @@ impl Codegen {
                 self.gen(globals, iseq, &else_, use_value)?;
                 self.write_disp_from_cur(iseq, src2);
             }
-            NodeKind::For(id, iter, body) => {
-                let id = match id.kind {
+            NodeKind::For { param, iter, body } => {
+                let id = match param.kind {
                     NodeKind::Ident(id) => id,
-                    _ => return Err(self.error_syntax("Expected an identifier.", id.loc())),
+                    _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
                 };
                 let (start, end, exclude) = match &iter.kind {
-                    NodeKind::Range(start, end, exclude) => (start, end, exclude),
+                    NodeKind::Range {
+                        start,
+                        end,
+                        exclude_end,
+                    } => (start, end, exclude_end),
                     _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
                 };
                 self.loop_stack.push(vec![]);
@@ -845,7 +853,12 @@ impl Codegen {
                     }
                 }
             }
-            _ => return Err(self.error_syntax("Codegen: Unimplemented syntax.", self.loc)),
+            _ => {
+                return Err(self.error_syntax(
+                    format!("Codegen: Unimplemented syntax. {:?}", node.kind),
+                    self.loc,
+                ))
+            }
         };
         Ok(())
     }

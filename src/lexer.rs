@@ -156,7 +156,15 @@ impl Lexer {
                     ':' => self.new_punct(Punct::Colon),
                     ',' => self.new_punct(Punct::Comma),
                     '+' => self.new_punct(Punct::Plus),
-                    '-' => self.new_punct(Punct::Minus),
+                    '-' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '>' {
+                            self.get()?;
+                            self.new_punct(Punct::Arrow)
+                        } else {
+                            self.new_punct(Punct::Minus)
+                        }
+                    }
                     '*' => self.new_punct(Punct::Mul),
                     '/' => self.new_punct(Punct::Div),
                     '(' => self.new_punct(Punct::LParen),
@@ -165,12 +173,13 @@ impl Lexer {
                     '~' => self.new_punct(Punct::BitNot),
                     '[' => self.new_punct(Punct::LBracket),
                     ']' => self.new_punct(Punct::RBracket),
+                    '{' => self.new_punct(Punct::LBrace),
                     '}' => match self.quote_state.last() {
                         Some(QuoteState::Expr) => {
                             self.quote_state.pop().unwrap();
                             self.lex_string_literal_double()?
                         }
-                        _ => return Err(self.error_unexpected(self.pos - 1)),
+                        _ => self.new_punct(Punct::RBrace),
                     },
                     '.' => {
                         let ch1 = self.peek()?;
