@@ -199,7 +199,9 @@ impl Codegen {
             NodeKind::Ident(id) => self.gen_set_local(iseq, *id),
             NodeKind::Const(id) => self.gen_set_const(iseq, *id),
             NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
-            NodeKind::Send(receiver, method, _args) => {
+            NodeKind::Send {
+                receiver, method, ..
+            } => {
                 let id = match method.kind {
                     NodeKind::Ident(id) => id,
                     _ => {
@@ -776,7 +778,12 @@ impl Codegen {
                     }
                 }
             }
-            NodeKind::Send(receiver, method, args) => {
+            NodeKind::Send {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
                 let loc = self.loc;
                 let id = match method.kind {
                     NodeKind::Ident(id) => id,
@@ -852,6 +859,14 @@ impl Codegen {
                         );
                     }
                 }
+            }
+            NodeKind::Proc { params, body, lvar } => {
+                let methodref = self.gen_iseq(globals, params, body, lvar, true)?;
+                iseq.push(Inst::CREATE_PROC);
+                self.push32(iseq, methodref.into());
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             _ => {
                 return Err(self.error_syntax(

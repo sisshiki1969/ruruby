@@ -1,6 +1,9 @@
 use super::array::ArrayRef;
 use super::class::ClassRef;
-use super::object::InstanceRef;
+use super::globals::*;
+use super::method::ISeqRef;
+use super::object::*;
+use super::proc::ProcRef;
 use super::range::RangeRef;
 use crate::util::IdentId;
 
@@ -18,10 +21,7 @@ pub enum Value {
     FloatNum(f64),
     String(String),
     Symbol(IdentId),
-    Class(ClassRef),
-    Instance(InstanceRef),
-    Array(ArrayRef),
-    Range(RangeRef),
+    Object(ObjectRef),
     Char(u8),
 }
 
@@ -142,33 +142,57 @@ impl PackedValue {
     }
 
     pub fn as_class(&self) -> Option<ClassRef> {
+        if self.is_packed_value() {
+            return None;
+        }
         unsafe {
             match *(self.0 as *mut Value) {
-                Value::Class(cref) => Some(cref),
+                Value::Object(oref) => match oref.kind {
+                    ObjKind::Class(cref) => Some(cref),
+                    _ => None,
+                },
                 _ => None,
             }
         }
     }
 
-    pub fn as_instance(&self) -> Option<InstanceRef> {
-        if self.0 & 0b0111 != 0 || self.0 <= 0x20 {
+    pub fn as_instance(&self) -> Option<ObjectRef> {
+        if self.is_packed_value() {
             return None;
         }
         unsafe {
             match *(self.0 as *mut Value) {
-                Value::Instance(iref) => Some(iref),
+                Value::Object(oref) => Some(oref),
                 _ => None,
             }
         }
     }
 
     pub fn as_array(&self) -> Option<ArrayRef> {
-        if self.0 & 0b0111 != 0 || self.0 <= 0x20 {
+        if self.is_packed_value() {
             return None;
         }
         unsafe {
             match *(self.0 as *mut Value) {
-                Value::Array(aref) => Some(aref),
+                Value::Object(oref) => match oref.kind {
+                    ObjKind::Array(aref) => Some(aref),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+    }
+
+    pub fn as_proc(&self) -> Option<ProcRef> {
+        if self.is_packed_value() {
+            return None;
+        }
+        unsafe {
+            match *(self.0 as *mut Value) {
+                Value::Object(oref) => match oref.kind {
+                    ObjKind::Proc(pref) => Some(pref),
+                    _ => None,
+                },
                 _ => None,
             }
         }
@@ -233,21 +257,25 @@ impl PackedValue {
         PackedValue((id as u64) << 32 | TAG_SYMBOL)
     }
 
-    pub fn class(class_ref: ClassRef) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::Class(class_ref)))
+    pub fn object(obj_ref: ObjectRef) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::Object(obj_ref)))
     }
 
-    pub fn instance(instance_ref: InstanceRef) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::Instance(instance_ref)))
+    pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
+        PackedValue::object(ObjectRef::new_class(globals, class_ref))
     }
 
-    pub fn array(array_ref: ArrayRef) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::Array(array_ref)))
+    pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
+        PackedValue::object(ObjectRef::new_array(globals, array_ref))
     }
 
-    pub fn range(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+    pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
         let rref = RangeRef::new(start, end, exclude);
-        PackedValue(Value::pack_as_boxed(Value::Range(rref)))
+        PackedValue::object(ObjectRef::new_range(globals, rref))
+    }
+
+    pub fn proc(globals: &Globals, iseq: ISeqRef) -> Self {
+        PackedValue::object(ObjectRef::new_proc(globals, iseq))
     }
 }
 
@@ -403,9 +431,13 @@ mod tests {
 
     #[test]
     fn pack_range() {
+        let globals = Globals::new(None);
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
-        let expect = Value::Range(RangeRef::new(from, to, false));
+        let expect = Value::Object(ObjectRef::new_range(
+            &globals,
+            RangeRef::new(from, to, false),
+        ));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -414,7 +446,11 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let expect = Value::Class(ClassRef::from_no_superclass(IdentId::from(0)));
+        let globals = Globals::new(None);
+        let expect = Value::Object(ObjectRef::new_class(
+            &globals,
+            ClassRef::from_no_superclass(IdentId::from(0)),
+        ));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -424,7 +460,7 @@ mod tests {
     #[test]
     fn pack_instance() {
         let class_ref = ClassRef::from_no_superclass(IdentId::from(0));
-        let expect = Value::Instance(InstanceRef::from(class_ref));
+        let expect = Value::Object(ObjectRef::from(class_ref));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

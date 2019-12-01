@@ -376,6 +376,42 @@ impl Parser {
         } else if node.is_operation() && self.is_command() {
             // EXPR : COMMAND
             Ok(self.parse_command(node)?)
+        } else if let Node {
+            kind:
+                NodeKind::Send {
+                    completed: false,
+                    method,
+                    receiver,
+                    args,
+                },
+            loc,
+        } = node
+        {
+            if self.is_command() {
+                let args = self.parse_arglist()?;
+                let loc = loc.merge(args[0].loc());
+                let node = Node::new(
+                    NodeKind::Send {
+                        method,
+                        receiver,
+                        args,
+                        completed: true,
+                    },
+                    loc,
+                );
+                Ok(node)
+            } else {
+                let node = Node::new(
+                    NodeKind::Send {
+                        method,
+                        receiver,
+                        args,
+                        completed: true,
+                    },
+                    loc,
+                );
+                Ok(node)
+            }
         } else {
             Ok(node)
         }
@@ -384,16 +420,22 @@ impl Parser {
     fn parse_command(&mut self, operation: Node) -> Result<Node, RubyError> {
         // COMMAND : OPERATION CALL_ARGS
         let loc = operation.loc();
+        let args = self.parse_arglist()?;
+        let end_loc = self.prev_loc();
+        Ok(Node::new_send(
+            Node::new(NodeKind::SelfValue, loc),
+            operation,
+            args,
+            true,
+            loc.merge(end_loc),
+        ))
+    }
+
+    fn parse_arglist(&mut self) -> Result<NodeVec, RubyError> {
         let first_arg = self.parse_arg()?;
 
         if first_arg.is_operation() && self.is_command() {
-            let end_loc = self.loc();
-            return Ok(Node::new_send(
-                Node::new(NodeKind::SelfValue, loc),
-                operation,
-                vec![self.parse_command(first_arg)?],
-                loc.merge(end_loc),
-            ));
+            return Ok(vec![self.parse_command(first_arg)?]);
         }
 
         let mut args = vec![first_arg];
@@ -405,13 +447,7 @@ impl Parser {
                 }
             }
         }
-        let end_loc = self.loc();
-        Ok(Node::new_send(
-            Node::new(NodeKind::SelfValue, loc),
-            operation,
-            args,
-            loc.merge(end_loc),
-        ))
+        Ok(args)
     }
 
     fn is_command(&mut self) -> bool {
@@ -703,6 +739,7 @@ impl Parser {
                 Node::new(NodeKind::SelfValue, loc),
                 node,
                 args,
+                true,
                 loc.merge(end_loc),
             ));
         };
@@ -729,14 +766,17 @@ impl Parser {
                     .clone();
                     let id = self.get_ident_id(&method);
                     let mut args = vec![];
+                    let mut completed = false;
                     if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
                         self.get()?;
                         args = self.parse_args(Punct::RParen)?;
+                        completed = true;
                     }
                     Node::new_send(
                         node,
                         Node::new_identifier(id, tok.loc()),
                         args,
+                        completed,
                         loc.merge(self.loc()),
                     )
                 }
@@ -815,12 +855,14 @@ impl Parser {
             }
             TokenKind::Punct(Punct::Arrow) => {
                 let mut params = vec![];
+                self.context_stack.push(Context::Method);
+                self.lvar_collector.push(LvarCollector::new());
                 if self.consume_punct(Punct::LParen) {
                     if !self.consume_punct(Punct::RParen) {
                         loop {
                             let id = self.expect_ident()?;
                             params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
-                            //self.add_local_var(id);
+                            self.add_local_var(id);
                             if !self.consume_punct(Punct::Comma) {
                                 break;
                             }
@@ -829,12 +871,15 @@ impl Parser {
                     }
                 } else if let TokenKind::Ident(_) = self.peek().kind {
                     let id = self.expect_ident()?;
+                    self.add_local_var(id);
                     params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
                 };
                 self.expect_punct(Punct::LBrace)?;
                 let body = self.parse_comp_stmt()?;
                 self.expect_punct(Punct::RBrace)?;
-                Ok(Node::new_proc(params, body, loc))
+                let lvar = self.lvar_collector.pop().unwrap();
+                self.context_stack.pop();
+                Ok(Node::new_proc(params, body, lvar, loc))
             }
             TokenKind::Reserved(Reserved::If) => {
                 let node = self.parse_if_then()?;

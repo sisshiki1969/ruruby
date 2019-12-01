@@ -7,6 +7,7 @@ mod method;
 mod object;
 #[cfg(feature = "perf")]
 mod perf;
+mod proc;
 mod range;
 pub mod value;
 mod vm_inst;
@@ -24,6 +25,7 @@ pub use method::*;
 pub use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
+pub use proc::*;
 pub use range::*;
 use std::collections::HashMap;
 pub use value::*;
@@ -82,17 +84,24 @@ impl VM {
     pub fn new(ident_table: Option<IdentifierTable>) -> Self {
         let mut globals = Globals::new(ident_table);
         let mut const_table = HashMap::new();
+        let class = globals.object_class;
         const_table.insert(
             globals.get_ident_id("Object"),
-            PackedValue::class(globals.object_class),
+            PackedValue::class(&globals, class),
         );
+        let class = globals.class_class;
         const_table.insert(
             globals.get_ident_id("Class"),
-            PackedValue::class(globals.class_class),
+            PackedValue::class(&globals, class),
         );
+        let class = globals.array_class;
         const_table.insert(
             globals.get_ident_id("Array"),
-            PackedValue::class(globals.array_class),
+            PackedValue::class(&globals, class),
+        );
+        const_table.insert(
+            globals.get_ident_id("Proc"),
+            PackedValue::class(&globals, globals.proc_class),
         );
         let iseq_ref = ISeqRef::new(ISeqInfo::new(
             vec![],
@@ -136,7 +145,8 @@ impl VM {
         } else {
             return Err(self.error_unimplemented("Methodref is illegal."));
         };
-        let main_object = PackedValue::class(self.globals.main_class);
+        let class = self.globals.main_class;
+        let main_object = PackedValue::class(&mut self.globals, class);
         self.vm_run(Context::new(main_object, iseq, CallMode::Ordinary))?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
@@ -167,7 +177,8 @@ impl VM {
         } else {
             return Err(self.error_unimplemented("Methodref is illegal."));
         };
-        let main_object = PackedValue::class(self.globals.main_class);
+        let class = self.globals.main_class;
+        let main_object = PackedValue::class(&mut self.globals, class);
         let context = if self.context_stack.len() == 0 {
             Context::new(main_object, iseq, CallMode::Ordinary)
         } else {
@@ -415,8 +426,7 @@ impl VM {
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let new_val = self.exec_stack.pop().unwrap();
                     match self_var {
-                        Value::Instance(id) => id.clone().instance_var.insert(var_id, new_val),
-                        Value::Class(id) => id.clone().instance_var.insert(var_id, new_val),
+                        Value::Object(id) => id.clone().instance_var.insert(var_id, new_val),
                         _ => unreachable!(),
                     };
                     self.pc += 5;
@@ -425,8 +435,7 @@ impl VM {
                     let var_id = self.read_id();
                     let self_var = &self.context_stack.last().unwrap().self_value.unpack();
                     let val = match self_var {
-                        Value::Instance(id) => id.instance_var.get(&var_id),
-                        Value::Class(id) => id.instance_var.get(&var_id),
+                        Value::Object(id) => id.instance_var.get(&var_id),
                         _ => unreachable!(),
                     };
                     let val = match val {
@@ -482,16 +491,27 @@ impl VM {
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap();
                     let end = self.exec_stack.pop().unwrap();
-                    let exclude = self.exec_stack.pop().unwrap();
-                    let range = PackedValue::range(start, end, self.val_to_bool(exclude));
+                    let exclude_val = self.exec_stack.pop().unwrap();
+                    let exclude_end = self.val_to_bool(exclude_val);
+                    let range = PackedValue::range(&mut self.globals, start, end, exclude_end);
                     self.exec_stack.push(range);
                     self.pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
                     let arg_num = self.read32(1) as usize;
                     let elems = self.pop_args(arg_num);
-                    let array = PackedValue::array(ArrayRef::from(elems));
+                    let array = PackedValue::array(&mut self.globals, ArrayRef::from(elems));
                     self.exec_stack.push(array);
+                    self.pc += 5;
+                }
+                Inst::CREATE_PROC => {
+                    let method = MethodRef::from(self.read32(1));
+                    let iseq = match self.globals.get_method_info(method) {
+                        MethodInfo::RubyFunc { iseq } => iseq,
+                        _ => return Err(self.error_unimplemented("Illegal methodref.")),
+                    };
+                    let proc_obj = PackedValue::proc(&self.globals, *iseq);
+                    self.exec_stack.push(proc_obj);
                     self.pc += 5;
                 }
                 Inst::JMP => {
@@ -512,13 +532,10 @@ impl VM {
                     let method_id = self.read_id();
                     let methodref = match receiver.unpack() {
                         Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
-                        Value::Class(cref) => self.get_class_method(cref, method_id)?,
-                        Value::Instance(iref) => {
-                            self.get_instance_method(iref.classref, method_id)?
-                        }
-                        Value::Array(_) => {
-                            self.get_instance_method(self.globals.array_class, method_id)?
-                        }
+                        Value::Object(oref) => match oref.kind {
+                            ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
+                            _ => self.get_instance_method(oref.classref, method_id)?,
+                        },
                         _ => {
                             return Err(self.error_unimplemented("Unimplemented type of receiver."))
                         }
@@ -533,7 +550,7 @@ impl VM {
                     let methodref = MethodRef::from(self.read32(5));
 
                     let classref = ClassRef::from(id, self.globals.object_class);
-                    let val = PackedValue::class(classref);
+                    let val = PackedValue::class(&mut self.globals, classref);
                     self.const_table.insert(id, val);
 
                     self.class_stack.push(classref);
@@ -673,7 +690,7 @@ impl VM {
                 (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 + rhs),
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs + rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
-                (Value::Instance(l_ref), _) => {
+                (Value::Object(l_ref), _) => {
                     let method = self.globals.get_ident_id("@add");
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
@@ -713,7 +730,7 @@ impl VM {
                 (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 - rhs),
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs - rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs - rhs),
-                (Value::Instance(l_ref), _) => {
+                (Value::Object(l_ref), _) => {
                     let method = self.globals.get_ident_id("@sub");
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
@@ -747,7 +764,7 @@ impl VM {
                 (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 * rhs),
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs * rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
-                (Value::Instance(l_ref), _) => {
+                (Value::Object(l_ref), _) => {
                     let method = self.globals.get_ident_id("@mul");
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
@@ -833,21 +850,24 @@ impl VM {
             (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
             (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
-            (Value::Class(lhs), Value::Class(rhs)) => Ok(*lhs == *rhs),
-            (Value::Instance(lhs), Value::Instance(rhs)) => Ok(lhs == rhs),
-            (Value::Array(lhs), Value::Array(rhs)) => {
-                let lhs = &lhs.elements;
-                let rhs = &rhs.elements;
-                if lhs.len() != rhs.len() {
-                    return Ok(false);
-                }
-                for i in 0..lhs.len() {
-                    if !self.eval_eq(lhs[i], rhs[i])? {
+            (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                (ObjKind::Ordinary, ObjKind::Ordinary) => Ok(lhs == rhs),
+                (ObjKind::Class(lhs), ObjKind::Class(rhs)) => Ok(lhs == rhs),
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                    let lhs = &lhs.elements;
+                    let rhs = &rhs.elements;
+                    if lhs.len() != rhs.len() {
                         return Ok(false);
                     }
+                    for i in 0..lhs.len() {
+                        if !self.eval_eq(lhs[i], rhs[i])? {
+                            return Ok(false);
+                        }
+                    }
+                    Ok(true)
                 }
-                Ok(true)
-            }
+                _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
+            },
             _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
         }
     }
@@ -932,27 +952,31 @@ impl VM {
             Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
             Value::Symbol(i) => format!(":{}", self.globals.get_ident_name(i)),
-            Value::Range(rref) => {
-                let start = self.val_to_s(rref.start);
-                let end = self.val_to_s(rref.end);
-                let sym = if rref.exclude { "..." } else { ".." };
-                format!("({}{}{})", start, sym, end)
-            }
+
             Value::Char(c) => format!("{:x}", c),
-            Value::Class(cref) => format! {"Class({})", self.globals.get_ident_name(cref.id)},
-            Value::Instance(iref) => {
-                format! {"Instance({}:{:?})", self.globals.get_ident_name(iref.classref.id), iref}
-            }
-            Value::Array(aref) => match aref.elements.len() {
-                0 => "[]".to_string(),
-                1 => format!("[{}]", self.val_to_s(aref.elements[0])),
-                len => {
-                    let mut result = self.val_to_s(aref.elements[0]);
-                    for i in 1..len {
-                        result = format!("{},{}", result, self.val_to_s(aref.elements[i]));
-                    }
-                    format! {"[{}]", result}
+            Value::Object(oref) => match oref.kind {
+                ObjKind::Class(cref) => format! {"Class({})", self.globals.get_ident_name(cref.id)},
+                ObjKind::Ordinary => {
+                    format! {"Instance({}:{:?})", self.globals.get_ident_name(oref.classref.id), oref}
                 }
+                ObjKind::Array(aref) => match aref.elements.len() {
+                    0 => "[]".to_string(),
+                    1 => format!("[{}]", self.val_to_s(aref.elements[0])),
+                    len => {
+                        let mut result = self.val_to_s(aref.elements[0]);
+                        for i in 1..len {
+                            result = format!("{},{}", result, self.val_to_s(aref.elements[i]));
+                        }
+                        format! {"[{}]", result}
+                    }
+                },
+                ObjKind::Range(rref) => {
+                    let start = self.val_to_s(rref.start);
+                    let end = self.val_to_s(rref.end);
+                    let sym = if rref.exclude { "..." } else { ".." };
+                    format!("({}{}{})", start, sym, end)
+                }
+                _ => format!("{:?}", oref.kind),
             },
         }
     }
@@ -961,10 +985,13 @@ impl VM {
         match val.unpack() {
             Value::Nil => "nil".to_string(),
             Value::String(s) => format!("\"{}\"", s),
-            Value::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.id)},
-            Value::Instance(iref) => {
-                format! {"#<{}:{:?}>", self.globals.get_ident_name(iref.classref.id), iref}
-            }
+            Value::Object(oref) => match oref.kind {
+                ObjKind::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.id)},
+                ObjKind::Ordinary => {
+                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.classref.id), oref}
+                }
+                _ => self.val_to_s(val),
+            },
             _ => self.val_to_s(val),
         }
     }
@@ -1003,15 +1030,15 @@ impl VM {
                 val
             }
             MethodInfo::AttrReader { id } => match receiver.unpack() {
-                Value::Instance(instanceref) => match instanceref.instance_var.get(id) {
+                Value::Object(oref) => match oref.instance_var.get(id) {
                     Some(v) => v.clone(),
                     None => PackedValue::nil(),
                 },
                 _ => unreachable!("AttrReader must be used only for class instance."),
             },
             MethodInfo::AttrWriter { id } => match receiver.unpack() {
-                Value::Instance(mut instanceref) => {
-                    instanceref.instance_var.insert(*id, args[0]);
+                Value::Object(mut oref) => {
+                    oref.instance_var.insert(*id, args[0]);
                     args[0]
                 }
                 _ => unreachable!("AttrReader must be used only for class instance."),

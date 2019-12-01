@@ -8,6 +8,7 @@ pub struct Globals {
     pub main_class: ClassRef,
     pub array_class: ClassRef,
     pub class_class: ClassRef,
+    pub proc_class: ClassRef,
     pub object_class: ClassRef,
 }
 
@@ -27,11 +28,13 @@ impl Globals {
             main_class,
             array_class: object_class,
             class_class: object_class,
+            proc_class: object_class,
             object_class,
         };
         object::init_object(&mut globals);
         globals.array_class = array::init_array(&mut globals);
         globals.class_class = class::init_class(&mut globals);
+        globals.proc_class = proc::init_proc(&mut globals);
         globals.get_ident_id("initialize");
         globals
     }
@@ -106,11 +109,14 @@ impl Globals {
             Value::FloatNum(_) => "Float".to_string(),
             Value::String(_) => "String".to_string(),
             Value::Symbol(_) => "Symbol".to_string(),
-            Value::Array(_) => "Array".to_string(),
-            Value::Range(_) => "Range".to_string(),
-            Value::Class(_) => "Class".to_string(),
-            Value::Instance(iref) => self.get_ident_name(iref.classref.id).clone(),
             Value::Char(_) => "Char".to_string(),
+            Value::Object(oref) => match oref.kind {
+                ObjKind::Array(_) => "Array".to_string(),
+                ObjKind::Range(_) => "Range".to_string(),
+                ObjKind::Class(_) => "Class".to_string(),
+                ObjKind::Proc(_) => "Proc".to_string(),
+                ObjKind::Ordinary => self.get_ident_name(oref.classref.id).clone(),
+            },
         }
     }
 }

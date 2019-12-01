@@ -38,6 +38,7 @@ pub enum NodeKind {
     Proc {
         params: NodeVec,
         body: Box<Node>,
+        lvar: LvarCollector,
     },
     Break,
     Next,
@@ -49,7 +50,12 @@ pub enum NodeKind {
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassDef(IdentId, Box<Node>, LvarCollector),
-    Send(Box<Node>, Box<Node>, NodeVec), //receiver, method_name, args
+    Send {
+        receiver: Box<Node>,
+        method: Box<Node>,
+        args: NodeVec,
+        completed: bool,
+    }, //receiver, method_name, args
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -206,9 +212,20 @@ impl Node {
         Node::new(NodeKind::ClassDef(id, Box::new(body), lvar), loc)
     }
 
-    pub fn new_send(receiver: Node, method_name: Node, args: Vec<Node>, loc: Loc) -> Self {
+    pub fn new_send(
+        receiver: Node,
+        method_name: Node,
+        args: Vec<Node>,
+        completed: bool,
+        loc: Loc,
+    ) -> Self {
         Node::new(
-            NodeKind::Send(Box::new(receiver), Box::new(method_name), args),
+            NodeKind::Send {
+                receiver: Box::new(receiver),
+                method: Box::new(method_name),
+                args,
+                completed,
+            },
             loc,
         )
     }
@@ -221,12 +238,13 @@ impl Node {
         Node::new(NodeKind::Next, loc)
     }
 
-    pub fn new_proc(params: NodeVec, body: Node, loc: Loc) -> Self {
+    pub fn new_proc(params: NodeVec, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
         Node::new(
             NodeKind::Proc {
                 params,
                 body: Box::new(body),
+                lvar,
             },
             loc,
         )
@@ -245,9 +263,14 @@ impl std::fmt::Display for Node {
         match &self.kind {
             NodeKind::BinOp(op, lhs, rhs) => write!(f, "({:?}: {}, {})", op, lhs, rhs),
             NodeKind::Ident(id) => write!(f, "(Ident {:?})", id),
-            NodeKind::Send(receiver, method_name, nodes) => {
-                write!(f, "[ Send [{}]: [{}]", receiver, method_name)?;
-                for node in nodes {
+            NodeKind::Send {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
+                write!(f, "[ Send [{}]: [{}]", receiver, method)?;
+                for node in args {
                     write!(f, "({}) ", node)?;
                 }
                 write!(f, "]")?;

@@ -34,7 +34,6 @@ impl ClassRef {
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
     pub id: IdentId,
-    pub instance_var: ValueTable,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub superclass: Option<ClassRef>,
@@ -45,7 +44,6 @@ impl ClassInfo {
     pub fn new(id: IdentId, superclass: Option<ClassRef>) -> Self {
         ClassInfo {
             id,
-            instance_var: HashMap::new(),
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
             superclass,
@@ -66,12 +64,12 @@ pub fn init_class(globals: &mut Globals) -> ClassRef {
 // Class methods
 
 pub fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
-    match receiver.unpack() {
-        Value::Class(cref) => match cref.superclass {
-            Some(superclass) => Ok(PackedValue::class(superclass)),
+    match receiver.as_class() {
+        Some(cref) => match cref.superclass {
+            Some(superclass) => Ok(PackedValue::class(&mut vm.globals, superclass)),
             None => Ok(PackedValue::nil()),
         },
-        _ => Err(vm.error_nomethod("Illegal argument.")),
+        None => Err(vm.error_nomethod("Illegal argument.")),
     }
 }
 
@@ -79,8 +77,9 @@ pub fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedVal
 pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
     match receiver.as_class() {
         Some(class_ref) => {
-            let instance = InstanceRef::from(class_ref);
-            let new_instance = PackedValue::instance(instance);
+            let instance = ObjectRef::from(class_ref);
+            let new_instance = PackedValue::object(instance);
+            // call initialize method.
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
                 let info = vm.globals.get_method_info(*methodref);
                 let iseq = match info {

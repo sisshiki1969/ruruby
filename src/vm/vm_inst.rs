@@ -37,6 +37,7 @@ impl Inst {
 
     pub const CREATE_RANGE: u8 = 50;
     pub const CREATE_ARRAY: u8 = 51;
+    pub const CREATE_PROC: u8 = 52;
 
     pub const POP: u8 = 60;
     pub const CONCAT_STRING: u8 = 61;
@@ -91,6 +92,7 @@ impl Inst {
             Inst::SEND => "SEND",
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
+            Inst::CREATE_PROC => "CREATE_PROC",
             Inst::POP => "POP",
             Inst::DUP => "DUP",
             Inst::CONCAT_STRING => "CONCAT_STR",
@@ -138,6 +140,7 @@ impl Inst {
             | Inst::GET_ARRAY_ELEM
             | Inst::SET_ARRAY_ELEM
             | Inst::CREATE_ARRAY
+            | Inst::CREATE_PROC
             | Inst::JMP
             | Inst::JMP_IF_FALSE
             | Inst::DUP => 5,

@@ -48,7 +48,7 @@ pub fn array_new(vm: &mut VM, _receiver: PackedValue, args: Vec<PackedValue>) ->
         }
         _ => return Err(vm.error_nomethod("Wrong number of arguments.")),
     };
-    let array = PackedValue::array(ArrayRef::from(array_vec));
+    let array = PackedValue::array(&mut vm.globals, ArrayRef::from(array_vec));
     Ok(array)
 }
 

@@ -533,7 +533,12 @@ impl Evaluator {
                 self.scope_stack.pop();
                 Ok(Value::Nil)
             }
-            NodeKind::Send(receiver, method, args) => {
+            NodeKind::Send {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
                 let id = match method.kind {
                     NodeKind::Ident(id) => id,
                     _ => {

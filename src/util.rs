@@ -6,7 +6,7 @@ const NEW: usize = 1;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
     pub kind: T,
-    loc: Loc,
+    pub loc: Loc,
 }
 
 impl<T> Annot<T> {

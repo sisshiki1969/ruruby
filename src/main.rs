@@ -161,7 +161,7 @@ fn repl_vm() {
     println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
     println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
     println!("Value: {}", std::mem::size_of::<Value>());
-    println!("InstanceInfo: {}", std::mem::size_of::<InstanceInfo>());
+    println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
 
     let mut rl = rustyline::Editor::<()>::new();
