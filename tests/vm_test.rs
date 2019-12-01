@@ -567,3 +567,16 @@ fn attr_accessor() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+
+#[test]
+fn lambda_literal() {
+    let program = "
+        f0 = ->{100}
+        f1 = ->x{x*6}
+        f2 = ->(x,y){x*y}
+        assert 100, f0.call
+        assert 300, f1.call(50)
+        assert 35, f2.call(5,7)";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
