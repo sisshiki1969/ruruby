@@ -32,3 +32,9 @@ impl Context {
         }
     }
 }
+
+impl ContextRef {
+    pub fn from(self_value: PackedValue, iseq_ref: ISeqRef, callmode: CallMode) -> Self {
+        ContextRef::new(Context::new(self_value, iseq_ref, callmode))
+    }
+}

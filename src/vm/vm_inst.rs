@@ -131,8 +131,6 @@ impl Inst {
 
             Inst::PUSH_STRING
             | Inst::PUSH_SYMBOL
-            | Inst::SET_LOCAL
-            | Inst::GET_LOCAL
             | Inst::GET_CONST
             | Inst::SET_CONST
             | Inst::GET_INSTANCE_VAR
@@ -147,6 +145,8 @@ impl Inst {
 
             Inst::PUSH_FIXNUM
             | Inst::PUSH_FLONUM
+            | Inst::SET_LOCAL
+            | Inst::GET_LOCAL
             | Inst::SEND
             | Inst::DEF_CLASS
             | Inst::DEF_METHOD

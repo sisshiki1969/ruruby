@@ -33,6 +33,16 @@ pub enum MethodInfo {
     BuiltinFunc { name: String, func: BuiltinFunc },
 }
 
+impl MethodInfo {
+    pub fn as_iseq(&self, vm: &VM) -> Result<ISeqRef, RubyError> {
+        if let MethodInfo::RubyFunc { iseq } = self {
+            Ok(iseq.clone())
+        } else {
+            Err(vm.error_unimplemented("Methodref is illegal."))
+        }
+    }
+}
+
 impl std::fmt::Debug for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

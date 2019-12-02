@@ -1,22 +1,22 @@
-use crate::vm::Context;
 use crate::vm::*;
 
 #[derive(Debug, Clone)]
 pub struct ProcInfo {
     pub iseq: ISeqRef,
+    pub context: ContextRef,
 }
 
 impl ProcInfo {
-    pub fn new(iseq: ISeqRef) -> Self {
-        ProcInfo { iseq }
+    pub fn new(iseq: ISeqRef, context: ContextRef) -> Self {
+        ProcInfo { iseq, context }
     }
 }
 
 pub type ProcRef = Ref<ProcInfo>;
 
 impl ProcRef {
-    pub fn from(iseq: ISeqRef) -> Self {
-        ProcRef::new(ProcInfo::new(iseq))
+    pub fn from(iseq: ISeqRef, context: ContextRef) -> Self {
+        ProcRef::new(ProcInfo::new(iseq, context))
     }
 }
 
@@ -31,20 +31,20 @@ pub fn init_proc(globals: &mut Globals) -> ClassRef {
 // Class methods
 
 pub fn proc_new(_vm: &mut VM, _receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
-    let proc = PackedValue::nil();
-    Ok(proc)
+    let procobj = PackedValue::nil();
+    Ok(procobj)
 }
 
 // Instance methods
 
 pub fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
-    let iseq = match receiver.as_proc() {
-        Some(pref) => pref.iseq,
+    let pref = match receiver.as_proc() {
+        Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
     };
-    let mut context = Context::new(receiver, iseq, CallMode::FromNative);
+    let mut context = pref.context;
     let arg_len = args.len();
-    for (i, id) in iseq.params.clone().iter().enumerate() {
+    for (i, id) in pref.iseq.params.clone().iter().enumerate() {
         context.lvar_scope[id.as_usize()] = if i < arg_len {
             args[i]
         } else {

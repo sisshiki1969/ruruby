@@ -1,5 +1,4 @@
 use crate::util::*;
-use crate::vm::Context;
 use crate::vm::*;
 use std::collections::HashMap;
 
@@ -81,12 +80,8 @@ pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> 
             let new_instance = PackedValue::object(instance);
             // call initialize method.
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
-                let info = vm.globals.get_method_info(*methodref);
-                let iseq = match info {
-                    MethodInfo::RubyFunc { iseq } => iseq,
-                    _ => panic!(),
-                };
-                let mut context = Context::new(new_instance, *iseq, CallMode::FromNative);
+                let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
+                let mut context = ContextRef::from(new_instance, iseq, CallMode::FromNative);
                 let arg_len = args.len();
                 for (i, id) in iseq.params.clone().iter().enumerate() {
                     context.lvar_scope[id.as_usize()] = if i < arg_len {

@@ -6,6 +6,7 @@ use super::object::*;
 use super::proc::ProcRef;
 use super::range::RangeRef;
 use crate::util::IdentId;
+use crate::vm::*;
 
 const NIL_VALUE: u64 = 0x08;
 const TRUE_VALUE: u64 = 0x14;
@@ -274,8 +275,8 @@ impl PackedValue {
         PackedValue::object(ObjectRef::new_range(globals, rref))
     }
 
-    pub fn proc(globals: &Globals, iseq: ISeqRef) -> Self {
-        PackedValue::object(ObjectRef::new_proc(globals, iseq))
+    pub fn proc(globals: &Globals, iseq: ISeqRef, context: ContextRef) -> Self {
+        PackedValue::object(ObjectRef::new_proc(globals, iseq, context))
     }
 }
 

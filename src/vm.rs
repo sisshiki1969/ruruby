@@ -17,14 +17,15 @@ use crate::error::{RubyError, RuntimeErrKind};
 use crate::node::*;
 pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
+use crate::vm::context::ContextRef;
 pub use array::*;
 pub use builtin::*;
 pub use class::*;
 use codegen::*;
+pub use context::{CallMode, Context};
 pub use globals::*;
 pub use method::*;
 pub use object::*;
-pub use context::{Context, CallMode};
 #[cfg(feature = "perf")]
 use perf::*;
 pub use proc::*;
@@ -44,7 +45,7 @@ pub struct VM {
     pub const_table: ValueTable,
     pub codegen: Codegen,
     // VM state
-    pub context_stack: Vec<Context>,
+    pub context_stack: Vec<ContextRef>,
     pub class_stack: Vec<ClassRef>,
     pub exec_stack: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
@@ -101,8 +102,12 @@ impl VM {
     }
 
     /// Get local variable table.
-    pub fn lvar_mut(&mut self, id: LvarId) -> &mut PackedValue {
-        &mut self.context_stack.last_mut().unwrap().lvar_scope[id.as_usize()]
+    pub fn get_outer_context(&mut self, outer: u32) -> ContextRef {
+        let mut context = self.context_stack.last().unwrap().clone();
+        for _ in 0..outer {
+            context = context.outer.unwrap();
+        }
+        context
     }
 
     pub fn run(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
@@ -110,17 +115,18 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let methodref =
-            self.codegen
-                .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
-        let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
-            iseq.clone()
-        } else {
-            return Err(self.error_unimplemented("Methodref is illegal."));
-        };
+        let methodref = self.codegen.gen_iseq(
+            &mut self.globals,
+            &vec![],
+            node,
+            lvar_collector,
+            true,
+            false,
+        )?;
+        let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let class = self.globals.main_class;
         let main_object = PackedValue::class(&mut self.globals, class);
-        self.vm_run(Context::new(main_object, iseq, CallMode::Ordinary))?;
+        self.vm_run(ContextRef::from(main_object, iseq, CallMode::Ordinary))?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -142,18 +148,19 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let methodref =
-            self.codegen
-                .gen_iseq(&mut self.globals, &vec![], node, lvar_collector, true)?;
-        let iseq = if let MethodInfo::RubyFunc { iseq } = self.globals.get_method_info(methodref) {
-            iseq.clone()
-        } else {
-            return Err(self.error_unimplemented("Methodref is illegal."));
-        };
+        let methodref = self.codegen.gen_iseq(
+            &mut self.globals,
+            &vec![],
+            node,
+            lvar_collector,
+            true,
+            false,
+        )?;
+        let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let class = self.globals.main_class;
         let main_object = PackedValue::class(&mut self.globals, class);
         let context = if self.context_stack.len() == 0 {
-            Context::new(main_object, iseq, CallMode::Ordinary)
+            ContextRef::from(main_object, iseq, CallMode::Ordinary)
         } else {
             let mut cxt = self.context_stack.pop().unwrap();
             cxt.iseq_ref = iseq;
@@ -183,7 +190,7 @@ impl VM {
         Ok(val)
     }
 
-    pub fn vm_run(&mut self, context: Context) -> Result<Context, RubyError> {
+    pub fn vm_run(&mut self, context: ContextRef) -> Result<ContextRef, RubyError> {
         self.iseq_ref = context.iseq_ref.clone();
         self.pc = context.pc;
         self.context_stack.push(context);
@@ -365,15 +372,17 @@ impl VM {
                 }
                 Inst::SET_LOCAL => {
                     let id = self.read_lvar_id();
+                    let outer = self.read32(5);
                     let val = self.exec_stack.pop().unwrap();
-                    *self.lvar_mut(id) = val;
-                    self.pc += 5;
+                    self.get_outer_context(outer).lvar_scope[id.as_usize()] = val;
+                    self.pc += 9;
                 }
                 Inst::GET_LOCAL => {
                     let id = self.read_lvar_id();
-                    let val = self.lvar_mut(id).clone();
+                    let outer = self.read32(5);
+                    let val = self.get_outer_context(outer).lvar_scope[id.as_usize()];
                     self.exec_stack.push(val);
-                    self.pc += 5;
+                    self.pc += 9;
                 }
                 Inst::SET_CONST => {
                     let id = self.read_id();
@@ -479,11 +488,12 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = MethodRef::from(self.read32(1));
-                    let iseq = match self.globals.get_method_info(method) {
-                        MethodInfo::RubyFunc { iseq } => iseq,
-                        _ => return Err(self.error_unimplemented("Illegal methodref.")),
-                    };
-                    let proc_obj = PackedValue::proc(&self.globals, *iseq);
+                    let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
+                    let outer = self.context_stack.last().unwrap().clone();
+                    let mut context =
+                        ContextRef::from(outer.self_value, iseq, CallMode::FromNative);
+                    context.outer = Some(outer);
+                    let proc_obj = PackedValue::proc(&self.globals, iseq, context);
                     self.exec_stack.push(proc_obj);
                     self.pc += 5;
                 }
@@ -504,7 +514,7 @@ impl VM {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = self.read_id();
                     let methodref = match receiver.unpack() {
-                        Value::Nil | Value::FixNum(_) => self.get_toplevel_method(method_id)?,
+                        Value::FixNum(_) => self.get_toplevel_method(method_id)?,
                         Value::Object(oref) => match oref.kind {
                             ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
                             _ => self.get_instance_method(oref.classref, method_id)?,
@@ -670,15 +680,19 @@ impl VM {
                             self.eval_send(mref.clone(), lhs, vec![rhs], CallMode::Ordinary)?;
                         }
                         None => {
-                            return Err(
-                                self.error_undefined_method("+", self.globals.get_class_name(lhs))
-                            )
+                            return Err(self.error_undefined_method(
+                                format!("+ {}", self.globals.get_class_name(rhs)),
+                                self.globals.get_class_name(lhs),
+                            ))
                         }
                     };
                     return Ok(());
                 }
                 (_, _) => {
-                    return Err(self.error_undefined_method("+", self.globals.get_class_name(lhs)))
+                    return Err(self.error_undefined_method(
+                        format!("+ {}", self.globals.get_class_name(rhs)),
+                        self.globals.get_class_name(lhs),
+                    ))
                 }
             }
         };
@@ -1018,7 +1032,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                let mut context = Context::new(receiver, iseq, callmode);
+                let mut context = ContextRef::from(receiver, iseq, callmode);
                 let arg_len = args.len();
                 for (i, id) in iseq.params.clone().iter().enumerate() {
                     context.lvar_scope[id.as_usize()] = if i < arg_len {

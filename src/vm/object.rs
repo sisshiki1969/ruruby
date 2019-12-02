@@ -81,8 +81,8 @@ impl ObjectRef {
         ObjectRef::new(ObjectInfo::new_range(globals, rangeref))
     }
 
-    pub fn new_proc(globals: &Globals, iseq: ISeqRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_proc(globals, ProcRef::from(iseq)))
+    pub fn new_proc(globals: &Globals, iseq: ISeqRef, context: ContextRef) -> Self {
+        ObjectRef::new(ObjectInfo::new_proc(globals, ProcRef::from(iseq, context)))
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
