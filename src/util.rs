@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use core::ptr::NonNull;
 
 const INITIALIZE: usize = 0;
 const NEW: usize = 1;
@@ -41,12 +42,12 @@ impl Loc {
 //------------------------------------------------------------
 
 #[derive(Debug)]
-pub struct Ref<T>(*mut T);
+pub struct Ref<T>(NonNull<T>);
 
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
-        Ref(boxed)
+        Ref(unsafe {NonNull::new_unchecked(boxed)})
     }
 }
 
@@ -75,13 +76,13 @@ impl<T> std::hash::Hash for Ref<T> {
 impl<T> std::ops::Deref for Ref<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { &*self.0 }
+        unsafe { &*self.0.as_ptr() }
     }
 }
 
 impl<T> std::ops::DerefMut for Ref<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut *self.0 }
+        unsafe { &mut *self.0.as_ptr() }
     }
 }
 

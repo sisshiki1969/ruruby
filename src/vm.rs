@@ -2,6 +2,7 @@ mod array;
 mod builtin;
 mod class;
 mod codegen;
+mod context;
 mod globals;
 mod method;
 mod object;
@@ -23,6 +24,7 @@ use codegen::*;
 pub use globals::*;
 pub use method::*;
 pub use object::*;
+pub use context::{Context, CallMode};
 #[cfg(feature = "perf")]
 use perf::*;
 pub use proc::*;
@@ -49,35 +51,6 @@ pub struct VM {
     pub pc: usize,
     #[cfg(feature = "perf")]
     perf: Perf,
-}
-
-#[derive(Debug, Clone)]
-pub struct Context {
-    pub self_value: PackedValue,
-    pub lvar_scope: Vec<PackedValue>,
-    pub iseq_ref: ISeqRef,
-    pub pc: usize,
-    pub callmode: CallMode,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CallMode {
-    Ordinary,
-    FromNative,
-    ClassDef,
-}
-
-impl Context {
-    pub fn new(self_value: PackedValue, iseq_ref: ISeqRef, callmode: CallMode) -> Self {
-        let lvar_num = iseq_ref.lvars;
-        Context {
-            self_value,
-            lvar_scope: vec![PackedValue::nil(); lvar_num],
-            iseq_ref,
-            pc: 0,
-            callmode,
-        }
-    }
 }
 
 impl VM {
