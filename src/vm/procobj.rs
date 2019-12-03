@@ -23,21 +23,21 @@ impl ProcRef {
 pub fn init_proc(globals: &mut Globals) -> ClassRef {
     let proc_id = globals.get_ident_id("Proc");
     let proc_class = ClassRef::from(proc_id, globals.object_class);
-    globals.add_builtin_instance_method(proc_class, "call", proc::proc_call);
-    globals.add_builtin_class_method(proc_class, "new", proc::proc_new);
+    globals.add_builtin_instance_method(proc_class, "call", procobj::proc_call);
+    globals.add_builtin_class_method(proc_class, "new", procobj::proc_new);
     proc_class
 }
 
 // Class methods
 
-pub fn proc_new(_vm: &mut VM, _receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+fn proc_new(_vm: &mut VM, _receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
     let procobj = PackedValue::nil();
     Ok(procobj)
 }
 
 // Instance methods
 
-pub fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
     let pref = match receiver.as_proc() {
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),

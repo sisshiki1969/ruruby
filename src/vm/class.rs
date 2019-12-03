@@ -62,7 +62,7 @@ pub fn init_class(globals: &mut Globals) -> ClassRef {
 
 // Class methods
 
-pub fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
     match receiver.as_class() {
         Some(cref) => match cref.superclass {
             Some(superclass) => Ok(PackedValue::class(&mut vm.globals, superclass)),
@@ -73,7 +73,7 @@ pub fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedVal
 }
 
 /// Built-in function "new".
-pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
     match receiver.as_class() {
         Some(class_ref) => {
             let instance = ObjectRef::from(class_ref);
@@ -100,7 +100,7 @@ pub fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> 
     }
 }
 /// Built-in function "attr_accessor".
-pub fn class_attr(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn class_attr(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
     match receiver.as_class() {
         Some(classref) => {
             for arg in args {

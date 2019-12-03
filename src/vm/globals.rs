@@ -34,7 +34,7 @@ impl Globals {
         object::init_object(&mut globals);
         globals.array_class = array::init_array(&mut globals);
         globals.class_class = class::init_class(&mut globals);
-        globals.proc_class = proc::init_proc(&mut globals);
+        globals.proc_class = procobj::init_proc(&mut globals);
         globals.get_ident_id("initialize");
         globals
     }

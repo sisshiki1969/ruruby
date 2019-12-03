@@ -1,11 +1,3 @@
-use super::array::ArrayRef;
-use super::class::ClassRef;
-use super::globals::*;
-use super::method::ISeqRef;
-use super::object::*;
-use super::proc::ProcRef;
-use super::range::RangeRef;
-use crate::util::IdentId;
 use crate::vm::*;
 
 const NIL_VALUE: u64 = 0x08;

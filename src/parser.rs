@@ -13,7 +13,6 @@ pub struct Parser {
     prev_cursor: usize,
     context_stack: Vec<Context>,
     pub ident_table: IdentifierTable,
-    lvar_collector: Vec<LvarCollector>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -97,9 +96,37 @@ impl LvarCollector {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum Context {
+struct Context {
+    lvar: LvarCollector,
+    kind: ContextKind,
+}
+
+impl Context {
+    fn new_method() ->Self {
+        Context {
+            lvar: LvarCollector::new(),
+            kind: ContextKind::Method,
+        }
+    }
+        fn new_class(lvar_collector:Option<LvarCollector>) ->Self {
+        Context {
+            lvar: lvar_collector.unwrap_or(LvarCollector::new()),
+            kind: ContextKind::Class,
+        }
+    }
+        fn new_block() ->Self {
+        Context {
+            lvar: LvarCollector::new(),
+            kind: ContextKind::Block,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ContextKind {
     Class,
     Method,
+    Block,
 }
 
 impl Parser {
@@ -110,9 +137,8 @@ impl Parser {
             tokens: vec![],
             cursor: 0,
             prev_cursor: 0,
-            context_stack: vec![Context::Class],
+            context_stack: vec![],
             ident_table: IdentifierTable::new(),
-            lvar_collector: vec![],
         }
     }
 
@@ -121,7 +147,7 @@ impl Parser {
     }
 
     fn add_local_var(&mut self, id: IdentId) {
-        self.lvar_collector.last_mut().unwrap().insert(id);
+        self.context_stack.last_mut().unwrap().lvar.insert(id);
     }
 
     fn get_ident_id(&mut self, method: &String) -> IdentId {
@@ -289,10 +315,9 @@ impl Parser {
         self.tokens = self.lexer.tokenize(program.clone())?.tokens;
         self.cursor = 0;
         self.prev_cursor = 0;
-        self.lvar_collector
-            .push(lvar_collector.unwrap_or(LvarCollector::new()));
+        self.context_stack.push(Context::new_class(lvar_collector));
         let node = self.parse_comp_stmt()?;
-        let lvar = self.lvar_collector.pop().unwrap();
+        let lvar = self.context_stack.pop().unwrap().lvar;
 
         let tok = self.peek();
         if tok.kind == TokenKind::EOF {
@@ -859,8 +884,7 @@ impl Parser {
             }
             TokenKind::Punct(Punct::Arrow) => {
                 let mut params = vec![];
-                self.context_stack.push(Context::Method);
-                self.lvar_collector.push(LvarCollector::new());
+                self.context_stack.push(Context::new_block());
                 if self.consume_punct(Punct::LParen) {
                     if !self.consume_punct(Punct::RParen) {
                         loop {
@@ -881,8 +905,7 @@ impl Parser {
                 self.expect_punct(Punct::LBrace)?;
                 let body = self.parse_comp_stmt()?;
                 self.expect_punct(Punct::RBrace)?;
-                let lvar = self.lvar_collector.pop().unwrap();
-                self.context_stack.pop();
+                let lvar = self.context_stack.pop().unwrap().lvar;
                 Ok(Node::new_proc(params, body, lvar, loc))
             }
             TokenKind::Reserved(Reserved::If) => {
@@ -913,20 +936,16 @@ impl Parser {
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Def) => {
-                self.context_stack.push(Context::Method);
                 let node = self.parse_def()?;
-                self.context_stack.pop();
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Class) => {
-                if *self.context_stack.last().unwrap_or_else(|| panic!()) == Context::Method {
+                if self.context_stack.last().unwrap_or_else(|| panic!()).kind == ContextKind::Method {
                     return Err(
                         self.error_unexpected(loc, "SyntaxError: class definition in method body.")
                     );
                 }
-                self.context_stack.push(Context::Class);
                 let node = self.parse_class()?;
-                self.context_stack.pop();
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
@@ -1061,11 +1080,11 @@ impl Parser {
             self.expect_punct(Punct::Dot)?;
             id = self.expect_ident()?;
         };
-        self.lvar_collector.push(LvarCollector::new());
+        self.context_stack.push(Context::new_method());
         let args = self.parse_params()?;
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
-        let lvar = self.lvar_collector.pop().unwrap();
+        let lvar = self.context_stack.pop().unwrap().lvar;
         if is_class_method {
             Ok(Node::new_class_method_decl(id, args, body, lvar))
         } else {
@@ -1110,10 +1129,10 @@ impl Parser {
             _ => return Err(self.error_unexpected(loc.dec(), "Expect class name.")),
         };
         let id = self.get_ident_id(&name);
-        self.lvar_collector.push(LvarCollector::new());
+        self.context_stack.push(Context::new_class(None));
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
-        let lvar = self.lvar_collector.pop().unwrap();
+        let lvar = self.context_stack.pop().unwrap().lvar;
         Ok(Node::new_class_decl(id, body, lvar))
     }
 }

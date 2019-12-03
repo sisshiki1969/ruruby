@@ -8,7 +8,7 @@ mod method;
 mod object;
 #[cfg(feature = "perf")]
 mod perf;
-mod proc;
+mod procobj;
 mod range;
 pub mod value;
 mod vm_inst;
@@ -17,18 +17,17 @@ use crate::error::{RubyError, RuntimeErrKind};
 use crate::node::*;
 pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
-use crate::vm::context::ContextRef;
 pub use array::*;
 pub use builtin::*;
 pub use class::*;
-use codegen::*;
-pub use context::{CallMode, Context};
+use codegen::{Codegen, ISeq, ISeqPos};
+pub use context::{CallMode, Context, ContextRef};
 pub use globals::*;
 pub use method::*;
 pub use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
-pub use proc::*;
+pub use procobj::*;
 pub use range::*;
 use std::collections::HashMap;
 pub use value::*;
@@ -58,20 +57,17 @@ impl VM {
     pub fn new(ident_table: Option<IdentifierTable>) -> Self {
         let mut globals = Globals::new(ident_table);
         let mut const_table = HashMap::new();
-        let class = globals.object_class;
         const_table.insert(
             globals.get_ident_id("Object"),
-            PackedValue::class(&globals, class),
+            PackedValue::class(&globals, globals.object_class),
         );
-        let class = globals.class_class;
         const_table.insert(
             globals.get_ident_id("Class"),
-            PackedValue::class(&globals, class),
+            PackedValue::class(&globals, globals.class_class),
         );
-        let class = globals.array_class;
         const_table.insert(
             globals.get_ident_id("Array"),
-            PackedValue::class(&globals, class),
+            PackedValue::class(&globals, globals.array_class),
         );
         const_table.insert(
             globals.get_ident_id("Proc"),
@@ -494,6 +490,12 @@ impl VM {
                         ContextRef::from(outer.self_value, iseq, CallMode::FromNative);
                     context.outer = Some(outer);
                     let proc_obj = PackedValue::proc(&self.globals, iseq, context);
+                    for v in &context.lvar_scope {
+                        println!("      {:?}", v.unpack());
+                    }
+                     for v in &context.outer.unwrap().lvar_scope {
+                        println!("Outer {:?}", v.unpack());
+                    }
                     self.exec_stack.push(proc_obj);
                     self.pc += 5;
                 }

@@ -95,7 +95,7 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "class", object_class);
 }
 
-pub fn object_class(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+fn object_class(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
     let val = match receiver.unpack() {
         Value::Object(oref) => PackedValue::class(&mut vm.globals, oref.classref),
         _ => {
