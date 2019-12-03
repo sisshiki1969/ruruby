@@ -524,6 +524,24 @@ impl VM {
                     self.pc += 9;
                     self.eval_send(methodref, receiver, args, CallMode::Ordinary)?;
                 }
+                Inst::SEND_SELF => {
+                    let receiver = self.context_stack.last().unwrap().self_value;
+                    let method_id = self.read_id();
+                    let methodref = match receiver.unpack() {
+                        Value::FixNum(_) => self.get_toplevel_method(method_id)?,
+                        Value::Object(oref) => match oref.kind {
+                            ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
+                            _ => self.get_instance_method(oref.classref, method_id)?,
+                        },
+                        _ => {
+                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
+                        }
+                    };
+                    let args_num = self.read32(5) as usize;
+                    let args = self.pop_args(args_num);
+                    self.pc += 9;
+                    self.eval_send(methodref, receiver, args, CallMode::Ordinary)?;
+                }
                 Inst::DEF_CLASS => {
                     let id = IdentId::from(self.read32(1));
                     let methodref = MethodRef::from(self.read32(5));

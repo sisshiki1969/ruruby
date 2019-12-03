@@ -580,3 +580,23 @@ fn lambda_literal() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+
+#[test]
+fn closure1() {
+    let program = "
+        def inc
+            a = 100
+            ->{a = a + 1; a}
+        end
+
+        assert 101, inc.call
+        assert 101, inc.call
+        assert 101, inc.call
+
+        p = inc()
+        assert 101, p.call
+        assert 102, p.call
+        assert 103, p.call";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}

@@ -214,6 +214,13 @@ impl Codegen {
         self.push32(iseq, args_num as u32);
     }
 
+    fn gen_send_self(&mut self, iseq: &mut ISeq, method: IdentId, args_num: usize) {
+        self.save_loc(iseq);
+        iseq.push(Inst::SEND_SELF);
+        self.push32(iseq, method.into());
+        self.push32(iseq, args_num as u32);
+    }
+
     fn gen_assign(
         &mut self,
         globals: &mut Globals,
@@ -816,9 +823,14 @@ impl Codegen {
                 for arg in args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                self.gen(globals, iseq, receiver, true)?;
-                self.loc = loc;
-                self.gen_send(iseq, *method, args.len());
+                if NodeKind::SelfValue == receiver.kind {
+                    self.loc = loc;
+                    self.gen_send_self(iseq, *method, args.len());
+                } else {
+                    self.gen(globals, iseq, receiver, true)?;
+                    self.loc = loc;
+                    self.gen_send(iseq, *method, args.len());
+                };
                 if !use_value {
                     self.gen_pop(iseq)
                 };

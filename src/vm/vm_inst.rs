@@ -34,6 +34,7 @@ impl Inst {
     pub const SET_ARRAY_ELEM: u8 = 37;
 
     pub const SEND: u8 = 40;
+    pub const SEND_SELF: u8 = 41;
 
     pub const CREATE_RANGE: u8 = 50;
     pub const CREATE_ARRAY: u8 = 51;
@@ -90,6 +91,7 @@ impl Inst {
             Inst::GET_ARRAY_ELEM => "GET_ARY_ELEM",
             Inst::SET_ARRAY_ELEM => "SET_ARY_ELEM",
             Inst::SEND => "SEND",
+            Inst::SEND_SELF => "SEND_SELF",
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
             Inst::CREATE_PROC => "CREATE_PROC",
@@ -148,6 +150,7 @@ impl Inst {
             | Inst::SET_LOCAL
             | Inst::GET_LOCAL
             | Inst::SEND
+            | Inst::SEND_SELF
             | Inst::DEF_CLASS
             | Inst::DEF_METHOD
             | Inst::DEF_CLASS_METHOD => 9,
