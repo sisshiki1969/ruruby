@@ -434,7 +434,7 @@ impl Parser {
             Ok(Node::new_mul_assign(mlhs, mrhs))
         } else if node.is_operation() && self.is_command() {
             // EXPR : COMMAND
-            Ok(self.parse_command(node)?)
+            Ok(self.parse_command(node.as_method_name().unwrap(), node.loc())?)
         } else if let Node {
             kind:
                 NodeKind::Send {
@@ -476,9 +476,8 @@ impl Parser {
         }
     }
 
-    fn parse_command(&mut self, operation: Node) -> Result<Node, RubyError> {
+    fn parse_command(&mut self, operation: IdentId, loc:Loc) -> Result<Node, RubyError> {
         // COMMAND : OPERATION CALL_ARGS
-        let loc = operation.loc();
         let args = self.parse_arglist()?;
         let end_loc = self.prev_loc();
         Ok(Node::new_send(
@@ -494,7 +493,7 @@ impl Parser {
         let first_arg = self.parse_arg()?;
 
         if first_arg.is_operation() && self.is_command() {
-            return Ok(vec![self.parse_command(first_arg)?]);
+            return Ok(vec![self.parse_command(first_arg.as_method_name().unwrap(), first_arg.loc())?]);
         }
 
         let mut args = vec![first_arg];
@@ -800,7 +799,7 @@ impl Parser {
 
             return Ok(Node::new_send(
                 Node::new(NodeKind::SelfValue, loc),
-                node,
+                node.as_method_name().unwrap(),
                 args,
                 true,
                 loc.merge(end_loc),
@@ -836,9 +835,9 @@ impl Parser {
                         completed = true;
                     }
                     let node = match node.kind {
-                        NodeKind::Ident(_) => Node::new_send(
+                        NodeKind::Ident(id) => Node::new_send(
                             Node::new(NodeKind::SelfValue, loc),
-                            node,
+                            id,
                             vec![],
                             true,
                             loc,
@@ -847,7 +846,7 @@ impl Parser {
                     };
                     Node::new_send(
                         node,
-                        Node::new_identifier(id, tok.loc()),
+                        id,
                         args,
                         completed,
                         loc.merge(self.loc()),

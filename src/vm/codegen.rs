@@ -227,13 +227,7 @@ impl Codegen {
             NodeKind::Send {
                 receiver, method, ..
             } => {
-                let id = match method.kind {
-                    NodeKind::Ident(id) => id,
-                    _ => {
-                        return Err(self.error_syntax(format!("Expected identifier."), method.loc()))
-                    }
-                };
-                let name = globals.get_ident_name(id).clone() + "=";
+                let name = globals.get_ident_name(*method).clone() + "=";
                 let assign_id = globals.get_ident_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
@@ -819,18 +813,12 @@ impl Codegen {
                 ..
             } => {
                 let loc = self.loc;
-                let id = match method.kind {
-                    NodeKind::Ident(id) => id,
-                    _ => {
-                        return Err(self.error_syntax(format!("Expected identifier."), method.loc()))
-                    }
-                };
                 for arg in args {
                     self.gen(globals, iseq, arg, true)?;
                 }
                 self.gen(globals, iseq, receiver, true)?;
                 self.loc = loc;
-                self.gen_send(iseq, id, args.len());
+                self.gen_send(iseq, *method, args.len());
                 if !use_value {
                     self.gen_pop(iseq)
                 };

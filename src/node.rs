@@ -53,7 +53,7 @@ pub enum NodeKind {
     ClassDef(IdentId, Box<Node>, LvarCollector),
     Send {
         receiver: Box<Node>,
-        method: Box<Node>,
+        method: IdentId,
         args: NodeVec,
         completed: bool,
     }, //receiver, method_name, args
@@ -219,7 +219,7 @@ impl Node {
 
     pub fn new_send(
         receiver: Node,
-        method_name: Node,
+        method: IdentId,
         args: Vec<Node>,
         completed: bool,
         loc: Loc,
@@ -227,7 +227,7 @@ impl Node {
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
-                method: Box::new(method_name),
+                method,
                 args,
                 completed,
             },
@@ -257,8 +257,15 @@ impl Node {
 
     pub fn is_operation(&self) -> bool {
         match self.kind {
-            NodeKind::Const(_) | NodeKind::Ident(_) => true,
+            NodeKind::Const(_) | NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn as_method_name(&self) -> Option<IdentId> {
+        match self.kind {
+            NodeKind::Const(id) | NodeKind::Ident(id) | NodeKind::LocalVar(id) => Some(id),
+            _ => None,
         }
     }
 }
@@ -275,7 +282,7 @@ impl std::fmt::Display for Node {
                 args,
                 ..
             } => {
-                write!(f, "[ Send [{}]: [{}]", receiver, method)?;
+                write!(f, "[ Send [{}]: [{:?}]", receiver, method)?;
                 for node in args {
                     write!(f, "({}) ", node)?;
                 }
