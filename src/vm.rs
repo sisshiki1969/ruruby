@@ -489,13 +489,7 @@ impl VM {
                     let mut context =
                         ContextRef::from(outer.self_value, iseq, CallMode::FromNative);
                     context.outer = Some(outer);
-                    let proc_obj = PackedValue::proc(&self.globals, iseq, context);
-                    for v in &context.lvar_scope {
-                        println!("      {:?}", v.unpack());
-                    }
-                     for v in &context.outer.unwrap().lvar_scope {
-                        println!("Outer {:?}", v.unpack());
-                    }
+                    let proc_obj = PackedValue::procobj(&self.globals, iseq, context);
                     self.exec_stack.push(proc_obj);
                     self.pc += 5;
                 }

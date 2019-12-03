@@ -102,19 +102,19 @@ struct Context {
 }
 
 impl Context {
-    fn new_method() ->Self {
+    fn new_method() -> Self {
         Context {
             lvar: LvarCollector::new(),
             kind: ContextKind::Method,
         }
     }
-        fn new_class(lvar_collector:Option<LvarCollector>) ->Self {
+    fn new_class(lvar_collector: Option<LvarCollector>) -> Self {
         Context {
             lvar: lvar_collector.unwrap_or(LvarCollector::new()),
             kind: ContextKind::Class,
         }
     }
-        fn new_block() ->Self {
+    fn new_block() -> Self {
         Context {
             lvar: LvarCollector::new(),
             kind: ContextKind::Block,
@@ -147,7 +147,23 @@ impl Parser {
     }
 
     fn add_local_var(&mut self, id: IdentId) {
-        self.context_stack.last_mut().unwrap().lvar.insert(id);
+        if !self.is_local_var(id) {
+            self.context_stack.last_mut().unwrap().lvar.insert(id);
+        }
+    }
+
+    fn is_local_var(&mut self, id: IdentId) -> bool {
+        let len = self.context_stack.len();
+        for i in 0..len {
+            let context = &self.context_stack[len - 1 - i];
+            if context.lvar.table.contains_key(&id) {
+                return true;
+            }
+            if context.kind != ContextKind::Block {
+                return false;
+            }
+        }
+        return false;
     }
 
     fn get_ident_id(&mut self, method: &String) -> IdentId {
@@ -940,7 +956,8 @@ impl Parser {
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Class) => {
-                if self.context_stack.last().unwrap_or_else(|| panic!()).kind == ContextKind::Method {
+                if self.context_stack.last().unwrap_or_else(|| panic!()).kind == ContextKind::Method
+                {
                     return Err(
                         self.error_unexpected(loc, "SyntaxError: class definition in method body.")
                     );

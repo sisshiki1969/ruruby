@@ -3,6 +3,11 @@ def inc
     ->{a = a + 1; puts a}
 end
 
+inc.call
+inc.call
+inc.call
+
 p = inc()
+p.call
 p.call
 p.call
