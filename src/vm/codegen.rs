@@ -221,7 +221,7 @@ impl Codegen {
         lhs: &Node,
     ) -> Result<(), RubyError> {
         match &lhs.kind {
-            NodeKind::Ident(id) => self.gen_set_local(iseq, *id),
+            NodeKind::Ident(id) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, *id),
             NodeKind::Const(id) => self.gen_set_const(iseq, *id),
             NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
             NodeKind::Send {
@@ -580,6 +580,12 @@ impl Codegen {
                 };
             }
             NodeKind::Ident(id) => {
+                return Err(self.error_name(format!(
+                    "Undefined local variable or method `{}'.",
+                    globals.get_ident_name(*id)
+                )));
+            }
+            NodeKind::LocalVar(id) => {
                 self.gen_get_local(iseq, *id)?;
                 if !use_value {
                     self.gen_pop(iseq)
@@ -730,7 +736,7 @@ impl Codegen {
             }
             NodeKind::For { param, iter, body } => {
                 let id = match param.kind {
-                    NodeKind::Ident(id) => id,
+                    NodeKind::Ident(id) | NodeKind::LocalVar(id) => id,
                     _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
                 };
                 let (start, end, exclude) = match &iter.kind {

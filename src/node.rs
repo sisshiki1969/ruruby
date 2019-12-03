@@ -42,6 +42,7 @@ pub enum NodeKind {
     },
     Break,
     Next,
+    LocalVar(IdentId),
     Ident(IdentId),
     InstanceVar(IdentId),
     Const(IdentId),
@@ -145,6 +146,10 @@ impl Node {
             index,
         };
         Node::new(kind, loc)
+    }
+
+    pub fn new_lvar(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::LocalVar(id), loc)
     }
 
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
@@ -263,6 +268,7 @@ impl std::fmt::Display for Node {
         match &self.kind {
             NodeKind::BinOp(op, lhs, rhs) => write!(f, "({:?}: {}, {})", op, lhs, rhs),
             NodeKind::Ident(id) => write!(f, "(Ident {:?})", id),
+            NodeKind::LocalVar(id) => write!(f, "(LocalVar {:?})", id),
             NodeKind::Send {
                 receiver,
                 method,

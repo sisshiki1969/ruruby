@@ -146,12 +146,23 @@ impl Parser {
         self.context_stack.len()
     }
 
+    // If the identifier(IdentId) does not exist in the current scope,
+    // add the identifier as a local variable in the current context.
+    fn add_local_var_if_new(&mut self, id: IdentId) {
+        if !self.is_local_var(id) {
+            self.context_stack.last_mut().unwrap().lvar.insert(id);
+        }
+    }
+
+    // Add the identifier(IdentId) as a local variable in the current context.
     fn add_local_var(&mut self, id: IdentId) {
         if !self.is_local_var(id) {
             self.context_stack.last_mut().unwrap().lvar.insert(id);
         }
     }
 
+    // Examine whether the identifier(IdentId) exists in the current scope.
+    // If exiets, return true.
     fn is_local_var(&mut self, id: IdentId) -> bool {
         let len = self.context_stack.len();
         for i in 0..len {
@@ -390,14 +401,15 @@ impl Parser {
         let node = self.parse_arg()?;
         if self.consume_punct_no_skip_line_term(Punct::Comma) {
             // EXPR : MLHS `=' MRHS
+            let mut new_lvar = vec![];
             if let NodeKind::Ident(id) = node.kind {
-                self.add_local_var(id);
+                new_lvar.push(id);
             };
             let mut mlhs = vec![node];
             loop {
                 let node = self.parse_function()?;
                 if let NodeKind::Ident(id) = node.kind {
-                    self.add_local_var(id);
+                    new_lvar.push(id);
                 };
                 mlhs.push(node);
                 if !self.consume_punct_no_skip_line_term(Punct::Comma) {
@@ -416,7 +428,9 @@ impl Parser {
                     break;
                 }
             }
-
+            for lvar in new_lvar {
+                self.add_local_var(lvar);
+            }
             Ok(Node::new_mul_assign(mlhs, mrhs))
         } else if node.is_operation() && self.is_command() {
             // EXPR : COMMAND
@@ -523,9 +537,7 @@ impl Parser {
         }
         if self.consume_punct(Punct::Assign) {
             let rhs = self.parse_arg()?;
-            if let NodeKind::Ident(id) = lhs.kind {
-                self.add_local_var(id);
-            };
+
             if self.consume_punct_no_skip_line_term(Punct::Comma) {
                 let mut mrhs = vec![rhs];
                 loop {
@@ -534,8 +546,14 @@ impl Parser {
                         break;
                     }
                 }
+                if let NodeKind::Ident(id) = lhs.kind {
+                    self.add_local_var(id);
+                };
                 Ok(Node::new_mul_assign(vec![lhs], mrhs))
             } else {
+                if let NodeKind::Ident(id) = lhs.kind {
+                    self.add_local_var(id);
+                };
                 Ok(Node::new_assign(lhs, rhs))
             }
         } else {
@@ -817,6 +835,16 @@ impl Parser {
                         args = self.parse_args(Punct::RParen)?;
                         completed = true;
                     }
+                    let node = match node.kind {
+                        NodeKind::Ident(_) => Node::new_send(
+                            Node::new(NodeKind::SelfValue, loc),
+                            node,
+                            vec![],
+                            true,
+                            loc,
+                        ),
+                        _ => node,
+                    };
                     Node::new_send(
                         node,
                         Node::new_identifier(id, tok.loc()),
@@ -868,7 +896,11 @@ impl Parser {
                 if name == "self" {
                     return Ok(Node::new(NodeKind::SelfValue, loc));
                 };
-                return Ok(Node::new_identifier(id, loc));
+                if self.is_local_var(id) {
+                    Ok(Node::new_lvar(id, loc))
+                } else {
+                    Ok(Node::new_identifier(id, loc))
+                }
             }
             TokenKind::InstanceVar(name) => {
                 let id = self.get_ident_id(name);
@@ -931,11 +963,9 @@ impl Parser {
             }
             TokenKind::Reserved(Reserved::For) => {
                 let loc = self.prev_loc();
-                let var = self.expect_ident()?;
-                let var = Node::new_identifier(var, self.prev_loc());
-                if let NodeKind::Ident(id) = var.kind {
-                    self.add_local_var(id);
-                }
+                let var_id = self.expect_ident()?;
+                let var = Node::new_lvar(var_id, self.prev_loc());
+                self.add_local_var_if_new(var_id);
                 self.expect_reserved(Reserved::In)?;
                 let iter = self.parse_expr()?;
                 self.parse_do()?;
