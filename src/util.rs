@@ -50,8 +50,8 @@ impl<T> Ref<T> {
         Ref(unsafe { NonNull::new_unchecked(boxed) })
     }
 
-    pub fn new_local(mut info: T) -> Self {
-        let boxed = &mut info as *mut T;
+    pub fn new_local(info: &T) -> Self {
+        let boxed = info as *const T as *mut T;
         Ref(unsafe { NonNull::new_unchecked(boxed) })
     }
 }

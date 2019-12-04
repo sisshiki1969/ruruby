@@ -184,7 +184,7 @@ impl VM {
         iseq: ISeqRef,
         args: Vec<PackedValue>,
     ) -> Result<(), RubyError> {
-        let mut context = ContextRef::from(self_value, iseq);
+        let mut context = Context::new(self_value, iseq);
         let arg_len = args.len();
         for (i, id) in iseq.params.clone().iter().enumerate() {
             context.lvar_scope[id.as_usize()] = if i < arg_len {
@@ -196,7 +196,7 @@ impl VM {
 
         let old_pc = self.pc;
         self.pc = context.pc;
-        self.context_stack.push(context);
+        self.context_stack.push(ContextRef::new_local(&context));
         loop {
             let iseq = &context.iseq_ref.iseq;
             #[cfg(feature = "perf")]
