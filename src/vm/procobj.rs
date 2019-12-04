@@ -42,6 +42,7 @@ fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
     };
+    /*
     let mut context = pref.context;
     let arg_len = args.len();
     for (i, id) in pref.iseq.params.clone().iter().enumerate() {
@@ -50,9 +51,8 @@ fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
         } else {
             PackedValue::nil()
         };
-    }
-    vm.context_stack.last_mut().unwrap().pc = vm.pc;
-    vm.vm_run(context)?;
+    }*/
+    vm.vm_run(pref.context.self_value, pref.context.iseq_ref, args)?;
     let res = vm.exec_stack.pop().unwrap();
     Ok(res)
 }

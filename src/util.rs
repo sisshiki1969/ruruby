@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use core::ptr::NonNull;
+use std::collections::HashMap;
 
 const INITIALIZE: usize = 0;
 const NEW: usize = 1;
@@ -47,7 +47,12 @@ pub struct Ref<T>(NonNull<T>);
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
-        Ref(unsafe {NonNull::new_unchecked(boxed)})
+        Ref(unsafe { NonNull::new_unchecked(boxed) })
+    }
+
+    pub fn new_local(mut info: T) -> Self {
+        let boxed = &mut info as *mut T;
+        Ref(unsafe { NonNull::new_unchecked(boxed) })
     }
 }
 

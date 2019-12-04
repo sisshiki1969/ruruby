@@ -147,6 +147,7 @@ fn repl_vm() {
                                 _ => {}
                             },
                         }
+                        vm.exec_stack.clear();
                         parser = parser_save;
                     }
                 }
