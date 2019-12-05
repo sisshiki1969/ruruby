@@ -114,7 +114,7 @@ impl VM {
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let class = self.globals.main_class;
         let main_object = PackedValue::class(&mut self.globals, class);
-        self.vm_run(main_object, iseq, vec![])?;
+        self.vm_run(main_object, iseq, None, vec![])?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -161,7 +161,7 @@ impl VM {
             }
             cxt
         };*/
-        self.vm_run(main_object, iseq, vec![])?;
+        self.vm_run(main_object, iseq, None, vec![])?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -182,10 +182,13 @@ impl VM {
         &mut self,
         self_value: PackedValue,
         iseq: ISeqRef,
+        outer: Option<ContextRef>,
         args: Vec<PackedValue>,
     ) -> Result<(), RubyError> {
         let mut context = Context::new(self_value, iseq);
+        context.outer = outer;
         let arg_len = args.len();
+        /*
         for (i, id) in iseq.params.clone().iter().enumerate() {
             context.lvar_scope[id.as_usize()] = if i < arg_len {
                 args[i]
@@ -193,10 +196,25 @@ impl VM {
                 PackedValue::nil()
             };
         }
+        */
+        for i in 0..iseq.params.len() {
+            context.lvar_scope[i] = if i < arg_len {
+                args[i]
+            } else {
+                PackedValue::nil()
+            };
+        }
+        self.vm_run_context(ContextRef::new_local(&context), true)
+    }
 
+    pub fn vm_run_context(
+        &mut self,
+        context: ContextRef,
+        mut on_stack: bool,
+    ) -> Result<(), RubyError> {
+        self.context_stack.push(context);
         let old_pc = self.pc;
         self.pc = context.pc;
-        self.context_stack.push(ContextRef::new_local(&context));
         loop {
             let iseq = &context.iseq_ref.iseq;
             #[cfg(feature = "perf")]
@@ -475,6 +493,12 @@ impl VM {
                 Inst::CREATE_PROC => {
                     let method = MethodRef::from(read32(iseq, self.pc + 1));
                     let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
+                    if on_stack {
+                        let context = self.context_stack.pop().unwrap();
+                        self.context_stack.push(ContextRef::new(context.dup()));
+                        on_stack = false;
+                    }
+
                     let outer = self.context_stack.last().unwrap().clone();
                     let mut context = ContextRef::from(outer.self_value, iseq);
                     context.outer = Some(outer);
@@ -1049,7 +1073,7 @@ impl VM {
                         PackedValue::nil()
                     };
                 }*/
-                self.vm_run(receiver, iseq, args)?;
+                self.vm_run(receiver, iseq, None, args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);

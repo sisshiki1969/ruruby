@@ -91,7 +91,7 @@ fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
                         PackedValue::nil()
                     };
                 }*/
-                vm.vm_run(new_instance, iseq, args)?;
+                vm.vm_run(new_instance, iseq, None, args)?;
                 vm.exec_stack.pop().unwrap();
             };
             Ok(new_instance)
