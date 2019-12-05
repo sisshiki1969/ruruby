@@ -131,7 +131,12 @@ impl VM {
         Ok(val)
     }
 
-    pub fn run_repl(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
+    pub fn run_repl(
+        &mut self,
+        node: &Node,
+        lvar_collector: &LvarCollector,
+        mut context: ContextRef,
+    ) -> VMResult {
         #[cfg(feature = "perf")]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
@@ -145,8 +150,7 @@ impl VM {
             false,
         )?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
-        let class = self.globals.main_class;
-        let main_object = PackedValue::class(&mut self.globals, class);
+        context.iseq_ref = iseq;
         /*
         let context = if self.context_stack.len() == 0 {
             ContextRef::from(main_object, iseq)
@@ -161,7 +165,8 @@ impl VM {
             }
             cxt
         };*/
-        self.vm_run(main_object, iseq, None, vec![])?;
+
+        self.vm_run_context(context, false)?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -215,8 +220,8 @@ impl VM {
         self.context_stack.push(context);
         let old_pc = self.pc;
         self.pc = context.pc;
+        let iseq = &context.iseq_ref.iseq;
         loop {
-            let iseq = &context.iseq_ref.iseq;
             #[cfg(feature = "perf")]
             {
                 self.perf.get_perf(iseq[self.pc]);
@@ -494,8 +499,8 @@ impl VM {
                     let method = MethodRef::from(read32(iseq, self.pc + 1));
                     let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
                     if on_stack {
-                        let context = self.context_stack.pop().unwrap();
-                        self.context_stack.push(ContextRef::new(context.dup()));
+                        let context = self.context_stack.last_mut().unwrap();
+                        *context = ContextRef::new(context.dup());
                         on_stack = false;
                     }
 
