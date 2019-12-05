@@ -267,8 +267,8 @@ impl PackedValue {
         PackedValue::object(ObjectRef::new_range(globals, rref))
     }
 
-    pub fn procobj(globals: &Globals, iseq: ISeqRef, context: ContextRef) -> Self {
-        PackedValue::object(ObjectRef::new_proc(globals, iseq, context))
+    pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
+        PackedValue::object(ObjectRef::new_proc(globals, context))
     }
 }
 

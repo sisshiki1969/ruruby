@@ -2,21 +2,20 @@ use crate::vm::*;
 
 #[derive(Debug, Clone)]
 pub struct ProcInfo {
-    pub iseq: ISeqRef,
     pub context: ContextRef,
 }
 
 impl ProcInfo {
-    pub fn new(iseq: ISeqRef, context: ContextRef) -> Self {
-        ProcInfo { iseq, context }
+    pub fn new(context: ContextRef) -> Self {
+        ProcInfo { context }
     }
 }
 
 pub type ProcRef = Ref<ProcInfo>;
 
 impl ProcRef {
-    pub fn from(iseq: ISeqRef, context: ContextRef) -> Self {
-        ProcRef::new(ProcInfo::new(iseq, context))
+    pub fn from(context: ContextRef) -> Self {
+        ProcRef::new(ProcInfo::new(context))
     }
 }
 

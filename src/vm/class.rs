@@ -81,16 +81,6 @@ fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
             // call initialize method.
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
                 let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
-                /*
-                let mut context = ContextRef::from(new_instance, iseq);
-                let arg_len = args.len();
-                for (i, id) in iseq.params.clone().iter().enumerate() {
-                    context.lvar_scope[id.as_usize()] = if i < arg_len {
-                        args[i]
-                    } else {
-                        PackedValue::nil()
-                    };
-                }*/
                 vm.vm_run(new_instance, iseq, None, args)?;
                 vm.exec_stack.pop().unwrap();
             };

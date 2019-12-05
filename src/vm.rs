@@ -502,7 +502,7 @@ impl VM {
                     let outer = self.context_stack.last().unwrap().clone();
                     let mut context = ContextRef::from(outer.self_value, iseq);
                     context.outer = Some(outer);
-                    let proc_obj = PackedValue::procobj(&self.globals, iseq, context);
+                    let proc_obj = PackedValue::procobj(&self.globals, context);
                     self.exec_stack.push(proc_obj);
                     self.pc += 5;
                 }
@@ -1063,16 +1063,6 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                /*
-                let mut context = Context::new(receiver, iseq);
-                let arg_len = args.len();
-                for (i, id) in iseq.params.clone().iter().enumerate() {
-                    context.lvar_scope[id.as_usize()] = if i < arg_len {
-                        args[i]
-                    } else {
-                        PackedValue::nil()
-                    };
-                }*/
                 self.vm_run(receiver, iseq, None, args)?;
                 #[cfg(feature = "perf")]
                 {
