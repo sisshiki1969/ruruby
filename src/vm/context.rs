@@ -1,10 +1,13 @@
 pub use crate::vm::*;
 use core::ptr::NonNull;
 
+pub const LVAR_ARRAY_SIZE: usize = 8;
+
 #[derive(Debug, Clone)]
 pub struct Context {
     pub self_value: PackedValue,
-    pub lvar_scope: [PackedValue; 16],
+    pub lvar_scope: [PackedValue; LVAR_ARRAY_SIZE],
+    pub ext_lvar: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
     pub pc: usize,
     pub outer: Option<ContextRef>,
@@ -14,10 +17,16 @@ pub type ContextRef = Ref<Context>;
 
 impl Context {
     pub fn new(self_value: PackedValue, iseq_ref: ISeqRef) -> Self {
-        //let lvar_num = iseq_ref.lvars;
+        let lvar_num = iseq_ref.lvars;
+        let ext_lvar = if lvar_num > 4 {
+            vec![PackedValue::nil(); lvar_num - LVAR_ARRAY_SIZE]
+        } else {
+            Vec::new()
+        };
         Context {
             self_value,
-            lvar_scope: [PackedValue::nil(); 16],
+            lvar_scope: [PackedValue::nil(); LVAR_ARRAY_SIZE],
+            ext_lvar,
             iseq_ref,
             pc: 0,
             outer: None,

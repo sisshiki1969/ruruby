@@ -21,7 +21,7 @@ pub use array::*;
 pub use builtin::*;
 pub use class::*;
 use codegen::{Codegen, ISeq, ISeqPos};
-pub use context::{Context, ContextRef};
+pub use context::*;
 pub use globals::*;
 pub use method::*;
 pub use object::*;
@@ -152,19 +152,15 @@ impl VM {
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         context.iseq_ref = iseq;
         /*
-        let context = if self.context_stack.len() == 0 {
-            ContextRef::from(main_object, iseq)
-        } else {
             let mut cxt = self.context_stack.pop().unwrap();
-            cxt.iseq_ref = iseq;
             cxt.pc = 0;
-            if cxt.lvar_scope.len() < iseq.lvars {
-                for _ in 0..iseq.lvars - cxt.lvar_scope.len() {
-                    cxt.lvar_scope.push(PackedValue::nil());
-                }
-            }
             cxt
-        };*/
+        */
+        if LVAR_ARRAY_SIZE < iseq.lvars {
+            for _ in 0..iseq.lvars - LVAR_ARRAY_SIZE {
+                context.ext_lvar.push(PackedValue::nil());
+            }
+        }
 
         self.vm_run_context(context, false)?;
         let val = self.exec_stack.pop().unwrap();
@@ -193,21 +189,21 @@ impl VM {
         let mut context = Context::new(self_value, iseq);
         context.outer = outer;
         let arg_len = args.len();
-        /*
-        for (i, id) in iseq.params.clone().iter().enumerate() {
-            context.lvar_scope[id.as_usize()] = if i < arg_len {
-                args[i]
-            } else {
-                PackedValue::nil()
-            };
-        }
-        */
-        for i in 0..iseq.params.len() {
+        for i in 0..LVAR_ARRAY_SIZE {
             context.lvar_scope[i] = if i < arg_len {
                 args[i]
             } else {
                 PackedValue::nil()
             };
+        }
+        if LVAR_ARRAY_SIZE < iseq.params.len() {
+            for i in LVAR_ARRAY_SIZE..iseq.params.len() {
+                context.ext_lvar[i - LVAR_ARRAY_SIZE] = if i < arg_len {
+                    args[i]
+                } else {
+                    PackedValue::nil()
+                };
+            }
         }
         self.vm_run_context(ContextRef::new_local(&context), true)
     }
@@ -380,16 +376,26 @@ impl VM {
                     self.exec_stack.push(val.pack());
                 }
                 Inst::SET_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1);
+                    let id = read_lvar_id(iseq, self.pc + 1).as_usize();
                     let outer = read32(iseq, self.pc + 5);
                     let val = self.exec_stack.pop().unwrap();
-                    self.get_outer_context(outer).lvar_scope[id.as_usize()] = val;
+                    let mut cref = self.get_outer_context(outer);
+                    if id < LVAR_ARRAY_SIZE {
+                        cref.lvar_scope[id] = val;
+                    } else {
+                        cref.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
+                    }
                     self.pc += 9;
                 }
                 Inst::GET_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1);
+                    let id = read_lvar_id(iseq, self.pc + 1).as_usize();
                     let outer = read32(iseq, self.pc + 5);
-                    let val = self.get_outer_context(outer).lvar_scope[id.as_usize()];
+                    let cref = self.get_outer_context(outer);
+                    let val = if id < LVAR_ARRAY_SIZE {
+                        cref.lvar_scope[id]
+                    } else {
+                        cref.ext_lvar[id - LVAR_ARRAY_SIZE]
+                    };
                     self.exec_stack.push(val);
                     self.pc += 9;
                 }
