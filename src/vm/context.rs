@@ -18,7 +18,7 @@ pub type ContextRef = Ref<Context>;
 impl Context {
     pub fn new(self_value: PackedValue, iseq_ref: ISeqRef) -> Self {
         let lvar_num = iseq_ref.lvars;
-        let ext_lvar = if lvar_num > 4 {
+        let ext_lvar = if lvar_num > LVAR_ARRAY_SIZE {
             vec![PackedValue::nil(); lvar_num - LVAR_ARRAY_SIZE]
         } else {
             Vec::new()
