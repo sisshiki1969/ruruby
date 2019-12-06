@@ -565,10 +565,36 @@ impl VM {
                 Inst::DEF_CLASS => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
-
-                    let classref = ClassRef::from(id, self.globals.object_class);
-                    let val = PackedValue::class(&mut self.globals, classref);
-                    self.const_table.insert(id, val);
+                    let super_val = self.exec_stack.pop().unwrap();
+                    let superclass = match super_val.as_class() {
+                        Some(cref) => cref,
+                        None => {
+                            return Err(self.error_type(format!(
+                                "{} is not a class.",
+                                self.val_pp(super_val.clone())
+                            )))
+                        }
+                    };
+                    let (val, classref) = match self.const_table.get(&id) {
+                        Some(val) => (
+                            val.clone(),
+                            match val.as_class() {
+                                Some(classref) => classref,
+                                None => {
+                                    return Err(self.error_type(format!(
+                                        "{} is not a class.",
+                                        self.val_pp(val.clone())
+                                    )))
+                                }
+                            },
+                        ),
+                        None => {
+                            let classref = ClassRef::from(id, superclass);
+                            let val = PackedValue::class(&mut self.globals, classref);
+                            self.const_table.insert(id, val);
+                            (val, classref)
+                        }
+                    };
 
                     self.class_stack.push(classref);
 
@@ -672,9 +698,17 @@ impl VM {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), loc)
     }
+    pub fn error_internal(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Internal(msg.into()), loc)
+    }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), loc)
+    }
+    pub fn error_type(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Type(msg.into()), loc)
     }
 
     fn get_loc(&self) -> Loc {

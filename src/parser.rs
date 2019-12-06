@@ -319,6 +319,19 @@ impl Parser {
         Ok(self.get_ident_id(&name))
     }
 
+    /// Get the next token and examine whether it is Const.
+    /// Return IdentId of the Const.
+    /// If not, return RubyError.
+    fn expect_const(&mut self) -> Result<IdentId, RubyError> {
+        let name = match &self.get()?.kind {
+            TokenKind::Const(s) => s.clone(),
+            _ => {
+                return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
+            }
+        };
+        Ok(self.get_ident_id(&name))
+    }
+
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
         RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
     }
@@ -476,7 +489,7 @@ impl Parser {
         }
     }
 
-    fn parse_command(&mut self, operation: IdentId, loc:Loc) -> Result<Node, RubyError> {
+    fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
         // COMMAND : OPERATION CALL_ARGS
         let args = self.parse_arglist()?;
         let end_loc = self.prev_loc();
@@ -493,7 +506,10 @@ impl Parser {
         let first_arg = self.parse_arg()?;
 
         if first_arg.is_operation() && self.is_command() {
-            return Ok(vec![self.parse_command(first_arg.as_method_name().unwrap(), first_arg.loc())?]);
+            return Ok(vec![self.parse_command(
+                first_arg.as_method_name().unwrap(),
+                first_arg.loc(),
+            )?]);
         }
 
         let mut args = vec![first_arg];
@@ -844,13 +860,7 @@ impl Parser {
                         ),
                         _ => node,
                     };
-                    Node::new_send(
-                        node,
-                        id,
-                        args,
-                        completed,
-                        loc.merge(self.loc()),
-                    )
+                    Node::new_send(node, id, args, completed, loc.merge(self.loc()))
                 }
                 TokenKind::Punct(Punct::LBracket) => {
                     // PRIMARY: PRIMARY `[' [ARGS] `]'
@@ -1169,16 +1179,22 @@ impl Parser {
         //  class identifier [`<' identifier]
         //      COMPSTMT
         //  end
-        let loc = self.loc();
+        let mut loc = self.loc();
         let name = match &self.get_no_skip_line_term().kind {
             TokenKind::Const(s) => s.clone(),
-            _ => return Err(self.error_unexpected(loc.dec(), "Expect class name.")),
+            _ => return Err(self.error_unexpected(loc, "Expect class name.")),
+        };
+        let superclass = if self.consume_punct_no_skip_line_term(Punct::Lt) {
+            loc = loc.merge(self.loc());
+            self.expect_const()?
+        } else {
+            self.get_ident_id(&"Object".to_string())
         };
         let id = self.get_ident_id(&name);
         self.context_stack.push(Context::new_class(None));
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        Ok(Node::new_class_decl(id, body, lvar))
+        Ok(Node::new_class_decl(id, superclass, body, lvar, loc))
     }
 }

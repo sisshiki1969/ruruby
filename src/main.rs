@@ -147,10 +147,15 @@ fn repl_vm() {
                                 RuntimeErrKind::NoMethod(n) => {
                                     println!("runtime error: NoMethodError ({})", n)
                                 }
+                                RuntimeErrKind::Type(n) => {
+                                    println!("runtime error: TypeError ({})", n)
+                                }
                                 RuntimeErrKind::Unimplemented(n) => {
                                     println!("runtime error: UnimplementedError ({})", n)
                                 }
-                                _ => {}
+                                RuntimeErrKind::Internal(n) => {
+                                    println!("runtime error: InternalError ({})", n)
+                                }
                             },
                         }
                         vm.exec_stack.clear();

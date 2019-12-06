@@ -500,6 +500,19 @@ fn class2() {
 }
 
 #[test]
+fn class3() {
+    let program = "
+        class Foo
+        end
+        class Bar < Foo
+        end
+        assert(Foo, Bar.superclass)
+        assert(Object, Bar.superclass.superclass)";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn initialize() {
     let program = "
     class Vec
@@ -597,6 +610,18 @@ fn closure1() {
         assert 101, p.call
         assert 102, p.call
         assert 103, p.call";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn closure2() {
+    let program = "
+        a = 5;
+        f = ->{ ->{ ->{ a } } }
+        assert 5, f.call.call.call
+        a = 7;
+        assert 7, f.call.call.call";
     let expected = Value::Nil;
     eval_script(program, expected);
 }
