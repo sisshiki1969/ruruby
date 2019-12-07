@@ -43,7 +43,7 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let methodref = self.add_method(info);
-        self.add_toplevel_method(id, methodref);
+        self.add_object_method(id, methodref);
     }
 
     pub fn get_ident_name(&self, id: IdentId) -> &String {
@@ -54,11 +54,11 @@ impl Globals {
         self.ident_table.get_ident_id(&name.into())
     }
 
-    pub fn add_toplevel_method(&mut self, id: IdentId, info: MethodRef) {
+    pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
         self.object_class.add_instance_method(id, info);
     }
 
-    pub fn get_toplevel_method(&self, id: IdentId) -> Option<&MethodRef> {
+    pub fn get_object_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.object_class.get_instance_method(id)
     }
 

@@ -134,22 +134,7 @@ impl PackedValue {
         }
     }
 
-    pub fn as_class(&self) -> Option<ClassRef> {
-        if self.is_packed_value() {
-            return None;
-        }
-        unsafe {
-            match *(self.0 as *mut Value) {
-                Value::Object(oref) => match oref.kind {
-                    ObjKind::Class(cref) => Some(cref),
-                    _ => None,
-                },
-                _ => None,
-            }
-        }
-    }
-
-    pub fn as_instance(&self) -> Option<ObjectRef> {
+    pub fn as_object(&self) -> Option<ObjectRef> {
         if self.is_packed_value() {
             return None;
         }
@@ -161,31 +146,43 @@ impl PackedValue {
         }
     }
 
-    pub fn as_array(&self) -> Option<ArrayRef> {
-        if self.is_packed_value() {
-            return None;
-        }
-        unsafe {
-            match *(self.0 as *mut Value) {
-                Value::Object(oref) => match oref.kind {
-                    ObjKind::Array(aref) => Some(aref),
-                    _ => None,
-                },
+    pub fn as_class(&self) -> Option<ClassRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Class(cref) => Some(cref),
                 _ => None,
-            }
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_array(&self) -> Option<ArrayRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Array(aref) => Some(aref),
+                _ => None,
+            },
+            None => None,
         }
     }
 
     pub fn as_proc(&self) -> Option<ProcRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Proc(pref) => Some(pref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<String> {
         if self.is_packed_value() {
             return None;
         }
         unsafe {
-            match *(self.0 as *mut Value) {
-                Value::Object(oref) => match oref.kind {
-                    ObjKind::Proc(pref) => Some(pref),
-                    _ => None,
-                },
+            match &*(self.0 as *mut Value) {
+                Value::String(string) => Some(string.clone()),
                 _ => None,
             }
         }

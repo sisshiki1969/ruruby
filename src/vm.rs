@@ -249,8 +249,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::PUSH_SELF => {
-                    let self_value = self.context_stack.last().unwrap().self_value.clone();
-                    self.exec_stack.push(self_value);
+                    self.exec_stack.push(context.self_value);
                     self.pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
@@ -364,12 +363,10 @@ impl VM {
                     self.exec_stack.push(val);
                 }
                 Inst::CONCAT_STRING => {
-                    let rhs = self.exec_stack.pop().unwrap().unpack();
-                    let lhs = self.exec_stack.pop().unwrap().unpack();
+                    let rhs = self.exec_stack.pop().unwrap().as_string();
+                    let lhs = self.exec_stack.pop().unwrap().as_string();
                     let val = match (lhs, rhs) {
-                        (Value::String(lhs), Value::String(rhs)) => {
-                            Value::String(format!("{}{}", lhs, rhs))
-                        }
+                        (Some(lhs), Some(rhs)) => Value::String(format!("{}{}", lhs, rhs)),
                         (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
                     };
                     self.pc += 1;
@@ -469,14 +466,38 @@ impl VM {
                     let args = self.pop_args(arg_num);
                     match self.exec_stack.pop().unwrap().as_array() {
                         Some(aref) => {
-                            let index = if args[0].is_packed_fixnum() {
-                                args[0].as_packed_fixnum()
-                            } else {
-                                return Err(self.error_unimplemented("Index must be an integer."));
+                            let index = match args[0].as_fixnum() {
+                                Some(num) => num,
+                                None => {
+                                    return Err(
+                                        self.error_type("No implicit conversion into Integer")
+                                    )
+                                }
                             };
                             let index = self.get_array_index(index, aref.elements.len())?;
-                            let elem = aref.elements[index];
-                            self.exec_stack.push(elem);
+                            if arg_num == 1 {
+                                let elem = aref.elements[index];
+                                self.exec_stack.push(elem);
+                            } else {
+                                let len = match args[1].as_fixnum() {
+                                    Some(num) => num,
+                                    None => {
+                                        return Err(
+                                            self.error_type("No implicit conversion into Integer")
+                                        )
+                                    }
+                                };
+                                if len < 0 {
+                                    self.exec_stack.push(PackedValue::nil());
+                                } else {
+                                    let len = len as usize;
+                                    let end = std::cmp::min(aref.elements.len(), index + len);
+                                    let ary = (&aref.elements[index..end]).to_vec();
+                                    let ary_object =
+                                        PackedValue::array(&self.globals, ArrayRef::from(ary));
+                                    self.exec_stack.push(ary_object);
+                                }
+                            };
                         }
                         None => {
                             return Err(self
@@ -534,7 +555,7 @@ impl VM {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = read_id(iseq, self.pc + 1);
                     let methodref = match receiver.unpack() {
-                        Value::FixNum(_) => self.get_toplevel_method(method_id)?,
+                        Value::FixNum(_) => self.get_object_method(method_id)?,
                         Value::Object(oref) => match oref.kind {
                             ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
                             _ => self.get_instance_method(oref.classref, method_id)?,
@@ -550,10 +571,10 @@ impl VM {
                     self.pc += 9;
                 }
                 Inst::SEND_SELF => {
-                    let receiver = self.context_stack.last().unwrap().self_value;
+                    let receiver = context.self_value;
                     let method_id = read_id(iseq, self.pc + 1);
                     let methodref = match receiver.unpack() {
-                        Value::FixNum(_) => self.get_toplevel_method(method_id)?,
+                        Value::FixNum(_) => self.get_object_method(method_id)?,
                         Value::Object(oref) => match oref.kind {
                             ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
                             _ => self.get_instance_method(oref.classref, method_id)?,
@@ -611,12 +632,11 @@ impl VM {
                 Inst::DEF_METHOD => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
-                    //let info = self.globals.get_method_info(methodref).clone();
                     if self.class_stack.len() == 0 {
-                        // A method defined in "top level" is registered to the global method table.
-                        self.globals.add_toplevel_method(id, methodref);
+                        // A method defined in "top level" is registered as an object method.
+                        self.globals.add_object_method(id, methodref);
                     } else {
-                        // A method defined in a class definition is registered as a instance method of the class.
+                        // A method defined in a class definition is registered as an instance method of the class.
                         let mut classref = self.class_stack.last().unwrap().clone();
                         classref.add_instance_method(id, methodref);
                     }
@@ -627,8 +647,8 @@ impl VM {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
                     if self.class_stack.len() == 0 {
-                        // A method defined in "top level" is registered to the global method table.
-                        self.globals.add_toplevel_method(id, methodref);
+                        // A method defined in "top level" is registered as an object method.
+                        self.globals.add_object_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a class method of the class.
                         let mut classref = self.class_stack.last().unwrap().clone();
@@ -1153,8 +1173,8 @@ impl VM {
         }
     }
 
-    pub fn get_toplevel_method(&self, method: IdentId) -> Result<MethodRef, RubyError> {
-        match self.globals.get_toplevel_method(method) {
+    pub fn get_object_method(&self, method: IdentId) -> Result<MethodRef, RubyError> {
+        match self.globals.get_object_method(method) {
             Some(info) => Ok(info.clone()),
             None => return Err(self.error_unimplemented("Method not defined.")),
         }
