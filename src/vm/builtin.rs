@@ -25,8 +25,18 @@ impl Builtin {
 
         /// Built-in function "puts".
         fn builtin_puts(vm: &mut VM, _receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+            fn flatten(vm: &VM, val: PackedValue) {
+                match val.as_array() {
+                    None => println!("{}", vm.val_to_s(val)),
+                    Some(aref) => {
+                        for val in &aref.elements {
+                            flatten(vm, val.clone());
+                        }
+                    }
+                }
+            }
             for arg in args {
-                println!("{}", vm.val_to_s(arg));
+                flatten(vm, arg);
             }
             Ok(PackedValue::nil())
         }
