@@ -4,21 +4,24 @@
 #  contributed by Karl von Laudermann
 #  modified by Jeremy Echols
 
-class Complexe
+class Complex_
   attr_accessor :r, :i
   def initialize(r,i)
-    @r=r; @i=i;
+    @r=r
+    @i=i
   end
   def *(c)
-    Complexe.new(@r*c.r - @i*c.i, @r*c.i + @i*c.r)
+    Complex_.new(@r*c.r - @i*c.i, @r*c.i + @i*c.r)
   end
   def +(c)
-    Complexe.new(@r + c.r, @i + c.i)
+    Complex_.new(@r + c.r, @i + c.i)
   end
-  def abs2; @r*@r + @i*@i; end
+  def abs2
+    @r*@r + @i*@i
+  end
 end
 
-size = 600 # ARGV[0].to_i
+size = 400 # ARGV[0].to_i
 
 puts "P4\n#{size} #{size}"
 
@@ -28,17 +31,17 @@ LIMIT_SQUARED = 4.0                 # Presquared limit
 byte_acc = 0
 bit_num = 0
 
-count_size = size - 1               # Precomputed size for easy for..in looping
+ary = []
 
 # For..in loops are faster than .upto, .downto, .times, etc.
-for y in 0..count_size
-  for x in 0..count_size
-    z = Complexe.new(0.0, 0.0)
-    c = Complexe.new(2.0*x/size-1.5, 2.0*y/size-1.0)
+for y in 0...size
+  for x in 0...size
+    z = Complex_.new(0.0, 0.0)
+    c = Complex_.new(2.0*x/size-1.5, 2.0*y/size-1.0)
     escape = false
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
-    for dummy in 0..ITER
+    for dummy in 0...ITER
       z = z * z + c
       if z.abs2 > LIMIT_SQUARED
         escape = true
@@ -52,14 +55,18 @@ for y in 0..count_size
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.
     if (bit_num == 8)
-      print byte_acc.chr
+      ary.push byte_acc.chr
       byte_acc = 0
       bit_num = 0
-    elsif (x == count_size)
+    elsif (x == size - 1)
       byte_acc = byte_acc << (8 - bit_num)
-      print byte_acc.chr
+      ary.push byte_acc.chr
       byte_acc = 0
       bit_num = 0
     end
   end
+end
+
+for i in 0...ary.length()
+  print ary[i]
 end

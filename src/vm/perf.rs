@@ -91,6 +91,8 @@ impl Perf {
                 "{:<12} {:>10} {:>8.2} {:>8}",
                 if i as u8 == Perf::CODEGEN {
                     "CODEGEN"
+                } else if i as u8 == Perf::EXTERN {
+                    "EXTERN"
                 } else {
                     Inst::inst_name(i as u8)
                 },
