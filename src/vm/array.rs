@@ -24,6 +24,8 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     let array_class = ClassRef::from(array_id, globals.object_class);
     globals.add_builtin_instance_method(array_class, "push", array::array_push);
     globals.add_builtin_instance_method(array_class, "pop", array::array_pop);
+    globals.add_builtin_instance_method(array_class, "length", array::array_length);
+    globals.add_builtin_instance_method(array_class, "size", array::array_length);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -69,5 +71,13 @@ fn array_pop(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMR
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     let res = aref.elements.pop().unwrap_or(PackedValue::nil());
+    Ok(res)
+}
+
+fn array_length(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let res = PackedValue::fixnum(aref.elements.len() as i64);
     Ok(res)
 }

@@ -111,6 +111,11 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
+    fn gen_add(&mut self, iseq: &mut ISeq) {
+        self.save_loc(iseq);
+        iseq.push(Inst::ADD);
+    }
+
     fn gen_create_array(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::CREATE_ARRAY);
         self.push32(iseq, len as u32);
@@ -342,6 +347,7 @@ impl Codegen {
         use_value: bool,
         is_block: bool,
     ) -> Result<MethodRef, RubyError> {
+        let save_loc = self.loc;
         let mut params_lvar = vec![];
         for param in params {
             match param.kind {
@@ -359,6 +365,7 @@ impl Codegen {
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
         iseq.push(Inst::END);
+        self.loc = save_loc;
 
         let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
@@ -397,7 +404,7 @@ impl Codegen {
 
             fn inst_info(
                 globals: &mut Globals,
-                lvar_table: &HashMap<IdentId, LvarId>,
+                _lvar_table: &HashMap<IdentId, LvarId>,
                 iseq: &ISeq,
                 pc: usize,
             ) -> String {
@@ -610,15 +617,14 @@ impl Codegen {
                     BinOp::Add => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;
-                        self.save_loc(iseq);
                         self.gen(globals, iseq, rhs, true)?;
-                        iseq.push(Inst::ADD);
+                        self.gen_add(iseq);
                     }
                     BinOp::Sub => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;
-                        self.save_loc(iseq);
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::SUB);
                     }
                     BinOp::Mul => {
@@ -643,51 +649,61 @@ impl Codegen {
                     BinOp::Shl => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::SHL);
                     }
                     BinOp::BitOr => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::BIT_OR);
                     }
                     BinOp::BitAnd => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::BIT_AND);
                     }
                     BinOp::BitXor => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::BIT_XOR);
                     }
                     BinOp::Eq => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::EQ);
                     }
                     BinOp::Ne => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::NE);
                     }
                     BinOp::Ge => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::GE);
                     }
                     BinOp::Gt => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::GT);
                     }
                     BinOp::Le => {
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::GE);
                     }
                     BinOp::Lt => {
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq);
                         iseq.push(Inst::GT);
                     }
                     BinOp::LAnd => {
@@ -760,7 +776,7 @@ impl Codegen {
                 let loop_continue = Codegen::current(iseq);
                 self.gen_get_local(iseq, id)?;
                 self.gen_fixnum(iseq, 1);
-                iseq.push(Inst::ADD);
+                self.gen_add(iseq);
 
                 self.gen_set_local(iseq, id);
 
@@ -853,8 +869,15 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::ClassDef(id, node, lvar) => {
-                let methodref = self.gen_iseq(globals, &vec![], node, lvar, true, false)?;
+            NodeKind::ClassDef {
+                id,
+                superclass,
+                body,
+                lvar,
+            } => {
+                let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false)?;
+                self.gen_get_const(iseq, *superclass);
+                self.save_loc(iseq);
                 iseq.push(Inst::DEF_CLASS);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());

@@ -50,7 +50,12 @@ pub enum NodeKind {
     Param(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassDef(IdentId, Box<Node>, LvarCollector),
+    ClassDef{
+        id: IdentId,
+        superclass: IdentId, 
+        body: Box<Node>,
+        lvar: LvarCollector
+    },
     Send {
         receiver: Box<Node>,
         method: IdentId,
@@ -212,9 +217,8 @@ impl Node {
         )
     }
 
-    pub fn new_class_decl(id: IdentId, body: Node, lvar: LvarCollector) -> Self {
-        let loc = Loc::new(body.loc());
-        Node::new(NodeKind::ClassDef(id, Box::new(body), lvar), loc)
+    pub fn new_class_decl(id: IdentId, superclass: IdentId, body: Node, lvar: LvarCollector, loc:Loc) -> Self {
+        Node::new(NodeKind::ClassDef{id, superclass, body:Box::new(body), lvar}, loc)
     }
 
     pub fn new_send(

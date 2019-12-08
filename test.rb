@@ -1,13 +1,15 @@
-def inc
-    a = 100
-    ->{a = a + 1; puts a}
+class Array
+    def map(fun)
+        a = []
+        for i in 0...self.length
+            a.push fun.call(self[i])
+        end
+        a
+    end
 end
 
-inc.call
-inc.call
-inc.call
+a = 3
+puts ([1,2,3,4].map(-> x { x*x*a }))
 
-p = inc()
-p.call
-p.call
-p.call
+a = 5
+puts ([1,2,3,4].map(-> x { x*x*a }))

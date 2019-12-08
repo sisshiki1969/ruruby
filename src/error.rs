@@ -16,9 +16,10 @@ pub enum ParseErrKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeErrKind {
     Unimplemented(String),
-    Unreachable(String),
+    Internal(String),
     Name(String),
     NoMethod(String),
+    Type(String),
 }
 
 pub type RubyError = Annot<RubyErrorKind>;

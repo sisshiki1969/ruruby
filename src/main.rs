@@ -102,6 +102,12 @@ fn repl_vm() {
     parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
+    let class = vm.globals.main_class;
+    let main_object = PackedValue::class(&mut vm.globals, class);
+    let context = ContextRef::new(Context::new(
+        main_object,
+        ISeqRef::new(ISeqInfo::new(vec![], vec![], LvarCollector::new(), vec![])),
+    ));
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline =
@@ -120,7 +126,7 @@ fn repl_vm() {
             Ok(parse_result) => {
                 //println!("{:?}", node);
                 vm.init(parse_result.ident_table);
-                match vm.run_repl(&parse_result.node, &parse_result.lvar_collector) {
+                match vm.run_repl(&parse_result.node, &parse_result.lvar_collector, context) {
                     Ok(result) => {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
@@ -141,12 +147,18 @@ fn repl_vm() {
                                 RuntimeErrKind::NoMethod(n) => {
                                     println!("runtime error: NoMethodError ({})", n)
                                 }
+                                RuntimeErrKind::Type(n) => {
+                                    println!("runtime error: TypeError ({})", n)
+                                }
                                 RuntimeErrKind::Unimplemented(n) => {
                                     println!("runtime error: UnimplementedError ({})", n)
                                 }
-                                _ => {}
+                                RuntimeErrKind::Internal(n) => {
+                                    println!("runtime error: InternalError ({})", n)
+                                }
                             },
                         }
+                        vm.exec_stack.clear();
                         parser = parser_save;
                     }
                 }

@@ -2,21 +2,20 @@ use crate::vm::*;
 
 #[derive(Debug, Clone)]
 pub struct ProcInfo {
-    pub iseq: ISeqRef,
     pub context: ContextRef,
 }
 
 impl ProcInfo {
-    pub fn new(iseq: ISeqRef, context: ContextRef) -> Self {
-        ProcInfo { iseq, context }
+    pub fn new(context: ContextRef) -> Self {
+        ProcInfo { context }
     }
 }
 
 pub type ProcRef = Ref<ProcInfo>;
 
 impl ProcRef {
-    pub fn from(iseq: ISeqRef, context: ContextRef) -> Self {
-        ProcRef::new(ProcInfo::new(iseq, context))
+    pub fn from(context: ContextRef) -> Self {
+        ProcRef::new(ProcInfo::new(context))
     }
 }
 
@@ -42,17 +41,12 @@ fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
     };
-    let mut context = pref.context;
-    let arg_len = args.len();
-    for (i, id) in pref.iseq.params.clone().iter().enumerate() {
-        context.lvar_scope[id.as_usize()] = if i < arg_len {
-            args[i]
-        } else {
-            PackedValue::nil()
-        };
-    }
-    vm.context_stack.last_mut().unwrap().pc = vm.pc;
-    vm.vm_run(context)?;
+    vm.vm_run(
+        pref.context.self_value,
+        pref.context.iseq_ref,
+        pref.context.outer,
+        args,
+    )?;
     let res = vm.exec_stack.pop().unwrap();
     Ok(res)
 }
