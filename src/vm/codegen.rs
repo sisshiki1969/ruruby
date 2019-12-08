@@ -404,7 +404,7 @@ impl Codegen {
 
             fn inst_info(
                 globals: &mut Globals,
-                lvar_table: &HashMap<IdentId, LvarId>,
+                _lvar_table: &HashMap<IdentId, LvarId>,
                 iseq: &ISeq,
                 pc: usize,
             ) -> String {
