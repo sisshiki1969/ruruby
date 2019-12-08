@@ -2,7 +2,6 @@
 A toy Ruby implementation by Rust.
 
 ## Implementation status
-----
 - Literals
     - [x] Bool
     - [x] Integer
@@ -41,10 +40,9 @@ A toy Ruby implementation by Rust.
     - [ ] Module
 
 ## How to run ruby
-----
-### To build ruruby, You'll need installation of Rust.
+To build ruruby, You'll need installation of Rust.
 
-### To run ruby program file on ruruby,
+To run ruby program file on ruruby,
 ```
 $ cargo run tests/sample.rb
 ```
@@ -52,7 +50,7 @@ or
 ```
 $ cargo run --release -- tests/sample.rb
 ```
-### You can launch irb-like interactive shell, omitting file name.
+You can launch irb-like interactive shell, omitting file name.
 ```
 $ cargo run
 ```
