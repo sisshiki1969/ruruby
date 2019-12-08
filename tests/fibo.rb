@@ -1,7 +1,9 @@
-def fibo(x)
-    if x < 2 then x
-    else fibo(x-1) + fibo(x-2)
+def fib(x)
+    if x < 3
+        1
+    else
+        fib(x-1) + fib(x-2)
     end
 end
 
-puts fibo 35
+puts fib 34
