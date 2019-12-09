@@ -91,9 +91,12 @@ impl PackedValue {
         }
     }
 
-    pub fn get_class(&self, globals: &Globals) -> ClassRef {
+    pub fn get_receiver_class(&self, globals: &Globals) -> ClassRef {
         match self.as_object() {
-            Some(oref) => oref.classref,
+            Some(oref) => match oref.kind {
+                ObjKind::Class(classref) => classref,
+                _ => oref.classref,
+            },
             None => globals.object_class,
         }
     }

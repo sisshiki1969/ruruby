@@ -736,17 +736,16 @@ impl VM {
         receiver: PackedValue,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class(&self.globals);
+        let rec_class = receiver.get_receiver_class(&self.globals);
         let methodref = match self.globals.method_cache.get_entry(cache_slot) {
             Some((class, method)) if *class == rec_class => method.clone(),
             _ => {
                 let method = match receiver.unpack() {
-                    Value::FixNum(_) => self.get_object_method(method_id)?,
                     Value::Object(oref) => match oref.kind {
                         ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
                         _ => self.get_instance_method(oref.classref, method_id)?,
                     },
-                    _ => return Err(self.error_unimplemented("Unimplemented type of receiver.")),
+                    _ => self.get_object_method(method_id)?,
                 };
                 self.globals
                     .method_cache
