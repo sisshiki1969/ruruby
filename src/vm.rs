@@ -568,26 +568,43 @@ impl VM {
                     let args = self.pop_args(args_num);
 
                     self.eval_send(methodref, receiver, args)?;
-                    self.pc += 9;
+                    self.pc += 13;
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
                     let method_id = read_id(iseq, self.pc + 1);
-                    let methodref = match receiver.unpack() {
-                        Value::FixNum(_) => self.get_object_method(method_id)?,
-                        Value::Object(oref) => match oref.kind {
-                            ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
-                            _ => self.get_instance_method(oref.classref, method_id)?,
-                        },
-                        _ => {
-                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
+                    let cache_slot = read32(iseq, self.pc + 9) as usize;
+
+                    let methodref = match self.globals.method_cache.get_entry(cache_slot) {
+                        None => {
+                            let method = match receiver.unpack() {
+                                Value::FixNum(_) => self.get_object_method(method_id)?,
+                                Value::Object(oref) => match oref.kind {
+                                    ObjKind::Class(cref) => {
+                                        self.get_class_method(cref, method_id)?
+                                    }
+                                    _ => self.get_instance_method(oref.classref, method_id)?,
+                                },
+                                _ => {
+                                    return Err(
+                                        self.error_unimplemented("Unimplemented type of receiver.")
+                                    )
+                                }
+                            };
+                            self.globals.method_cache.set_entry(
+                                cache_slot,
+                                receiver.get_class(&self.globals),
+                                method,
+                            );
+                            method
                         }
+                        Some((_class, method)) => method.clone(),
                     };
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
                     self.eval_send(methodref, receiver, args)?;
-                    self.pc += 9;
+                    self.pc += 13;
                 }
                 Inst::DEF_CLASS => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));

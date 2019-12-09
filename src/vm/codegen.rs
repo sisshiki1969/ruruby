@@ -212,18 +212,32 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
-    fn gen_send(&mut self, iseq: &mut ISeq, method: IdentId, args_num: usize) {
+    fn gen_send(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        method: IdentId,
+        args_num: usize,
+    ) {
         self.save_loc(iseq);
         iseq.push(Inst::SEND);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
+        self.push32(iseq, globals.method_cache.add_entry() as u32);
     }
 
-    fn gen_send_self(&mut self, iseq: &mut ISeq, method: IdentId, args_num: usize) {
+    fn gen_send_self(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        method: IdentId,
+        args_num: usize,
+    ) {
         self.save_loc(iseq);
         iseq.push(Inst::SEND_SELF);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
+        self.push32(iseq, globals.method_cache.add_entry() as u32);
     }
 
     fn gen_assign(
@@ -243,7 +257,7 @@ impl Codegen {
                 let assign_id = globals.get_ident_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
-                self.gen_send(iseq, assign_id, 1);
+                self.gen_send(globals, iseq, assign_id, 1);
                 self.gen_pop(iseq);
             }
             NodeKind::ArrayMember { array, index } => {
@@ -841,11 +855,11 @@ impl Codegen {
                 }
                 if NodeKind::SelfValue == receiver.kind {
                     self.loc = loc;
-                    self.gen_send_self(iseq, *method, args.len());
+                    self.gen_send_self(globals, iseq, *method, args.len());
                 } else {
                     self.gen(globals, iseq, receiver, true)?;
                     self.loc = loc;
-                    self.gen_send(iseq, *method, args.len());
+                    self.gen_send(globals, iseq, *method, args.len());
                 };
                 if !use_value {
                     self.gen_pop(iseq)
