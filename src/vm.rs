@@ -554,16 +554,8 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = read_id(iseq, self.pc + 1);
-                    let methodref = match receiver.unpack() {
-                        Value::FixNum(_) => self.get_object_method(method_id)?,
-                        Value::Object(oref) => match oref.kind {
-                            ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
-                            _ => self.get_instance_method(oref.classref, method_id)?,
-                        },
-                        _ => {
-                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
-                        }
-                    };
+                    let cache_slot = read32(iseq, self.pc + 9) as usize;
+                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
@@ -572,33 +564,9 @@ impl VM {
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
-                    let rec_class = receiver.get_class(&self.globals);
                     let method_id = read_id(iseq, self.pc + 1);
                     let cache_slot = read32(iseq, self.pc + 9) as usize;
-
-                    let methodref = match self.globals.method_cache.get_entry(cache_slot) {
-                        Some((class, method)) if *class == rec_class => method.clone(),
-                        _ => {
-                            let method = match receiver.unpack() {
-                                Value::FixNum(_) => self.get_object_method(method_id)?,
-                                Value::Object(oref) => match oref.kind {
-                                    ObjKind::Class(cref) => {
-                                        self.get_class_method(cref, method_id)?
-                                    }
-                                    _ => self.get_instance_method(oref.classref, method_id)?,
-                                },
-                                _ => {
-                                    return Err(
-                                        self.error_unimplemented("Unimplemented type of receiver.")
-                                    )
-                                }
-                            };
-                            self.globals
-                                .method_cache
-                                .set_entry(cache_slot, rec_class, method);
-                            method
-                        }
-                    };
+                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
@@ -760,6 +728,33 @@ impl VM {
             .find(|x| x.0 == ISeqPos::from_usize(self.pc))
             .unwrap_or(&(ISeqPos::from_usize(0), Loc(0, 0)))
             .1
+    }
+
+    fn get_method_from_cache(
+        &mut self,
+        cache_slot: usize,
+        receiver: PackedValue,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
+        let rec_class = receiver.get_class(&self.globals);
+        let methodref = match self.globals.method_cache.get_entry(cache_slot) {
+            Some((class, method)) if *class == rec_class => method.clone(),
+            _ => {
+                let method = match receiver.unpack() {
+                    Value::FixNum(_) => self.get_object_method(method_id)?,
+                    Value::Object(oref) => match oref.kind {
+                        ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
+                        _ => self.get_instance_method(oref.classref, method_id)?,
+                    },
+                    _ => return Err(self.error_unimplemented("Unimplemented type of receiver.")),
+                };
+                self.globals
+                    .method_cache
+                    .set_entry(cache_slot, rec_class, method);
+                method
+            }
+        };
+        Ok(methodref)
     }
 }
 
