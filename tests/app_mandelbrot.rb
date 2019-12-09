@@ -31,8 +31,6 @@ LIMIT_SQUARED = 4.0                 # Presquared limit
 byte_acc = 0
 bit_num = 0
 
-ary = []
-
 # For..in loops are faster than .upto, .downto, .times, etc.
 for y in 0...size
   for x in 0...size
@@ -55,18 +53,14 @@ for y in 0...size
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.
     if (bit_num == 8)
-      ary.push byte_acc.chr
+      print byte_acc.chr
       byte_acc = 0
       bit_num = 0
     elsif (x == size - 1)
       byte_acc = byte_acc << (8 - bit_num)
-      ary.push byte_acc.chr
+      print byte_acc.chr
       byte_acc = 0
       bit_num = 0
     end
   end
-end
-
-for i in 0...ary.length()
-  print ary[i]
 end
