@@ -572,11 +572,13 @@ impl VM {
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
+                    let rec_class = receiver.get_class(&self.globals);
                     let method_id = read_id(iseq, self.pc + 1);
                     let cache_slot = read32(iseq, self.pc + 9) as usize;
 
                     let methodref = match self.globals.method_cache.get_entry(cache_slot) {
-                        None => {
+                        Some((class, method)) if *class == rec_class => method.clone(),
+                        _ => {
                             let method = match receiver.unpack() {
                                 Value::FixNum(_) => self.get_object_method(method_id)?,
                                 Value::Object(oref) => match oref.kind {
@@ -591,14 +593,11 @@ impl VM {
                                     )
                                 }
                             };
-                            self.globals.method_cache.set_entry(
-                                cache_slot,
-                                receiver.get_class(&self.globals),
-                                method,
-                            );
+                            self.globals
+                                .method_cache
+                                .set_entry(cache_slot, rec_class, method);
                             method
                         }
-                        Some((_class, method)) => method.clone(),
                     };
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
