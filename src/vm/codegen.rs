@@ -116,6 +116,23 @@ impl Codegen {
         iseq.push(Inst::ADD);
     }
 
+    fn gen_addi(&mut self, iseq: &mut ISeq, i: i32) {
+        self.save_loc(iseq);
+        iseq.push(Inst::ADDI);
+        self.push32(iseq, i as u32);
+    }
+
+    fn gen_sub(&mut self, iseq: &mut ISeq) {
+        self.save_loc(iseq);
+        iseq.push(Inst::SUB);
+    }
+
+    fn gen_subi(&mut self, iseq: &mut ISeq, i: i32) {
+        self.save_loc(iseq);
+        iseq.push(Inst::SUBI);
+        self.push32(iseq, i as u32);
+    }
+
     fn gen_create_array(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::CREATE_ARRAY);
         self.push32(iseq, len as u32);
@@ -628,19 +645,32 @@ impl Codegen {
             NodeKind::BinOp(op, lhs, rhs) => {
                 let loc = self.loc;
                 match op {
-                    BinOp::Add => {
-                        self.gen(globals, iseq, lhs, true)?;
-                        self.loc = loc;
-                        self.gen(globals, iseq, rhs, true)?;
-                        self.gen_add(iseq);
-                    }
-                    BinOp::Sub => {
-                        self.gen(globals, iseq, lhs, true)?;
-                        self.loc = loc;
-                        self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
-                        iseq.push(Inst::SUB);
-                    }
+                    BinOp::Add => match rhs.kind {
+                        NodeKind::Number(i) if i as u64 as u32 as i32 as i64 == i => {
+                            self.gen(globals, iseq, lhs, true)?;
+                            self.loc = loc;
+                            self.gen_addi(iseq, i as u64 as u32 as i32);
+                        }
+                        _ => {
+                            self.gen(globals, iseq, lhs, true)?;
+                            self.gen(globals, iseq, rhs, true)?;
+                            self.loc = loc;
+                            self.gen_add(iseq);
+                        }
+                    },
+                    BinOp::Sub => match rhs.kind {
+                        NodeKind::Number(i) if i as u64 as u32 as i32 as i64 == i => {
+                            self.gen(globals, iseq, lhs, true)?;
+                            self.loc = loc;
+                            self.gen_subi(iseq, i as u64 as u32 as i32);
+                        }
+                        _ => {
+                            self.gen(globals, iseq, lhs, true)?;
+                            self.gen(globals, iseq, rhs, true)?;
+                            self.loc = loc;
+                            self.gen_sub(iseq);
+                        }
+                    },
                     BinOp::Mul => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
@@ -789,8 +819,7 @@ impl Codegen {
                 self.gen(globals, iseq, body, false)?;
                 let loop_continue = Codegen::current(iseq);
                 self.gen_get_local(iseq, id)?;
-                self.gen_fixnum(iseq, 1);
-                self.gen_add(iseq);
+                self.gen_addi(iseq, 1);
 
                 self.gen_set_local(iseq, id);
 

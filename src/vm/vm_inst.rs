@@ -24,6 +24,9 @@ impl Inst {
     pub const BIT_AND: u8 = 20;
     pub const BIT_XOR: u8 = 21;
 
+    pub const ADDI: u8 = 25;
+    pub const SUBI: u8 = 26;
+
     pub const SET_LOCAL: u8 = 30;
     pub const GET_LOCAL: u8 = 31;
     pub const GET_CONST: u8 = 32;
@@ -67,7 +70,9 @@ impl Inst {
             Inst::PUSH_SYMBOL => "PUSH_SYMBOL",
             Inst::PUSH_SELF => "PUSH_SELF",
             Inst::ADD => "ADD",
+            Inst::ADDI => "ADDI",
             Inst::SUB => "SUB",
+            Inst::SUBI => "SUBI",
             Inst::MUL => "MUL",
             Inst::DIV => "DIV",
             Inst::EQ => "EQ",
@@ -143,7 +148,9 @@ impl Inst {
             | Inst::CREATE_PROC
             | Inst::JMP
             | Inst::JMP_IF_FALSE
-            | Inst::DUP => 5,
+            | Inst::DUP
+            | Inst::ADDI
+            | Inst::SUBI => 5,
 
             Inst::PUSH_FIXNUM
             | Inst::PUSH_FLONUM

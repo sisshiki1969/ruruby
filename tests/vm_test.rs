@@ -206,6 +206,42 @@ fn op10() {
 }
 
 #[test]
+fn int1() {
+    let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0x4000_0000_0000_0005u64 as i64;
+    let program = format!("{}+6=={}", i1, i2);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
+fn int2() {
+    let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0x4000_0000_0000_0005u64 as i64;
+    let program = format!("{}-6=={}", i2, i1);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
+fn int3() {
+    let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0xc000_0000_0000_0005u64 as i64;
+    let program = format!("{}+6=={}", i1, i2);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
+fn int4() {
+    let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0xc000_0000_0000_0005u64 as i64;
+    let program = format!("{}-6=={}", i2, i1);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
 fn if1() {
     let program = "if 5*4==16 +4 then 4;2*3+1 end";
     let expected = Value::FixNum(7);
