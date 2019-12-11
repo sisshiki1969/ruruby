@@ -619,10 +619,10 @@ impl Codegen {
                 };
             }
             NodeKind::Ident(id) => {
-                return Err(self.error_name(format!(
-                    "Undefined local variable or method `{}'.",
-                    globals.get_ident_name(*id)
-                )));
+                self.gen_send_self(globals, iseq, *id, 0);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::LocalVar(id) => {
                 self.gen_get_local(iseq, *id)?;

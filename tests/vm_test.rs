@@ -592,8 +592,8 @@ fn define_binop() {
     v1 = Vec.new(2,4)
     v2 = Vec.new(3,5)
     v = v1 + v2;
-    assert(v.x, 5)
-    assert(v.y, 9)
+    assert v.x, 5
+    assert v.y, 9
     ";
     let expected = Value::Nil;
     eval_script(program, expected);
@@ -603,15 +603,15 @@ fn define_binop() {
 fn attr_accessor() {
     let program = "
     class Foo
-    attr_accessor(:car, :cdr)
+        attr_accessor :car, :cdr
     end
     bar = Foo.new
-    assert(nil, bar.car)
-    assert(nil, bar.cdr)
+    assert nil, bar.car
+    assert nil, bar.cdr
     bar.car = 1000
     bar.cdr = :something
-    assert(1000, bar.car)
-    assert(:something, bar.cdr)
+    assert 1000, bar.car
+    assert :something, bar.cdr
     ";
     let expected = Value::Nil;
     eval_script(program, expected);
@@ -642,7 +642,7 @@ fn closure1() {
         assert 101, inc.call
         assert 101, inc.call
 
-        p = inc()
+        p = inc
         assert 101, p.call
         assert 102, p.call
         assert 103, p.call";
