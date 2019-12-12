@@ -770,13 +770,6 @@ impl VM {
                 } else {
                     self.get_instance_method(rec_class, method_id)?
                 };
-                eprintln!(
-                    "cache miss {:?} {:?} {:?} {:?}",
-                    cache_slot,
-                    self.globals.get_ident_name(rec_class.id),
-                    class_method,
-                    method
-                );
                 self.globals
                     .method_cache
                     .set_entry(cache_slot, rec_class, class_method, method);

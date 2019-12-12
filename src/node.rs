@@ -125,8 +125,8 @@ impl Node {
         Node::new(NodeKind::InterporatedString(nodes), loc)
     }
 
-    pub fn new_comp_stmt(loc: Loc) -> Self {
-        Node::new(NodeKind::CompStmt(vec![]), loc)
+    pub fn new_comp_stmt(nodes: Vec<Node>, loc: Loc) -> Self {
+        Node::new(NodeKind::CompStmt(nodes), loc)
     }
 
     pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {

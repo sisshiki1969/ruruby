@@ -277,6 +277,15 @@ impl Parser {
         }
     }
 
+    fn consume_reserved_no_skip_line_term(&mut self, expect: Reserved) -> bool {
+        if TokenKind::Reserved(expect) == self.peek_no_skip_line_term().kind {
+            let _ = self.get();
+            true
+        } else {
+            false
+        }
+    }
+
     /// Get the next token if it is a line terminator or ';' or EOF, and return true,
     /// Otherwise, return false.
     fn consume_term(&mut self) -> bool {
@@ -377,7 +386,7 @@ impl Parser {
             if let Some(node) = nodes.last() {
                 loc = loc.merge(node.loc());
             };
-            Ok(Node::new(NodeKind::CompStmt(nodes), loc))
+            Ok(Node::new_comp_stmt(nodes, loc))
         }
 
         let loc = self.loc();
@@ -396,7 +405,7 @@ impl Parser {
                 },
                 _ => {}
             };
-            let node = self.parse_expr()?;
+            let node = self.parse_stmt()?;
             nodes.push(node);
             if !self.consume_term() {
                 break;
@@ -405,11 +414,25 @@ impl Parser {
 
         return_comp_stmt(nodes, loc)
     }
-    /*
-        fn parse_stmt(&mut self) -> Result<Node, RubyError> {
-            self.parse_expr()
+
+    fn parse_stmt(&mut self) -> Result<Node, RubyError> {
+        let node = self.parse_expr()?;
+        if self.consume_reserved_no_skip_line_term(Reserved::If) {
+            let cond = self.parse_expr()?;
+            let loc = node.loc().merge(cond.loc());
+            Ok(Node::new(
+                NodeKind::If {
+                    cond: Box::new(cond),
+                    then_: Box::new(node),
+                    else_: Box::new(Node::new_comp_stmt(vec![], loc)),
+                },
+                loc,
+            ))
+        } else {
+            Ok(node)
         }
-    */
+    }
+
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
         let node = self.parse_arg()?;
         if self.consume_punct_no_skip_line_term(Punct::Comma) {
@@ -1081,7 +1104,7 @@ impl Parser {
         let cond = self.parse_expr()?;
         self.parse_then()?;
         let then_ = self.parse_comp_stmt()?;
-        let mut else_ = Node::new_comp_stmt(self.loc());
+        let mut else_ = Node::new_comp_stmt(vec![], self.loc());
         if self.consume_reserved(Reserved::Elsif) {
             else_ = self.parse_if_then()?;
         } else if self.consume_reserved(Reserved::Else) {
