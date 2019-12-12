@@ -113,8 +113,16 @@ impl GlobalMethodTable {
 }
 
 #[derive(Debug, Clone)]
+pub struct MethodCacheEntry {
+    pub class: ClassRef,
+    pub version: usize,
+    pub is_class_method: bool,
+    pub method: MethodRef,
+}
+
+#[derive(Debug, Clone)]
 pub struct MethodCache {
-    table: Vec<Option<(ClassRef, MethodRef)>>,
+    table: Vec<Option<MethodCacheEntry>>,
     id: usize,
 }
 
@@ -131,12 +139,23 @@ impl MethodCache {
         self.id - 1
     }
 
-    pub fn get_entry(&self, id: usize) -> &Option<(ClassRef, MethodRef)> {
+    pub fn get_entry(&self, id: usize) -> &Option<MethodCacheEntry> {
         &self.table[id]
     }
 
-    pub fn set_entry(&mut self, id: usize, class: ClassRef, method: MethodRef) {
-        self.table[id] = Some((class, method));
+    pub fn set_entry(
+        &mut self,
+        id: usize,
+        class: ClassRef,
+        is_class_method: bool,
+        method: MethodRef,
+    ) {
+        self.table[id] = Some(MethodCacheEntry {
+            class,
+            version: class.version,
+            is_class_method,
+            method,
+        });
     }
 
     pub fn clear_entry(&mut self, id: usize) {

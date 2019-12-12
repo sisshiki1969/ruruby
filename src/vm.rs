@@ -748,20 +748,38 @@ impl VM {
         receiver: PackedValue,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_receiver_class(&self.globals);
+        let (rec_class, class_method) = match receiver.as_class() {
+            Some(cref) => (cref, true),
+            None => (receiver.get_receiver_class(&self.globals), false),
+        };
         let methodref = match self.globals.method_cache.get_entry(cache_slot) {
-            Some((class, method)) if *class == rec_class => method.clone(),
+            Some(MethodCacheEntry {
+                class,
+                version,
+                is_class_method,
+                method,
+            }) if *class == rec_class
+                && *version == rec_class.version
+                && *is_class_method == class_method =>
+            {
+                method.clone()
+            }
             _ => {
-                let method = match receiver.unpack() {
-                    Value::Object(oref) => match oref.kind {
-                        ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
-                        _ => self.get_instance_method(oref.classref, method_id)?,
-                    },
-                    _ => self.get_object_method(method_id)?,
+                let method = if class_method {
+                    self.get_class_method(rec_class, method_id)?
+                } else {
+                    self.get_instance_method(rec_class, method_id)?
                 };
+                eprintln!(
+                    "cache miss {:?} {:?} {:?} {:?}",
+                    cache_slot,
+                    self.globals.get_ident_name(rec_class.id),
+                    class_method,
+                    method
+                );
                 self.globals
                     .method_cache
-                    .set_entry(cache_slot, rec_class, method);
+                    .set_entry(cache_slot, rec_class, class_method, method);
                 method
             }
         };

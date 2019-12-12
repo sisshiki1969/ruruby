@@ -445,9 +445,20 @@ impl Parser {
                 self.add_local_var(lvar);
             }
             Ok(Node::new_mul_assign(mlhs, mrhs))
-        } else if node.is_operation() && self.is_command() {
-            // EXPR : COMMAND
-            Ok(self.parse_command(node.as_method_name().unwrap(), node.loc())?)
+        } else if node.is_operation() {
+            if self.is_command() {
+                // EXPR : COMMAND
+                Ok(self.parse_command(node.as_method_name().unwrap(), node.loc())?)
+            } else {
+                let loc = node.loc();
+                Ok(Node::new_send(
+                    Node::new(NodeKind::SelfValue, loc),
+                    node.as_method_name().unwrap(),
+                    vec![],
+                    true,
+                    loc,
+                ))
+            }
         } else if let Node {
             kind:
                 NodeKind::Send {
@@ -805,22 +816,22 @@ impl Parser {
         //        | super [`(' [CALL_ARGS] `)']
         let loc = self.loc();
         let mut node = self.parse_primary()?;
-        if node.is_operation()
-            && self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen)
-        {
-            // OPERATION `(' [CALL_ARGS] `)'
-            self.get()?;
-            let args = self.parse_args(Punct::RParen)?;
-            let end_loc = self.loc();
+        if node.is_operation() {
+            if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
+                // OPERATION `(' [CALL_ARGS] `)'
+                self.get()?;
+                let args = self.parse_args(Punct::RParen)?;
+                let end_loc = self.loc();
 
-            return Ok(Node::new_send(
-                Node::new(NodeKind::SelfValue, loc),
-                node.as_method_name().unwrap(),
-                args,
-                true,
-                loc.merge(end_loc),
-            ));
-        };
+                return Ok(Node::new_send(
+                    Node::new(NodeKind::SelfValue, loc),
+                    node.as_method_name().unwrap(),
+                    args,
+                    true,
+                    loc.merge(end_loc),
+                ));
+            };
+        }
         loop {
             let tok = self.peek_no_skip_line_term();
             node = match tok.kind {
@@ -904,8 +915,7 @@ impl Parser {
                 let id = self.get_ident_id(name);
                 if name == "self" {
                     return Ok(Node::new(NodeKind::SelfValue, loc));
-                };
-                if self.is_local_var(id) {
+                } else if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
                 } else {
                     Ok(Node::new_identifier(id, loc))
