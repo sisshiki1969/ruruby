@@ -5,6 +5,7 @@ pub struct Globals {
     // Global info
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
+    pub method_cache: MethodCache,
     pub main_class: ClassRef,
     pub array_class: ClassRef,
     pub class_class: ClassRef,
@@ -25,6 +26,7 @@ impl Globals {
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
+            method_cache: MethodCache::new(),
             main_class,
             array_class: object_class,
             class_class: object_class,

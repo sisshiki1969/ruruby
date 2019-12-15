@@ -91,6 +91,13 @@ impl PackedValue {
         }
     }
 
+    pub fn get_receiver_class(&self, globals: &Globals) -> ClassRef {
+        match self.as_object() {
+            Some(oref) => oref.classref,
+            None => globals.object_class,
+        }
+    }
+
     pub fn is_packed_fixnum(&self) -> bool {
         self.0 & 0b1 == 1
     }

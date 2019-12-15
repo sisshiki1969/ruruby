@@ -18,6 +18,7 @@ impl ClassRef {
     }
 
     pub fn add_class_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
+        self.version += 1;
         self.class_method.insert(id, info)
     }
 
@@ -26,6 +27,7 @@ impl ClassRef {
     }
 
     pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
+        self.version += 1;
         self.instance_method.insert(id, info)
     }
 }
@@ -33,6 +35,8 @@ impl ClassRef {
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
     pub id: IdentId,
+    /// version counter: increment when new instance / class methods are defined.
+    pub version: usize,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub superclass: Option<ClassRef>,
@@ -43,6 +47,7 @@ impl ClassInfo {
     pub fn new(id: IdentId, superclass: Option<ClassRef>) -> Self {
         ClassInfo {
             id,
+            version: 0,
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
             superclass,

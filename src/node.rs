@@ -50,11 +50,11 @@ pub enum NodeKind {
     Param(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassDef{
+    ClassDef {
         id: IdentId,
-        superclass: IdentId, 
+        superclass: IdentId,
         body: Box<Node>,
-        lvar: LvarCollector
+        lvar: LvarCollector,
     },
     Send {
         receiver: Box<Node>,
@@ -125,8 +125,8 @@ impl Node {
         Node::new(NodeKind::InterporatedString(nodes), loc)
     }
 
-    pub fn new_comp_stmt(loc: Loc) -> Self {
-        Node::new(NodeKind::CompStmt(vec![]), loc)
+    pub fn new_comp_stmt(nodes: Vec<Node>, loc: Loc) -> Self {
+        Node::new(NodeKind::CompStmt(nodes), loc)
     }
 
     pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
@@ -217,8 +217,22 @@ impl Node {
         )
     }
 
-    pub fn new_class_decl(id: IdentId, superclass: IdentId, body: Node, lvar: LvarCollector, loc:Loc) -> Self {
-        Node::new(NodeKind::ClassDef{id, superclass, body:Box::new(body), lvar}, loc)
+    pub fn new_class_decl(
+        id: IdentId,
+        superclass: IdentId,
+        body: Node,
+        lvar: LvarCollector,
+        loc: Loc,
+    ) -> Self {
+        Node::new(
+            NodeKind::ClassDef {
+                id,
+                superclass,
+                body: Box::new(body),
+                lvar,
+            },
+            loc,
+        )
     }
 
     pub fn new_send(
@@ -261,7 +275,7 @@ impl Node {
 
     pub fn is_operation(&self) -> bool {
         match self.kind {
-            NodeKind::Const(_) | NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
+            NodeKind::Ident(_) => true,
             _ => false,
         }
     }

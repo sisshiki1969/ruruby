@@ -277,90 +277,102 @@ impl VM {
                 Inst::ADD => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    self.pc += 1;
                     self.eval_add(lhs, rhs)?;
+                    self.pc += 1;
+                }
+                Inst::ADDI => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let i = read32(iseq, self.pc + 1) as i32;
+                    self.eval_addi(lhs, i)?;
+                    self.pc += 5;
                 }
                 Inst::SUB => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    self.pc += 1;
                     self.eval_sub(lhs, rhs)?;
+                    self.pc += 1;
+                }
+                Inst::SUBI => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let i = read32(iseq, self.pc + 1) as i32;
+                    self.eval_subi(lhs, i)?;
+                    self.pc += 5;
                 }
                 Inst::MUL => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
-                    self.pc += 1;
                     self.eval_mul(lhs, rhs)?;
+                    self.pc += 1;
                 }
                 Inst::DIV => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_div(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::SHR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_shr(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::SHL => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_shl(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::BIT_AND => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitand(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::BIT_OR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitor(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_bitxor(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::EQ => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = PackedValue::bool(self.eval_eq(lhs, rhs)?);
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::NE => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = PackedValue::bool(!self.eval_eq(lhs, rhs)?);
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::GT => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_gt(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::GE => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = self.eval_ge(lhs, rhs)?;
-                    self.pc += 1;
                     self.exec_stack.push(val);
+                    self.pc += 1;
                 }
                 Inst::CONCAT_STRING => {
                     let rhs = self.exec_stack.pop().unwrap().as_string();
@@ -369,8 +381,8 @@ impl VM {
                         (Some(lhs), Some(rhs)) => Value::String(format!("{}{}", lhs, rhs)),
                         (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
                     };
-                    self.pc += 1;
                     self.exec_stack.push(val.pack());
+                    self.pc += 1;
                 }
                 Inst::SET_LOCAL => {
                     let id = read_lvar_id(iseq, self.pc + 1).as_usize();
@@ -554,40 +566,24 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = read_id(iseq, self.pc + 1);
-                    let methodref = match receiver.unpack() {
-                        Value::FixNum(_) => self.get_object_method(method_id)?,
-                        Value::Object(oref) => match oref.kind {
-                            ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
-                            _ => self.get_instance_method(oref.classref, method_id)?,
-                        },
-                        _ => {
-                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
-                        }
-                    };
+                    let cache_slot = read32(iseq, self.pc + 9) as usize;
+                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
                     self.eval_send(methodref, receiver, args)?;
-                    self.pc += 9;
+                    self.pc += 13;
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
                     let method_id = read_id(iseq, self.pc + 1);
-                    let methodref = match receiver.unpack() {
-                        Value::FixNum(_) => self.get_object_method(method_id)?,
-                        Value::Object(oref) => match oref.kind {
-                            ObjKind::Class(cref) => self.get_class_method(cref, method_id)?,
-                            _ => self.get_instance_method(oref.classref, method_id)?,
-                        },
-                        _ => {
-                            return Err(self.error_unimplemented("Unimplemented type of receiver."))
-                        }
-                    };
+                    let cache_slot = read32(iseq, self.pc + 9) as usize;
+                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
                     self.eval_send(methodref, receiver, args)?;
-                    self.pc += 9;
+                    self.pc += 13;
                 }
                 Inst::DEF_CLASS => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
@@ -745,6 +741,43 @@ impl VM {
             .unwrap_or(&(ISeqPos::from_usize(0), Loc(0, 0)))
             .1
     }
+
+    fn get_method_from_cache(
+        &mut self,
+        cache_slot: usize,
+        receiver: PackedValue,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
+        let (rec_class, class_method) = match receiver.as_class() {
+            Some(cref) => (cref, true),
+            None => (receiver.get_receiver_class(&self.globals), false),
+        };
+        let methodref = match self.globals.method_cache.get_entry(cache_slot) {
+            Some(MethodCacheEntry {
+                class,
+                version,
+                is_class_method,
+                method,
+            }) if *class == rec_class
+                && *version == rec_class.version
+                && *is_class_method == class_method =>
+            {
+                method.clone()
+            }
+            _ => {
+                let method = if class_method {
+                    self.get_class_method(rec_class, method_id)?
+                } else {
+                    self.get_instance_method(rec_class, method_id)?
+                };
+                self.globals
+                    .method_cache
+                    .set_entry(cache_slot, rec_class, class_method, method);
+                method
+            }
+        };
+        Ok(methodref)
+    }
 }
 
 impl VM {
@@ -766,7 +799,7 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs + rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
                 (Value::Object(l_ref), _) => {
-                    let method = self.globals.get_ident_id("@add");
+                    let method = IdentId::_ADD;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
                             self.eval_send(mref.clone(), lhs, vec![rhs])?;
@@ -783,6 +816,42 @@ impl VM {
                 (_, _) => {
                     return Err(self.error_undefined_method(
                         format!("+ {}", self.globals.get_class_name(rhs)),
+                        self.globals.get_class_name(lhs),
+                    ))
+                }
+            }
+        };
+        self.exec_stack.push(val);
+        Ok(())
+    }
+
+    fn eval_addi(&mut self, lhs: PackedValue, i: i32) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() {
+            PackedValue::fixnum(lhs.as_packed_fixnum() + i as i64)
+        } else if lhs.is_packed_num() {
+            PackedValue::flonum(lhs.as_packed_flonum() + i as f64)
+        } else {
+            match lhs.unpack() {
+                Value::FixNum(lhs) => PackedValue::fixnum(lhs + i as i64),
+                Value::FloatNum(lhs) => PackedValue::flonum(lhs + i as f64),
+                Value::Object(l_ref) => {
+                    let method = IdentId::_ADD;
+                    match l_ref.get_instance_method(method) {
+                        Some(mref) => {
+                            self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(i as i64)])?;
+                        }
+                        None => {
+                            return Err(self.error_undefined_method(
+                                format!("+ Integer"),
+                                self.globals.get_class_name(lhs),
+                            ))
+                        }
+                    };
+                    return Ok(());
+                }
+                _ => {
+                    return Err(self.error_undefined_method(
+                        format!("+ Integer"),
                         self.globals.get_class_name(lhs),
                     ))
                 }
@@ -810,16 +879,62 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs - rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs - rhs),
                 (Value::Object(l_ref), _) => {
-                    let method = self.globals.get_ident_id("@sub");
+                    let method = IdentId::_SUB;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
                             self.eval_send(mref.clone(), lhs, vec![rhs])?;
                         }
-                        None => return Err(self.error_nomethod("'-'")),
+                        None => {
+                            return Err(self.error_undefined_method(
+                                format!("- {}", self.globals.get_class_name(rhs)),
+                                self.globals.get_class_name(lhs),
+                            ))
+                        }
                     };
                     return Ok(());
                 }
-                (_, _) => return Err(self.error_nomethod("'-'")),
+                (_, _) => {
+                    return Err(self.error_undefined_method(
+                        format!("+ {}", self.globals.get_class_name(rhs)),
+                        self.globals.get_class_name(lhs),
+                    ))
+                }
+            }
+        };
+        self.exec_stack.push(val);
+        Ok(())
+    }
+
+    fn eval_subi(&mut self, lhs: PackedValue, i: i32) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() {
+            PackedValue::fixnum(lhs.as_packed_fixnum() - i as i64)
+        } else if lhs.is_packed_num() {
+            PackedValue::flonum(lhs.as_packed_flonum() - i as f64)
+        } else {
+            match lhs.unpack() {
+                Value::FixNum(lhs) => PackedValue::fixnum(lhs - i as i64),
+                Value::FloatNum(lhs) => PackedValue::flonum(lhs - i as f64),
+                Value::Object(l_ref) => {
+                    let method = IdentId::_SUB;
+                    match l_ref.get_instance_method(method) {
+                        Some(mref) => {
+                            self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(i as i64)])?;
+                        }
+                        None => {
+                            return Err(self.error_undefined_method(
+                                format!("- Integer"),
+                                self.globals.get_class_name(lhs),
+                            ))
+                        }
+                    };
+                    return Ok(());
+                }
+                _ => {
+                    return Err(self.error_undefined_method(
+                        format!("- Integer"),
+                        self.globals.get_class_name(lhs),
+                    ))
+                }
             }
         };
         self.exec_stack.push(val);
@@ -844,16 +959,26 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs * rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
                 (Value::Object(l_ref), _) => {
-                    let method = self.globals.get_ident_id("@mul");
+                    let method = IdentId::_MUL;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
                             self.eval_send(mref.clone(), lhs, vec![rhs])?;
                         }
-                        None => return Err(self.error_nomethod("'*'")),
+                        None => {
+                            return Err(self.error_undefined_method(
+                                format!("* {}", self.globals.get_class_name(rhs)),
+                                self.globals.get_class_name(lhs),
+                            ))
+                        }
                     };
                     return Ok(());
                 }
-                (_, _) => return Err(self.error_nomethod("'*'")),
+                (_, _) => {
+                    return Err(self.error_undefined_method(
+                        format!("* {}", self.globals.get_class_name(rhs)),
+                        self.globals.get_class_name(lhs),
+                    ))
+                }
             }
         };
         self.exec_stack.push(val);
