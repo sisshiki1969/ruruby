@@ -598,10 +598,21 @@ impl Parser {
             | TokenKind::NumLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
-            | TokenKind::OpenDoubleQuote(_)
-            | TokenKind::Punct(Punct::LParen)
-            | TokenKind::Punct(Punct::LBracket)
-            | TokenKind::Punct(Punct::Colon) => true,
+            | TokenKind::OpenDoubleQuote(_) => true,
+            TokenKind::Punct(p) => match p {
+                Punct::LParen
+                | Punct::LBracket
+                | Punct::LBrace
+                | Punct::Colon
+                | Punct::Plus
+                | Punct::Minus
+                | Punct::Arrow => true,
+                _ => false,
+            },
+            TokenKind::Reserved(r) => match r {
+                Reserved::False | Reserved::Nil | Reserved::True => true,
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -870,29 +881,30 @@ impl Parser {
         //        | super [`(' [CALL_ARGS] `)']
         let loc = self.loc();
         let mut node = self.parse_primary()?;
-        if node.is_operation() {
-            if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
-                // OPERATION `(' [CALL_ARGS] `)'
-                self.get()?;
-                let args = self.parse_args(Punct::RParen)?;
-                let end_loc = self.loc();
+        if node.is_operation()
+            && self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen)
+        {
+            // OPERATION `(' [CALL_ARGS] `)' => Send
+            // OPERATION => Ident
+            self.get()?;
+            let args = self.parse_args(Punct::RParen)?;
+            let end_loc = self.loc();
 
-                return Ok(Node::new_send(
-                    Node::new(NodeKind::SelfValue, loc),
-                    node.as_method_name().unwrap(),
-                    args,
-                    true,
-                    loc.merge(end_loc),
-                ));
-            };
-        }
+            return Ok(Node::new_send(
+                Node::new(NodeKind::SelfValue, loc),
+                node.as_method_name().unwrap(),
+                args,
+                true,
+                loc.merge(end_loc),
+            ));
+        };
         loop {
             let tok = self.peek_no_skip_line_term();
             node = match tok.kind {
                 TokenKind::Punct(Punct::Dot) => {
                     // FUNCTION:
-                    // PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
-                    // PRIMARY `.' FNAME
+                    // PRIMARY `.' FNAME `(' [CALL_ARGS] `)' => Send(PRIMARY, FNAME, completed:true)
+                    // PRIMARY `.' FNAME => Send(PRIMARY, FNAME, completed:false)
                     self.get()?;
                     let tok = self.get()?.clone();
                     let method = match &tok.kind {
@@ -915,6 +927,7 @@ impl Parser {
                         args = self.parse_args(Punct::RParen)?;
                         completed = true;
                     }
+                    /*
                     let node = match node.kind {
                         NodeKind::Ident(id) => Node::new_send(
                             Node::new(NodeKind::SelfValue, loc),
@@ -924,7 +937,7 @@ impl Parser {
                             loc,
                         ),
                         _ => node,
-                    };
+                    };*/
                     Node::new_send(node, id, args, completed, loc.merge(self.loc()))
                 }
                 TokenKind::Punct(Punct::LBracket) => {
@@ -972,6 +985,7 @@ impl Parser {
                 } else if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
                 } else {
+                    // FUNCTION or COMMAND or LHS for assignment
                     Ok(Node::new_identifier(id, loc))
                 }
             }
