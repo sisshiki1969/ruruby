@@ -1,4 +1,4 @@
-#![feature(test)]
+//#![feature(test)]
 pub mod error;
 pub mod lexer;
 pub mod node;

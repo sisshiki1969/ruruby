@@ -417,7 +417,9 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> Result<Node, RubyError> {
         let node = self.parse_expr()?;
+        let node = self.parse_do_block(node)?;
         if self.consume_reserved_no_skip_line_term(Reserved::If) {
+            // STMT : STMT if EXPR
             let cond = self.parse_expr()?;
             let loc = node.loc().merge(cond.loc());
             Ok(Node::new(
@@ -431,6 +433,46 @@ impl Parser {
         } else {
             Ok(node)
         }
+    }
+
+    fn parse_do_block(&mut self, mut node: Node) -> Result<Node, RubyError> {
+        if let NodeKind::Send {
+            receiver,
+            mut args,
+            method,
+            completed,
+        } = node.kind.clone()
+        {
+            if self.consume_reserved_no_skip_line_term(Reserved::Do) {
+                // STMT : CALL do [`|' [BLOCK_VAR] `|'] COMPSTMT end
+                let loc = self.prev_loc();
+                self.context_stack.push(Context::new_block());
+                let mut params = vec![];
+                if self.consume_punct(Punct::BitOr) {
+                    loop {
+                        let id = self.expect_ident()?;
+                        params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                        self.add_local_var(id);
+                        if !self.consume_punct(Punct::Comma) {
+                            break;
+                        }
+                    }
+                    self.expect_punct(Punct::BitOr)?;
+                }
+                let body = self.parse_comp_stmt()?;
+                self.expect_reserved(Reserved::End)?;
+                let lvar = self.context_stack.pop().unwrap().lvar;
+                let loc = loc.merge(self.prev_loc());
+                args.push(Node::new_proc(params, body, lvar, loc));
+                node.kind = NodeKind::Send {
+                    receiver,
+                    args,
+                    method,
+                    completed,
+                };
+            }
+        };
+        Ok(node)
     }
 
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
@@ -488,36 +530,25 @@ impl Parser {
                     completed: false,
                     method,
                     receiver,
-                    args,
+                    mut args,
                 },
-            loc,
-        } = node
+            mut loc,
+        } = node.clone()
         {
             if self.is_command() {
-                let args = self.parse_arglist()?;
-                let loc = loc.merge(args[0].loc());
-                let node = Node::new(
-                    NodeKind::Send {
-                        method,
-                        receiver,
-                        args,
-                        completed: true,
-                    },
-                    loc,
-                );
-                Ok(node)
-            } else {
-                let node = Node::new(
-                    NodeKind::Send {
-                        method,
-                        receiver,
-                        args,
-                        completed: true,
-                    },
-                    loc,
-                );
-                Ok(node)
+                args = self.parse_arglist()?;
+                loc = loc.merge(args[0].loc());
             }
+            let node = Node::new(
+                NodeKind::Send {
+                    method,
+                    receiver,
+                    args,
+                    completed: true,
+                },
+                loc,
+            );
+            Ok(node)
         } else {
             Ok(node)
         }

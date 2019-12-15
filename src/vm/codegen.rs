@@ -800,31 +800,32 @@ impl Codegen {
                     NodeKind::Ident(id) | NodeKind::LocalVar(id) => id,
                     _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
                 };
-                let (start, end, exclude) = match &iter.kind {
+                self.loop_stack.push(vec![]);
+                let loop_continue;
+                match &iter.kind {
                     NodeKind::Range {
                         start,
                         end,
                         exclude_end,
-                    } => (start, end, exclude_end),
+                    } => {
+                        self.gen(globals, iseq, start, true)?;
+                        self.gen_set_local(iseq, id);
+                        let loop_start = Codegen::current(iseq);
+                        self.gen(globals, iseq, end, true)?;
+                        self.gen_get_local(iseq, id)?;
+                        iseq.push(if *exclude_end { Inst::GT } else { Inst::GE });
+                        let src = self.gen_jmp_if_false(iseq);
+                        self.gen(globals, iseq, body, false)?;
+                        loop_continue = Codegen::current(iseq);
+                        self.gen_get_local(iseq, id)?;
+                        self.gen_addi(iseq, 1);
+                        self.gen_set_local(iseq, id);
+                        self.gen_jmp_back(iseq, loop_start);
+                        self.write_disp_from_cur(iseq, src);
+                    }
                     _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
                 };
-                self.loop_stack.push(vec![]);
-                self.gen(globals, iseq, start, true)?;
-                self.gen_set_local(iseq, id);
-                let loop_start = Codegen::current(iseq);
-                self.gen(globals, iseq, end, true)?;
-                self.gen_get_local(iseq, id)?;
-                iseq.push(if *exclude { Inst::GT } else { Inst::GE });
-                let src = self.gen_jmp_if_false(iseq);
-                self.gen(globals, iseq, body, false)?;
-                let loop_continue = Codegen::current(iseq);
-                self.gen_get_local(iseq, id)?;
-                self.gen_addi(iseq, 1);
 
-                self.gen_set_local(iseq, id);
-
-                self.gen_jmp_back(iseq, loop_start);
-                self.write_disp_from_cur(iseq, src);
                 if use_value {
                     self.gen(globals, iseq, iter, true)?;
                 }

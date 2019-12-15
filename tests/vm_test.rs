@@ -282,6 +282,20 @@ fn if4() {
 }
 
 #[test]
+fn if5() {
+    let program = "a = 77 if 1+2 == 3";
+    let expected = Value::FixNum(77);
+    eval_script(program, expected);
+}
+
+#[test]
+fn if6() {
+    let program = "a = 77 if 1+3 == 3";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn for1() {
     let program = "
             y = 0
