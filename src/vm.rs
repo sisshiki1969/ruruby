@@ -568,10 +568,11 @@ impl VM {
                     let method_id = read_id(iseq, self.pc + 1);
                     let cache_slot = read32(iseq, self.pc + 9) as usize;
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+                    let block = self.exec_stack.pop().unwrap();
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
-                    self.eval_send(methodref, receiver, args)?;
+                    self.eval_send(methodref, receiver, args, block)?;
                     self.pc += 13;
                 }
                 Inst::SEND_SELF => {
@@ -579,10 +580,11 @@ impl VM {
                     let method_id = read_id(iseq, self.pc + 1);
                     let cache_slot = read32(iseq, self.pc + 9) as usize;
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+                    let block = self.exec_stack.pop().unwrap();
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
 
-                    self.eval_send(methodref, receiver, args)?;
+                    self.eval_send(methodref, receiver, args, block)?;
                     self.pc += 13;
                 }
                 Inst::DEF_CLASS => {
@@ -621,7 +623,7 @@ impl VM {
 
                     self.class_stack.push(classref);
 
-                    self.eval_send(methodref, val, vec![])?;
+                    self.eval_send(methodref, val, vec![], PackedValue::nil())?;
                     self.pc += 9;
                     self.class_stack.pop().unwrap();
                 }
@@ -802,7 +804,7 @@ impl VM {
                     let method = IdentId::_ADD;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs])?;
+                            self.eval_send(mref.clone(), lhs, vec![rhs], PackedValue::nil())?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -838,7 +840,12 @@ impl VM {
                     let method = IdentId::_ADD;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(i as i64)])?;
+                            self.eval_send(
+                                mref.clone(),
+                                lhs,
+                                vec![PackedValue::fixnum(i as i64)],
+                                PackedValue::nil(),
+                            )?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -882,7 +889,7 @@ impl VM {
                     let method = IdentId::_SUB;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs])?;
+                            self.eval_send(mref.clone(), lhs, vec![rhs], PackedValue::nil())?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -918,7 +925,12 @@ impl VM {
                     let method = IdentId::_SUB;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![PackedValue::fixnum(i as i64)])?;
+                            self.eval_send(
+                                mref.clone(),
+                                lhs,
+                                vec![PackedValue::fixnum(i as i64)],
+                                PackedValue::nil(),
+                            )?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -962,7 +974,7 @@ impl VM {
                     let method = IdentId::_MUL;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs])?;
+                            self.eval_send(mref.clone(), lhs, vec![rhs], PackedValue::nil())?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -1215,7 +1227,8 @@ impl VM {
         &mut self,
         methodref: MethodRef,
         receiver: PackedValue,
-        args: Vec<PackedValue>,
+        mut args: Vec<PackedValue>,
+        block: PackedValue,
     ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
@@ -1253,6 +1266,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
+                args.push(block);
                 self.vm_run(receiver, iseq, None, args)?;
                 #[cfg(feature = "perf")]
                 {

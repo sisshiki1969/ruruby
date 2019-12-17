@@ -10,7 +10,14 @@ use test::Bencher;
 
 fn eval_script(script: impl Into<String>, expected: Value) {
     let mut parser = Parser::new();
-    let result = parser.parse_program(script.into(), None).unwrap();
+    let result = match parser.parse_program(script.into(), None) {
+        Ok(result) => result,
+        Err(err) => {
+            parser.show_loc(&err.loc());
+            eprintln!("RubyError: {:?}", err.kind);
+            panic!();
+        }
+    };
     let mut eval = VM::new(Some(result.ident_table));
     eval.init_builtin();
     match eval.run(&result.node, &result.lvar_collector) {
@@ -20,7 +27,10 @@ fn eval_script(script: impl Into<String>, expected: Value) {
                 panic!("Expected:{:?} Got:{:?}", expected, res);
             }
         }
-        Err(err) => panic!("Got runtime error: {:?}", err),
+        Err(err) => {
+            result.source_info.show_loc(&err.loc());
+            panic!("Got runtime error: {:?}", err);
+        }
     }
 }
 
@@ -656,7 +666,7 @@ fn closure1() {
         assert 101, inc.call
         assert 101, inc.call
 
-        p = inc
+        p = inc()
         assert 101, p.call
         assert 102, p.call
         assert 103, p.call";
@@ -672,6 +682,57 @@ fn closure2() {
         assert 5, f.call.call.call
         a = 7;
         assert 7, f.call.call.call";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn method_chain1() {
+    let program = "
+        class Foo
+            attr_accessor :a
+            def initialize
+                @a = 0
+            end
+            def inc
+                @a = @a + 1
+                self
+            end
+        end
+
+        ans1 = Foo.new
+            .inc
+            .inc
+            .a
+        assert 2, ans1
+        ans2 = Foo.new
+            .inc()
+            .inc()
+            .a
+        assert 2, ans2";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn method_chain2() {
+    let program = "
+        class Array
+            def map(&fun)
+                a = []
+                for i in 0...self.length
+                    a.push fun.call(self[i])
+                end
+                a
+            end
+        end
+        a = 3
+        assert [4,7,12,19], [1,2,3,4].map do |x| x*x+a end
+        a = 1
+        assert [2,5,10,17], [1,2,3,4].map do |x| x*x+a end
+        assert [4,4,4,4], [1,2,3,4].map do || 4 end
+        assert [7,7,7,7], [1,2,3,4].map do | | 7 end
+        ";
     let expected = Value::Nil;
     eval_script(program, expected);
 }

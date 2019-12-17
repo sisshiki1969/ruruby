@@ -289,12 +289,15 @@ impl Parser {
     /// Get the next token if it is a line terminator or ';' or EOF, and return true,
     /// Otherwise, return false.
     fn consume_term(&mut self) -> bool {
-        if self.peek_no_skip_line_term().is_term() {
-            self.get_no_skip_line_term();
-            true
-        } else {
-            false
+        if !self.peek_no_skip_line_term().is_term() {
+            return false;
+        };
+        while self.peek_no_skip_line_term().is_term() {
+            if self.get_no_skip_line_term().is_eof() {
+                return true;
+            }
         }
+        return true;
     }
 
     /// Get the next token and examine whether it is an expected Reserved.
@@ -380,7 +383,7 @@ impl Parser {
     }
 
     fn parse_comp_stmt(&mut self) -> Result<Node, RubyError> {
-        // STMT (TERM EXPR)* [TERM]
+        // COMP_STMT : STMT [TERM+ STMT]* [TERM+]?
 
         fn return_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Result<Node, RubyError> {
             if let Some(node) = nodes.last() {
@@ -417,7 +420,6 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> Result<Node, RubyError> {
         let node = self.parse_expr()?;
-        let node = self.parse_do_block(node)?;
         if self.consume_reserved_no_skip_line_term(Reserved::If) {
             // STMT : STMT if EXPR
             let cond = self.parse_expr()?;
@@ -431,51 +433,32 @@ impl Parser {
                 loc,
             ))
         } else {
+            // STMT : EXPR
             Ok(node)
         }
     }
 
-    fn parse_do_block(&mut self, mut node: Node) -> Result<Node, RubyError> {
-        if let NodeKind::Send {
-            receiver,
-            mut args,
-            method,
-            completed,
-        } = node.kind.clone()
-        {
-            if self.consume_reserved_no_skip_line_term(Reserved::Do) {
-                // STMT : CALL do [`|' [BLOCK_VAR] `|'] COMPSTMT end
-                let loc = self.prev_loc();
-                self.context_stack.push(Context::new_block());
-                let mut params = vec![];
-                if self.consume_punct(Punct::BitOr) {
-                    loop {
-                        let id = self.expect_ident()?;
-                        params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
-                        self.add_local_var(id);
-                        if !self.consume_punct(Punct::Comma) {
-                            break;
-                        }
-                    }
-                    self.expect_punct(Punct::BitOr)?;
-                }
-                let body = self.parse_comp_stmt()?;
-                self.expect_reserved(Reserved::End)?;
-                let lvar = self.context_stack.pop().unwrap().lvar;
-                let loc = loc.merge(self.prev_loc());
-                args.push(Node::new_proc(params, body, lvar, loc));
-                node.kind = NodeKind::Send {
-                    receiver,
-                    args,
-                    method,
-                    completed,
-                };
-            }
-        };
-        Ok(node)
-    }
-
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
+        // EXPR : NOT
+        // | KEYWORD-AND
+        // | KEYWORD-OR
+        // NOT : ARG
+        // | UNPARENTHESIZED-METHOD
+        // | ! UNPARENTHESIZED-METHOD
+        // | KEYWORD-NOT
+        // UNPARENTHESIZED-METHOD :
+        // | FNAME ARGS
+        // | PRIMARY . FNAME ARGS
+        // | PRIMARY :: FNAME ARGS
+        // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]*
+        // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]* . FNAME ARGS
+        // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]* :: FNAME ARGS
+        // CHAIN-METOD : . FNAME
+        // | :: FNAME
+        // | . FNAME( ARGS )
+        // | :: FNAME( ARGS )
+        // COMMAND-WITH-DO-BLOCK : FNAME ARGS DO-BLOCK
+        // | PRIMARY . FNAME ARGS DO-BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
         let node = self.parse_arg()?;
         if self.consume_punct_no_skip_line_term(Punct::Comma) {
             // EXPR : MLHS `=' MRHS
@@ -509,28 +492,22 @@ impl Parser {
             for lvar in new_lvar {
                 self.add_local_var(lvar);
             }
-            Ok(Node::new_mul_assign(mlhs, mrhs))
-        } else if node.is_operation() {
-            if self.is_command() {
-                // EXPR : COMMAND
-                Ok(self.parse_command(node.as_method_name().unwrap(), node.loc())?)
-            } else {
-                let loc = node.loc();
-                Ok(Node::new_send(
-                    Node::new(NodeKind::SelfValue, loc),
-                    node.as_method_name().unwrap(),
-                    vec![],
-                    true,
-                    loc,
-                ))
-            }
+            return Ok(Node::new_mul_assign(mlhs, mrhs));
+        }
+        if node.is_operation() && self.is_command() {
+            // FNAME ARGS
+            // FNAME ARGS DO-BLOCK
+            Ok(self.parse_command(node.as_method_name().unwrap(), node.loc())?)
         } else if let Node {
+            // PRIMARY . FNAME ARGS
+            // PRIMARY . FNAME ARGS DO_BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
             kind:
                 NodeKind::Send {
-                    completed: false,
                     method,
                     receiver,
                     mut args,
+                    completed: false,
+                    ..
                 },
             mut loc,
         } = node.clone()
@@ -539,29 +516,35 @@ impl Parser {
                 args = self.parse_arglist()?;
                 loc = loc.merge(args[0].loc());
             }
+            let block = Box::new(self.parse_block()?);
             let node = Node::new(
                 NodeKind::Send {
                     method,
                     receiver,
                     args,
+                    block,
                     completed: true,
                 },
                 loc,
             );
             Ok(node)
         } else {
+            // EXPR : ARG
             Ok(node)
         }
     }
 
     fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
-        // COMMAND : OPERATION CALL_ARGS
+        // FNAME ARGS
+        // FNAME ARGS DO-BLOCK
         let args = self.parse_arglist()?;
         let end_loc = self.prev_loc();
+        let block = self.parse_block()?;
         Ok(Node::new_send(
             Node::new(NodeKind::SelfValue, loc),
             operation,
             args,
+            block,
             true,
             loc.merge(end_loc),
         ))
@@ -587,6 +570,13 @@ impl Parser {
             }
         }
         Ok(args)
+    }
+
+    fn is_block(&mut self) -> bool {
+        match self.peek().kind {
+            TokenKind::Reserved(Reserved::Do) | TokenKind::Punct(Punct::LBrace) => true,
+            _ => false,
+        }
     }
 
     fn is_command(&mut self) -> bool {
@@ -873,38 +863,37 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Node, RubyError> {
-        // FUNCTION : OPERATION [`(' [CALL_ARGS] `)']
-        //        | PRIMARY `.' FNAME `(' [CALL_ARGS] `)'
-        //        | PRIMARY `::' FNAME `(' [CALL_ARGS] `)'
-        //        | PRIMARY `.' FNAME
-        //        | PRIMARY `::' FNAME
-        //        | super [`(' [CALL_ARGS] `)']
         let loc = self.loc();
         let mut node = self.parse_primary()?;
-        if node.is_operation()
-            && self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen)
-        {
-            // OPERATION `(' [CALL_ARGS] `)' => Send
-            // OPERATION => Ident
-            self.get()?;
-            let args = self.parse_args(Punct::RParen)?;
-            let end_loc = self.loc();
+        if node.is_operation() {
+            if self.consume_punct_no_skip_line_term(Punct::LParen) {
+                // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
+                // | FNAME BLOCK
+                let args = if self.is_block() {
+                    vec![]
+                } else {
+                    self.parse_args(Punct::RParen)?
+                };
+                let end_loc = self.loc();
+                let block = self.parse_block()?;
 
-            return Ok(Node::new_send(
-                Node::new(NodeKind::SelfValue, loc),
-                node.as_method_name().unwrap(),
-                args,
-                true,
-                loc.merge(end_loc),
-            ));
-        };
+                return Ok(Node::new_send(
+                    Node::new(NodeKind::SelfValue, loc),
+                    node.as_method_name().unwrap(),
+                    args,
+                    block,
+                    true,
+                    loc.merge(end_loc),
+                ));
+            }
+        }
         loop {
-            let tok = self.peek_no_skip_line_term();
+            let tok = self.peek();
             node = match tok.kind {
                 TokenKind::Punct(Punct::Dot) => {
-                    // FUNCTION:
-                    // PRIMARY `.' FNAME `(' [CALL_ARGS] `)' => Send(PRIMARY, FNAME, completed:true)
-                    // PRIMARY `.' FNAME => Send(PRIMARY, FNAME, completed:false)
+                    // PRIMARY-METHOD :
+                    // | PRIMARY . FNAME ( ARGS )? BLOCK? => completed: true
+                    // | PRIMARY . FNAME => completed: false
                     self.get()?;
                     let tok = self.get()?.clone();
                     let method = match &tok.kind {
@@ -922,26 +911,28 @@ impl Parser {
                     let id = self.get_ident_id(&method);
                     let mut args = vec![];
                     let mut completed = false;
-                    if self.peek_no_skip_line_term().kind == TokenKind::Punct(Punct::LParen) {
-                        self.get()?;
+                    if self.consume_punct_no_skip_line_term(Punct::LParen) {
                         args = self.parse_args(Punct::RParen)?;
                         completed = true;
                     }
-                    /*
+                    let block = self.parse_block()?;
                     let node = match node.kind {
                         NodeKind::Ident(id) => Node::new_send(
                             Node::new(NodeKind::SelfValue, loc),
                             id,
                             vec![],
+                            None,
                             true,
                             loc,
                         ),
                         _ => node,
-                    };*/
-                    Node::new_send(node, id, args, completed, loc.merge(self.loc()))
+                    };
+                    Node::new_send(node, id, args, block, completed, loc.merge(self.loc()))
                 }
                 TokenKind::Punct(Punct::LBracket) => {
-                    // PRIMARY: PRIMARY `[' [ARGS] `]'
+                    if node.is_operation() {
+                        return Ok(node);
+                    };
                     let loc = self.loc();
                     self.get()?;
                     let args = self.parse_args(Punct::RBracket)?;
@@ -972,6 +963,37 @@ impl Parser {
         }
         self.expect_punct(punct)?;
         Ok(args)
+    }
+
+    fn parse_block(&mut self) -> Result<Option<Node>, RubyError> {
+        if !self.consume_reserved_no_skip_line_term(Reserved::Do) {
+            return Ok(None);
+        }
+        // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
+        let loc = self.prev_loc();
+        self.context_stack.push(Context::new_block());
+        let mut params = vec![];
+        if self.consume_punct(Punct::BitOr) {
+            if !self.consume_punct(Punct::BitOr) {
+                loop {
+                    let id = self.expect_ident()?;
+                    params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                    self.add_local_var(id);
+                    if !self.consume_punct(Punct::Comma) {
+                        break;
+                    }
+                }
+                self.expect_punct(Punct::BitOr)?;
+            }
+        } else {
+            self.consume_punct(Punct::LOr);
+        }
+        let body = self.parse_comp_stmt()?;
+        self.expect_reserved(Reserved::End)?;
+        let lvar = self.context_stack.pop().unwrap().lvar;
+        let loc = loc.merge(self.prev_loc());
+        let node = Node::new_proc(params, body, lvar, loc);
+        Ok(Some(node))
     }
 
     fn parse_primary(&mut self) -> Result<Node, RubyError> {
@@ -1226,6 +1248,8 @@ impl Parser {
         }
     }
 
+    // ( )
+    // ( ident [, ident]* )
     fn parse_params(&mut self) -> Result<Vec<Node>, RubyError> {
         if self.consume_term() {
             return Ok(vec![]);
@@ -1239,8 +1263,13 @@ impl Parser {
             return Ok(args);
         }
         loop {
+            let is_block = self.consume_punct(Punct::BitAnd);
             let id = self.expect_ident()?;
-            args.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+            if is_block {
+                args.push(Node::new(NodeKind::BlockParam(id), self.prev_loc()))
+            } else {
+                args.push(Node::new(NodeKind::Param(id), self.prev_loc()))
+            };
             self.add_local_var(id);
             if !self.consume_punct(Punct::Comma) {
                 break;

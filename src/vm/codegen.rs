@@ -272,6 +272,7 @@ impl Codegen {
             } => {
                 let name = globals.get_ident_name(*method).clone() + "=";
                 let assign_id = globals.get_ident_id(name);
+                self.gen_push_nil(iseq);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
                 self.gen_send(globals, iseq, assign_id, 1);
@@ -383,6 +384,10 @@ impl Codegen {
         for param in params {
             match param.kind {
                 NodeKind::Param(id) => {
+                    let lvar = lvar_collector.table.get(&id).unwrap();
+                    params_lvar.push(*lvar);
+                }
+                NodeKind::BlockParam(id) => {
                     let lvar = lvar_collector.table.get(&id).unwrap();
                     params_lvar.push(*lvar);
                 }
@@ -619,6 +624,7 @@ impl Codegen {
                 };
             }
             NodeKind::Ident(id) => {
+                self.gen_push_nil(iseq);
                 self.gen_send_self(globals, iseq, *id, 0);
                 if !use_value {
                     self.gen_pop(iseq)
@@ -877,11 +883,16 @@ impl Codegen {
                 receiver,
                 method,
                 args,
+                block,
                 ..
             } => {
                 let loc = self.loc;
                 for arg in args {
                     self.gen(globals, iseq, arg, true)?;
+                }
+                match &**block {
+                    Some(block) => self.gen(globals, iseq, block, true)?,
+                    None => self.gen_push_nil(iseq),
                 }
                 if NodeKind::SelfValue == receiver.kind {
                     self.loc = loc;

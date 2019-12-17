@@ -48,6 +48,7 @@ pub enum NodeKind {
     Const(IdentId),
     Symbol(IdentId),
     Param(IdentId),
+    BlockParam(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassDef {
@@ -60,6 +61,7 @@ pub enum NodeKind {
         receiver: Box<Node>,
         method: IdentId,
         args: NodeVec,
+        block: Box<Option<Node>>,
         completed: bool,
     }, //receiver, method_name, args
 }
@@ -239,6 +241,7 @@ impl Node {
         receiver: Node,
         method: IdentId,
         args: Vec<Node>,
+        block: Option<Node>,
         completed: bool,
         loc: Loc,
     ) -> Self {
@@ -247,6 +250,7 @@ impl Node {
                 receiver: Box::new(receiver),
                 method,
                 args,
+                block: Box::new(block),
                 completed,
             },
             loc,
