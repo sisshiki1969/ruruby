@@ -323,7 +323,7 @@ impl Parser {
     /// If not, return RubyError.
     fn expect_ident(&mut self) -> Result<IdentId, RubyError> {
         let name = match &self.get()?.kind {
-            TokenKind::Ident(s) => s.clone(),
+            TokenKind::Ident(s, _) => s.clone(),
             _ => {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
             }
@@ -458,7 +458,7 @@ impl Parser {
         // COMMAND-WITH-DO-BLOCK : FNAME ARGS DO-BLOCK
         // | PRIMARY . FNAME ARGS DO-BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
         let node = self.parse_arg()?;
-        if self.consume_punct_no_skip_line_term(Punct::Comma) {
+        if self.consume_punct_no_skip_line_term(Punct::Comma) && node.is_lvar() {
             // EXPR : MLHS `=' MRHS
             return Ok(self.parse_mul_assign(node)?);
         }
@@ -496,13 +496,21 @@ impl Parser {
     fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
         // EXPR : MLHS `=' MRHS
         let mut new_lvar = vec![];
-        if let NodeKind::Ident(id) = node.kind {
+        if let NodeKind::Ident(id, has_suffix) = node.kind {
+            if has_suffix {
+                return Err(self.error_unexpected(node.loc(), "Illegal identifier for left hand."));
+            };
             new_lvar.push(id);
         };
         let mut mlhs = vec![node];
         loop {
             let node = self.parse_function()?;
-            if let NodeKind::Ident(id) = node.kind {
+            if let NodeKind::Ident(id, has_suffix) = node.kind {
+                if has_suffix {
+                    return Err(
+                        self.error_unexpected(node.loc(), "Illegal identifier for left hand.")
+                    );
+                };
                 new_lvar.push(id);
             };
             mlhs.push(node);
@@ -575,7 +583,7 @@ impl Parser {
     fn is_command(&mut self) -> bool {
         let tok = self.peek_no_skip_line_term();
         match tok.kind {
-            TokenKind::Ident(_)
+            TokenKind::Ident(_, _)
             | TokenKind::InstanceVar(_)
             | TokenKind::Const(_)
             | TokenKind::NumLit(_)
@@ -620,12 +628,22 @@ impl Parser {
                         break;
                     }
                 }
-                if let NodeKind::Ident(id) = lhs.kind {
+                if let NodeKind::Ident(id, has_suffix) = lhs.kind {
+                    if has_suffix {
+                        return Err(
+                            self.error_unexpected(lhs.loc(), "Illegal identifier for left hand.")
+                        );
+                    };
                     self.add_local_var(id);
                 };
                 Ok(Node::new_mul_assign(vec![lhs], mrhs))
             } else {
-                if let NodeKind::Ident(id) = lhs.kind {
+                if let NodeKind::Ident(id, has_suffix) = lhs.kind {
+                    if has_suffix {
+                        return Err(
+                            self.error_unexpected(lhs.loc(), "Illegal identifier for left hand.")
+                        );
+                    };
                     self.add_local_var(id);
                 };
                 Ok(Node::new_assign(lhs, rhs))
@@ -881,7 +899,7 @@ impl Parser {
                     self.get()?;
                     let tok = self.get()?.clone();
                     let method = match &tok.kind {
-                        TokenKind::Ident(s) => s,
+                        TokenKind::Ident(s, _) => s,
                         TokenKind::Reserved(r) => {
                             let string = self.lexer.get_string_from_reserved(*r);
                             string
@@ -901,7 +919,7 @@ impl Parser {
                     }
                     let block = self.parse_block()?;
                     let node = match node.kind {
-                        NodeKind::Ident(id) => {
+                        NodeKind::Ident(id, _) => {
                             Node::new_send(Node::new_self(loc), id, vec![], None, true, loc)
                         }
                         _ => node,
@@ -979,15 +997,23 @@ impl Parser {
         let tok = self.get()?.clone();
         let loc = tok.loc();
         match &tok.kind {
-            TokenKind::Ident(name) => {
+            TokenKind::Ident(name, has_suffix) => {
                 let id = self.get_ident_id(name);
                 if name == "self" {
                     return Ok(Node::new_self(loc));
+                } else if *has_suffix {
+                    match self.get()?.kind {
+                        TokenKind::Punct(Punct::Question) => {
+                            let id = self.get_ident_id(&(name.clone() + "?"));
+                            Ok(Node::new_identifier(id, true, loc))
+                        }
+                        _ => panic!("Illegal method name."),
+                    }
                 } else if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
                 } else {
                     // FUNCTION or COMMAND or LHS for assignment
-                    Ok(Node::new_identifier(id, loc))
+                    Ok(Node::new_identifier(id, false, loc))
                 }
             }
             TokenKind::InstanceVar(name) => {
@@ -1033,7 +1059,7 @@ impl Parser {
                         }
                         self.expect_punct(Punct::RParen)?;
                     }
-                } else if let TokenKind::Ident(_) = self.peek().kind {
+                } else if let TokenKind::Ident(_, _) = self.peek().kind {
                     let id = self.expect_ident()?;
                     self.add_local_var(id);
                     params.push(Node::new_param(id, self.prev_loc()));
@@ -1187,20 +1213,20 @@ impl Parser {
         //  end
         let mut is_class_method = false;
         let self_id = self.get_ident_id(&"self".to_string());
-        let mut id = match self.peek().kind {
-            TokenKind::Ident(_) => self.expect_ident()?,
-            TokenKind::Punct(Punct::Plus) => {
-                self.get()?;
-                self.get_ident_id(&"@add".to_string())
+        let mut id = match self.get()?.kind.clone() {
+            TokenKind::Ident(name, has_suffix) => {
+                if has_suffix {
+                    match self.get()?.kind {
+                        TokenKind::Punct(Punct::Question) => self.get_ident_id(&(name + "?")),
+                        _ => panic!("Illegal method name."),
+                    }
+                } else {
+                    self.get_ident_id(&name)
+                }
             }
-            TokenKind::Punct(Punct::Minus) => {
-                self.get()?;
-                self.get_ident_id(&"@sub".to_string())
-            }
-            TokenKind::Punct(Punct::Mul) => {
-                self.get()?;
-                self.get_ident_id(&"@mul".to_string())
-            }
+            TokenKind::Punct(Punct::Plus) => self.get_ident_id(&"@add".to_string()),
+            TokenKind::Punct(Punct::Minus) => self.get_ident_id(&"@sub".to_string()),
+            TokenKind::Punct(Punct::Mul) => self.get_ident_id(&"@mul".to_string()),
             _ => return Err(self.error_unexpected(self.loc(), "Expected identifier or operator.")),
         };
         if id == self_id {
