@@ -422,14 +422,12 @@ impl Parser {
         let node = self.parse_expr()?;
         if self.consume_reserved_no_skip_line_term(Reserved::If) {
             // STMT : STMT if EXPR
+            let loc = self.prev_loc();
             let cond = self.parse_expr()?;
-            let loc = node.loc().merge(cond.loc());
-            Ok(Node::new(
-                NodeKind::If {
-                    cond: Box::new(cond),
-                    then_: Box::new(node),
-                    else_: Box::new(Node::new_comp_stmt(vec![], loc)),
-                },
+            Ok(Node::new_if(
+                cond,
+                node,
+                Node::new_comp_stmt(vec![], loc),
                 loc,
             ))
         } else {
@@ -462,37 +460,7 @@ impl Parser {
         let node = self.parse_arg()?;
         if self.consume_punct_no_skip_line_term(Punct::Comma) {
             // EXPR : MLHS `=' MRHS
-            let mut new_lvar = vec![];
-            if let NodeKind::Ident(id) = node.kind {
-                new_lvar.push(id);
-            };
-            let mut mlhs = vec![node];
-            loop {
-                let node = self.parse_function()?;
-                if let NodeKind::Ident(id) = node.kind {
-                    new_lvar.push(id);
-                };
-                mlhs.push(node);
-                if !self.consume_punct_no_skip_line_term(Punct::Comma) {
-                    break;
-                }
-            }
-
-            if !self.consume_punct_no_skip_line_term(Punct::Assign) {
-                return Err(self.error_unexpected(self.loc(), "Expected '='."));
-            }
-
-            let mut mrhs = vec![];
-            loop {
-                mrhs.push(self.parse_arg()?);
-                if !self.consume_punct_no_skip_line_term(Punct::Comma) {
-                    break;
-                }
-            }
-            for lvar in new_lvar {
-                self.add_local_var(lvar);
-            }
-            return Ok(Node::new_mul_assign(mlhs, mrhs));
+            return Ok(self.parse_mul_assign(node)?);
         }
         if node.is_operation() && self.is_command() {
             // FNAME ARGS
@@ -516,17 +484,8 @@ impl Parser {
                 args = self.parse_arglist()?;
                 loc = loc.merge(args[0].loc());
             }
-            let block = Box::new(self.parse_block()?);
-            let node = Node::new(
-                NodeKind::Send {
-                    method,
-                    receiver,
-                    args,
-                    block,
-                    completed: true,
-                },
-                loc,
-            );
+            let block = self.parse_block()?;
+            let node = Node::new_send(*receiver, method, args, block, true, loc);
             Ok(node)
         } else {
             // EXPR : ARG
@@ -534,19 +493,53 @@ impl Parser {
         }
     }
 
+    fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
+        // EXPR : MLHS `=' MRHS
+        let mut new_lvar = vec![];
+        if let NodeKind::Ident(id) = node.kind {
+            new_lvar.push(id);
+        };
+        let mut mlhs = vec![node];
+        loop {
+            let node = self.parse_function()?;
+            if let NodeKind::Ident(id) = node.kind {
+                new_lvar.push(id);
+            };
+            mlhs.push(node);
+            if !self.consume_punct_no_skip_line_term(Punct::Comma) {
+                break;
+            }
+        }
+
+        if !self.consume_punct_no_skip_line_term(Punct::Assign) {
+            return Err(self.error_unexpected(self.loc(), "Expected '='."));
+        }
+
+        let mut mrhs = vec![];
+        loop {
+            mrhs.push(self.parse_arg()?);
+            if !self.consume_punct_no_skip_line_term(Punct::Comma) {
+                break;
+            }
+        }
+        for lvar in new_lvar {
+            self.add_local_var(lvar);
+        }
+        return Ok(Node::new_mul_assign(mlhs, mrhs));
+    }
+
     fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
         // FNAME ARGS
         // FNAME ARGS DO-BLOCK
         let args = self.parse_arglist()?;
-        let end_loc = self.prev_loc();
         let block = self.parse_block()?;
         Ok(Node::new_send(
-            Node::new(NodeKind::SelfValue, loc),
+            Node::new_self(loc),
             operation,
             args,
             block,
             true,
-            loc.merge(end_loc),
+            loc,
         ))
     }
 
@@ -643,21 +636,13 @@ impl Parser {
     }
 
     fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {
-        let loc = self.prev_loc();
+        let loc = self.loc();
         let cond = self.parse_arg_range()?;
         if self.consume_punct(Punct::Question) {
             let then_ = self.parse_arg_ternary()?;
             self.expect_punct(Punct::Colon)?;
             let else_ = self.parse_arg_ternary()?;
-            let loc = loc.merge(else_.loc());
-            let node = Node::new(
-                NodeKind::If {
-                    cond: Box::new(cond),
-                    then_: Box::new(then_),
-                    else_: Box::new(else_),
-                },
-                loc,
-            );
+            let node = Node::new_if(cond, then_, else_, loc);
             Ok(node)
         } else {
             Ok(cond)
@@ -874,16 +859,15 @@ impl Parser {
                 } else {
                     self.parse_args(Punct::RParen)?
                 };
-                let end_loc = self.loc();
                 let block = self.parse_block()?;
 
                 return Ok(Node::new_send(
-                    Node::new(NodeKind::SelfValue, loc),
+                    Node::new_self(loc),
                     node.as_method_name().unwrap(),
                     args,
                     block,
                     true,
-                    loc.merge(end_loc),
+                    loc,
                 ));
             }
         }
@@ -917,14 +901,9 @@ impl Parser {
                     }
                     let block = self.parse_block()?;
                     let node = match node.kind {
-                        NodeKind::Ident(id) => Node::new_send(
-                            Node::new(NodeKind::SelfValue, loc),
-                            id,
-                            vec![],
-                            None,
-                            true,
-                            loc,
-                        ),
+                        NodeKind::Ident(id) => {
+                            Node::new_send(Node::new_self(loc), id, vec![], None, true, loc)
+                        }
                         _ => node,
                     };
                     Node::new_send(node, id, args, block, completed, loc.merge(self.loc()))
@@ -977,7 +956,7 @@ impl Parser {
             if !self.consume_punct(Punct::BitOr) {
                 loop {
                     let id = self.expect_ident()?;
-                    params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                    params.push(Node::new_param(id, self.prev_loc()));
                     self.add_local_var(id);
                     if !self.consume_punct(Punct::Comma) {
                         break;
@@ -1003,7 +982,7 @@ impl Parser {
             TokenKind::Ident(name) => {
                 let id = self.get_ident_id(name);
                 if name == "self" {
-                    return Ok(Node::new(NodeKind::SelfValue, loc));
+                    return Ok(Node::new_self(loc));
                 } else if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
                 } else {
@@ -1046,7 +1025,7 @@ impl Parser {
                     if !self.consume_punct(Punct::RParen) {
                         loop {
                             let id = self.expect_ident()?;
-                            params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                            params.push(Node::new_param(id, self.prev_loc()));
                             self.add_local_var(id);
                             if !self.consume_punct(Punct::Comma) {
                                 break;
@@ -1057,7 +1036,7 @@ impl Parser {
                 } else if let TokenKind::Ident(_) = self.peek().kind {
                     let id = self.expect_ident()?;
                     self.add_local_var(id);
-                    params.push(Node::new(NodeKind::Param(id), self.prev_loc()));
+                    params.push(Node::new_param(id, self.prev_loc()));
                 };
                 self.expect_punct(Punct::LBrace)?;
                 let body = self.parse_comp_stmt()?;
@@ -1167,25 +1146,18 @@ impl Parser {
         //      (elsif EXPR THEN COMPSTMT)*
         //      [else COMPSTMT]
         //  end
-        let mut loc = self.prev_loc();
+        let loc = self.prev_loc();
         let cond = self.parse_expr()?;
         self.parse_then()?;
         let then_ = self.parse_comp_stmt()?;
-        let mut else_ = Node::new_comp_stmt(vec![], self.loc());
-        if self.consume_reserved(Reserved::Elsif) {
-            else_ = self.parse_if_then()?;
+        let else_ = if self.consume_reserved(Reserved::Elsif) {
+            self.parse_if_then()?
         } else if self.consume_reserved(Reserved::Else) {
-            else_ = self.parse_comp_stmt()?;
-        }
-        loc = loc.merge(else_.loc());
-        Ok(Node::new(
-            NodeKind::If {
-                cond: Box::new(cond),
-                then_: Box::new(then_),
-                else_: Box::new(else_),
-            },
-            loc,
-        ))
+            self.parse_comp_stmt()?
+        } else {
+            Node::new_comp_stmt(vec![], self.loc())
+        };
+        Ok(Node::new_if(cond, then_, else_, loc))
     }
 
     fn parse_then(&mut self) -> Result<(), RubyError> {
@@ -1268,7 +1240,7 @@ impl Parser {
             if is_block {
                 args.push(Node::new(NodeKind::BlockParam(id), self.prev_loc()))
             } else {
-                args.push(Node::new(NodeKind::Param(id), self.prev_loc()))
+                args.push(Node::new_param(id, self.prev_loc()))
             };
             self.add_local_var(id);
             if !self.consume_punct(Punct::Comma) {

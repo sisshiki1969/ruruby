@@ -123,6 +123,10 @@ impl Node {
         Node::new(NodeKind::String(s), loc)
     }
 
+    pub fn new_self(loc: Loc) -> Self {
+        Node::new(NodeKind::SelfValue, loc)
+    }
+
     pub fn new_interporated_string(nodes: Vec<Node>, loc: Loc) -> Self {
         Node::new(NodeKind::InterporatedString(nodes), loc)
     }
@@ -157,6 +161,10 @@ impl Node {
 
     pub fn new_lvar(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::LocalVar(id), loc)
+    }
+
+    pub fn new_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::Param(id), loc)
     }
 
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
@@ -202,7 +210,7 @@ impl Node {
         body: Node,
         lvar: LvarCollector,
     ) -> Self {
-        let loc = Loc::new(body.loc());
+        let loc = body.loc();
         Node::new(NodeKind::MethodDef(id, params, Box::new(body), lvar), loc)
     }
 
@@ -212,7 +220,7 @@ impl Node {
         body: Node,
         lvar: LvarCollector,
     ) -> Self {
-        let loc = Loc::new(body.loc());
+        let loc = body.loc();
         Node::new(
             NodeKind::ClassMethodDef(id, params, Box::new(body), lvar),
             loc,
@@ -245,6 +253,11 @@ impl Node {
         completed: bool,
         loc: Loc,
     ) -> Self {
+        let loc = match (args.last(), &block) {
+            (_, Some(block)) => loc.merge(block.loc),
+            (Some(arg), None) => loc.merge(arg.loc),
+            _ => loc,
+        };
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
@@ -252,6 +265,18 @@ impl Node {
                 args,
                 block: Box::new(block),
                 completed,
+            },
+            loc,
+        )
+    }
+
+    pub fn new_if(cond: Node, then_: Node, else_: Node, loc: Loc) -> Self {
+        let loc = loc.merge(then_.loc()).merge(else_.loc());
+        Node::new(
+            NodeKind::If {
+                cond: Box::new(cond),
+                then_: Box::new(then_),
+                else_: Box::new(else_),
             },
             loc,
         )
