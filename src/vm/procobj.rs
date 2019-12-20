@@ -46,6 +46,7 @@ fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
         pref.context.iseq_ref,
         pref.context.outer,
         args,
+        0,
     )?;
     let res = vm.exec_stack.pop().unwrap();
     Ok(res)

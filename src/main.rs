@@ -107,6 +107,7 @@ fn repl_vm() {
     let main_object = PackedValue::class(&mut vm.globals, class);
     let context = ContextRef::new(Context::new(
         main_object,
+        0,
         ISeqRef::new(ISeqInfo::new(vec![], vec![], LvarCollector::new(), vec![])),
     ));
     loop {

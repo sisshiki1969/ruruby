@@ -114,7 +114,7 @@ impl VM {
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let class = self.globals.main_class;
         let main_object = PackedValue::class(&mut self.globals, class);
-        self.vm_run(main_object, iseq, None, vec![])?;
+        self.vm_run(main_object, iseq, None, vec![], 0)?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -162,7 +162,7 @@ impl VM {
             }
         }
 
-        self.vm_run_context(context, false)?;
+        self.vm_run_context(context)?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -185,8 +185,9 @@ impl VM {
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args: Vec<PackedValue>,
+        block: u32,
     ) -> Result<(), RubyError> {
-        let mut context = Context::new(self_value, iseq);
+        let mut context = Context::new(self_value, block, iseq);
         context.outer = outer;
         let arg_len = args.len();
         for i in 0..LVAR_ARRAY_SIZE {
@@ -205,13 +206,25 @@ impl VM {
                 };
             }
         }
-        self.vm_run_context(ContextRef::new_local(&context), true)
+        if block != 0 {
+            if let Some(id) = iseq.lvar.block_param() {
+                let id: usize = id.as_usize();
+                let val = self.create_proc_obj(MethodRef::from(block))?;
+
+                if id < LVAR_ARRAY_SIZE {
+                    context.lvar_scope[id] = val;
+                } else {
+                    context.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
+                }
+            }
+        }
+        self.vm_run_context(ContextRef::new_local(&context))
     }
 
     pub fn vm_run_context(
         &mut self,
         context: ContextRef,
-        mut on_stack: bool,
+        //mut on_stack: bool,
     ) -> Result<(), RubyError> {
         self.context_stack.push(context);
         let old_pc = self.pc;
@@ -536,17 +549,7 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = MethodRef::from(read32(iseq, self.pc + 1));
-                    let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
-                    if on_stack {
-                        let context = self.context_stack.last_mut().unwrap();
-                        *context = ContextRef::new(context.dup());
-                        on_stack = false;
-                    }
-
-                    let outer = self.context_stack.last().unwrap().clone();
-                    let mut context = ContextRef::from(outer.self_value, iseq);
-                    context.outer = Some(outer);
-                    let proc_obj = PackedValue::procobj(&self.globals, context);
+                    let proc_obj = self.create_proc_obj(method)?;
                     self.exec_stack.push(proc_obj);
                     self.pc += 5;
                 }
@@ -568,24 +571,24 @@ impl VM {
                     let method_id = read_id(iseq, self.pc + 1);
                     let cache_slot = read32(iseq, self.pc + 9) as usize;
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
-                    let block = self.exec_stack.pop().unwrap();
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
+                    let block = read32(iseq, self.pc + 13);
 
                     self.eval_send(methodref, receiver, args, block)?;
-                    self.pc += 13;
+                    self.pc += 17;
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
                     let method_id = read_id(iseq, self.pc + 1);
                     let cache_slot = read32(iseq, self.pc + 9) as usize;
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
-                    let block = self.exec_stack.pop().unwrap();
                     let args_num = read32(iseq, self.pc + 5) as usize;
                     let args = self.pop_args(args_num);
+                    let block = read32(iseq, self.pc + 13);
 
                     self.eval_send(methodref, receiver, args, block)?;
-                    self.pc += 13;
+                    self.pc += 17;
                 }
                 Inst::DEF_CLASS => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
@@ -623,7 +626,7 @@ impl VM {
 
                     self.class_stack.push(classref);
 
-                    self.eval_send(methodref, val, vec![], PackedValue::nil())?;
+                    self.eval_send(methodref, val, vec![], 0)?;
                     self.pc += 9;
                     self.class_stack.pop().unwrap();
                 }
@@ -632,11 +635,11 @@ impl VM {
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered as an object method.
-                        self.globals.add_object_method(id, methodref);
+                        self.add_object_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as an instance method of the class.
-                        let mut classref = self.class_stack.last().unwrap().clone();
-                        classref.add_instance_method(id, methodref);
+                        let classref = self.class_stack.last().unwrap().clone();
+                        self.add_instance_method(classref, id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
                     self.pc += 9;
@@ -646,11 +649,11 @@ impl VM {
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered as an object method.
-                        self.globals.add_object_method(id, methodref);
+                        self.add_object_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a class method of the class.
-                        let mut classref = self.class_stack.last().unwrap().clone();
-                        classref.add_class_method(id, methodref);
+                        let classref = self.class_stack.last().unwrap().clone();
+                        self.add_class_method(classref, id, methodref);
                     }
                     self.exec_stack.push(PackedValue::nil());
                     self.pc += 9;
@@ -754,18 +757,8 @@ impl VM {
             Some(cref) => (cref, true),
             None => (receiver.get_receiver_class(&self.globals), false),
         };
-        let methodref = match self.globals.method_cache.get_entry(cache_slot) {
-            Some(MethodCacheEntry {
-                class,
-                version,
-                is_class_method,
-                method,
-            }) if *class == rec_class
-                && *version == rec_class.version
-                && *is_class_method == class_method =>
-            {
-                method.clone()
-            }
+        match self.globals.get_method_from_cache(cache_slot, receiver) {
+            Some(method) => Ok(method),
             _ => {
                 let method = if class_method {
                     self.get_class_method(rec_class, method_id)?
@@ -773,12 +766,10 @@ impl VM {
                     self.get_instance_method(rec_class, method_id)?
                 };
                 self.globals
-                    .method_cache
-                    .set_entry(cache_slot, rec_class, class_method, method);
-                method
+                    .set_method_cache_entry(cache_slot, rec_class, class_method, method);
+                Ok(method)
             }
-        };
-        Ok(methodref)
+        }
     }
 }
 
@@ -804,7 +795,7 @@ impl VM {
                     let method = IdentId::_ADD;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs], PackedValue::nil())?;
+                            self.eval_send(mref.clone(), lhs, vec![rhs], 0)?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -844,7 +835,7 @@ impl VM {
                                 mref.clone(),
                                 lhs,
                                 vec![PackedValue::fixnum(i as i64)],
-                                PackedValue::nil(),
+                                0,
                             )?;
                         }
                         None => {
@@ -889,7 +880,7 @@ impl VM {
                     let method = IdentId::_SUB;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs], PackedValue::nil())?;
+                            self.eval_send(mref.clone(), lhs, vec![rhs], 0)?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -929,7 +920,7 @@ impl VM {
                                 mref.clone(),
                                 lhs,
                                 vec![PackedValue::fixnum(i as i64)],
-                                PackedValue::nil(),
+                                0,
                             )?;
                         }
                         None => {
@@ -974,7 +965,7 @@ impl VM {
                     let method = IdentId::_MUL;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs], PackedValue::nil())?;
+                            self.eval_send(mref.clone(), lhs, vec![rhs], 0)?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -1227,8 +1218,8 @@ impl VM {
         &mut self,
         methodref: MethodRef,
         receiver: PackedValue,
-        mut args: Vec<PackedValue>,
-        block: PackedValue,
+        args: Vec<PackedValue>,
+        block: u32,
     ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
@@ -1266,8 +1257,8 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                args.push(block);
-                self.vm_run(receiver, iseq, None, args)?;
+                //args.push(block);
+                self.vm_run(receiver, iseq, None, args, block)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
@@ -1281,6 +1272,26 @@ impl VM {
 }
 
 impl VM {
+    pub fn add_class_method(
+        &mut self,
+        mut class: ClassRef,
+        id: IdentId,
+        info: MethodRef,
+    ) -> Option<MethodRef> {
+        self.globals.class_version += 1;
+        class.class_method.insert(id, info)
+    }
+
+    pub fn add_instance_method(
+        &mut self,
+        mut class: ClassRef,
+        id: IdentId,
+        info: MethodRef,
+    ) -> Option<MethodRef> {
+        self.globals.class_version += 1;
+        class.instance_method.insert(id, info)
+    }
+
     pub fn get_class_method(
         &self,
         class: ClassRef,
@@ -1319,6 +1330,12 @@ impl VM {
         }
     }
 
+    pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
+        self.add_instance_method(self.globals.object_class, id, info);
+    }
+}
+
+impl VM {
     fn get_array_index(&self, idx_arg: i64, len: usize) -> Result<usize, RubyError> {
         if idx_arg < 0 {
             let i = len as i64 + idx_arg;
@@ -1340,5 +1357,18 @@ impl VM {
         }
         args.reverse();
         args
+    }
+
+    fn create_proc_obj(&mut self, method: MethodRef) -> Result<PackedValue, RubyError> {
+        let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
+        let context = self.context_stack.last_mut().unwrap();
+        if context.on_stack {
+            *context = ContextRef::new(context.dup());
+            context.on_stack = false;
+        }
+        let outer = self.context_stack.last().unwrap().clone();
+        let mut context = ContextRef::from(outer.self_value, 0, iseq);
+        context.outer = Some(outer);
+        Ok(PackedValue::procobj(&self.globals, context))
     }
 }

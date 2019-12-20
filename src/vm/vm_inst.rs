@@ -159,7 +159,7 @@ impl Inst {
             | Inst::DEF_CLASS
             | Inst::DEF_METHOD
             | Inst::DEF_CLASS_METHOD => 9,
-            Inst::SEND | Inst::SEND_SELF => 13,
+            Inst::SEND | Inst::SEND_SELF => 17,
             _ => 1,
         }
     }

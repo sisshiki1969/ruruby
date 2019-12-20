@@ -72,7 +72,7 @@ impl ISeqInfo {
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     ) -> Self {
-        let lvars = lvar.table.len();
+        let lvars = lvar.len();
         ISeqInfo {
             params,
             iseq,
@@ -92,8 +92,10 @@ pub struct GlobalMethodTable {
 impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
-            table: vec![],
-            method_id: 0,
+            table: vec![MethodInfo::AttrReader {
+                id: IdentId::from(0),
+            }],
+            method_id: 1,
         }
     }
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
@@ -109,56 +111,5 @@ impl GlobalMethodTable {
 
     pub fn get_mut_method(&mut self, method: MethodRef) -> &mut MethodInfo {
         &mut self.table[method.0]
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MethodCacheEntry {
-    pub class: ClassRef,
-    pub version: usize,
-    pub is_class_method: bool,
-    pub method: MethodRef,
-}
-
-#[derive(Debug, Clone)]
-pub struct MethodCache {
-    table: Vec<Option<MethodCacheEntry>>,
-    id: usize,
-}
-
-impl MethodCache {
-    pub fn new() -> Self {
-        MethodCache {
-            table: vec![],
-            id: 0,
-        }
-    }
-    pub fn add_entry(&mut self) -> usize {
-        self.id += 1;
-        self.table.push(None);
-        self.id - 1
-    }
-
-    pub fn get_entry(&self, id: usize) -> &Option<MethodCacheEntry> {
-        &self.table[id]
-    }
-
-    pub fn set_entry(
-        &mut self,
-        id: usize,
-        class: ClassRef,
-        is_class_method: bool,
-        method: MethodRef,
-    ) {
-        self.table[id] = Some(MethodCacheEntry {
-            class,
-            version: class.version,
-            is_class_method,
-            method,
-        });
-    }
-
-    pub fn clear_entry(&mut self, id: usize) {
-        self.table[id] = None;
     }
 }

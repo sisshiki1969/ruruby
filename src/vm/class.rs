@@ -17,26 +17,14 @@ impl ClassRef {
         self.class_method.get(&id)
     }
 
-    pub fn add_class_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
-        self.version += 1;
-        self.class_method.insert(id, info)
-    }
-
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.instance_method.get(&id)
-    }
-
-    pub fn add_instance_method(&mut self, id: IdentId, info: MethodRef) -> Option<MethodRef> {
-        self.version += 1;
-        self.instance_method.insert(id, info)
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
     pub id: IdentId,
-    /// version counter: increment when new instance / class methods are defined.
-    pub version: usize,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub superclass: Option<ClassRef>,
@@ -47,7 +35,6 @@ impl ClassInfo {
     pub fn new(id: IdentId, superclass: Option<ClassRef>) -> Self {
         ClassInfo {
             id,
-            version: 0,
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
             superclass,
@@ -86,7 +73,7 @@ fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
             // call initialize method.
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
                 let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
-                vm.vm_run(new_instance, iseq, None, args)?;
+                vm.vm_run(new_instance, iseq, None, args, 0)?;
                 vm.exec_stack.pop().unwrap();
             };
             Ok(new_instance)
@@ -103,13 +90,13 @@ fn class_attr(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMR
                     let id = arg.as_packed_symbol();
                     let info = MethodInfo::AttrReader { id };
                     let methodref = vm.globals.add_method(info);
-                    classref.clone().add_instance_method(id, methodref);
+                    vm.add_instance_method(classref, id, methodref);
 
                     let assign_name = vm.globals.get_ident_name(id).clone() + "=";
                     let assign_id = vm.globals.get_ident_id(assign_name);
                     let info = MethodInfo::AttrWriter { id };
                     let methodref = vm.globals.add_method(info);
-                    classref.clone().add_instance_method(assign_id, methodref);
+                    vm.add_instance_method(classref, assign_id, methodref);
                 } else {
                     return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
                 }

@@ -235,12 +235,21 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
+        block: Option<MethodRef>,
     ) {
         self.save_loc(iseq);
         iseq.push(Inst::SEND);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
-        self.push32(iseq, globals.method_cache.add_entry() as u32);
+        self.push32(iseq, globals.add_method_cache_entry() as u32);
+        self.push32(
+            iseq,
+            match block {
+                Some(block) => block,
+                None => MethodRef::from(0),
+            }
+            .into(),
+        )
     }
 
     fn gen_send_self(
@@ -249,12 +258,21 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
+        block: Option<MethodRef>,
     ) {
         self.save_loc(iseq);
         iseq.push(Inst::SEND_SELF);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
-        self.push32(iseq, globals.method_cache.add_entry() as u32);
+        self.push32(iseq, globals.add_method_cache_entry() as u32);
+        self.push32(
+            iseq,
+            match block {
+                Some(block) => block,
+                None => MethodRef::from(0),
+            }
+            .into(),
+        )
     }
 
     fn gen_assign(
@@ -272,10 +290,9 @@ impl Codegen {
             } => {
                 let name = globals.get_ident_name(*method).clone() + "=";
                 let assign_id = globals.get_ident_id(name);
-                self.gen_push_nil(iseq);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
-                self.gen_send(globals, iseq, assign_id, 1);
+                self.gen_send(globals, iseq, assign_id, 1, None);
                 self.gen_pop(iseq);
             }
             NodeKind::ArrayMember { array, index } => {
@@ -384,11 +401,11 @@ impl Codegen {
         for param in params {
             match param.kind {
                 NodeKind::Param(id) => {
-                    let lvar = lvar_collector.table.get(&id).unwrap();
+                    let lvar = lvar_collector.get(&id).unwrap();
                     params_lvar.push(*lvar);
                 }
                 NodeKind::BlockParam(id) => {
-                    let lvar = lvar_collector.table.get(&id).unwrap();
+                    let lvar = lvar_collector.get(&id).unwrap();
                     params_lvar.push(*lvar);
                 }
                 _ => return Err(self.error_syntax("Parameters should be identifier.", self.loc)),
@@ -396,7 +413,7 @@ impl Codegen {
         }
         let mut iseq = ISeq::new();
         self.context_stack
-            .push(Context::from(lvar_collector.table.clone(), is_block));
+            .push(Context::from(lvar_collector.clone_table(), is_block));
         self.gen(globals, &mut iseq, node, use_value)?;
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
@@ -624,8 +641,7 @@ impl Codegen {
                 };
             }
             NodeKind::Ident(id, _) => {
-                self.gen_push_nil(iseq);
-                self.gen_send_self(globals, iseq, *id, 0);
+                self.gen_send_self(globals, iseq, *id, 0, None);
                 if !use_value {
                     self.gen_pop(iseq)
                 };
@@ -890,17 +906,24 @@ impl Codegen {
                 for arg in args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                match &**block {
-                    Some(block) => self.gen(globals, iseq, block, true)?,
-                    None => self.gen_push_nil(iseq),
-                }
+                let block_ref = match block {
+                    Some(block) => match &block.kind {
+                        NodeKind::Proc { params, body, lvar } => {
+                            let methodref =
+                                self.gen_iseq(globals, params, body, lvar, true, true)?;
+                            Some(methodref)
+                        }
+                        _ => panic!(),
+                    },
+                    None => None,
+                };
                 if NodeKind::SelfValue == receiver.kind {
                     self.loc = loc;
-                    self.gen_send_self(globals, iseq, *method, args.len());
+                    self.gen_send_self(globals, iseq, *method, args.len(), block_ref);
                 } else {
                     self.gen(globals, iseq, receiver, true)?;
                     self.loc = loc;
-                    self.gen_send(globals, iseq, *method, args.len());
+                    self.gen_send(globals, iseq, *method, args.len(), block_ref);
                 };
                 if !use_value {
                     self.gen_pop(iseq)

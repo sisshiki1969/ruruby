@@ -71,7 +71,8 @@ impl LvarId {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LvarCollector {
     id: usize,
-    pub table: HashMap<IdentId, LvarId>,
+    table: HashMap<IdentId, LvarId>,
+    block: Option<LvarId>,
 }
 
 impl LvarCollector {
@@ -79,6 +80,7 @@ impl LvarCollector {
         LvarCollector {
             id: 0,
             table: HashMap::new(),
+            block: None,
         }
     }
 
@@ -92,6 +94,28 @@ impl LvarCollector {
                 LvarId(id)
             }
         }
+    }
+
+    fn insert_block_param(&mut self, val: IdentId) -> LvarId {
+        let lvar = self.insert(val);
+        self.block = Some(lvar);
+        lvar
+    }
+
+    pub fn get(&self, val: &IdentId) -> Option<&LvarId> {
+        self.table.get(val)
+    }
+
+    pub fn block_param(&self) -> Option<LvarId> {
+        self.block
+    }
+
+    pub fn len(&self) -> usize {
+        self.table.len()
+    }
+
+    pub fn clone_table(&self) -> HashMap<IdentId, LvarId> {
+        self.table.clone()
     }
 }
 
@@ -156,9 +180,16 @@ impl Parser {
 
     // Add the identifier(IdentId) as a local variable in the current context.
     fn add_local_var(&mut self, id: IdentId) {
-        if !self.is_local_var(id) {
-            self.context_stack.last_mut().unwrap().lvar.insert(id);
-        }
+        self.context_stack.last_mut().unwrap().lvar.insert(id);
+    }
+
+    // Add the identifier(IdentId) as a block parameter in the current context.
+    fn add_block_param(&mut self, id: IdentId) {
+        self.context_stack
+            .last_mut()
+            .unwrap()
+            .lvar
+            .insert_block_param(id);
     }
 
     // Examine whether the identifier(IdentId) exists in the current scope.
@@ -531,7 +562,7 @@ impl Parser {
             }
         }
         for lvar in new_lvar {
-            self.add_local_var(lvar);
+            self.add_local_var_if_new(lvar);
         }
         return Ok(Node::new_mul_assign(mlhs, mrhs));
     }
@@ -634,7 +665,7 @@ impl Parser {
                             self.error_unexpected(lhs.loc(), "Illegal identifier for left hand.")
                         );
                     };
-                    self.add_local_var(id);
+                    self.add_local_var_if_new(id);
                 };
                 Ok(Node::new_mul_assign(vec![lhs], mrhs))
             } else {
@@ -644,7 +675,7 @@ impl Parser {
                             self.error_unexpected(lhs.loc(), "Illegal identifier for left hand.")
                         );
                     };
-                    self.add_local_var(id);
+                    self.add_local_var_if_new(id);
                 };
                 Ok(Node::new_assign(lhs, rhs))
             }
@@ -962,7 +993,7 @@ impl Parser {
         Ok(args)
     }
 
-    fn parse_block(&mut self) -> Result<Option<Node>, RubyError> {
+    fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
         if !self.consume_reserved_no_skip_line_term(Reserved::Do) {
             return Ok(None);
         }
@@ -990,7 +1021,7 @@ impl Parser {
         let lvar = self.context_stack.pop().unwrap().lvar;
         let loc = loc.merge(self.prev_loc());
         let node = Node::new_proc(params, body, lvar, loc);
-        Ok(Some(node))
+        Ok(Some(Box::new(node)))
     }
 
     fn parse_primary(&mut self) -> Result<Node, RubyError> {
@@ -1261,15 +1292,19 @@ impl Parser {
             return Ok(args);
         }
         loop {
+            let mut loc = self.loc();
             let is_block = self.consume_punct(Punct::BitAnd);
             let id = self.expect_ident()?;
+            loc = loc.merge(self.prev_loc());
             if is_block {
-                args.push(Node::new(NodeKind::BlockParam(id), self.prev_loc()))
+                args.push(Node::new_block_param(id, loc));
+                self.add_block_param(id);
             } else {
-                args.push(Node::new_param(id, self.prev_loc()))
+                args.push(Node::new_param(id, loc));
+                self.add_local_var(id);
             };
-            self.add_local_var(id);
-            if !self.consume_punct(Punct::Comma) {
+            self.context_stack.last_mut().unwrap().lvar.insert(id);
+            if is_block || !self.consume_punct(Punct::Comma) {
                 break;
             }
         }

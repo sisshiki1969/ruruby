@@ -61,7 +61,7 @@ pub enum NodeKind {
         receiver: Box<Node>,
         method: IdentId,
         args: NodeVec,
-        block: Box<Option<Node>>,
+        block: Option<Box<Node>>,
         completed: bool,
     }, //receiver, method_name, args
 }
@@ -167,6 +167,10 @@ impl Node {
         Node::new(NodeKind::Param(id), loc)
     }
 
+    pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::BlockParam(id), loc)
+    }
+
     pub fn new_identifier(id: IdentId, has_suffix: bool, loc: Loc) -> Self {
         Node::new(NodeKind::Ident(id, has_suffix), loc)
     }
@@ -249,13 +253,12 @@ impl Node {
         receiver: Node,
         method: IdentId,
         args: Vec<Node>,
-        block: Option<Node>,
+        block: Option<Box<Node>>,
         completed: bool,
         loc: Loc,
     ) -> Self {
         let loc = match (args.last(), &block) {
-            (_, Some(block)) => loc.merge(block.loc),
-            (Some(arg), None) => loc.merge(arg.loc),
+            (Some(arg), _) => loc.merge(arg.loc),
             _ => loc,
         };
         Node::new(
@@ -263,7 +266,7 @@ impl Node {
                 receiver: Box::new(receiver),
                 method,
                 args,
-                block: Box::new(block),
+                block,
                 completed,
             },
             loc,
