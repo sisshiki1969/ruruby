@@ -18,7 +18,12 @@ pub struct Context {
 pub type ContextRef = Ref<Context>;
 
 impl Context {
-    pub fn new(self_value: PackedValue, block: u32, iseq_ref: ISeqRef) -> Self {
+    pub fn new(
+        self_value: PackedValue,
+        block: u32,
+        iseq_ref: ISeqRef,
+        outer: Option<ContextRef>,
+    ) -> Self {
         let lvar_num = iseq_ref.lvars;
         let ext_lvar = if lvar_num > LVAR_ARRAY_SIZE {
             vec![PackedValue::nil(); lvar_num - LVAR_ARRAY_SIZE]
@@ -32,15 +37,20 @@ impl Context {
             ext_lvar,
             iseq_ref,
             pc: 0,
-            outer: None,
+            outer,
             on_stack: true,
         }
     }
 }
 
 impl ContextRef {
-    pub fn from(self_value: PackedValue, block: u32, iseq_ref: ISeqRef) -> Self {
-        ContextRef::new(Context::new(self_value, block, iseq_ref))
+    pub fn from(
+        self_value: PackedValue,
+        block: u32,
+        iseq_ref: ISeqRef,
+        outer: Option<ContextRef>,
+    ) -> Self {
+        ContextRef::new(Context::new(self_value, block, iseq_ref, outer))
     }
 
     pub fn new_local(info: &Context) -> Self {

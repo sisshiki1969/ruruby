@@ -105,11 +105,12 @@ fn repl_vm() {
     let mut lvar_collector = LvarCollector::new();
     let class = vm.globals.main_class;
     let main_object = PackedValue::class(&mut vm.globals, class);
-    let context = ContextRef::new(Context::new(
+    let context = ContextRef::from(
         main_object,
         0,
         ISeqRef::new(ISeqInfo::new(vec![], vec![], LvarCollector::new(), vec![])),
-    ));
+        None,
+    );
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline =

@@ -89,9 +89,13 @@ impl VM {
         self.globals.ident_table = ident_table;
     }
 
+    pub fn context(&self) -> ContextRef {
+        *self.context_stack.last().unwrap()
+    }
+
     /// Get local variable table.
     pub fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.context_stack.last().unwrap().clone();
+        let mut context = self.context().clone();
         for _ in 0..outer {
             context = context.outer.unwrap();
         }
@@ -187,23 +191,18 @@ impl VM {
         args: Vec<PackedValue>,
         block: u32,
     ) -> Result<(), RubyError> {
-        let mut context = Context::new(self_value, block, iseq);
-        context.outer = outer;
+        let mut context = Context::new(self_value, block, iseq, outer);
         let arg_len = args.len();
-        for i in 0..LVAR_ARRAY_SIZE {
-            context.lvar_scope[i] = if i < arg_len {
-                args[i]
-            } else {
-                PackedValue::nil()
-            };
-        }
-        if LVAR_ARRAY_SIZE < iseq.params.len() {
-            for i in LVAR_ARRAY_SIZE..iseq.params.len() {
-                context.ext_lvar[i - LVAR_ARRAY_SIZE] = if i < arg_len {
-                    args[i]
-                } else {
-                    PackedValue::nil()
-                };
+        if arg_len > LVAR_ARRAY_SIZE {
+            for i in 0..LVAR_ARRAY_SIZE {
+                context.lvar_scope[i] = args[i];
+            }
+            for i in LVAR_ARRAY_SIZE..arg_len {
+                context.ext_lvar[i - LVAR_ARRAY_SIZE] = args[i];
+            }
+        } else {
+            for i in 0..arg_len {
+                context.lvar_scope[i] = args[i];
             }
         }
         if block != 0 {
@@ -442,22 +441,15 @@ impl VM {
                 }
                 Inst::SET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, self.pc + 1);
-                    let self_var = &self.context_stack.last().unwrap().self_value.unpack();
+                    let mut self_obj = self.context().self_value.as_object().unwrap();
                     let new_val = self.exec_stack.pop().unwrap();
-                    match self_var {
-                        Value::Object(id) => id.clone().instance_var.insert(var_id, new_val),
-                        _ => unreachable!(),
-                    };
+                    self_obj.instance_var.insert(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, self.pc + 1);
-                    let self_var = &self.context_stack.last().unwrap().self_value.unpack();
-                    let val = match self_var {
-                        Value::Object(id) => id.instance_var.get(&var_id),
-                        _ => unreachable!(),
-                    };
-                    let val = match val {
+                    let self_obj = self.context().self_value.as_object().unwrap();
+                    let val = match self_obj.instance_var.get(&var_id) {
                         Some(val) => val.clone(),
                         None => PackedValue::nil(),
                     };
@@ -739,7 +731,7 @@ impl VM {
     }
 
     fn get_loc(&self) -> Loc {
-        let sourcemap = &self.context_stack.last().unwrap().iseq_ref.iseq_sourcemap;
+        let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
         sourcemap
             .iter()
             .find(|x| x.0 == ISeqPos::from_usize(self.pc))
@@ -1366,9 +1358,8 @@ impl VM {
             *context = ContextRef::new(context.dup());
             context.on_stack = false;
         }
-        let outer = self.context_stack.last().unwrap().clone();
-        let mut context = ContextRef::from(outer.self_value, 0, iseq);
-        context.outer = Some(outer);
+        let outer = self.context();
+        let context = ContextRef::from(outer.self_value, 0, iseq, Some(outer));
         Ok(PackedValue::procobj(&self.globals, context))
     }
 }
