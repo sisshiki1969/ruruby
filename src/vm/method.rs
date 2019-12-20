@@ -72,7 +72,7 @@ impl ISeqInfo {
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     ) -> Self {
-        let lvars = lvar.table.len();
+        let lvars = lvar.len();
         ISeqInfo {
             params,
             iseq,
@@ -92,8 +92,10 @@ pub struct GlobalMethodTable {
 impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
-            table: vec![],
-            method_id: 0,
+            table: vec![MethodInfo::AttrReader {
+                id: IdentId::from(0),
+            }],
+            method_id: 1,
         }
     }
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {

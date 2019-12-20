@@ -35,7 +35,7 @@ impl std::fmt::Display for Token {
 pub enum TokenKind {
     Nop,
     EOF,
-    Ident(String),
+    Ident(String, bool),
     InstanceVar(String),
     Const(String),
     NumLit(i64),
@@ -117,8 +117,8 @@ pub enum Punct {
 
 #[allow(unused)]
 impl Token {
-    pub fn new_ident(ident: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::Ident(ident.into()), loc)
+    pub fn new_ident(ident: impl Into<String>, has_suffix: bool, loc: Loc) -> Self {
+        Annot::new(TokenKind::Ident(ident.into(), has_suffix), loc)
     }
 
     pub fn new_instance_var(ident: impl Into<String>, loc: Loc) -> Self {

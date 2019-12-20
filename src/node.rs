@@ -43,23 +43,25 @@ pub enum NodeKind {
     Break,
     Next,
     LocalVar(IdentId),
-    Ident(IdentId),
+    Ident(IdentId, bool),
     InstanceVar(IdentId),
     Const(IdentId),
     Symbol(IdentId),
     Param(IdentId),
+    BlockParam(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassDef{
+    ClassDef {
         id: IdentId,
-        superclass: IdentId, 
+        superclass: IdentId,
         body: Box<Node>,
-        lvar: LvarCollector
+        lvar: LvarCollector,
     },
     Send {
         receiver: Box<Node>,
         method: IdentId,
         args: NodeVec,
+        block: Option<Box<Node>>,
         completed: bool,
     }, //receiver, method_name, args
 }
@@ -121,12 +123,16 @@ impl Node {
         Node::new(NodeKind::String(s), loc)
     }
 
+    pub fn new_self(loc: Loc) -> Self {
+        Node::new(NodeKind::SelfValue, loc)
+    }
+
     pub fn new_interporated_string(nodes: Vec<Node>, loc: Loc) -> Self {
         Node::new(NodeKind::InterporatedString(nodes), loc)
     }
 
-    pub fn new_comp_stmt(loc: Loc) -> Self {
-        Node::new(NodeKind::CompStmt(vec![]), loc)
+    pub fn new_comp_stmt(nodes: Vec<Node>, loc: Loc) -> Self {
+        Node::new(NodeKind::CompStmt(nodes), loc)
     }
 
     pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
@@ -157,8 +163,16 @@ impl Node {
         Node::new(NodeKind::LocalVar(id), loc)
     }
 
-    pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Ident(id), loc)
+    pub fn new_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::Param(id), loc)
+    }
+
+    pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::BlockParam(id), loc)
+    }
+
+    pub fn new_identifier(id: IdentId, has_suffix: bool, loc: Loc) -> Self {
+        Node::new(NodeKind::Ident(id, has_suffix), loc)
     }
 
     pub fn new_symbol(id: IdentId, loc: Loc) -> Self {
@@ -200,7 +214,7 @@ impl Node {
         body: Node,
         lvar: LvarCollector,
     ) -> Self {
-        let loc = Loc::new(body.loc());
+        let loc = body.loc();
         Node::new(NodeKind::MethodDef(id, params, Box::new(body), lvar), loc)
     }
 
@@ -210,30 +224,62 @@ impl Node {
         body: Node,
         lvar: LvarCollector,
     ) -> Self {
-        let loc = Loc::new(body.loc());
+        let loc = body.loc();
         Node::new(
             NodeKind::ClassMethodDef(id, params, Box::new(body), lvar),
             loc,
         )
     }
 
-    pub fn new_class_decl(id: IdentId, superclass: IdentId, body: Node, lvar: LvarCollector, loc:Loc) -> Self {
-        Node::new(NodeKind::ClassDef{id, superclass, body:Box::new(body), lvar}, loc)
+    pub fn new_class_decl(
+        id: IdentId,
+        superclass: IdentId,
+        body: Node,
+        lvar: LvarCollector,
+        loc: Loc,
+    ) -> Self {
+        Node::new(
+            NodeKind::ClassDef {
+                id,
+                superclass,
+                body: Box::new(body),
+                lvar,
+            },
+            loc,
+        )
     }
 
     pub fn new_send(
         receiver: Node,
         method: IdentId,
         args: Vec<Node>,
+        block: Option<Box<Node>>,
         completed: bool,
         loc: Loc,
     ) -> Self {
+        let loc = match (args.last(), &block) {
+            (Some(arg), _) => loc.merge(arg.loc),
+            _ => loc,
+        };
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
                 method,
                 args,
+                block,
                 completed,
+            },
+            loc,
+        )
+    }
+
+    pub fn new_if(cond: Node, then_: Node, else_: Node, loc: Loc) -> Self {
+        let loc = loc.merge(then_.loc()).merge(else_.loc());
+        Node::new(
+            NodeKind::If {
+                cond: Box::new(cond),
+                then_: Box::new(then_),
+                else_: Box::new(else_),
             },
             loc,
         )
@@ -261,14 +307,21 @@ impl Node {
 
     pub fn is_operation(&self) -> bool {
         match self.kind {
-            NodeKind::Const(_) | NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
+            NodeKind::Ident(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_lvar(&self) -> bool {
+        match self.kind {
+            NodeKind::Ident(_, false) | NodeKind::LocalVar(_) => true,
             _ => false,
         }
     }
 
     pub fn as_method_name(&self) -> Option<IdentId> {
         match self.kind {
-            NodeKind::Const(id) | NodeKind::Ident(id) | NodeKind::LocalVar(id) => Some(id),
+            NodeKind::Const(id) | NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => Some(id),
             _ => None,
         }
     }
@@ -278,7 +331,7 @@ impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             NodeKind::BinOp(op, lhs, rhs) => write!(f, "({:?}: {}, {})", op, lhs, rhs),
-            NodeKind::Ident(id) => write!(f, "(Ident {:?})", id),
+            NodeKind::Ident(id, _) => write!(f, "(Ident {:?})", id),
             NodeKind::LocalVar(id) => write!(f, "(LocalVar {:?})", id),
             NodeKind::Send {
                 receiver,

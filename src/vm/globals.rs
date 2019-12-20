@@ -5,6 +5,9 @@ pub struct Globals {
     // Global info
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
+    method_cache: MethodCache,
+    /// version counter: increment when new instance / class methods are defined.
+    pub class_version: usize,
     pub main_class: ClassRef,
     pub array_class: ClassRef,
     pub class_class: ClassRef,
@@ -25,6 +28,8 @@ impl Globals {
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
+            method_cache: MethodCache::new(),
+            class_version: 0,
             main_class,
             array_class: object_class,
             class_class: object_class,
@@ -55,7 +60,7 @@ impl Globals {
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.object_class.add_instance_method(id, info);
+        self.object_class.instance_method.insert(id, info);
     }
 
     pub fn get_object_method(&self, id: IdentId) -> Option<&MethodRef> {
@@ -76,7 +81,7 @@ impl Globals {
 
     pub fn add_builtin_class_method(
         &mut self,
-        classref: ClassRef,
+        mut classref: ClassRef,
         name: impl Into<String>,
         func: BuiltinFunc,
     ) {
@@ -84,12 +89,13 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
-        classref.clone().add_class_method(id, func_ref);
+        classref.class_method.insert(id, func_ref);
+        //classref.clone().add_class_method(id, func_ref);
     }
 
     pub fn add_builtin_instance_method(
         &mut self,
-        classref: ClassRef,
+        mut classref: ClassRef,
         name: impl Into<String>,
         func: BuiltinFunc,
     ) {
@@ -97,7 +103,7 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let methodref = self.add_method(info);
-        classref.clone().add_instance_method(id, methodref);
+        classref.instance_method.insert(id, methodref);
     }
 
     pub fn get_class_name(&self, val: PackedValue) -> String {
@@ -118,5 +124,96 @@ impl Globals {
                 ObjKind::Ordinary => self.get_ident_name(oref.classref.id).clone(),
             },
         }
+    }
+}
+
+impl Globals {
+    pub fn set_method_cache_entry(
+        &mut self,
+        id: usize,
+        class: ClassRef,
+        is_class_method: bool,
+        method: MethodRef,
+    ) {
+        self.method_cache.table[id] = Some(MethodCacheEntry {
+            class,
+            version: self.class_version,
+            is_class_method,
+            method,
+        });
+    }
+
+    pub fn add_method_cache_entry(&mut self) -> usize {
+        self.method_cache.add_entry()
+    }
+
+    fn get_method_cache_entry(&self, id: usize) -> &Option<MethodCacheEntry> {
+        self.method_cache.get_entry(id)
+    }
+
+    pub fn get_method_from_cache(
+        &mut self,
+        cache_slot: usize,
+        receiver: PackedValue,
+    ) -> Option<MethodRef> {
+        let (rec_class, class_method) = match receiver.as_class() {
+            Some(cref) => (cref, true),
+            None => (receiver.get_receiver_class(&self), false),
+        };
+        match self.get_method_cache_entry(cache_slot) {
+            Some(MethodCacheEntry {
+                class,
+                version,
+                is_class_method,
+                method,
+            }) if *class == rec_class
+                && *version == self.class_version
+                && *is_class_method == class_method =>
+            {
+                Some(*method)
+            }
+            _ => {
+                /*
+                eprintln!(
+                    "cache miss! {:?} {:?} {:?}",
+                    receiver.unpack(),
+                    rec_class,
+                    class_method
+                );*/
+                None
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodCacheEntry {
+    class: ClassRef,
+    version: usize,
+    is_class_method: bool,
+    method: MethodRef,
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodCache {
+    table: Vec<Option<MethodCacheEntry>>,
+    id: usize,
+}
+
+impl MethodCache {
+    fn new() -> Self {
+        MethodCache {
+            table: vec![],
+            id: 0,
+        }
+    }
+    fn add_entry(&mut self) -> usize {
+        self.id += 1;
+        self.table.push(None);
+        self.id - 1
+    }
+
+    fn get_entry(&self, id: usize) -> &Option<MethodCacheEntry> {
+        &self.table[id]
     }
 }

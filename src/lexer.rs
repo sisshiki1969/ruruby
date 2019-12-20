@@ -291,6 +291,10 @@ impl Lexer {
                 break;
             }
         }
+        let has_suffix = match self.peek() {
+            Ok(ch) if ch == '!' || ch == '?' => true,
+            _ => false,
+        };
         match self.reserved.get(&tok) {
             Some(reserved) => Ok(self.new_reserved(*reserved)),
             None => {
@@ -299,7 +303,7 @@ impl Lexer {
                 } else if is_instance_var {
                     Ok(self.new_instance_var(tok))
                 } else {
-                    Ok(self.new_ident(tok))
+                    Ok(self.new_ident(tok, has_suffix))
                 }
             }
         }
@@ -492,8 +496,8 @@ impl Lexer {
 }
 
 impl Lexer {
-    fn new_ident(&self, ident: impl Into<String>) -> Token {
-        Token::new_ident(ident.into(), self.cur_loc())
+    fn new_ident(&self, ident: impl Into<String>, has_suffix: bool) -> Token {
+        Token::new_ident(ident.into(), has_suffix, self.cur_loc())
     }
 
     fn new_instance_var(&self, ident: impl Into<String>) -> Token {
@@ -595,7 +599,7 @@ mod test {
 
     macro_rules! Token (
         (Ident($item:expr), $loc_0:expr, $loc_1:expr) => {
-            Token::new_ident($item, Loc($loc_0, $loc_1))
+            Token::new_ident($item, false, Loc($loc_0, $loc_1))
         };
         (InstanceVar($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_instance_var($item, Loc($loc_0, $loc_1))

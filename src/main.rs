@@ -88,12 +88,13 @@ fn file_read(file_name: impl Into<String>) {
 }
 
 fn repl_vm() {
+    /*
     println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
     println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
     println!("Value: {}", std::mem::size_of::<Value>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-
+    */
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
@@ -104,10 +105,12 @@ fn repl_vm() {
     let mut lvar_collector = LvarCollector::new();
     let class = vm.globals.main_class;
     let main_object = PackedValue::class(&mut vm.globals, class);
-    let context = ContextRef::new(Context::new(
+    let context = ContextRef::from(
         main_object,
+        0,
         ISeqRef::new(ISeqInfo::new(vec![], vec![], LvarCollector::new(), vec![])),
-    ));
+        None,
+    );
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline =

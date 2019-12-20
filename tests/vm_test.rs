@@ -10,7 +10,14 @@ use test::Bencher;
 
 fn eval_script(script: impl Into<String>, expected: Value) {
     let mut parser = Parser::new();
-    let result = parser.parse_program(script.into(), None).unwrap();
+    let result = match parser.parse_program(script.into(), None) {
+        Ok(result) => result,
+        Err(err) => {
+            parser.show_loc(&err.loc());
+            eprintln!("RubyError: {:?}", err.kind);
+            panic!();
+        }
+    };
     let mut eval = VM::new(Some(result.ident_table));
     eval.init_builtin();
     match eval.run(&result.node, &result.lvar_collector) {
@@ -20,7 +27,10 @@ fn eval_script(script: impl Into<String>, expected: Value) {
                 panic!("Expected:{:?} Got:{:?}", expected, res);
             }
         }
-        Err(err) => panic!("Got runtime error: {:?}", err),
+        Err(err) => {
+            result.source_info.show_loc(&err.loc());
+            panic!("Got runtime error: {:?}", err);
+        }
     }
 }
 
@@ -206,6 +216,42 @@ fn op10() {
 }
 
 #[test]
+fn int1() {
+    let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0x4000_0000_0000_0005u64 as i64;
+    let program = format!("{}+6=={}", i1, i2);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
+fn int2() {
+    let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0x4000_0000_0000_0005u64 as i64;
+    let program = format!("{}-6=={}", i2, i1);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
+fn int3() {
+    let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0xc000_0000_0000_0005u64 as i64;
+    let program = format!("{}+6=={}", i1, i2);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
+fn int4() {
+    let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
+    let i2 = 0xc000_0000_0000_0005u64 as i64;
+    let program = format!("{}-6=={}", i2, i1);
+    let expected = Value::Bool(true);
+    eval_script(program, expected);
+}
+
+#[test]
 fn if1() {
     let program = "if 5*4==16 +4 then 4;2*3+1 end";
     let expected = Value::FixNum(7);
@@ -242,6 +288,20 @@ fn if4() {
             5
             end";
     let expected = Value::FixNum(5);
+    eval_script(program, expected);
+}
+
+#[test]
+fn if5() {
+    let program = "a = 77 if 1+2 == 3";
+    let expected = Value::FixNum(77);
+    eval_script(program, expected);
+}
+
+#[test]
+fn if6() {
+    let program = "a = 77 if 1+3 == 3";
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 
@@ -556,8 +616,8 @@ fn define_binop() {
     v1 = Vec.new(2,4)
     v2 = Vec.new(3,5)
     v = v1 + v2;
-    assert(v.x, 5)
-    assert(v.y, 9)
+    assert v.x, 5
+    assert v.y, 9
     ";
     let expected = Value::Nil;
     eval_script(program, expected);
@@ -567,15 +627,15 @@ fn define_binop() {
 fn attr_accessor() {
     let program = "
     class Foo
-    attr_accessor(:car, :cdr)
+        attr_accessor :car, :cdr
     end
     bar = Foo.new
-    assert(nil, bar.car)
-    assert(nil, bar.cdr)
+    assert nil, bar.car
+    assert nil, bar.cdr
     bar.car = 1000
     bar.cdr = :something
-    assert(1000, bar.car)
-    assert(:something, bar.cdr)
+    assert 1000, bar.car
+    assert :something, bar.cdr
     ";
     let expected = Value::Nil;
     eval_script(program, expected);
@@ -622,6 +682,57 @@ fn closure2() {
         assert 5, f.call.call.call
         a = 7;
         assert 7, f.call.call.call";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn method_chain1() {
+    let program = "
+        class Foo
+            attr_accessor :a
+            def initialize
+                @a = 0
+            end
+            def inc
+                @a = @a + 1
+                self
+            end
+        end
+
+        ans1 = Foo.new
+            .inc
+            .inc
+            .a
+        assert 2, ans1
+        ans2 = Foo.new
+            .inc()
+            .inc()
+            .a
+        assert 2, ans2";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn method_chain2() {
+    let program = "
+        class Array
+            def map(&fun)
+                a = []
+                for i in 0...self.length
+                    a.push fun.call(self[i])
+                end
+                a
+            end
+        end
+        a = 3
+        assert [4,7,12,19], [1,2,3,4].map do |x| x*x+a end
+        a = 1
+        assert [2,5,10,17], [1,2,3,4].map do |x| x*x+a end
+        assert [4,4,4,4], [1,2,3,4].map do || 4 end
+        assert [7,7,7,7], [1,2,3,4].map do | | 7 end
+        ";
     let expected = Value::Nil;
     eval_script(program, expected);
 }
