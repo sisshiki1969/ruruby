@@ -141,24 +141,17 @@ fn repl_vm() {
                         parse_result.source_info.show_loc(&err.loc());
                         match err.kind {
                             RubyErrorKind::ParseErr(e) => {
-                                println!("parse error: {:?}", e);
+                                eprintln!("parse error: {:?}", e);
                             }
                             RubyErrorKind::RuntimeErr(e) => match e {
-                                RuntimeErrKind::Name(n) => {
-                                    println!("runtime error: NoNameError ({})", n)
-                                }
-                                RuntimeErrKind::NoMethod(n) => {
-                                    println!("runtime error: NoMethodError ({})", n)
-                                }
-                                RuntimeErrKind::Type(n) => {
-                                    println!("runtime error: TypeError ({})", n)
-                                }
+                                RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
+                                RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),
+                                RuntimeErrKind::Type(n) => eprintln!("TypeError ({})", n),
                                 RuntimeErrKind::Unimplemented(n) => {
-                                    println!("runtime error: UnimplementedError ({})", n)
+                                    eprintln!("UnimplementedError ({})", n)
                                 }
-                                RuntimeErrKind::Internal(n) => {
-                                    println!("runtime error: InternalError ({})", n)
-                                }
+                                RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
+                                RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
                             },
                         }
                         vm.exec_stack.clear();

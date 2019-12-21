@@ -9,6 +9,7 @@ impl Builtin {
         globals.add_builtin_method("puts", builtin_puts);
         globals.add_builtin_method("print", builtin_print);
         globals.add_builtin_method("assert", builtin_assert);
+        globals.add_builtin_method("block_given?", builtin_block_given);
 
         /// Built-in function "chr".
         fn builtin_chr(_vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
@@ -70,6 +71,15 @@ impl Builtin {
                 println!("Assert OK: {:?}", vm.val_pp(args[0]));
                 Ok(PackedValue::nil())
             }
+        }
+
+        /// Built-in function "block_given?".
+        fn builtin_block_given(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            _args: Vec<PackedValue>,
+        ) -> VMResult {
+            Ok(PackedValue::bool(vm.context().block != 0))
         }
     }
 }

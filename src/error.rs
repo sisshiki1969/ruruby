@@ -19,6 +19,7 @@ pub enum RuntimeErrKind {
     Internal(String),
     Name(String),
     NoMethod(String),
+    Argument(String),
     Type(String),
 }
 

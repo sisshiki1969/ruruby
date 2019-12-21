@@ -902,7 +902,6 @@ impl Parser {
         if node.is_operation() {
             if self.consume_punct_no_skip_line_term(Punct::LParen) {
                 // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-                // | FNAME BLOCK
                 let args = if self.is_block() {
                     vec![]
                 } else {
@@ -910,14 +909,24 @@ impl Parser {
                 };
                 let block = self.parse_block()?;
 
-                return Ok(Node::new_send(
+                node = Node::new_send(
                     Node::new_self(loc),
                     node.as_method_name().unwrap(),
                     args,
                     block,
                     true,
                     loc,
-                ));
+                );
+            } else if let Some(block) = self.parse_block()? {
+                // PRIMARY-METHOD : FNAME BLOCK
+                node = Node::new_send(
+                    Node::new_self(loc),
+                    node.as_method_name().unwrap(),
+                    vec![],
+                    Some(block),
+                    true,
+                    loc,
+                );
             }
         }
         loop {

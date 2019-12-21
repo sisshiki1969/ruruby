@@ -747,7 +747,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let (rec_class, class_method) = match receiver.as_class() {
             Some(cref) => (cref, true),
-            None => (receiver.get_receiver_class(&self.globals), false),
+            None => (receiver.get_class(&self.globals), false),
         };
         match self.globals.get_method_from_cache(cache_slot, receiver) {
             Some(method) => Ok(method),
@@ -1297,9 +1297,10 @@ impl VM {
 
     pub fn get_instance_method(
         &self,
-        mut class: ClassRef,
+        classref: ClassRef,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
+        let mut class = classref;
         loop {
             match class.get_instance_method(method) {
                 Some(methodref) => return Ok(*methodref),
@@ -1307,7 +1308,7 @@ impl VM {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);
-                        let class_name = self.globals.get_ident_name(class.id);
+                        let class_name = self.globals.get_ident_name(classref.id);
                         return Err(self.error_undefined_method(method_name, class_name));
                     }
                 },

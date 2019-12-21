@@ -158,7 +158,7 @@ impl Globals {
     ) -> Option<MethodRef> {
         let (rec_class, class_method) = match receiver.as_class() {
             Some(cref) => (cref, true),
-            None => (receiver.get_receiver_class(&self), false),
+            None => (receiver.get_class(&self), false),
         };
         match self.get_method_cache_entry(cache_slot) {
             Some(MethodCacheEntry {

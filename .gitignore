@@ -4,4 +4,7 @@
 *.jpg
 *.png
 .vscode
+.github
+.devcontainer
+.*
 
