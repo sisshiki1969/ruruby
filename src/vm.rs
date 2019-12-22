@@ -95,7 +95,7 @@ impl VM {
 
     /// Get local variable table.
     pub fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.context().clone();
+        let mut context = self.context();
         for _ in 0..outer {
             context = context.outer.unwrap();
         }
@@ -155,16 +155,7 @@ impl VM {
         )?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         context.iseq_ref = iseq;
-        /*
-            let mut cxt = self.context_stack.pop().unwrap();
-            cxt.pc = 0;
-            cxt
-        */
-        if LVAR_ARRAY_SIZE < iseq.lvars {
-            for _ in 0..iseq.lvars - LVAR_ARRAY_SIZE {
-                context.ext_lvar.push(PackedValue::nil());
-            }
-        }
+        context.adjust_lvar_size();
 
         self.vm_run_context(context)?;
         let val = self.exec_stack.pop().unwrap();
@@ -192,39 +183,17 @@ impl VM {
         block: u32,
     ) -> Result<(), RubyError> {
         let mut context = Context::new(self_value, block, iseq, outer);
-        let arg_len = args.len();
-        if arg_len > LVAR_ARRAY_SIZE {
-            for i in 0..LVAR_ARRAY_SIZE {
-                context.lvar_scope[i] = args[i];
-            }
-            for i in LVAR_ARRAY_SIZE..arg_len {
-                context.ext_lvar[i - LVAR_ARRAY_SIZE] = args[i];
-            }
-        } else {
-            for i in 0..arg_len {
-                context.lvar_scope[i] = args[i];
-            }
-        }
+        context.set_arguments(args);
         if block != 0 {
             if let Some(id) = iseq.lvar.block_param() {
-                let id: usize = id.as_usize();
                 let val = self.create_proc_obj(MethodRef::from(block))?;
-
-                if id < LVAR_ARRAY_SIZE {
-                    context.lvar_scope[id] = val;
-                } else {
-                    context.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
-                }
+                *context.get_mut_lvar(id) = val;
             }
         }
         self.vm_run_context(ContextRef::new_local(&context))
     }
 
-    pub fn vm_run_context(
-        &mut self,
-        context: ContextRef,
-        //mut on_stack: bool,
-    ) -> Result<(), RubyError> {
+    pub fn vm_run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
         self.context_stack.push(context);
         let old_pc = self.pc;
         self.pc = context.pc;
@@ -397,26 +366,18 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::SET_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1).as_usize();
+                    let id = read_lvar_id(iseq, self.pc + 1);
                     let outer = read32(iseq, self.pc + 5);
                     let val = self.exec_stack.pop().unwrap();
                     let mut cref = self.get_outer_context(outer);
-                    if id < LVAR_ARRAY_SIZE {
-                        cref.lvar_scope[id] = val;
-                    } else {
-                        cref.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
-                    }
+                    *cref.get_mut_lvar(id) = val;
                     self.pc += 9;
                 }
                 Inst::GET_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1).as_usize();
+                    let id = read_lvar_id(iseq, self.pc + 1);
                     let outer = read32(iseq, self.pc + 5);
                     let cref = self.get_outer_context(outer);
-                    let val = if id < LVAR_ARRAY_SIZE {
-                        cref.lvar_scope[id]
-                    } else {
-                        cref.ext_lvar[id - LVAR_ARRAY_SIZE]
-                    };
+                    let val = cref.get_lvar(id);
                     self.exec_stack.push(val);
                     self.pc += 9;
                 }
@@ -561,11 +522,12 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.exec_stack.pop().unwrap();
                     let method_id = read_id(iseq, self.pc + 1);
-                    let cache_slot = read32(iseq, self.pc + 9) as usize;
-                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
                     let args_num = read32(iseq, self.pc + 5) as usize;
-                    let args = self.pop_args(args_num);
+                    let cache_slot = read32(iseq, self.pc + 9) as usize;
                     let block = read32(iseq, self.pc + 13);
+                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+
+                    let args = self.pop_args(args_num);
 
                     self.eval_send(methodref, receiver, args, block)?;
                     self.pc += 17;
@@ -573,11 +535,12 @@ impl VM {
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
                     let method_id = read_id(iseq, self.pc + 1);
-                    let cache_slot = read32(iseq, self.pc + 9) as usize;
-                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
                     let args_num = read32(iseq, self.pc + 5) as usize;
-                    let args = self.pop_args(args_num);
+                    let cache_slot = read32(iseq, self.pc + 9) as usize;
                     let block = read32(iseq, self.pc + 13);
+                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+
+                    let args = self.pop_args(args_num);
 
                     self.eval_send(methodref, receiver, args, block)?;
                     self.pc += 17;
@@ -599,7 +562,15 @@ impl VM {
                         Some(val) => (
                             val.clone(),
                             match val.as_class() {
-                                Some(classref) => classref,
+                                Some(classref) => {
+                                    if classref.superclass != Some(superclass) {
+                                        return Err(self.error_type(format!(
+                                            "superclass mismatch for class {}.",
+                                            self.globals.get_ident_name(id),
+                                        )));
+                                    };
+                                    classref
+                                }
                                 None => {
                                     return Err(self.error_type(format!(
                                         "{} is not a class.",
@@ -1356,7 +1327,7 @@ impl VM {
         let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
         let context = self.context_stack.last_mut().unwrap();
         if context.on_stack {
-            *context = ContextRef::new(context.dup());
+            *context = ContextRef::new(context.dup_context());
             context.on_stack = false;
         }
         let outer = self.context();

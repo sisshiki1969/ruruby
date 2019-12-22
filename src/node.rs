@@ -5,7 +5,7 @@ use crate::util::{Annot, IdentId, Loc};
 pub enum NodeKind {
     SelfValue,
     Nil,
-    Number(i64),
+    Integer(i64),
     Float(f64),
     Bool(bool),
     String(String),
@@ -53,7 +53,7 @@ pub enum NodeKind {
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassDef {
         id: IdentId,
-        superclass: IdentId,
+        superclass: Box<Node>,
         body: Box<Node>,
         lvar: LvarCollector,
     },
@@ -107,8 +107,8 @@ impl Node {
         Node::new(NodeKind::Nil, loc)
     }
 
-    pub fn new_number(num: i64, loc: Loc) -> Self {
-        Node::new(NodeKind::Number(num), loc)
+    pub fn new_integer(num: i64, loc: Loc) -> Self {
+        Node::new(NodeKind::Integer(num), loc)
     }
 
     pub fn new_bool(b: bool, loc: Loc) -> Self {
@@ -233,7 +233,7 @@ impl Node {
 
     pub fn new_class_decl(
         id: IdentId,
-        superclass: IdentId,
+        superclass: Node,
         body: Node,
         lvar: LvarCollector,
         loc: Loc,
@@ -241,7 +241,7 @@ impl Node {
         Node::new(
             NodeKind::ClassDef {
                 id,
-                superclass,
+                superclass: Box::new(superclass),
                 body: Box::new(body),
                 lvar,
             },

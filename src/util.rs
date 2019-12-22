@@ -2,10 +2,11 @@ use core::ptr::NonNull;
 use std::collections::HashMap;
 
 const INITIALIZE: usize = 0;
-const NEW: usize = 1;
-const _ADD: usize = 2;
-const _SUB: usize = 3;
-const _MUL: usize = 4;
+const OBJECT: usize = 1;
+const NEW: usize = 2;
+const _ADD: usize = 3;
+const _SUB: usize = 4;
+const _MUL: usize = 5;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -179,6 +180,7 @@ impl From<u32> for IdentId {
 
 impl IdentId {
     pub const INITIALIZE: IdentId = IdentId(INITIALIZE);
+    pub const OBJECT: IdentId = IdentId(OBJECT);
     pub const NEW: IdentId = IdentId(NEW);
     pub const _ADD: IdentId = IdentId(_ADD);
     pub const _SUB: IdentId = IdentId(_SUB);
@@ -200,6 +202,7 @@ impl IdentifierTable {
             ident_id: 20,
         };
         table.set_ident_id("initialize", INITIALIZE);
+        table.set_ident_id("Object", OBJECT);
         table.set_ident_id("new", NEW);
         table.set_ident_id("@add", _ADD);
         table.set_ident_id("@sub", _SUB);

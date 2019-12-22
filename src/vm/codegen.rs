@@ -561,7 +561,7 @@ impl Codegen {
             match &node.kind {
                 NodeKind::Nil
                 | NodeKind::Bool(_)
-                | NodeKind::Number(_)
+                | NodeKind::Integer(_)
                 | NodeKind::Float(_)
                 | NodeKind::String(_)
                 | NodeKind::Symbol(_)
@@ -578,7 +578,7 @@ impl Codegen {
                     iseq.push(Inst::PUSH_FALSE)
                 }
             }
-            NodeKind::Number(num) => {
+            NodeKind::Integer(num) => {
                 self.gen_fixnum(iseq, *num);
             }
             NodeKind::Float(num) => {
@@ -668,7 +668,7 @@ impl Codegen {
                 let loc = self.loc;
                 match op {
                     BinOp::Add => match rhs.kind {
-                        NodeKind::Number(i) if i as u64 as u32 as i32 as i64 == i => {
+                        NodeKind::Integer(i) if i as u64 as u32 as i32 as i64 == i => {
                             self.gen(globals, iseq, lhs, true)?;
                             self.loc = loc;
                             self.gen_addi(iseq, i as u64 as u32 as i32);
@@ -681,7 +681,7 @@ impl Codegen {
                         }
                     },
                     BinOp::Sub => match rhs.kind {
-                        NodeKind::Number(i) if i as u64 as u32 as i32 as i64 == i => {
+                        NodeKind::Integer(i) if i as u64 as u32 as i32 as i64 == i => {
                             self.gen(globals, iseq, lhs, true)?;
                             self.loc = loc;
                             self.gen_subi(iseq, i as u64 as u32 as i32);
@@ -954,7 +954,7 @@ impl Codegen {
                 lvar,
             } => {
                 let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false)?;
-                self.gen_get_const(iseq, *superclass);
+                self.gen(globals, iseq, superclass, true)?;
                 self.save_loc(iseq);
                 iseq.push(Inst::DEF_CLASS);
                 self.push32(iseq, (*id).into());

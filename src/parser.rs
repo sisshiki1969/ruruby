@@ -361,20 +361,20 @@ impl Parser {
         };
         Ok(self.get_ident_id(&name))
     }
-
-    /// Get the next token and examine whether it is Const.
-    /// Return IdentId of the Const.
-    /// If not, return RubyError.
-    fn expect_const(&mut self) -> Result<IdentId, RubyError> {
-        let name = match &self.get()?.kind {
-            TokenKind::Const(s) => s.clone(),
-            _ => {
-                return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
-            }
-        };
-        Ok(self.get_ident_id(&name))
-    }
-
+    /*
+        /// Get the next token and examine whether it is Const.
+        /// Return IdentId of the Const.
+        /// If not, return RubyError.
+        fn expect_const(&mut self) -> Result<IdentId, RubyError> {
+            let name = match &self.get()?.kind {
+                TokenKind::Const(s) => s.clone(),
+                _ => {
+                    return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
+                }
+            };
+            Ok(self.get_ident_id(&name))
+        }
+    */
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
         RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
     }
@@ -876,7 +876,7 @@ impl Parser {
         if self.consume_punct(Punct::Minus) {
             let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
-            let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_number(-1, loc));
+            let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_integer(-1, loc));
             Ok(lhs)
         } else {
             let lhs = self.parse_unary_bitnot()?;
@@ -1064,7 +1064,7 @@ impl Parser {
                 let id = self.get_ident_id(name);
                 Ok(Node::new_const(id, loc))
             }
-            TokenKind::NumLit(num) => Ok(Node::new_number(*num, loc)),
+            TokenKind::NumLit(num) => Ok(Node::new_integer(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
             TokenKind::OpenDoubleQuote(s) => Ok(self.parse_interporated_string_literal(s)?),
@@ -1140,8 +1140,7 @@ impl Parser {
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Class) => {
-                if self.context_stack.last().unwrap_or_else(|| panic!()).kind == ContextKind::Method
-                {
+                if self.context_stack.last().unwrap().kind == ContextKind::Method {
                     return Err(
                         self.error_unexpected(loc, "SyntaxError: class definition in method body.")
                     );
@@ -1325,19 +1324,18 @@ impl Parser {
     }
 
     fn parse_class(&mut self) -> Result<Node, RubyError> {
-        //  class identifier [`<' identifier]
+        //  class identifier [`<' EXPR]
         //      COMPSTMT
         //  end
-        let mut loc = self.loc();
+        let loc = self.loc();
         let name = match &self.get_no_skip_line_term().kind {
             TokenKind::Const(s) => s.clone(),
             _ => return Err(self.error_unexpected(loc, "Expect class name.")),
         };
         let superclass = if self.consume_punct_no_skip_line_term(Punct::Lt) {
-            loc = loc.merge(self.loc());
-            self.expect_const()?
+            self.parse_expr()?
         } else {
-            self.get_ident_id(&"Object".to_string())
+            Node::new_const(IdentId::OBJECT, loc)
         };
         let id = self.get_ident_id(&name);
         self.context_stack.push(Context::new_class(None));

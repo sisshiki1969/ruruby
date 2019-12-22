@@ -1,14 +1,14 @@
 pub use crate::vm::*;
 use core::ptr::NonNull;
 
-pub const LVAR_ARRAY_SIZE: usize = 8;
+const LVAR_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone)]
 pub struct Context {
     pub self_value: PackedValue,
     pub block: u32,
-    pub lvar_scope: [PackedValue; LVAR_ARRAY_SIZE],
-    pub ext_lvar: Vec<PackedValue>,
+    lvar_scope: [PackedValue; LVAR_ARRAY_SIZE],
+    ext_lvar: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
     pub pc: usize,
     pub outer: Option<ContextRef>,
@@ -41,6 +41,40 @@ impl Context {
             on_stack: true,
         }
     }
+
+    pub fn get_lvar(&self, id: LvarId) -> PackedValue {
+        let id = id.as_usize();
+        if id < LVAR_ARRAY_SIZE {
+            self.lvar_scope[id]
+        } else {
+            self.ext_lvar[id - LVAR_ARRAY_SIZE]
+        }
+    }
+
+    pub fn get_mut_lvar(&mut self, id: LvarId) -> &mut PackedValue {
+        let id = id.as_usize();
+        if id < LVAR_ARRAY_SIZE {
+            &mut self.lvar_scope[id]
+        } else {
+            &mut self.ext_lvar[id - LVAR_ARRAY_SIZE]
+        }
+    }
+
+    pub fn set_arguments(&mut self, args: Vec<PackedValue>) {
+        let arg_len = std::cmp::min(args.len(), self.iseq_ref.params.len());
+        if arg_len <= LVAR_ARRAY_SIZE {
+            for i in 0..arg_len {
+                self.lvar_scope[i] = args[i];
+            }
+        } else {
+            for i in 0..LVAR_ARRAY_SIZE {
+                self.lvar_scope[i] = args[i];
+            }
+            for i in LVAR_ARRAY_SIZE..arg_len {
+                self.ext_lvar[i - LVAR_ARRAY_SIZE] = args[i];
+            }
+        }
+    }
 }
 
 impl ContextRef {
@@ -57,7 +91,17 @@ impl ContextRef {
         let boxed = info as *const Context as *mut Context;
         Ref(unsafe { NonNull::new_unchecked(boxed) })
     }
-    pub fn dup(&self) -> Context {
+
+    pub fn dup_context(&self) -> Context {
         unsafe { (*self.0.as_ptr()).clone() }
+    }
+
+    pub fn adjust_lvar_size(&mut self) {
+        let len = self.iseq_ref.lvars;
+        if LVAR_ARRAY_SIZE < len {
+            for _ in 0..len - LVAR_ARRAY_SIZE {
+                self.ext_lvar.push(PackedValue::nil());
+            }
+        }
     }
 }
