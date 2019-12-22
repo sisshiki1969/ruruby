@@ -6,7 +6,7 @@ const LVAR_ARRAY_SIZE: usize = 8;
 #[derive(Debug, Clone)]
 pub struct Context {
     pub self_value: PackedValue,
-    pub block: u32,
+    pub block: Option<ContextRef>,
     lvar_scope: [PackedValue; LVAR_ARRAY_SIZE],
     ext_lvar: Vec<PackedValue>,
     pub iseq_ref: ISeqRef,
@@ -20,7 +20,7 @@ pub type ContextRef = Ref<Context>;
 impl Context {
     pub fn new(
         self_value: PackedValue,
-        block: u32,
+        block: Option<ContextRef>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
     ) -> Self {
@@ -80,7 +80,7 @@ impl Context {
 impl ContextRef {
     pub fn from(
         self_value: PackedValue,
-        block: u32,
+        block: Option<ContextRef>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
     ) -> Self {

@@ -1,0 +1,1 @@
+10000.times do |x| 1000.times do |x| end end

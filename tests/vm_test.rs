@@ -567,7 +567,10 @@ fn class3() {
         class Bar < Foo
         end
         assert(Foo, Bar.superclass)
-        assert(Object, Bar.superclass.superclass)";
+        assert(Object, Bar.superclass.superclass)
+        assert(Class, Bar.class)
+        assert(Bar, Bar.new.class)
+        assert(Integer, -3456.class)";
     let expected = Value::Nil;
     eval_script(program, expected);
 }

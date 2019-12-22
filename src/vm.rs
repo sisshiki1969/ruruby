@@ -4,6 +4,7 @@ mod class;
 mod codegen;
 mod context;
 mod globals;
+mod integer;
 mod method;
 mod object;
 #[cfg(feature = "perf")]
@@ -17,18 +18,15 @@ use crate::error::{RubyError, RuntimeErrKind};
 use crate::node::*;
 pub use crate::parser::{LvarCollector, LvarId};
 pub use crate::util::*;
-pub use array::*;
-pub use builtin::*;
+use array::*;
 pub use class::*;
 use codegen::{Codegen, ISeq, ISeqPos};
 pub use context::*;
 pub use globals::*;
 pub use method::*;
-pub use object::*;
+use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
-pub use procobj::*;
-pub use range::*;
 use std::collections::HashMap;
 pub use value::*;
 use vm_inst::*;
@@ -63,6 +61,10 @@ impl VM {
         const_table.insert(
             globals.get_ident_id("Class"),
             PackedValue::class(&globals, globals.class_class),
+        );
+        const_table.insert(
+            globals.get_ident_id("Integer"),
+            PackedValue::class(&globals, globals.integer_class),
         );
         const_table.insert(
             globals.get_ident_id("Array"),
@@ -118,7 +120,7 @@ impl VM {
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let class = self.globals.main_class;
         let main_object = PackedValue::class(&mut self.globals, class);
-        self.vm_run(main_object, iseq, None, vec![], 0)?;
+        self.vm_run(main_object, iseq, None, vec![], None)?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -180,15 +182,17 @@ impl VM {
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args: Vec<PackedValue>,
-        block: u32,
+        block: Option<ContextRef>,
     ) -> Result<(), RubyError> {
         let mut context = Context::new(self_value, block, iseq, outer);
         context.set_arguments(args);
-        if block != 0 {
-            if let Some(id) = iseq.lvar.block_param() {
-                let val = self.create_proc_obj(MethodRef::from(block))?;
-                *context.get_mut_lvar(id) = val;
+        match block {
+            Some(block) => {
+                if let Some(id) = iseq.lvar.block_param() {
+                    *context.get_mut_lvar(id) = PackedValue::procobj(&self.globals, block);
+                }
             }
+            None => {}
         }
         self.vm_run_context(ContextRef::new_local(&context))
     }
@@ -856,7 +860,7 @@ impl VM {
                 }
                 (_, _) => {
                     return Err(self.error_undefined_method(
-                        format!("+ {}", self.globals.get_class_name(rhs)),
+                        format!("- {}", self.globals.get_class_name(rhs)),
                         self.globals.get_class_name(lhs),
                     ))
                 }
@@ -961,7 +965,7 @@ impl VM {
                 Ok(Value::FloatNum(lhs / (rhs as f64)).pack())
             }
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs / rhs).pack()),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '*'")),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '/'")),
         }
     }
 
@@ -982,21 +986,21 @@ impl VM {
     fn eval_bitand(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs & rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '&'")),
         }
     }
 
     fn eval_bitor(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs | rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '|'")),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs ^ rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '^'")),
         }
     }
 
@@ -1184,6 +1188,12 @@ impl VM {
         args: Vec<PackedValue>,
         block: u32,
     ) -> Result<(), RubyError> {
+        let block = if block != 0 {
+            let val = self.create_context_from_method(MethodRef::from(block))?;
+            Some(val)
+        } else {
+            None
+        };
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
@@ -1197,7 +1207,7 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                let val = func(self, receiver, args)?;
+                let val = func(self, receiver, args, block)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
@@ -1220,7 +1230,6 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                //args.push(block);
                 self.vm_run(receiver, iseq, None, args, block)?;
                 #[cfg(feature = "perf")]
                 {
@@ -1324,6 +1333,11 @@ impl VM {
     }
 
     fn create_proc_obj(&mut self, method: MethodRef) -> Result<PackedValue, RubyError> {
+        let context = self.create_context_from_method(method)?;
+        Ok(PackedValue::procobj(&self.globals, context))
+    }
+
+    fn create_context_from_method(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
         let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
         let context = self.context_stack.last_mut().unwrap();
         if context.on_stack {
@@ -1331,7 +1345,6 @@ impl VM {
             context.on_stack = false;
         }
         let outer = self.context();
-        let context = ContextRef::from(outer.self_value, 0, iseq, Some(outer));
-        Ok(PackedValue::procobj(&self.globals, context))
+        Ok(ContextRef::from(outer.self_value, None, iseq, Some(outer)))
     }
 }

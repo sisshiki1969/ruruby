@@ -32,7 +32,12 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
 
 // Class methods
 
-fn array_new(vm: &mut VM, _receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn array_new(
+    vm: &mut VM,
+    _receiver: PackedValue,
+    args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].as_fixnum() {
@@ -56,7 +61,12 @@ fn array_new(vm: &mut VM, _receiver: PackedValue, args: Vec<PackedValue>) -> VMR
 
 // Instance methods
 
-fn array_push(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn array_push(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     let mut aref = receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
@@ -66,7 +76,12 @@ fn array_push(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMR
     Ok(receiver)
 }
 
-fn array_pop(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+fn array_pop(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     let mut aref = receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
@@ -74,7 +89,12 @@ fn array_pop(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMR
     Ok(res)
 }
 
-fn array_length(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+fn array_length(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     let aref = receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;

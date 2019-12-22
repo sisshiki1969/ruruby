@@ -13,6 +13,7 @@ pub struct Parser {
     prev_cursor: usize,
     context_stack: Vec<Context>,
     pub ident_table: IdentifierTable,
+    state_save: Vec<(usize, usize)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -163,7 +164,22 @@ impl Parser {
             prev_cursor: 0,
             context_stack: vec![],
             ident_table: IdentifierTable::new(),
+            state_save: vec![],
         }
+    }
+
+    fn save_state(&mut self) {
+        self.state_save.push((self.cursor, self.prev_cursor));
+    }
+
+    fn restore_state(&mut self) {
+        let state = self.state_save.pop().unwrap();
+        self.cursor = state.0;
+        self.prev_cursor = state.1;
+    }
+
+    fn discard_state(&mut self) {
+        self.state_save.pop().unwrap();
     }
 
     pub fn get_context_depth(&self) -> usize {
@@ -440,6 +456,7 @@ impl Parser {
                 _ => {}
             };
             let node = self.parse_stmt()?;
+            //println!("node {:?}", node);
             nodes.push(node);
             if !self.consume_term() {
                 break;
@@ -873,12 +890,22 @@ impl Parser {
 
     fn parse_unary_minus(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
+        self.save_state();
         if self.consume_punct(Punct::Minus) {
+            match self.peek().kind {
+                TokenKind::NumLit(_) | TokenKind::FloatLit(_) => {
+                    self.restore_state();
+                    let lhs = self.parse_unary_bitnot()?;
+                    return Ok(lhs);
+                }
+                _ => self.discard_state(),
+            };
             let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
             let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_integer(-1, loc));
             Ok(lhs)
         } else {
+            self.discard_state();
             let lhs = self.parse_unary_bitnot()?;
             Ok(lhs)
         }
@@ -958,6 +985,9 @@ impl Parser {
                         completed = true;
                     }
                     let block = self.parse_block()?;
+                    if block.is_some() {
+                        completed = true;
+                    };
                     let node = match node.kind {
                         NodeKind::Ident(id, _) => {
                             Node::new_send(Node::new_self(loc), id, vec![], None, true, loc)
@@ -1068,48 +1098,60 @@ impl Parser {
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
             TokenKind::OpenDoubleQuote(s) => Ok(self.parse_interporated_string_literal(s)?),
-            TokenKind::Punct(Punct::LParen) => {
-                let node = self.parse_comp_stmt()?;
-                self.expect_punct(Punct::RParen)?;
-                Ok(node)
-            }
-            TokenKind::Punct(Punct::LBracket) => {
-                let nodes = self.parse_args(Punct::RBracket)?;
-                Ok(Node::new(
-                    NodeKind::Array(nodes),
-                    loc.merge(self.prev_loc()),
-                ))
-            }
-            TokenKind::Punct(Punct::Colon) => {
-                let ident = self.expect_ident()?;
-                Ok(Node::new_symbol(ident, loc.merge(self.prev_loc())))
-            }
-            TokenKind::Punct(Punct::Arrow) => {
-                let mut params = vec![];
-                self.context_stack.push(Context::new_block());
-                if self.consume_punct(Punct::LParen) {
-                    if !self.consume_punct(Punct::RParen) {
-                        loop {
-                            let id = self.expect_ident()?;
-                            params.push(Node::new_param(id, self.prev_loc()));
-                            self.add_local_var(id);
-                            if !self.consume_punct(Punct::Comma) {
-                                break;
+            TokenKind::Punct(punct) => match punct {
+                Punct::Minus => match self.get()?.kind {
+                    TokenKind::NumLit(num) => Ok(Node::new_integer(-num, loc)),
+                    TokenKind::FloatLit(num) => Ok(Node::new_float(-num, loc)),
+                    _ => unreachable!(),
+                },
+                Punct::LParen => {
+                    let node = self.parse_comp_stmt()?;
+                    self.expect_punct(Punct::RParen)?;
+                    Ok(node)
+                }
+                Punct::LBracket => {
+                    let nodes = self.parse_args(Punct::RBracket)?;
+                    Ok(Node::new(
+                        NodeKind::Array(nodes),
+                        loc.merge(self.prev_loc()),
+                    ))
+                }
+                Punct::Colon => {
+                    let ident = self.expect_ident()?;
+                    Ok(Node::new_symbol(ident, loc.merge(self.prev_loc())))
+                }
+                Punct::Arrow => {
+                    let mut params = vec![];
+                    self.context_stack.push(Context::new_block());
+                    if self.consume_punct(Punct::LParen) {
+                        if !self.consume_punct(Punct::RParen) {
+                            loop {
+                                let id = self.expect_ident()?;
+                                params.push(Node::new_param(id, self.prev_loc()));
+                                self.add_local_var(id);
+                                if !self.consume_punct(Punct::Comma) {
+                                    break;
+                                }
                             }
+                            self.expect_punct(Punct::RParen)?;
                         }
-                        self.expect_punct(Punct::RParen)?;
-                    }
-                } else if let TokenKind::Ident(_, _) = self.peek().kind {
-                    let id = self.expect_ident()?;
-                    self.add_local_var(id);
-                    params.push(Node::new_param(id, self.prev_loc()));
-                };
-                self.expect_punct(Punct::LBrace)?;
-                let body = self.parse_comp_stmt()?;
-                self.expect_punct(Punct::RBrace)?;
-                let lvar = self.context_stack.pop().unwrap().lvar;
-                Ok(Node::new_proc(params, body, lvar, loc))
-            }
+                    } else if let TokenKind::Ident(_, _) = self.peek().kind {
+                        let id = self.expect_ident()?;
+                        self.add_local_var(id);
+                        params.push(Node::new_param(id, self.prev_loc()));
+                    };
+                    self.expect_punct(Punct::LBrace)?;
+                    let body = self.parse_comp_stmt()?;
+                    self.expect_punct(Punct::RBrace)?;
+                    let lvar = self.context_stack.pop().unwrap().lvar;
+                    Ok(Node::new_proc(params, body, lvar, loc))
+                }
+                _ => {
+                    return Err(
+                        self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
+                    )
+                }
+            },
             TokenKind::Reserved(Reserved::If) => {
                 let node = self.parse_if_then()?;
                 self.expect_reserved(Reserved::End)?;

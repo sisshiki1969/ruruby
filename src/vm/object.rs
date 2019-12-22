@@ -1,5 +1,6 @@
 use super::array::ArrayRef;
 use super::class::ClassRef;
+use super::procobj::ProcRef;
 use super::range::RangeRef;
 use crate::vm::*;
 use std::collections::HashMap;
@@ -95,13 +96,12 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "class", object_class);
 }
 
-fn object_class(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
-    let val = match receiver.unpack() {
-        Value::Object(oref) => PackedValue::class(&mut vm.globals, oref.classref),
-        _ => {
-            let class = vm.globals.object_class;
-            PackedValue::class(&mut vm.globals, class)
-        }
-    };
-    Ok(val)
+fn object_class(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
+    let class = receiver.get_class(&vm.globals);
+    Ok(PackedValue::class(&mut vm.globals, class))
 }

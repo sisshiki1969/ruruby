@@ -92,9 +92,10 @@ impl PackedValue {
     }
 
     pub fn get_class(&self, globals: &Globals) -> ClassRef {
-        match self.as_object() {
-            Some(oref) => oref.classref,
-            None => globals.object_class,
+        match self.unpack() {
+            Value::FixNum(_) => globals.integer_class,
+            Value::Object(oref) => oref.classref,
+            _ => globals.object_class,
         }
     }
 
@@ -173,7 +174,7 @@ impl PackedValue {
         }
     }
 
-    pub fn as_proc(&self) -> Option<ProcRef> {
+    pub fn as_proc(&self) -> Option<procobj::ProcRef> {
         match self.as_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
@@ -267,7 +268,7 @@ impl PackedValue {
     }
 
     pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
-        let rref = RangeRef::new(start, end, exclude);
+        let rref = range::RangeRef::new(start, end, exclude);
         PackedValue::object(ObjectRef::new_range(globals, rref))
     }
 
@@ -433,7 +434,7 @@ mod tests {
         let to = Value::FixNum(36).pack();
         let expect = Value::Object(ObjectRef::new_range(
             &globals,
-            RangeRef::new(from, to, false),
+            range::RangeRef::new(from, to, false),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {

@@ -95,6 +95,10 @@ fn repl_vm() {
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     */
+    println!(
+        "Option<PackedValue>: {}",
+        std::mem::size_of::<Option<PackedValue>>()
+    );
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
@@ -107,7 +111,7 @@ fn repl_vm() {
     let main_object = PackedValue::class(&mut vm.globals, class);
     let context = ContextRef::from(
         main_object,
-        0,
+        None,
         ISeqRef::new(ISeqInfo::new(vec![], vec![], LvarCollector::new(), vec![])),
         None,
     );

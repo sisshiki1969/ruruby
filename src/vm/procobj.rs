@@ -22,21 +22,34 @@ impl ProcRef {
 pub fn init_proc(globals: &mut Globals) -> ClassRef {
     let proc_id = globals.get_ident_id("Proc");
     let proc_class = ClassRef::from(proc_id, globals.object_class);
-    globals.add_builtin_instance_method(proc_class, "call", procobj::proc_call);
-    globals.add_builtin_class_method(proc_class, "new", procobj::proc_new);
+    globals.add_builtin_instance_method(proc_class, "call", proc_call);
+    globals.add_builtin_class_method(proc_class, "new", proc_new);
     proc_class
 }
 
 // Class methods
 
-fn proc_new(_vm: &mut VM, _receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
-    let procobj = PackedValue::nil();
+fn proc_new(
+    vm: &mut VM,
+    _receiver: PackedValue,
+    _args: Vec<PackedValue>,
+    block: Option<ContextRef>,
+) -> VMResult {
+    let procobj = match block {
+        Some(block) => PackedValue::procobj(&vm.globals, block),
+        None => return Err(vm.error_type("Needs block.")),
+    };
     Ok(procobj)
 }
 
 // Instance methods
 
-fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn proc_call(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     let pref = match receiver.as_proc() {
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
@@ -46,7 +59,7 @@ fn proc_call(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
         pref.context.iseq_ref,
         pref.context.outer,
         args,
-        0,
+        None,
     )?;
     let res = vm.exec_stack.pop().unwrap();
     Ok(res)

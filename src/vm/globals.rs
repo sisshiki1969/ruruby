@@ -9,6 +9,7 @@ pub struct Globals {
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
     pub main_class: ClassRef,
+    pub integer_class: ClassRef,
     pub array_class: ClassRef,
     pub class_class: ClassRef,
     pub proc_class: ClassRef,
@@ -31,16 +32,17 @@ impl Globals {
             method_cache: MethodCache::new(),
             class_version: 0,
             main_class,
+            integer_class: object_class,
             array_class: object_class,
             class_class: object_class,
             proc_class: object_class,
             object_class,
         };
         object::init_object(&mut globals);
+        globals.integer_class = integer::init_integer(&mut globals);
         globals.array_class = array::init_array(&mut globals);
         globals.class_class = class::init_class(&mut globals);
         globals.proc_class = procobj::init_proc(&mut globals);
-        globals.get_ident_id("initialize");
         globals
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {

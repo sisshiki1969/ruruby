@@ -54,7 +54,12 @@ pub fn init_class(globals: &mut Globals) -> ClassRef {
 
 // Class methods
 
-fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>) -> VMResult {
+fn class_superclass(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     match receiver.as_class() {
         Some(cref) => match cref.superclass {
             Some(superclass) => Ok(PackedValue::class(&mut vm.globals, superclass)),
@@ -65,7 +70,12 @@ fn class_superclass(vm: &mut VM, receiver: PackedValue, _args: Vec<PackedValue>)
 }
 
 /// Built-in function "new".
-fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn class_new(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     match receiver.as_class() {
         Some(class_ref) => {
             let instance = ObjectRef::from(class_ref);
@@ -73,7 +83,7 @@ fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
             // call initialize method.
             if let Some(methodref) = class_ref.get_instance_method(IdentId::INITIALIZE) {
                 let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
-                vm.vm_run(new_instance, iseq, None, args, 0)?;
+                vm.vm_run(new_instance, iseq, None, args, None)?;
                 vm.exec_stack.pop().unwrap();
             };
             Ok(new_instance)
@@ -82,7 +92,12 @@ fn class_new(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMRe
     }
 }
 /// Built-in function "attr_accessor".
-fn class_attr(vm: &mut VM, receiver: PackedValue, args: Vec<PackedValue>) -> VMResult {
+fn class_attr(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: Vec<PackedValue>,
+    _block: Option<ContextRef>,
+) -> VMResult {
     match receiver.as_class() {
         Some(classref) => {
             for arg in args {
