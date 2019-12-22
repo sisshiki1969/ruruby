@@ -4,7 +4,7 @@ pub type BuiltinFunc = fn(
     vm: &mut VM,
     receiver: PackedValue,
     args: Vec<PackedValue>,
-    block: Option<ContextRef>,
+    block: Option<MethodRef>,
 ) -> VMResult;
 
 pub type MethodTable = HashMap<IdentId, MethodRef>;

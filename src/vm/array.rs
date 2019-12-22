@@ -36,7 +36,7 @@ fn array_new(
     vm: &mut VM,
     _receiver: PackedValue,
     args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let array_vec = match args.len() {
         0 => vec![],
@@ -65,7 +65,7 @@ fn array_push(
     vm: &mut VM,
     receiver: PackedValue,
     args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let mut aref = receiver
         .as_array()
@@ -80,7 +80,7 @@ fn array_pop(
     vm: &mut VM,
     receiver: PackedValue,
     _args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let mut aref = receiver
         .as_array()
@@ -93,7 +93,7 @@ fn array_length(
     vm: &mut VM,
     receiver: PackedValue,
     _args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
         .as_array()

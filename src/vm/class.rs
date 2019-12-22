@@ -58,7 +58,7 @@ fn class_superclass(
     vm: &mut VM,
     receiver: PackedValue,
     _args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     match receiver.as_class() {
         Some(cref) => match cref.superclass {
@@ -74,7 +74,7 @@ fn class_new(
     vm: &mut VM,
     receiver: PackedValue,
     args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     match receiver.as_class() {
         Some(class_ref) => {
@@ -96,7 +96,7 @@ fn class_attr(
     vm: &mut VM,
     receiver: PackedValue,
     args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     match receiver.as_class() {
         Some(classref) => {

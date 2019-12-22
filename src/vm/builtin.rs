@@ -15,7 +15,7 @@ impl Builtin {
             vm: &mut VM,
             _receiver: PackedValue,
             args: Vec<PackedValue>,
-            _block: Option<ContextRef>,
+            _block: Option<MethodRef>,
         ) -> VMResult {
             fn flatten(vm: &VM, val: PackedValue) {
                 match val.as_array() {
@@ -38,7 +38,7 @@ impl Builtin {
             vm: &mut VM,
             _receiver: PackedValue,
             args: Vec<PackedValue>,
-            _block: Option<ContextRef>,
+            _block: Option<MethodRef>,
         ) -> VMResult {
             for arg in args {
                 if let Value::Char(ch) = arg.unpack() {
@@ -57,7 +57,7 @@ impl Builtin {
             vm: &mut VM,
             _receiver: PackedValue,
             args: Vec<PackedValue>,
-            _block: Option<ContextRef>,
+            _block: Option<MethodRef>,
         ) -> VMResult {
             if args.len() != 2 {
                 panic!("Invalid number of arguments.");
@@ -79,7 +79,7 @@ impl Builtin {
             vm: &mut VM,
             _receiver: PackedValue,
             _args: Vec<PackedValue>,
-            _block: Option<ContextRef>,
+            _block: Option<MethodRef>,
         ) -> VMResult {
             Ok(PackedValue::bool(vm.context().block.is_some()))
         }

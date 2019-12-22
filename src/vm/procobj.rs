@@ -33,10 +33,13 @@ fn proc_new(
     vm: &mut VM,
     _receiver: PackedValue,
     _args: Vec<PackedValue>,
-    block: Option<ContextRef>,
+    block: Option<MethodRef>,
 ) -> VMResult {
     let procobj = match block {
-        Some(block) => PackedValue::procobj(&vm.globals, block),
+        Some(block) => {
+            let context = vm.create_context_from_method(block)?;
+            PackedValue::procobj(&vm.globals, context)
+        }
         None => return Err(vm.error_type("Needs block.")),
     };
     Ok(procobj)
@@ -48,7 +51,7 @@ fn proc_call(
     vm: &mut VM,
     receiver: PackedValue,
     args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let pref = match receiver.as_proc() {
         Some(pref) => pref,

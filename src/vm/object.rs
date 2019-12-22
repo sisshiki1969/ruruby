@@ -100,7 +100,7 @@ fn object_class(
     vm: &mut VM,
     receiver: PackedValue,
     _args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let class = receiver.get_class(&vm.globals);
     Ok(PackedValue::class(&mut vm.globals, class))

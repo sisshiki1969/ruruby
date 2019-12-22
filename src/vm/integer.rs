@@ -17,7 +17,7 @@ fn integer_times(
     vm: &mut VM,
     receiver: PackedValue,
     _args: Vec<PackedValue>,
-    block: Option<ContextRef>,
+    block: Option<MethodRef>,
 ) -> VMResult {
     let num = receiver.as_fixnum().unwrap();
     if num < 1 {
@@ -25,12 +25,16 @@ fn integer_times(
     };
     match block {
         None => return Ok(PackedValue::nil()),
-        Some(context) => {
+        Some(method) => {
+            let self_value = vm.context().self_value;
+            let context = vm.context();
+            let info = vm.globals.get_method_info(method);
+            let iseq = info.as_iseq(&vm)?;
             for i in 0..num {
                 vm.vm_run(
-                    context.self_value,
-                    context.iseq_ref,
-                    context.outer,
+                    self_value,
+                    iseq,
+                    Some(context),
                     vec![PackedValue::fixnum(i)],
                     None,
                 )?;
@@ -46,7 +50,7 @@ fn integer_chr(
     _vm: &mut VM,
     receiver: PackedValue,
     _args: Vec<PackedValue>,
-    _block: Option<ContextRef>,
+    _block: Option<MethodRef>,
 ) -> VMResult {
     let num = receiver.as_fixnum().unwrap();
     Ok(Value::Char(num as u8).pack())
