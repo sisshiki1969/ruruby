@@ -1,11 +1,7 @@
 use crate::vm::*;
 
-pub type BuiltinFunc = fn(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: Vec<PackedValue>,
-    block: Option<MethodRef>,
-) -> VMResult;
+pub type BuiltinFunc =
+    fn(vm: &mut VM, receiver: PackedValue, args: VecArray, block: Option<MethodRef>) -> VMResult;
 
 pub type MethodTable = HashMap<IdentId, MethodRef>;
 

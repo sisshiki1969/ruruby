@@ -120,7 +120,7 @@ impl VM {
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let class = self.globals.main_class;
         let main_object = PackedValue::class(&mut self.globals, class);
-        self.vm_run(main_object, iseq, None, vec![], None)?;
+        self.vm_run(main_object, iseq, None, VecArray::new0(), None)?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
         {
@@ -181,7 +181,7 @@ impl VM {
         self_value: PackedValue,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
-        args: Vec<PackedValue>,
+        args: VecArray,
         block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
         let mut context = Context::new(self_value, block, iseq, outer);
@@ -532,7 +532,7 @@ impl VM {
                     let block = read32(iseq, self.pc + 13);
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
 
-                    let args = self.pop_args(args_num);
+                    let args = self.pop_args_to_ary(args_num);
                     let block = if block != 0 {
                         Some(MethodRef::from(block))
                     } else {
@@ -549,7 +549,7 @@ impl VM {
                     let block = read32(iseq, self.pc + 13);
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
 
-                    let args = self.pop_args(args_num);
+                    let args = self.pop_args_to_ary(args_num);
                     let block = if block != 0 {
                         Some(MethodRef::from(block))
                     } else {
@@ -602,7 +602,7 @@ impl VM {
 
                     self.class_stack.push(classref);
 
-                    self.eval_send(methodref, val, vec![], None)?;
+                    self.eval_send(methodref, val, VecArray::new0(), None)?;
                     self.pc += 9;
                     self.class_stack.pop().unwrap();
                 }
@@ -771,7 +771,7 @@ impl VM {
                     let method = IdentId::_ADD;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs], None)?;
+                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None)?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -810,7 +810,7 @@ impl VM {
                             self.eval_send(
                                 mref.clone(),
                                 lhs,
-                                vec![PackedValue::fixnum(i as i64)],
+                                VecArray::new1(PackedValue::fixnum(i as i64)),
                                 None,
                             )?;
                         }
@@ -856,7 +856,7 @@ impl VM {
                     let method = IdentId::_SUB;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs], None)?;
+                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None)?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -895,7 +895,7 @@ impl VM {
                             self.eval_send(
                                 mref.clone(),
                                 lhs,
-                                vec![PackedValue::fixnum(i as i64)],
+                                VecArray::new1(PackedValue::fixnum(i as i64)),
                                 None,
                             )?;
                         }
@@ -941,7 +941,7 @@ impl VM {
                     let method = IdentId::_MUL;
                     match l_ref.get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, vec![rhs], None)?;
+                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None)?;
                         }
                         None => {
                             return Err(self.error_undefined_method(
@@ -1194,7 +1194,7 @@ impl VM {
         &mut self,
         methodref: MethodRef,
         receiver: PackedValue,
-        args: Vec<PackedValue>,
+        args: VecArray,
         block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
@@ -1332,6 +1332,14 @@ impl VM {
             args.push(self.exec_stack.pop().unwrap());
         }
         args.reverse();
+        args
+    }
+
+    fn pop_args_to_ary(&mut self, arg_num: usize) -> VecArray {
+        let mut args = VecArray::new(arg_num);
+        for i in 0..arg_num {
+            args[arg_num - i - 1] = self.exec_stack.pop().unwrap();
+        }
         args
     }
 
