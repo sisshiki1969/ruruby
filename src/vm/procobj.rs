@@ -32,7 +32,7 @@ pub fn init_proc(globals: &mut Globals) -> ClassRef {
 fn proc_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let procobj = match block {
@@ -50,7 +50,7 @@ fn proc_new(
 fn proc_call(
     vm: &mut VM,
     receiver: PackedValue,
-    args: Vec<PackedValue>,
+    args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let pref = match receiver.as_proc() {

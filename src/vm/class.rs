@@ -57,7 +57,7 @@ pub fn init_class(globals: &mut Globals) -> ClassRef {
 fn class_superclass(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     match receiver.as_class() {
@@ -73,7 +73,7 @@ fn class_superclass(
 fn class_new(
     vm: &mut VM,
     receiver: PackedValue,
-    args: Vec<PackedValue>,
+    args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     match receiver.as_class() {
@@ -95,12 +95,12 @@ fn class_new(
 fn class_attr(
     vm: &mut VM,
     receiver: PackedValue,
-    args: Vec<PackedValue>,
+    args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     match receiver.as_class() {
         Some(classref) => {
-            for arg in args {
+            for arg in args.iter() {
                 if arg.is_packed_symbol() {
                     let id = arg.as_packed_symbol();
                     let info = MethodInfo::AttrReader { id };

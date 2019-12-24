@@ -99,7 +99,7 @@ pub fn init_object(globals: &mut Globals) {
 fn object_class(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = receiver.get_class(&vm.globals);

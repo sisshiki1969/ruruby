@@ -1,4 +1,6 @@
 use crate::vm::*;
+use std::ops::Deref;
+use std::ops::{Index, IndexMut};
 
 const NIL_VALUE: u64 = 0x08;
 const TRUE_VALUE: u64 = 0x14;
@@ -16,6 +18,80 @@ pub enum Value {
     Symbol(IdentId),
     Object(ObjectRef),
     Char(u8),
+}
+
+const VEC_ARRAY_SIZE: usize = 8;
+
+pub enum VecArray {
+    Array {
+        len: usize,
+        ary: [PackedValue; VEC_ARRAY_SIZE],
+    },
+    Vec(Vec<PackedValue>),
+}
+
+impl VecArray {
+    pub fn new(len: usize) -> Self {
+        if len <= VEC_ARRAY_SIZE {
+            VecArray::Array {
+                len,
+                ary: [PackedValue::nil(); VEC_ARRAY_SIZE],
+            }
+        } else {
+            VecArray::Vec(vec![PackedValue::nil(); len])
+        }
+    }
+
+    pub fn new0() -> Self {
+        VecArray::Array {
+            len: 0,
+            ary: [PackedValue::nil(); VEC_ARRAY_SIZE],
+        }
+    }
+
+    pub fn new1(arg: PackedValue) -> Self {
+        let mut ary = [PackedValue::nil(); VEC_ARRAY_SIZE];
+        ary[0] = arg;
+        VecArray::Array { len: 1, ary }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            VecArray::Array { len, .. } => *len,
+            VecArray::Vec(v) => v.len(),
+        }
+    }
+}
+
+impl Index<usize> for VecArray {
+    type Output = PackedValue;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            VecArray::Array { ary, .. } => &ary[index],
+            VecArray::Vec(v) => &v[index],
+        }
+    }
+}
+
+impl IndexMut<usize> for VecArray {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match self {
+            VecArray::Array { ary, .. } => &mut ary[index],
+            VecArray::Vec(v) => &mut v[index],
+        }
+    }
+}
+
+impl Deref for VecArray {
+    type Target = [PackedValue];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            VecArray::Array { len, ary } => &ary[0..*len],
+            VecArray::Vec(v) => &v,
+        }
+    }
 }
 
 impl Value {

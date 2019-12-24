@@ -16,7 +16,7 @@ pub fn init_integer(globals: &mut Globals) -> ClassRef {
 fn integer_times(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let num = receiver.as_fixnum().unwrap();
@@ -35,7 +35,7 @@ fn integer_times(
                     self_value,
                     iseq,
                     Some(context),
-                    vec![PackedValue::fixnum(i)],
+                    VecArray::new1(PackedValue::fixnum(i)),
                     None,
                 )?;
                 vm.exec_stack.pop().unwrap();
@@ -49,7 +49,7 @@ fn integer_times(
 fn integer_chr(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let num = receiver.as_fixnum().unwrap();

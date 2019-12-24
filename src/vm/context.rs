@@ -60,7 +60,7 @@ impl Context {
         }
     }
 
-    pub fn set_arguments(&mut self, args: Vec<PackedValue>) {
+    pub fn set_arguments(&mut self, args: VecArray) {
         let arg_len = std::cmp::min(args.len(), self.iseq_ref.params.len());
         if arg_len <= LVAR_ARRAY_SIZE {
             for i in 0..arg_len {

@@ -14,7 +14,7 @@ impl Builtin {
         fn builtin_puts(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: Vec<PackedValue>,
+            args: VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             fn flatten(vm: &VM, val: PackedValue) {
@@ -27,8 +27,8 @@ impl Builtin {
                     }
                 }
             }
-            for arg in args {
-                flatten(vm, arg);
+            for arg in args.iter() {
+                flatten(vm, arg.clone());
             }
             Ok(PackedValue::nil())
         }
@@ -37,16 +37,16 @@ impl Builtin {
         fn builtin_print(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: Vec<PackedValue>,
+            args: VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
-            for arg in args {
+            for arg in args.iter() {
                 if let Value::Char(ch) = arg.unpack() {
                     let v = [ch];
                     use std::io::{self, Write};
                     io::stdout().write(&v).unwrap();
                 } else {
-                    print!("{}", vm.val_to_s(arg));
+                    print!("{}", vm.val_to_s(arg.clone()));
                 }
             }
             Ok(PackedValue::nil())
@@ -56,7 +56,7 @@ impl Builtin {
         fn builtin_assert(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: Vec<PackedValue>,
+            args: VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             if args.len() != 2 {
@@ -78,7 +78,7 @@ impl Builtin {
         fn builtin_block_given(
             vm: &mut VM,
             _receiver: PackedValue,
-            _args: Vec<PackedValue>,
+            _args: VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             Ok(PackedValue::bool(vm.context().block.is_some()))

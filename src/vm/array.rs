@@ -35,7 +35,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
 fn array_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    args: Vec<PackedValue>,
+    args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let array_vec = match args.len() {
@@ -64,14 +64,14 @@ fn array_new(
 fn array_push(
     vm: &mut VM,
     receiver: PackedValue,
-    args: Vec<PackedValue>,
+    args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut aref = receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
-    for arg in args {
-        aref.elements.push(arg);
+    for arg in args.iter() {
+        aref.elements.push(arg.clone());
     }
     Ok(receiver)
 }
@@ -79,7 +79,7 @@ fn array_push(
 fn array_pop(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut aref = receiver
@@ -92,7 +92,7 @@ fn array_pop(
 fn array_length(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: Vec<PackedValue>,
+    _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
