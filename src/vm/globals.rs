@@ -8,7 +8,7 @@ pub struct Globals {
     method_cache: MethodCache,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
-    pub main_class: ClassRef,
+    pub main_object: ObjectRef,
     pub integer_class: ClassRef,
     pub array_class: ClassRef,
     pub class_class: ClassRef,
@@ -24,14 +24,13 @@ impl Globals {
         };
         let object_id = ident_table.get_ident_id("Object");
         let object_class = ClassRef::from_no_superclass(object_id);
-        let main_id = ident_table.get_ident_id("main");
-        let main_class = ClassRef::from(main_id, object_class);
+        let main_object = ObjectRef::from(object_class);
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
             method_cache: MethodCache::new(),
             class_version: 0,
-            main_class,
+            main_object,
             integer_class: object_class,
             array_class: object_class,
             class_class: object_class,

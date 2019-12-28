@@ -27,6 +27,7 @@ pub struct ClassInfo {
     pub id: IdentId,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
+    pub constants: ValueTable,
     pub superclass: Option<ClassRef>,
     pub subclass: HashMap<IdentId, ClassRef>,
 }
@@ -37,6 +38,7 @@ impl ClassInfo {
             id,
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
+            constants: HashMap::new(),
             superclass,
             subclass: HashMap::new(),
         }
@@ -47,12 +49,11 @@ pub fn init_class(globals: &mut Globals) -> ClassRef {
     let class_id = globals.get_ident_id("Class");
     let class = ClassRef::from(class_id, globals.object_class);
     globals.add_builtin_instance_method(class, "superclass", class_superclass);
+    globals.add_builtin_instance_method(class, "constants", class_constants);
     globals.add_builtin_instance_method(class, "new", class_new);
     globals.add_builtin_instance_method(class, "attr_accessor", class_attr);
     class
 }
-
-// Class methods
 
 fn class_superclass(
     vm: &mut VM,
@@ -65,7 +66,26 @@ fn class_superclass(
             Some(superclass) => Ok(PackedValue::class(&mut vm.globals, superclass)),
             None => Ok(PackedValue::nil()),
         },
-        None => Err(vm.error_nomethod("Illegal argument.")),
+        None => Err(vm.error_internal("Illegal argument.")),
+    }
+}
+
+fn class_constants(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    match receiver.as_class() {
+        Some(cref) => {
+            let v: Vec<PackedValue> = cref
+                .constants
+                .keys()
+                .map(|k| PackedValue::symbol(k.clone()))
+                .collect();
+            Ok(PackedValue::array(&vm.globals, ArrayRef::from(v)))
+        }
+        None => Err(vm.error_internal("Illegal argument.")),
     }
 }
 

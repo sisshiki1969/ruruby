@@ -39,7 +39,7 @@ pub type VMResult = Result<PackedValue, RubyError>;
 pub struct VM {
     // Global info
     pub globals: Globals,
-    pub const_table: ValueTable,
+    //pub const_table: ValueTable,
     pub codegen: Codegen,
     // VM state
     pub context_stack: Vec<ContextRef>,
@@ -53,30 +53,24 @@ pub struct VM {
 impl VM {
     pub fn new(ident_table: Option<IdentifierTable>) -> Self {
         let mut globals = Globals::new(ident_table);
-        let mut const_table = HashMap::new();
-        const_table.insert(
-            globals.get_ident_id("Object"),
-            PackedValue::class(&globals, globals.object_class),
-        );
-        const_table.insert(
-            globals.get_ident_id("Class"),
-            PackedValue::class(&globals, globals.class_class),
-        );
-        const_table.insert(
-            globals.get_ident_id("Integer"),
-            PackedValue::class(&globals, globals.integer_class),
-        );
-        const_table.insert(
-            globals.get_ident_id("Array"),
-            PackedValue::class(&globals, globals.array_class),
-        );
-        const_table.insert(
-            globals.get_ident_id("Proc"),
-            PackedValue::class(&globals, globals.proc_class),
-        );
+
+        macro_rules! set_builtin_class {
+            ($name:expr, $class:ident) => {
+                let id = globals.get_ident_id($name);
+                let class = PackedValue::class(&globals, globals.$class);
+                globals.object_class.constants.insert(id, class);
+            };
+        }
+
+        set_builtin_class!("Object", object_class);
+        set_builtin_class!("Class", class_class);
+        set_builtin_class!("Integer", integer_class);
+        set_builtin_class!("Array", array_class);
+        set_builtin_class!("Proc", proc_class);
+
         VM {
             globals,
-            const_table,
+            //const_table,
             codegen: Codegen::new(),
             class_stack: vec![],
             context_stack: vec![],
@@ -93,6 +87,14 @@ impl VM {
 
     pub fn context(&self) -> ContextRef {
         *self.context_stack.last().unwrap()
+    }
+
+    pub fn class(&self) -> ClassRef {
+        if self.class_stack.len() == 0 {
+            self.globals.object_class
+        } else {
+            *self.class_stack.last().unwrap()
+        }
     }
 
     /// Get local variable table.
@@ -118,8 +120,8 @@ impl VM {
             false,
         )?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
-        let class = self.globals.main_class;
-        let main_object = PackedValue::class(&mut self.globals, class);
+        let main = self.globals.main_object;
+        let main_object = PackedValue::object(main);
         self.vm_run(main_object, iseq, None, VecArray::new0(), None)?;
         let val = self.exec_stack.pop().unwrap();
         #[cfg(feature = "perf")]
@@ -389,18 +391,29 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = read_id(iseq, self.pc + 1);
                     let val = self.exec_stack.pop().unwrap();
-                    self.const_table.insert(id, val);
+                    let mut class = self.class();
+                    class.constants.insert(id, val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
                     let id = read_id(iseq, self.pc + 1);
-                    match self.const_table.get(&id) {
-                        Some(val) => self.exec_stack.push(val.clone()),
-                        None => {
-                            let name = self.globals.get_ident_name(id).clone();
-                            return Err(
-                                self.error_name(format!("uninitialized constant {}.", name))
-                            );
+                    let mut class = self.class();
+                    loop {
+                        match class.constants.get(&id) {
+                            Some(val) => {
+                                self.exec_stack.push(val.clone());
+                                break;
+                            }
+                            None => match class.superclass {
+                                Some(superclass) => {
+                                    class = superclass;
+                                }
+                                None => {
+                                    let name = self.globals.get_ident_name(id).clone();
+                                    return Err(self
+                                        .error_name(format!("uninitialized constant {}.", name)));
+                                }
+                            },
                         }
                     }
                     self.pc += 5;
@@ -571,7 +584,7 @@ impl VM {
                             )))
                         }
                     };
-                    let (val, classref) = match self.const_table.get(&id) {
+                    let (val, classref) = match self.globals.object_class.constants.get(&id) {
                         Some(val) => (
                             val.clone(),
                             match val.as_class() {
@@ -595,7 +608,7 @@ impl VM {
                         None => {
                             let classref = ClassRef::from(id, superclass);
                             let val = PackedValue::class(&mut self.globals, classref);
-                            self.const_table.insert(id, val);
+                            self.globals.object_class.constants.insert(id, val);
                             (val, classref)
                         }
                     };
