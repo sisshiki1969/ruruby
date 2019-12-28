@@ -26,6 +26,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "pop", array::array_pop);
     globals.add_builtin_instance_method(array_class, "length", array::array_length);
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
+    globals.add_builtin_instance_method(array_class, "@mul", array::array_mul);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -99,5 +100,38 @@ fn array_length(
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     let res = PackedValue::fixnum(aref.elements.len() as i64);
+    Ok(res)
+}
+
+fn array_mul(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let v = match args[0].unpack() {
+        Value::FixNum(num) => match num {
+            i if i < 0 => return Err(vm.error_argument("Negative argument.")),
+            0 => vec![],
+            1 => aref.elements.clone(),
+            _ => {
+                let len = aref.elements.len();
+                let src = &aref.elements[0..len];
+                let mut v = vec![PackedValue::nil(); len * num as usize];
+                //println!("dest:{:?} src:{:?}", aref.elements, src);
+                let mut i = 0;
+                for _ in 0..num {
+                    v[i..i + len].copy_from_slice(src);
+                    i += len;
+                }
+                v
+            }
+        },
+        _ => return Err(vm.error_nomethod(" ")),
+    };
+    let res = PackedValue::array(&vm.globals, ArrayRef::from(v));
     Ok(res)
 }

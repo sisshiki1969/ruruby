@@ -1,18 +1,1 @@
-class Foo
-    attr_accessor :a
-    def initialize
-        @a = 0
-    end
-    def inc
-        @a = @a + 1
-        self
-    end
-end
-
-x = Foo
-.new
-.inc
-.inc
-.a
-
-puts x
+[1,2,3,4,5] * 1000_000

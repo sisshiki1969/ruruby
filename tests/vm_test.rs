@@ -442,6 +442,15 @@ fn array() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+#[test]
+fn array1() {
+    let program = "
+    assert([1,2,3]*0, [])
+    assert([1,2,3]*1, [1,2,3])
+    assert([nil]*5, [nil,nil,nil,nil,nil])";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
 
 #[test]
 fn func1() {

@@ -713,6 +713,10 @@ impl VM {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Type(msg.into()), loc)
     }
+    pub fn error_argument(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Argument(msg.into()), loc)
+    }
 
     fn get_loc(&self) -> Loc {
         let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
@@ -1175,6 +1179,17 @@ impl VM {
             Value::String(s) => format!("\"{}\"", s),
             Value::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.id)},
+                ObjKind::Array(aref) => match aref.elements.len() {
+                    0 => "[]".to_string(),
+                    1 => format!("[{}]", self.val_pp(aref.elements[0])),
+                    len => {
+                        let mut result = self.val_pp(aref.elements[0]);
+                        for i in 1..len {
+                            result = format!("{},{}", result, self.val_pp(aref.elements[i]));
+                        }
+                        format! {"[{}]", result}
+                    }
+                },
                 ObjKind::Ordinary => {
                     format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.classref.id), oref}
                 }
