@@ -86,6 +86,7 @@ pub enum Punct {
     RBrace,
     Semi,
     Colon,
+    Scope,
     Comma,
     Dot,
     Question,

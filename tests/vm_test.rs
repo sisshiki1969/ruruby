@@ -422,6 +422,28 @@ fn const1() {
 }
 
 #[test]
+fn const2() {
+    let program = "
+            BOO = 100
+            class Foo
+                FOO = 222
+                assert 100, BOO
+                def foo
+                    assert 333, ::Bar::BAR
+                end
+            end
+            class Bar
+                BAR = 333
+                assert 100, BOO
+                assert 222, ::Foo::FOO
+            end
+            Foo.new.foo
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn array() {
     let program = "
     a=[1,2,3,4]

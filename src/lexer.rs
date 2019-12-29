@@ -153,7 +153,15 @@ impl Lexer {
                     }
                     '"' => self.lex_string_literal_double()?,
                     ';' => self.new_punct(Punct::Semi),
-                    ':' => self.new_punct(Punct::Colon),
+                    ':' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == ':' {
+                            self.get()?;
+                            self.new_punct(Punct::Scope)
+                        } else {
+                            self.new_punct(Punct::Colon)
+                        }
+                    }
                     ',' => self.new_punct(Punct::Comma),
                     '+' => self.new_punct(Punct::Plus),
                     '-' => {

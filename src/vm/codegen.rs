@@ -95,6 +95,10 @@ impl Codegen {
         iseq.push(Inst::PUSH_NIL);
     }
 
+    fn gen_push_self(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::PUSH_SELF);
+    }
+
     fn gen_fixnum(&mut self, iseq: &mut ISeq, num: i64) {
         iseq.push(Inst::PUSH_FIXNUM);
         self.push64(iseq, num as u64);
@@ -229,6 +233,18 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
+    fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
+        self.save_loc(iseq);
+        iseq.push(Inst::GET_CONST_TOP);
+        self.push32(iseq, id.into());
+    }
+
+    fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId) {
+        self.save_loc(iseq);
+        iseq.push(Inst::GET_SCOPE);
+        self.push32(iseq, id.into());
+    }
+
     fn gen_send(
         &mut self,
         globals: &mut Globals,
@@ -283,7 +299,9 @@ impl Codegen {
     ) -> Result<(), RubyError> {
         match &lhs.kind {
             NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, *id),
-            NodeKind::Const(id) => self.gen_set_const(iseq, *id),
+            NodeKind::Const { id, toplevel: _ } => {
+                self.gen_set_const(iseq, *id);
+            }
             NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
             NodeKind::Send {
                 receiver, method, ..
@@ -611,7 +629,7 @@ impl Codegen {
                 };
             }
             NodeKind::SelfValue => {
-                iseq.push(Inst::PUSH_SELF);
+                self.gen_push_self(iseq);
             }
             NodeKind::Range {
                 start,
@@ -652,8 +670,19 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::Const(id) => {
-                self.gen_get_const(iseq, *id);
+            NodeKind::Const { id, toplevel } => {
+                if *toplevel {
+                    self.gen_get_const_top(iseq, *id);
+                } else {
+                    self.gen_get_const(iseq, *id);
+                };
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
+            NodeKind::Scope(parent, id) => {
+                self.gen(globals, iseq, parent, true)?;
+                self.gen_get_scope(iseq, *id);
                 if !use_value {
                     self.gen_pop(iseq)
                 };

@@ -107,8 +107,8 @@ fn repl_vm() {
     parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
-    let class = vm.globals.main_class;
-    let main_object = PackedValue::class(&mut vm.globals, class);
+    let main = vm.globals.main_object;
+    let main_object = PackedValue::object(main);
     let context = ContextRef::from(
         main_object,
         None,

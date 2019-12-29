@@ -45,7 +45,11 @@ pub enum NodeKind {
     LocalVar(IdentId),
     Ident(IdentId, bool),
     InstanceVar(IdentId),
-    Const(IdentId),
+    Const {
+        toplevel: bool,
+        id: IdentId,
+    },
+    Scope(Box<Node>, IdentId),
     Symbol(IdentId),
     Param(IdentId),
     BlockParam(IdentId),
@@ -92,13 +96,6 @@ pub enum UnOp {
     BitNot,
 }
 
-/*
-#[derive(Debug, Clone, PartialEq)]
-pub struct Node {
-    pub kind: NodeKind,
-    pub loc: Loc,
-}
-*/
 pub type Node = Annot<NodeKind>;
 pub type NodeVec = Vec<Node>;
 
@@ -194,8 +191,12 @@ impl Node {
         Node::new(NodeKind::InstanceVar(id), loc)
     }
 
-    pub fn new_const(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Const(id), loc)
+    pub fn new_const(id: IdentId, toplevel: bool, loc: Loc) -> Self {
+        Node::new(NodeKind::Const { toplevel, id }, loc)
+    }
+
+    pub fn new_scope(parent: Node, id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::Scope(Box::new(parent), id), loc)
     }
 
     pub fn new_assign(lhs: Node, rhs: Node) -> Self {
@@ -321,7 +322,9 @@ impl Node {
 
     pub fn as_method_name(&self) -> Option<IdentId> {
         match self.kind {
-            NodeKind::Const(id) | NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => Some(id),
+            NodeKind::Const { id, .. } | NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => {
+                Some(id)
+            }
             _ => None,
         }
     }
