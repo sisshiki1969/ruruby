@@ -27,6 +27,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "length", array::array_length);
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
     globals.add_builtin_instance_method(array_class, "@mul", array::array_mul);
+    globals.add_builtin_instance_method(array_class, "map", array::array_map);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -133,5 +134,31 @@ fn array_mul(
         _ => return Err(vm.error_nomethod(" ")),
     };
     let res = PackedValue::array(&vm.globals, ArrayRef::from(v));
+    Ok(res)
+}
+
+fn array_map(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    block: Option<MethodRef>,
+) -> VMResult {
+    let aref = receiver.as_array().unwrap();
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let mut res = vec![];
+    for i in &aref.elements {
+        vm.vm_run(
+            vm.context().self_value,
+            iseq,
+            Some(vm.context()),
+            VecArray::new1(i.clone()),
+            None,
+        )?;
+        res.push(vm.exec_stack.pop().unwrap());
+    }
+    let res = PackedValue::array(&vm.globals, ArrayRef::from(res));
     Ok(res)
 }
