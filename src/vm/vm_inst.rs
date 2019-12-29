@@ -31,10 +31,12 @@ impl Inst {
     pub const GET_LOCAL: u8 = 31;
     pub const GET_CONST: u8 = 32;
     pub const SET_CONST: u8 = 33;
-    pub const GET_INSTANCE_VAR: u8 = 34;
-    pub const SET_INSTANCE_VAR: u8 = 35;
-    pub const GET_ARRAY_ELEM: u8 = 36;
-    pub const SET_ARRAY_ELEM: u8 = 37;
+    pub const GET_CONST_TOP: u8 = 34;
+    pub const GET_SCOPE: u8 = 35;
+    pub const GET_INSTANCE_VAR: u8 = 36;
+    pub const SET_INSTANCE_VAR: u8 = 37;
+    pub const GET_ARRAY_ELEM: u8 = 38;
+    pub const SET_ARRAY_ELEM: u8 = 39;
 
     pub const SEND: u8 = 40;
     pub const SEND_SELF: u8 = 41;
@@ -90,7 +92,10 @@ impl Inst {
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
             Inst::GET_CONST => "GET_CONST",
+            Inst::GET_CONST_TOP => "GET_CONSTTOP",
+            Inst::GET_SCOPE => "GET_SCOPE",
             Inst::SET_CONST => "SET_CONST",
+
             Inst::GET_INSTANCE_VAR => "GET_INST_VAR",
             Inst::SET_INSTANCE_VAR => "SET_INST_VAR",
             Inst::GET_ARRAY_ELEM => "GET_ARY_ELEM",
@@ -140,6 +145,8 @@ impl Inst {
             | Inst::PUSH_SYMBOL
             | Inst::GET_CONST
             | Inst::SET_CONST
+            | Inst::GET_CONST_TOP
+            | Inst::GET_SCOPE
             | Inst::GET_INSTANCE_VAR
             | Inst::SET_INSTANCE_VAR
             | Inst::GET_ARRAY_ELEM

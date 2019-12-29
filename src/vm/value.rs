@@ -61,6 +61,13 @@ impl VecArray {
             VecArray::Vec(v) => v.len(),
         }
     }
+
+    pub fn get_slice(&self, start: usize, end: usize) -> &[PackedValue] {
+        match self {
+            VecArray::Array { ary, .. } => &ary[start..end],
+            VecArray::Vec(v) => &v[start..end],
+        }
+    }
 }
 
 impl Index<usize> for VecArray {

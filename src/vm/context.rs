@@ -63,16 +63,12 @@ impl Context {
     pub fn set_arguments(&mut self, args: VecArray) {
         let arg_len = std::cmp::min(args.len(), self.iseq_ref.params.len());
         if arg_len <= LVAR_ARRAY_SIZE {
-            for i in 0..arg_len {
-                self.lvar_scope[i] = args[i];
-            }
+            self.lvar_scope[0..arg_len].clone_from_slice(args.get_slice(0, arg_len));
         } else {
-            for i in 0..LVAR_ARRAY_SIZE {
-                self.lvar_scope[i] = args[i];
-            }
-            for i in LVAR_ARRAY_SIZE..arg_len {
-                self.ext_lvar[i - LVAR_ARRAY_SIZE] = args[i];
-            }
+            self.lvar_scope[0..LVAR_ARRAY_SIZE]
+                .clone_from_slice(args.get_slice(0, LVAR_ARRAY_SIZE));
+            self.ext_lvar[0..arg_len - LVAR_ARRAY_SIZE]
+                .clone_from_slice(args.get_slice(LVAR_ARRAY_SIZE, arg_len));
         }
     }
 }

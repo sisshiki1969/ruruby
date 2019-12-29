@@ -397,25 +397,32 @@ impl VM {
                 }
                 Inst::GET_CONST => {
                     let id = read_id(iseq, self.pc + 1);
-                    let mut class = self.class();
-                    loop {
-                        match class.constants.get(&id) {
-                            Some(val) => {
-                                self.exec_stack.push(val.clone());
-                                break;
-                            }
-                            None => match class.superclass {
-                                Some(superclass) => {
-                                    class = superclass;
-                                }
-                                None => {
-                                    let name = self.globals.get_ident_name(id).clone();
-                                    return Err(self
-                                        .error_name(format!("uninitialized constant {}.", name)));
-                                }
-                            },
+                    let class = self.class();
+                    let val = self.get_constant(class, id)?;
+                    self.exec_stack.push(val);
+                    self.pc += 5;
+                }
+                Inst::GET_CONST_TOP => {
+                    let id = read_id(iseq, self.pc + 1);
+                    let class = self.globals.object_class;
+                    let val = self.get_constant(class, id)?;
+                    self.exec_stack.push(val);
+                    self.pc += 5;
+                }
+                Inst::GET_SCOPE => {
+                    let parent = self.exec_stack.pop().unwrap();
+                    let id = read_id(iseq, self.pc + 1);
+                    let class = match parent.as_class() {
+                        Some(class) => class,
+                        None => {
+                            return Err(self.error_type(format!(
+                                "{:?} is not a class/module.",
+                                parent.unpack()
+                            )))
                         }
-                    }
+                    };
+                    let val = self.get_constant(class, id)?;
+                    self.exec_stack.push(val);
                     self.pc += 5;
                 }
                 Inst::SET_INSTANCE_VAR => {
@@ -757,6 +764,25 @@ impl VM {
                 self.globals
                     .set_method_cache_entry(cache_slot, rec_class, class_method, method);
                 Ok(method)
+            }
+        }
+    }
+
+    fn get_constant(&self, mut class: ClassRef, id: IdentId) -> Result<PackedValue, RubyError> {
+        loop {
+            match class.constants.get(&id) {
+                Some(val) => {
+                    return Ok(val.clone());
+                }
+                None => match class.superclass {
+                    Some(superclass) => {
+                        class = superclass;
+                    }
+                    None => {
+                        let name = self.globals.get_ident_name(id).clone();
+                        return Err(self.error_name(format!("Uninitialized constant {}.", name)));
+                    }
+                },
             }
         }
     }

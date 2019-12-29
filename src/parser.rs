@@ -377,20 +377,20 @@ impl Parser {
         };
         Ok(self.get_ident_id(&name))
     }
-    /*
-        /// Get the next token and examine whether it is Const.
-        /// Return IdentId of the Const.
-        /// If not, return RubyError.
-        fn expect_const(&mut self) -> Result<IdentId, RubyError> {
-            let name = match &self.get()?.kind {
-                TokenKind::Const(s) => s.clone(),
-                _ => {
-                    return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
-                }
-            };
-            Ok(self.get_ident_id(&name))
-        }
-    */
+
+    /// Get the next token and examine whether it is Const.
+    /// Return IdentId of the Const.
+    /// If not, return RubyError.
+    fn expect_const(&mut self) -> Result<IdentId, RubyError> {
+        let name = match &self.get()?.kind {
+            TokenKind::Const(s) => s.clone(),
+            _ => {
+                return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
+            }
+        };
+        Ok(self.get_ident_id(&name))
+    }
+
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
         RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
     }
@@ -643,6 +643,7 @@ impl Parser {
                 | Punct::LBracket
                 | Punct::LBrace
                 | Punct::Colon
+                | Punct::Scope
                 | Punct::Plus
                 | Punct::Minus
                 | Punct::Arrow => true,
@@ -1012,6 +1013,12 @@ impl Parser {
                     }
                     Node::new_array_member(node, args)
                 }
+                TokenKind::Punct(Punct::Scope) => {
+                    self.get()?;
+                    let loc = self.loc();
+                    let id = self.expect_const()?;
+                    Node::new_scope(node, id, loc)
+                }
                 _ => return Ok(node),
             }
         }
@@ -1092,7 +1099,7 @@ impl Parser {
             }
             TokenKind::Const(name) => {
                 let id = self.get_ident_id(name);
-                Ok(Node::new_const(id, loc))
+                Ok(Node::new_const(id, false, loc))
             }
             TokenKind::NumLit(num) => Ok(Node::new_integer(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
@@ -1145,6 +1152,10 @@ impl Parser {
                     self.expect_punct(Punct::RBrace)?;
                     let lvar = self.context_stack.pop().unwrap().lvar;
                     Ok(Node::new_proc(params, body, lvar, loc))
+                }
+                Punct::Scope => {
+                    let id = self.expect_const()?;
+                    Ok(Node::new_const(id, true, loc))
                 }
                 _ => {
                     return Err(
@@ -1377,7 +1388,7 @@ impl Parser {
         let superclass = if self.consume_punct_no_skip_line_term(Punct::Lt) {
             self.parse_expr()?
         } else {
-            Node::new_const(IdentId::OBJECT, loc)
+            Node::new_const(IdentId::OBJECT, true, loc)
         };
         let id = self.get_ident_id(&name);
         self.context_stack.push(Context::new_class(None));
