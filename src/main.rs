@@ -80,9 +80,24 @@ fn file_read(file_name: impl Into<String>) {
             };
         }
         Err(err) => {
+            eprintln!("{:?}", &err.loc());
             parser.show_tokens();
             parser.show_loc(&err.loc());
-            eprintln!("{:?}", err.kind);
+            match err.kind {
+                RubyErrorKind::ParseErr(e) => match e {
+                    ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF."),
+                    ParseErrKind::UnexpectedToken => eprintln!("Unexpected token."),
+                    ParseErrKind::SyntaxError(n) => eprintln!("Syntax error ({})", n),
+                },
+                RubyErrorKind::RuntimeErr(e) => match e {
+                    RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
+                    RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),
+                    RuntimeErrKind::Type(n) => eprintln!("TypeError ({})", n),
+                    RuntimeErrKind::Unimplemented(n) => eprintln!("UnimplementedError ({})", n),
+                    RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
+                    RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
+                },
+            }
         }
     }
 }

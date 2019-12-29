@@ -108,10 +108,12 @@ impl SourceInfo {
 
     /// Show the location of the Loc in the source code using '^^^'.
     pub fn show_loc(&self, loc: &Loc) {
+        let mut found = false;
         for line in &self.line_pos {
             if line.2 < loc.0 || line.1 > loc.1 {
                 continue;
             }
+            found = true;
             eprintln!(
                 "{}",
                 self.code[(line.1)..(line.2)].iter().collect::<String>()
@@ -129,6 +131,28 @@ impl SourceInfo {
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
+            eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
+        }
+
+        if !found {
+            let line = match self.line_pos.last() {
+                Some(line) => (line.0 + 1, line.2 + 1, loc.1),
+                None => (1, 0, loc.1),
+            };
+            let read = self.code[(line.1)..(loc.0)]
+                .iter()
+                .map(|x| calc_width(x))
+                .sum();
+            let length: usize = self.code[loc.0..loc.1].iter().map(|x| calc_width(x)).sum();
+            let is_cr = self.code[loc.1] == '\n';
+            eprintln!(
+                "{}",
+                if !is_cr {
+                    self.code[(line.1)..=(loc.1)].iter().collect::<String>()
+                } else {
+                    self.code[(line.1)..(loc.1)].iter().collect::<String>()
+                }
+            );
             eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
         }
 

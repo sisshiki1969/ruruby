@@ -97,6 +97,7 @@ pub enum Punct {
     Minus,
     Mul,
     Div,
+    Rem,
     Shr,
     Shl,
     BitOr,

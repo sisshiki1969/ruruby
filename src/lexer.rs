@@ -80,7 +80,6 @@ impl Lexer {
         self.reserved_rev.get(&reserved).unwrap()
     }
 
-    #[allow(dead_code)]
     fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
@@ -136,6 +135,7 @@ impl Lexer {
                 }
             };
 
+            let pos = self.pos;
             let ch = match self.get() {
                 Ok(ch) => ch,
                 Err(_) => break,
@@ -174,6 +174,7 @@ impl Lexer {
                         }
                     }
                     '*' => self.new_punct(Punct::Mul),
+                    '%' => self.new_punct(Punct::Rem),
                     '/' => self.new_punct(Punct::Div),
                     '(' => self.new_punct(Punct::LParen),
                     ')' => self.new_punct(Punct::RParen),
@@ -269,7 +270,7 @@ impl Lexer {
                         let ch = self.get()?;
                         self.lex_identifier(ch, true)?
                     }
-                    _ => unimplemented!("{}", ch),
+                    _ => return Err(self.error_unexpected(pos)), //unimplemented!("{}", ch),
                 }
             } else {
                 self.lex_identifier(ch, false)?
@@ -319,6 +320,15 @@ impl Lexer {
 
     /// Read number literal
     fn lex_number_literal(&mut self, ch: char) -> Result<Token, RubyError> {
+        if ch == '0' {
+            match self.peek() {
+                Ok(ch) if ch == 'x' => {
+                    self.get()?;
+                    return self.lex_hex_number();
+                }
+                _ => {}
+            }
+        };
         let mut int = ch.to_string();
         let mut decimal_flag = false;
         loop {
@@ -359,6 +369,27 @@ impl Lexer {
             let i = int.parse::<i64>().unwrap();
             Ok(self.new_numlit(i))
         }
+    }
+
+    fn lex_hex_number(&mut self) -> Result<Token, RubyError> {
+        let mut val = match self.peek() {
+            Ok(ch @ '0'..='9') => (ch as u64 - '0' as u64),
+            Ok(ch @ 'a'..='f') => (ch as u64 - 'a' as u64 + 10),
+            Ok(ch @ 'A'..='F') => (ch as u64 - 'A' as u64 + 10),
+            _ => return Err(self.error_unexpected(self.pos)),
+        };
+        self.get()?;
+        loop {
+            match self.peek() {
+                Ok(ch @ '0'..='9') => val = val * 16 + (ch as u64 - '0' as u64),
+                Ok(ch @ 'a'..='f') => val = val * 16 + (ch as u64 - 'a' as u64 + 10),
+                Ok(ch @ 'A'..='F') => val = val * 16 + (ch as u64 - 'A' as u64 + 10),
+                Ok('_') => {}
+                _ => break,
+            }
+            self.get()?;
+        }
+        Ok(self.new_numlit(val as i64))
     }
 
     /// Read string literal

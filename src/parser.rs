@@ -506,7 +506,9 @@ impl Parser {
         // COMMAND-WITH-DO-BLOCK : FNAME ARGS DO-BLOCK
         // | PRIMARY . FNAME ARGS DO-BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
         let node = self.parse_arg()?;
-        if self.consume_punct_no_skip_line_term(Punct::Comma) && node.is_lvar() {
+        if self.consume_punct_no_skip_line_term(Punct::Comma)
+        /*&& node.is_lvar()*/
+        {
             // EXPR : MLHS `=' MRHS
             return Ok(self.parse_mul_assign(node)?);
         }
@@ -1040,9 +1042,15 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
-        if !self.consume_reserved_no_skip_line_term(Reserved::Do) {
-            return Ok(None);
-        }
+        let do_flag = if self.consume_reserved_no_skip_line_term(Reserved::Do) {
+            true
+        } else {
+            if self.consume_punct_no_skip_line_term(Punct::LBrace) {
+                false
+            } else {
+                return Ok(None);
+            }
+        };
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();
         self.context_stack.push(Context::new_block());
@@ -1063,7 +1071,11 @@ impl Parser {
             self.consume_punct(Punct::LOr);
         }
         let body = self.parse_comp_stmt()?;
-        self.expect_reserved(Reserved::End)?;
+        if do_flag {
+            self.expect_reserved(Reserved::End)?;
+        } else {
+            self.expect_punct(Punct::RBrace)?;
+        };
         let lvar = self.context_stack.pop().unwrap().lvar;
         let loc = loc.merge(self.prev_loc());
         let node = Node::new_proc(params, body, lvar, loc);
