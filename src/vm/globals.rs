@@ -12,6 +12,7 @@ pub struct Globals {
     pub integer_class: ClassRef,
     pub array_class: ClassRef,
     pub class_class: ClassRef,
+    pub module_class: ClassRef,
     pub proc_class: ClassRef,
     pub object_class: ClassRef,
 }
@@ -33,6 +34,7 @@ impl Globals {
             main_object,
             integer_class: object_class,
             array_class: object_class,
+            module_class: object_class,
             class_class: object_class,
             proc_class: object_class,
             object_class,
@@ -40,6 +42,7 @@ impl Globals {
         object::init_object(&mut globals);
         globals.integer_class = integer::init_integer(&mut globals);
         globals.array_class = array::init_array(&mut globals);
+        globals.module_class = module::init_module(&mut globals);
         globals.class_class = class::init_class(&mut globals);
         globals.proc_class = procobj::init_proc(&mut globals);
         globals

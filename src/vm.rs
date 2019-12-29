@@ -6,6 +6,7 @@ mod context;
 mod globals;
 mod integer;
 mod method;
+mod module;
 mod object;
 #[cfg(feature = "perf")]
 mod perf;
@@ -24,6 +25,7 @@ use codegen::{Codegen, ISeq, ISeqPos};
 pub use context::*;
 pub use globals::*;
 pub use method::*;
+pub use module::*;
 use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
@@ -63,6 +65,7 @@ impl VM {
         }
 
         set_builtin_class!("Object", object_class);
+        set_builtin_class!("Module", module_class);
         set_builtin_class!("Class", class_class);
         set_builtin_class!("Integer", integer_class);
         set_builtin_class!("Array", array_class);
