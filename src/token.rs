@@ -1,3 +1,4 @@
+use crate::node::BinOp;
 use crate::util::*;
 
 pub type Token = Annot<TokenKind>;
@@ -105,6 +106,7 @@ pub enum Punct {
     BitXor,
     BitNot,
     Assign,
+    AssignOp(BinOp),
     Eq,
     Ne,
     Gt,

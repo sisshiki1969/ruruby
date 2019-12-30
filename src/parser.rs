@@ -679,29 +679,31 @@ impl Parser {
                         break;
                     }
                 }
-                if let NodeKind::Ident(id, has_suffix) = lhs.kind {
-                    if has_suffix {
-                        return Err(
-                            self.error_unexpected(lhs.loc(), "Illegal identifier for left hand.")
-                        );
-                    };
-                    self.add_local_var_if_new(id);
-                };
+                self.check_lhs(&lhs)?;
                 Ok(Node::new_mul_assign(vec![lhs], mrhs))
             } else {
-                if let NodeKind::Ident(id, has_suffix) = lhs.kind {
-                    if has_suffix {
-                        return Err(
-                            self.error_unexpected(lhs.loc(), "Illegal identifier for left hand.")
-                        );
-                    };
-                    self.add_local_var_if_new(id);
-                };
+                self.check_lhs(&lhs)?;
                 Ok(Node::new_assign(lhs, rhs))
             }
+        } else if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_skip_line_term().kind {
+            //let loc = self.loc();
+            self.get()?;
+            let rhs = self.parse_arg()?;
+            self.check_lhs(&lhs)?;
+            Ok(Node::new_assign(lhs.clone(), Node::new_binop(op, lhs, rhs)))
         } else {
             Ok(lhs)
         }
+    }
+
+    fn check_lhs(&mut self, lhs: &Node) -> Result<(), RubyError> {
+        if let NodeKind::Ident(id, has_suffix) = lhs.kind {
+            if has_suffix {
+                return Err(self.error_unexpected(lhs.loc(), "Illegal identifier for left hand."));
+            };
+            self.add_local_var_if_new(id);
+        };
+        Ok(())
     }
 
     fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {

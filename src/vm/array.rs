@@ -149,11 +149,12 @@ fn array_map(
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let mut res = vec![];
+    let context = vm.context();
     for i in &aref.elements {
         vm.vm_run(
-            vm.context().self_value,
+            context.self_value,
             iseq,
-            Some(vm.context()),
+            Some(context),
             VecArray::new1(i.clone()),
             None,
         )?;

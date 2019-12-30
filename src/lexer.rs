@@ -1,4 +1,5 @@
 use crate::error::{ParseErrKind, RubyError};
+use crate::node::BinOp;
 use crate::token::*;
 use crate::util::*;
 use std::collections::HashMap;
@@ -163,19 +164,46 @@ impl Lexer {
                         }
                     }
                     ',' => self.new_punct(Punct::Comma),
-                    '+' => self.new_punct(Punct::Plus),
+                    '+' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::Add))
+                        } else {
+                            self.new_punct(Punct::Plus)
+                        }
+                    }
                     '-' => {
                         let ch1 = self.peek()?;
                         if ch1 == '>' {
                             self.get()?;
                             self.new_punct(Punct::Arrow)
+                        } else if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::Sub))
                         } else {
                             self.new_punct(Punct::Minus)
                         }
                     }
-                    '*' => self.new_punct(Punct::Mul),
+                    '*' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::Mul))
+                        } else {
+                            self.new_punct(Punct::Mul)
+                        }
+                    }
                     '%' => self.new_punct(Punct::Rem),
-                    '/' => self.new_punct(Punct::Div),
+                    '/' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::Div))
+                        } else {
+                            self.new_punct(Punct::Div)
+                        }
+                    }
                     '(' => self.new_punct(Punct::LParen),
                     ')' => self.new_punct(Punct::RParen),
                     '^' => self.new_punct(Punct::BitXor),
@@ -222,7 +250,13 @@ impl Lexer {
                             self.new_punct(Punct::Ge)
                         } else if ch1 == '>' {
                             self.get()?;
-                            self.new_punct(Punct::Shr)
+                            let ch2 = self.peek()?;
+                            if ch2 == '=' {
+                                self.get()?;
+                                self.new_punct(Punct::AssignOp(BinOp::Shr))
+                            } else {
+                                self.new_punct(Punct::Shr)
+                            }
                         } else {
                             self.new_punct(Punct::Gt)
                         }
@@ -234,7 +268,13 @@ impl Lexer {
                             self.new_punct(Punct::Le)
                         } else if ch1 == '<' {
                             self.get()?;
-                            self.new_punct(Punct::Shl)
+                            let ch2 = self.peek()?;
+                            if ch2 == '=' {
+                                self.get()?;
+                                self.new_punct(Punct::AssignOp(BinOp::Shl))
+                            } else {
+                                self.new_punct(Punct::Shl)
+                            }
                         } else {
                             self.new_punct(Punct::Lt)
                         }
@@ -253,6 +293,9 @@ impl Lexer {
                         if ch1 == '&' {
                             self.get()?;
                             self.new_punct(Punct::LAnd)
+                        } else if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::BitAnd))
                         } else {
                             self.new_punct(Punct::BitAnd)
                         }
@@ -262,6 +305,9 @@ impl Lexer {
                         if ch1 == '|' {
                             self.get()?;
                             self.new_punct(Punct::LOr)
+                        } else if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::BitOr))
                         } else {
                             self.new_punct(Punct::BitOr)
                         }

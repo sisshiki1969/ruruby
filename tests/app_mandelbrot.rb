@@ -48,7 +48,7 @@ for y in 0...size
     end
 
     byte_acc = (byte_acc << 1) | (escape ? 0 : 1)
-    bit_num = bit_num + 1
+    bit_num += 1
 
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.

@@ -464,12 +464,24 @@ fn array() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+
 #[test]
 fn array1() {
     let program = "
     assert([1,2,3]*0, [])
     assert([1,2,3]*1, [1,2,3])
     assert([nil]*5, [nil,nil,nil,nil,nil])";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn array_map() {
+    let program = "
+    a = [1,2,3]
+    assert(a.map {|| 3 }, [3,3,3])
+    assert(a.map {|x| x*3 }, [3,6,9])
+    assert(a, [1,2,3])";
     let expected = Value::Nil;
     eval_script(program, expected);
 }
@@ -766,6 +778,23 @@ fn method_chain2() {
         assert [2,5,10,17], [1,2,3,4].map do |x| x*x+a end
         assert [4,4,4,4], [1,2,3,4].map do || 4 end
         assert [7,7,7,7], [1,2,3,4].map do | | 7 end
+        ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn assign_op() {
+    let program = "
+        a = 10
+        assert 15, a+=5
+        assert 9, a-=6
+        assert 3, a/=3
+        assert 30, a*=10
+        assert 120, a<<=2
+        assert 7, a>>=4
+        assert 2, a&=2
+        assert 11, a|=9
         ";
     let expected = Value::Nil;
     eval_script(program, expected);

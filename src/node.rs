@@ -23,6 +23,7 @@ pub enum NodeKind {
         index: Vec<Node>,
     },
     Assign(Box<Node>, Box<Node>),
+    AssignOp(BinOp, Box<Node>, Box<Node>),
     MulAssign(Vec<Node>, Vec<Node>),
     CompStmt(NodeVec),
     If {
@@ -70,7 +71,7 @@ pub enum NodeKind {
     }, //receiver, method_name, args
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp {
     Add,
     Sub,
