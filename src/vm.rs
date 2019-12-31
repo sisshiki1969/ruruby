@@ -586,12 +586,13 @@ impl VM {
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
                     let super_val = self.exec_stack.pop().unwrap();
                     let superclass = match super_val.as_class() {
-                        Some(cref) => cref,
+                        Some(class) => class,
                         None => {
+                            let val = self.val_pp(super_val);
                             return Err(self.error_type(format!(
-                                "{} is not a class.",
-                                self.val_pp(super_val.clone())
-                            )))
+                                "Superclass must be a class. (given:{:?})",
+                                val
+                            )));
                         }
                     };
                     let (val, classref) = match self.globals.object_class.constants.get(&id) {
@@ -618,7 +619,7 @@ impl VM {
                         None => {
                             let classref = ClassRef::from(id, superclass);
                             let val = PackedValue::class(&mut self.globals, classref);
-                            self.globals.object_class.constants.insert(id, val);
+                            self.class().constants.insert(id, val);
                             (val, classref)
                         }
                     };
@@ -740,7 +741,21 @@ impl VM {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Argument(msg.into()), loc)
     }
+}
 
+impl VM {
+    pub fn val_as_class(&self, val: PackedValue) -> Result<ClassRef, RubyError> {
+        match val.as_class() {
+            Some(class_ref) => Ok(class_ref),
+            None => {
+                let val = self.val_pp(val);
+                Err(self.error_type(format!("Must be a class. (given:{:?})", val)))
+            }
+        }
+    }
+}
+
+impl VM {
     fn get_loc(&self) -> Loc {
         let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
         sourcemap
