@@ -415,7 +415,7 @@ impl VM {
                 Inst::GET_SCOPE => {
                     let parent = self.exec_stack.pop().unwrap();
                     let id = read_id(iseq, self.pc + 1);
-                    let class = match parent.as_class() {
+                    let class = match parent.as_module() {
                         Some(class) => class,
                         None => {
                             return Err(self.error_type(format!(
@@ -582,8 +582,9 @@ impl VM {
                     self.pc += 17;
                 }
                 Inst::DEF_CLASS => {
-                    let id = IdentId::from(read32(iseq, self.pc + 1));
-                    let methodref = MethodRef::from(read32(iseq, self.pc + 5));
+                    let is_module = read8(iseq, self.pc + 1) == 1;
+                    let id = IdentId::from(read32(iseq, self.pc + 2));
+                    let methodref = MethodRef::from(read32(iseq, self.pc + 6));
                     let super_val = self.exec_stack.pop().unwrap();
                     let superclass = match super_val.as_class() {
                         Some(class) => class,
@@ -618,7 +619,11 @@ impl VM {
                         ),
                         None => {
                             let classref = ClassRef::from(id, superclass);
-                            let val = PackedValue::class(&mut self.globals, classref);
+                            let val = if is_module {
+                                PackedValue::module(&mut self.globals, classref)
+                            } else {
+                                PackedValue::class(&mut self.globals, classref)
+                            };
                             self.class().constants.insert(id, val);
                             (val, classref)
                         }
@@ -627,7 +632,7 @@ impl VM {
                     self.class_stack.push(classref);
 
                     self.eval_send(methodref, val, VecArray::new0(), None)?;
-                    self.pc += 9;
+                    self.pc += 10;
                     self.class_stack.pop().unwrap();
                 }
                 Inst::DEF_METHOD => {
@@ -641,7 +646,7 @@ impl VM {
                         let classref = self.class_stack.last().unwrap().clone();
                         self.add_instance_method(classref, id, methodref);
                     }
-                    self.exec_stack.push(PackedValue::nil());
+                    self.exec_stack.push(PackedValue::symbol(id));
                     self.pc += 9;
                 }
                 Inst::DEF_CLASS_METHOD => {
@@ -655,7 +660,7 @@ impl VM {
                         let classref = self.class_stack.last().unwrap().clone();
                         self.add_class_method(classref, id, methodref);
                     }
-                    self.exec_stack.push(PackedValue::nil());
+                    self.exec_stack.push(PackedValue::symbol(id));
                     self.pc += 9;
                 }
                 Inst::TO_S => {
@@ -697,6 +702,10 @@ impl VM {
         fn read32(iseq: &ISeq, pc: usize) -> u32 {
             let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
             unsafe { *ptr }
+        }
+
+        fn read8(iseq: &ISeq, pc: usize) -> u8 {
+            iseq[pc]
         }
     }
 }
@@ -750,6 +759,16 @@ impl VM {
             None => {
                 let val = self.val_pp(val);
                 Err(self.error_type(format!("Must be a class. (given:{:?})", val)))
+            }
+        }
+    }
+
+    pub fn val_as_module(&self, val: PackedValue) -> Result<ClassRef, RubyError> {
+        match val.as_module() {
+            Some(class_ref) => Ok(class_ref),
+            None => {
+                let val = self.val_pp(val);
+                Err(self.error_type(format!("Must be a module/class. (given:{:?})", val)))
             }
         }
     }

@@ -16,6 +16,7 @@ pub struct ObjectInfo {
 pub enum ObjKind {
     Ordinary,
     Class(ClassRef),
+    Module(ClassRef),
     Array(ArrayRef),
     Range(RangeRef),
     Proc(ProcRef),
@@ -35,6 +36,14 @@ impl ObjectInfo {
             classref: globals.class_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Class(classref),
+        }
+    }
+
+    pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
+        ObjectInfo {
+            classref: globals.module_class,
+            instance_var: HashMap::new(),
+            kind: ObjKind::Module(classref),
         }
     }
 
@@ -72,6 +81,10 @@ impl ObjectRef {
 
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
         ObjectRef::new(ObjectInfo::new_class(globals, classref))
+    }
+
+    pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
+        ObjectRef::new(ObjectInfo::new_module(globals, classref))
     }
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {

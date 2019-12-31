@@ -247,6 +247,16 @@ impl PackedValue {
         }
     }
 
+    pub fn as_module(&self) -> Option<ClassRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Class(cref) | ObjKind::Module(cref) => Some(cref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_array(&self) -> Option<ArrayRef> {
         match self.as_object() {
             Some(oref) => match oref.kind {
@@ -344,6 +354,10 @@ impl PackedValue {
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
         PackedValue::object(ObjectRef::new_class(globals, class_ref))
+    }
+
+    pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
+        PackedValue::object(ObjectRef::new_module(globals, class_ref))
     }
 
     pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {

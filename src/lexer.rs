@@ -20,6 +20,7 @@ pub struct Lexer {
 #[derive(Debug, Clone, PartialEq)]
 enum QuoteState {
     DoubleQuote,
+    Brace,
     Expr,
 }
 
@@ -58,6 +59,7 @@ impl Lexer {
             "false" => Reserved::False,
             "if" => Reserved::If,
             "in" => Reserved::In,
+            "module" => Reserved::Module,
             "next" => Reserved::Next,
             "nil" => Reserved::Nil,
             "return" => Reserved::Return,
@@ -152,7 +154,10 @@ impl Lexer {
                         self.goto_eol();
                         self.new_nop()
                     }
-                    '"' => self.lex_string_literal_double()?,
+                    '"' => {
+                        self.quote_state.push(QuoteState::DoubleQuote);
+                        self.lex_string_literal_double()?
+                    }
                     ';' => self.new_punct(Punct::Semi),
                     ':' => {
                         let ch1 = self.peek()?;
@@ -210,13 +215,17 @@ impl Lexer {
                     '~' => self.new_punct(Punct::BitNot),
                     '[' => self.new_punct(Punct::LBracket),
                     ']' => self.new_punct(Punct::RBracket),
-                    '{' => self.new_punct(Punct::LBrace),
+                    '{' => {
+                        self.quote_state.push(QuoteState::Brace);
+                        self.new_punct(Punct::LBrace)
+                    }
                     '}' => match self.quote_state.last() {
-                        Some(QuoteState::Expr) => {
-                            self.quote_state.pop().unwrap();
-                            self.lex_string_literal_double()?
+                        Some(QuoteState::Expr) => self.lex_string_literal_double()?,
+                        Some(QuoteState::Brace) => {
+                            self.quote_state.pop();
+                            self.new_punct(Punct::RBrace)
                         }
-                        _ => self.new_punct(Punct::RBrace),
+                        _ => return Err(self.error_unexpected(pos)),
                     },
                     '.' => {
                         let ch1 = self.peek()?;
@@ -441,7 +450,9 @@ impl Lexer {
     /// Read string literal
     fn lex_string_literal_double(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
+        let mut pos;
         loop {
+            pos = self.pos;
             match self.get()? {
                 '"' => break,
                 '\\' => s.push(self.read_escaped_char()?),
@@ -449,13 +460,11 @@ impl Lexer {
                     if self.peek()? == '{' {
                         self.get()?;
                         match self.quote_state.last() {
-                            None => {
-                                self.quote_state.push(QuoteState::DoubleQuote);
+                            Some(QuoteState::DoubleQuote) => {
                                 self.quote_state.push(QuoteState::Expr);
                                 return Ok(self.new_open_dq(s));
                             }
-                            Some(QuoteState::DoubleQuote) => {
-                                self.quote_state.push(QuoteState::Expr);
+                            Some(QuoteState::Expr) => {
                                 return Ok(self.new_inter_dq(s));
                             }
                             _ => return Err(self.error_unexpected(self.pos - 1)),
@@ -468,13 +477,13 @@ impl Lexer {
             }
         }
 
-        match self.quote_state.last() {
-            None => Ok(self.new_stringlit(s)),
-            Some(QuoteState::DoubleQuote) => {
-                self.quote_state.pop().unwrap();
+        match self.quote_state.pop().unwrap() {
+            QuoteState::DoubleQuote => Ok(self.new_stringlit(s)),
+            QuoteState::Expr => {
+                assert_eq!(self.quote_state.pop().unwrap(), QuoteState::DoubleQuote);
                 Ok(self.new_close_dq(s))
             }
-            _ => Err(self.error_unexpected(self.pos - 1)),
+            QuoteState::Brace => Err(self.error_unexpected(pos)),
         }
     }
 

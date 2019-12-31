@@ -80,8 +80,6 @@ fn file_read(file_name: impl Into<String>) {
             };
         }
         Err(err) => {
-            eprintln!("{:?}", &err.loc());
-            parser.show_tokens();
             parser.show_loc(&err.loc());
             match err.kind {
                 RubyErrorKind::ParseErr(e) => match e {

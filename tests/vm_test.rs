@@ -75,7 +75,7 @@ fn interpolated_string_lit1() {
     let program = r###"
     x = 20
     f = "fibonacci";
-    "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;} fibo(#{x}) = #{fibo(x)}"
+    "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
     "###;
     let expected = Value::String("fibonacci  fibo(20) = 6765".to_string());
     eval_script(program, expected);

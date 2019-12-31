@@ -980,12 +980,14 @@ impl Codegen {
                 id,
                 superclass,
                 body,
+                is_module,
                 lvar,
             } => {
                 let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false)?;
                 self.gen(globals, iseq, superclass, true)?;
                 self.save_loc(iseq);
                 iseq.push(Inst::DEF_CLASS);
+                iseq.push(if *is_module { 1 } else { 0 });
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
                 if !use_value {

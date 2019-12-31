@@ -163,9 +163,9 @@ impl Inst {
             | Inst::PUSH_FLONUM
             | Inst::SET_LOCAL
             | Inst::GET_LOCAL
-            | Inst::DEF_CLASS
             | Inst::DEF_METHOD
             | Inst::DEF_CLASS_METHOD => 9,
+            Inst::DEF_CLASS => 10,
             Inst::SEND | Inst::SEND_SELF => 17,
             _ => 1,
         }

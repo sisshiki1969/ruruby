@@ -70,6 +70,7 @@ pub enum Reserved {
     False,
     If,
     In,
+    Module,
     Next,
     Nil,
     Return,

@@ -1212,7 +1212,16 @@ impl Parser {
                         self.error_unexpected(loc, "SyntaxError: class definition in method body.")
                     );
                 }
-                let node = self.parse_class()?;
+                let node = self.parse_class(false)?;
+                Ok(node)
+            }
+            TokenKind::Reserved(Reserved::Module) => {
+                if self.context_stack.last().unwrap().kind == ContextKind::Method {
+                    return Err(
+                        self.error_unexpected(loc, "SyntaxError: class definition in method body.")
+                    );
+                }
+                let node = self.parse_class(true)?;
                 Ok(node)
             }
             TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
@@ -1390,16 +1399,19 @@ impl Parser {
         Ok(args)
     }
 
-    fn parse_class(&mut self) -> Result<Node, RubyError> {
+    fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
         //  class identifier [`<' EXPR]
         //      COMPSTMT
         //  end
         let loc = self.loc();
-        let name = match &self.get_no_skip_line_term().kind {
+        let name = match &self.get()?.kind {
             TokenKind::Const(s) => s.clone(),
-            _ => return Err(self.error_unexpected(loc, "Expect class name.")),
+            _ => return Err(self.error_unexpected(loc, "Class/Module name must be CONSTANT.")),
         };
         let superclass = if self.consume_punct_no_skip_line_term(Punct::Lt) {
+            if is_module {
+                return Err(self.error_unexpected(self.prev_loc(), "Unexpected '<'."));
+            };
             self.parse_expr()?
         } else {
             Node::new_const(IdentId::OBJECT, true, loc)
@@ -1409,6 +1421,8 @@ impl Parser {
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        Ok(Node::new_class_decl(id, superclass, body, lvar, loc))
+        Ok(Node::new_class_decl(
+            id, superclass, body, lvar, is_module, loc,
+        ))
     }
 }

@@ -61,6 +61,7 @@ pub enum NodeKind {
         superclass: Box<Node>,
         body: Box<Node>,
         lvar: LvarCollector,
+        is_module: bool,
     },
     Send {
         receiver: Box<Node>,
@@ -238,6 +239,7 @@ impl Node {
         superclass: Node,
         body: Node,
         lvar: LvarCollector,
+        is_module: bool,
         loc: Loc,
     ) -> Self {
         Node::new(
@@ -245,6 +247,7 @@ impl Node {
                 id,
                 superclass: Box::new(superclass),
                 body: Box::new(body),
+                is_module,
                 lvar,
             },
             loc,

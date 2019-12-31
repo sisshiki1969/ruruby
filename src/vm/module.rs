@@ -17,7 +17,7 @@ fn constants(
     _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
+    let class = vm.val_as_module(receiver)?;
     let v: Vec<PackedValue> = class
         .constants
         .keys()
@@ -32,7 +32,7 @@ fn attr_accessor(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
+    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
@@ -51,7 +51,7 @@ fn attr_reader(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
+    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
@@ -69,7 +69,7 @@ fn attr_writer(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
+    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();

@@ -114,6 +114,7 @@ impl SourceInfo {
                 continue;
             }
             found = true;
+            eprintln!("line: {}", line.0);
             eprintln!(
                 "{}",
                 self.code[(line.1)..(line.2)].iter().collect::<String>()
@@ -145,6 +146,7 @@ impl SourceInfo {
                 .sum();
             let length: usize = self.code[loc.0..loc.1].iter().map(|x| calc_width(x)).sum();
             let is_cr = self.code[loc.1] == '\n';
+            eprintln!("line: {}", line.0);
             eprintln!(
                 "{}",
                 if !is_cr {
