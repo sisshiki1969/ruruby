@@ -335,6 +335,11 @@ impl Codegen {
         self.push32(iseq, len as u32);
     }
 
+    fn gen_take(&mut self, iseq: &mut ISeq, len: usize) {
+        iseq.push(Inst::TAKE);
+        self.push32(iseq, len as u32);
+    }
+
     fn gen_concat(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::CONCAT_STRING);
     }
@@ -898,13 +903,17 @@ impl Codegen {
             }
             NodeKind::MulAssign(mlhs, mrhs) => {
                 let lhs_len = mlhs.len();
-                let rhs_len = mrhs.len();
+                let mut rhs_len = mrhs.len();
                 for rhs in mrhs {
                     self.gen(globals, iseq, rhs, true)?;
                 }
                 if use_value {
                     self.gen_dup(iseq, rhs_len);
                 };
+                if rhs_len == 1 {
+                    self.gen_take(iseq, lhs_len);
+                    rhs_len = lhs_len;
+                }
                 if rhs_len < lhs_len {
                     for _ in 0..lhs_len - rhs_len {
                         self.gen_push_nil(iseq);
@@ -919,7 +928,7 @@ impl Codegen {
                     self.gen_assign(globals, iseq, lhs)?;
                 }
                 if use_value {
-                    if rhs_len != 1 {
+                    if mrhs.len() != 1 {
                         self.gen_create_array(iseq, rhs_len);
                     }
                 }

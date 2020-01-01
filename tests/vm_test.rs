@@ -412,6 +412,28 @@ fn mul_assign4() {
 }
 
 #[test]
+fn mul_assign5() {
+    let program = "
+            d = (a,b,c = [1,2])
+            assert([a,b,c],[1,2,nil])
+            assert(d,[1,2])
+            ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn mul_assign6() {
+    let program = "
+            d = (a,b,c = [1,2,3,4,5])
+            assert([a,b,c],[1,2,3])
+            assert(d,[1,2,3,4,5])
+            ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn const1() {
     let program = "
             Ruby = 777

@@ -682,6 +682,40 @@ impl VM {
                     }
                     self.pc += 5;
                 }
+                Inst::TAKE => {
+                    let len = read32(iseq, self.pc + 1) as usize;
+                    let val = self.exec_stack.pop().unwrap();
+                    match val.as_object() {
+                        Some(obj) => match obj.kind {
+                            ObjKind::Array(info) => push_some(self, &info.elements, len),
+                            _ => push_one(self, val, len),
+                        },
+                        None => push_one(self, val, len),
+                    }
+                    self.pc += 5;
+
+                    fn push_one(vm: &mut VM, val: PackedValue, len: usize) {
+                        vm.exec_stack.push(val);
+                        for _ in 0..len - 1 {
+                            vm.exec_stack.push(PackedValue::nil());
+                        }
+                    }
+                    fn push_some(vm: &mut VM, elem: &Vec<PackedValue>, len: usize) {
+                        let ary_len = elem.len();
+                        if len <= ary_len {
+                            for i in 0..len {
+                                vm.exec_stack.push(elem[i]);
+                            }
+                        } else {
+                            for i in 0..ary_len {
+                                vm.exec_stack.push(elem[i]);
+                            }
+                            for _ in ary_len..len {
+                                vm.exec_stack.push(PackedValue::nil());
+                            }
+                        }
+                    }
+                }
                 _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
             }
         }

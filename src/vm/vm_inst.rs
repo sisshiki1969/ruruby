@@ -49,6 +49,7 @@ impl Inst {
     pub const CONCAT_STRING: u8 = 61;
     pub const TO_S: u8 = 62;
     pub const DUP: u8 = 63;
+    pub const TAKE: u8 = 64;
 
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
@@ -107,6 +108,7 @@ impl Inst {
             Inst::CREATE_PROC => "CREATE_PROC",
             Inst::POP => "POP",
             Inst::DUP => "DUP",
+            Inst::TAKE => "TAKE",
             Inst::CONCAT_STRING => "CONCAT_STR",
             Inst::TO_S => "TO_S",
             Inst::DEF_CLASS => "DEF_CLASS",
@@ -156,6 +158,7 @@ impl Inst {
             | Inst::JMP
             | Inst::JMP_IF_FALSE
             | Inst::DUP
+            | Inst::TAKE
             | Inst::ADDI
             | Inst::SUBI => 5,
 
