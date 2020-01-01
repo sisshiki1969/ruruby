@@ -267,6 +267,16 @@ impl PackedValue {
         }
     }
 
+    pub fn as_range(&self) -> Option<RangeRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Range(rref) => Some(rref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_proc(&self) -> Option<procobj::ProcRef> {
         match self.as_object() {
             Some(oref) => match oref.kind {
@@ -365,7 +375,7 @@ impl PackedValue {
     }
 
     pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
-        let rref = range::RangeRef::new(start, end, exclude);
+        let rref = range::RangeRef::new_range(start, end, exclude);
         PackedValue::object(ObjectRef::new_range(globals, rref))
     }
 
@@ -531,7 +541,7 @@ mod tests {
         let to = Value::FixNum(36).pack();
         let expect = Value::Object(ObjectRef::new_range(
             &globals,
-            range::RangeRef::new(from, to, false),
+            range::RangeRef::new_range(from, to, false),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {

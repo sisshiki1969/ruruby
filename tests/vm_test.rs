@@ -509,6 +509,33 @@ fn array_map() {
 }
 
 #[test]
+fn range1() {
+    let program = "
+    assert(Range.new(5,10), 5..10)
+    assert(Range.new(5,10, false), 5..10)
+    assert(Range.new(5,10, true), 5...10)";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn range2() {
+    let program = "
+    assert(Range.new(5,10).first, 5)
+    assert(Range.new(5,10).first(4), [5,6,7,8])
+    assert(Range.new(5,10).first(100), [5,6,7,8,9,10])
+    assert(Range.new(5,10,true).first(4), [5,6,7,8])
+    assert(Range.new(5,10,true).first(100), [5,6,7,8,9])
+    assert(Range.new(5,10).last, 10)
+    assert(Range.new(5,10).last(4), [7,8,9,10])
+    assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
+    assert(Range.new(5,10,true).last(4), [6,7,8,9])
+    assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn func1() {
     let program = "
             def func(a,b,c)

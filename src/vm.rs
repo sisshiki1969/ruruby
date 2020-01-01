@@ -29,6 +29,7 @@ pub use module::*;
 use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
+use range::*;
 use std::collections::HashMap;
 pub use value::*;
 use vm_inst::*;
@@ -70,6 +71,7 @@ impl VM {
         set_builtin_class!("Integer", integer_class);
         set_builtin_class!("Array", array_class);
         set_builtin_class!("Proc", proc_class);
+        set_builtin_class!("Range", range_class);
 
         VM {
             globals,
@@ -515,6 +517,10 @@ impl VM {
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap();
                     let end = self.exec_stack.pop().unwrap();
+                    match (start.unpack(), end.unpack()) {
+                        (Value::FixNum(_), Value::FixNum(_)) => {}
+                        _ => return Err(self.error_argument("Bad value for range.")),
+                    };
                     let exclude_val = self.exec_stack.pop().unwrap();
                     let exclude_end = self.val_to_bool(exclude_val);
                     let range = PackedValue::range(&mut self.globals, start, end, exclude_end);
@@ -1162,6 +1168,13 @@ impl VM {
                         }
                     }
                     Ok(true)
+                }
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                    if lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude {
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
                 }
                 _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
             },

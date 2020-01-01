@@ -116,23 +116,19 @@ impl Codegen {
     }
 
     fn gen_add(&mut self, iseq: &mut ISeq) {
-        self.save_loc(iseq);
         iseq.push(Inst::ADD);
     }
 
     fn gen_addi(&mut self, iseq: &mut ISeq, i: i32) {
-        self.save_loc(iseq);
         iseq.push(Inst::ADDI);
         self.push32(iseq, i as u32);
     }
 
     fn gen_sub(&mut self, iseq: &mut ISeq) {
-        self.save_loc(iseq);
         iseq.push(Inst::SUB);
     }
 
     fn gen_subi(&mut self, iseq: &mut ISeq, i: i32) {
-        self.save_loc(iseq);
         iseq.push(Inst::SUBI);
         self.push32(iseq, i as u32);
     }
@@ -228,19 +224,19 @@ impl Codegen {
     }
 
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_loc(iseq);
+        self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
         self.push32(iseq, id.into());
     }
 
     fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_loc(iseq);
+        self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST_TOP);
         self.push32(iseq, id.into());
     }
 
     fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_loc(iseq);
+        self.save_cur_loc(iseq);
         iseq.push(Inst::GET_SCOPE);
         self.push32(iseq, id.into());
     }
@@ -253,7 +249,7 @@ impl Codegen {
         args_num: usize,
         block: Option<MethodRef>,
     ) {
-        self.save_loc(iseq);
+        self.save_cur_loc(iseq);
         iseq.push(Inst::SEND);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
@@ -276,7 +272,7 @@ impl Codegen {
         args_num: usize,
         block: Option<MethodRef>,
     ) {
-        self.save_loc(iseq);
+        self.save_cur_loc(iseq);
         iseq.push(Inst::SEND_SELF);
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
@@ -400,12 +396,17 @@ impl Codegen {
         iseq.push((num >> 48) as u8);
         iseq.push((num >> 56) as u8);
     }
-    fn save_loc(&mut self, iseq: &mut ISeq) {
+
+    fn save_loc(&mut self, iseq: &mut ISeq, loc: Loc) {
         self.context_stack
             .last_mut()
             .unwrap()
             .iseq_sourcemap
-            .push((ISeqPos(iseq.len()), self.loc));
+            .push((ISeqPos(iseq.len()), loc));
+    }
+
+    fn save_cur_loc(&mut self, iseq: &mut ISeq) {
+        self.save_loc(iseq, self.loc)
     }
 
     /// Generate ISeq.
@@ -641,6 +642,7 @@ impl Codegen {
                 end,
                 exclude_end,
             } => {
+                let loc = node.loc();
                 if *exclude_end {
                     iseq.push(Inst::PUSH_TRUE);
                 } else {
@@ -648,6 +650,7 @@ impl Codegen {
                 };
                 self.gen(globals, iseq, end, true)?;
                 self.gen(globals, iseq, start, true)?;
+                self.save_loc(iseq, loc);
                 iseq.push(Inst::CREATE_RANGE);
                 if !use_value {
                     self.gen_pop(iseq)
@@ -704,106 +707,105 @@ impl Codegen {
                     BinOp::Add => match rhs.kind {
                         NodeKind::Integer(i) if i as u64 as u32 as i32 as i64 == i => {
                             self.gen(globals, iseq, lhs, true)?;
-                            self.loc = loc;
+                            self.save_loc(iseq, loc);
                             self.gen_addi(iseq, i as u64 as u32 as i32);
                         }
                         _ => {
                             self.gen(globals, iseq, lhs, true)?;
                             self.gen(globals, iseq, rhs, true)?;
-                            self.loc = loc;
+                            self.save_loc(iseq, loc);
                             self.gen_add(iseq);
                         }
                     },
                     BinOp::Sub => match rhs.kind {
                         NodeKind::Integer(i) if i as u64 as u32 as i32 as i64 == i => {
                             self.gen(globals, iseq, lhs, true)?;
-                            self.loc = loc;
+                            self.save_loc(iseq, loc);
                             self.gen_subi(iseq, i as u64 as u32 as i32);
                         }
                         _ => {
                             self.gen(globals, iseq, lhs, true)?;
                             self.gen(globals, iseq, rhs, true)?;
-                            self.loc = loc;
+                            self.save_loc(iseq, loc);
                             self.gen_sub(iseq);
                         }
                     },
                     BinOp::Mul => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.loc = loc;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::MUL);
                     }
                     BinOp::Div => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.loc = loc;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::DIV);
                     }
                     BinOp::Shr => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::SHR);
                     }
                     BinOp::Shl => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::SHL);
                     }
                     BinOp::BitOr => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::BIT_OR);
                     }
                     BinOp::BitAnd => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::BIT_AND);
                     }
                     BinOp::BitXor => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::BIT_XOR);
                     }
                     BinOp::Eq => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::EQ);
                     }
                     BinOp::Ne => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::NE);
                     }
                     BinOp::Ge => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::GE);
                     }
                     BinOp::Gt => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::GT);
                     }
                     BinOp::Le => {
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::GE);
                     }
                     BinOp::Lt => {
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
-                        self.save_loc(iseq);
+                        self.save_loc(iseq, loc);
                         iseq.push(Inst::GT);
                     }
                     BinOp::LAnd => {
@@ -831,11 +833,13 @@ impl Codegen {
             }
             NodeKind::ArrayMember { array, index } => {
                 // number of index elements must be 1 or 2 (ensured by parser).
+                let loc = node.loc();
                 self.gen(globals, iseq, array, true)?;
                 let num_args = index.len();
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
                 }
+                self.save_loc(iseq, loc);
                 self.gen_get_array_elem(iseq, num_args);
                 if !use_value {
                     self.gen_pop(iseq)
@@ -992,9 +996,10 @@ impl Codegen {
                 is_module,
                 lvar,
             } => {
+                let loc = node.loc();
                 let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false)?;
                 self.gen(globals, iseq, superclass, true)?;
-                self.save_loc(iseq);
+                self.save_loc(iseq, loc);
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if *is_module { 1 } else { 0 });
                 self.push32(iseq, (*id).into());

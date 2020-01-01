@@ -57,7 +57,7 @@ impl ObjectInfo {
 
     pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {
         ObjectInfo {
-            classref: globals.object_class,
+            classref: globals.range_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Range(rangeref),
         }
