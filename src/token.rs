@@ -201,4 +201,14 @@ impl Token {
             _ => false,
         }
     }
+
+    pub fn can_be_symbol(&self) -> bool {
+        match self.kind {
+            TokenKind::Const(_)
+            | TokenKind::Ident(_, _)
+            | TokenKind::Reserved(_)
+            | TokenKind::StringLit(_) => true,
+            _ => false,
+        }
+    }
 }

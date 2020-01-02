@@ -1144,8 +1144,34 @@ impl Parser {
                         return Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())));
                     };
                     loop {
-                        let key = self.parse_arg()?;
-                        self.expect_punct(Punct::FatArrow)?;
+                        let ident_loc = self.loc();
+                        let mut symbol_flag = false;
+                        let key = if self.peek().can_be_symbol() {
+                            self.save_state();
+                            let ident = match self.get()?.kind.clone() {
+                                TokenKind::Ident(ident, _) => ident,
+                                TokenKind::Const(ident) => ident,
+                                TokenKind::StringLit(ident) => ident,
+                                TokenKind::Reserved(reserved) => {
+                                    self.lexer.get_string_from_reserved(reserved).to_string()
+                                }
+                                _ => unreachable!(),
+                            };
+                            if self.consume_punct(Punct::Colon) {
+                                self.discard_state();
+                                let id = self.get_ident_id(&ident);
+                                symbol_flag = true;
+                                Node::new_symbol(id, ident_loc)
+                            } else {
+                                self.restore_state();
+                                self.parse_arg()?
+                            }
+                        } else {
+                            self.parse_arg()?
+                        };
+                        if !symbol_flag {
+                            self.expect_punct(Punct::FatArrow)?
+                        };
                         let value = self.parse_arg()?;
                         kvp.push((key, value));
                         if self.consume_punct(Punct::RBrace) {
