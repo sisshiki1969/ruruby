@@ -143,7 +143,7 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct PackedValue(u64);
 
 impl std::ops::Deref for PackedValue {
@@ -155,9 +155,54 @@ impl std::ops::Deref for PackedValue {
 
 impl std::hash::Hash for PackedValue {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        if self.is_packed_value() {
+            self.0.hash(state);
+        } else {
+            let lhs = unsafe { (*(self.0 as *mut Value)).clone() };
+            match lhs {
+                Value::String(lhs) => lhs.hash(state),
+                _ => self.0.hash(state),
+            };
+        }
     }
 }
+
+impl PartialEq for PackedValue {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0 == other.0 {
+            return true;
+        };
+        match (self.unpack(), other.unpack()) {
+            (Value::Nil, Value::Nil) => true,
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => lhs as f64 == rhs,
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => lhs == rhs as f64,
+            (Value::String(lhs), Value::String(rhs)) => lhs == rhs,
+            (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
+            (Value::Symbol(lhs), Value::Symbol(rhs)) => lhs == rhs,
+
+            (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                    if lhs.elements.len() != rhs.elements.len() {
+                        false
+                    } else {
+                        for i in 0..lhs.elements.len() {
+                            if lhs.elements[i] != rhs.elements[i] {
+                                return false;
+                            };
+                        }
+                        true
+                    }
+                }
+                _ => lhs == rhs,
+            },
+            _ => false,
+        }
+    }
+}
+
+impl Eq for PackedValue {}
 
 impl PackedValue {
     pub fn unpack(self) -> Value {
