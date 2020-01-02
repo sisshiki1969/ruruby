@@ -525,6 +525,21 @@ fn hash1() {
 }
 
 #[test]
+fn hash2() {
+    let program = r#"
+    h = {true: "true", false: "false", nil: "nil", 100 => "100", 7.7 => "7.7", ruby: "string"}
+    assert(h[:true], "true")
+    assert(h[:false], "false")
+    assert(h[:nil], "nil")
+    assert(h[100], "100")
+    assert(h[7.7], "7.7")
+    assert(h[:ruby], "string")
+    "#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn range1() {
     let program = "
     assert(Range.new(5,10), 5..10)

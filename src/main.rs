@@ -108,6 +108,7 @@ fn repl_vm() {
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     */
+    println!("Value: {}", std::mem::size_of::<Value>());
     println!(
         "Option<PackedValue>: {}",
         std::mem::size_of::<Option<PackedValue>>()

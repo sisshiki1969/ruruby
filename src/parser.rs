@@ -391,6 +391,18 @@ impl Parser {
         Ok(self.get_ident_id(&name))
     }
 
+    fn token_as_symbol(&self, token: &Token) -> String {
+        match token.kind.clone() {
+            TokenKind::Ident(ident, _) => ident,
+            TokenKind::Const(ident) => ident,
+            TokenKind::StringLit(ident) => ident,
+            TokenKind::Reserved(reserved) => {
+                self.lexer.get_string_from_reserved(reserved).to_string()
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
         RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
     }
@@ -1148,15 +1160,8 @@ impl Parser {
                         let mut symbol_flag = false;
                         let key = if self.peek().can_be_symbol() {
                             self.save_state();
-                            let ident = match self.get()?.kind.clone() {
-                                TokenKind::Ident(ident, _) => ident,
-                                TokenKind::Const(ident) => ident,
-                                TokenKind::StringLit(ident) => ident,
-                                TokenKind::Reserved(reserved) => {
-                                    self.lexer.get_string_from_reserved(reserved).to_string()
-                                }
-                                _ => unreachable!(),
-                            };
+                            let token = self.get()?.clone();
+                            let ident = self.token_as_symbol(&token);
                             if self.consume_punct(Punct::Colon) {
                                 self.discard_state();
                                 let id = self.get_ident_id(&ident);
@@ -1182,8 +1187,16 @@ impl Parser {
                     Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
                 }
                 Punct::Colon => {
-                    let ident = self.expect_ident()?;
-                    Ok(Node::new_symbol(ident, loc.merge(self.prev_loc())))
+                    let symbol_loc = self.loc();
+                    let token = self.get()?.clone();
+                    if !token.can_be_symbol() {
+                        return Err(
+                            self.error_unexpected(symbol_loc, "Expect identifier or string.")
+                        );
+                    };
+                    let ident = self.token_as_symbol(&token);
+                    let id = self.get_ident_id(&ident);
+                    Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
                 }
                 Punct::Arrow => {
                     let mut params = vec![];
