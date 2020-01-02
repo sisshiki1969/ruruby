@@ -1137,6 +1137,24 @@ impl Parser {
                         loc.merge(self.prev_loc()),
                     ))
                 }
+                Punct::LBrace => {
+                    let mut kvp = vec![];
+                    let loc = self.prev_loc();
+                    if self.consume_punct(Punct::RBrace) {
+                        return Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())));
+                    };
+                    loop {
+                        let key = self.parse_arg()?;
+                        self.expect_punct(Punct::FatArrow)?;
+                        let value = self.parse_arg()?;
+                        kvp.push((key, value));
+                        if self.consume_punct(Punct::RBrace) {
+                            break;
+                        };
+                        self.expect_punct(Punct::Comma)?;
+                    }
+                    Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
+                }
                 Punct::Colon => {
                     let ident = self.expect_ident()?;
                     Ok(Node::new_symbol(ident, loc.merge(self.prev_loc())))

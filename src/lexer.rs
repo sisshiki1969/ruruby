@@ -248,6 +248,9 @@ impl Lexer {
                         if ch1 == '=' {
                             self.get()?;
                             self.new_punct(Punct::Eq)
+                        } else if ch1 == '>' {
+                            self.get()?;
+                            self.new_punct(Punct::FatArrow)
                         } else {
                             self.new_punct(Punct::Assign)
                         }

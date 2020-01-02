@@ -10,12 +10,23 @@ pub enum NodeKind {
     Bool(bool),
     String(String),
     InterporatedString(Vec<Node>),
+    Symbol(IdentId),
     Range {
         start: Box<Node>,
         end: Box<Node>,
         exclude_end: bool,
     }, // start, end, exclude_end
     Array(NodeVec),
+    Hash(Vec<(Node, Node)>),
+    LocalVar(IdentId),
+    Ident(IdentId, bool),
+    InstanceVar(IdentId),
+    Const {
+        toplevel: bool,
+        id: IdentId,
+    },
+    Scope(Box<Node>, IdentId),
+
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
     ArrayMember {
@@ -43,15 +54,6 @@ pub enum NodeKind {
     },
     Break,
     Next,
-    LocalVar(IdentId),
-    Ident(IdentId, bool),
-    InstanceVar(IdentId),
-    Const {
-        toplevel: bool,
-        id: IdentId,
-    },
-    Scope(Box<Node>, IdentId),
-    Symbol(IdentId),
     Param(IdentId),
     BlockParam(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
@@ -122,6 +124,21 @@ impl Node {
         Node::new(NodeKind::String(s), loc)
     }
 
+    pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
+        Node::new(
+            NodeKind::Range {
+                start: Box::new(start),
+                end: Box::new(end),
+                exclude_end,
+            },
+            loc,
+        )
+    }
+
+    pub fn new_hash(key_value: Vec<(Node, Node)>, loc: Loc) -> Self {
+        Node::new(NodeKind::Hash(key_value), loc)
+    }
+
     pub fn new_self(loc: Loc) -> Self {
         Node::new(NodeKind::SelfValue, loc)
     }
@@ -176,17 +193,6 @@ impl Node {
 
     pub fn new_symbol(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Symbol(id), loc)
-    }
-
-    pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
-        Node::new(
-            NodeKind::Range {
-                start: Box::new(start),
-                end: Box::new(end),
-                exclude_end,
-            },
-            loc,
-        )
     }
 
     pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {

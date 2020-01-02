@@ -44,6 +44,7 @@ impl Inst {
     pub const CREATE_RANGE: u8 = 50;
     pub const CREATE_ARRAY: u8 = 51;
     pub const CREATE_PROC: u8 = 52;
+    pub const CREATE_HASH: u8 = 53;
 
     pub const POP: u8 = 60;
     pub const CONCAT_STRING: u8 = 61;
@@ -106,6 +107,8 @@ impl Inst {
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
             Inst::CREATE_PROC => "CREATE_PROC",
+            Inst::CREATE_HASH => "CREATE_HASH",
+
             Inst::POP => "POP",
             Inst::DUP => "DUP",
             Inst::TAKE => "TAKE",
@@ -160,7 +163,8 @@ impl Inst {
             | Inst::DUP
             | Inst::TAKE
             | Inst::ADDI
-            | Inst::SUBI => 5,
+            | Inst::SUBI
+            | Inst::CREATE_HASH => 5,
 
             Inst::PUSH_FIXNUM
             | Inst::PUSH_FLONUM

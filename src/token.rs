@@ -118,6 +118,7 @@ pub enum Punct {
     LOr,
 
     Arrow,
+    FatArrow,
 }
 
 #[allow(unused)]

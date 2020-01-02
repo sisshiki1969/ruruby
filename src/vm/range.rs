@@ -39,12 +39,7 @@ fn range_new(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let len = args.len();
-    if len < 2 || 3 < len {
-        return Err(vm.error_argument(format!(
-            "Wrong number of arguments. (given {}, expected 2..3)",
-            len
-        )));
-    }
+    vm.check_args_num(len, 2, 3)?;
     let (start, end) = (args[0], args[1]);
     let exclude_end = if len == 2 {
         false
@@ -86,10 +81,7 @@ fn range_first(
     if args.len() == 0 {
         return Ok(range.start);
     };
-    let arg = match args[0].as_fixnum() {
-        Some(i) => i,
-        None => return Err(vm.error_type("Must be an integer.")),
-    };
+    let arg = args[0].expect_fixnum(&vm, "Argument")?;
     if arg < 0 {
         return Err(vm.error_argument("Negative array size"));
     };
@@ -115,10 +107,7 @@ fn range_last(
     if args.len() == 0 {
         return Ok(range.end);
     };
-    let arg = match args[0].as_fixnum() {
-        Some(i) => i,
-        None => return Err(vm.error_type("Must be an integer.")),
-    };
+    let arg = args[0].expect_fixnum(&vm, "Argument")?;
     if arg < 0 {
         return Err(vm.error_argument("Negative array size"));
     };
@@ -145,16 +134,8 @@ fn range_map(
     };
     let mut res = vec![];
     let context = vm.context();
-    let start = if let Some(start) = range.start.as_fixnum() {
-        start
-    } else {
-        return Err(vm.error_argument("Currently, start must be an Integer."));
-    };
-    let end = if let Some(end) = range.end.as_fixnum() {
-        end + if range.exclude { 0 } else { 1 }
-    } else {
-        return Err(vm.error_argument("Currently, end must be an Integer."));
-    };
+    let start = range.start.expect_fixnum(&vm, "Start")?;
+    let end = range.end.expect_fixnum(&vm, "Start")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         vm.vm_run(
             context.self_value,

@@ -143,13 +143,19 @@ impl Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PackedValue(u64);
 
 impl std::ops::Deref for PackedValue {
     type Target = u64;
     fn deref(&self) -> &u64 {
         &self.0
+    }
+}
+
+impl std::hash::Hash for PackedValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
     }
 }
 
@@ -220,6 +226,21 @@ impl PackedValue {
                 match *(self.0 as *mut Value) {
                     Value::FixNum(i) => Some(i),
                     _ => None,
+                }
+            }
+        }
+    }
+
+    pub fn expect_fixnum(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
+        if self.is_packed_fixnum() {
+            Ok(self.as_packed_fixnum())
+        } else if self.is_packed_value() {
+            Err(vm.error_argument(msg.into() + " must be an Integer."))
+        } else {
+            unsafe {
+                match *(self.0 as *mut Value) {
+                    Value::FixNum(i) => Ok(i),
+                    _ => Err(vm.error_argument(msg.into() + " must be an Integer.")),
                 }
             }
         }
@@ -372,6 +393,10 @@ impl PackedValue {
 
     pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
         PackedValue::object(ObjectRef::new_array(globals, array_ref))
+    }
+
+    pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
+        PackedValue::object(ObjectRef::new_hash(globals, hash_ref))
     }
 
     pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {

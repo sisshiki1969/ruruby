@@ -1,5 +1,6 @@
 use super::array::ArrayRef;
 use super::class::ClassRef;
+use super::hash::HashRef;
 use super::procobj::ProcRef;
 use super::range::RangeRef;
 use crate::vm::*;
@@ -18,6 +19,7 @@ pub enum ObjKind {
     Class(ClassRef),
     Module(ClassRef),
     Array(ArrayRef),
+    Hash(HashRef),
     Range(RangeRef),
     Proc(ProcRef),
 }
@@ -55,6 +57,14 @@ impl ObjectInfo {
         }
     }
 
+    pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
+        ObjectInfo {
+            classref: globals.object_class,
+            instance_var: HashMap::new(),
+            kind: ObjKind::Hash(hashref),
+        }
+    }
+
     pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {
         ObjectInfo {
             classref: globals.range_class,
@@ -89,6 +99,10 @@ impl ObjectRef {
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectRef::new(ObjectInfo::new_array(globals, arrayref))
+    }
+
+    pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
+        ObjectRef::new(ObjectInfo::new_hash(globals, hashref))
     }
 
     pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {

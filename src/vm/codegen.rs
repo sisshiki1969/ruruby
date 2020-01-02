@@ -1048,6 +1048,18 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
+            NodeKind::Hash(key_value) => {
+                let len = key_value.len();
+                for (k, v) in key_value {
+                    self.gen(globals, iseq, k, true)?;
+                    self.gen(globals, iseq, v, true)?;
+                }
+                iseq.push(Inst::CREATE_HASH);
+                self.push32(iseq, len as u32);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
             _ => {
                 return Err(self.error_syntax(
                     format!("Codegen: Unimplemented syntax. {:?}", node.kind),

@@ -40,14 +40,16 @@ fn array_new(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
+    vm.check_args_num(args.len(), 0, 2)?;
     let array_vec = match args.len() {
         0 => vec![],
-        1 => match args[0].as_fixnum() {
-            Some(num) => vec![PackedValue::nil(); num as usize],
-            None => match args[0].as_array() {
-                Some(aref) => aref.elements.clone(),
-                None => return Err(vm.error_nomethod("Invalid arguments")),
+        1 => match args[0].unpack() {
+            Value::FixNum(num) if num >= 0 => vec![PackedValue::nil(); num as usize],
+            Value::Object(oref) => match oref.kind {
+                ObjKind::Array(aref) => aref.elements.clone(),
+                _ => return Err(vm.error_nomethod("Invalid arguments")),
             },
+            _ => return Err(vm.error_nomethod("Invalid arguments")),
         },
         2 => {
             let arg_num = args[0]
@@ -55,7 +57,7 @@ fn array_new(
                 .ok_or(vm.error_nomethod("Invalid arguments"))?;
             vec![args[1]; arg_num as usize]
         }
-        _ => return Err(vm.error_nomethod("Wrong number of arguments.")),
+        _ => unreachable!(),
     };
     let array = PackedValue::array(&mut vm.globals, ArrayRef::from(array_vec));
     Ok(array)
@@ -143,7 +145,9 @@ fn array_map(
     _args: VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
-    let aref = receiver.as_array().unwrap();
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     let iseq = match block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),

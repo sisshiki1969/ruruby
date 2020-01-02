@@ -4,6 +4,7 @@ mod class;
 mod codegen;
 mod context;
 mod globals;
+mod hash;
 mod integer;
 mod method;
 mod module;
@@ -24,6 +25,7 @@ pub use class::*;
 use codegen::{Codegen, ISeq, ISeqPos};
 pub use context::*;
 pub use globals::*;
+pub use hash::*;
 pub use method::*;
 pub use module::*;
 use object::*;
@@ -450,66 +452,85 @@ impl VM {
                 Inst::SET_ARRAY_ELEM => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
-                    match self.exec_stack.pop().unwrap().as_array() {
-                        Some(mut aref) => {
-                            let index = if args[0].is_packed_fixnum() {
-                                args[0].as_packed_fixnum()
-                            } else {
-                                return Err(self.error_unimplemented("Index must be an integer."));
+
+                    match self.exec_stack.pop().unwrap().as_object() {
+                        Some(oref) => {
+                            match oref.kind {
+                                ObjKind::Array(mut aref) => {
+                                    let index = args[0].expect_fixnum(&self, "Index")?;
+                                    let index = self.get_array_index(index, aref.elements.len())?;
+                                    let val = self.exec_stack.pop().unwrap();
+                                    aref.elements[index] = val;
+                                }
+                                ObjKind::Hash(mut href) => {
+                                    let key = args[0];
+                                    let val = self.exec_stack.pop().unwrap();
+                                    href.map.insert(key, val);
+                                }
+                                _ => {
+                                    return Err(self.error_unimplemented(
+                                        "Currently, []= is supported only for Array and Hash.",
+                                    ))
+                                }
                             };
-                            let index = self.get_array_index(index, aref.elements.len())?;
-                            let val = self.exec_stack.pop().unwrap();
-                            aref.elements[index] = val;
                         }
                         None => {
                             return Err(self.error_unimplemented(
-                                "Currently, []= is supported only for array.",
+                                "Currently, []= is supported only for Array and Hash.",
                             ))
                         }
                     }
+
                     self.pc += 5;
                 }
                 Inst::GET_ARRAY_ELEM => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
-                    match self.exec_stack.pop().unwrap().as_array() {
-                        Some(aref) => {
-                            let index = match args[0].as_fixnum() {
-                                Some(num) => num,
-                                None => {
-                                    return Err(
-                                        self.error_type("No implicit conversion into Integer")
-                                    )
+                    match self.exec_stack.pop().unwrap().as_object() {
+                        Some(oref) => {
+                            match oref.kind {
+                                ObjKind::Array(aref) => {
+                                    let index = args[0].expect_fixnum(&self, "Index")?;
+                                    let index = self.get_array_index(index, aref.elements.len())?;
+                                    if arg_num == 1 {
+                                        let elem = aref.elements[index];
+                                        self.exec_stack.push(elem);
+                                    } else {
+                                        let len = args[1].expect_fixnum(&self, "Index")?;
+                                        if len < 0 {
+                                            self.exec_stack.push(PackedValue::nil());
+                                        } else {
+                                            let len = len as usize;
+                                            let end =
+                                                std::cmp::min(aref.elements.len(), index + len);
+                                            let ary = (&aref.elements[index..end]).to_vec();
+                                            let ary_object = PackedValue::array(
+                                                &self.globals,
+                                                ArrayRef::from(ary),
+                                            );
+                                            self.exec_stack.push(ary_object);
+                                        }
+                                    };
                                 }
-                            };
-                            let index = self.get_array_index(index, aref.elements.len())?;
-                            if arg_num == 1 {
-                                let elem = aref.elements[index];
-                                self.exec_stack.push(elem);
-                            } else {
-                                let len = match args[1].as_fixnum() {
-                                    Some(num) => num,
-                                    None => {
-                                        return Err(
-                                            self.error_type("No implicit conversion into Integer")
-                                        )
-                                    }
-                                };
-                                if len < 0 {
-                                    self.exec_stack.push(PackedValue::nil());
-                                } else {
-                                    let len = len as usize;
-                                    let end = std::cmp::min(aref.elements.len(), index + len);
-                                    let ary = (&aref.elements[index..end]).to_vec();
-                                    let ary_object =
-                                        PackedValue::array(&self.globals, ArrayRef::from(ary));
-                                    self.exec_stack.push(ary_object);
+                                ObjKind::Hash(href) => {
+                                    let key = args[0];
+                                    let val = match href.map.get(&key) {
+                                        Some(val) => val.clone(),
+                                        None => PackedValue::nil(),
+                                    };
+                                    self.exec_stack.push(val);
+                                }
+                                _ => {
+                                    return Err(self.error_unimplemented(
+                                        "Currently, [] is supported only for Array and Hash.",
+                                    ))
                                 }
                             };
                         }
                         None => {
-                            return Err(self
-                                .error_unimplemented("Currently, [] is supported only for array."))
+                            return Err(self.error_unimplemented(
+                                "Currently, [] is supported only for Array and Hash.",
+                            ))
                         }
                     }
                     self.pc += 5;
@@ -538,6 +559,13 @@ impl VM {
                     let method = MethodRef::from(read32(iseq, self.pc + 1));
                     let proc_obj = self.create_proc_obj(method)?;
                     self.exec_stack.push(proc_obj);
+                    self.pc += 5;
+                }
+                Inst::CREATE_HASH => {
+                    let arg_num = read32(iseq, self.pc + 1) as usize;
+                    let key_value = self.pop_key_value_pair(arg_num);
+                    let hash = PackedValue::hash(&self.globals, HashRef::from(key_value));
+                    self.exec_stack.push(hash);
                     self.pc += 5;
                 }
                 Inst::JMP => {
@@ -789,6 +817,16 @@ impl VM {
     pub fn error_argument(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Argument(msg.into()), loc)
+    }
+    pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(self.error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {}..{})",
+                len, min, max
+            )))
+        }
     }
 }
 
@@ -1280,7 +1318,7 @@ impl VM {
                     len => {
                         let mut result = self.val_to_s(aref.elements[0]);
                         for i in 1..len {
-                            result = format!("{},{}", result, self.val_to_s(aref.elements[i]));
+                            result = format!("{}, {}", result, self.val_to_s(aref.elements[i]));
                         }
                         format! {"[{}]", result}
                     }
@@ -1308,9 +1346,30 @@ impl VM {
                     len => {
                         let mut result = self.val_pp(aref.elements[0]);
                         for i in 1..len {
-                            result = format!("{},{}", result, self.val_pp(aref.elements[i]));
+                            result = format!("{}, {}", result, self.val_pp(aref.elements[i]));
                         }
                         format! {"[{}]", result}
+                    }
+                },
+                ObjKind::Hash(href) => match href.map.len() {
+                    0 => "{}".to_string(),
+                    _ => {
+                        let mut result = "".to_string();
+                        let mut first = true;
+                        for (k, v) in &href.map {
+                            result = if first {
+                                format!("{} => {}", self.val_pp(k.clone()), self.val_pp(v.clone()))
+                            } else {
+                                format!(
+                                    "{}, {} => {}",
+                                    result,
+                                    self.val_pp(k.clone()),
+                                    self.val_pp(v.clone())
+                                )
+                            };
+                            first = false;
+                        }
+                        format! {"{{{}}}", result}
                     }
                 },
                 ObjKind::Ordinary => {
@@ -1471,6 +1530,16 @@ impl VM {
         }
         args.reverse();
         args
+    }
+
+    fn pop_key_value_pair(&mut self, arg_num: usize) -> HashMap<PackedValue, PackedValue> {
+        let mut hash = HashMap::new();
+        for _ in 0..arg_num {
+            let value = self.exec_stack.pop().unwrap();
+            let key = self.exec_stack.pop().unwrap();
+            hash.insert(key, value);
+        }
+        hash
     }
 
     fn pop_args_to_ary(&mut self, arg_num: usize) -> VecArray {
