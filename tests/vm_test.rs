@@ -540,6 +540,35 @@ fn hash2() {
 }
 
 #[test]
+fn hash3() {
+    let program = r#"
+    h1 = {a: "symbol", c:nil, d:nil}
+    assert(h1.has_key?(:a), true)
+    assert(h1.has_key?(:b), false)
+    assert(h1.has_value?("symbol"), true)
+    assert(h1.has_value?(500), false)
+    assert(h1.length, 3)
+    assert(h1.size, 3)
+    #assert(h1.keys, [:a, :d, :c])
+    #assert(h1.values, ["symbol", nil, nil])
+    h2 = h1.clone()
+    h2[:b] = 100
+    assert(h2[:b], 100)
+    assert(h1[:b], nil)
+    h3 = h2.compact
+    assert(h3.delete(:a), "symbol")
+    assert(h3.empty?, false)
+    assert(h3.delete(:b), 100)
+    assert(h3.delete(:c), nil)
+    assert(h3.empty?, true)
+    h2.clear()
+    assert(h2.empty?, true)
+    "#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn range1() {
     let program = "
     assert(Range.new(5,10), 5..10)

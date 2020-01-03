@@ -53,6 +53,16 @@ impl<T> Ref<T> {
         let boxed = Box::into_raw(Box::new(info));
         Ref(unsafe { NonNull::new_unchecked(boxed) })
     }
+
+    pub fn inner(&self) -> &T {
+        unsafe { &*self.0.as_ptr() }
+    }
+}
+
+impl<T: Clone> Ref<T> {
+    pub fn dup(&self) -> Self {
+        Self::new(self.inner().clone())
+    }
 }
 
 impl<T> Copy for Ref<T> {}

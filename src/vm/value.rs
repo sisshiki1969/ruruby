@@ -55,6 +55,13 @@ impl VecArray {
         VecArray::Array { len: 1, ary }
     }
 
+    pub fn new2(arg0: PackedValue, arg1: PackedValue) -> Self {
+        let mut ary = [PackedValue::nil(); VEC_ARRAY_SIZE];
+        ary[0] = arg0;
+        ary[1] = arg1;
+        VecArray::Array { len: 2, ary }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             VecArray::Array { len, .. } => *len,
@@ -327,6 +334,16 @@ impl PackedValue {
         match self.as_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Array(aref) => Some(aref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_hash(&self) -> Option<HashRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Hash(href) => Some(href),
                 _ => None,
             },
             None => None,

@@ -15,6 +15,7 @@ pub struct Globals {
     pub module_class: ClassRef,
     pub proc_class: ClassRef,
     pub range_class: ClassRef,
+    pub hash_class: ClassRef,
     pub object_class: ClassRef,
 }
 
@@ -39,6 +40,7 @@ impl Globals {
             class_class: object_class,
             proc_class: object_class,
             range_class: object_class,
+            hash_class: object_class,
             object_class,
         };
         object::init_object(&mut globals);
@@ -48,6 +50,7 @@ impl Globals {
         globals.class_class = class::init_class(&mut globals);
         globals.proc_class = procobj::init_proc(&mut globals);
         globals.range_class = range::init_range(&mut globals);
+        globals.hash_class = hash::init_hash(&mut globals);
         globals
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {

@@ -59,7 +59,7 @@ impl ObjectInfo {
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         ObjectInfo {
-            classref: globals.object_class,
+            classref: globals.hash_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Hash(hashref),
         }

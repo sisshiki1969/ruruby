@@ -74,6 +74,7 @@ impl VM {
         set_builtin_class!("Array", array_class);
         set_builtin_class!("Proc", proc_class);
         set_builtin_class!("Range", range_class);
+        set_builtin_class!("Hash", hash_class);
 
         VM {
             globals,

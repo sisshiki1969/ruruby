@@ -983,17 +983,25 @@ impl Parser {
                     self.get()?;
                     let tok = self.get()?.clone();
                     let method = match &tok.kind {
-                        TokenKind::Ident(s, _) => s,
+                        TokenKind::Ident(s, has_suffix) => {
+                            if *has_suffix {
+                                match self.get()?.kind {
+                                    TokenKind::Punct(Punct::Question) => s.clone() + "?",
+                                    _ => panic!("Illegal method name."),
+                                }
+                            } else {
+                                s.clone()
+                            }
+                        }
                         TokenKind::Reserved(r) => {
                             let string = self.lexer.get_string_from_reserved(*r);
-                            string
+                            string.clone()
                         }
                         _ => {
                             return Err(self
                                 .error_unexpected(tok.loc(), "method name must be an identifier."))
                         }
-                    }
-                    .clone();
+                    };
                     let id = self.get_ident_id(&method);
                     let mut args = vec![];
                     let mut completed = false;
