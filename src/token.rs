@@ -106,6 +106,7 @@ pub enum Punct {
     BitAnd,
     BitXor,
     BitNot,
+    Not,
     Assign,
     AssignOp(BinOp),
     Eq,

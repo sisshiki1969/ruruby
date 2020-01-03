@@ -7,6 +7,7 @@ extern crate rustyline;
 use ansi_term::Colour::Red;
 use clap::{App, Arg};
 use ruruby::error::*;
+use ruruby::loader::*;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::vm::*;
 
@@ -35,69 +36,36 @@ fn main() {
 }
 
 fn file_read(file_name: impl Into<String>) {
-    use std::fs::*;
-    use std::io::Read;
     let file_name = file_name.into();
-    let path = std::path::Path::new(&file_name).with_extension("rb");
-    let absolute_path = match path.canonicalize() {
-        Ok(path) => path,
-        Err(ioerr) => {
-            let msg = format!("{}", ioerr);
-            eprintln!("No such file or directory --- {} (LoadError)", &file_name);
-            eprintln!("{}", msg);
-            return;
-        }
-    };
-
-    let mut file_body = String::new();
-
-    match OpenOptions::new().read(true).open(&absolute_path) {
-        Ok(mut ok) => ok
-            .read_to_string(&mut file_body)
-            .ok()
-            .expect("cannot read file"),
-        Err(ioerr) => {
-            let msg = format!("{}", ioerr);
-            eprintln!("Error: Cannot find module file. '{}'", &file_name);
-            eprintln!("{}", msg);
-            return;
-        }
-    };
-
-    let mut parser = Parser::new();
-    let res = parser.parse_program(file_body, None);
-
-    match res {
-        Ok(result) => {
-            let mut eval = VM::new(Some(result.ident_table));
-            eval.init_builtin();
-            match eval.run(&result.node, &result.lvar_collector) {
-                Ok(_result) => {}
-                Err(err) => {
-                    result.source_info.show_loc(&err.loc());
-                    eprintln!("{:?}", err.kind);
-                }
-            };
-        }
-        Err(err) => {
-            parser.show_loc(&err.loc());
-            match err.kind {
-                RubyErrorKind::ParseErr(e) => match e {
-                    ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF."),
-                    ParseErrKind::UnexpectedToken => eprintln!("Unexpected token."),
-                    ParseErrKind::SyntaxError(n) => eprintln!("Syntax error ({})", n),
-                },
-                RubyErrorKind::RuntimeErr(e) => match e {
-                    RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
-                    RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),
-                    RuntimeErrKind::Type(n) => eprintln!("TypeError ({})", n),
-                    RuntimeErrKind::Unimplemented(n) => eprintln!("UnimplementedError ({})", n),
-                    RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
-                    RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
-                },
+    let (absolute_path, program) = match load_file(file_name.clone()) {
+        Ok((path, program)) => (path, program),
+        Err(err) => match err {
+            LoadError::NotFound(msg) => {
+                eprintln!("No such file or directory --- {} (LoadError)", &file_name);
+                eprintln!("{}", msg);
+                return;
             }
+            LoadError::CouldntOpen(msg) => {
+                eprintln!("Cannot open file. '{}'", &file_name);
+                eprintln!("{}", msg);
+                return;
+            }
+        },
+    };
+
+    let mut vm = VM::new();
+    let mut root_path = absolute_path.clone();
+    root_path.pop();
+    eprintln!("{:?}", root_path);
+    vm.root_path = root_path;
+    match vm.run(absolute_path.to_str().unwrap(), program) {
+        Ok(_) => {}
+        Err(err) => {
+            err.show_file_name();
+            err.show_loc();
+            eprintln!("{:?}", err.kind);
         }
-    }
+    };
 }
 
 fn repl_vm() {
@@ -116,8 +84,7 @@ fn repl_vm() {
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
-    let mut vm = VM::new(None);
-    vm.init_builtin();
+    let mut vm = VM::new();
     parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
@@ -126,7 +93,13 @@ fn repl_vm() {
     let context = ContextRef::from(
         main_object,
         None,
-        ISeqRef::new(ISeqInfo::new(vec![], vec![], LvarCollector::new(), vec![])),
+        ISeqRef::new(ISeqInfo::new(
+            vec![],
+            vec![],
+            LvarCollector::new(),
+            vec![],
+            SourceInfoRef::empty(),
+        )),
         None,
     );
     loop {
@@ -142,12 +115,14 @@ fn repl_vm() {
 
         program = format!("{}{}", program, line);
 
-        let parser_save = parser.clone();
-        match parser.parse_program(program.clone(), Some(lvar_collector.clone())) {
+        match parser.clone().parse_program_repl(
+            "REPL",
+            program.clone(),
+            Some(lvar_collector.clone()),
+        ) {
             Ok(parse_result) => {
                 //println!("{:?}", node);
-                vm.init(parse_result.ident_table);
-                match vm.run_repl(&parse_result.node, &parse_result.lvar_collector, context) {
+                match vm.run_repl(&parse_result, context) {
                     Ok(result) => {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
@@ -156,40 +131,21 @@ fn repl_vm() {
                         println!("=> {}", res_str);
                     }
                     Err(err) => {
-                        parse_result.source_info.show_loc(&err.loc());
-                        match err.kind {
-                            RubyErrorKind::ParseErr(e) => {
-                                eprintln!("parse error: {:?}", e);
-                            }
-                            RubyErrorKind::RuntimeErr(e) => match e {
-                                RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
-                                RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),
-                                RuntimeErrKind::Type(n) => eprintln!("TypeError ({})", n),
-                                RuntimeErrKind::Unimplemented(n) => {
-                                    eprintln!("UnimplementedError ({})", n)
-                                }
-                                RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
-                                RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
-                            },
-                        }
+                        err.show_loc();
+                        err.show_err();
                         vm.exec_stack.clear();
-                        parser = parser_save;
                     }
                 }
-                level = parser.get_context_depth();
+                level = 0;
                 program = String::new();
             }
             Err(err) => {
+                level = err.level();
                 if RubyErrorKind::ParseErr(ParseErrKind::UnexpectedEOF) == err.kind {
-                    level = parser.get_context_depth();
-                    parser = parser_save;
                     continue;
                 }
-                parser.show_tokens();
-                level = parser.get_context_depth();
-                parser.show_loc(&err.loc());
-                eprintln!("RubyError: {:?}", err.kind);
-                parser = parser_save;
+                err.show_loc();
+                err.show_err();
                 program = String::new();
             }
         }

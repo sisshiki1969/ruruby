@@ -21,16 +21,16 @@ pub struct ParseResult {
     pub node: Node,
     pub ident_table: IdentifierTable,
     pub lvar_collector: LvarCollector,
-    pub source_info: SourceInfo,
+    pub source_info: SourceInfoRef,
 }
 
 impl ParseResult {
-    pub fn default(node: Node, lvar_collector: LvarCollector) -> Self {
+    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
         ParseResult {
             node,
             ident_table: IdentifierTable::new(),
             lvar_collector,
-            source_info: SourceInfo::new(),
+            source_info,
         }
     }
 }
@@ -404,40 +404,72 @@ impl Parser {
     }
 
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
+        RubyError::new_parse_err(
+            ParseErrKind::SyntaxError(msg.into()),
+            self.lexer.source_info,
+            0,
+            loc,
+        )
     }
 
     fn error_eof(&self, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, loc)
-    }
-
-    pub fn show_loc(&self, loc: &Loc) {
-        self.lexer.source_info.show_loc(&loc)
+        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.lexer.source_info, 0, loc)
     }
 }
 
 impl Parser {
     pub fn parse_program(
-        &mut self,
+        mut self,
+        path: impl Into<String>,
         program: String,
-        lvar_collector: Option<LvarCollector>,
     ) -> Result<ParseResult, RubyError> {
-        //println!("{:?}", program);
+        self.lexer.source_info.path = path.into();
         self.tokens = self.lexer.tokenize(program.clone())?.tokens;
         self.cursor = 0;
         self.prev_cursor = 0;
-        self.context_stack.push(Context::new_class(lvar_collector));
+        self.context_stack.push(Context::new_class(None));
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
 
         let tok = self.peek();
         if tok.kind == TokenKind::EOF {
-            let mut result = ParseResult::default(node, lvar);
-            std::mem::swap(&mut result.ident_table, &mut self.ident_table);
-            std::mem::swap(&mut result.source_info, &mut self.lexer.source_info);
+            let mut result = ParseResult::default(node, lvar, self.lexer.source_info);
+            result.ident_table = self.ident_table;
             Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
+        }
+    }
+
+    pub fn parse_program_repl(
+        mut self,
+        path: impl Into<String>,
+        program: String,
+        lvar_collector: Option<LvarCollector>,
+    ) -> Result<ParseResult, RubyError> {
+        self.lexer.source_info.path = path.into();
+        self.tokens = self.lexer.tokenize(program.clone())?.tokens;
+        self.cursor = 0;
+        self.prev_cursor = 0;
+        self.context_stack.push(Context::new_class(lvar_collector));
+        let node = match self.parse_comp_stmt() {
+            Ok(node) => node,
+            Err(mut err) => {
+                err.set_level(self.context_stack.len() - 1);
+                return Err(err);
+            }
+        };
+        let lvar = self.context_stack.pop().unwrap().lvar;
+
+        let tok = self.peek();
+        if tok.kind == TokenKind::EOF {
+            let mut result = ParseResult::default(node, lvar, self.lexer.source_info);
+            std::mem::swap(&mut result.ident_table, &mut self.ident_table);
+            Ok(result)
+        } else {
+            let mut err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
+            err.set_level(0);
+            Err(err)
         }
     }
 
@@ -445,6 +477,9 @@ impl Parser {
         // COMP_STMT : STMT [TERM+ STMT]* [TERM+]?
 
         fn return_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Result<Node, RubyError> {
+            if let Some(node) = nodes.first() {
+                loc = node.loc();
+            };
             if let Some(node) = nodes.last() {
                 loc = loc.merge(node.loc());
             };
@@ -719,8 +754,8 @@ impl Parser {
     }
 
     fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {
-        let loc = self.loc();
         let cond = self.parse_arg_range()?;
+        let loc = cond.loc();
         if self.consume_punct(Punct::Question) {
             let then_ = self.parse_arg_ternary()?;
             self.expect_punct(Punct::Colon)?;
@@ -898,6 +933,9 @@ impl Parser {
             } else if self.consume_punct(Punct::Div) {
                 let rhs = self.parse_unary_minus()?;
                 lhs = Node::new_binop(BinOp::Div, lhs, rhs);
+            } else if self.consume_punct(Punct::Rem) {
+                let rhs = self.parse_unary_minus()?;
+                lhs = Node::new_binop(BinOp::Rem, lhs, rhs);
             } else {
                 break;
             }
@@ -906,9 +944,9 @@ impl Parser {
     }
 
     fn parse_unary_minus(&mut self) -> Result<Node, RubyError> {
-        let loc = self.loc();
         self.save_state();
         if self.consume_punct(Punct::Minus) {
+            let loc = self.prev_loc();
             match self.peek().kind {
                 TokenKind::NumLit(_) | TokenKind::FloatLit(_) => {
                     self.restore_state();
@@ -929,10 +967,15 @@ impl Parser {
     }
 
     fn parse_unary_bitnot(&mut self) -> Result<Node, RubyError> {
-        let loc = self.loc();
         if self.consume_punct(Punct::BitNot) {
+            let loc = self.prev_loc();
             let lhs = self.parse_unary_bitnot()?;
             let lhs = Node::new_unop(UnOp::BitNot, lhs, loc);
+            Ok(lhs)
+        } else if self.consume_punct(Punct::Not) {
+            let loc = self.prev_loc();
+            let lhs = self.parse_unary_bitnot()?;
+            let lhs = Node::new_unop(UnOp::Not, lhs, loc);
             Ok(lhs)
         } else {
             let lhs = self.parse_function()?;
@@ -941,8 +984,8 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Node, RubyError> {
-        let loc = self.loc();
         let mut node = self.parse_primary()?;
+        let loc = node.loc();
         if node.is_operation() {
             if self.consume_punct_no_skip_line_term(Punct::LParen) {
                 // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
@@ -987,7 +1030,12 @@ impl Parser {
                             if *has_suffix {
                                 match self.get()?.kind {
                                     TokenKind::Punct(Punct::Question) => s.clone() + "?",
-                                    _ => panic!("Illegal method name."),
+                                    TokenKind::Punct(Punct::Not) => s.clone() + "!",
+                                    _ => {
+                                        return Err(
+                                            self.error_unexpected(tok.loc, "Illegal method name.")
+                                        )
+                                    }
                                 }
                             } else {
                                 s.clone()
@@ -1116,9 +1164,13 @@ impl Parser {
                     match self.get()?.kind {
                         TokenKind::Punct(Punct::Question) => {
                             let id = self.get_ident_id(&(name.clone() + "?"));
-                            Ok(Node::new_identifier(id, true, loc))
+                            Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
                         }
-                        _ => panic!("Illegal method name."),
+                        TokenKind::Punct(Punct::Not) => {
+                            let id = self.get_ident_id(&(name.clone() + "!"));
+                            Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
+                        }
+                        _ => return Err(self.error_unexpected(tok.loc, "Illegal method name.")),
                     }
                 } else if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
@@ -1393,12 +1445,14 @@ impl Parser {
         //  end
         let mut is_class_method = false;
         let self_id = self.get_ident_id(&"self".to_string());
-        let mut id = match self.get()?.kind.clone() {
+        let tok = self.get()?.clone();
+        let mut id = match tok.kind {
             TokenKind::Ident(name, has_suffix) => {
                 if has_suffix {
                     match self.get()?.kind {
                         TokenKind::Punct(Punct::Question) => self.get_ident_id(&(name + "?")),
-                        _ => panic!("Illegal method name."),
+                        TokenKind::Punct(Punct::Not) => self.get_ident_id(&(name + "!")),
+                        _ => return Err(self.error_unexpected(tok.loc, "Illegal method name.")),
                     }
                 } else {
                     self.get_ident_id(&name)
@@ -1481,6 +1535,7 @@ impl Parser {
         } else {
             Node::new_const(IdentId::OBJECT, true, loc)
         };
+        self.consume_term();
         let id = self.get_ident_id(&name);
         self.context_stack.push(Context::new_class(None));
         let body = self.parse_comp_stmt()?;

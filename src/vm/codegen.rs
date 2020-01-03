@@ -1,6 +1,6 @@
 use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
-use crate::node::{BinOp, Node, NodeKind};
+use crate::node::{BinOp, Node, NodeKind, UnOp};
 use crate::vm::*;
 use std::collections::HashMap;
 
@@ -11,6 +11,7 @@ pub struct Codegen {
     pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
     pub context_stack: Vec<Context>,
     pub loc: Loc,
+    pub source_info: SourceInfoRef,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,19 +72,20 @@ impl ISeqPos {
 }
 
 impl Codegen {
-    pub fn new() -> Self {
+    pub fn new(source_info: SourceInfoRef) -> Self {
         Codegen {
             context_stack: vec![Context::new()],
             //class_stack: vec![],
             loop_stack: vec![],
             loc: Loc(0, 0),
+            source_info,
         }
     }
-
-    pub fn set_context(&mut self, lvar_table: HashMap<IdentId, LvarId>) {
-        self.context_stack = vec![Context::from(lvar_table, false)];
-    }
-
+    /*
+        pub fn set_context(&mut self, lvar_table: HashMap<IdentId, LvarId>) {
+            self.context_stack = vec![Context::from(lvar_table, false)];
+        }
+    */
     pub fn current(iseq: &ISeq) -> ISeqPos {
         ISeqPos::from_usize(iseq.len())
     }
@@ -450,6 +452,7 @@ impl Codegen {
                 iseq,
                 lvar_collector.clone(),
                 iseq_sourcemap,
+                self.source_info,
             )),
         };
         let methodref = globals.add_method(info);
@@ -742,6 +745,12 @@ impl Codegen {
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::DIV);
                     }
+                    BinOp::Rem => {
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq, loc);
+                        iseq.push(Inst::REM);
+                    }
                     BinOp::Shr => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
@@ -825,6 +834,23 @@ impl Codegen {
                         self.write_disp_from_cur(iseq, src1);
                         self.gen(globals, iseq, rhs, true)?;
                         self.write_disp_from_cur(iseq, src2);
+                    }
+                }
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
+            NodeKind::UnOp(op, lhs) => {
+                match op {
+                    UnOp::BitNot => {
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq, node.loc());
+                        iseq.push(Inst::BIT_NOT);
+                    }
+                    UnOp::Not => {
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq, node.loc());
+                        iseq.push(Inst::NOT);
                     }
                 }
                 if !use_value {
@@ -1073,9 +1099,14 @@ impl Codegen {
 
 impl Codegen {
     pub fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), loc)
+        RubyError::new_parse_err(
+            ParseErrKind::SyntaxError(msg.into()),
+            self.source_info,
+            0,
+            loc,
+        )
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info, self.loc)
     }
 }

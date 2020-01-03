@@ -80,6 +80,7 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Rem,
     Shr,
     Shl,
     BitAnd,
@@ -98,6 +99,7 @@ pub enum BinOp {
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnOp {
     BitNot,
+    Not,
 }
 
 pub type Node = Annot<NodeKind>;

@@ -1,6 +1,9 @@
 # ruruby ![](https://github.com/sisshiki1969/ruruby/workflows/Rust/badge.svg)
 A toy Ruby implementation by Rust.
 
+## Related article
+[Qiita: Rustでつくる（つくれるかもしれない）Ruby](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)
+
 ## Implementation status
 - Literals
     - [x] Bool
@@ -9,8 +12,9 @@ A toy Ruby implementation by Rust.
     - [x] String literal
     - [x] String literal with interpolation
     - [x] Array literal
-    - [ ] Hash literal
+    - [x] Hash literal
     - [x] Lambda literal
+    - [x] Block literal
 - Objects
     - [x] Array
     - [ ] Hash
@@ -31,13 +35,12 @@ A toy Ruby implementation by Rust.
     - [x] Instance Method
     - [x] Class Method
     - [ ] Singleton Method
-    - [ ] Block syntax
 - Class and Module
     - [x] Subclass / Inheritance
     - [x] Initializer
     - [x] Attribute accessor
     - [x] Monkey patch (Ad-hoc class definition)
-    - [ ] Module
+    - [x] Module
 
 ## How to run ruby
 To build ruruby, You'll need installation of Rust.
