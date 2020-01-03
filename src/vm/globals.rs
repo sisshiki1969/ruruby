@@ -20,11 +20,8 @@ pub struct Globals {
 }
 
 impl Globals {
-    pub fn new(ident_table: Option<IdentifierTable>) -> Self {
-        let mut ident_table = match ident_table {
-            Some(table) => table,
-            None => IdentifierTable::new(),
-        };
+    pub fn new() -> Self {
+        let mut ident_table = IdentifierTable::new();
         let object_id = ident_table.get_ident_id("Object");
         let object_class = ClassRef::from_no_superclass(object_id);
         let main_object = ObjectRef::from(object_class);

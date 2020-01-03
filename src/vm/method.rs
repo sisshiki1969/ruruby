@@ -64,6 +64,7 @@ pub struct ISeqInfo {
     pub lvar: LvarCollector,
     pub lvars: usize,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+    pub source_info: SourceInfoRef,
 }
 
 impl ISeqInfo {
@@ -72,6 +73,7 @@ impl ISeqInfo {
         iseq: ISeq,
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+        source_info: SourceInfoRef,
     ) -> Self {
         let lvars = lvar.len();
         ISeqInfo {
@@ -80,6 +82,7 @@ impl ISeqInfo {
             lvar,
             lvars,
             iseq_sourcemap,
+            source_info,
         }
     }
 }

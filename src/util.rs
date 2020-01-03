@@ -102,18 +102,31 @@ impl<T> std::ops::DerefMut for Ref<T> {
 
 //------------------------------------------------------------
 
+pub type SourceInfoRef = Ref<SourceInfo>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceInfo {
+    pub path: String,
     pub code: Vec<char>,
     pub line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
 }
 
+impl SourceInfoRef {
+    pub fn empty() -> Self {
+        SourceInfoRef::new(SourceInfo::new(""))
+    }
+}
+
 impl SourceInfo {
-    pub fn new() -> Self {
+    pub fn new(path: impl Into<String>) -> Self {
         SourceInfo {
+            path: path.into(),
             code: vec![],
             line_pos: vec![],
         }
+    }
+    pub fn show_file_name(&self) {
+        eprintln!("{}", self.path);
     }
 
     /// Show the location of the Loc in the source code using '^^^'.
@@ -123,8 +136,10 @@ impl SourceInfo {
             if line.2 < loc.0 || line.1 > loc.1 {
                 continue;
             }
+            if !found {
+                eprintln!("line: {}", line.0)
+            };
             found = true;
-            eprintln!("line: {}", line.0);
             eprintln!(
                 "{}",
                 self.code[(line.1)..(line.2)].iter().collect::<String>()

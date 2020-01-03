@@ -9,18 +9,8 @@ use ruruby::vm::*;
 use test::Bencher;
 
 fn eval_script(script: impl Into<String>, expected: Value) {
-    let mut parser = Parser::new();
-    let result = match parser.parse_program(script.into(), None) {
-        Ok(result) => result,
-        Err(err) => {
-            parser.show_loc(&err.loc());
-            eprintln!("RubyError: {:?}", err.kind);
-            panic!();
-        }
-    };
-    let mut eval = VM::new(Some(result.ident_table));
-    eval.init_builtin();
-    match eval.run(&result.node, &result.lvar_collector) {
+    let mut vm = VM::new();
+    match vm.run("", script.into()) {
         Ok(res) => {
             let res = res.unpack();
             if res != expected {
@@ -28,8 +18,9 @@ fn eval_script(script: impl Into<String>, expected: Value) {
             }
         }
         Err(err) => {
-            result.source_info.show_loc(&err.loc());
-            panic!("Got runtime error: {:?}", err);
+            err.show_loc();
+            eprintln!("{:?}", err.kind);
+            panic!("Got error: {:?}", err);
         }
     }
 }
@@ -58,7 +49,7 @@ fn nil_lit1() {
 #[test]
 fn string_lit1() {
     let program = r#""open "  "windows""#;
-    let expected = Value::String("open windows".to_string());
+    let expected = Value::String(Box::new("open windows".to_string()));
     eval_script(program, expected);
 }
 
@@ -66,7 +57,7 @@ fn string_lit1() {
 fn string_lit2() {
     let program = r#""open "
     "windows""#;
-    let expected = Value::String("windows".to_string());
+    let expected = Value::String(Box::new("windows".to_string()));
     eval_script(program, expected);
 }
 
@@ -77,7 +68,7 @@ fn interpolated_string_lit1() {
     f = "fibonacci";
     "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
     "###;
-    let expected = Value::String("fibonacci  fibo(20) = 6765".to_string());
+    let expected = Value::String(Box::new("fibonacci  fibo(20) = 6765".to_string()));
     eval_script(program, expected);
 }
 
@@ -158,6 +149,28 @@ fn expr9() {
         a==17?23*45:14+7
         ";
     let expected = Value::FixNum(21);
+    eval_script(program, expected);
+}
+
+#[test]
+fn expr10() {
+    let program = r#"
+        assert(3984, 12736%4376)
+        assert(3984, 12736%-4376)  # in Ruby, assert(-392, 12736%-4376)
+        assert(-3984, -12736%-4376)
+        assert(-3984, -12736%4376) # in Ruby, assert(-392, -12736%4376)
+        assert(26.603399999999937, 654.6234%34.89)
+
+        assert(-101, ~100)
+        assert(44, ~-45)
+
+        assert(true, !nil)
+        assert(true, !false)
+        assert(false, !true)
+        assert(false, !0)
+        assert(false, !"windows")
+        "#;
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 

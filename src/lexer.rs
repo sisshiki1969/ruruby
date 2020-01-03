@@ -14,7 +14,7 @@ pub struct Lexer {
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
     quote_state: Vec<QuoteState>,
-    pub source_info: SourceInfo,
+    pub source_info: SourceInfoRef,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -75,7 +75,7 @@ impl Lexer {
             reserved,
             reserved_rev,
             quote_state: vec![],
-            source_info: SourceInfo::new(),
+            source_info: SourceInfoRef::new(SourceInfo::new("")),
         }
     }
 
@@ -87,13 +87,15 @@ impl Lexer {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos])),
+            self.source_info,
+            0,
             loc,
         )
     }
 
     fn error_eof(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
-        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, loc)
+        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, 0, loc)
     }
 
     pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, RubyError> {
@@ -297,7 +299,7 @@ impl Lexer {
                             self.get()?;
                             self.new_punct(Punct::Ne)
                         } else {
-                            unimplemented!("{}", ch)
+                            self.new_punct(Punct::Not)
                         }
                     }
                     '&' => {

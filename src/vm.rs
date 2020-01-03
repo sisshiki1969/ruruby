@@ -17,8 +17,8 @@ pub mod value;
 mod vm_inst;
 
 use crate::error::{RubyError, RuntimeErrKind};
-use crate::node::*;
-pub use crate::parser::{LvarCollector, LvarId};
+use crate::parser::*;
+pub use crate::parser::{LvarCollector, LvarId, ParseResult};
 pub use crate::util::*;
 use array::*;
 pub use class::*;
@@ -33,6 +33,7 @@ use object::*;
 use perf::*;
 use range::*;
 use std::collections::HashMap;
+use std::path::PathBuf;
 pub use value::*;
 use vm_inst::*;
 
@@ -44,8 +45,7 @@ pub type VMResult = Result<PackedValue, RubyError>;
 pub struct VM {
     // Global info
     pub globals: Globals,
-    //pub const_table: ValueTable,
-    pub codegen: Codegen,
+    pub root_path: PathBuf,
     // VM state
     pub context_stack: Vec<ContextRef>,
     pub class_stack: Vec<ClassRef>,
@@ -56,8 +56,8 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(ident_table: Option<IdentifierTable>) -> Self {
-        let mut globals = Globals::new(ident_table);
+    pub fn new() -> Self {
+        let mut globals = Globals::new();
 
         macro_rules! set_builtin_class {
             ($name:expr, $class:ident) => {
@@ -76,25 +76,26 @@ impl VM {
         set_builtin_class!("Range", range_class);
         set_builtin_class!("Hash", hash_class);
 
-        VM {
+        let mut vm = VM {
             globals,
-            //const_table,
-            codegen: Codegen::new(),
+            root_path: PathBuf::new(),
             class_stack: vec![],
             context_stack: vec![],
             exec_stack: vec![],
             pc: 0,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
-        }
-    }
-
-    pub fn init(&mut self, ident_table: IdentifierTable) {
-        self.globals.ident_table = ident_table;
+        };
+        builtin::Builtin::init_builtin(&mut vm.globals);
+        vm
     }
 
     pub fn context(&self) -> ContextRef {
         *self.context_stack.last().unwrap()
+    }
+
+    pub fn source_info(&self) -> SourceInfoRef {
+        self.context().iseq_ref.source_info
     }
 
     pub fn class(&self) -> ClassRef {
@@ -114,16 +115,21 @@ impl VM {
         context
     }
 
-    pub fn run(&mut self, node: &Node, lvar_collector: &LvarCollector) -> VMResult {
+    pub fn run(&mut self, path: impl Into<String>, program: String) -> VMResult {
+        let mut parser = Parser::new();
+        std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
+        let result = parser.parse_program(path, program)?;
+        self.globals.ident_table = result.ident_table;
+
         #[cfg(feature = "perf")]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let methodref = self.codegen.gen_iseq(
+        let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
-            node,
-            lvar_collector,
+            &result.node,
+            &result.lvar_collector,
             true,
             false,
         )?;
@@ -147,21 +153,17 @@ impl VM {
         Ok(val)
     }
 
-    pub fn run_repl(
-        &mut self,
-        node: &Node,
-        lvar_collector: &LvarCollector,
-        mut context: ContextRef,
-    ) -> VMResult {
+    pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        let methodref = self.codegen.gen_iseq(
+        self.globals.ident_table = result.ident_table.clone();
+        let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
-            node,
-            lvar_collector,
+            &result.node,
+            &result.lvar_collector,
             true,
             false,
         )?;
@@ -186,6 +188,7 @@ impl VM {
         Ok(val)
     }
 
+    /// Create new context from given args, and run vm on the context.
     pub fn vm_run(
         &mut self,
         self_value: PackedValue,
@@ -307,6 +310,13 @@ impl VM {
                     self.exec_stack.push(val);
                     self.pc += 1;
                 }
+                Inst::REM => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_rem(lhs, rhs)?;
+                    self.exec_stack.push(val);
+                    self.pc += 1;
+                }
                 Inst::SHR => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
@@ -342,6 +352,12 @@ impl VM {
                     self.exec_stack.push(val);
                     self.pc += 1;
                 }
+                Inst::BIT_NOT => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let val = self.eval_bitnot(lhs)?;
+                    self.exec_stack.push(val);
+                    self.pc += 1;
+                }
                 Inst::EQ => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
@@ -370,14 +386,20 @@ impl VM {
                     self.exec_stack.push(val);
                     self.pc += 1;
                 }
+                Inst::NOT => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let val = PackedValue::bool(!self.val_to_bool(lhs));
+                    self.exec_stack.push(val);
+                    self.pc += 1;
+                }
                 Inst::CONCAT_STRING => {
                     let rhs = self.exec_stack.pop().unwrap().as_string();
                     let lhs = self.exec_stack.pop().unwrap().as_string();
                     let val = match (lhs, rhs) {
-                        (Some(lhs), Some(rhs)) => Value::String(format!("{}{}", lhs, rhs)),
+                        (Some(lhs), Some(rhs)) => PackedValue::string(format!("{}{}", lhs, rhs)),
                         (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
                     };
-                    self.exec_stack.push(val.pack());
+                    self.exec_stack.push(val);
                     self.pc += 1;
                 }
                 Inst::SET_LOCAL => {
@@ -782,7 +804,11 @@ impl VM {
 impl VM {
     pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::NoMethod(msg.into()), loc)
+        RubyError::new_runtime_err(
+            RuntimeErrKind::NoMethod(msg.into()),
+            self.source_info(),
+            loc,
+        )
     }
     pub fn error_undefined_method(
         &self,
@@ -796,28 +822,41 @@ impl VM {
                 method_name.into(),
                 class_name.into()
             )),
+            self.source_info(),
             loc,
         )
     }
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented(msg.into()), loc)
+        RubyError::new_runtime_err(
+            RuntimeErrKind::Unimplemented(msg.into()),
+            self.source_info(),
+            loc,
+        )
     }
     pub fn error_internal(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Internal(msg.into()), loc)
+        RubyError::new_runtime_err(
+            RuntimeErrKind::Internal(msg.into()),
+            self.source_info(),
+            loc,
+        )
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info(), loc)
     }
     pub fn error_type(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Type(msg.into()), loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Type(msg.into()), self.source_info(), loc)
     }
     pub fn error_argument(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Argument(msg.into()), loc)
+        RubyError::new_runtime_err(
+            RuntimeErrKind::Argument(msg.into()),
+            self.source_info(),
+            loc,
+        )
     }
     pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
         if min <= len && len <= max {
@@ -1137,6 +1176,20 @@ impl VM {
         }
     }
 
+    fn eval_rem(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
+        match (lhs.unpack(), rhs.unpack()) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(Value::FixNum(lhs % rhs).pack()),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
+                Ok(Value::FloatNum((lhs as f64) % rhs).pack())
+            }
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => {
+                Ok(Value::FloatNum(lhs % (rhs as f64)).pack())
+            }
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs % rhs).pack()),
+            (_, _) => Err(self.error_nomethod("NoMethodError: '%'")),
+        }
+    }
+
     fn eval_shl(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs << rhs)),
@@ -1169,6 +1222,13 @@ impl VM {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs ^ rhs)),
             (_, _) => Err(self.error_nomethod("NoMethodError: '^'")),
+        }
+    }
+
+    fn eval_bitnot(&mut self, lhs: PackedValue) -> VMResult {
+        match lhs.unpack() {
+            Value::FixNum(lhs) => Ok(PackedValue::fixnum(!lhs)),
+            _ => Err(self.error_nomethod("NoMethodError: '~'")),
         }
     }
 
@@ -1384,10 +1444,6 @@ impl VM {
 }
 
 impl VM {
-    pub fn init_builtin(&mut self) {
-        builtin::Builtin::init_builtin(&mut self.globals);
-    }
-
     pub fn eval_send(
         &mut self,
         methodref: MethodRef,

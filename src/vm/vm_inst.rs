@@ -23,6 +23,9 @@ impl Inst {
     pub const BIT_OR: u8 = 19;
     pub const BIT_AND: u8 = 20;
     pub const BIT_XOR: u8 = 21;
+    pub const REM: u8 = 22;
+    pub const NOT: u8 = 23;
+    pub const BIT_NOT: u8 = 24;
 
     pub const ADDI: u8 = 25;
     pub const SUBI: u8 = 26;
@@ -79,15 +82,18 @@ impl Inst {
             Inst::SUBI => "SUBI",
             Inst::MUL => "MUL",
             Inst::DIV => "DIV",
+            Inst::REM => "REM",
             Inst::EQ => "EQ",
             Inst::NE => "NE",
             Inst::GT => "GT",
             Inst::GE => "GE",
+            Inst::NOT => "NOT",
             Inst::SHR => "SHR",
             Inst::SHL => "SHL",
             Inst::BIT_OR => "BIT_OR",
             Inst::BIT_AND => "BIT_AND",
             Inst::BIT_XOR => "BIT_XOR",
+            Inst::BIT_NOT => "BIT_NOT",
 
             Inst::JMP => "JMP",
             Inst::JMP_IF_FALSE => "JMP_IF_FALSE",
@@ -132,15 +138,18 @@ impl Inst {
             | Inst::SUB
             | Inst::MUL
             | Inst::DIV
+            | Inst::REM
             | Inst::EQ
             | Inst::NE
             | Inst::GT
             | Inst::GE
+            | Inst::NOT
             | Inst::SHR
             | Inst::SHL
             | Inst::BIT_OR
             | Inst::BIT_AND
             | Inst::BIT_XOR
+            | Inst::BIT_NOT
             | Inst::CONCAT_STRING
             | Inst::CREATE_RANGE
             | Inst::TO_S

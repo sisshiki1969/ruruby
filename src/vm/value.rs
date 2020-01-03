@@ -14,7 +14,7 @@ pub enum Value {
     Bool(bool),
     FixNum(i64),
     FloatNum(f64),
-    String(String),
+    String(Box<String>),
     Symbol(IdentId),
     Object(ObjectRef),
     Char(u8),
@@ -376,7 +376,7 @@ impl PackedValue {
         }
         unsafe {
             match &*(self.0 as *mut Value) {
-                Value::String(string) => Some(string.clone()),
+                Value::String(string) => Some(string.to_string()),
                 _ => None,
             }
         }
@@ -433,7 +433,7 @@ impl PackedValue {
     }
 
     pub fn string(string: String) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::String(string)))
+        PackedValue(Value::pack_as_boxed(Value::String(Box::new(string))))
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn pack_string() {
-        let expect = Value::String("Ruby".to_string());
+        let expect = Value::String(Box::new("Ruby".to_string()));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -623,7 +623,7 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let globals = Globals::new(None);
+        let globals = Globals::new();
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
         let expect = Value::Object(ObjectRef::new_range(
@@ -638,7 +638,7 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let globals = Globals::new(None);
+        let globals = Globals::new();
         let expect = Value::Object(ObjectRef::new_class(
             &globals,
             ClassRef::from_no_superclass(IdentId::from(0)),
