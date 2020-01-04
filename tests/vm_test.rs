@@ -319,6 +319,34 @@ fn if6() {
 }
 
 #[test]
+fn unless1() {
+    let program = "a = 5; unless a > 3 then 10 else 50 end";
+    let expected = Value::FixNum(50);
+    eval_script(program, expected);
+}
+
+#[test]
+fn unless2() {
+    let program = "a = 5; unless a < 3 then 10 else 50 end";
+    let expected = Value::FixNum(10);
+    eval_script(program, expected);
+}
+
+#[test]
+fn unless3() {
+    let program = "a = 5; a = 7 unless a == 3; a";
+    let expected = Value::FixNum(7);
+    eval_script(program, expected);
+}
+
+#[test]
+fn unless4() {
+    let program = "a = 5; a = 7 unless a == 5; a";
+    let expected = Value::FixNum(5);
+    eval_script(program, expected);
+}
+
+#[test]
 fn for1() {
     let program = "
             y = 0
@@ -651,6 +679,20 @@ fn func3(b: &mut Bencher) {
             fibo(20)";
     let expected = Value::FixNum(6765);
     b.iter(|| eval_script(program, expected.clone()));
+}
+
+#[test]
+fn func4() {
+    let program = "
+        def fact(a)
+            puts(a)
+            return 1 if a == 1
+            return a * fact(a-1)
+        end
+    
+        fact(5)";
+    let expected = Value::FixNum(120);
+    eval_script(program, expected);
 }
 
 #[test]

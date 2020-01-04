@@ -525,6 +525,16 @@ impl Parser {
                 Node::new_comp_stmt(vec![], loc),
                 loc,
             ))
+        } else if self.consume_reserved_no_skip_line_term(Reserved::Unless) {
+            // STMT : STMT unless EXPR
+            let loc = self.prev_loc();
+            let cond = self.parse_expr()?;
+            Ok(Node::new_if(
+                cond,
+                Node::new_comp_stmt(vec![], loc),
+                node,
+                loc,
+            ))
         } else {
             // STMT : EXPR
             Ok(node)
@@ -1304,6 +1314,11 @@ impl Parser {
                 self.expect_reserved(Reserved::End)?;
                 Ok(node)
             }
+            TokenKind::Reserved(Reserved::Unless) => {
+                let node = self.parse_unless()?;
+                self.expect_reserved(Reserved::End)?;
+                Ok(node)
+            }
             TokenKind::Reserved(Reserved::For) => {
                 let loc = self.prev_loc();
                 let var_id = self.expect_ident()?;
@@ -1430,6 +1445,23 @@ impl Parser {
             Node::new_comp_stmt(vec![], self.loc())
         };
         Ok(Node::new_if(cond, then_, else_, loc))
+    }
+
+    fn parse_unless(&mut self) -> Result<Node, RubyError> {
+        //  unless EXPR THEN
+        //      COMPSTMT
+        //      [else COMPSTMT]
+        //  end
+        let loc = self.prev_loc();
+        let cond = self.parse_expr()?;
+        self.parse_then()?;
+        let then_ = self.parse_comp_stmt()?;
+        let else_ = if self.consume_reserved(Reserved::Else) {
+            self.parse_comp_stmt()?
+        } else {
+            Node::new_comp_stmt(vec![], self.loc())
+        };
+        Ok(Node::new_if(cond, else_, then_, loc))
     }
 
     fn parse_then(&mut self) -> Result<(), RubyError> {
