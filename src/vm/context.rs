@@ -26,14 +26,14 @@ impl Context {
     ) -> Self {
         let lvar_num = iseq_ref.lvars;
         let ext_lvar = if lvar_num > LVAR_ARRAY_SIZE {
-            vec![PackedValue::nil(); lvar_num - LVAR_ARRAY_SIZE]
+            vec![PackedValue::uninitialized(); lvar_num - LVAR_ARRAY_SIZE]
         } else {
             Vec::new()
         };
         Context {
             self_value,
             block,
-            lvar_scope: [PackedValue::nil(); LVAR_ARRAY_SIZE],
+            lvar_scope: [PackedValue::uninitialized(); LVAR_ARRAY_SIZE],
             ext_lvar,
             iseq_ref,
             pc: 0,

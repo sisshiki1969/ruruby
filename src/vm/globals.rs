@@ -115,6 +115,7 @@ impl Globals {
 
     pub fn get_class_name(&self, val: PackedValue) -> String {
         match val.unpack() {
+            Value::Uninitialized => "[Uninitialized]".to_string(),
             Value::Nil => "NilClass".to_string(),
             Value::Bool(true) => "TrueClass".to_string(),
             Value::Bool(false) => "FalseClass".to_string(),
@@ -125,6 +126,7 @@ impl Globals {
             Value::Char(_) => "Char".to_string(),
             Value::Object(oref) => match oref.kind {
                 ObjKind::Array(_) => "Array".to_string(),
+                ObjKind::SplatArray(_) => "[SplatArray]".to_string(),
                 ObjKind::Hash(_) => "Hash".to_string(),
                 ObjKind::Range(_) => "Range".to_string(),
                 ObjKind::Class(_) => "Class".to_string(),

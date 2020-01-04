@@ -150,6 +150,10 @@ impl Codegen {
         self.push32(iseq, num_args as u32);
     }
 
+    fn gen_splat(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::SPLAT);
+    }
+
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_IF_FALSE);
         iseq.push(0);
@@ -186,6 +190,17 @@ impl Codegen {
 
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
         iseq.push(Inst::GET_LOCAL);
+        let (outer, lvar_id) = match self.get_local_var(id) {
+            Some((outer, id)) => (outer, id),
+            None => return Err(self.error_name("undefined local variable.")),
+        };
+        self.push32(iseq, lvar_id.as_u32());
+        self.push32(iseq, outer);
+        Ok(())
+    }
+
+    fn gen_check_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
+        iseq.push(Inst::CHECK_LOCAL);
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
             None => return Err(self.error_name("undefined local variable.")),
@@ -338,6 +353,10 @@ impl Codegen {
         self.push32(iseq, len as u32);
     }
 
+    fn gen_array_reverse(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::ARY_REVERSE);
+    }
+
     fn gen_concat(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::CONCAT_STRING);
     }
@@ -424,11 +443,29 @@ impl Codegen {
     ) -> Result<MethodRef, RubyError> {
         let save_loc = self.loc;
         let mut params_lvar = vec![];
+        let mut min = 0;
+        let mut max = 0;
+        let mut iseq = ISeq::new();
+
+        self.context_stack
+            .push(Context::from(lvar_collector.clone_table(), is_block));
         for param in params {
-            match param.kind {
+            match &param.kind {
                 NodeKind::Param(id) => {
                     let lvar = lvar_collector.get(&id).unwrap();
                     params_lvar.push(*lvar);
+                    min += 1;
+                    max += 1;
+                }
+                NodeKind::DefaultParam(id, default) => {
+                    let lvar = lvar_collector.get(&id).unwrap();
+                    params_lvar.push(*lvar);
+                    max += 1;
+                    self.gen_check_local(&mut iseq, *id)?;
+                    let src1 = self.gen_jmp_if_false(&mut iseq);
+                    self.gen(globals, &mut iseq, default, true)?;
+                    self.gen_set_local(&mut iseq, *id);
+                    self.write_disp_from_cur(&mut iseq, src1);
                 }
                 NodeKind::BlockParam(id) => {
                     let lvar = lvar_collector.get(&id).unwrap();
@@ -437,9 +474,7 @@ impl Codegen {
                 _ => return Err(self.error_syntax("Parameters should be identifier.", self.loc)),
             }
         }
-        let mut iseq = ISeq::new();
-        self.context_stack
-            .push(Context::from(lvar_collector.clone_table(), is_block));
+
         self.gen(globals, &mut iseq, node, use_value)?;
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
@@ -449,6 +484,8 @@ impl Codegen {
         let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
                 params_lvar,
+                if is_block { 0 } else { min },
+                if is_block { std::usize::MAX } else { max },
                 iseq,
                 lvar_collector.clone(),
                 iseq_sourcemap,
@@ -469,25 +506,12 @@ impl Codegen {
             let iseq = &iseq.iseq;
             let mut pc = 0;
             while iseq[pc] != Inst::END {
-                eprintln!(
-                    "  {:>05} {}",
-                    pc,
-                    inst_info(globals, &lvar_collector.table, &iseq, pc)
-                );
+                eprintln!("  {:>05} {}", pc, inst_info(globals, &iseq, pc));
                 pc += Inst::inst_size(iseq[pc]);
             }
-            eprintln!(
-                "  {:>05} {}",
-                pc,
-                inst_info(globals, &lvar_collector.table, &iseq, pc)
-            );
+            eprintln!("  {:>05} {}", pc, inst_info(globals, &iseq, pc));
 
-            fn inst_info(
-                globals: &mut Globals,
-                _lvar_table: &HashMap<IdentId, LvarId>,
-                iseq: &ISeq,
-                pc: usize,
-            ) -> String {
+            fn inst_info(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
                 match iseq[pc] {
                     Inst::END
                     | Inst::PUSH_NIL
@@ -498,19 +522,25 @@ impl Codegen {
                     | Inst::SUB
                     | Inst::MUL
                     | Inst::DIV
+                    | Inst::REM
                     | Inst::EQ
                     | Inst::NE
                     | Inst::GT
                     | Inst::GE
+                    | Inst::NOT
                     | Inst::SHR
                     | Inst::SHL
                     | Inst::BIT_OR
                     | Inst::BIT_AND
                     | Inst::BIT_XOR
+                    | Inst::BIT_NOT
                     | Inst::CONCAT_STRING
                     | Inst::CREATE_RANGE
                     | Inst::TO_S
+                    | Inst::SPLAT
                     | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
+                    Inst::ADDI => format!("ADDI {}", read32(iseq, pc + 1) as i32),
+                    Inst::SUBI => format!("SUBI {}", read32(iseq, pc + 1) as i32),
                     Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", read64(iseq, pc + 1) as i64),
                     Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", unsafe {
                         std::mem::transmute::<u64, f64>(read64(iseq, pc + 1))
@@ -544,6 +574,11 @@ impl Codegen {
                     Inst::SET_ARRAY_ELEM => format!("SET_ARY_ELEM {} items", read32(iseq, pc + 1)),
                     Inst::SEND => format!(
                         "SEND '{}' {} items",
+                        ident_name(globals, iseq, pc + 1),
+                        read32(iseq, pc + 5)
+                    ),
+                    Inst::SEND_SELF => format!(
+                        "SEND_SELF '{}' {} items",
                         ident_name(globals, iseq, pc + 1),
                         read32(iseq, pc + 5)
                     ),
@@ -871,6 +906,13 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
+            NodeKind::Splat(array) => {
+                self.gen(globals, iseq, array, true)?;
+                self.gen_splat(iseq);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
             NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes, use_value)?,
             NodeKind::If { cond, then_, else_ } => {
                 self.gen(globals, iseq, &cond, true)?;
@@ -960,6 +1002,7 @@ impl Codegen {
                 if use_value {
                     if mrhs.len() != 1 {
                         self.gen_create_array(iseq, rhs_len);
+                        self.gen_array_reverse(iseq);
                     }
                 }
             }

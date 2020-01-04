@@ -186,26 +186,26 @@ impl Parser {
         self.context_stack.len()
     }
 
+    fn context_mut(&mut self) -> &mut Context {
+        self.context_stack.last_mut().unwrap()
+    }
+
     // If the identifier(IdentId) does not exist in the current scope,
     // add the identifier as a local variable in the current context.
     fn add_local_var_if_new(&mut self, id: IdentId) {
         if !self.is_local_var(id) {
-            self.context_stack.last_mut().unwrap().lvar.insert(id);
+            self.context_mut().lvar.insert(id);
         }
     }
 
     // Add the identifier(IdentId) as a local variable in the current context.
     fn add_local_var(&mut self, id: IdentId) {
-        self.context_stack.last_mut().unwrap().lvar.insert(id);
+        self.context_mut().lvar.insert(id);
     }
 
     // Add the identifier(IdentId) as a block parameter in the current context.
     fn add_block_param(&mut self, id: IdentId) {
-        self.context_stack
-            .last_mut()
-            .unwrap()
-            .lvar
-            .insert_block_param(id);
+        self.context_mut().lvar.insert_block_param(id);
     }
 
     // Examine whether the identifier(IdentId) exists in the current scope.
@@ -1102,7 +1102,13 @@ impl Parser {
             return Ok(args);
         }
         loop {
-            args.push(self.parse_arg()?);
+            if self.consume_punct(Punct::Mul) {
+                let loc = self.prev_loc();
+                let array = self.parse_arg()?;
+                args.push(Node::new_splat(array, loc));
+            } else {
+                args.push(self.parse_arg()?);
+            }
             if !self.consume_punct(Punct::Comma) {
                 break;
             }
@@ -1203,7 +1209,8 @@ impl Parser {
                     Ok(node)
                 }
                 Punct::LBracket => {
-                    let nodes = self.parse_args(Punct::RBracket)?;
+                    let mut nodes = self.parse_args(Punct::RBracket)?;
+                    nodes.reverse();
                     Ok(Node::new(
                         NodeKind::Array(nodes),
                         loc.merge(self.prev_loc()),
@@ -1494,19 +1501,39 @@ impl Parser {
             }
             return Ok(args);
         }
+        let mut default_flag = false;
+        let mut no_default_flag = false;
         loop {
             let mut loc = self.loc();
             let is_block = self.consume_punct(Punct::BitAnd);
             let id = self.expect_ident()?;
+            let default = if self.consume_punct(Punct::Assign) {
+                if no_default_flag {
+                    return Err(self.error_unexpected(
+                        loc.merge(self.prev_loc()),
+                        "Must be a parameter without defalut value.",
+                    ));
+                };
+                default_flag = true;
+                Some(self.parse_primary()?)
+            } else {
+                if default_flag {
+                    no_default_flag = true;
+                };
+                None
+            };
             loc = loc.merge(self.prev_loc());
             if is_block {
                 args.push(Node::new_block_param(id, loc));
                 self.add_block_param(id);
+            } else if default.is_some() {
+                args.push(Node::new_default_param(id, default.unwrap(), loc));
+                self.add_local_var(id);
             } else {
                 args.push(Node::new_param(id, loc));
                 self.add_local_var(id);
             };
-            self.context_stack.last_mut().unwrap().lvar.insert(id);
+            self.context_mut().lvar.insert(id);
             if is_block || !self.consume_punct(Punct::Comma) {
                 break;
             }

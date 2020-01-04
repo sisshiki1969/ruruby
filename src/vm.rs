@@ -197,6 +197,7 @@ impl VM {
         args: VecArray,
         block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
+        self.check_args_num(args.len(), iseq.min_params, iseq.max_params)?;
         let mut context = Context::new(self_value, block, iseq, outer);
         context.set_arguments(args);
         match block {
@@ -418,6 +419,14 @@ impl VM {
                     self.exec_stack.push(val);
                     self.pc += 9;
                 }
+                Inst::CHECK_LOCAL => {
+                    let id = read_lvar_id(iseq, self.pc + 1);
+                    let outer = read32(iseq, self.pc + 5);
+                    let cref = self.get_outer_context(outer);
+                    let val = cref.get_lvar(id).is_uninitialized();
+                    self.exec_stack.push(PackedValue::bool(val));
+                    self.pc += 9;
+                }
                 Inst::SET_CONST => {
                     let id = read_id(iseq, self.pc + 1);
                     let val = self.exec_stack.pop().unwrap();
@@ -557,6 +566,15 @@ impl VM {
                         }
                     }
                     self.pc += 5;
+                }
+                Inst::SPLAT => {
+                    let array = self.exec_stack.pop().unwrap();
+                    let res = match array.as_array() {
+                        Some(array) => PackedValue::splat(&self.globals, array),
+                        None => array,
+                    };
+                    self.exec_stack.push(res);
+                    self.pc += 1;
                 }
                 Inst::CREATE_RANGE => {
                     let start = self.exec_stack.pop().unwrap();
@@ -728,6 +746,14 @@ impl VM {
                 }
                 Inst::POP => {
                     self.exec_stack.pop().unwrap();
+                    self.pc += 1;
+                }
+                Inst::ARY_REVERSE => {
+                    let ary = self.exec_stack.last().unwrap();
+                    match ary.as_array() {
+                        Some(mut aref) => aref.elements.reverse(),
+                        None => {}
+                    };
                     self.pc += 1;
                 }
                 Inst::DUP => {
@@ -1357,6 +1383,7 @@ impl VM {
 
     pub fn val_to_s(&self, val: PackedValue) -> String {
         match val.unpack() {
+            Value::Uninitialized => "[Uninitialized]".to_string(),
             Value::Nil => "".to_string(),
             Value::Bool(b) => match b {
                 true => "true".to_string(),
@@ -1585,7 +1612,6 @@ impl VM {
         for _ in 0..arg_num {
             args.push(self.exec_stack.pop().unwrap());
         }
-        args.reverse();
         args
     }
 
@@ -1600,9 +1626,17 @@ impl VM {
     }
 
     fn pop_args_to_ary(&mut self, arg_num: usize) -> VecArray {
-        let mut args = VecArray::new(arg_num);
-        for i in 0..arg_num {
-            args[arg_num - i - 1] = self.exec_stack.pop().unwrap();
+        let mut args = VecArray::new(0);
+        for _ in 0..arg_num {
+            let val = self.exec_stack.pop().unwrap();
+            match val.as_splat() {
+                Some(ary) => {
+                    for elem in &ary.elements {
+                        args.push(elem.clone());
+                    }
+                }
+                None => args.push(val),
+            };
         }
         args
     }

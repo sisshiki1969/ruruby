@@ -2,14 +2,17 @@ use crate::vm::*;
 use std::ops::Deref;
 use std::ops::{Index, IndexMut};
 
-const NIL_VALUE: u64 = 0x08;
-const TRUE_VALUE: u64 = 0x14;
 const FALSE_VALUE: u64 = 0x00;
-const ZERO: u64 = (0b1000 << 60) | 0b10;
+const UNINITIALIZED: u64 = 0x04;
+const NIL_VALUE: u64 = 0x08;
 const TAG_SYMBOL: u64 = 0x0c;
+const TRUE_VALUE: u64 = 0x14;
+
+const ZERO: u64 = (0b1000 << 60) | 0b10;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
+    Uninitialized,
     Nil,
     Bool(bool),
     FixNum(i64),
@@ -35,28 +38,47 @@ impl VecArray {
         if len <= VEC_ARRAY_SIZE {
             VecArray::Array {
                 len,
-                ary: [PackedValue::nil(); VEC_ARRAY_SIZE],
+                ary: [PackedValue::uninitialized(); VEC_ARRAY_SIZE],
             }
         } else {
-            VecArray::Vec(vec![PackedValue::nil(); len])
+            VecArray::Vec(vec![PackedValue::uninitialized(); len])
+        }
+    }
+
+    pub fn push(&mut self, val: PackedValue) {
+        if self.len() == VEC_ARRAY_SIZE {
+            let mut ary = self.get_slice(0, VEC_ARRAY_SIZE).to_vec();
+            ary.push(val);
+            unsafe { std::ptr::write(self, VecArray::Vec(ary)) };
+        } else {
+            match self {
+                VecArray::Vec(ref mut v) => v.push(val),
+                VecArray::Array {
+                    ref mut len,
+                    ref mut ary,
+                } => {
+                    ary[*len] = val;
+                    *len += 1;
+                }
+            }
         }
     }
 
     pub fn new0() -> Self {
         VecArray::Array {
             len: 0,
-            ary: [PackedValue::nil(); VEC_ARRAY_SIZE],
+            ary: [PackedValue::uninitialized(); VEC_ARRAY_SIZE],
         }
     }
 
     pub fn new1(arg: PackedValue) -> Self {
-        let mut ary = [PackedValue::nil(); VEC_ARRAY_SIZE];
+        let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
         ary[0] = arg;
         VecArray::Array { len: 1, ary }
     }
 
     pub fn new2(arg0: PackedValue, arg1: PackedValue) -> Self {
-        let mut ary = [PackedValue::nil(); VEC_ARRAY_SIZE];
+        let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
         ary[0] = arg0;
         ary[1] = arg1;
         VecArray::Array { len: 2, ary }
@@ -111,6 +133,7 @@ impl Deref for VecArray {
 impl Value {
     pub fn pack(self) -> PackedValue {
         match self {
+            Value::Uninitialized => PackedValue::uninitialized(),
             Value::Nil => PackedValue::nil(),
             Value::Bool(b) if b => PackedValue::true_val(),
             Value::Bool(_) => PackedValue::false_val(),
@@ -136,11 +159,9 @@ impl Value {
         }
         let unum: u64 = unsafe { std::mem::transmute(num) };
         let exp = (unum >> 60) & 0b111;
-        //eprintln!("before   pack:{:064b}", unum);
         if exp == 4 || exp == 3 {
             ((unum & !(0b0110u64 << 60)) | (0b0100u64 << 60)).rotate_left(3)
         } else {
-            //eprintln!("{}", num);
             Value::pack_as_boxed(Value::FloatNum(num))
         }
     }
@@ -227,6 +248,8 @@ impl PackedValue {
             Value::Bool(true)
         } else if self.0 == FALSE_VALUE {
             Value::Bool(false)
+        } else if self.0 == UNINITIALIZED {
+            Value::Uninitialized
         } else {
             unreachable!("Illegal packed value.")
         }
@@ -250,6 +273,10 @@ impl PackedValue {
 
     pub fn is_packed_symbol(&self) -> bool {
         self.0 & 0xff == TAG_SYMBOL
+    }
+
+    pub fn is_uninitialized(&self) -> bool {
+        self.0 == UNINITIALIZED
     }
 
     pub fn is_nil(&self) -> bool {
@@ -340,6 +367,16 @@ impl PackedValue {
         }
     }
 
+    pub fn as_splat(&self) -> Option<ArrayRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::SplatArray(aref) => Some(aref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_hash(&self) -> Option<HashRef> {
         match self.as_object() {
             Some(oref) => match oref.kind {
@@ -404,6 +441,10 @@ impl PackedValue {
         IdentId::from((self.0 >> 32) as u32)
     }
 
+    pub fn uninitialized() -> Self {
+        PackedValue(UNINITIALIZED)
+    }
+
     pub fn nil() -> Self {
         PackedValue(NIL_VALUE)
     }
@@ -457,6 +498,10 @@ impl PackedValue {
         PackedValue::object(ObjectRef::new_array(globals, array_ref))
     }
 
+    pub fn splat(globals: &Globals, array_ref: ArrayRef) -> Self {
+        PackedValue::object(ObjectRef::new_splat(globals, array_ref))
+    }
+
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
         PackedValue::object(ObjectRef::new_hash(globals, hash_ref))
     }
@@ -496,6 +541,15 @@ mod tests {
     #[test]
     fn pack_nil() {
         let expect = Value::Nil;
+        let got = expect.clone().pack().unpack();
+        if expect != got {
+            panic!("Expect:{:?} Got:{:?}", expect, got)
+        }
+    }
+
+    #[test]
+    fn pack_uninit() {
+        let expect = Value::Uninitialized;
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

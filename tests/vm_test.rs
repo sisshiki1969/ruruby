@@ -416,9 +416,9 @@ fn mul_assign3() {
 #[test]
 fn mul_assign4() {
     let program = "
-            f = 1,2
+            f = 1,2,3
             assert(1,f)
-            assert([1,2],f=1,2)
+            assert([1,2,3],(f=1,2,3))
             ";
     let expected = Value::Nil;
     eval_script(program, expected);
@@ -754,9 +754,6 @@ fn initialize() {
         def y; @y; end
     end
 
-    v = Vec.new
-    assert(nil, v.x)
-    assert(nil, v.y)
     v1 = Vec.new(3, 5.9)
     assert(3, v1.x)
     assert(5.9, v1.y)

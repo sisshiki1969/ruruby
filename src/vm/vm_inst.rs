@@ -44,6 +44,8 @@ impl Inst {
     pub const SEND: u8 = 40;
     pub const SEND_SELF: u8 = 41;
 
+    pub const CHECK_LOCAL: u8 = 42;
+
     pub const CREATE_RANGE: u8 = 50;
     pub const CREATE_ARRAY: u8 = 51;
     pub const CREATE_PROC: u8 = 52;
@@ -54,6 +56,8 @@ impl Inst {
     pub const TO_S: u8 = 62;
     pub const DUP: u8 = 63;
     pub const TAKE: u8 = 64;
+    pub const SPLAT: u8 = 65;
+    pub const ARY_REVERSE: u8 = 66;
 
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
@@ -118,6 +122,8 @@ impl Inst {
             Inst::POP => "POP",
             Inst::DUP => "DUP",
             Inst::TAKE => "TAKE",
+            Inst::SPLAT => "SPLAT",
+            Inst::ARY_REVERSE => "ARY_REVERSE",
             Inst::CONCAT_STRING => "CONCAT_STR",
             Inst::TO_S => "TO_S",
             Inst::DEF_CLASS => "DEF_CLASS",
@@ -153,6 +159,8 @@ impl Inst {
             | Inst::CONCAT_STRING
             | Inst::CREATE_RANGE
             | Inst::TO_S
+            | Inst::SPLAT
+            | Inst::ARY_REVERSE
             | Inst::POP => 1,
 
             Inst::PUSH_STRING

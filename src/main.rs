@@ -95,6 +95,8 @@ fn repl_vm() {
         None,
         ISeqRef::new(ISeqInfo::new(
             vec![],
+            0,
+            0,
             vec![],
             LvarCollector::new(),
             vec![],

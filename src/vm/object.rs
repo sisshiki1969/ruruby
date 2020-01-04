@@ -19,6 +19,7 @@ pub enum ObjKind {
     Class(ClassRef),
     Module(ClassRef),
     Array(ArrayRef),
+    SplatArray(ArrayRef), // internal use only.
     Hash(HashRef),
     Range(RangeRef),
     Proc(ProcRef),
@@ -54,6 +55,14 @@ impl ObjectInfo {
             classref: globals.array_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Array(arrayref),
+        }
+    }
+
+    pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
+        ObjectInfo {
+            classref: globals.array_class,
+            instance_var: HashMap::new(),
+            kind: ObjKind::SplatArray(arrayref),
         }
     }
 
@@ -99,6 +108,10 @@ impl ObjectRef {
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectRef::new(ObjectInfo::new_array(globals, arrayref))
+    }
+
+    pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
+        ObjectRef::new(ObjectInfo::new_splat(globals, arrayref))
     }
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {

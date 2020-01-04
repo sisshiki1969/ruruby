@@ -33,6 +33,7 @@ pub enum NodeKind {
         array: Box<Node>,
         index: Vec<Node>,
     },
+    Splat(Box<Node>),
     Assign(Box<Node>, Box<Node>),
     AssignOp(BinOp, Box<Node>, Box<Node>),
     MulAssign(Vec<Node>, Vec<Node>),
@@ -55,6 +56,7 @@ pub enum NodeKind {
     Break,
     Next,
     Param(IdentId),
+    DefaultParam(IdentId, Box<Node>),
     BlockParam(IdentId),
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
@@ -177,12 +179,21 @@ impl Node {
         Node::new(kind, loc)
     }
 
+    pub fn new_splat(array: Node, loc: Loc) -> Self {
+        let loc = loc.merge(array.loc());
+        Node::new(NodeKind::Splat(Box::new(array)), loc)
+    }
+
     pub fn new_lvar(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::LocalVar(id), loc)
     }
 
     pub fn new_param(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Param(id), loc)
+    }
+
+    pub fn new_default_param(id: IdentId, default: Node, loc: Loc) -> Self {
+        Node::new(NodeKind::DefaultParam(id, Box::new(default)), loc)
     }
 
     pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
@@ -265,7 +276,7 @@ impl Node {
     pub fn new_send(
         receiver: Node,
         method: IdentId,
-        args: Vec<Node>,
+        mut args: Vec<Node>,
         block: Option<Box<Node>>,
         completed: bool,
         loc: Loc,
@@ -274,6 +285,7 @@ impl Node {
             (Some(arg), _) => loc.merge(arg.loc),
             _ => loc,
         };
+        args.reverse();
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),

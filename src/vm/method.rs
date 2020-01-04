@@ -60,6 +60,8 @@ pub type ISeqRef = Ref<ISeqInfo>;
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
     pub params: Vec<LvarId>,
+    pub min_params: usize,
+    pub max_params: usize,
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
@@ -70,6 +72,8 @@ pub struct ISeqInfo {
 impl ISeqInfo {
     pub fn new(
         params: Vec<LvarId>,
+        min_params: usize,
+        max_params: usize,
         iseq: ISeq,
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
@@ -78,6 +82,8 @@ impl ISeqInfo {
         let lvars = lvar.len();
         ISeqInfo {
             params,
+            min_params,
+            max_params,
             iseq,
             lvar,
             lvars,
