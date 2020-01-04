@@ -231,7 +231,7 @@ impl VM {
                 );
             }
             match iseq[self.pc] {
-                Inst::END => {
+                Inst::END | Inst::RETURN => {
                     self.context_stack.pop().unwrap();
                     self.pc = old_pc;
                     return Ok(());
@@ -674,7 +674,7 @@ impl VM {
                     let (val, classref) = match self.globals.object_class.constants.get(&id) {
                         Some(val) => (
                             val.clone(),
-                            match val.as_class() {
+                            match val.as_module() {
                                 Some(classref) => {
                                     if classref.superclass != Some(superclass) {
                                         return Err(self.error_type(format!(
@@ -1396,9 +1396,11 @@ impl VM {
 
             Value::Char(c) => format!("{:x}", c),
             Value::Object(oref) => match oref.kind {
-                ObjKind::Class(cref) => format! {"Class({})", self.globals.get_ident_name(cref.id)},
+                ObjKind::Class(cref) => {
+                    format! {"Class({})", self.globals.get_ident_name(cref.name)}
+                }
                 ObjKind::Ordinary => {
-                    format! {"Instance({}:{:?})", self.globals.get_ident_name(oref.classref.id), oref}
+                    format! {"Instance({}:{:?})", self.globals.get_ident_name(oref.classref.name), oref}
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
@@ -1427,7 +1429,7 @@ impl VM {
             Value::Nil => "nil".to_string(),
             Value::String(s) => format!("\"{}\"", s),
             Value::Object(oref) => match oref.kind {
-                ObjKind::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.id)},
+                ObjKind::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.name)},
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
                     1 => format!("[{}]", self.val_pp(aref.elements[0])),
@@ -1461,7 +1463,7 @@ impl VM {
                     }
                 },
                 ObjKind::Ordinary => {
-                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.classref.id), oref}
+                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.classref.name), oref}
                 }
                 _ => self.val_to_s(val),
             },
@@ -1572,7 +1574,7 @@ impl VM {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);
-                        let class_name = self.globals.get_ident_name(classref.id);
+                        let class_name = self.globals.get_ident_name(classref.name);
                         return Err(self.error_undefined_method(method_name, class_name));
                     }
                 },

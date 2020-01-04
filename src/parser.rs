@@ -1164,9 +1164,7 @@ impl Parser {
         match &tok.kind {
             TokenKind::Ident(name, has_suffix) => {
                 let id = self.get_ident_id(name);
-                if name == "self" {
-                    return Ok(Node::new_self(loc));
-                } else if *has_suffix {
+                if *has_suffix {
                     match self.get()?.kind {
                         TokenKind::Punct(Punct::Question) => {
                             let id = self.get_ident_id(&(name.clone() + "?"));
@@ -1348,11 +1346,20 @@ impl Parser {
                 let node = self.parse_class(true)?;
                 Ok(node)
             }
+            TokenKind::Reserved(Reserved::Return) => {
+                let val = if self.peek_no_skip_line_term().is_term() {
+                    Node::new_comp_stmt(vec![], loc)
+                } else {
+                    self.parse_arg()?
+                };
+                Ok(Node::new_return(val, loc))
+            }
             TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
             TokenKind::Reserved(Reserved::Next) => Ok(Node::new_next(loc)),
             TokenKind::Reserved(Reserved::True) => Ok(Node::new_bool(true, loc)),
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
+            TokenKind::Reserved(Reserved::Self_) => Ok(Node::new_self(loc)),
             TokenKind::EOF => {
                 return Err(self.error_eof(loc));
             }
@@ -1451,9 +1458,13 @@ impl Parser {
         //      [ensure COMPSTMT]
         //  end
         let mut is_class_method = false;
-        let self_id = self.get_ident_id(&"self".to_string());
         let tok = self.get()?.clone();
-        let mut id = match tok.kind {
+        let id = match tok.kind {
+            TokenKind::Reserved(Reserved::Self_) => {
+                is_class_method = true;
+                self.expect_punct(Punct::Dot)?;
+                self.expect_ident()?
+            }
             TokenKind::Ident(name, has_suffix) => {
                 if has_suffix {
                     match self.get()?.kind {
@@ -1469,11 +1480,6 @@ impl Parser {
             TokenKind::Punct(Punct::Minus) => self.get_ident_id(&"@sub".to_string()),
             TokenKind::Punct(Punct::Mul) => self.get_ident_id(&"@mul".to_string()),
             _ => return Err(self.error_unexpected(self.loc(), "Expected identifier or operator.")),
-        };
-        if id == self_id {
-            is_class_method = true;
-            self.expect_punct(Punct::Dot)?;
-            id = self.expect_ident()?;
         };
         self.context_stack.push(Context::new_method());
         let args = self.parse_params()?;
@@ -1515,7 +1521,7 @@ impl Parser {
                     ));
                 };
                 default_flag = true;
-                Some(self.parse_primary()?)
+                Some(self.parse_arg()?)
             } else {
                 if default_flag {
                     no_default_flag = true;

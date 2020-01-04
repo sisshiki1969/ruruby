@@ -4,23 +4,21 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
-    pub id: IdentId,
+    pub name: IdentId,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub constants: ValueTable,
     pub superclass: Option<ClassRef>,
-    //pub subclass: HashMap<IdentId, ClassRef>,
 }
 
 impl ClassInfo {
-    pub fn new(id: IdentId, superclass: Option<ClassRef>) -> Self {
+    pub fn new(name: IdentId, superclass: Option<ClassRef>) -> Self {
         ClassInfo {
-            id,
+            name,
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
             constants: HashMap::new(),
             superclass,
-            //subclass: HashMap::new(),
         }
     }
 }
@@ -50,7 +48,22 @@ pub fn init_class(globals: &mut Globals) -> ClassRef {
     let class = ClassRef::from(class_id, globals.module_class);
     globals.add_builtin_instance_method(class, "new", class_new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
+    globals.add_builtin_class_method(class, "new", class_class_new);
     class
+}
+
+/// Built-in function "new".
+fn class_class_new(
+    vm: &mut VM,
+    _receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let id = vm.globals.get_ident_id("nil");
+    let classref = ClassRef::from(id, vm.globals.object_class);
+    let val = PackedValue::class(&mut vm.globals, classref);
+
+    Ok(val)
 }
 
 /// Built-in function "new".

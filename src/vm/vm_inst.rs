@@ -65,6 +65,7 @@ impl Inst {
 
     pub const JMP: u8 = 80;
     pub const JMP_IF_FALSE: u8 = 81;
+    pub const RETURN: u8 = 82;
 }
 
 #[allow(dead_code)]
@@ -101,6 +102,8 @@ impl Inst {
 
             Inst::JMP => "JMP",
             Inst::JMP_IF_FALSE => "JMP_IF_FALSE",
+            Inst::RETURN => "RETURN",
+
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
             Inst::GET_CONST => "GET_CONST",
@@ -161,7 +164,8 @@ impl Inst {
             | Inst::TO_S
             | Inst::SPLAT
             | Inst::ARY_REVERSE
-            | Inst::POP => 1,
+            | Inst::POP
+            | Inst::RETURN => 1,
 
             Inst::PUSH_STRING
             | Inst::PUSH_SYMBOL

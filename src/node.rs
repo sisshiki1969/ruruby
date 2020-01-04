@@ -18,6 +18,7 @@ pub enum NodeKind {
     }, // start, end, exclude_end
     Array(NodeVec),
     Hash(Vec<(Node, Node)>),
+
     LocalVar(IdentId),
     Ident(IdentId, bool),
     InstanceVar(IdentId),
@@ -37,6 +38,7 @@ pub enum NodeKind {
     Assign(Box<Node>, Box<Node>),
     AssignOp(BinOp, Box<Node>, Box<Node>),
     MulAssign(Vec<Node>, Vec<Node>),
+
     CompStmt(NodeVec),
     If {
         cond: Box<Node>,
@@ -55,9 +57,12 @@ pub enum NodeKind {
     },
     Break,
     Next,
+    Return(Box<Node>),
+
     Param(IdentId),
     DefaultParam(IdentId, Box<Node>),
     BlockParam(IdentId),
+
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
     ClassDef {
@@ -316,6 +321,11 @@ impl Node {
 
     pub fn new_next(loc: Loc) -> Self {
         Node::new(NodeKind::Next, loc)
+    }
+
+    pub fn new_return(node: Node, loc: Loc) -> Self {
+        let loc = loc.merge(node.loc());
+        Node::new(NodeKind::Return(Box::new(node)), loc)
     }
 
     pub fn new_proc(params: NodeVec, body: Node, lvar: LvarCollector, loc: Loc) -> Self {

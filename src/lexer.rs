@@ -63,8 +63,13 @@ impl Lexer {
             "next" => Reserved::Next,
             "nil" => Reserved::Nil,
             "return" => Reserved::Return,
+            "self" => Reserved::Self_,
             "then" => Reserved::Then,
-            "true" => Reserved::True
+            "true" => Reserved::True,
+            "until" => Reserved::Until,
+            "unless" => Reserved::Unless,
+            "when" => Reserved::When,
+            "while" => Reserved::While
         };
         Lexer {
             len: 0,

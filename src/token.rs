@@ -74,8 +74,13 @@ pub enum Reserved {
     Next,
     Nil,
     Return,
+    Self_,
     Then,
     True,
+    Until,
+    Unless,
+    When,
+    While,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

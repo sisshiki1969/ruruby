@@ -178,6 +178,10 @@ impl Codegen {
         ISeqPos(iseq.len())
     }
 
+    fn gen_return(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::RETURN);
+    }
+
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_LOCAL);
         let (outer, lvar_id) = match self.get_local_var(id) {
@@ -1076,6 +1080,10 @@ impl Codegen {
                 if !use_value {
                     self.gen_pop(iseq)
                 };
+            }
+            NodeKind::Return(node) => {
+                self.gen(globals, iseq, node, true)?;
+                self.gen_return(iseq);
             }
             NodeKind::Break => {
                 if use_value {

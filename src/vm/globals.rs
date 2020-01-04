@@ -132,7 +132,7 @@ impl Globals {
                 ObjKind::Class(_) => "Class".to_string(),
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
-                ObjKind::Ordinary => self.get_ident_name(oref.classref.id).clone(),
+                ObjKind::Ordinary => self.get_ident_name(oref.classref.name).clone(),
             },
         }
     }
