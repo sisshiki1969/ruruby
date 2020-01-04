@@ -708,6 +708,18 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
+            NodeKind::Hash(key_value) => {
+                let len = key_value.len();
+                for (k, v) in key_value {
+                    self.gen(globals, iseq, k, true)?;
+                    self.gen(globals, iseq, v, true)?;
+                }
+                iseq.push(Inst::CREATE_HASH);
+                self.push32(iseq, len as u32);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
             NodeKind::Ident(id, _) => {
                 self.gen_send_self(globals, iseq, *id, 0, None);
                 if !use_value {
@@ -961,6 +973,7 @@ impl Codegen {
                 if use_value {
                     self.gen(globals, iseq, iter, true)?;
                 }
+                let src = self.gen_jmp(iseq);
                 for p in self.loop_stack.pop().unwrap() {
                     match p.1 {
                         EscapeKind::Break => {
@@ -969,6 +982,39 @@ impl Codegen {
                         EscapeKind::Next => self.write_disp(iseq, p.0, loop_continue),
                     }
                 }
+                if !use_value {
+                    self.gen_pop(iseq);
+                }
+
+                self.write_disp_from_cur(iseq, src);
+            }
+            NodeKind::While { cond, body } => {
+                self.loop_stack.push(vec![]);
+
+                let loop_start = Codegen::current(iseq);
+                self.gen(globals, iseq, cond, true)?;
+                let src = self.gen_jmp_if_false(iseq);
+                self.gen(globals, iseq, body, false)?;
+                self.gen_jmp_back(iseq, loop_start);
+                self.write_disp_from_cur(iseq, src);
+
+                if use_value {
+                    self.gen_push_nil(iseq);
+                }
+                let src = self.gen_jmp(iseq);
+                for p in self.loop_stack.pop().unwrap() {
+                    match p.1 {
+                        EscapeKind::Break => {
+                            self.write_disp_from_cur(iseq, p.0);
+                        }
+                        EscapeKind::Next => self.write_disp(iseq, p.0, loop_start),
+                    }
+                }
+                if !use_value {
+                    self.gen_pop(iseq);
+                }
+
+                self.write_disp_from_cur(iseq, src);
             }
             NodeKind::Assign(lhs, rhs) => {
                 self.gen(globals, iseq, rhs, true)?;
@@ -1086,9 +1132,7 @@ impl Codegen {
                 self.gen_return(iseq);
             }
             NodeKind::Break => {
-                if use_value {
-                    self.gen_push_nil(iseq);
-                };
+                self.gen_push_nil(iseq);
                 let src = self.gen_jmp(iseq);
                 match self.loop_stack.last_mut() {
                     Some(x) => {
@@ -1121,18 +1165,6 @@ impl Codegen {
                 let methodref = self.gen_iseq(globals, params, body, lvar, true, true)?;
                 iseq.push(Inst::CREATE_PROC);
                 self.push32(iseq, methodref.into());
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
-            }
-            NodeKind::Hash(key_value) => {
-                let len = key_value.len();
-                for (k, v) in key_value {
-                    self.gen(globals, iseq, k, true)?;
-                    self.gen(globals, iseq, v, true)?;
-                }
-                iseq.push(Inst::CREATE_HASH);
-                self.push32(iseq, len as u32);
                 if !use_value {
                     self.gen_pop(iseq)
                 };

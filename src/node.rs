@@ -49,7 +49,11 @@ pub enum NodeKind {
         param: Box<Node>,
         iter: Box<Node>,
         body: Box<Node>,
-    }, // param, iter, body
+    },
+    While {
+        cond: Box<Node>,
+        body: Box<Node>,
+    },
     Proc {
         params: NodeVec,
         body: Box<Node>,
@@ -310,6 +314,16 @@ impl Node {
                 cond: Box::new(cond),
                 then_: Box::new(then_),
                 else_: Box::new(else_),
+            },
+            loc,
+        )
+    }
+    pub fn new_while(cond: Node, body: Node, loc: Loc) -> Self {
+        let loc = loc.merge(body.loc());
+        Node::new(
+            NodeKind::While {
+                cond: Box::new(cond),
+                body: Box::new(body),
             },
             loc,
         )

@@ -17,7 +17,7 @@ A toy Ruby implementation by Rust.
     - [x] Block literal
 - Objects
     - [x] Array
-    - [ ] Hash
+    - [x] Hash
     - [x] Proc
 - Variables
     - [x] Local variable
@@ -28,9 +28,14 @@ A toy Ruby implementation by Rust.
     - [x] Constant
 - Branch and Loop
     - [x] If-then-elsif-else
+    - [x] Unless-then-else
+    - [x] Postfix if / unless
     - [x] For-in
     - [x] Break / Continue
-    - [ ] While
+    - [x] While
+    - [x] Until
+    - [x] Postfix while / until
+    - [x] Return
 - Methods
     - [x] Instance Method
     - [x] Class Method
@@ -95,7 +100,7 @@ MethodRef(15)
   00035 CONCAT_STR
   00036 PUSH_STRING 
   00041 CONCAT_STR
-  00042 undefined
+  00042 SEND_SELF 'puts' 1 items
   00051 END
 Hello world!
 ```
@@ -111,14 +116,14 @@ Performance analysis for Inst:
 Inst name         count    %time     nsec
                                     /inst
 ------------------------------------------
-END                   1     0.69     1083
-PUSH_STRING           4     6.94     2666
-SET_LOCAL             1     1.39     2784
-GET_LOCAL             1     0.00      521
-SEND_SELF             1     5.56     8900
-CONCAT_STR            3     4.17     2051
-TO_S                  1     1.39     2725
-CODEGEN               1    58.33    84527
-undefined             1    18.06    26943
+END                   1     0.00      953
+PUSH_STRING           4     1.65     2562
+SET_LOCAL             1     0.33     2578
+GET_LOCAL             1     0.00      454
+SEND_SELF             1     0.99     6895
+CONCAT_STR            3     1.65     3354
+TO_S                  1     0.82     5193
+CODEGEN               1    92.42   561408
+EXTERN                1     1.48     9645
 ------------------------------------------
 ```

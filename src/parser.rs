@@ -535,6 +535,18 @@ impl Parser {
                 node,
                 loc,
             ))
+        } else if self.consume_reserved_no_skip_line_term(Reserved::While) {
+            // STMT : STMT while EXPR
+            let loc = self.prev_loc();
+            let cond = self.parse_expr()?;
+            let loc = loc.merge(self.prev_loc());
+            Ok(Node::new_while(cond, node, loc))
+        } else if self.consume_reserved_no_skip_line_term(Reserved::Until) {
+            // STMT : STMT until EXPR
+            let loc = self.prev_loc();
+            let cond = Node::new_unop(UnOp::Not, self.parse_expr()?, loc);
+            let loc = loc.merge(self.prev_loc());
+            Ok(Node::new_while(cond, node, loc))
         } else {
             // STMT : EXPR
             Ok(node)
@@ -1339,6 +1351,25 @@ impl Parser {
                 );
                 Ok(node)
             }
+            TokenKind::Reserved(Reserved::While) => {
+                let loc = self.prev_loc();
+                let cond = self.parse_expr()?;
+                self.parse_do()?;
+                let body = self.parse_comp_stmt()?;
+                self.expect_reserved(Reserved::End)?;
+                let loc = loc.merge(self.prev_loc());
+                Ok(Node::new_while(cond, body, loc))
+            }
+            TokenKind::Reserved(Reserved::Until) => {
+                let loc = self.prev_loc();
+                let cond = self.parse_expr()?;
+                let cond = Node::new_unop(UnOp::Not, cond, loc);
+                self.parse_do()?;
+                let body = self.parse_comp_stmt()?;
+                self.expect_reserved(Reserved::End)?;
+                let loc = loc.merge(self.prev_loc());
+                Ok(Node::new_while(cond, body, loc))
+            }
             TokenKind::Reserved(Reserved::Def) => {
                 let node = self.parse_def()?;
                 Ok(node)
@@ -1475,7 +1506,7 @@ impl Parser {
 
     fn parse_do(&mut self) -> Result<(), RubyError> {
         if self.consume_term() {
-            self.consume_reserved(Reserved::Do);
+            //self.consume_reserved(Reserved::Do);
             return Ok(());
         }
         self.expect_reserved(Reserved::Do)?;

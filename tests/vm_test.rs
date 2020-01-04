@@ -397,6 +397,58 @@ fn for4() {
 }
 
 #[test]
+fn for5() {
+    let program = "
+        assert(for a in 0..2 do end, 0..2)
+        assert(for a in 0..2 do if a == 1 then break end end, nil)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn while1() {
+    let program = "
+        assert((a = 0; while a < 5 do puts a; a+=1 end; a), 5)
+        assert((a = 0; while a < 5 do puts a; break if a == 3; a+=1 end; a), 3)
+        assert((a = 0; while a < 5 do puts a; a+=1 end), nil)
+        assert((a = 0; while a < 5 do puts a; break if a == 3; a+=1 end), nil)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn while2() {
+    let program = "
+        assert((a = 0; a+=1 while a < 5; a), 5)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn until1() {
+    let program = "
+        assert((a = 0; until a == 4 do puts a; a+=1 end; a), 4)
+        assert((a = 0; until a == 4 do puts a; break if a == 3; a+=1 end; a), 3)
+        assert((a = 0; until a == 4 do puts a; a+=1 end), nil)
+        assert((a = 0; until a == 4 do puts a; break if a == 3; a+=1 end), nil)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn until2() {
+    let program = "
+        assert((a = 0; a+=1 until a == 5; a), 5)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn local_var1() {
     let program = "
             ruby = 7
