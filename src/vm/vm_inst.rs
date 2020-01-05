@@ -57,7 +57,6 @@ impl Inst {
     pub const DUP: u8 = 63;
     pub const TAKE: u8 = 64;
     pub const SPLAT: u8 = 65;
-    pub const ARY_REVERSE: u8 = 66;
 
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
@@ -126,7 +125,6 @@ impl Inst {
             Inst::DUP => "DUP",
             Inst::TAKE => "TAKE",
             Inst::SPLAT => "SPLAT",
-            Inst::ARY_REVERSE => "ARY_REVERSE",
             Inst::CONCAT_STRING => "CONCAT_STR",
             Inst::TO_S => "TO_S",
             Inst::DEF_CLASS => "DEF_CLASS",
@@ -163,7 +161,6 @@ impl Inst {
             | Inst::CREATE_RANGE
             | Inst::TO_S
             | Inst::SPLAT
-            | Inst::ARY_REVERSE
             | Inst::POP
             | Inst::RETURN => 1,
 

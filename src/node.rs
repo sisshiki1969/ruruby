@@ -137,6 +137,14 @@ impl Node {
         Node::new(NodeKind::String(s), loc)
     }
 
+    pub fn new_array(nodes: Vec<Node>, loc: Loc) -> Self {
+        let loc = match nodes.last() {
+            Some(node) => loc.merge(node.loc()),
+            None => loc,
+        };
+        Node::new(NodeKind::Array(nodes), loc)
+    }
+
     pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
         Node::new(
             NodeKind::Range {
@@ -160,7 +168,13 @@ impl Node {
         Node::new(NodeKind::InterporatedString(nodes), loc)
     }
 
-    pub fn new_comp_stmt(nodes: Vec<Node>, loc: Loc) -> Self {
+    pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {
+        if let Some(node) = nodes.first() {
+            loc = node.loc();
+        };
+        if let Some(node) = nodes.last() {
+            loc = loc.merge(node.loc());
+        };
         Node::new(NodeKind::CompStmt(nodes), loc)
     }
 
@@ -227,11 +241,6 @@ impl Node {
 
     pub fn new_scope(parent: Node, id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Scope(Box::new(parent), id), loc)
-    }
-
-    pub fn new_assign(lhs: Node, rhs: Node) -> Self {
-        let loc = lhs.loc().merge(rhs.loc());
-        Node::new(NodeKind::Assign(Box::new(lhs), Box::new(rhs)), loc)
     }
 
     pub fn new_mul_assign(lhs: Vec<Node>, rhs: Vec<Node>) -> Self {

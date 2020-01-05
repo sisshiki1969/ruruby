@@ -518,10 +518,12 @@ impl VM {
                 Inst::GET_ARRAY_ELEM => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
+                    let arg_num = args.len();
                     match self.exec_stack.pop().unwrap().as_object() {
                         Some(oref) => {
                             match oref.kind {
                                 ObjKind::Array(aref) => {
+                                    self.check_args_num(arg_num, 1, 2)?;
                                     let index = args[0].expect_fixnum(&self, "Index")?;
                                     let index = self.get_array_index(index, aref.elements.len())?;
                                     if arg_num == 1 {
@@ -545,6 +547,7 @@ impl VM {
                                     };
                                 }
                                 ObjKind::Hash(href) => {
+                                    self.check_args_num(arg_num, 1, 2)?;
                                     let key = args[0];
                                     let val = match href.map.get(&key) {
                                         Some(val) => val.clone(),
@@ -746,14 +749,6 @@ impl VM {
                 }
                 Inst::POP => {
                     self.exec_stack.pop().unwrap();
-                    self.pc += 1;
-                }
-                Inst::ARY_REVERSE => {
-                    let ary = self.exec_stack.last().unwrap();
-                    match ary.as_array() {
-                        Some(mut aref) => aref.elements.reverse(),
-                        None => {}
-                    };
                     self.pc += 1;
                 }
                 Inst::DUP => {
@@ -1612,7 +1607,17 @@ impl VM {
     fn pop_args(&mut self, arg_num: usize) -> Vec<PackedValue> {
         let mut args = vec![];
         for _ in 0..arg_num {
-            args.push(self.exec_stack.pop().unwrap());
+            let val = self.exec_stack.pop().unwrap();
+            match val.as_splat() {
+                Some(ary) => {
+                    for elem in &ary.elements {
+                        args.push(elem.clone());
+                    }
+                }
+                None => {
+                    args.push(val);
+                }
+            };
         }
         args
     }

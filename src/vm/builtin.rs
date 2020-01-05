@@ -67,9 +67,9 @@ impl Builtin {
             }
             if !vm.eval_eq(args[0].clone(), args[1].clone())? {
                 panic!(
-                    "Assertion error: Expected: {:?} Actual: {:?}",
-                    args[0].unpack(),
-                    args[1].unpack()
+                    "Assertion error: Expected: {} Actual: {}",
+                    vm.val_pp(args[0]),
+                    vm.val_pp(args[1]),
                 );
             } else {
                 println!("Assert OK: {:?}", vm.val_pp(args[0]));

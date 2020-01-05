@@ -357,10 +357,6 @@ impl Codegen {
         self.push32(iseq, len as u32);
     }
 
-    fn gen_array_reverse(&mut self, iseq: &mut ISeq) {
-        iseq.push(Inst::ARY_REVERSE);
-    }
-
     fn gen_concat(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::CONCAT_STRING);
     }
@@ -1025,34 +1021,43 @@ impl Codegen {
             }
             NodeKind::MulAssign(mlhs, mrhs) => {
                 let lhs_len = mlhs.len();
-                let mut rhs_len = mrhs.len();
-                for rhs in mrhs {
-                    self.gen(globals, iseq, rhs, true)?;
-                }
-                if use_value {
-                    self.gen_dup(iseq, rhs_len);
+                let rhs_len = mrhs.len();
+                let splat_flag = match mrhs[0].kind {
+                    NodeKind::Splat(_) => true,
+                    _ => false,
                 };
-                if rhs_len == 1 {
-                    self.gen_take(iseq, lhs_len);
-                    rhs_len = lhs_len;
-                }
-                if rhs_len < lhs_len {
-                    for _ in 0..lhs_len - rhs_len {
-                        self.gen_push_nil(iseq);
+                if lhs_len == 1 && rhs_len == 1 {
+                    self.gen(globals, iseq, &mrhs[0], true)?;
+                    if splat_flag {
+                        self.gen_create_array(iseq, 1);
                     }
-                }
-                if lhs_len < rhs_len {
-                    for _ in 0..rhs_len - lhs_len {
-                        self.gen_pop(iseq);
+                    if use_value {
+                        self.gen_dup(iseq, 1);
+                    };
+                    self.gen_assign(globals, iseq, &mlhs[0])?;
+                } else if lhs_len == 1 {
+                    for rhs in mrhs.iter().rev() {
+                        self.gen(globals, iseq, rhs, true)?;
                     }
-                }
-                for lhs in mlhs.iter().rev() {
-                    self.gen_assign(globals, iseq, lhs)?;
-                }
-                if use_value {
-                    if mrhs.len() != 1 {
+                    self.gen_create_array(iseq, rhs_len);
+                    if use_value {
+                        self.gen_dup(iseq, 1);
+                    };
+                    self.gen_assign(globals, iseq, &mlhs[0])?;
+                } else {
+                    for rhs in mrhs.iter().rev() {
+                        self.gen(globals, iseq, rhs, true)?;
+                    }
+                    if splat_flag || rhs_len != 1 {
                         self.gen_create_array(iseq, rhs_len);
-                        self.gen_array_reverse(iseq);
+                    }
+                    if use_value {
+                        self.gen_dup(iseq, 1);
+                    };
+                    self.gen_take(iseq, lhs_len);
+
+                    for lhs in mlhs.iter().rev() {
+                        self.gen_assign(globals, iseq, lhs)?;
                     }
                 }
             }

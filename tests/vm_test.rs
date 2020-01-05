@@ -497,7 +497,7 @@ fn mul_assign3() {
 fn mul_assign4() {
     let program = "
             f = 1,2,3
-            assert(1,f)
+            assert([1,2,3],f)
             assert([1,2,3],(f=1,2,3))
             ";
     let expected = Value::Nil;
@@ -522,6 +522,21 @@ fn mul_assign6() {
             assert([a,b,c],[1,2,3])
             assert(d,[1,2,3,4,5])
             ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn mul_assign7() {
+    let program = "
+        a = [1,2,3]
+        b = 5,*a,5
+        c,d,e,f,g,h = *b
+        assert(b,[5,1,2,3,5])
+        assert([c,d,e,f,g,h],[5,1,2,3,5,nil])
+        a = *[1,2,3]
+        assert(a,[1,2,3])
+        ";
     let expected = Value::Nil;
     eval_script(program, expected);
 }
@@ -586,6 +601,21 @@ fn array1() {
     assert([1,2,3]*0, [])
     assert([1,2,3]*1, [1,2,3])
     assert([nil]*5, [nil,nil,nil,nil,nil])";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn array2() {
+    let program = "
+    a = [1,2,3,4,5,6,7]
+    b = [3,9]
+    c = [3,3]
+    assert(a[2], 3)
+    assert(a[3,9], [4,5,6,7])
+    assert(a[*b], [4,5,6,7])
+    assert(a[3,3], [4,5,6])
+    assert(a[*c], [4,5,6])";
     let expected = Value::Nil;
     eval_script(program, expected);
 }
@@ -744,6 +774,18 @@ fn func4() {
     
         fact(5)";
     let expected = Value::FixNum(120);
+    eval_script(program, expected);
+}
+
+#[test]
+fn return1() {
+    let program = "
+        def fn
+            return 1,2,3
+        end
+        assert(fn, [1,2,3])
+        ";
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 
