@@ -332,11 +332,10 @@ impl Codegen {
             }
             NodeKind::ArrayMember { array, index } => {
                 self.gen(globals, iseq, array, true)?;
-                if index.len() != 1 {
-                    return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc()));
+                for i in index {
+                    self.gen(globals, iseq, i, true)?;
                 }
-                self.gen(globals, iseq, &index[0], true)?;
-                self.gen_set_array_elem(iseq, 1);
+                self.gen_set_array_elem(iseq, index.len());
             }
             _ => return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())),
         }
@@ -431,7 +430,6 @@ impl Codegen {
     }
 
     /// Generate ISeq.
-
     pub fn gen_iseq(
         &mut self,
         globals: &mut Globals,
@@ -503,6 +501,11 @@ impl Codegen {
             };
             eprintln!("-----------------------------------------");
             eprintln!("{:?}", methodref);
+            for (k, v) in iseq.lvar.table() {
+                eprint!(" {:?}:{}", v.as_u32(), globals.get_ident_name(*k));
+            }
+            eprintln!("");
+            eprintln!("block: {:?}", iseq.lvar.block());
             let iseq = &iseq.iseq;
             let mut pc = 0;
             while iseq[pc] != Inst::END {
@@ -536,34 +539,46 @@ impl Codegen {
                     | Inst::BIT_NOT
                     | Inst::CONCAT_STRING
                     | Inst::CREATE_RANGE
+                    | Inst::RETURN
                     | Inst::TO_S
                     | Inst::SPLAT
                     | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
+                    Inst::PUSH_STRING => format!("PUSH_STRING {}", read32(iseq, pc + 1) as i32),
+                    Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL {}", read32(iseq, pc + 1) as i32),
                     Inst::ADDI => format!("ADDI {}", read32(iseq, pc + 1) as i32),
                     Inst::SUBI => format!("SUBI {}", read32(iseq, pc + 1) as i32),
                     Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", read64(iseq, pc + 1) as i64),
                     Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", unsafe {
                         std::mem::transmute::<u64, f64>(read64(iseq, pc + 1))
                     }),
-                    Inst::PUSH_STRING => format!("PUSH_STRING "),
-                    Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL "),
+
                     Inst::JMP => format!("JMP {:>05}", pc as i32 + 5 + read32(iseq, pc + 1) as i32),
                     Inst::JMP_IF_FALSE => format!(
                         "JMP_IF_FALSE {:>05}",
                         pc as i32 + 5 + read32(iseq, pc + 1) as i32
                     ),
                     Inst::SET_LOCAL => {
-                        let id = read32(iseq, pc + 1);
                         let frame = read32(iseq, pc + 5);
-                        format!("SET_LOCAL {} '{}'", frame, id)
+                        format!("SET_LOCAL outer:{} LvarId:{}", frame, read32(iseq, pc + 1))
                     }
                     Inst::GET_LOCAL => {
-                        let id = read32(iseq, pc + 1);
                         let frame = read32(iseq, pc + 5);
-                        format!("GET_LOCAL {} '{}'", frame, id)
+                        format!("GET_LOCAL outer:{} LvarId:{}", frame, read32(iseq, pc + 1))
+                    }
+                    Inst::CHECK_LOCAL => {
+                        let frame = read32(iseq, pc + 5);
+                        format!(
+                            "CHECK_LOCAL outer:{} LvarId:{}",
+                            frame,
+                            read32(iseq, pc + 1)
+                        )
                     }
                     Inst::GET_CONST => format!("GET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
+                    Inst::GET_CONST_TOP => {
+                        format!("GET_CONST_TOP '{}'", ident_name(globals, iseq, pc + 1))
+                    }
                     Inst::SET_CONST => format!("SET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
+                    Inst::GET_SCOPE => format!("SET_SCOPE '{}'", ident_name(globals, iseq, pc + 1)),
                     Inst::GET_INSTANCE_VAR => {
                         format!("GET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
                     }
@@ -582,12 +597,28 @@ impl Codegen {
                         ident_name(globals, iseq, pc + 1),
                         read32(iseq, pc + 5)
                     ),
+
                     Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", read32(iseq, pc + 1)),
                     Inst::CREATE_PROC => format!("CREATE_PROC method:{}", read32(iseq, pc + 1)),
+                    Inst::CREATE_HASH => format!("CREATE_HASH {} items", read32(iseq, pc + 1)),
                     Inst::DUP => format!("DUP {}", read32(iseq, pc + 1)),
-                    Inst::DEF_CLASS => format!("DEF_CLASS"),
-                    Inst::DEF_METHOD => format!("DEF_METHOD"),
-                    Inst::DEF_CLASS_METHOD => format!("DEF_CLASS_METHOD"),
+                    Inst::TAKE => format!("TAKE {}", read32(iseq, pc + 1)),
+                    Inst::DEF_CLASS => format!(
+                        "DEF_CLASS {} '{}' method:{}",
+                        if read8(iseq, pc + 1) == 1 {
+                            "module"
+                        } else {
+                            "class"
+                        },
+                        ident_name(globals, iseq, pc + 2),
+                        read32(iseq, pc)
+                    ),
+                    Inst::DEF_METHOD => {
+                        format!("DEF_METHOD '{}'", ident_name(globals, iseq, pc + 1))
+                    }
+                    Inst::DEF_CLASS_METHOD => {
+                        format!("DEF_CLASS_METHOD '{}'", ident_name(globals, iseq, pc + 1))
+                    }
                     _ => format!("undefined"),
                 }
             }
@@ -600,6 +631,10 @@ impl Codegen {
             fn read32(iseq: &ISeq, pc: usize) -> u32 {
                 let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
                 unsafe { *ptr }
+            }
+
+            fn read8(iseq: &ISeq, pc: usize) -> u8 {
+                iseq[pc]
             }
 
             fn ident_name(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
@@ -905,7 +940,6 @@ impl Codegen {
                 };
             }
             NodeKind::ArrayMember { array, index } => {
-                // number of index elements must be 1 or 2 (ensured by parser).
                 let loc = node.loc();
                 self.gen(globals, iseq, array, true)?;
                 let num_args = index.len();
@@ -1075,8 +1109,10 @@ impl Codegen {
                 let block_ref = match block {
                     Some(block) => match &block.kind {
                         NodeKind::Proc { params, body, lvar } => {
+                            self.loop_stack.push(vec![]);
                             let methodref =
                                 self.gen_iseq(globals, params, body, lvar, true, true)?;
+                            self.loop_stack.pop().unwrap();
                             Some(methodref)
                         }
                         _ => panic!(),
@@ -1167,7 +1203,9 @@ impl Codegen {
                 }
             }
             NodeKind::Proc { params, body, lvar } => {
+                self.loop_stack.push(vec![]);
                 let methodref = self.gen_iseq(globals, params, body, lvar, true, true)?;
+                self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
                 self.push32(iseq, methodref.into());
                 if !use_value {

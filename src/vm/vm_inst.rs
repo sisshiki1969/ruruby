@@ -14,21 +14,25 @@ impl Inst {
     pub const SUB: u8 = 10;
     pub const MUL: u8 = 11;
     pub const DIV: u8 = 12;
+    pub const REM: u8 = 22;
     pub const EQ: u8 = 13;
     pub const NE: u8 = 14;
     pub const GT: u8 = 15;
     pub const GE: u8 = 16;
+    pub const NOT: u8 = 23;
     pub const SHR: u8 = 17;
     pub const SHL: u8 = 18;
     pub const BIT_OR: u8 = 19;
     pub const BIT_AND: u8 = 20;
     pub const BIT_XOR: u8 = 21;
-    pub const REM: u8 = 22;
-    pub const NOT: u8 = 23;
     pub const BIT_NOT: u8 = 24;
 
     pub const ADDI: u8 = 25;
     pub const SUBI: u8 = 26;
+
+    pub const JMP: u8 = 80;
+    pub const JMP_IF_FALSE: u8 = 81;
+    pub const RETURN: u8 = 82;
 
     pub const SET_LOCAL: u8 = 30;
     pub const GET_LOCAL: u8 = 31;
@@ -52,19 +56,15 @@ impl Inst {
     pub const CREATE_HASH: u8 = 53;
 
     pub const POP: u8 = 60;
-    pub const CONCAT_STRING: u8 = 61;
-    pub const TO_S: u8 = 62;
     pub const DUP: u8 = 63;
     pub const TAKE: u8 = 64;
     pub const SPLAT: u8 = 65;
+    pub const CONCAT_STRING: u8 = 61;
+    pub const TO_S: u8 = 62;
 
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
     pub const DEF_CLASS_METHOD: u8 = 72;
-
-    pub const JMP: u8 = 80;
-    pub const JMP_IF_FALSE: u8 = 81;
-    pub const RETURN: u8 = 82;
 }
 
 #[allow(dead_code)]
@@ -80,6 +80,7 @@ impl Inst {
             Inst::PUSH_STRING => "PUSH_STRING",
             Inst::PUSH_SYMBOL => "PUSH_SYMBOL",
             Inst::PUSH_SELF => "PUSH_SELF",
+
             Inst::ADD => "ADD",
             Inst::ADDI => "ADDI",
             Inst::SUB => "SUB",
@@ -116,6 +117,8 @@ impl Inst {
             Inst::SET_ARRAY_ELEM => "SET_ARY_ELEM",
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SELF",
+            Inst::CHECK_LOCAL => "CHECK_LOCAL",
+
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
             Inst::CREATE_PROC => "CREATE_PROC",

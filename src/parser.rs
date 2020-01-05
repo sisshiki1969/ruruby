@@ -115,6 +115,14 @@ impl LvarCollector {
         self.table.len()
     }
 
+    pub fn table(&self) -> &HashMap<IdentId, LvarId> {
+        &self.table
+    }
+
+    pub fn block(&self) -> &Option<LvarId> {
+        &self.block
+    }
+
     pub fn clone_table(&self) -> HashMap<IdentId, LvarId> {
         self.table.clone()
     }
@@ -683,13 +691,6 @@ impl Parser {
         Ok(args)
     }
 
-    fn is_block(&mut self) -> bool {
-        match self.peek().kind {
-            TokenKind::Reserved(Reserved::Do) | TokenKind::Punct(Punct::LBrace) => true,
-            _ => false,
-        }
-    }
-
     fn is_command(&mut self) -> bool {
         let tok = self.peek_no_term();
         match tok.kind {
@@ -976,11 +977,7 @@ impl Parser {
         if node.is_operation() {
             if self.consume_punct_no_term(Punct::LParen) {
                 // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-                let args = if self.is_block() {
-                    vec![]
-                } else {
-                    self.parse_args(Punct::RParen)?
-                };
+                let args = self.parse_args(Punct::RParen)?;
                 let block = self.parse_block()?;
 
                 node = Node::new_send(
@@ -1605,7 +1602,6 @@ impl Parser {
             TokenKind::Const(s) => s.clone(),
             _ => return Err(self.error_unexpected(loc, "Class/Module name must be CONSTANT.")),
         };
-        eprintln!("Parse..  is_module:{} name:{}", is_module, name);
         let superclass = if self.consume_punct_no_term(Punct::Lt) {
             if is_module {
                 return Err(self.error_unexpected(self.prev_loc(), "Unexpected '<'."));

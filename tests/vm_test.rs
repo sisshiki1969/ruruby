@@ -619,6 +619,17 @@ fn array2() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+#[test]
+fn array3() {
+    let program = "
+    a = [1,2,3,4,5,6,7]
+    assert(a[2,3], [3,4,5])
+    a[2,3] = 100
+    assert(a, [1,2,100,6,7])
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
 
 #[test]
 fn array_map() {
@@ -774,6 +785,30 @@ fn func4() {
     
         fact(5)";
     let expected = Value::FixNum(120);
+    eval_script(program, expected);
+}
+
+#[test]
+fn default_arg() {
+    let program = "
+        def fn(a = 0, b = 1, c = 2)
+            [a,b,c]
+        end
+    
+        assert([0,1,2], fn())
+        assert([5,1,2,], fn(5))
+        assert([5,7,2], fn(5,7))
+        assert([5,7,10], fn(5,7,10))
+
+        def fx(a, b = 1, c = 2)
+            [a,b,c]
+        end
+
+        assert([5,1,2], fx(5))
+        assert([5,7,2], fx(5,7))
+        assert([5,7,10], fx(5,7,10))
+        ";
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 

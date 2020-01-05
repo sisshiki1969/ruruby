@@ -484,15 +484,30 @@ impl VM {
                 Inst::SET_ARRAY_ELEM => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
-
+                    let arg_num = args.len();
                     match self.exec_stack.pop().unwrap().as_object() {
                         Some(oref) => {
                             match oref.kind {
                                 ObjKind::Array(mut aref) => {
+                                    self.check_args_num(arg_num, 1, 2)?;
                                     let index = args[0].expect_fixnum(&self, "Index")?;
                                     let index = self.get_array_index(index, aref.elements.len())?;
                                     let val = self.exec_stack.pop().unwrap();
-                                    aref.elements[index] = val;
+                                    if arg_num == 1 {
+                                        aref.elements[index] = val;
+                                    } else {
+                                        let len = args[1].expect_fixnum(&self, "Index")?;
+                                        if len < 0 {
+                                            return Err(self
+                                                .error_index(format!("Negative length. {}", len)));
+                                        } else {
+                                            let len = len as usize;
+                                            let end =
+                                                std::cmp::min(aref.elements.len(), index + len);
+                                            aref.elements.drain(index..end);
+                                            aref.elements.insert(index, val);
+                                        }
+                                    }
                                 }
                                 ObjKind::Hash(mut href) => {
                                     let key = args[0];
@@ -878,6 +893,10 @@ impl VM {
             self.source_info(),
             loc,
         )
+    }
+    pub fn error_index(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Index(msg.into()), self.source_info(), loc)
     }
     pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
         if min <= len && len <= max {

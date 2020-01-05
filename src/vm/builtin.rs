@@ -127,7 +127,7 @@ impl Builtin {
                     return Err(vm.error_internal("LoadError"));
                 }
             };
-
+            eprintln!("reading:{}", absolute_path.to_string_lossy());
             vm.run(absolute_path.to_str().unwrap(), program)?;
             Ok(())
         }

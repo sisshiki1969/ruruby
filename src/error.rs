@@ -50,6 +50,7 @@ impl RubyError {
                 RuntimeErrKind::Unimplemented(n) => eprintln!("UnimplementedError ({})", n),
                 RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
                 RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
+                RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
             },
         }
     }
@@ -76,6 +77,7 @@ pub enum RuntimeErrKind {
     Name(String),
     NoMethod(String),
     Argument(String),
+    Index(String),
     Type(String),
 }
 
