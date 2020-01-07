@@ -13,6 +13,7 @@ mod object;
 mod perf;
 mod procobj;
 mod range;
+mod string;
 pub mod value;
 mod vm_inst;
 
@@ -45,7 +46,7 @@ pub type VMResult = Result<PackedValue, RubyError>;
 pub struct VM {
     // Global info
     pub globals: Globals,
-    pub root_path: PathBuf,
+    pub root_path: Vec<PathBuf>,
     // VM state
     pub context_stack: Vec<ContextRef>,
     pub class_stack: Vec<ClassRef>,
@@ -74,11 +75,16 @@ impl VM {
         set_builtin_class!("Array", array_class);
         set_builtin_class!("Proc", proc_class);
         set_builtin_class!("Range", range_class);
+        set_builtin_class!("String", string_class);
         set_builtin_class!("Hash", hash_class);
+
+        let id = globals.get_ident_id("StandardError");
+        let class = PackedValue::class(&globals, globals.class_class);
+        globals.object_class.constants.insert(id, class);
 
         let mut vm = VM {
             globals,
-            root_path: PathBuf::new(),
+            root_path: vec![],
             class_stack: vec![],
             context_stack: vec![],
             exec_stack: vec![],
@@ -370,6 +376,20 @@ impl VM {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let val = PackedValue::bool(!self.eval_eq(lhs, rhs)?);
+                    self.exec_stack.push(val);
+                    self.pc += 1;
+                }
+                Inst::TEQ => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let res = match lhs.as_class() {
+                        Some(class) if rhs.get_class(&self.globals) == class => true,
+                        _ => match self.eval_eq(lhs, rhs) {
+                            Ok(res) => res,
+                            Err(_) => false,
+                        },
+                    };
+                    let val = PackedValue::bool(res);
                     self.exec_stack.push(val);
                     self.pc += 1;
                 }

@@ -875,6 +875,12 @@ impl Codegen {
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::NE);
                     }
+                    BinOp::TEq => {
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq, loc);
+                        iseq.push(Inst::TEQ);
+                    }
                     BinOp::Ge => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
@@ -1046,12 +1052,30 @@ impl Codegen {
 
                 self.write_disp_from_cur(iseq, src);
             }
-            NodeKind::Assign(lhs, rhs) => {
-                self.gen(globals, iseq, rhs, true)?;
-                if use_value {
-                    self.gen_dup(iseq, 1);
-                };
-                self.gen_assign(globals, iseq, lhs)?;
+            NodeKind::Case { cond, when_, else_ } => {
+                let mut end = vec![];
+                self.gen(globals, iseq, cond, true)?;
+                for branch in when_ {
+                    let mut jmp_dest = vec![];
+                    for elem in &branch.when {
+                        self.gen_dup(iseq, 1);
+                        self.gen(globals, iseq, elem, true)?;
+                        self.save_loc(iseq, elem.loc);
+                        iseq.push(Inst::TEQ);
+                        jmp_dest.push(self.gen_jmp_if_false(iseq));
+                    }
+                    self.gen_pop(iseq);
+                    self.gen(globals, iseq, &branch.body, use_value)?;
+                    end.push(self.gen_jmp(iseq));
+                    for dest in jmp_dest {
+                        self.write_disp_from_cur(iseq, dest);
+                    }
+                }
+                self.gen_pop(iseq);
+                self.gen(globals, iseq, &else_, use_value)?;
+                for dest in end {
+                    self.write_disp_from_cur(iseq, dest);
+                }
             }
             NodeKind::MulAssign(mlhs, mrhs) => {
                 let lhs_len = mlhs.len();

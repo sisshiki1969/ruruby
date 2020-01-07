@@ -115,6 +115,7 @@ pub enum Punct {
     Assign,
     AssignOp(BinOp),
     Eq,
+    TEq,
     Ne,
     Gt,
     Ge,
@@ -214,6 +215,23 @@ impl Token {
             | TokenKind::Ident(_, _)
             | TokenKind::Reserved(_)
             | TokenKind::StringLit(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn check_stmt_end(&self) -> bool {
+        match self.kind {
+            TokenKind::EOF
+            | TokenKind::IntermediateDoubleQuote(_)
+            | TokenKind::CloseDoubleQuote(_) => true,
+            TokenKind::Reserved(reserved) => match reserved {
+                Reserved::Else | Reserved::Elsif | Reserved::End | Reserved::When => true,
+                _ => false,
+            },
+            TokenKind::Punct(punct) => match punct {
+                Punct::RParen | Punct::RBrace | Punct::RBracket => true,
+                _ => false,
+            },
             _ => false,
         }
     }

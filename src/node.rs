@@ -54,6 +54,11 @@ pub enum NodeKind {
         cond: Box<Node>,
         body: Box<Node>,
     },
+    Case {
+        cond: Box<Node>,
+        when_: Vec<CaseBranch>,
+        else_: Box<Node>,
+    },
     Proc {
         params: NodeVec,
         body: Box<Node>,
@@ -85,6 +90,21 @@ pub enum NodeKind {
     }, //receiver, method_name, args
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaseBranch {
+    pub when: Vec<Node>,
+    pub body: Box<Node>,
+}
+
+impl CaseBranch {
+    pub fn new(when: Vec<Node>, body: Node) -> Self {
+        CaseBranch {
+            when,
+            body: Box::new(body),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BinOp {
     Add,
@@ -99,6 +119,7 @@ pub enum BinOp {
     BitXor,
     Eq,
     Ne,
+    TEq,
     Gt,
     Ge,
     Lt,
@@ -327,12 +348,25 @@ impl Node {
             loc,
         )
     }
+
     pub fn new_while(cond: Node, body: Node, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
         Node::new(
             NodeKind::While {
                 cond: Box::new(cond),
                 body: Box::new(body),
+            },
+            loc,
+        )
+    }
+
+    pub fn new_case(cond: Node, when_: Vec<CaseBranch>, else_: Node, loc: Loc) -> Self {
+        let loc = loc.merge(else_.loc());
+        Node::new(
+            NodeKind::Case {
+                cond: Box::new(cond),
+                when_,
+                else_: Box::new(else_),
             },
             loc,
         )

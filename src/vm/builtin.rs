@@ -7,6 +7,7 @@ pub struct Builtin {}
 impl Builtin {
     pub fn init_builtin(globals: &mut Globals) {
         globals.add_builtin_method("puts", builtin_puts);
+        globals.add_builtin_method("p", builtin_p);
         globals.add_builtin_method("print", builtin_print);
         globals.add_builtin_method("assert", builtin_assert);
         globals.add_builtin_method("require", builtin_require);
@@ -34,6 +35,22 @@ impl Builtin {
                 flatten(vm, arg.clone());
             }
             Ok(PackedValue::nil())
+        }
+
+        fn builtin_p(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            for arg in args.iter() {
+                println!("{}", vm.val_pp(*arg));
+            }
+            Ok(if args.len() == 1 {
+                args[0]
+            } else {
+                PackedValue::array(&vm.globals, ArrayRef::from(args.to_vec()))
+            })
         }
 
         /// Built-in function "print".
@@ -88,7 +105,9 @@ impl Builtin {
                 Some(string) => string,
                 None => return Err(vm.error_argument("file name must be a string.")),
             };
-            require(vm, file_name)?;
+            let mut path = std::env::current_dir().unwrap();
+            path.push(file_name);
+            require(vm, path)?;
             Ok(PackedValue::bool(true))
         }
 
@@ -99,18 +118,20 @@ impl Builtin {
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let mut path = vm.root_path.clone();
+            let mut path = vm.root_path.last().unwrap().clone();
 
             let file_name = match args[0].as_string() {
                 Some(string) => string,
                 None => return Err(vm.error_argument("file name must be a string.")),
             };
+            path.pop();
             path.push(file_name);
-            require(vm, path.to_string_lossy().to_string())?;
+            require(vm, path)?;
             Ok(PackedValue::bool(true))
         }
 
-        fn require(vm: &mut VM, file_name: String) -> Result<(), RubyError> {
+        fn require(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
+            let file_name = path.to_string_lossy().to_string();
             let (absolute_path, program) = match load_file(file_name.clone()) {
                 Ok((path, program)) => (path, program),
                 Err(err) => {
@@ -128,7 +149,9 @@ impl Builtin {
                 }
             };
             eprintln!("reading:{}", absolute_path.to_string_lossy());
+            vm.root_path.push(path);
             vm.run(absolute_path.to_str().unwrap(), program)?;
+            vm.root_path.pop().unwrap();
             Ok(())
         }
 

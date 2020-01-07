@@ -483,13 +483,14 @@ impl Parser {
 
     fn parse_comp_stmt(&mut self) -> Result<Node, RubyError> {
         // COMP_STMT : (STMT (TERM STMT)*)? (TERM+)?
-        fn check_not_stmt(token: &Token) -> bool {
+        /*
+        fn check_stmt_end(token: &Token) -> bool {
             match token.kind {
                 TokenKind::EOF
                 | TokenKind::IntermediateDoubleQuote(_)
                 | TokenKind::CloseDoubleQuote(_) => true,
                 TokenKind::Reserved(reserved) => match reserved {
-                    Reserved::Else | Reserved::Elsif | Reserved::End => true,
+                    Reserved::Else | Reserved::Elsif | Reserved::End | Reserved::When => true,
                     _ => false,
                 },
                 TokenKind::Punct(punct) => match punct {
@@ -498,13 +499,13 @@ impl Parser {
                 },
                 _ => false,
             }
-        }
+        }*/
 
         let loc = self.loc();
         let mut nodes = vec![];
 
         loop {
-            if check_not_stmt(self.peek()) {
+            if self.peek().check_stmt_end() {
                 return Ok(Node::new_comp_stmt(nodes, loc));
             }
 
@@ -570,6 +571,9 @@ impl Parser {
         // | FNAME ARGS
         // | PRIMARY . FNAME ARGS
         // | PRIMARY :: FNAME ARGS
+        // | return ARGS
+        // | break ARGS
+        // | next ARGS
         // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]*
         // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]* . FNAME ARGS
         // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]* :: FNAME ARGS
@@ -817,6 +821,9 @@ impl Parser {
         } else if self.consume_punct_no_term(Punct::Ne) {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Ne, lhs, rhs))
+        } else if self.consume_punct_no_term(Punct::TEq) {
+            let rhs = self.parse_arg_comp()?;
+            Ok(Node::new_binop(BinOp::TEq, lhs, rhs))
         } else {
             Ok(lhs)
         }
@@ -1333,18 +1340,33 @@ impl Parser {
                 let loc = loc.merge(self.prev_loc());
                 Ok(Node::new_while(cond, body, loc))
             }
-            TokenKind::Reserved(Reserved::Def) => {
-                let node = self.parse_def()?;
-                Ok(node)
+            TokenKind::Reserved(Reserved::Case) => {
+                let loc = self.prev_loc();
+                let cond = self.parse_expr()?;
+                self.consume_term();
+                let mut when_ = vec![];
+                while self.consume_reserved(Reserved::When) {
+                    let arg = self.parse_args(None)?;
+                    self.parse_then()?;
+                    let body = self.parse_comp_stmt()?;
+                    when_.push(CaseBranch::new(arg, body));
+                }
+                let else_ = if self.consume_reserved(Reserved::Else) {
+                    self.parse_comp_stmt()?
+                } else {
+                    Node::new_comp_stmt(vec![], self.loc())
+                };
+                self.expect_reserved(Reserved::End)?;
+                Ok(Node::new_case(cond, when_, else_, loc))
             }
+            TokenKind::Reserved(Reserved::Def) => Ok(self.parse_def()?),
             TokenKind::Reserved(Reserved::Class) => {
                 if self.context_stack.last().unwrap().kind == ContextKind::Method {
                     return Err(
                         self.error_unexpected(loc, "SyntaxError: class definition in method body.")
                     );
                 }
-                let node = self.parse_class(false)?;
-                Ok(node)
+                Ok(self.parse_class(false)?)
             }
             TokenKind::Reserved(Reserved::Module) => {
                 if self.context_stack.last().unwrap().kind == ContextKind::Method {
@@ -1352,14 +1374,15 @@ impl Parser {
                         self.error_unexpected(loc, "SyntaxError: class definition in method body.")
                     );
                 }
-                let node = self.parse_class(true)?;
-                Ok(node)
+                Ok(self.parse_class(true)?)
             }
             TokenKind::Reserved(Reserved::Return) => {
                 let tok = self.peek_no_term();
+                // TODO: This is not correct.
                 if tok.is_term()
                     || tok.kind == TokenKind::Reserved(Reserved::Unless)
                     || tok.kind == TokenKind::Reserved(Reserved::If)
+                    || tok.check_stmt_end()
                 {
                     let val = Node::new_comp_stmt(vec![], loc);
                     return Ok(Node::new_return(val, loc));
@@ -1384,9 +1407,7 @@ impl Parser {
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
             TokenKind::Reserved(Reserved::Self_) => Ok(Node::new_self(loc)),
-            TokenKind::EOF => {
-                return Err(self.error_eof(loc));
-            }
+            TokenKind::EOF => return Err(self.error_eof(loc)),
             _ => {
                 return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
             }
@@ -1616,7 +1637,11 @@ impl Parser {
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        eprintln!("Parsed  is_module:{} name:{}", is_module, name);
+        eprintln!(
+            "Parsed {} name:{}",
+            if is_module { "module" } else { "class" },
+            name
+        );
         Ok(Node::new_class_decl(
             id, superclass, body, lvar, is_module, loc,
         ))

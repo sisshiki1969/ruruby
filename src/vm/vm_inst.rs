@@ -10,25 +10,26 @@ impl Inst {
     pub const PUSH_SYMBOL: u8 = 7;
     pub const PUSH_SELF: u8 = 8;
 
-    pub const ADD: u8 = 9;
-    pub const SUB: u8 = 10;
-    pub const MUL: u8 = 11;
-    pub const DIV: u8 = 12;
-    pub const REM: u8 = 22;
-    pub const EQ: u8 = 13;
-    pub const NE: u8 = 14;
-    pub const GT: u8 = 15;
-    pub const GE: u8 = 16;
-    pub const NOT: u8 = 23;
-    pub const SHR: u8 = 17;
-    pub const SHL: u8 = 18;
-    pub const BIT_OR: u8 = 19;
-    pub const BIT_AND: u8 = 20;
-    pub const BIT_XOR: u8 = 21;
-    pub const BIT_NOT: u8 = 24;
+    pub const ADD: u8 = 10;
+    pub const SUB: u8 = 11;
+    pub const MUL: u8 = 12;
+    pub const DIV: u8 = 13;
+    pub const REM: u8 = 14;
+    pub const EQ: u8 = 15;
+    pub const NE: u8 = 16;
+    pub const TEQ: u8 = 17;
+    pub const GT: u8 = 18;
+    pub const GE: u8 = 19;
+    pub const NOT: u8 = 20;
+    pub const SHR: u8 = 21;
+    pub const SHL: u8 = 22;
+    pub const BIT_OR: u8 = 23;
+    pub const BIT_AND: u8 = 24;
+    pub const BIT_XOR: u8 = 25;
+    pub const BIT_NOT: u8 = 26;
 
-    pub const ADDI: u8 = 25;
-    pub const SUBI: u8 = 26;
+    pub const ADDI: u8 = 27;
+    pub const SUBI: u8 = 28;
 
     pub const JMP: u8 = 80;
     pub const JMP_IF_FALSE: u8 = 81;

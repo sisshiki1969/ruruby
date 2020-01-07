@@ -54,10 +54,9 @@ fn file_read(file_name: impl Into<String>) {
     };
 
     let mut vm = VM::new();
-    let mut root_path = absolute_path.clone();
-    root_path.pop();
-    eprintln!("{:?}", root_path);
-    vm.root_path = root_path;
+    let root_path = absolute_path.clone();
+    eprintln!("load file: {:?}", root_path);
+    vm.root_path.push(root_path);
     match vm.run(absolute_path.to_str().unwrap(), program) {
         Ok(_) => {}
         Err(err) => {

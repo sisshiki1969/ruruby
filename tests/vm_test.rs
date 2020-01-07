@@ -265,6 +265,24 @@ fn int4() {
 }
 
 #[test]
+fn triple_equal() {
+    let program = r#"
+        assert(true, 1 === 1)
+        assert(false, 1 === 2)
+        assert(false, "a" === 2)
+        assert(false, 2 === "a")
+        assert(false, "ruby" === "rust")
+        assert(true, "ruby" === "ruby")
+        assert(true, Integer === 100)
+        assert(false, Integer === "ruby")
+        assert(true, String === "ruby")
+        assert(false, String === 100)
+    "#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn if1() {
     let program = "if 5*4==16 +4 then 4;2*3+1 end";
     let expected = Value::FixNum(7);

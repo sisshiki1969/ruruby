@@ -206,7 +206,15 @@ impl Lexer {
                             self.new_punct(Punct::Mul)
                         }
                     }
-                    '%' => self.new_punct(Punct::Rem),
+                    '%' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::Rem))
+                        } else {
+                            self.new_punct(Punct::Rem)
+                        }
+                    }
                     '/' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
@@ -218,7 +226,15 @@ impl Lexer {
                     }
                     '(' => self.new_punct(Punct::LParen),
                     ')' => self.new_punct(Punct::RParen),
-                    '^' => self.new_punct(Punct::BitXor),
+                    '^' => {
+                        let ch1 = self.peek()?;
+                        if ch1 == '=' {
+                            self.get()?;
+                            self.new_punct(Punct::AssignOp(BinOp::BitXor))
+                        } else {
+                            self.new_punct(Punct::BitXor)
+                        }
+                    }
                     '~' => self.new_punct(Punct::BitNot),
                     '[' => self.new_punct(Punct::LBracket),
                     ']' => self.new_punct(Punct::RBracket),
@@ -254,7 +270,13 @@ impl Lexer {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::Eq)
+                            let ch2 = self.peek()?;
+                            if ch2 == '=' {
+                                self.get()?;
+                                self.new_punct(Punct::TEq)
+                            } else {
+                                self.new_punct(Punct::Eq)
+                            }
                         } else if ch1 == '>' {
                             self.get()?;
                             self.new_punct(Punct::FatArrow)
@@ -391,6 +413,10 @@ impl Lexer {
                     self.get()?;
                     return self.lex_hex_number();
                 }
+                Ok(ch) if ch == 'b' => {
+                    self.get()?;
+                    return self.lex_bin_number();
+                }
                 _ => {}
             }
         };
@@ -449,6 +475,23 @@ impl Lexer {
                 Ok(ch @ '0'..='9') => val = val * 16 + (ch as u64 - '0' as u64),
                 Ok(ch @ 'a'..='f') => val = val * 16 + (ch as u64 - 'a' as u64 + 10),
                 Ok(ch @ 'A'..='F') => val = val * 16 + (ch as u64 - 'A' as u64 + 10),
+                Ok('_') => {}
+                _ => break,
+            }
+            self.get()?;
+        }
+        Ok(self.new_numlit(val as i64))
+    }
+
+    fn lex_bin_number(&mut self) -> Result<Token, RubyError> {
+        let mut val = match self.peek() {
+            Ok(ch @ '0'..='1') => (ch as u64 - '0' as u64),
+            _ => return Err(self.error_unexpected(self.pos)),
+        };
+        self.get()?;
+        loop {
+            match self.peek() {
+                Ok(ch @ '0'..='1') => val = val * 2 + (ch as u64 - '0' as u64),
                 Ok('_') => {}
                 _ => break,
             }

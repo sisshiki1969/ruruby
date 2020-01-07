@@ -258,6 +258,7 @@ impl PackedValue {
     pub fn get_class(&self, globals: &Globals) -> ClassRef {
         match self.unpack() {
             Value::FixNum(_) => globals.integer_class,
+            Value::String(_) => globals.string_class,
             Value::Object(oref) => oref.classref,
             _ => globals.object_class,
         }
