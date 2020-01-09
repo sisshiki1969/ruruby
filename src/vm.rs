@@ -1309,7 +1309,7 @@ impl VM {
         }
     }
 
-    pub fn eval_eq(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<bool, RubyError> {
+    pub fn eval_eq(&self, rhs: PackedValue, lhs: PackedValue) -> Result<bool, RubyError> {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(*lhs == *rhs);
         }
@@ -1326,6 +1326,8 @@ impl VM {
             (Value::Nil, Value::Nil) => Ok(true),
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(lhs == rhs),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(lhs == rhs),
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(*lhs as f64 == *rhs),
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(*lhs == *rhs as f64),
             (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
             (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),

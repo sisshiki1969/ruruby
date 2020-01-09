@@ -666,6 +666,19 @@ fn array_map() {
 }
 
 #[test]
+fn array_include() {
+    let program = r#"
+    a = ["ruby","rust","java"]
+    assert(true, a.include?("ruby"))
+    assert(true, a.include?("rust"))
+    assert(false, a.include?("c++"))
+    assert(false, a.include?(:ruby))
+    "#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn array_each() {
     let program = "
     a = [1,2,3]
@@ -1140,6 +1153,28 @@ fn assign_op() {
         assert 7, a>>=4
         assert 2, a&=2
         assert 11, a|=9
+        ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn is_a() {
+    let program = "
+        module M
+        end
+        class C
+        end
+        class S < C
+        end
+
+        obj = S.new
+        assert true, obj.is_a?(S)
+        assert true, obj.is_a?(C)
+        assert true, obj.is_a?(Object)
+        assert false, obj.is_a?(Integer)
+        assert false, obj.is_a?(Array)
+        assert false, obj.is_a?(M)
         ";
     let expected = Value::Nil;
     eval_script(program, expected);

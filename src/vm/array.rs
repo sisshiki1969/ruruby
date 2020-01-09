@@ -29,6 +29,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "*", array::array_mul);
     globals.add_builtin_instance_method(array_class, "map", array::array_map);
     globals.add_builtin_instance_method(array_class, "each", array::array_each);
+    globals.add_builtin_instance_method(array_class, "include?", array::array_include);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -195,4 +196,24 @@ fn array_each(
     }
     let res = receiver;
     Ok(res)
+}
+
+fn array_include(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let target = args[0];
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let res = aref
+        .elements
+        .iter()
+        .any(|x| match vm.eval_eq(x.clone(), target) {
+            Ok(res) => res,
+            Err(_) => false,
+        });
+    Ok(PackedValue::bool(res))
 }

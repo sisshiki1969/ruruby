@@ -14,6 +14,7 @@ impl Builtin {
         globals.add_builtin_method("require_relative", builtin_require_relative);
         globals.add_builtin_method("block_given?", builtin_block_given);
         globals.add_builtin_method("method", builtin_method);
+        globals.add_builtin_method("is_a?", builtin_isa);
 
         /// Built-in function "puts".
         fn builtin_puts(
@@ -193,6 +194,28 @@ impl Builtin {
 
             let val = PackedValue::method(&vm.globals, name, receiver, method);
             Ok(val)
+        }
+
+        fn builtin_isa(
+            vm: &mut VM,
+            receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            let target = match args[0].as_module() {
+                Some(class) => class,
+                None => return Err(vm.error_type("An argument must be a Module or Class.")),
+            };
+            let mut recv_class = receiver.get_class(&vm.globals);
+            loop {
+                if recv_class == target {
+                    return Ok(PackedValue::true_val());
+                }
+                recv_class = match recv_class.superclass {
+                    Some(class) => class,
+                    None => return Ok(PackedValue::false_val()),
+                }
+            }
         }
     }
 }
