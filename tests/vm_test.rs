@@ -666,6 +666,18 @@ fn array_map() {
 }
 
 #[test]
+fn array_each() {
+    let program = "
+    a = [1,2,3]
+    b = 0
+    assert([1,2,3], a.each {|x| b+=x })
+    assert(6, b)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn hash1() {
     let program = r#"
     h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7", "ruby" => "string", :ruby => "symbol"}
@@ -748,6 +760,26 @@ fn range2() {
     assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
     assert(Range.new(5,10,true).last(4), [6,7,8,9])
     assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn method1() {
+    let program = r#"
+    class Foo
+        def foo(arg)
+            "instance #{arg}"
+        end
+        def self.boo(arg)
+            "class #{arg}"
+        end
+    end
+    m = Foo.new.method(:foo)
+    assert("instance 77", m.call(77))
+    m = Foo.method(:boo)
+    assert("class 99", m.call(99))
+    "#;
     let expected = Value::Nil;
     eval_script(program, expected);
 }

@@ -408,6 +408,16 @@ impl PackedValue {
         }
     }
 
+    pub fn as_method(&self) -> Option<method::MethodObjRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Method(mref) => Some(mref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_string(&self) -> Option<String> {
         if self.is_packed_value() {
             return None;
@@ -417,6 +427,14 @@ impl PackedValue {
                 Value::String(string) => Some(string.to_string()),
                 _ => None,
             }
+        }
+    }
+
+    pub fn as_symbol(&self) -> Option<IdentId> {
+        if self.is_packed_symbol() {
+            Some(self.as_packed_symbol())
+        } else {
+            None
         }
     }
 
@@ -514,6 +532,15 @@ impl PackedValue {
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
         PackedValue::object(ObjectRef::new_proc(globals, context))
+    }
+
+    pub fn method(
+        globals: &Globals,
+        name: IdentId,
+        receiver: PackedValue,
+        method: MethodRef,
+    ) -> Self {
+        PackedValue::object(ObjectRef::new_method(globals, name, receiver, method))
     }
 }
 

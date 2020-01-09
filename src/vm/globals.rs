@@ -14,6 +14,7 @@ pub struct Globals {
     pub class_class: ClassRef,
     pub module_class: ClassRef,
     pub proc_class: ClassRef,
+    pub method_class: ClassRef,
     pub range_class: ClassRef,
     pub hash_class: ClassRef,
     pub string_class: ClassRef,
@@ -37,6 +38,7 @@ impl Globals {
             module_class: object_class,
             class_class: object_class,
             proc_class: object_class,
+            method_class: object_class,
             range_class: object_class,
             hash_class: object_class,
             string_class: object_class,
@@ -48,6 +50,7 @@ impl Globals {
         globals.module_class = module::init_module(&mut globals);
         globals.class_class = class::init_class(&mut globals);
         globals.proc_class = procobj::init_proc(&mut globals);
+        globals.method_class = method::init_method(&mut globals);
         globals.range_class = range::init_range(&mut globals);
         globals.string_class = string::init_string(&mut globals);
         globals.hash_class = hash::init_hash(&mut globals);
@@ -135,6 +138,7 @@ impl Globals {
                 ObjKind::Class(_) => "Class".to_string(),
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
+                ObjKind::Method(_) => "Method".to_string(),
                 ObjKind::Ordinary => self.get_ident_name(oref.classref.name).clone(),
             },
         }

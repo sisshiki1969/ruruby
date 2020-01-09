@@ -77,6 +77,7 @@ impl VM {
         set_builtin_class!("Range", range_class);
         set_builtin_class!("String", string_class);
         set_builtin_class!("Hash", hash_class);
+        set_builtin_class!("Method", method_class);
 
         let id = globals.get_ident_id("StandardError");
         let class = PackedValue::class(&globals, globals.class_class);

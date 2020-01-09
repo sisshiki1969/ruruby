@@ -28,6 +28,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
     globals.add_builtin_instance_method(array_class, "*", array::array_mul);
     globals.add_builtin_instance_method(array_class, "map", array::array_map);
+    globals.add_builtin_instance_method(array_class, "each", array::array_each);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -165,5 +166,33 @@ fn array_map(
         res.push(vm.exec_stack.pop().unwrap());
     }
     let res = PackedValue::array(&vm.globals, ArrayRef::from(res));
+    Ok(res)
+}
+
+fn array_each(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    block: Option<MethodRef>,
+) -> VMResult {
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let context = vm.context();
+    for i in &aref.elements {
+        vm.vm_run(
+            context.self_value,
+            iseq,
+            Some(context),
+            VecArray::new1(i.clone()),
+            None,
+        )?;
+        vm.exec_stack.pop().unwrap();
+    }
+    let res = receiver;
     Ok(res)
 }

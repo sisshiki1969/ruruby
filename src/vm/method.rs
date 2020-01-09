@@ -123,3 +123,53 @@ impl GlobalMethodTable {
         &mut self.table[method.0]
     }
 }
+
+//----------------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct MethodObjInfo {
+    pub name: IdentId,
+    pub receiver: PackedValue,
+    pub method: MethodRef,
+}
+
+impl MethodObjInfo {
+    pub fn new(name: IdentId, receiver: PackedValue, method: MethodRef) -> Self {
+        MethodObjInfo {
+            name,
+            receiver,
+            method,
+        }
+    }
+}
+
+pub type MethodObjRef = Ref<MethodObjInfo>;
+
+impl MethodObjRef {
+    pub fn from(name: IdentId, receiver: PackedValue, method: MethodRef) -> Self {
+        MethodObjRef::new(MethodObjInfo::new(name, receiver, method))
+    }
+}
+
+pub fn init_method(globals: &mut Globals) -> ClassRef {
+    let proc_id = globals.get_ident_id("Method");
+    let method = ClassRef::from(proc_id, globals.object_class);
+    globals.add_builtin_instance_method(method, "call", method_call);
+    //globals.add_builtin_class_method(method, "new", proc_new);
+    method
+}
+
+fn method_call(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    block: Option<MethodRef>,
+) -> VMResult {
+    let method = match receiver.as_method() {
+        Some(method) => method,
+        None => return Err(vm.error_unimplemented("Expected Method object.")),
+    };
+    vm.eval_send(method.method, method.receiver, args, block)?;
+    let res = vm.exec_stack.pop().unwrap();
+    Ok(res)
+}

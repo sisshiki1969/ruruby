@@ -13,6 +13,7 @@ impl Builtin {
         globals.add_builtin_method("require", builtin_require);
         globals.add_builtin_method("require_relative", builtin_require_relative);
         globals.add_builtin_method("block_given?", builtin_block_given);
+        globals.add_builtin_method("method", builtin_method);
 
         /// Built-in function "puts".
         fn builtin_puts(
@@ -166,6 +167,32 @@ impl Builtin {
             _block: Option<MethodRef>,
         ) -> VMResult {
             Ok(PackedValue::bool(vm.context().block.is_some()))
+        }
+
+        fn builtin_method(
+            vm: &mut VM,
+            receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            eprintln!("method:{:?}", vm.val_pp(receiver));
+            let name = match args[0].as_symbol() {
+                Some(id) => id,
+                None => return Err(vm.error_type("An argument must be a Symbol.")),
+            };
+            let method = match receiver.as_class() {
+                Some(class) => match class.get_class_method(name) {
+                    Some(method) => method.clone(),
+                    None => return Err(vm.error_type("Method not found.")),
+                },
+                None => match receiver.get_class(&vm.globals).get_instance_method(name) {
+                    Some(method) => method.clone(),
+                    None => return Err(vm.error_type("Method not found.")),
+                },
+            };
+
+            let val = PackedValue::method(&vm.globals, name, receiver, method);
+            Ok(val)
         }
     }
 }

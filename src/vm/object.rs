@@ -23,6 +23,7 @@ pub enum ObjKind {
     Hash(HashRef),
     Range(RangeRef),
     Proc(ProcRef),
+    Method(MethodObjRef),
 }
 
 impl ObjectInfo {
@@ -89,6 +90,14 @@ impl ObjectInfo {
             kind: ObjKind::Proc(procref),
         }
     }
+
+    pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
+        ObjectInfo {
+            classref: globals.method_class,
+            instance_var: HashMap::new(),
+            kind: ObjKind::Method(methodref),
+        }
+    }
 }
 
 pub type ObjectRef = Ref<ObjectInfo>;
@@ -124,6 +133,18 @@ impl ObjectRef {
 
     pub fn new_proc(globals: &Globals, context: ContextRef) -> Self {
         ObjectRef::new(ObjectInfo::new_proc(globals, ProcRef::from(context)))
+    }
+
+    pub fn new_method(
+        globals: &Globals,
+        name: IdentId,
+        receiver: PackedValue,
+        method: MethodRef,
+    ) -> Self {
+        ObjectRef::new(ObjectInfo::new_method(
+            globals,
+            MethodObjRef::from(name, receiver, method),
+        ))
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
