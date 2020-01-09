@@ -335,6 +335,7 @@ impl Codegen {
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
                 }
+                self.save_loc(iseq, lhs.loc());
                 self.gen_set_array_elem(iseq, index.len());
             }
             _ => return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())),

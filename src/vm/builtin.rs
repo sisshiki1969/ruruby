@@ -15,6 +15,7 @@ impl Builtin {
         globals.add_builtin_method("block_given?", builtin_block_given);
         globals.add_builtin_method("method", builtin_method);
         globals.add_builtin_method("is_a?", builtin_isa);
+        globals.add_builtin_method("to_s", builtin_tos);
 
         /// Built-in function "puts".
         fn builtin_puts(
@@ -176,7 +177,7 @@ impl Builtin {
             args: VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
-            eprintln!("method:{:?}", vm.val_pp(receiver));
+            vm.check_args_num(args.len(), 1, 1)?;
             let name = match args[0].as_symbol() {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
@@ -202,6 +203,7 @@ impl Builtin {
             args: VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
+            vm.check_args_num(args.len(), 1, 1)?;
             let target = match args[0].as_module() {
                 Some(class) => class,
                 None => return Err(vm.error_type("An argument must be a Module or Class.")),
@@ -216,6 +218,17 @@ impl Builtin {
                     None => return Ok(PackedValue::false_val()),
                 }
             }
+        }
+
+        fn builtin_tos(
+            vm: &mut VM,
+            receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            vm.check_args_num(args.len(), 0, 0)?;
+            let s = vm.val_to_s(receiver);
+            Ok(PackedValue::string(s))
         }
     }
 }

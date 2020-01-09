@@ -516,21 +516,31 @@ impl VM {
                                 ObjKind::Array(mut aref) => {
                                     self.check_args_num(arg_num, 1, 2)?;
                                     let index = args[0].expect_fixnum(&self, "Index")?;
-                                    let index = self.get_array_index(index, aref.elements.len())?;
-                                    let val = self.exec_stack.pop().unwrap();
-                                    if arg_num == 1 {
-                                        aref.elements[index] = val;
+                                    if arg_num == 1 && index >= aref.elements.len() as i64 {
+                                        let padding = index as usize - aref.elements.len();
+                                        aref.elements
+                                            .append(&mut vec![PackedValue::nil(); padding]);
+                                        aref.elements.push(self.exec_stack.pop().unwrap());
                                     } else {
-                                        let len = args[1].expect_fixnum(&self, "Index")?;
-                                        if len < 0 {
-                                            return Err(self
-                                                .error_index(format!("Negative length. {}", len)));
+                                        let index =
+                                            self.get_array_index(index, aref.elements.len())?;
+                                        let val = self.exec_stack.pop().unwrap();
+                                        if arg_num == 1 {
+                                            aref.elements[index] = val;
                                         } else {
-                                            let len = len as usize;
-                                            let end =
-                                                std::cmp::min(aref.elements.len(), index + len);
-                                            aref.elements.drain(index..end);
-                                            aref.elements.insert(index, val);
+                                            let len = args[1].expect_fixnum(&self, "Index")?;
+                                            if len < 0 {
+                                                return Err(self.error_index(format!(
+                                                    "Negative length. {}",
+                                                    len
+                                                )));
+                                            } else {
+                                                let len = len as usize;
+                                                let end =
+                                                    std::cmp::min(aref.elements.len(), index + len);
+                                                aref.elements.drain(index..end);
+                                                aref.elements.insert(index, val);
+                                            }
                                         }
                                     }
                                 }
