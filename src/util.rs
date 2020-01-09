@@ -1,12 +1,12 @@
 use core::ptr::NonNull;
 use std::collections::HashMap;
 
-const INITIALIZE: usize = 0;
-const OBJECT: usize = 1;
-const NEW: usize = 2;
-const _ADD: usize = 3;
-const _SUB: usize = 4;
-const _MUL: usize = 5;
+const INITIALIZE: usize = 1;
+const OBJECT: usize = 2;
+const NEW: usize = 3;
+const _ADD: usize = 4;
+const _SUB: usize = 5;
+const _MUL: usize = 6;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -196,14 +196,7 @@ impl SourceInfo {
 //------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdentId(usize);
-
-impl std::ops::Deref for IdentId {
-    type Target = usize;
-    fn deref(&self) -> &usize {
-        &self.0
-    }
-}
+pub struct IdentId(std::num::NonZeroUsize);
 
 impl std::hash::Hash for IdentId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -213,29 +206,58 @@ impl std::hash::Hash for IdentId {
 
 impl Into<usize> for IdentId {
     fn into(self) -> usize {
-        self.0
+        self.0.get()
     }
 }
 
 impl Into<u32> for IdentId {
     fn into(self) -> u32 {
-        self.0 as u32
+        self.0.get() as u32
     }
 }
 
 impl From<u32> for IdentId {
     fn from(id: u32) -> Self {
-        IdentId(id as usize)
+        let id = unsafe { std::num::NonZeroUsize::new_unchecked(id as usize) };
+        IdentId(id)
     }
 }
 
+impl From<usize> for IdentId {
+    fn from(id: usize) -> Self {
+        let id = unsafe { std::num::NonZeroUsize::new_unchecked(id) };
+        IdentId(id)
+    }
+}
+
+pub struct OptionalId(Option<IdentId>);
+
+impl OptionalId {
+    pub fn new(id: impl Into<Option<IdentId>>) -> Self {
+        OptionalId(id.into())
+    }
+}
+
+impl std::ops::Deref for OptionalId {
+    type Target = Option<IdentId>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+macro_rules! to {
+    ($constant:ident) => {
+        unsafe { std::num::NonZeroUsize::new_unchecked($constant) }
+    };
+}
+
 impl IdentId {
-    pub const INITIALIZE: IdentId = IdentId(INITIALIZE);
-    pub const OBJECT: IdentId = IdentId(OBJECT);
-    pub const NEW: IdentId = IdentId(NEW);
-    pub const _ADD: IdentId = IdentId(_ADD);
-    pub const _SUB: IdentId = IdentId(_SUB);
-    pub const _MUL: IdentId = IdentId(_MUL);
+    pub const INITIALIZE: IdentId = IdentId(to!(INITIALIZE));
+    pub const OBJECT: IdentId = IdentId(to!(OBJECT));
+    pub const NEW: IdentId = IdentId(to!(NEW));
+    pub const _ADD: IdentId = IdentId(to!(_ADD));
+    pub const _SUB: IdentId = IdentId(to!(_SUB));
+    pub const _MUL: IdentId = IdentId(to!(_MUL));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -255,9 +277,9 @@ impl IdentifierTable {
         table.set_ident_id("initialize", INITIALIZE);
         table.set_ident_id("Object", OBJECT);
         table.set_ident_id("new", NEW);
-        table.set_ident_id("@add", _ADD);
-        table.set_ident_id("@sub", _SUB);
-        table.set_ident_id("@mul", _MUL);
+        table.set_ident_id("+", _ADD);
+        table.set_ident_id("-", _SUB);
+        table.set_ident_id("*", _MUL);
         table
     }
 
@@ -270,18 +292,18 @@ impl IdentifierTable {
     pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
         let name = name.into();
         match self.table.get(&name) {
-            Some(id) => IdentId(*id),
+            Some(id) => IdentId::from(*id),
             None => {
                 let id = self.ident_id;
                 self.table.insert(name.clone(), id);
                 self.table_rev.insert(id, name.clone());
                 self.ident_id += 1;
-                IdentId(id)
+                IdentId::from(id)
             }
         }
     }
 
     pub fn get_name(&self, id: IdentId) -> &String {
-        self.table_rev.get(&id).unwrap()
+        self.table_rev.get(&id.0.get()).unwrap()
     }
 }

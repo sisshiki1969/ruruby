@@ -26,7 +26,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "pop", array::array_pop);
     globals.add_builtin_instance_method(array_class, "length", array::array_length);
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
-    globals.add_builtin_instance_method(array_class, "@mul", array::array_mul);
+    globals.add_builtin_instance_method(array_class, "*", array::array_mul);
     globals.add_builtin_instance_method(array_class, "map", array::array_map);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class

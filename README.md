@@ -35,6 +35,7 @@ A toy Ruby implementation by Rust.
     - [x] While
     - [x] Until
     - [x] Postfix while / until
+    - [x] Case-when
     - [x] Return
 - Methods
     - [x] Instance Method

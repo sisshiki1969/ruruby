@@ -55,6 +55,7 @@ fn file_read(file_name: impl Into<String>) {
 
     let mut vm = VM::new();
     let root_path = absolute_path.clone();
+    #[cfg(feature = "verbose")]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     match vm.run(absolute_path.to_str().unwrap(), program) {
@@ -62,7 +63,7 @@ fn file_read(file_name: impl Into<String>) {
         Err(err) => {
             err.show_file_name();
             err.show_loc();
-            eprintln!("{:?}", err.kind);
+            err.show_err();
         }
     };
 }
@@ -80,6 +81,8 @@ fn repl_vm() {
         "Option<PackedValue>: {}",
         std::mem::size_of::<Option<PackedValue>>()
     );
+    println!("IdentId: {}", std::mem::size_of::<IdentId>());
+    println!("OptionalID: {}", std::mem::size_of::<OptionalId>());
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();

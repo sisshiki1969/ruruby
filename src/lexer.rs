@@ -345,7 +345,13 @@ impl Lexer {
                         let ch1 = self.peek()?;
                         if ch1 == '|' {
                             self.get()?;
-                            self.new_punct(Punct::LOr)
+                            let ch2 = self.peek()?;
+                            if ch2 == '=' {
+                                self.get()?;
+                                self.new_punct(Punct::AssignOp(BinOp::LOr))
+                            } else {
+                                self.new_punct(Punct::LOr)
+                            }
                         } else if ch1 == '=' {
                             self.get()?;
                             self.new_punct(Punct::AssignOp(BinOp::BitOr))

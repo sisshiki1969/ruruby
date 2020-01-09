@@ -11,6 +11,7 @@ default = []
 perf = []
 trace = []
 emit-iseq = []
+verbose = []
 
 [dependencies]
 rustyline = "5.0.3"

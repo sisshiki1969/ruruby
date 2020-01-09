@@ -455,9 +455,13 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = read32(iseq, self.pc + 1);
                     let class = self.class();
-                    let val = self.get_constant(class, id)?;
+                    let val = if id == 0 {
+                        PackedValue::class(&self.globals, class)
+                    } else {
+                        self.get_constant(class, IdentId::from(id))?
+                    };
                     self.exec_stack.push(val);
                     self.pc += 5;
                 }
@@ -715,6 +719,18 @@ impl VM {
                             match val.as_module() {
                                 Some(classref) => {
                                     if classref.superclass != Some(superclass) {
+                                        eprintln!(
+                                            "prev: {:?}",
+                                            match classref.superclass {
+                                                None => "None",
+                                                Some(class) =>
+                                                    self.globals.get_ident_name(class.name),
+                                            }
+                                        );
+                                        eprintln!(
+                                            " new: {:?}",
+                                            self.globals.get_ident_name(superclass.name)
+                                        );
                                         return Err(self.error_type(format!(
                                             "superclass mismatch for class {}.",
                                             self.globals.get_ident_name(id),
@@ -1412,7 +1428,7 @@ impl VM {
 
 impl VM {
     pub fn val_to_bool(&self, val: PackedValue) -> bool {
-        !val.is_nil() && !val.is_false_val()
+        !val.is_nil() && !val.is_false_val() && !val.is_uninitialized()
     }
 
     pub fn val_to_s(&self, val: PackedValue) -> String {

@@ -696,7 +696,7 @@ mod tests {
         let globals = Globals::new();
         let expect = Value::Object(ObjectRef::new_class(
             &globals,
-            ClassRef::from_no_superclass(IdentId::from(0)),
+            ClassRef::from_no_superclass(IdentId::from(1usize)),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {
@@ -706,7 +706,7 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let class_ref = ClassRef::from_no_superclass(IdentId::from(0));
+        let class_ref = ClassRef::from_no_superclass(IdentId::from(1usize));
         let expect = Value::Object(ObjectRef::from(class_ref));
         let got = expect.clone().pack().unpack();
         if expect != got {
@@ -716,7 +716,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        let expect = Value::Symbol(IdentId::from(12345));
+        let expect = Value::Symbol(IdentId::from(12345usize));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

@@ -103,7 +103,7 @@ impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
             table: vec![MethodInfo::AttrReader {
-                id: IdentId::from(0),
+                id: IdentId::from(1usize),
             }],
             method_id: 1,
         }

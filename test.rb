@@ -1,3 +1,6 @@
-a=100
-a+=1
-puts a
+class Foo
+    OCTOPUS = 8
+    class Boo
+        puts OCTOPUS
+    end
+end

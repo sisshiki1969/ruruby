@@ -232,7 +232,7 @@ impl Parser {
         return false;
     }
 
-    fn get_ident_id(&mut self, method: &String) -> IdentId {
+    fn get_ident_id(&mut self, method: impl Into<String>) -> IdentId {
         self.ident_table.get_ident_id(method)
     }
 
@@ -275,9 +275,9 @@ impl Parser {
 
     /// Get next token (skipping line terminators).
     /// Return RubyError if it was EOF.
-    fn get(&mut self) -> Result<&Token, RubyError> {
+    fn get(&mut self) -> Result<Token, RubyError> {
         loop {
-            let token = &self.tokens[self.cursor];
+            let token = self.tokens[self.cursor].clone();
             if token.is_eof() {
                 return Err(self.error_eof(token.loc()));
             }
@@ -383,7 +383,7 @@ impl Parser {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
             }
         };
-        Ok(self.get_ident_id(&name))
+        Ok(self.get_ident_id(name))
     }
 
     /// Get the next token and examine whether it is Const.
@@ -396,7 +396,7 @@ impl Parser {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
             }
         };
-        Ok(self.get_ident_id(&name))
+        Ok(self.get_ident_id(name))
     }
 
     fn token_as_symbol(&self, token: &Token) -> String {
@@ -729,7 +729,7 @@ impl Parser {
     }
 
     fn parse_arg_assign(&mut self) -> Result<Node, RubyError> {
-        let lhs = self.parse_arg_ternary()?;
+        let mut lhs = self.parse_arg_ternary()?;
         if self.is_line_term() {
             return Ok(lhs);
         }
@@ -738,14 +738,32 @@ impl Parser {
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
         } else if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_term().kind {
-            //let loc = self.loc();
-            self.get()?;
-            let rhs = self.parse_arg()?;
-            self.check_lhs(&lhs)?;
-            Ok(Node::new_mul_assign(
-                vec![lhs.clone()],
-                vec![Node::new_binop(op, lhs, rhs)],
-            ))
+            match op {
+                BinOp::LOr => {
+                    self.get()?;
+                    let rhs = self.parse_arg()?;
+                    self.check_lhs(&lhs)?;
+                    if let NodeKind::Ident(id, _) = lhs.kind {
+                        lhs = Node::new_lvar(id, lhs.loc());
+                    };
+                    let node = Node::new_binop(
+                        BinOp::LOr,
+                        lhs.clone(),
+                        Node::new_mul_assign(vec![lhs.clone()], vec![rhs]),
+                    );
+                    Ok(node)
+                }
+                _ => {
+                    //let loc = self.loc();
+                    self.get()?;
+                    let rhs = self.parse_arg()?;
+                    self.check_lhs(&lhs)?;
+                    Ok(Node::new_mul_assign(
+                        vec![lhs.clone()],
+                        vec![Node::new_binop(op, lhs, rhs)],
+                    ))
+                }
+            }
         } else {
             Ok(lhs)
         }
@@ -764,10 +782,12 @@ impl Parser {
     fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {
         let cond = self.parse_arg_range()?;
         let loc = cond.loc();
-        if self.consume_punct(Punct::Question) {
-            let then_ = self.parse_arg_ternary()?;
-            self.expect_punct(Punct::Colon)?;
-            let else_ = self.parse_arg_ternary()?;
+        if self.consume_punct_no_term(Punct::Question) {
+            let then_ = self.parse_arg()?;
+            if !self.consume_punct_no_term(Punct::Colon) {
+                return Err(self.error_unexpected(self.loc(), "Expect ':'."));
+            };
+            let else_ = self.parse_arg()?;
             let node = Node::new_if(cond, then_, else_, loc);
             Ok(node)
         } else {
@@ -1042,7 +1062,7 @@ impl Parser {
                                 .error_unexpected(tok.loc(), "method name must be an identifier."))
                         }
                     };
-                    let id = self.get_ident_id(&method);
+                    let id = self.get_ident_id(method);
                     let mut args = vec![];
                     let mut completed = false;
                     if self.consume_punct_no_term(Punct::LParen) {
@@ -1161,11 +1181,11 @@ impl Parser {
                 if *has_suffix {
                     match self.get()?.kind {
                         TokenKind::Punct(Punct::Question) => {
-                            let id = self.get_ident_id(&(name.clone() + "?"));
+                            let id = self.get_ident_id(name.clone() + "?");
                             Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
                         }
                         TokenKind::Punct(Punct::Not) => {
-                            let id = self.get_ident_id(&(name.clone() + "!"));
+                            let id = self.get_ident_id(name.clone() + "!");
                             Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
                         }
                         _ => return Err(self.error_unexpected(tok.loc, "Illegal method name.")),
@@ -1206,53 +1226,22 @@ impl Parser {
                     let loc = loc.merge(self.prev_loc());
                     Ok(Node::new_array(nodes, loc))
                 }
-                Punct::LBrace => {
-                    let mut kvp = vec![];
-                    let loc = self.prev_loc();
-                    if self.consume_punct(Punct::RBrace) {
-                        return Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())));
-                    };
-                    loop {
-                        let ident_loc = self.loc();
-                        let mut symbol_flag = false;
-                        let key = if self.peek().can_be_symbol() {
-                            self.save_state();
-                            let token = self.get()?.clone();
-                            let ident = self.token_as_symbol(&token);
-                            if self.consume_punct(Punct::Colon) {
-                                self.discard_state();
-                                let id = self.get_ident_id(&ident);
-                                symbol_flag = true;
-                                Node::new_symbol(id, ident_loc)
-                            } else {
-                                self.restore_state();
-                                self.parse_arg()?
-                            }
-                        } else {
-                            self.parse_arg()?
-                        };
-                        if !symbol_flag {
-                            self.expect_punct(Punct::FatArrow)?
-                        };
-                        let value = self.parse_arg()?;
-                        kvp.push((key, value));
-                        if self.consume_punct(Punct::RBrace) {
-                            break;
-                        };
-                        self.expect_punct(Punct::Comma)?;
-                    }
-                    Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
-                }
+                Punct::LBrace => self.parse_hash_literal(),
                 Punct::Colon => {
                     let symbol_loc = self.loc();
-                    let token = self.get()?.clone();
-                    if !token.can_be_symbol() {
-                        return Err(
-                            self.error_unexpected(symbol_loc, "Expect identifier or string.")
-                        );
+                    let token = self.get()?;
+                    let id = match &token.kind {
+                        TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
+                        _ if token.can_be_symbol() => {
+                            let ident = self.token_as_symbol(&token);
+                            self.get_ident_id(ident)
+                        }
+                        _ => {
+                            return Err(
+                                self.error_unexpected(symbol_loc, "Expect identifier or string.")
+                            )
+                        }
                     };
-                    let ident = self.token_as_symbol(&token);
-                    let id = self.get_ident_id(&ident);
                     Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
                 }
                 Punct::Arrow => {
@@ -1407,6 +1396,11 @@ impl Parser {
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
             TokenKind::Reserved(Reserved::Self_) => Ok(Node::new_self(loc)),
+            TokenKind::Reserved(Reserved::Begin) => {
+                let node = self.parse_comp_stmt()?;
+                self.expect_reserved(Reserved::End)?;
+                Ok(node)
+            }
             TokenKind::EOF => return Err(self.error_eof(loc)),
             _ => {
                 return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
@@ -1455,6 +1449,44 @@ impl Parser {
                 }
             }
         }
+    }
+
+    fn parse_hash_literal(&mut self) -> Result<Node, RubyError> {
+        let mut kvp = vec![];
+        let loc = self.prev_loc();
+        loop {
+            if self.consume_punct(Punct::RBrace) {
+                return Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())));
+            };
+            let ident_loc = self.loc();
+            let mut symbol_flag = false;
+            let key = if self.peek().can_be_symbol() {
+                self.save_state();
+                let token = self.get()?.clone();
+                let ident = self.token_as_symbol(&token);
+                if self.consume_punct(Punct::Colon) {
+                    self.discard_state();
+                    let id = self.get_ident_id(ident);
+                    symbol_flag = true;
+                    Node::new_symbol(id, ident_loc)
+                } else {
+                    self.restore_state();
+                    self.parse_arg()?
+                }
+            } else {
+                self.parse_arg()?
+            };
+            if !symbol_flag {
+                self.expect_punct(Punct::FatArrow)?
+            };
+            let value = self.parse_arg()?;
+            kvp.push((key, value));
+            if !self.consume_punct(Punct::Comma) {
+                break;
+            };
+        }
+        self.expect_punct(Punct::RBrace)?;
+        Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
     }
 
     fn parse_if_then(&mut self) -> Result<Node, RubyError> {
@@ -1530,17 +1562,23 @@ impl Parser {
             TokenKind::Ident(name, has_suffix) => {
                 if has_suffix {
                     match self.get()?.kind {
-                        TokenKind::Punct(Punct::Question) => self.get_ident_id(&(name + "?")),
-                        TokenKind::Punct(Punct::Not) => self.get_ident_id(&(name + "!")),
+                        TokenKind::Punct(Punct::Question) => self.get_ident_id(name + "?"),
+                        TokenKind::Punct(Punct::Not) => self.get_ident_id(name + "!"),
                         _ => return Err(self.error_unexpected(tok.loc, "Illegal method name.")),
                     }
                 } else {
-                    self.get_ident_id(&name)
+                    match self.peek_no_term().kind {
+                        TokenKind::Punct(Punct::Assign) => {
+                            self.get()?;
+                            self.get_ident_id(name + "=")
+                        }
+                        _ => self.get_ident_id(name),
+                    }
                 }
             }
-            TokenKind::Punct(Punct::Plus) => self.get_ident_id(&"@add".to_string()),
-            TokenKind::Punct(Punct::Minus) => self.get_ident_id(&"@sub".to_string()),
-            TokenKind::Punct(Punct::Mul) => self.get_ident_id(&"@mul".to_string()),
+            TokenKind::Punct(Punct::Plus) => self.get_ident_id("+"),
+            TokenKind::Punct(Punct::Minus) => self.get_ident_id("-"),
+            TokenKind::Punct(Punct::Mul) => self.get_ident_id("*"),
             _ => return Err(self.error_unexpected(self.loc(), "Expected identifier or operator.")),
         };
         self.context_stack.push(Context::new_method());
@@ -1548,6 +1586,7 @@ impl Parser {
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         let lvar = self.context_stack.pop().unwrap().lvar;
+        #[cfg(feature = "verbose")]
         eprintln!("Parsed def name:{}", self.ident_table.get_name(id));
         if is_class_method {
             Ok(Node::new_class_method_decl(id, args, body, lvar))
@@ -1629,7 +1668,7 @@ impl Parser {
             };
             self.parse_expr()?
         } else {
-            Node::new_const(IdentId::OBJECT, true, loc)
+            Node::new_const(IdentId::from(0usize), false, loc)
         };
         self.consume_term();
         let id = self.get_ident_id(&name);
@@ -1637,6 +1676,7 @@ impl Parser {
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         let lvar = self.context_stack.pop().unwrap().lvar;
+        #[cfg(feature = "verbose")]
         eprintln!(
             "Parsed {} name:{}",
             if is_module { "module" } else { "class" },
@@ -1645,5 +1685,22 @@ impl Parser {
         Ok(Node::new_class_decl(
             id, superclass, body, lvar, is_module, loc,
         ))
+    }
+
+    fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, RubyError> {
+        match punct {
+            Punct::LBracket => {
+                if self.consume_punct_no_term(Punct::RBracket) {
+                    if self.consume_punct_no_term(Punct::Assign) {
+                        Ok(self.get_ident_id("[]="))
+                    } else {
+                        Ok(self.get_ident_id("[]"))
+                    }
+                } else {
+                    Err(self.error_unexpected(self.loc(), "Invalid symbol literal."))
+                }
+            }
+            _ => Err(self.error_unexpected(self.prev_loc(), "Invalid symbol literal.")),
+        }
     }
 }

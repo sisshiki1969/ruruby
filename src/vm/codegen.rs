@@ -108,7 +108,7 @@ impl Codegen {
 
     fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &String) {
         iseq.push(Inst::PUSH_STRING);
-        let id = globals.get_ident_id(s.clone());
+        let id = globals.get_ident_id(s);
         self.push32(iseq, id.into());
     }
 
@@ -916,10 +916,11 @@ impl Codegen {
                     }
                     BinOp::LOr => {
                         self.gen(globals, iseq, lhs, true)?;
+                        self.gen_dup(iseq, 1);
                         let src1 = self.gen_jmp_if_false(iseq);
-                        iseq.push(Inst::PUSH_TRUE);
                         let src2 = self.gen_jmp(iseq);
                         self.write_disp_from_cur(iseq, src1);
+                        self.gen_pop(iseq);
                         self.gen(globals, iseq, rhs, true)?;
                         self.write_disp_from_cur(iseq, src2);
                     }
@@ -1080,19 +1081,26 @@ impl Codegen {
             NodeKind::MulAssign(mlhs, mrhs) => {
                 let lhs_len = mlhs.len();
                 let rhs_len = mrhs.len();
-                let splat_flag = match mrhs[0].kind {
-                    NodeKind::Splat(_) => true,
-                    _ => false,
-                };
-                if lhs_len == 1 && rhs_len == 1 {
-                    self.gen(globals, iseq, &mrhs[0], true)?;
-                    if splat_flag {
-                        self.gen_create_array(iseq, 1);
+                let splat_flag = mrhs.iter().any(|x| {
+                    if let NodeKind::Splat(_) = x.kind {
+                        true
+                    } else {
+                        false
+                    }
+                });
+                if lhs_len == rhs_len && !splat_flag {
+                    for rhs in mrhs.iter().rev() {
+                        self.gen(globals, iseq, rhs, true)?;
                     }
                     if use_value {
-                        self.gen_dup(iseq, 1);
+                        self.gen_dup(iseq, rhs_len);
+                    }
+                    for lhs in mlhs {
+                        self.gen_assign(globals, iseq, lhs)?;
+                    }
+                    if use_value && rhs_len != 1 {
+                        self.gen_create_array(iseq, rhs_len);
                     };
-                    self.gen_assign(globals, iseq, &mlhs[0])?;
                 } else if lhs_len == 1 {
                     for rhs in mrhs.iter().rev() {
                         self.gen(globals, iseq, rhs, true)?;

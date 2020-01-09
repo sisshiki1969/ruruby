@@ -66,7 +66,7 @@ impl Globals {
     }
 
     pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
-        self.ident_table.get_ident_id(&name.into())
+        self.ident_table.get_ident_id(name)
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {

@@ -216,8 +216,13 @@ fn op4() {
 
 #[test]
 fn op9() {
-    let program = "4!=4 || 1==1 && 2==3";
-    let expected = Value::Bool(false);
+    let program = "
+        assert(4, 4 || 5)
+        assert(4, 4 || nil)
+        assert(4, nil || 4)
+        assert(nil, nil || nil)
+        ";
+    let expected = Value::Nil;
     eval_script(program, expected);
 }
 
