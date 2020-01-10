@@ -270,6 +270,25 @@ fn int4() {
 }
 
 #[test]
+fn int_index() {
+    let program = "
+        i = 0b0100_1101
+        assert(0, i[-5])
+        assert(1, i[0])
+        assert(0, i[1])
+        assert(1, i[2])
+        assert(1, i[3])
+        assert(0, i[4])
+        assert(0, i[5])
+        assert(1, i[6])
+        assert(0, i[7])
+        assert(0, i[700])
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn triple_equal() {
     let program = r#"
         assert(true, 1 === 1)
@@ -642,6 +661,7 @@ fn array2() {
     let expected = Value::Nil;
     eval_script(program, expected);
 }
+
 #[test]
 fn array3() {
     let program = "
@@ -650,6 +670,18 @@ fn array3() {
     a[2,3] = 100
     assert(a, [1,2,100,6,7])
     ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn array_push() {
+    let program = r#"
+    a = [1,2,3]
+    a << 4
+    a << "Ruby"
+    assert([1,2,3,4,"Ruby"], a)
+    "#;
     let expected = Value::Nil;
     eval_script(program, expected);
 }
@@ -685,6 +717,19 @@ fn array_each() {
     b = 0
     assert([1,2,3], a.each {|x| b+=x })
     assert(6, b)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn array_reverse() {
+    let program = "
+    a = [1,2,3,4,5]
+    assert([5,4,3,2,1], a.reverse)
+    assert([1,2,3,4,5], a)
+    assert([5,4,3,2,1], a.reverse!)
+    assert([5,4,3,2,1], a)
     ";
     let expected = Value::Nil;
     eval_script(program, expected);

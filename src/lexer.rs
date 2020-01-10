@@ -397,6 +397,9 @@ impl Lexer {
             Ok(ch) if ch == '!' || ch == '?' => true,
             _ => false,
         };
+        if is_instance_var {
+            return Ok(self.new_instance_var(tok));
+        };
         match self.reserved.get(&tok) {
             Some(reserved) => Ok(self.new_reserved(*reserved)),
             None => {

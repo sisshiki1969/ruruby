@@ -569,8 +569,8 @@ impl VM {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
                     let arg_num = args.len();
-                    match self.exec_stack.pop().unwrap().as_object() {
-                        Some(oref) => {
+                    match self.exec_stack.pop().unwrap().unpack() {
+                        Value::Object(oref) => {
                             match oref.kind {
                                 ObjKind::Array(aref) => {
                                     self.check_args_num(arg_num, 1, 2)?;
@@ -612,7 +612,17 @@ impl VM {
                                 }
                             };
                         }
-                        None => {
+                        Value::FixNum(i) => {
+                            self.check_args_num(arg_num, 1, 1)?;
+                            let index = args[0].expect_fixnum(&self, "Index")?;
+                            let val = if index < 0 || 63 < index {
+                                0
+                            } else {
+                                (i >> index) & 1
+                            };
+                            self.exec_stack.push(PackedValue::fixnum(val));
+                        }
+                        _ => {
                             return Err(self.error_unimplemented(
                                 "Currently, [] is supported only for Array and Hash.",
                             ))
@@ -1280,7 +1290,25 @@ impl VM {
     fn eval_shl(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs << rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '<<'")),
+            (Value::Object(l_ref), _) => {
+                let method = self.globals.get_ident_id("<<");
+                match l_ref.get_instance_method(method) {
+                    Some(mref) => {
+                        self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None)?;
+                        Ok(self.exec_stack.pop().unwrap())
+                    }
+                    None => Err(self.error_undefined_method(
+                        format!("<< {}", self.globals.get_class_name(rhs)),
+                        self.globals.get_class_name(lhs),
+                    )),
+                }
+            }
+            (_, _) => {
+                return Err(self.error_undefined_method(
+                    format!("<< {}", self.globals.get_class_name(rhs)),
+                    self.globals.get_class_name(lhs),
+                ))
+            }
         }
     }
 

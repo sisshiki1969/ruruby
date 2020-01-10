@@ -23,6 +23,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     let array_id = globals.get_ident_id("Array");
     let array_class = ClassRef::from(array_id, globals.object_class);
     globals.add_builtin_instance_method(array_class, "push", array::array_push);
+    globals.add_builtin_instance_method(array_class, "<<", array::array_push);
     globals.add_builtin_instance_method(array_class, "pop", array::array_pop);
     globals.add_builtin_instance_method(array_class, "length", array::array_length);
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
@@ -30,6 +31,8 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "map", array::array_map);
     globals.add_builtin_instance_method(array_class, "each", array::array_each);
     globals.add_builtin_instance_method(array_class, "include?", array::array_include);
+    globals.add_builtin_instance_method(array_class, "reverse", array::array_reverse);
+    globals.add_builtin_instance_method(array_class, "reverse!", array::array_reverse_);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -216,4 +219,33 @@ fn array_include(
             Err(_) => false,
         });
     Ok(PackedValue::bool(res))
+}
+
+fn array_reverse(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let mut res = aref.elements.clone();
+    res.reverse();
+    Ok(PackedValue::array(&vm.globals, ArrayRef::from(res)))
+}
+
+fn array_reverse_(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    aref.elements.reverse();
+    Ok(receiver)
 }

@@ -733,7 +733,7 @@ impl Parser {
         if self.is_line_term() {
             return Ok(lhs);
         }
-        if self.consume_punct(Punct::Assign) {
+        if self.consume_punct_no_term(Punct::Assign) {
             let mrhs = self.parse_args(None)?;
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
