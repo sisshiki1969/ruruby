@@ -28,6 +28,7 @@ pub fn init_range(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(class, "first", range_first);
     globals.add_builtin_instance_method(class, "end", range_end);
     globals.add_builtin_instance_method(class, "last", range_last);
+    globals.add_builtin_instance_method(class, "to_a", range_toa);
     globals.add_builtin_class_method(class, "new", range_new);
     class
 }
@@ -143,9 +144,32 @@ fn range_map(
             Some(context),
             VecArray::new1(PackedValue::fixnum(i)),
             None,
+            None,
         )?;
         res.push(vm.exec_stack.pop().unwrap());
     }
     let res = PackedValue::array(&vm.globals, ArrayRef::from(res));
     Ok(res)
+}
+
+fn range_toa(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let range = receiver.as_range().unwrap();
+    let start = range.start.expect_fixnum(&vm, "Range.start")?;
+    let end = range.end.expect_fixnum(&vm, "Range.end")?;
+    let mut v = vec![];
+    if range.exclude {
+        for i in start..end {
+            v.push(PackedValue::fixnum(i));
+        }
+    } else {
+        for i in start..=end {
+            v.push(PackedValue::fixnum(i));
+        }
+    }
+    Ok(PackedValue::array(&vm.globals, ArrayRef::from(v)))
 }

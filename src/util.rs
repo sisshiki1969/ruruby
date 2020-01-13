@@ -274,6 +274,7 @@ impl IdentifierTable {
             table_rev: HashMap::new(),
             ident_id: 20,
         };
+        table.set_ident_id("<null>", 0);
         table.set_ident_id("initialize", INITIALIZE);
         table.set_ident_id("Object", OBJECT);
         table.set_ident_id("new", NEW);

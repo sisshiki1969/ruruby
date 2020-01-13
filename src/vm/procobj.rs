@@ -63,6 +63,7 @@ fn proc_call(
         pref.context.outer,
         args,
         None,
+        None,
     )?;
     let res = vm.exec_stack.pop().unwrap();
     Ok(res)

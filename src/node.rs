@@ -69,7 +69,10 @@ pub enum NodeKind {
     Return(Box<Node>),
 
     Param(IdentId),
-    DefaultParam(IdentId, Box<Node>),
+    PostParam(IdentId),
+    OptionalParam(IdentId, Box<Node>),
+    RestParam(IdentId),
+    KeywordParam(IdentId, Box<Option<Node>>),
     BlockParam(IdentId),
 
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
@@ -85,6 +88,7 @@ pub enum NodeKind {
         receiver: Box<Node>,
         method: IdentId,
         args: NodeVec,
+        keyword_arg: Vec<(IdentId, Node)>,
         block: Option<Box<Node>>,
         completed: bool,
     }, //receiver, method_name, args
@@ -236,8 +240,20 @@ impl Node {
         Node::new(NodeKind::Param(id), loc)
     }
 
-    pub fn new_default_param(id: IdentId, default: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::DefaultParam(id, Box::new(default)), loc)
+    pub fn new_optional_param(id: IdentId, default: Node, loc: Loc) -> Self {
+        Node::new(NodeKind::OptionalParam(id, Box::new(default)), loc)
+    }
+
+    pub fn new_splat_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::RestParam(id), loc)
+    }
+
+    pub fn new_post_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::PostParam(id), loc)
+    }
+
+    pub fn new_keyword_param(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
+        Node::new(NodeKind::KeywordParam(id, Box::new(default)), loc)
     }
 
     pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
@@ -316,6 +332,7 @@ impl Node {
         receiver: Node,
         method: IdentId,
         mut args: Vec<Node>,
+        keyword_arg: Vec<(IdentId, Node)>,
         block: Option<Box<Node>>,
         completed: bool,
         loc: Loc,
@@ -330,6 +347,7 @@ impl Node {
                 receiver: Box::new(receiver),
                 method,
                 args,
+                keyword_arg,
                 block,
                 completed,
             },

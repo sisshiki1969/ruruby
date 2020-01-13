@@ -117,6 +117,7 @@ fn hash_select(
             Some(context),
             VecArray::new2(k.clone(), v.clone()),
             None,
+            None,
         )?;
         let b = vm.exec_stack.pop().unwrap();
         if vm.val_to_bool(b) {

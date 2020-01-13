@@ -28,6 +28,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "length", array::array_length);
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
     globals.add_builtin_instance_method(array_class, "*", array::array_mul);
+    globals.add_builtin_instance_method(array_class, "+", array::array_add);
     globals.add_builtin_instance_method(array_class, "map", array::array_map);
     globals.add_builtin_instance_method(array_class, "each", array::array_each);
     globals.add_builtin_instance_method(array_class, "include?", array::array_include);
@@ -144,6 +145,26 @@ fn array_mul(
     Ok(res)
 }
 
+fn array_add(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let mut lhs = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?
+        .elements
+        .clone();
+    let mut rhs = args[0]
+        .as_array()
+        .ok_or(vm.error_nomethod("An arg must be an array."))?
+        .elements
+        .clone();
+    lhs.append(&mut rhs);
+    Ok(PackedValue::array(&vm.globals, ArrayRef::from(lhs)))
+}
+
 fn array_map(
     vm: &mut VM,
     receiver: PackedValue,
@@ -165,6 +186,7 @@ fn array_map(
             iseq,
             Some(context),
             VecArray::new1(i.clone()),
+            None,
             None,
         )?;
         res.push(vm.exec_stack.pop().unwrap());
@@ -193,6 +215,7 @@ fn array_each(
             iseq,
             Some(context),
             VecArray::new1(i.clone()),
+            None,
             None,
         )?;
         vm.exec_stack.pop().unwrap();

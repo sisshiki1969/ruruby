@@ -59,9 +59,15 @@ pub type ISeqRef = Ref<ISeqInfo>;
 
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
-    pub params: Vec<LvarId>,
+    pub req_params: usize,
+    pub opt_params: usize,
+    pub rest_param: bool,
+    pub post_params: usize,
+    pub block_param: bool,
     pub min_params: usize,
     pub max_params: usize,
+    pub param_ident: Vec<IdentId>,
+    pub keyword_params: HashMap<IdentId, LvarId>,
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
@@ -71,9 +77,15 @@ pub struct ISeqInfo {
 
 impl ISeqInfo {
     pub fn new(
-        params: Vec<LvarId>,
+        req_params: usize,
+        opt_params: usize,
+        rest_param: bool,
+        post_params: usize,
+        block_param: bool,
         min_params: usize,
         max_params: usize,
+        param_ident: Vec<IdentId>,
+        keyword_params: HashMap<IdentId, LvarId>,
         iseq: ISeq,
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
@@ -81,9 +93,15 @@ impl ISeqInfo {
     ) -> Self {
         let lvars = lvar.len();
         ISeqInfo {
-            params,
+            req_params,
+            opt_params,
+            rest_param,
+            post_params,
+            block_param,
             min_params,
             max_params,
+            param_ident,
+            keyword_params,
             iseq,
             lvar,
             lvars,
@@ -169,7 +187,7 @@ fn method_call(
         Some(method) => method,
         None => return Err(vm.error_unimplemented("Expected Method object.")),
     };
-    vm.eval_send(method.method, method.receiver, args, block)?;
+    vm.eval_send(method.method, method.receiver, args, None, block)?;
     let res = vm.exec_stack.pop().unwrap();
     Ok(res)
 }

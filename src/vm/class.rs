@@ -79,7 +79,7 @@ fn class_new(
     // call initialize method.
     if let Some(methodref) = class.get_instance_method(IdentId::INITIALIZE) {
         let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
-        vm.vm_run(new_instance, iseq, None, args, None)?;
+        vm.vm_run(new_instance, iseq, None, args, None, None)?;
         vm.exec_stack.pop().unwrap();
     };
     Ok(new_instance)

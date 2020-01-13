@@ -37,6 +37,7 @@ fn integer_times(
                     Some(context),
                     VecArray::new1(PackedValue::fixnum(i)),
                     None,
+                    None,
                 )?;
                 vm.exec_stack.pop().unwrap();
             }

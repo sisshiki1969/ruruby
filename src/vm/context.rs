@@ -51,24 +51,51 @@ impl Context {
         }
     }
 
+    pub fn set_lvar(&mut self, id: usize, val: PackedValue) {
+        if id < LVAR_ARRAY_SIZE {
+            self.lvar_scope[id] = val;
+        } else {
+            self.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
+        }
+    }
+
     pub fn get_mut_lvar(&mut self, id: LvarId) -> &mut PackedValue {
         let id = id.as_usize();
         if id < LVAR_ARRAY_SIZE {
             &mut self.lvar_scope[id]
         } else {
+            eprintln!(
+                "id:{} LVAR_ARRAY_SIZE:{} ext_lvar:{}",
+                id,
+                LVAR_ARRAY_SIZE,
+                self.ext_lvar.len()
+            );
             &mut self.ext_lvar[id - LVAR_ARRAY_SIZE]
         }
     }
 
-    pub fn set_arguments(&mut self, args: VecArray) {
-        let arg_len = std::cmp::min(args.len(), self.iseq_ref.params.len());
-        if arg_len <= LVAR_ARRAY_SIZE {
-            self.lvar_scope[0..arg_len].clone_from_slice(args.get_slice(0, arg_len));
-        } else {
-            self.lvar_scope[0..LVAR_ARRAY_SIZE]
-                .clone_from_slice(args.get_slice(0, LVAR_ARRAY_SIZE));
-            self.ext_lvar[0..arg_len - LVAR_ARRAY_SIZE]
-                .clone_from_slice(args.get_slice(LVAR_ARRAY_SIZE, arg_len));
+    pub fn set_arguments(&mut self, globals: &Globals, args: VecArray) {
+        let arg_len = args.len();
+        let req_len = self.iseq_ref.req_params;
+        let opt_len = self.iseq_ref.opt_params;
+        let rest_len = if self.iseq_ref.rest_param { 1 } else { 0 };
+        let post_len = self.iseq_ref.post_params;
+        let post_pos = req_len + opt_len + rest_len;
+        for i in 0..std::cmp::min(opt_len + req_len, arg_len - post_len) {
+            self.set_lvar(i, args[i]);
+        }
+        for i in 0..post_len {
+            self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
+        }
+        if rest_len == 1 {
+            let ary = if req_len + opt_len + post_len >= arg_len {
+                vec![]
+            } else {
+                args.get_slice(req_len + opt_len, arg_len - post_len)
+                    .to_vec()
+            };
+            let val = PackedValue::array(globals, ArrayRef::from(ary));
+            self.set_lvar(req_len + opt_len, val);
         }
     }
 }
