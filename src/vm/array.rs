@@ -34,6 +34,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "include?", array::array_include);
     globals.add_builtin_instance_method(array_class, "reverse", array::array_reverse);
     globals.add_builtin_instance_method(array_class, "reverse!", array::array_reverse_);
+    globals.add_builtin_instance_method(array_class, "transpose", array::array_transpose);
     globals.add_builtin_class_method(array_class, "new", array::array_new);
     array_class
 }
@@ -65,7 +66,7 @@ fn array_new(
         }
         _ => unreachable!(),
     };
-    let array = PackedValue::array(&mut vm.globals, ArrayRef::from(array_vec));
+    let array = PackedValue::array_from(&vm.globals, array_vec);
     Ok(array)
 }
 
@@ -141,7 +142,7 @@ fn array_mul(
         },
         _ => return Err(vm.error_nomethod(" ")),
     };
-    let res = PackedValue::array(&vm.globals, ArrayRef::from(v));
+    let res = PackedValue::array_from(&vm.globals, v);
     Ok(res)
 }
 
@@ -162,7 +163,7 @@ fn array_add(
         .elements
         .clone();
     lhs.append(&mut rhs);
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(lhs)))
+    Ok(PackedValue::array_from(&vm.globals, lhs))
 }
 
 fn array_map(
@@ -191,7 +192,7 @@ fn array_map(
         )?;
         res.push(vm.exec_stack.pop().unwrap());
     }
-    let res = PackedValue::array(&vm.globals, ArrayRef::from(res));
+    let res = PackedValue::array_from(&vm.globals, res);
     Ok(res)
 }
 
@@ -256,7 +257,7 @@ fn array_reverse(
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     let mut res = aref.elements.clone();
     res.reverse();
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(res)))
+    Ok(PackedValue::array_from(&vm.globals, res))
 }
 
 fn array_reverse_(
@@ -271,4 +272,44 @@ fn array_reverse_(
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     aref.elements.reverse();
     Ok(receiver)
+}
+
+fn array_transpose(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    if aref.elements.len() == 0 {
+        return Ok(PackedValue::array_from(&vm.globals, vec![]));
+    }
+    let mut vec = vec![];
+    for elem in &aref.elements {
+        let ary = elem
+            .as_array()
+            .ok_or(vm.error_nomethod("Each element of receiver must be an array."))?
+            .elements
+            .clone();
+        vec.push(ary);
+    }
+    let len = vec[0].len();
+    let mut trans = vec![];
+    for i in 0..len {
+        let mut temp = vec![];
+        for v in &vec {
+            if v.len() != len {
+                return Err(vm.error_index("Element size differs."));
+            }
+            temp.push(v[i].clone());
+        }
+        let ary = PackedValue::array_from(&vm.globals, temp);
+        trans.push(ary);
+    }
+    //aref.elements.reverse();
+    let res = PackedValue::array_from(&vm.globals, trans);
+    Ok(res)
 }

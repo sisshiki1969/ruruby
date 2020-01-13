@@ -29,6 +29,14 @@ pub struct LexerResult {
     pub tokens: Vec<Token>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum VarKind {
+    Identifier,
+    InstanceVar,
+    ClassVar,
+    GlobalVar,
+}
+
 impl Lexer {
     pub fn new() -> Self {
         let mut reserved = HashMap::new();
@@ -152,7 +160,7 @@ impl Lexer {
             };
 
             let token = if ch.is_ascii_alphabetic() || ch == '_' {
-                self.lex_identifier(ch, false)?
+                self.lex_identifier(ch, VarKind::Identifier)?
             } else if ch.is_numeric() {
                 self.lex_number_literal(ch)?
             } else if ch.is_ascii_punctuation() {
@@ -202,6 +210,9 @@ impl Lexer {
                         if ch1 == '=' {
                             self.get()?;
                             self.new_punct(Punct::AssignOp(BinOp::Mul))
+                        } else if ch1 == '*' {
+                            self.get()?;
+                            self.new_punct(Punct::DMul)
                         } else {
                             self.new_punct(Punct::Mul)
                         }
@@ -361,12 +372,16 @@ impl Lexer {
                     }
                     '@' => {
                         let ch = self.get()?;
-                        self.lex_identifier(ch, true)?
+                        self.lex_identifier(ch, VarKind::InstanceVar)?
+                    }
+                    '$' => {
+                        let ch = self.get()?;
+                        self.lex_identifier(ch, VarKind::GlobalVar)?
                     }
                     _ => return Err(self.error_unexpected(pos)), //unimplemented!("{}", ch),
                 }
             } else {
-                self.lex_identifier(ch, false)?
+                self.lex_identifier(ch, VarKind::Identifier)?
             };
             if token.kind != TokenKind::Nop {
                 tokens.push(token);
@@ -376,7 +391,7 @@ impl Lexer {
         Ok(LexerResult::new(tokens))
     }
 
-    fn lex_identifier(&mut self, ch: char, is_instance_var: bool) -> Result<Token, RubyError> {
+    fn lex_identifier(&mut self, ch: char, var_kind: VarKind) -> Result<Token, RubyError> {
         // read identifier or reserved keyword
         let is_const = ch.is_ascii_uppercase();
         let mut tok = ch.to_string();
@@ -397,15 +412,17 @@ impl Lexer {
             Ok(ch) if ch == '!' || ch == '?' => true,
             _ => false,
         };
-        if is_instance_var {
-            return Ok(self.new_instance_var(tok));
-        };
+        match var_kind {
+            VarKind::InstanceVar => return Ok(self.new_instance_var(tok)),
+            VarKind::GlobalVar => return Ok(self.new_global_var(tok)),
+            _ => {}
+        }
         match self.reserved.get(&tok) {
             Some(reserved) => Ok(self.new_reserved(*reserved)),
             None => {
                 if is_const {
                     Ok(self.new_const(tok))
-                } else if is_instance_var {
+                } else if var_kind == VarKind::InstanceVar {
                     Ok(self.new_instance_var(tok))
                 } else {
                     Ok(self.new_ident(tok, has_suffix))
@@ -658,6 +675,10 @@ impl Lexer {
 
     fn new_instance_var(&self, ident: impl Into<String>) -> Token {
         Annot::new(TokenKind::InstanceVar(ident.into()), self.cur_loc())
+    }
+
+    fn new_global_var(&self, ident: impl Into<String>) -> Token {
+        Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
     }
 
     fn new_const(&self, ident: impl Into<String>) -> Token {

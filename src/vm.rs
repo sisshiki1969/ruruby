@@ -47,6 +47,7 @@ pub struct VM {
     // Global info
     pub globals: Globals,
     pub root_path: Vec<PathBuf>,
+    pub global_var: ValueTable,
     // VM state
     pub context_stack: Vec<ContextRef>,
     pub class_stack: Vec<ClassRef>,
@@ -86,6 +87,7 @@ impl VM {
         let mut vm = VM {
             globals,
             root_path: vec![],
+            global_var: HashMap::new(),
             class_stack: vec![],
             context_stack: vec![],
             exec_stack: vec![],
@@ -523,6 +525,18 @@ impl VM {
                     self.exec_stack.push(val);
                     self.pc += 5;
                 }
+                Inst::SET_GLOBAL_VAR => {
+                    let var_id = read_id(iseq, self.pc + 1);
+                    let new_val = self.exec_stack.pop().unwrap();
+                    self.set_global_var(var_id, new_val);
+                    self.pc += 5;
+                }
+                Inst::GET_GLOBAL_VAR => {
+                    let var_id = read_id(iseq, self.pc + 1);
+                    let val = self.get_global_var(var_id);
+                    self.exec_stack.push(val);
+                    self.pc += 5;
+                }
                 Inst::SET_ARRAY_ELEM => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
@@ -605,10 +619,8 @@ impl VM {
                                             let end =
                                                 std::cmp::min(aref.elements.len(), index + len);
                                             let ary = (&aref.elements[index..end]).to_vec();
-                                            let ary_object = PackedValue::array(
-                                                &self.globals,
-                                                ArrayRef::from(ary),
-                                            );
+                                            let ary_object =
+                                                PackedValue::array_from(&self.globals, ary);
                                             self.exec_stack.push(ary_object);
                                         }
                                     };
@@ -672,7 +684,7 @@ impl VM {
                 Inst::CREATE_ARRAY => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let elems = self.pop_args(arg_num);
-                    let array = PackedValue::array(&mut self.globals, ArrayRef::from(elems));
+                    let array = PackedValue::array_from(&self.globals, elems);
                     self.exec_stack.push(array);
                     self.pc += 5;
                 }
@@ -1074,6 +1086,17 @@ impl VM {
                 },
             }
         }
+    }
+
+    fn get_global_var(&self, id: IdentId) -> PackedValue {
+        match self.global_var.get(&id) {
+            Some(val) => val.clone(),
+            None => PackedValue::nil(),
+        }
+    }
+
+    fn set_global_var(&mut self, id: IdentId, val: PackedValue) {
+        self.global_var.insert(id, val);
     }
 }
 

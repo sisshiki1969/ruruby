@@ -22,6 +22,7 @@ pub enum NodeKind {
     LocalVar(IdentId),
     Ident(IdentId, bool),
     InstanceVar(IdentId),
+    GlobalVar(IdentId),
     Const {
         toplevel: bool,
         id: IdentId,
@@ -116,6 +117,7 @@ pub enum BinOp {
     Mul,
     Div,
     Rem,
+    Exp,
     Shr,
     Shl,
     BitAnd,
@@ -270,6 +272,10 @@ impl Node {
 
     pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::InstanceVar(id), loc)
+    }
+
+    pub fn new_global_var(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::GlobalVar(id), loc)
     }
 
     pub fn new_const(id: IdentId, toplevel: bool, loc: Loc) -> Self {

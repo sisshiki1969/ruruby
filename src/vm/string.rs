@@ -4,6 +4,8 @@ pub fn init_string(globals: &mut Globals) -> ClassRef {
     let id = globals.get_ident_id("String");
     let class = ClassRef::from(id, globals.object_class);
     globals.add_builtin_instance_method(class, "start_with?", string_start_with);
+    globals.add_builtin_instance_method(class, "to_sym", string_to_sym);
+    globals.add_builtin_instance_method(class, "intern", string_to_sym);
     /*
     globals.add_builtin_class_method(class, "new", range_new);
     */
@@ -24,4 +26,16 @@ fn string_start_with(
     };
     let res = string.starts_with(&arg);
     Ok(PackedValue::bool(res))
+}
+
+fn string_to_sym(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let string = receiver.as_string().unwrap();
+    let id = vm.globals.get_ident_id(string);
+    Ok(PackedValue::symbol(id))
 }

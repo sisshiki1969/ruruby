@@ -93,7 +93,7 @@ fn range_first(
     for i in start..=end {
         v.push(PackedValue::fixnum(i));
     }
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(v)))
+    Ok(PackedValue::array_from(&vm.globals, v))
 }
 
 fn range_last(
@@ -119,7 +119,7 @@ fn range_last(
     for i in start..=end {
         v.push(PackedValue::fixnum(i));
     }
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(v)))
+    Ok(PackedValue::array_from(&vm.globals, v))
 }
 
 fn range_map(
@@ -148,7 +148,7 @@ fn range_map(
         )?;
         res.push(vm.exec_stack.pop().unwrap());
     }
-    let res = PackedValue::array(&vm.globals, ArrayRef::from(res));
+    let res = PackedValue::array_from(&vm.globals, res);
     Ok(res)
 }
 
@@ -171,5 +171,5 @@ fn range_toa(
             v.push(PackedValue::fixnum(i));
         }
     }
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(v)))
+    Ok(PackedValue::array_from(&vm.globals, v))
 }

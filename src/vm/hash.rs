@@ -172,7 +172,7 @@ fn hash_keys(
     for key in hash.map.keys() {
         vec.push(key.clone());
     }
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(vec)))
+    Ok(PackedValue::array_from(&vm.globals, vec))
 }
 
 fn hash_values(
@@ -186,5 +186,5 @@ fn hash_values(
     for val in hash.map.values() {
         vec.push(val.clone());
     }
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(vec)))
+    Ok(PackedValue::array_from(&vm.globals, vec))
 }

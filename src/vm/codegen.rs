@@ -244,6 +244,16 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
+    fn gen_get_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::GET_GLOBAL_VAR);
+        self.push32(iseq, id.into());
+    }
+
+    fn gen_set_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::SET_GLOBAL_VAR);
+        self.push32(iseq, id.into());
+    }
+
     fn gen_set_const(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_CONST);
         self.push32(iseq, id.into());
@@ -329,6 +339,7 @@ impl Codegen {
                 self.gen_set_const(iseq, *id);
             }
             NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
+            NodeKind::GlobalVar(id) => self.gen_set_global_var(iseq, *id),
             NodeKind::Send {
                 receiver, method, ..
             } => {
@@ -814,6 +825,12 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
+            NodeKind::GlobalVar(id) => {
+                self.gen_get_global_var(iseq, *id);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
             NodeKind::Const { id, toplevel } => {
                 if *toplevel {
                     self.gen_get_const_top(iseq, *id);
@@ -877,6 +894,12 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::DIV);
+                    }
+                    BinOp::Exp => {
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.save_loc(iseq, loc);
+                        iseq.push(Inst::EXP);
                     }
                     BinOp::Rem => {
                         self.gen(globals, iseq, lhs, true)?;

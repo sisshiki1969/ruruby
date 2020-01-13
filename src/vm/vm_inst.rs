@@ -30,6 +30,7 @@ impl Inst {
 
     pub const ADDI: u8 = 27;
     pub const SUBI: u8 = 28;
+    pub const EXP: u8 = 29;
 
     pub const JMP: u8 = 80;
     pub const JMP_IF_FALSE: u8 = 81;
@@ -43,6 +44,8 @@ impl Inst {
     pub const GET_SCOPE: u8 = 35;
     pub const GET_INSTANCE_VAR: u8 = 36;
     pub const SET_INSTANCE_VAR: u8 = 37;
+    pub const GET_GLOBAL_VAR: u8 = 90;
+    pub const SET_GLOBAL_VAR: u8 = 91;
     pub const GET_ARRAY_ELEM: u8 = 38;
     pub const SET_ARRAY_ELEM: u8 = 39;
 
@@ -89,6 +92,7 @@ impl Inst {
             Inst::MUL => "MUL",
             Inst::DIV => "DIV",
             Inst::REM => "REM",
+            Inst::EXP => "EXP",
             Inst::EQ => "EQ",
             Inst::NE => "NE",
             Inst::GT => "GT",
@@ -114,6 +118,8 @@ impl Inst {
 
             Inst::GET_INSTANCE_VAR => "GET_INST_VAR",
             Inst::SET_INSTANCE_VAR => "SET_INST_VAR",
+            Inst::GET_GLOBAL_VAR => "GET_GLBL_VAR",
+            Inst::SET_GLOBAL_VAR => "SET_GLBL_VAR",
             Inst::GET_ARRAY_ELEM => "GET_ARY_ELEM",
             Inst::SET_ARRAY_ELEM => "SET_ARY_ELEM",
             Inst::SEND => "SEND",
@@ -150,6 +156,7 @@ impl Inst {
             | Inst::MUL
             | Inst::DIV
             | Inst::REM
+            | Inst::EXP
             | Inst::EQ
             | Inst::NE
             | Inst::GT
@@ -176,6 +183,8 @@ impl Inst {
             | Inst::GET_SCOPE
             | Inst::GET_INSTANCE_VAR
             | Inst::SET_INSTANCE_VAR
+            | Inst::GET_GLOBAL_VAR
+            | Inst::SET_GLOBAL_VAR
             | Inst::GET_ARRAY_ELEM
             | Inst::SET_ARRAY_ELEM
             | Inst::CREATE_ARRAY

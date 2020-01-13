@@ -517,6 +517,10 @@ impl PackedValue {
         PackedValue::object(ObjectRef::new_array(globals, array_ref))
     }
 
+    pub fn array_from(globals: &Globals, ary: Vec<PackedValue>) -> Self {
+        PackedValue::object(ObjectRef::new_array(globals, ArrayRef::from(ary)))
+    }
+
     pub fn splat(globals: &Globals, array_ref: ArrayRef) -> Self {
         PackedValue::object(ObjectRef::new_splat(globals, array_ref))
     }

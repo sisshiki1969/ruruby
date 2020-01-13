@@ -52,7 +52,7 @@ impl Builtin {
             Ok(if args.len() == 1 {
                 args[0]
             } else {
-                PackedValue::array(&vm.globals, ArrayRef::from(args.to_vec()))
+                PackedValue::array_from(&vm.globals, args.to_vec())
             })
         }
 

@@ -501,6 +501,22 @@ fn local_var1() {
 }
 
 #[test]
+fn global_var() {
+    let program = "
+            class A
+                $global = 1250
+            end
+            class B
+                class C
+                    assert(1250, $global)
+                end
+            end
+            ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn mul_assign1() {
     let program = "
             a,b,c = 1,2,3

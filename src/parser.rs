@@ -993,7 +993,13 @@ impl Parser {
     }
 
     fn parse_exponent(&mut self) -> Result<Node, RubyError> {
-        self.parse_unary()
+        let lhs = self.parse_unary()?;
+        if self.consume_punct_no_term(Punct::DMul) {
+            let rhs = self.parse_exponent()?;
+            Ok(Node::new_binop(BinOp::Exp, lhs, rhs))
+        } else {
+            Ok(lhs)
+        }
     }
 
     fn parse_unary(&mut self) -> Result<Node, RubyError> {
@@ -1243,6 +1249,10 @@ impl Parser {
                 let id = self.get_ident_id(name);
                 return Ok(Node::new_instance_var(id, loc));
             }
+            TokenKind::GlobalVar(name) => {
+                let id = self.get_ident_id(name);
+                return Ok(Node::new_global_var(id, loc));
+            }
             TokenKind::Const(name) => {
                 let id = self.get_ident_id(name);
                 Ok(Node::new_const(id, false, loc))
@@ -1279,9 +1289,23 @@ impl Parser {
                             self.get_ident_id(ident)
                         }
                         _ => {
+                            if let TokenKind::OpenDoubleQuote(s) = token.kind {
+                                let node = self.parse_interporated_string_literal(&s)?;
+                                let method = self.ident_table.get_ident_id("to_sym");
+                                let loc = symbol_loc.merge(node.loc());
+                                return Ok(Node::new_send(
+                                    node,
+                                    method,
+                                    vec![],
+                                    vec![],
+                                    None,
+                                    true,
+                                    loc,
+                                ));
+                            }
                             return Err(
                                 self.error_unexpected(symbol_loc, "Expect identifier or string.")
-                            )
+                            );
                         }
                     };
                     Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
@@ -1628,8 +1652,8 @@ impl Parser {
         let body = self.parse_comp_stmt()?;
         self.expect_reserved(Reserved::End)?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        eprintln!("Parsed def name:{}", self.ident_table.get_name(id));
+        //#[cfg(feature = "verbose")]
+        //eprintln!("Parsed def name:{}", self.ident_table.get_name(id));
         if is_class_method {
             Ok(Node::new_class_method_decl(id, args, body, lvar))
         } else {

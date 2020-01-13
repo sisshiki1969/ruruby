@@ -8,6 +8,7 @@ pub fn init_module(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(class, "attr", attr_reader);
     globals.add_builtin_instance_method(class, "attr_reader", attr_reader);
     globals.add_builtin_instance_method(class, "attr_writer", attr_writer);
+    globals.add_builtin_instance_method(class, "module_function", module_function);
     class
 }
 
@@ -23,7 +24,7 @@ fn constants(
         .keys()
         .map(|k| PackedValue::symbol(k.clone()))
         .collect();
-    Ok(PackedValue::array(&vm.globals, ArrayRef::from(v)))
+    Ok(PackedValue::array_from(&vm.globals, v))
 }
 
 fn attr_accessor(
@@ -93,4 +94,13 @@ fn define_writer(vm: &mut VM, class: ClassRef, id: IdentId) {
     let info = MethodInfo::AttrWriter { id };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, assign_id, methodref);
+}
+
+fn module_function(
+    _vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    Ok(receiver)
 }

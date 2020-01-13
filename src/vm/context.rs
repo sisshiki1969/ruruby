@@ -94,7 +94,7 @@ impl Context {
                 args.get_slice(req_len + opt_len, arg_len - post_len)
                     .to_vec()
             };
-            let val = PackedValue::array(globals, ArrayRef::from(ary));
+            let val = PackedValue::array_from(globals, ary);
             self.set_lvar(req_len + opt_len, val);
         }
     }
