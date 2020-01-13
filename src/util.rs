@@ -7,6 +7,7 @@ const NEW: usize = 3;
 const _ADD: usize = 4;
 const _SUB: usize = 5;
 const _MUL: usize = 6;
+const _POW: usize = 7;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -258,6 +259,7 @@ impl IdentId {
     pub const _ADD: IdentId = IdentId(to!(_ADD));
     pub const _SUB: IdentId = IdentId(to!(_SUB));
     pub const _MUL: IdentId = IdentId(to!(_MUL));
+    pub const _POW: IdentId = IdentId(to!(_POW));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -281,6 +283,7 @@ impl IdentifierTable {
         table.set_ident_id("+", _ADD);
         table.set_ident_id("-", _SUB);
         table.set_ident_id("*", _MUL);
+        table.set_ident_id("**", _POW);
         table
     }
 

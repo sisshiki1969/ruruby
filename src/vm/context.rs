@@ -64,12 +64,6 @@ impl Context {
         if id < LVAR_ARRAY_SIZE {
             &mut self.lvar_scope[id]
         } else {
-            eprintln!(
-                "id:{} LVAR_ARRAY_SIZE:{} ext_lvar:{}",
-                id,
-                LVAR_ARRAY_SIZE,
-                self.ext_lvar.len()
-            );
             &mut self.ext_lvar[id - LVAR_ARRAY_SIZE]
         }
     }

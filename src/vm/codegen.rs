@@ -899,7 +899,7 @@ impl Codegen {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
-                        iseq.push(Inst::EXP);
+                        iseq.push(Inst::POW);
                     }
                     BinOp::Rem => {
                         self.gen(globals, iseq, lhs, true)?;

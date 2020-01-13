@@ -330,6 +330,12 @@ impl VM {
                     self.eval_mul(lhs, rhs)?;
                     self.pc += 1;
                 }
+                Inst::POW => {
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let rhs = self.exec_stack.pop().unwrap();
+                    self.eval_exp(lhs, rhs)?;
+                    self.pc += 1;
+                }
                 Inst::DIV => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
@@ -948,22 +954,41 @@ impl VM {
             loc,
         )
     }
+    pub fn error_undefined_op(
+        &self,
+        method_name: impl Into<String>,
+        rhs: PackedValue,
+        lhs: PackedValue,
+    ) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(
+            RuntimeErrKind::NoMethod(format!(
+                "undefined method `{}' {} for {}",
+                method_name.into(),
+                self.globals.get_class_name(rhs),
+                self.globals.get_class_name(lhs)
+            )),
+            self.source_info(),
+            loc,
+        )
+    }
     pub fn error_undefined_method(
         &self,
         method_name: impl Into<String>,
-        class_name: impl Into<String>,
+        receiver: PackedValue,
     ) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
             RuntimeErrKind::NoMethod(format!(
                 "undefined method `{}' for {}",
                 method_name.into(),
-                class_name.into()
+                self.globals.get_class_name(receiver)
             )),
             self.source_info(),
             loc,
         )
     }
+
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
@@ -1101,6 +1126,23 @@ impl VM {
 }
 
 impl VM {
+    fn fallback_to_method(
+        &mut self,
+        method: IdentId,
+        lhs: PackedValue,
+        rhs: PackedValue,
+        l_ref: ObjectRef,
+    ) -> Result<(), RubyError> {
+        let name = self.globals.get_ident_name(method);
+        match l_ref.get_instance_method(method) {
+            Some(mref) => {
+                self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
+                Ok(())
+            }
+            None => Err(self.error_undefined_op(name, rhs, lhs)),
+        }
+    }
+
     fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             PackedValue::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2)
@@ -1119,26 +1161,9 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs + rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
                 (Value::Object(l_ref), _) => {
-                    let method = IdentId::_ADD;
-                    match l_ref.get_instance_method(method) {
-                        Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
-                        }
-                        None => {
-                            return Err(self.error_undefined_method(
-                                format!("+ {}", self.globals.get_class_name(rhs)),
-                                self.globals.get_class_name(lhs),
-                            ))
-                        }
-                    };
-                    return Ok(());
+                    return self.fallback_to_method(IdentId::_ADD, lhs, rhs, l_ref)
                 }
-                (_, _) => {
-                    return Err(self.error_undefined_method(
-                        format!("+ {}", self.globals.get_class_name(rhs)),
-                        self.globals.get_class_name(lhs),
-                    ))
-                }
+                (_, _) => return Err(self.error_undefined_op("+", rhs, lhs)),
             }
         };
         self.exec_stack.push(val);
@@ -1155,32 +1180,14 @@ impl VM {
                 Value::FixNum(lhs) => PackedValue::fixnum(lhs + i as i64),
                 Value::FloatNum(lhs) => PackedValue::flonum(lhs + i as f64),
                 Value::Object(l_ref) => {
-                    let method = IdentId::_ADD;
-                    match l_ref.get_instance_method(method) {
-                        Some(mref) => {
-                            self.eval_send(
-                                mref.clone(),
-                                lhs,
-                                VecArray::new1(PackedValue::fixnum(i as i64)),
-                                None,
-                                None,
-                            )?;
-                        }
-                        None => {
-                            return Err(self.error_undefined_method(
-                                format!("+ Integer"),
-                                self.globals.get_class_name(lhs),
-                            ))
-                        }
-                    };
-                    return Ok(());
+                    return self.fallback_to_method(
+                        IdentId::_ADD,
+                        lhs,
+                        PackedValue::fixnum(i as i64),
+                        l_ref,
+                    )
                 }
-                _ => {
-                    return Err(self.error_undefined_method(
-                        format!("+ Integer"),
-                        self.globals.get_class_name(lhs),
-                    ))
-                }
+                _ => return Err(self.error_undefined_op("+", PackedValue::fixnum(i as i64), lhs)),
             }
         };
         self.exec_stack.push(val);
@@ -1205,26 +1212,9 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs - rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs - rhs),
                 (Value::Object(l_ref), _) => {
-                    let method = IdentId::_SUB;
-                    match l_ref.get_instance_method(method) {
-                        Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
-                        }
-                        None => {
-                            return Err(self.error_undefined_method(
-                                format!("- {}", self.globals.get_class_name(rhs)),
-                                self.globals.get_class_name(lhs),
-                            ))
-                        }
-                    };
-                    return Ok(());
+                    return self.fallback_to_method(IdentId::_SUB, lhs, rhs, l_ref)
                 }
-                (_, _) => {
-                    return Err(self.error_undefined_method(
-                        format!("- {}", self.globals.get_class_name(rhs)),
-                        self.globals.get_class_name(lhs),
-                    ))
-                }
+                (_, _) => return Err(self.error_undefined_op("-", rhs, lhs)),
             }
         };
         self.exec_stack.push(val);
@@ -1241,32 +1231,14 @@ impl VM {
                 Value::FixNum(lhs) => PackedValue::fixnum(lhs - i as i64),
                 Value::FloatNum(lhs) => PackedValue::flonum(lhs - i as f64),
                 Value::Object(l_ref) => {
-                    let method = IdentId::_SUB;
-                    match l_ref.get_instance_method(method) {
-                        Some(mref) => {
-                            self.eval_send(
-                                mref.clone(),
-                                lhs,
-                                VecArray::new1(PackedValue::fixnum(i as i64)),
-                                None,
-                                None,
-                            )?;
-                        }
-                        None => {
-                            return Err(self.error_undefined_method(
-                                format!("- Integer"),
-                                self.globals.get_class_name(lhs),
-                            ))
-                        }
-                    };
-                    return Ok(());
+                    return self.fallback_to_method(
+                        IdentId::_SUB,
+                        lhs,
+                        PackedValue::fixnum(i as i64),
+                        l_ref,
+                    )
                 }
-                _ => {
-                    return Err(self.error_undefined_method(
-                        format!("- Integer"),
-                        self.globals.get_class_name(lhs),
-                    ))
-                }
+                _ => return Err(self.error_undefined_op("-", PackedValue::fixnum(i as i64), lhs)),
             }
         };
         self.exec_stack.push(val);
@@ -1291,26 +1263,9 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs * rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
                 (Value::Object(l_ref), _) => {
-                    let method = IdentId::_MUL;
-                    match l_ref.get_instance_method(method) {
-                        Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
-                        }
-                        None => {
-                            return Err(self.error_undefined_method(
-                                format!("* {}", self.globals.get_class_name(rhs)),
-                                self.globals.get_class_name(lhs),
-                            ))
-                        }
-                    };
-                    return Ok(());
+                    return self.fallback_to_method(IdentId::_MUL, lhs, rhs, l_ref);
                 }
-                (_, _) => {
-                    return Err(self.error_undefined_method(
-                        format!("* {}", self.globals.get_class_name(rhs)),
-                        self.globals.get_class_name(lhs),
-                    ))
-                }
+                (_, _) => return Err(self.error_undefined_op("*", rhs, lhs)),
             }
         };
         self.exec_stack.push(val);
@@ -1327,7 +1282,7 @@ impl VM {
                 Ok(Value::FloatNum(lhs / (rhs as f64)).pack())
             }
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs / rhs).pack()),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '/'")),
+            (_, _) => return Err(self.error_undefined_op("/", rhs, lhs)),
         }
     }
 
@@ -1341,8 +1296,48 @@ impl VM {
                 Ok(Value::FloatNum(lhs % (rhs as f64)).pack())
             }
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(Value::FloatNum(lhs % rhs).pack()),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '%'")),
+            (_, _) => return Err(self.error_undefined_op("%", rhs, lhs)),
         }
+    }
+
+    fn eval_exp(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            PackedValue::flonum((lhs.as_packed_fixnum() as f64).powf(rhs.as_packed_fixnum() as f64))
+        } else if lhs.is_packed_num() && rhs.is_packed_num() {
+            if lhs.is_packed_fixnum() {
+                PackedValue::flonum(lhs.as_packed_fixnum() as f64 * rhs.as_packed_flonum())
+            } else if rhs.is_packed_fixnum() {
+                PackedValue::flonum(lhs.as_packed_flonum() * rhs.as_packed_fixnum() as f64)
+            } else {
+                PackedValue::flonum(lhs.as_packed_flonum() * rhs.as_packed_flonum())
+            }
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (Value::FixNum(lhs), Value::FixNum(rhs)) => {
+                    PackedValue::flonum((lhs as f64).powf(rhs as f64))
+                }
+                (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
+                    PackedValue::flonum((lhs as f64).powf(rhs))
+                }
+                (Value::FloatNum(lhs), Value::FixNum(rhs)) => {
+                    PackedValue::flonum(lhs.powf(rhs as f64))
+                }
+                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs.powf(rhs)),
+                (Value::Object(l_ref), _) => {
+                    let method = IdentId::_POW;
+                    match l_ref.get_instance_method(method) {
+                        Some(mref) => {
+                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
+                        }
+                        None => return Err(self.error_undefined_op("**", rhs, lhs)),
+                    };
+                    return Ok(());
+                }
+                (_, _) => return Err(self.error_undefined_op("**", rhs, lhs)),
+            }
+        };
+        self.exec_stack.push(val);
+        Ok(())
     }
 
     fn eval_shl(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
@@ -1355,46 +1350,38 @@ impl VM {
                         self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
                         Ok(self.exec_stack.pop().unwrap())
                     }
-                    None => Err(self.error_undefined_method(
-                        format!("<< {}", self.globals.get_class_name(rhs)),
-                        self.globals.get_class_name(lhs),
-                    )),
+                    None => return Err(self.error_undefined_op("<<", rhs, lhs)),
                 }
             }
-            (_, _) => {
-                return Err(self.error_undefined_method(
-                    format!("<< {}", self.globals.get_class_name(rhs)),
-                    self.globals.get_class_name(lhs),
-                ))
-            }
+            (_, _) => return Err(self.error_undefined_op("<<", rhs, lhs)),
         }
     }
 
     fn eval_shr(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs >> rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '>>'")),
+            (_, _) => return Err(self.error_undefined_op(">>", rhs, lhs)),
         }
     }
 
     fn eval_bitand(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs & rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '&'")),
+            (_, _) => return Err(self.error_undefined_op("&", rhs, lhs)),
         }
     }
 
     fn eval_bitor(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs | rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '|'")),
+            (_, _) => return Err(self.error_undefined_op("|", rhs, lhs)),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs ^ rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '^'")),
+            (_, _) => return Err(self.error_undefined_op("^", rhs, lhs)),
         }
     }
 
@@ -1514,12 +1501,7 @@ impl VM {
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::bool(lhs > (rhs as f64)),
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::bool(lhs as f64 > rhs),
             (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::bool(lhs > rhs),
-            (_, _) => {
-                return Err(self.error_undefined_method(
-                    format!("> {}", self.globals.get_class_name(rhs)),
-                    self.globals.get_class_name(lhs),
-                ))
-            }
+            (_, _) => return Err(self.error_undefined_op(">", rhs, lhs)),
         };
         Ok(b)
     }
@@ -1725,7 +1707,10 @@ impl VM {
                     None => {
                         let method_name = self.globals.get_ident_name(method);
                         let class_name = self.globals.get_ident_name(classref.name);
-                        return Err(self.error_undefined_method(method_name, class_name));
+                        return Err(self.error_nomethod(format!(
+                            "no method `{}' found for {}",
+                            method_name, class_name
+                        )));
                     }
                 },
             };

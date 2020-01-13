@@ -30,7 +30,7 @@ impl Inst {
 
     pub const ADDI: u8 = 27;
     pub const SUBI: u8 = 28;
-    pub const EXP: u8 = 29;
+    pub const POW: u8 = 29;
 
     pub const JMP: u8 = 80;
     pub const JMP_IF_FALSE: u8 = 81;
@@ -92,7 +92,7 @@ impl Inst {
             Inst::MUL => "MUL",
             Inst::DIV => "DIV",
             Inst::REM => "REM",
-            Inst::EXP => "EXP",
+            Inst::POW => "POW",
             Inst::EQ => "EQ",
             Inst::NE => "NE",
             Inst::GT => "GT",
@@ -156,7 +156,7 @@ impl Inst {
             | Inst::MUL
             | Inst::DIV
             | Inst::REM
-            | Inst::EXP
+            | Inst::POW
             | Inst::EQ
             | Inst::NE
             | Inst::GT

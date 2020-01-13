@@ -15,15 +15,19 @@ A toy Ruby implementation by Rust.
     - [x] Hash literal
     - [x] Lambda literal
     - [x] Block literal
+    - [ ] Regular expression literal
 - Objects
+    - [x] String
+    - [x] Range
     - [x] Array
     - [x] Hash
     - [x] Proc
+    - [x] Method
 - Variables
     - [x] Local variable
     - [x] Instance variable
     - [ ] Class variable
-    - [ ] Global variable
+    - [x] Global variable
 - Constants
     - [x] Constant
 - Branch and Loop
@@ -48,8 +52,9 @@ A toy Ruby implementation by Rust.
     - [x] Monkey patch (Ad-hoc class definition)
     - [x] Module
 
-## How to run ruby
+## How to run ruruby
 To build ruruby, You'll need installation of Rust.
+Be aware that only nightly version of Rust works for ruruby.
 
 To run ruby program file on ruruby,
 ```
