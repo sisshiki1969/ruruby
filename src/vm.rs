@@ -791,18 +791,6 @@ impl VM {
                             match val.as_module() {
                                 Some(classref) => {
                                     if classref.superclass != Some(superclass) {
-                                        eprintln!(
-                                            "prev: {:?}",
-                                            match classref.superclass {
-                                                None => "None",
-                                                Some(class) =>
-                                                    self.globals.get_ident_name(class.name),
-                                            }
-                                        );
-                                        eprintln!(
-                                            " new: {:?}",
-                                            self.globals.get_ident_name(superclass.name)
-                                        );
                                         return Err(self.error_type(format!(
                                             "superclass mismatch for class {}.",
                                             self.globals.get_ident_name(id),
@@ -1075,17 +1063,19 @@ impl VM {
         receiver: PackedValue,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let (rec_class, class_method) = match receiver.as_class() {
-            Some(cref) => (cref, true),
-            None => (receiver.get_class(&self.globals), false),
-        };
         match self.globals.get_method_from_cache(cache_slot, receiver) {
             Some(method) => Ok(method),
             _ => {
-                let method = if class_method {
-                    self.get_class_method(rec_class, method_id)?
-                } else {
-                    self.get_instance_method(rec_class, method_id)?
+                let (rec_class, class_method, method) = match receiver.as_class() {
+                    Some(rec_class) => {
+                        let method = self.get_class_method(rec_class, method_id)?;
+                        (rec_class, true, method)
+                    }
+                    None => {
+                        let rec_class = receiver.get_class(&self.globals);
+                        let method = self.get_instance_method(rec_class, method_id)?;
+                        (rec_class, false, method)
+                    }
                 };
                 self.globals
                     .set_method_cache_entry(cache_slot, rec_class, class_method, method);
@@ -1133,13 +1123,15 @@ impl VM {
         rhs: PackedValue,
         l_ref: ObjectRef,
     ) -> Result<(), RubyError> {
-        let name = self.globals.get_ident_name(method);
         match l_ref.get_instance_method(method) {
             Some(mref) => {
                 self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
                 Ok(())
             }
-            None => Err(self.error_undefined_op(name, rhs, lhs)),
+            None => {
+                let name = self.globals.get_ident_name(method);
+                Err(self.error_undefined_op(name, rhs, lhs))
+            }
         }
     }
 

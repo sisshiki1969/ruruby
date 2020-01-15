@@ -7,10 +7,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
     len: usize,
-    line_top_pos: usize,
+    //line_top_pos: usize,
     token_start_pos: usize,
     pos: usize,
-    line: usize,
+    //line: usize,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
     quote_state: Vec<QuoteState>,
@@ -81,10 +81,10 @@ impl Lexer {
         };
         Lexer {
             len: 0,
-            line_top_pos: 0,
+            //line_top_pos: 0,
             token_start_pos: 0,
             pos: 0,
-            line: 1,
+            //line: 1,
             reserved,
             reserved_rev,
             quote_state: vec![],
@@ -126,24 +126,10 @@ impl Lexer {
         code_text: impl Into<String>,
     ) -> Result<LexerResult, RubyError> {
         let mut code = code_text.into().chars().collect::<Vec<char>>();
-        let pop_flag = match self.source_info.line_pos.last() {
-            None => false,
-            Some(info) => {
-                let next_pos = self.source_info.code.len();
-                self.line_top_pos = next_pos;
-                self.token_start_pos = next_pos;
-                self.pos = next_pos;
-                self.line = info.0;
-                true
-            }
-        };
-        if pop_flag {
-            self.source_info.line_pos.pop();
-        }
-
+        self.pos = self.source_info.code.len();
         self.source_info.code.append(&mut code);
+
         self.len = self.source_info.code.len();
-        //println!("{:?}", self);
         let mut tokens: Vec<Token> = vec![];
         loop {
             self.token_start_pos = self.pos;
@@ -159,105 +145,104 @@ impl Lexer {
                 Err(_) => break,
             };
 
-            let token = if ch.is_ascii_alphabetic() || ch == '_' {
-                self.lex_identifier(ch, VarKind::Identifier)?
+            if ch.is_ascii_alphabetic() || ch == '_' {
+                self.lex_identifier(&mut tokens, ch, VarKind::Identifier)?;
             } else if ch.is_numeric() {
-                self.lex_number_literal(ch)?
+                tokens.push(self.lex_number_literal(ch)?);
             } else if ch.is_ascii_punctuation() {
                 match ch {
                     '#' => {
                         self.goto_eol();
-                        self.new_nop()
                     }
                     '"' => {
                         self.quote_state.push(QuoteState::DoubleQuote);
-                        self.lex_string_literal_double()?
+                        tokens.push(self.lex_string_literal_double()?);
                     }
-                    ';' => self.new_punct(Punct::Semi),
+                    ';' => self.new_punct(&mut tokens, Punct::Semi),
                     ':' => {
                         let ch1 = self.peek()?;
                         if ch1 == ':' {
                             self.get()?;
-                            self.new_punct(Punct::Scope)
+                            self.new_punct(&mut tokens, Punct::Scope);
                         } else {
-                            self.new_punct(Punct::Colon)
+                            self.new_punct(&mut tokens, Punct::Colon);
                         }
                     }
-                    ',' => self.new_punct(Punct::Comma),
+                    ',' => self.new_punct(&mut tokens, Punct::Comma),
                     '+' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::Add))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Add))
                         } else {
-                            self.new_punct(Punct::Plus)
+                            self.new_punct(&mut tokens, Punct::Plus)
                         }
                     }
                     '-' => {
                         let ch1 = self.peek()?;
                         if ch1 == '>' {
                             self.get()?;
-                            self.new_punct(Punct::Arrow)
+                            self.new_punct(&mut tokens, Punct::Arrow)
                         } else if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::Sub))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Sub))
                         } else {
-                            self.new_punct(Punct::Minus)
+                            self.new_punct(&mut tokens, Punct::Minus)
                         }
                     }
                     '*' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::Mul))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Mul))
                         } else if ch1 == '*' {
                             self.get()?;
-                            self.new_punct(Punct::DMul)
+                            self.new_punct(&mut tokens, Punct::DMul)
                         } else {
-                            self.new_punct(Punct::Mul)
+                            self.new_punct(&mut tokens, Punct::Mul)
                         }
                     }
                     '%' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::Rem))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Rem))
                         } else {
-                            self.new_punct(Punct::Rem)
+                            self.new_punct(&mut tokens, Punct::Rem)
                         }
                     }
                     '/' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::Div))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Div))
                         } else {
-                            self.new_punct(Punct::Div)
+                            self.new_punct(&mut tokens, Punct::Div)
                         }
                     }
-                    '(' => self.new_punct(Punct::LParen),
-                    ')' => self.new_punct(Punct::RParen),
+                    '(' => self.new_punct(&mut tokens, Punct::LParen),
+                    ')' => self.new_punct(&mut tokens, Punct::RParen),
                     '^' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::BitXor))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::BitXor))
                         } else {
-                            self.new_punct(Punct::BitXor)
+                            self.new_punct(&mut tokens, Punct::BitXor)
                         }
                     }
-                    '~' => self.new_punct(Punct::BitNot),
-                    '[' => self.new_punct(Punct::LBracket),
-                    ']' => self.new_punct(Punct::RBracket),
+                    '~' => self.new_punct(&mut tokens, Punct::BitNot),
+                    '[' => self.new_punct(&mut tokens, Punct::LBracket),
+                    ']' => self.new_punct(&mut tokens, Punct::RBracket),
                     '{' => {
                         self.quote_state.push(QuoteState::Brace);
-                        self.new_punct(Punct::LBrace)
+                        self.new_punct(&mut tokens, Punct::LBrace)
                     }
                     '}' => match self.quote_state.last() {
-                        Some(QuoteState::Expr) => self.lex_string_literal_double()?,
+                        Some(QuoteState::Expr) => tokens.push(self.lex_string_literal_double()?),
                         Some(QuoteState::Brace) => {
                             self.quote_state.pop();
-                            self.new_punct(Punct::RBrace)
+                            self.new_punct(&mut tokens, Punct::RBrace);
                         }
                         _ => return Err(self.error_unexpected(pos)),
                     },
@@ -268,15 +253,16 @@ impl Lexer {
                             let ch2 = self.peek()?;
                             if ch2 == '.' {
                                 self.get()?;
-                                self.new_punct(Punct::Range3)
+                                self.new_punct(&mut tokens, Punct::Range3)
                             } else {
-                                self.new_punct(Punct::Range2)
+                                self.new_punct(&mut tokens, Punct::Range2)
                             }
                         } else {
-                            self.new_punct(Punct::Dot)
+                            self.new_punct(&mut tokens, Punct::Dot)
                         }
                     }
-                    '?' => self.new_punct(Punct::Question),
+                    '?' => self.new_punct(&mut tokens, Punct::Question),
+                    '\\' => self.new_punct(&mut tokens, Punct::Backslash),
                     '=' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
@@ -284,72 +270,72 @@ impl Lexer {
                             let ch2 = self.peek()?;
                             if ch2 == '=' {
                                 self.get()?;
-                                self.new_punct(Punct::TEq)
+                                self.new_punct(&mut tokens, Punct::TEq)
                             } else {
-                                self.new_punct(Punct::Eq)
+                                self.new_punct(&mut tokens, Punct::Eq)
                             }
                         } else if ch1 == '>' {
                             self.get()?;
-                            self.new_punct(Punct::FatArrow)
+                            self.new_punct(&mut tokens, Punct::FatArrow)
                         } else {
-                            self.new_punct(Punct::Assign)
+                            self.new_punct(&mut tokens, Punct::Assign)
                         }
                     }
                     '>' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::Ge)
+                            self.new_punct(&mut tokens, Punct::Ge)
                         } else if ch1 == '>' {
                             self.get()?;
                             let ch2 = self.peek()?;
                             if ch2 == '=' {
                                 self.get()?;
-                                self.new_punct(Punct::AssignOp(BinOp::Shr))
+                                self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Shr))
                             } else {
-                                self.new_punct(Punct::Shr)
+                                self.new_punct(&mut tokens, Punct::Shr)
                             }
                         } else {
-                            self.new_punct(Punct::Gt)
+                            self.new_punct(&mut tokens, Punct::Gt)
                         }
                     }
                     '<' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::Le)
+                            self.new_punct(&mut tokens, Punct::Le)
                         } else if ch1 == '<' {
                             self.get()?;
                             let ch2 = self.peek()?;
                             if ch2 == '=' {
                                 self.get()?;
-                                self.new_punct(Punct::AssignOp(BinOp::Shl))
+                                self.new_punct(&mut tokens, Punct::AssignOp(BinOp::Shl))
                             } else {
-                                self.new_punct(Punct::Shl)
+                                self.new_punct(&mut tokens, Punct::Shl)
                             }
                         } else {
-                            self.new_punct(Punct::Lt)
+                            self.new_punct(&mut tokens, Punct::Lt)
                         }
                     }
                     '!' => {
                         let ch1 = self.peek()?;
                         if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::Ne)
+                            self.new_punct(&mut tokens, Punct::Ne)
                         } else {
-                            self.new_punct(Punct::Not)
+                            self.new_punct(&mut tokens, Punct::Not)
                         }
                     }
                     '&' => {
                         let ch1 = self.peek()?;
                         if ch1 == '&' {
                             self.get()?;
-                            self.new_punct(Punct::LAnd)
+                            self.new_punct(&mut tokens, Punct::LAnd)
                         } else if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::BitAnd))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::BitAnd))
                         } else {
-                            self.new_punct(Punct::BitAnd)
+                            self.new_punct(&mut tokens, Punct::BitAnd)
                         }
                     }
                     '|' => {
@@ -359,39 +345,41 @@ impl Lexer {
                             let ch2 = self.peek()?;
                             if ch2 == '=' {
                                 self.get()?;
-                                self.new_punct(Punct::AssignOp(BinOp::LOr))
+                                self.new_punct(&mut tokens, Punct::AssignOp(BinOp::LOr))
                             } else {
-                                self.new_punct(Punct::LOr)
+                                self.new_punct(&mut tokens, Punct::LOr)
                             }
                         } else if ch1 == '=' {
                             self.get()?;
-                            self.new_punct(Punct::AssignOp(BinOp::BitOr))
+                            self.new_punct(&mut tokens, Punct::AssignOp(BinOp::BitOr))
                         } else {
-                            self.new_punct(Punct::BitOr)
+                            self.new_punct(&mut tokens, Punct::BitOr)
                         }
                     }
                     '@' => {
                         let ch = self.get()?;
-                        self.lex_identifier(ch, VarKind::InstanceVar)?
+                        self.lex_identifier(&mut tokens, ch, VarKind::InstanceVar)?;
                     }
                     '$' => {
                         let ch = self.get()?;
-                        self.lex_identifier(ch, VarKind::GlobalVar)?
+                        self.lex_identifier(&mut tokens, ch, VarKind::GlobalVar)?;
                     }
                     _ => return Err(self.error_unexpected(pos)), //unimplemented!("{}", ch),
                 }
             } else {
-                self.lex_identifier(ch, VarKind::Identifier)?
+                self.lex_identifier(&mut tokens, ch, VarKind::Identifier)?;
             };
-            if token.kind != TokenKind::Nop {
-                tokens.push(token);
-            }
         }
         tokens.push(self.new_eof(self.source_info.code.len()));
         Ok(LexerResult::new(tokens))
     }
 
-    fn lex_identifier(&mut self, ch: char, var_kind: VarKind) -> Result<Token, RubyError> {
+    fn lex_identifier(
+        &mut self,
+        tokens: &mut Vec<Token>,
+        ch: char,
+        var_kind: VarKind,
+    ) -> Result<(), RubyError> {
         // read identifier or reserved keyword
         let is_const = ch.is_ascii_uppercase();
         let mut tok = ch.to_string();
@@ -413,22 +401,29 @@ impl Lexer {
             _ => false,
         };
         match var_kind {
-            VarKind::InstanceVar => return Ok(self.new_instance_var(tok)),
-            VarKind::GlobalVar => return Ok(self.new_global_var(tok)),
+            VarKind::InstanceVar => {
+                tokens.push(self.new_instance_var(tok));
+                return Ok(());
+            }
+            VarKind::GlobalVar => {
+                tokens.push(self.new_global_var(tok));
+                return Ok(());
+            }
             _ => {}
         }
         match self.reserved.get(&tok) {
-            Some(reserved) => Ok(self.new_reserved(*reserved)),
+            Some(reserved) => tokens.push(self.new_reserved(*reserved)),
             None => {
                 if is_const {
-                    Ok(self.new_const(tok))
+                    tokens.push(self.new_const(tok));
                 } else if var_kind == VarKind::InstanceVar {
-                    Ok(self.new_instance_var(tok))
+                    tokens.push(self.new_instance_var(tok));
                 } else {
-                    Ok(self.new_ident(tok, has_suffix))
+                    tokens.push(self.new_ident(tok, has_suffix));
                 }
             }
         }
+        Ok(())
     }
 
     /// Read number literal
@@ -588,19 +583,9 @@ impl Lexer {
     /// Returns Ok(char) or RubyError if the cursor reached EOF.
     fn get(&mut self) -> Result<char, RubyError> {
         if self.pos >= self.len {
-            self.source_info
-                .line_pos
-                .push((self.line, self.line_top_pos, self.len));
             Err(self.error_eof(self.len))
         } else {
             let ch = self.source_info.code[self.pos];
-            if ch == '\n' {
-                self.source_info
-                    .line_pos
-                    .push((self.line, self.line_top_pos, self.pos));
-                self.line += 1;
-                self.line_top_pos = self.pos + 1;
-            }
             self.pos += 1;
             Ok(ch)
         }
@@ -701,8 +686,8 @@ impl Lexer {
         Annot::new(TokenKind::StringLit(string.into()), self.cur_loc())
     }
 
-    fn new_punct(&self, punc: Punct) -> Token {
-        Annot::new(TokenKind::Punct(punc), self.cur_loc())
+    fn new_punct(&self, tokens: &mut Vec<Token>, punc: Punct) {
+        tokens.push(Annot::new(TokenKind::Punct(punc), self.cur_loc()));
     }
 
     fn new_open_dq(&self, s: String) -> Token {
@@ -727,10 +712,6 @@ impl Lexer {
 
     fn new_eof(&self, pos: usize) -> Token {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
-    }
-
-    fn new_nop(&self) -> Token {
-        Token::new_nop()
     }
 }
 

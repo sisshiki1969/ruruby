@@ -109,7 +109,7 @@ pub type SourceInfoRef = Ref<SourceInfo>;
 pub struct SourceInfo {
     pub path: String,
     pub code: Vec<char>,
-    pub line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
+    //pub line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
 }
 
 impl SourceInfoRef {
@@ -123,7 +123,7 @@ impl SourceInfo {
         SourceInfo {
             path: path.into(),
             code: vec![],
-            line_pos: vec![],
+            //line_pos: vec![],
         }
     }
     pub fn show_file_name(&self) {
@@ -132,8 +132,22 @@ impl SourceInfo {
 
     /// Show the location of the Loc in the source code using '^^^'.
     pub fn show_loc(&self, loc: &Loc) {
+        let mut line = 1;
+        let mut line_top_pos = 0;
+        let mut line_pos = vec![];
+        for (pos, ch) in self.code.iter().enumerate() {
+            if *ch == '\n' {
+                line_pos.push((line, line_top_pos, pos));
+                line += 1;
+                line_top_pos = pos + 1;
+            }
+        }
+        if line_top_pos <= self.code.len() - 1 {
+            line_pos.push((line, line_top_pos, self.code.len() - 1));
+        }
+
         let mut found = false;
-        for line in &self.line_pos {
+        for line in &line_pos {
             if line.2 < loc.0 || line.1 > loc.1 {
                 continue;
             }
@@ -162,7 +176,7 @@ impl SourceInfo {
         }
 
         if !found {
-            let line = match self.line_pos.last() {
+            let line = match line_pos.last() {
                 Some(line) => (line.0 + 1, line.2 + 1, loc.1),
                 None => (1, 0, loc.1),
             };

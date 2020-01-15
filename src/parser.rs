@@ -422,6 +422,7 @@ impl Parser {
         match token.kind.clone() {
             TokenKind::Ident(ident, _) => ident,
             TokenKind::Const(ident) => ident,
+            TokenKind::InstanceVar(ident) => ident,
             TokenKind::StringLit(ident) => ident,
             TokenKind::Reserved(reserved) => {
                 self.lexer.get_string_from_reserved(reserved).to_string()
@@ -1161,8 +1162,12 @@ impl Parser {
             } else {
                 let node = self.parse_arg()?;
                 match node.kind {
-                    NodeKind::Ident(id, ..) if self.consume_punct_no_term(Punct::Colon) => {
-                        keyword_args.push((id, self.parse_arg()?));
+                    NodeKind::Ident(id, ..) | NodeKind::LocalVar(id) => {
+                        if self.consume_punct_no_term(Punct::Colon) {
+                            keyword_args.push((id, self.parse_arg()?));
+                        } else {
+                            args.push(node);
+                        }
                     }
                     _ => {
                         args.push(node);

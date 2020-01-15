@@ -126,6 +126,7 @@ pub enum Punct {
     LAnd,
     LOr,
 
+    Backslash,
     Arrow,
     FatArrow,
 }
@@ -215,6 +216,7 @@ impl Token {
         match self.kind {
             TokenKind::Const(_)
             | TokenKind::Ident(_, _)
+            | TokenKind::InstanceVar(_)
             | TokenKind::Reserved(_)
             | TokenKind::StringLit(_) => true,
             _ => false,
