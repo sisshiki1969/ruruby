@@ -1,8 +1,1 @@
-a = 100
-
-def fn(a)
-    puts a
-end
-
-fn 70
-
+puts 0b10
