@@ -1232,16 +1232,14 @@ impl Parser {
             TokenKind::Ident(name, has_suffix) => {
                 let id = self.get_ident_id(name);
                 if *has_suffix {
-                    match self.get()?.kind {
-                        TokenKind::Punct(Punct::Question) => {
-                            let id = self.get_ident_id(name.clone() + "?");
-                            Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
-                        }
-                        TokenKind::Punct(Punct::Not) => {
-                            let id = self.get_ident_id(name.clone() + "!");
-                            Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
-                        }
-                        _ => return Err(self.error_unexpected(tok.loc, "Illegal method name.")),
+                    if self.consume_punct(Punct::Question) {
+                        let id = self.get_ident_id(name.clone() + "?");
+                        Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
+                    } else if self.consume_punct(Punct::Not) {
+                        let id = self.get_ident_id(name.clone() + "!");
+                        Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())))
+                    } else {
+                        Ok(Node::new_identifier(id, true, loc))
                     }
                 } else if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
