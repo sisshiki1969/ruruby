@@ -18,6 +18,7 @@ pub enum NodeKind {
     }, // start, end, exclude_end
     Array(NodeVec),
     Hash(Vec<(Node, Node)>),
+    RegExp(Vec<Node>),
 
     LocalVar(IdentId),
     Ident(IdentId, bool),
@@ -185,6 +186,10 @@ impl Node {
 
     pub fn new_hash(key_value: Vec<(Node, Node)>, loc: Loc) -> Self {
         Node::new(NodeKind::Hash(key_value), loc)
+    }
+
+    pub fn new_regexp(regex: Vec<Node>, loc: Loc) -> Self {
+        Node::new(NodeKind::RegExp(regex), loc)
     }
 
     pub fn new_self(loc: Loc) -> Self {

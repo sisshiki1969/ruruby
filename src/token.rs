@@ -45,9 +45,9 @@ pub enum TokenKind {
     StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
-    OpenDoubleQuote(String),
-    IntermediateDoubleQuote(String),
-    CloseDoubleQuote(String),
+    OpenString(String),
+    InterString(String),
+    CloseString(String),
     Space,
     LineTerm,
 }
@@ -162,14 +162,14 @@ impl Token {
     }
 
     pub fn new_open_dq(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::OpenDoubleQuote(s.into()), loc)
+        Annot::new(TokenKind::OpenString(s.into()), loc)
     }
 
     pub fn new_inter_dq(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::IntermediateDoubleQuote(s.into()), loc)
+        Annot::new(TokenKind::InterString(s.into()), loc)
     }
     pub fn new_close_dq(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::CloseDoubleQuote(s.into()), loc)
+        Annot::new(TokenKind::CloseString(s.into()), loc)
     }
 
     pub fn new_punct(punct: Punct, loc: Loc) -> Self {
@@ -225,9 +225,7 @@ impl Token {
 
     pub fn check_stmt_end(&self) -> bool {
         match self.kind {
-            TokenKind::EOF
-            | TokenKind::IntermediateDoubleQuote(_)
-            | TokenKind::CloseDoubleQuote(_) => true,
+            TokenKind::EOF | TokenKind::InterString(_) | TokenKind::CloseString(_) => true,
             TokenKind::Reserved(reserved) => match reserved {
                 Reserved::Else | Reserved::Elsif | Reserved::End | Reserved::When => true,
                 _ => false,

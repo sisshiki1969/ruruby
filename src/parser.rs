@@ -667,7 +667,7 @@ impl Parser {
             | TokenKind::NumLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
-            | TokenKind::OpenDoubleQuote(_) => Ok(true),
+            | TokenKind::OpenString(_) => Ok(true),
             TokenKind::Punct(p) => match p {
                 Punct::LParen
                 | Punct::LBracket
@@ -1165,7 +1165,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Node, RubyError> {
-        let tok = self.get()?.clone();
+        let tok = self.get()?;
         let loc = tok.loc();
         match &tok.kind {
             TokenKind::Ident(name, has_suffix) => {
@@ -1201,7 +1201,7 @@ impl Parser {
             TokenKind::NumLit(num) => Ok(Node::new_integer(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
-            TokenKind::OpenDoubleQuote(s) => Ok(self.parse_interporated_string_literal(s)?),
+            TokenKind::OpenString(s) => Ok(self.parse_interporated_string_literal(s)?),
             TokenKind::Punct(punct) => match punct {
                 Punct::Minus => match self.get()?.kind {
                     TokenKind::NumLit(num) => Ok(Node::new_integer(-num, loc)),
@@ -1214,6 +1214,7 @@ impl Parser {
                     Ok(node)
                 }
                 Punct::LBracket => {
+                    // Array literal
                     let (mut nodes, _) = self.parse_args(Punct::RBracket)?;
                     nodes.reverse();
                     let loc = loc.merge(self.prev_loc());
@@ -1221,6 +1222,7 @@ impl Parser {
                 }
                 Punct::LBrace => self.parse_hash_literal(),
                 Punct::Colon => {
+                    // Symbol literal
                     let token = self.get()?;
                     let symbol_loc = self.prev_loc();
                     let id = match &token.kind {
@@ -1230,7 +1232,7 @@ impl Parser {
                             self.get_ident_id(ident)
                         }
                         _ => {
-                            if let TokenKind::OpenDoubleQuote(s) = token.kind {
+                            if let TokenKind::OpenString(s) = token.kind {
                                 let node = self.parse_interporated_string_literal(&s)?;
                                 let method = self.ident_table.get_ident_id("to_sym");
                                 let loc = symbol_loc.merge(node.loc());
@@ -1252,6 +1254,7 @@ impl Parser {
                     Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
                 }
                 Punct::Arrow => {
+                    // Lambda literal
                     let mut params = vec![];
                     self.context_stack.push(Context::new_block());
                     if self.consume_punct(Punct::LParen)? {
@@ -1280,6 +1283,10 @@ impl Parser {
                 Punct::Scope => {
                     let id = self.expect_const()?;
                     Ok(Node::new_const(id, true, loc))
+                }
+                Punct::Div => {
+                    let node = self.parse_regexp()?;
+                    Ok(node)
                 }
                 _ => {
                     return Err(
@@ -1430,7 +1437,7 @@ impl Parser {
         let mut nodes = vec![Node::new_string(s.clone(), start_loc)];
         loop {
             match self.peek()?.kind {
-                TokenKind::CloseDoubleQuote(s) => {
+                TokenKind::CloseString(s) => {
                     let end_loc = self.loc();
                     nodes.push(Node::new_string(s.clone(), end_loc));
                     self.get()?;
@@ -1439,11 +1446,11 @@ impl Parser {
                         start_loc.merge(end_loc),
                     ));
                 }
-                TokenKind::IntermediateDoubleQuote(s) => {
+                TokenKind::InterString(s) => {
                     nodes.push(Node::new_string(s.clone(), self.loc()));
                     self.get()?;
                 }
-                TokenKind::OpenDoubleQuote(s) => {
+                TokenKind::OpenString(s) => {
                     let s = s.clone();
                     self.get()?;
                     self.parse_interporated_string_literal(&s)?;
@@ -1457,6 +1464,19 @@ impl Parser {
                 }
             }
         }
+    }
+
+    fn parse_regexp(&mut self) -> Result<Node, RubyError> {
+        let tok = self.lexer.lex_regexp()?;
+        eprintln!("{:?}", tok);
+        let regexp = if let TokenKind::StringLit(s) = tok.kind {
+            s
+        } else {
+            "".to_string()
+        };
+        let node = Node::new_string(regexp, tok.loc);
+        let loc = node.loc();
+        Ok(Node::new_regexp(vec![node], loc))
     }
 
     fn parse_hash_literal(&mut self) -> Result<Node, RubyError> {

@@ -146,11 +146,11 @@ impl Lexer {
             TokenKind::Punct(Punct::RBrace) => {
                 self.quote_state.pop().unwrap();
             }
-            TokenKind::OpenDoubleQuote(_) => {
+            TokenKind::OpenString(_) => {
                 self.quote_state.push(QuoteState::DoubleQuote);
                 self.quote_state.push(QuoteState::Expr);
             }
-            TokenKind::CloseDoubleQuote(_) => {
+            TokenKind::CloseString(_) => {
                 self.quote_state.pop().unwrap();
                 assert_eq!(self.quote_state.pop().unwrap(), QuoteState::DoubleQuote);
             }
@@ -219,7 +219,7 @@ impl Lexer {
                         self.goto_eol();
                     }
                     '"' => {
-                        return self.lex_string_literal_double1();
+                        return self.lex_string_literal_double();
                     }
                     ';' => return Ok(self.new_punct(Punct::Semi)),
                     ':' => {
@@ -395,10 +395,12 @@ impl Lexer {
                 ch.is_ascii_uppercase()
             }
             None => {
-                match self.peek() {
+                match self.get() {
                     Ok(ch) => {
                         if !ch.is_alphanumeric() && ch != '_' && ch != '&' {
                             return Err(self.error_unexpected(self.pos));
+                        } else {
+                            tok.push(ch);
                         }
                     }
                     Err(_) => {
@@ -536,7 +538,7 @@ impl Lexer {
     }
 
     /// Read string literal
-    fn lex_string_literal_double1(&mut self) -> Result<Token, RubyError> {
+    fn lex_string_literal_double(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -568,6 +570,18 @@ impl Lexer {
                     }
                 }
                 c => s.push(c),
+            }
+        }
+    }
+
+    pub fn lex_regexp(&mut self) -> Result<Token, RubyError> {
+        let mut s = "".to_string();
+        loop {
+            match self.get()? {
+                '/' => return Ok(self.new_stringlit(s)),
+                c => {
+                    s.push(c);
+                }
             }
         }
     }
@@ -816,13 +830,13 @@ mod test {
         (StringLit($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_stringlit($item, Loc($loc_0, $loc_1))
         };
-        (OpenDoubleQuote($item:expr), $loc_0:expr, $loc_1:expr) => {
+        (OpenString($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_open_dq($item, Loc($loc_0, $loc_1))
         };
-        (IntermediateDoubleQuote($item:expr), $loc_0:expr, $loc_1:expr) => {
+        (InterString($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_inter_dq($item, Loc($loc_0, $loc_1))
         };
-        (CloseDoubleQuote($item:expr), $loc_0:expr, $loc_1:expr) => {
+        (CloseString($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_close_dq($item, Loc($loc_0, $loc_1))
         };
         (LineTerm, $loc_0:expr, $loc_1:expr) => {
@@ -851,11 +865,11 @@ mod test {
     fn string_literal3() {
         let program = r#""this is #{item1} and #{item2}. ""#;
         let ans = vec![
-            Token![OpenDoubleQuote("this is "), 0, 10],
+            Token![OpenString("this is "), 0, 10],
             Token![Ident("item1", false), 11, 15],
-            Token![IntermediateDoubleQuote(" and "), 16, 23],
+            Token![InterString(" and "), 16, 23],
             Token![Ident("item2", false), 24, 28],
-            Token![CloseDoubleQuote(". "), 29, 32],
+            Token![CloseString(". "), 29, 32],
             Token![EOF, 33],
         ];
         assert_tokens(program, ans);
