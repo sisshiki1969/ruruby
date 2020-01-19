@@ -1178,6 +1178,9 @@ impl Parser {
                         let id = self.get_ident_id(name.clone() + "!");
                         return Ok(Node::new_identifier(id, true, loc.merge(self.prev_loc())));
                     }
+                    if self.peek_no_term()?.kind == TokenKind::Punct(Punct::LParen) {
+                        return Ok(Node::new_identifier(id, false, loc));
+                    }
                 };
                 if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
@@ -1588,11 +1591,20 @@ impl Parser {
             }
             TokenKind::Ident(name, has_suffix) => {
                 if has_suffix {
-                    match self.get()?.kind {
-                        TokenKind::Punct(Punct::Question) => self.get_ident_id(name + "?"),
-                        TokenKind::Punct(Punct::Not) => self.get_ident_id(name + "!"),
-                        TokenKind::Punct(Punct::Assign) => self.get_ident_id(name + "="),
-                        _ => return Err(self.error_unexpected(tok.loc, "Illegal method name.")),
+                    match self.peek_no_term()?.kind {
+                        TokenKind::Punct(Punct::Question) => {
+                            self.get()?;
+                            self.get_ident_id(name + "?")
+                        }
+                        TokenKind::Punct(Punct::Not) => {
+                            self.get()?;
+                            self.get_ident_id(name + "!")
+                        }
+                        TokenKind::Punct(Punct::Assign) => {
+                            self.get()?;
+                            self.get_ident_id(name + "=")
+                        }
+                        _ => self.get_ident_id(name),
                     }
                 } else {
                     self.get_ident_id(name)

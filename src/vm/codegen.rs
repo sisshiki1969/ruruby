@@ -751,7 +751,7 @@ impl Codegen {
             NodeKind::Symbol(id) => {
                 self.gen_symbol(iseq, *id);
             }
-            NodeKind::InterporatedString(nodes) => {
+            NodeKind::InterporatedString(nodes) | NodeKind::RegExp(nodes) => {
                 self.gen_string(globals, iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {

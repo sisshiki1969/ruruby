@@ -397,10 +397,10 @@ impl Lexer {
             None => {
                 match self.get() {
                     Ok(ch) => {
-                        if !ch.is_alphanumeric() && ch != '_' && ch != '&' {
-                            return Err(self.error_unexpected(self.pos));
-                        } else {
+                        if ch.is_alphanumeric() || ch == '_' || ch == '&' || ch == '\'' {
                             tok.push(ch);
+                        } else {
+                            return Err(self.error_unexpected(self.pos));
                         }
                     }
                     Err(_) => {
@@ -424,7 +424,7 @@ impl Lexer {
             }
         }
         let has_suffix = match self.peek() {
-            Ok(ch) if ch == '!' || ch == '?' || ch == ':' || ch == '=' => true,
+            Ok(ch) if ch == '!' || ch == '?' || ch == ':' || ch == '=' || ch == '(' => true,
             _ => false,
         };
         match var_kind {
@@ -578,7 +578,14 @@ impl Lexer {
         let mut s = "".to_string();
         loop {
             match self.get()? {
-                '/' => return Ok(self.new_stringlit(s)),
+                '/' => {
+                    if self.consume('i') {
+                    } else if self.consume('m') {
+                    } else if self.consume('x') {
+                    } else if self.consume('o') {
+                    };
+                    return Ok(self.new_stringlit(s));
+                }
                 c => {
                     s.push(c);
                 }
