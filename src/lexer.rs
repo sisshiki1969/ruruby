@@ -136,6 +136,36 @@ impl Lexer {
     }
 
     pub fn get_token(&mut self) -> Result<Token, RubyError> {
+        let tok = self.fetch_token()?;
+        match tok.kind {
+            TokenKind::Punct(Punct::LBrace) => {
+                self.quote_state.push(QuoteState::Brace);
+            }
+            TokenKind::Punct(Punct::RBrace) => {
+                self.quote_state.pop().unwrap();
+            }
+            TokenKind::OpenDoubleQuote(_) => {
+                self.quote_state.push(QuoteState::DoubleQuote);
+                self.quote_state.push(QuoteState::Expr);
+            }
+            TokenKind::CloseDoubleQuote(_) => {
+                self.quote_state.pop().unwrap();
+                assert_eq!(self.quote_state.pop().unwrap(), QuoteState::DoubleQuote);
+            }
+            _ => {}
+        };
+        Ok(tok)
+    }
+
+    pub fn peek_token(&mut self) -> Result<Token, RubyError> {
+        let state_save = (self.pos, self.token_start_pos);
+        let tok = self.fetch_token()?;
+        self.pos = state_save.0;
+        self.token_start_pos = state_save.1;
+        Ok(tok)
+    }
+
+    fn fetch_token(&mut self) -> Result<Token, RubyError> {
         loop {
             self.token_start_pos = self.pos;
             if let Some(tok) = self.skip_whitespace() {
@@ -160,8 +190,7 @@ impl Lexer {
                         self.goto_eol();
                     }
                     '"' => {
-                        self.quote_state.push(QuoteState::DoubleQuote);
-                        return self.lex_string_literal_double();
+                        return self.lex_string_literal_double1();
                     }
                     ';' => return Ok(self.new_punct(Punct::Semi)),
                     ':' => {
@@ -223,16 +252,10 @@ impl Lexer {
                     '~' => return Ok(self.new_punct(Punct::BitNot)),
                     '[' => return Ok(self.new_punct(Punct::LBracket)),
                     ']' => return Ok(self.new_punct(Punct::RBracket)),
-                    '{' => {
-                        self.quote_state.push(QuoteState::Brace);
-                        return Ok(self.new_punct(Punct::LBrace));
-                    }
+                    '{' => return Ok(self.new_punct(Punct::LBrace)),
                     '}' => match self.quote_state.last() {
-                        Some(QuoteState::Expr) => return self.lex_string_literal_double(),
-                        Some(QuoteState::Brace) => {
-                            self.quote_state.pop();
-                            return Ok(self.new_punct(Punct::RBrace));
-                        }
+                        Some(QuoteState::Expr) => return self.lex_close_interpolate(),
+                        Some(QuoteState::Brace) => return Ok(self.new_punct(Punct::RBrace)),
                         _ => return Err(self.error_unexpected(pos)),
                     },
                     '.' => {
@@ -484,26 +507,15 @@ impl Lexer {
     }
 
     /// Read string literal
-    fn lex_string_literal_double(&mut self) -> Result<Token, RubyError> {
+    fn lex_string_literal_double1(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
-        let mut pos;
         loop {
-            pos = self.pos;
             match self.get()? {
-                '"' => break,
+                '"' => return Ok(self.new_stringlit(s)),
                 '\\' => s.push(self.read_escaped_char()?),
                 '#' => {
                     if self.consume('{') {
-                        match self.quote_state.last() {
-                            Some(QuoteState::DoubleQuote) => {
-                                self.quote_state.push(QuoteState::Expr);
-                                return Ok(self.new_open_dq(s));
-                            }
-                            Some(QuoteState::Expr) => {
-                                return Ok(self.new_inter_dq(s));
-                            }
-                            _ => return Err(self.error_unexpected(self.pos - 1)),
-                        }
+                        return Ok(self.new_open_dq(s));
                     } else {
                         s.push('#');
                     }
@@ -511,14 +523,23 @@ impl Lexer {
                 c => s.push(c),
             }
         }
+    }
 
-        match self.quote_state.pop().unwrap() {
-            QuoteState::DoubleQuote => Ok(self.new_stringlit(s)),
-            QuoteState::Expr => {
-                assert_eq!(self.quote_state.pop().unwrap(), QuoteState::DoubleQuote);
-                Ok(self.new_close_dq(s))
+    fn lex_close_interpolate(&mut self) -> Result<Token, RubyError> {
+        let mut s = "".to_string();
+        loop {
+            match self.get()? {
+                '"' => return Ok(self.new_close_dq(s)),
+                '\\' => s.push(self.read_escaped_char()?),
+                '#' => {
+                    if self.consume('{') {
+                        return Ok(self.new_inter_dq(s));
+                    } else {
+                        s.push('#');
+                    }
+                }
+                c => s.push(c),
             }
-            QuoteState::Brace => Err(self.error_unexpected(pos)),
         }
     }
 
