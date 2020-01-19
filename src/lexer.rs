@@ -13,6 +13,7 @@ pub struct Lexer {
     reserved_rev: HashMap<Reserved, String>,
     quote_state: Vec<QuoteState>,
     pub source_info: SourceInfoRef,
+    state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,6 +88,7 @@ impl Lexer {
             reserved_rev,
             quote_state: vec![],
             source_info: SourceInfoRef::new(SourceInfo::new("")),
+            state_save: vec![],
         }
     }
 
@@ -158,11 +160,38 @@ impl Lexer {
     }
 
     pub fn peek_token(&mut self) -> Result<Token, RubyError> {
-        let state_save = (self.pos, self.token_start_pos);
+        self.save_state();
         let tok = self.fetch_token()?;
+        self.restore_state();
+        Ok(tok)
+    }
+
+    pub fn peek_token_skip_lt(&mut self) -> Result<Token, RubyError> {
+        let state_save = (self.pos, self.token_start_pos);
+        let mut tok;
+        loop {
+            tok = self.fetch_token()?;
+            if tok.is_eof() || !tok.is_line_term() {
+                break;
+            }
+        }
         self.pos = state_save.0;
         self.token_start_pos = state_save.1;
         Ok(tok)
+    }
+
+    pub fn save_state(&mut self) {
+        self.state_save.push((self.token_start_pos, self.pos));
+    }
+
+    pub fn restore_state(&mut self) {
+        let state = self.state_save.pop().unwrap();
+        self.token_start_pos = state.0;
+        self.pos = state.1;
+    }
+
+    pub fn discard_state(&mut self) {
+        self.state_save.pop().unwrap();
     }
 
     fn fetch_token(&mut self) -> Result<Token, RubyError> {
