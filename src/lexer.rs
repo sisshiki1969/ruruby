@@ -9,6 +9,8 @@ pub struct Lexer {
     len: usize,
     token_start_pos: usize,
     pos: usize,
+    buf: Option<Token>,
+    buf_skip_lt: Option<Token>,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
     quote_state: Vec<QuoteState>,
@@ -80,10 +82,10 @@ impl Lexer {
         };
         Lexer {
             len: 0,
-            //line_top_pos: 0,
             token_start_pos: 0,
             pos: 0,
-            //line: 1,
+            buf: None,
+            buf_skip_lt: None,
             reserved,
             reserved_rev,
             quote_state: vec![],
@@ -138,6 +140,8 @@ impl Lexer {
     }
 
     pub fn get_token(&mut self) -> Result<Token, RubyError> {
+        self.buf = None;
+        self.buf_skip_lt = None;
         let tok = self.fetch_token()?;
         match tok.kind {
             TokenKind::Punct(Punct::LBrace) => {
@@ -160,13 +164,20 @@ impl Lexer {
     }
 
     pub fn peek_token(&mut self) -> Result<Token, RubyError> {
+        if let Some(tok) = &self.buf {
+            return Ok(tok.clone());
+        };
         self.save_state();
         let tok = self.fetch_token()?;
         self.restore_state();
+        self.buf = Some(tok.clone());
         Ok(tok)
     }
 
     pub fn peek_token_skip_lt(&mut self) -> Result<Token, RubyError> {
+        if let Some(tok) = &self.buf_skip_lt {
+            return Ok(tok.clone());
+        };
         let state_save = (self.pos, self.token_start_pos);
         let mut tok;
         loop {
@@ -177,6 +188,7 @@ impl Lexer {
         }
         self.pos = state_save.0;
         self.token_start_pos = state_save.1;
+        self.buf_skip_lt = Some(tok.clone());
         Ok(tok)
     }
 
