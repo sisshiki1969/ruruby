@@ -1471,15 +1471,47 @@ impl Parser {
 
     fn parse_regexp(&mut self) -> Result<Node, RubyError> {
         let tok = self.lexer.lex_regexp()?;
-        eprintln!("{:?}", tok);
-        let regexp = if let TokenKind::StringLit(s) = tok.kind {
-            s
-        } else {
-            "".to_string()
+        let mut nodes = match tok.kind {
+            TokenKind::StringLit(s) => {
+                return Ok(Node::new_regexp(
+                    vec![Node::new_string(s, tok.loc)],
+                    tok.loc,
+                ));
+            }
+            TokenKind::OpenRegex(s) => vec![Node::new_string(s.clone(), tok.loc)],
+            _ => panic!(),
         };
-        let node = Node::new_string(regexp, tok.loc);
-        let loc = node.loc();
-        Ok(Node::new_regexp(vec![node], loc))
+        loop {
+            match self.peek()?.kind {
+                TokenKind::CloseString(s) => {
+                    self.get()?;
+                    let end_loc = self.prev_loc();
+                    nodes.push(Node::new_string(s.clone(), end_loc));
+                    eprintln!("REGEXP");
+                    for node in &nodes {
+                        eprintln!("{:?}", node);
+                    }
+                    return Ok(Node::new_regexp(nodes, tok.loc.merge(end_loc)));
+                }
+                TokenKind::InterString(s) => {
+                    self.get()?;
+                    nodes.push(Node::new_string(s.clone(), self.prev_loc()));
+                }
+                /*
+                TokenKind::OpenString(s) => {
+                    let s = s.clone();
+                    self.get()?;
+                    self.parse_interporated_string_literal(&s)?;
+                }*/
+                TokenKind::EOF => {
+                    let loc = self.loc();
+                    return Err(self.error_unexpected(loc, "Unexpectd EOF."));
+                }
+                _ => {
+                    nodes.push(self.parse_comp_stmt()?);
+                }
+            }
+        }
     }
 
     fn parse_hash_literal(&mut self) -> Result<Node, RubyError> {

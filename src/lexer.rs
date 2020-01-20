@@ -21,8 +21,9 @@ pub struct Lexer {
 #[derive(Debug, Clone, PartialEq)]
 enum QuoteState {
     DoubleQuote,
+    RegEx,
     Brace,
-    Expr,
+    //Expr,
 }
 
 #[derive(Debug, Clone)]
@@ -152,11 +153,11 @@ impl Lexer {
             }
             TokenKind::OpenString(_) => {
                 self.quote_state.push(QuoteState::DoubleQuote);
-                self.quote_state.push(QuoteState::Expr);
+                //self.quote_state.push(QuoteState::Expr);
             }
             TokenKind::CloseString(_) => {
+                //assert_eq!(self.quote_state.pop().unwrap(), QuoteState::Expr);
                 self.quote_state.pop().unwrap();
-                assert_eq!(self.quote_state.pop().unwrap(), QuoteState::DoubleQuote);
             }
             _ => {}
         };
@@ -295,7 +296,8 @@ impl Lexer {
                     ']' => return Ok(self.new_punct(Punct::RBracket)),
                     '{' => return Ok(self.new_punct(Punct::LBrace)),
                     '}' => match self.quote_state.last() {
-                        Some(QuoteState::Expr) => return self.lex_close_interpolate(),
+                        Some(QuoteState::DoubleQuote) => return self.lex_interpolate_string(),
+                        Some(QuoteState::RegEx) => return self.lex_interpolate_regexp(),
                         Some(QuoteState::Brace) => return Ok(self.new_punct(Punct::RBrace)),
                         _ => return Err(self.error_unexpected(pos)),
                     },
@@ -568,7 +570,7 @@ impl Lexer {
         }
     }
 
-    fn lex_close_interpolate(&mut self) -> Result<Token, RubyError> {
+    fn lex_interpolate_string(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -598,9 +600,43 @@ impl Lexer {
                     };
                     return Ok(self.new_stringlit(s));
                 }
+                '\\' => {
+                    s.push('\\');
+                    s.push(self.get()?);
+                }
+                '#' => {
+                    if self.consume('{') {
+                        self.quote_state.push(QuoteState::RegEx);
+                        //self.quote_state.push(QuoteState::Expr);
+                        return Ok(self.new_open_reg(s));
+                    } else {
+                        s.push('#');
+                    }
+                }
                 c => {
                     s.push(c);
                 }
+            }
+        }
+    }
+
+    fn lex_interpolate_regexp(&mut self) -> Result<Token, RubyError> {
+        let mut s = "".to_string();
+        loop {
+            match self.get()? {
+                '/' => return Ok(self.new_close_dq(s)),
+                '\\' => {
+                    s.push('\\');
+                    s.push(self.get()?);
+                }
+                '#' => {
+                    if self.consume('{') {
+                        return Ok(self.new_inter_dq(s));
+                    } else {
+                        s.push('#');
+                    }
+                }
+                c => s.push(c),
             }
         }
     }
@@ -772,6 +808,10 @@ impl Lexer {
 
     fn new_close_dq(&self, s: String) -> Token {
         Token::new_close_dq(s, self.cur_loc())
+    }
+
+    fn new_open_reg(&self, s: String) -> Token {
+        Token::new_open_reg(s, self.cur_loc())
     }
 
     fn new_space(&self) -> Token {

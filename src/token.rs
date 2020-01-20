@@ -48,6 +48,7 @@ pub enum TokenKind {
     OpenString(String),
     InterString(String),
     CloseString(String),
+    OpenRegex(String),
     Space,
     LineTerm,
 }
@@ -168,8 +169,13 @@ impl Token {
     pub fn new_inter_dq(s: impl Into<String>, loc: Loc) -> Self {
         Annot::new(TokenKind::InterString(s.into()), loc)
     }
+
     pub fn new_close_dq(s: impl Into<String>, loc: Loc) -> Self {
         Annot::new(TokenKind::CloseString(s.into()), loc)
+    }
+
+    pub fn new_open_reg(s: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::OpenRegex(s.into()), loc)
     }
 
     pub fn new_punct(punct: Punct, loc: Loc) -> Self {
