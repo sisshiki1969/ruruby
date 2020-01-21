@@ -13,6 +13,7 @@ mod object;
 mod perf;
 mod procobj;
 mod range;
+mod regexp;
 mod string;
 pub mod value;
 mod vm_inst;
@@ -299,7 +300,6 @@ impl VM {
                     self.exec_stack.push(PackedValue::symbol(id));
                     self.pc += 5;
                 }
-
                 Inst::ADD => {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
@@ -440,9 +440,9 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CONCAT_STRING => {
-                    let rhs = self.exec_stack.pop().unwrap().as_string();
-                    let lhs = self.exec_stack.pop().unwrap().as_string();
-                    let val = match (lhs, rhs) {
+                    let rhs = self.exec_stack.pop().unwrap();
+                    let lhs = self.exec_stack.pop().unwrap();
+                    let val = match (lhs.as_string(), rhs.as_string()) {
                         (Some(lhs), Some(rhs)) => PackedValue::string(format!("{}{}", lhs, rhs)),
                         (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
                     };
@@ -706,6 +706,22 @@ impl VM {
                     let hash = PackedValue::hash(&self.globals, HashRef::from(key_value));
                     self.exec_stack.push(hash);
                     self.pc += 5;
+                }
+                Inst::CREATE_REGEXP => {
+                    let arg = self.exec_stack.pop().unwrap();
+                    let arg = match arg.as_string() {
+                        Some(arg) => arg,
+                        None => {
+                            return Err(self.error_argument("Illegal argument for CREATE_REGEXP"))
+                        }
+                    };
+                    let regexpref = match regexp::RegexpRef::from_string(arg) {
+                        Ok(regex) => regex,
+                        Err(_) => return Err(self.error_argument("Illegal regular expression")),
+                    };
+                    let regexp = PackedValue::regexp(&self.globals, regexpref);
+                    self.exec_stack.push(regexp);
+                    self.pc += 1;
                 }
                 Inst::JMP => {
                     let disp = read32(iseq, self.pc + 1) as i32 as i64;

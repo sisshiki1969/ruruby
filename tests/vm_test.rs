@@ -839,6 +839,16 @@ fn range2() {
 }
 
 #[test]
+fn regexp1() {
+    let program = r#"
+    assert("abc!!g", "abcdefg".gsub(/def/, "!!"))
+    assert("2.5".gsub(".", ","), "2,5")
+    "#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn method1() {
     let program = r#"
     class Foo

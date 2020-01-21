@@ -3,6 +3,7 @@ use super::class::ClassRef;
 use super::hash::HashRef;
 use super::procobj::ProcRef;
 use super::range::RangeRef;
+use super::regexp::RegexpRef;
 use crate::vm::*;
 use std::collections::HashMap;
 
@@ -23,6 +24,7 @@ pub enum ObjKind {
     Hash(HashRef),
     Range(RangeRef),
     Proc(ProcRef),
+    Regexp(RegexpRef),
     Method(MethodObjRef),
 }
 
@@ -72,6 +74,14 @@ impl ObjectInfo {
             classref: globals.hash_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Hash(hashref),
+        }
+    }
+
+    pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
+        ObjectInfo {
+            classref: globals.regexp_class,
+            instance_var: HashMap::new(),
+            kind: ObjKind::Regexp(regexpref),
         }
     }
 
@@ -125,6 +135,10 @@ impl ObjectRef {
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         ObjectRef::new(ObjectInfo::new_hash(globals, hashref))
+    }
+
+    pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
+        ObjectRef::new(ObjectInfo::new_regexp(globals, regexpref))
     }
 
     pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {

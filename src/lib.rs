@@ -1,4 +1,5 @@
 //#![feature(test)]
+extern crate regex;
 pub mod error;
 pub mod lexer;
 pub mod loader;

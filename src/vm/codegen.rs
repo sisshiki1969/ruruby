@@ -145,6 +145,10 @@ impl Codegen {
         self.push32(iseq, len as u32);
     }
 
+    fn gen_create_regexp(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::CREATE_REGEXP);
+    }
+
     fn gen_get_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
         iseq.push(Inst::GET_ARRAY_ELEM);
         self.push32(iseq, num_args as u32);
@@ -751,7 +755,7 @@ impl Codegen {
             NodeKind::Symbol(id) => {
                 self.gen_symbol(iseq, *id);
             }
-            NodeKind::InterporatedString(nodes) | NodeKind::RegExp(nodes) => {
+            NodeKind::InterporatedString(nodes) => {
                 self.gen_string(globals, iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {
@@ -766,6 +770,26 @@ impl Codegen {
                     }
                     self.gen_concat(iseq);
                 }
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
+            NodeKind::RegExp(nodes) => {
+                self.gen_string(globals, iseq, &"".to_string());
+                for node in nodes {
+                    match &node.kind {
+                        NodeKind::String(s) => {
+                            self.gen_string(globals, iseq, &s);
+                        }
+                        NodeKind::CompStmt(nodes) => {
+                            self.gen_comp_stmt(globals, iseq, nodes, true)?;
+                            iseq.push(Inst::TO_S);
+                        }
+                        _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
+                    }
+                    self.gen_concat(iseq);
+                }
+                self.gen_create_regexp(iseq);
                 if !use_value {
                     self.gen_pop(iseq)
                 };

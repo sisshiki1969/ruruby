@@ -58,6 +58,7 @@ impl Inst {
     pub const CREATE_ARRAY: u8 = 51;
     pub const CREATE_PROC: u8 = 52;
     pub const CREATE_HASH: u8 = 53;
+    pub const CREATE_REGEXP: u8 = 54;
 
     pub const POP: u8 = 60;
     pub const DUP: u8 = 63;
@@ -130,6 +131,7 @@ impl Inst {
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
             Inst::CREATE_PROC => "CREATE_PROC",
             Inst::CREATE_HASH => "CREATE_HASH",
+            Inst::CREATE_REGEXP => "CREATE_REGEXP",
 
             Inst::POP => "POP",
             Inst::DUP => "DUP",
@@ -170,6 +172,7 @@ impl Inst {
             | Inst::BIT_NOT
             | Inst::CONCAT_STRING
             | Inst::CREATE_RANGE
+            | Inst::CREATE_REGEXP
             | Inst::TO_S
             | Inst::SPLAT
             | Inst::POP

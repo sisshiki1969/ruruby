@@ -17,6 +17,7 @@ pub struct Globals {
     pub method_class: ClassRef,
     pub range_class: ClassRef,
     pub hash_class: ClassRef,
+    pub regexp_class: ClassRef,
     pub string_class: ClassRef,
     pub object_class: ClassRef,
 }
@@ -41,6 +42,7 @@ impl Globals {
             method_class: object_class,
             range_class: object_class,
             hash_class: object_class,
+            regexp_class: object_class,
             string_class: object_class,
             object_class,
         };
@@ -54,6 +56,7 @@ impl Globals {
         globals.range_class = range::init_range(&mut globals);
         globals.string_class = string::init_string(&mut globals);
         globals.hash_class = hash::init_hash(&mut globals);
+        globals.regexp_class = regexp::init_regexp(&mut globals);
         globals
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
@@ -134,6 +137,7 @@ impl Globals {
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::SplatArray(_) => "[SplatArray]".to_string(),
                 ObjKind::Hash(_) => "Hash".to_string(),
+                ObjKind::Regexp(_) => "Regexp".to_string(),
                 ObjKind::Range(_) => "Range".to_string(),
                 ObjKind::Class(_) => "Class".to_string(),
                 ObjKind::Module(_) => "Module".to_string(),

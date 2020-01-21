@@ -17,3 +17,4 @@ verbose = []
 rustyline = "5.0.3"
 clap = "2.33.0"
 ansi_term = "0.12.1"
+regex = "1"

@@ -388,6 +388,16 @@ impl PackedValue {
         }
     }
 
+    pub fn as_regexp(&self) -> Option<regexp::RegexpRef> {
+        match self.as_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Regexp(regref) => Some(regref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_range(&self) -> Option<RangeRef> {
         match self.as_object() {
             Some(oref) => match oref.kind {
@@ -418,13 +428,13 @@ impl PackedValue {
         }
     }
 
-    pub fn as_string(&self) -> Option<String> {
+    pub fn as_string(&self) -> Option<&String> {
         if self.is_packed_value() {
             return None;
         }
         unsafe {
             match &*(self.0 as *mut Value) {
-                Value::String(string) => Some(string.to_string()),
+                Value::String(string) => Some(string),
                 _ => None,
             }
         }
@@ -527,6 +537,10 @@ impl PackedValue {
 
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
         PackedValue::object(ObjectRef::new_hash(globals, hash_ref))
+    }
+
+    pub fn regexp(globals: &Globals, regexp_ref: regexp::RegexpRef) -> Self {
+        PackedValue::object(ObjectRef::new_regexp(globals, regexp_ref))
     }
 
     pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
