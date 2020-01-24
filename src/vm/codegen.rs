@@ -789,6 +789,8 @@ impl Codegen {
                     }
                     self.gen_concat(iseq);
                 }
+                let loc = self.loc;
+                self.save_loc(iseq, loc);
                 self.gen_create_regexp(iseq);
                 if !use_value {
                     self.gen_pop(iseq)

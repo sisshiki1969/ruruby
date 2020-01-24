@@ -49,6 +49,7 @@ pub enum TokenKind {
     InterString(String),
     CloseString(String),
     OpenRegex(String),
+    PercentNotation(char, String),
     Space,
     LineTerm,
 }
@@ -176,6 +177,10 @@ impl Token {
 
     pub fn new_open_reg(s: impl Into<String>, loc: Loc) -> Self {
         Annot::new(TokenKind::OpenRegex(s.into()), loc)
+    }
+
+    pub fn new_percent(kind: char, content: String, loc: Loc) -> Self {
+        Annot::new(TokenKind::PercentNotation(kind, content), loc)
     }
 
     pub fn new_punct(punct: Punct, loc: Loc) -> Self {

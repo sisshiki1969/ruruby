@@ -25,7 +25,9 @@ fn main() {
     let app_matches = app.get_matches();
     match app_matches.value_of("file") {
         Some(file_name) => {
-            file_read(file_name);
+            let mut vm = VM::new();
+            exec_file(&mut vm, "struct.rb");
+            exec_file(&mut vm, file_name);
             return;
         }
         None => {
@@ -35,7 +37,7 @@ fn main() {
     };
 }
 
-fn file_read(file_name: impl Into<String>) {
+fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
     let file_name = file_name.into();
     let (absolute_path, program) = match load_file(file_name.clone()) {
         Ok((path, program)) => (path, program),
@@ -53,7 +55,6 @@ fn file_read(file_name: impl Into<String>) {
         },
     };
 
-    let mut vm = VM::new();
     let root_path = absolute_path.clone();
     #[cfg(feature = "verbose")]
     eprintln!("load file: {:?}", root_path);

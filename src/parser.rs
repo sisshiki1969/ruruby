@@ -1291,6 +1291,10 @@ impl Parser {
                     let node = self.parse_regexp()?;
                     Ok(node)
                 }
+                Punct::Rem => {
+                    let node = self.parse_percent_notation()?;
+                    Ok(node)
+                }
                 _ => {
                     return Err(
                         self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
@@ -1511,6 +1515,21 @@ impl Parser {
                     nodes.push(self.parse_comp_stmt()?);
                 }
             }
+        }
+    }
+
+    fn parse_percent_notation(&mut self) -> Result<Node, RubyError> {
+        let tok = self.lexer.lex_percent_notation()?;
+        let loc = tok.loc;
+        if let TokenKind::PercentNotation(_kind, content) = tok.kind {
+            let ary = content
+                .split(' ')
+                .map(|x| Node::new_string(x.to_string(), loc))
+                .rev()
+                .collect();
+            Ok(Node::new_array(ary, tok.loc))
+        } else {
+            panic!();
         }
     }
 

@@ -594,9 +594,15 @@ impl Lexer {
             match self.get()? {
                 '/' => {
                     if self.consume('i') {
+                        s.push('i');
                     } else if self.consume('m') {
+                        s.push('m');
                     } else if self.consume('x') {
+                        s.push('x');
                     } else if self.consume('o') {
+                        s.push('o');
+                    } else {
+                        s.push(' ');
                     };
                     return Ok(self.new_stringlit(s));
                 }
@@ -638,6 +644,23 @@ impl Lexer {
                 }
                 c => s.push(c),
             }
+        }
+    }
+
+    pub fn lex_percent_notation(&mut self) -> Result<Token, RubyError> {
+        if self.consume('w') {
+            let mut s = "".to_string();
+            if !self.consume('(') {
+                return Err(self.error_unexpected(self.pos));
+            }
+            loop {
+                match self.get()? {
+                    ')' => return Ok(self.new_percent('w', s)),
+                    ch => s.push(ch),
+                }
+            }
+        } else {
+            return Err(self.error_unexpected(self.pos));
         }
     }
 
@@ -812,6 +835,10 @@ impl Lexer {
 
     fn new_open_reg(&self, s: String) -> Token {
         Token::new_open_reg(s, self.cur_loc())
+    }
+
+    fn new_percent(&self, kind: char, content: String) -> Token {
+        Token::new_percent(kind, content, self.cur_loc())
     }
 
     fn new_space(&self) -> Token {

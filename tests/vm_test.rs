@@ -307,6 +307,15 @@ fn triple_equal() {
 }
 
 #[test]
+fn percent_notation() {
+    let program = r#"
+    assert(%w(We are the champions), ["We", "are", "the", "champions"])
+"#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn if1() {
     let program = "if 5*4==16 +4 then 4;2*3+1 end";
     let expected = Value::FixNum(7);

@@ -709,15 +709,27 @@ impl VM {
                 }
                 Inst::CREATE_REGEXP => {
                     let arg = self.exec_stack.pop().unwrap();
-                    let arg = match arg.as_string() {
-                        Some(arg) => arg,
+                    let mut arg = match arg.as_string() {
+                        Some(arg) => arg.clone(),
                         None => {
                             return Err(self.error_argument("Illegal argument for CREATE_REGEXP"))
                         }
                     };
-                    let regexpref = match regexp::RegexpRef::from_string(arg) {
+                    match arg.pop().unwrap() {
+                        'i' => arg.insert_str(0, "(?i)"),
+                        'm' => arg.insert_str(0, "(?m)"),
+                        'x' => arg.insert_str(0, "(?x)"),
+                        'o' => arg.insert_str(0, "(?o)"),
+                        _ => {}
+                    };
+                    let regexpref = match regexp::RegexpRef::from_string(&arg) {
                         Ok(regex) => regex,
-                        Err(_) => return Err(self.error_argument("Illegal regular expression")),
+                        Err(err) => {
+                            return Err(self.error_argument(format!(
+                                "Illegal regular expression: {:?}\n/{}/",
+                                err, arg
+                            )))
+                        }
                     };
                     let regexp = PackedValue::regexp(&self.globals, regexpref);
                     self.exec_stack.push(regexp);
