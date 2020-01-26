@@ -67,8 +67,12 @@ impl Globals {
         self.add_object_method(id, methodref);
     }
 
-    pub fn get_ident_name(&self, id: IdentId) -> &String {
-        self.ident_table.get_name(id)
+    pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {
+        let id = id.into();
+        match id {
+            Some(id) => self.ident_table.get_name(id),
+            None => &"",
+        }
     }
 
     pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
@@ -143,7 +147,7 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => self.get_ident_name(oref.classref.name).clone(),
+                ObjKind::Ordinary => self.get_ident_name(oref.classref.name).to_string(),
             },
         }
     }

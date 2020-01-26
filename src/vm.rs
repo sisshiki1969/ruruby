@@ -291,7 +291,7 @@ impl VM {
                 }
                 Inst::PUSH_STRING => {
                     let id = read_id(iseq, self.pc + 1);
-                    let string = self.globals.get_ident_name(id).clone();
+                    let string = self.globals.get_ident_name(id).to_string();
                     self.exec_stack.push(PackedValue::string(string));
                     self.pc += 5;
                 }
@@ -1580,7 +1580,10 @@ impl VM {
             Value::Nil => "nil".to_string(),
             Value::String(s) => format!("\"{}\"", s),
             Value::Object(oref) => match oref.kind {
-                ObjKind::Class(cref) => format! {"{}", self.globals.get_ident_name(cref.name)},
+                ObjKind::Class(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    None => format! {"#<Class:0x{:x}>", cref.id()},
+                },
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
                     1 => format!("[{}]", self.val_pp(aref.elements[0])),
@@ -1614,7 +1617,7 @@ impl VM {
                     }
                 },
                 ObjKind::Ordinary => {
-                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.classref.name), oref}
+                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.classref.name), oref.id()}
                 }
                 _ => self.val_to_s(val),
             },

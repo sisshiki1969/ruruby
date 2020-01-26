@@ -4,21 +4,23 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
-    pub name: IdentId,
+    pub name: Option<IdentId>,
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub constants: ValueTable,
     pub superclass: Option<ClassRef>,
+    pub is_singleton: bool,
 }
 
 impl ClassInfo {
-    pub fn new(name: IdentId, superclass: Option<ClassRef>) -> Self {
+    pub fn new(name: impl Into<Option<IdentId>>, superclass: Option<ClassRef>) -> Self {
         ClassInfo {
-            name,
+            name: name.into(),
             instance_method: HashMap::new(),
             class_method: HashMap::new(),
             constants: HashMap::new(),
             superclass,
+            is_singleton: false,
         }
     }
 }
@@ -26,11 +28,11 @@ impl ClassInfo {
 pub type ClassRef = Ref<ClassInfo>;
 
 impl ClassRef {
-    pub fn from_no_superclass(id: IdentId) -> Self {
+    pub fn from_no_superclass(id: impl Into<Option<IdentId>>) -> Self {
         ClassRef::new(ClassInfo::new(id, None))
     }
 
-    pub fn from(id: IdentId, superclass: ClassRef) -> Self {
+    pub fn from(id: impl Into<Option<IdentId>>, superclass: ClassRef) -> Self {
         ClassRef::new(ClassInfo::new(id, Some(superclass)))
     }
 

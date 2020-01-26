@@ -58,6 +58,10 @@ impl<T> Ref<T> {
     pub fn inner(&self) -> &T {
         unsafe { &*self.0.as_ptr() }
     }
+
+    pub fn id(&self) -> u64 {
+        self.0.as_ptr() as u64
+    }
 }
 
 impl<T: Clone> Ref<T> {

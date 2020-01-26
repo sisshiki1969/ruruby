@@ -255,6 +255,10 @@ impl PackedValue {
         }
     }
 
+    pub fn id(&self) -> u64 {
+        self.0
+    }
+
     pub fn get_class(&self, globals: &Globals) -> ClassRef {
         match self.unpack() {
             Value::FixNum(_) => globals.integer_class,

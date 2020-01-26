@@ -10,6 +10,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectInfo {
     pub classref: ClassRef,
+    pub singleton: Option<ClassRef>,
     pub instance_var: ValueTable,
     pub kind: ObjKind,
 }
@@ -34,6 +35,7 @@ impl ObjectInfo {
             classref,
             instance_var: HashMap::new(),
             kind: ObjKind::Ordinary,
+            singleton: None,
         }
     }
 
@@ -42,6 +44,7 @@ impl ObjectInfo {
             classref: globals.class_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Class(classref),
+            singleton: None,
         }
     }
 
@@ -50,6 +53,7 @@ impl ObjectInfo {
             classref: globals.module_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Module(classref),
+            singleton: None,
         }
     }
 
@@ -58,6 +62,7 @@ impl ObjectInfo {
             classref: globals.array_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Array(arrayref),
+            singleton: None,
         }
     }
 
@@ -66,6 +71,7 @@ impl ObjectInfo {
             classref: globals.array_class,
             instance_var: HashMap::new(),
             kind: ObjKind::SplatArray(arrayref),
+            singleton: None,
         }
     }
 
@@ -74,6 +80,7 @@ impl ObjectInfo {
             classref: globals.hash_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Hash(hashref),
+            singleton: None,
         }
     }
 
@@ -82,6 +89,7 @@ impl ObjectInfo {
             classref: globals.regexp_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Regexp(regexpref),
+            singleton: None,
         }
     }
 
@@ -90,6 +98,7 @@ impl ObjectInfo {
             classref: globals.range_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Range(rangeref),
+            singleton: None,
         }
     }
 
@@ -98,6 +107,7 @@ impl ObjectInfo {
             classref: globals.proc_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Proc(procref),
+            singleton: None,
         }
     }
 
@@ -106,6 +116,7 @@ impl ObjectInfo {
             classref: globals.method_class,
             instance_var: HashMap::new(),
             kind: ObjKind::Method(methodref),
+            singleton: None,
         }
     }
 }
@@ -168,10 +179,13 @@ impl ObjectRef {
 
 pub fn init_object(globals: &mut Globals) {
     let object = globals.object_class;
-    globals.add_builtin_instance_method(object, "class", object_class);
+    globals.add_builtin_instance_method(object, "class", class);
+    globals.add_builtin_instance_method(object, "object_id", object_id);
+    globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
+    globals.add_builtin_instance_method(object, "inspect", inspect);
 }
 
-fn object_class(
+fn class(
     vm: &mut VM,
     receiver: PackedValue,
     _args: VecArray,
@@ -179,4 +193,45 @@ fn object_class(
 ) -> VMResult {
     let class = receiver.get_class(&vm.globals);
     Ok(PackedValue::class(&mut vm.globals, class))
+}
+
+fn object_id(
+    _vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let id = receiver.id();
+    Ok(PackedValue::fixnum(id as i64))
+}
+
+fn singleton_class(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    match receiver.unpack() {
+        Value::Object(mut obj) => match obj.singleton {
+            Some(class) => Ok(PackedValue::class(&vm.globals, class)),
+            None => {
+                let mut singleton_class = ClassRef::from_no_superclass(None);
+                singleton_class.is_singleton = true;
+                obj.singleton = Some(singleton_class);
+                let obj = PackedValue::class(&vm.globals, singleton_class);
+                Ok(obj)
+            }
+        },
+        _ => Err(vm.error_type("Can not define singleton.")),
+    }
+}
+
+fn inspect(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let inspect = vm.val_pp(receiver);
+    Ok(PackedValue::string(inspect))
 }

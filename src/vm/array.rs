@@ -29,6 +29,7 @@ pub fn init_array(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(array_class, "size", array::array_length);
     globals.add_builtin_instance_method(array_class, "*", array::array_mul);
     globals.add_builtin_instance_method(array_class, "+", array::array_add);
+    globals.add_builtin_instance_method(array_class, "-", array::array_sub);
     globals.add_builtin_instance_method(array_class, "map", array::array_map);
     globals.add_builtin_instance_method(array_class, "each", array::array_each);
     globals.add_builtin_instance_method(array_class, "include?", array::array_include);
@@ -163,6 +164,26 @@ fn array_add(
         .elements
         .clone();
     lhs.append(&mut rhs);
+    Ok(PackedValue::array_from(&vm.globals, lhs))
+}
+
+fn array_sub(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let mut lhs = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?
+        .elements
+        .clone();
+    let rhs = args[0]
+        .as_array()
+        .ok_or(vm.error_nomethod("An arg must be an array."))?
+        .elements
+        .clone();
+    lhs.retain(|x| !rhs.contains(x));
     Ok(PackedValue::array_from(&vm.globals, lhs))
 }
 

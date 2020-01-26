@@ -347,7 +347,7 @@ impl Codegen {
             NodeKind::Send {
                 receiver, method, ..
             } => {
-                let name = globals.get_ident_name(*method).clone() + "=";
+                let name = globals.get_ident_name(*method).to_string() + "=";
                 let assign_id = globals.get_ident_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
