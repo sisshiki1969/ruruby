@@ -528,6 +528,15 @@ impl PackedValue {
         PackedValue(Value::pack_as_boxed(Value::Object(obj_ref)))
     }
 
+    pub fn bootstrap_class(classref: ClassRef) -> Self {
+        PackedValue::object(ObjectRef::new(ObjectInfo {
+            class: PackedValue::nil(), // dummy for boot strapping
+            kind: ObjKind::Class(classref),
+            instance_var: HashMap::new(),
+            singleton: None,
+        }))
+    }
+
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
         PackedValue::object(ObjectRef::new_class(globals, class_ref))
     }

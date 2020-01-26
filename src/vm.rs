@@ -51,7 +51,7 @@ pub struct VM {
     pub global_var: ValueTable,
     // VM state
     pub context_stack: Vec<ContextRef>,
-    pub class_stack: Vec<ClassRef>,
+    pub class_stack: Vec<PackedValue>,
     pub exec_stack: Vec<PackedValue>,
     pub pc: usize,
     #[cfg(feature = "perf")]
@@ -115,7 +115,7 @@ impl VM {
         if self.class_stack.len() == 0 {
             self.globals.object_class
         } else {
-            *self.class_stack.last().unwrap()
+            self.class_stack.last().unwrap().as_module().unwrap()
         }
     }
 
@@ -486,30 +486,25 @@ impl VM {
                 Inst::GET_CONST => {
                     let id = read_id(iseq, self.pc + 1);
                     let class = self.class();
-                    let val = self.get_constant(class, id)?;
+                    let val = match self.get_env_const(id) {
+                        Some(val) => val,
+                        None => self.get_super_const(class, id)?,
+                    };
                     self.exec_stack.push(val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST_TOP => {
                     let id = read_id(iseq, self.pc + 1);
                     let class = self.globals.object_class;
-                    let val = self.get_constant(class, id)?;
+                    let val = self.get_super_const(class, id)?;
                     self.exec_stack.push(val);
                     self.pc += 5;
                 }
                 Inst::GET_SCOPE => {
                     let parent = self.exec_stack.pop().unwrap();
                     let id = read_id(iseq, self.pc + 1);
-                    let class = match parent.as_module() {
-                        Some(class) => class,
-                        None => {
-                            return Err(self.error_type(format!(
-                                "{:?} is not a class/module.",
-                                parent.unpack()
-                            )))
-                        }
-                    };
-                    let val = self.get_constant(class, id)?;
+                    let class = self.val_as_module(parent)?;
+                    let val = self.get_super_const(class, id)?;
                     self.exec_stack.push(val);
                     self.pc += 5;
                 }
@@ -802,51 +797,42 @@ impl VM {
                     let id = IdentId::from(read32(iseq, self.pc + 2));
                     let methodref = MethodRef::from(read32(iseq, self.pc + 6));
                     let super_val = self.exec_stack.pop().unwrap();
-                    let superclass = match super_val.as_class() {
-                        Some(class) => class,
-                        None => {
-                            let val = self.val_pp(super_val);
-                            return Err(self.error_type(format!(
-                                "Superclass must be a class. (given:{:?})",
-                                val
-                            )));
+                    let val = match self.globals.object_class.constants.get(&id) {
+                        Some(val) => {
+                            let classref = self.val_as_module(val.clone())?;
+                            if !super_val.is_nil() && classref.superclass != Some(super_val) {
+                                return Err(self.error_type(format!(
+                                    "superclass mismatch for class {}.",
+                                    self.globals.get_ident_name(id),
+                                )));
+                            };
+                            val.clone()
                         }
-                    };
-                    let (val, classref) = match self.globals.object_class.constants.get(&id) {
-                        Some(val) => (
-                            val.clone(),
-                            match val.as_module() {
-                                Some(classref) => {
-                                    if classref.superclass() != Some(superclass) {
-                                        return Err(self.error_type(format!(
-                                            "superclass mismatch for class {}.",
-                                            self.globals.get_ident_name(id),
-                                        )));
-                                    };
-                                    classref
-                                }
-                                None => {
-                                    return Err(self.error_type(format!(
-                                        "{} is not a class.",
-                                        self.val_pp(val.clone())
-                                    )))
-                                }
-                            },
-                        ),
                         None => {
+                            let super_val = if !super_val.is_nil() {
+                                if super_val.as_class().is_none() {
+                                    let val = self.val_pp(super_val);
+                                    return Err(self.error_type(format!(
+                                        "Superclass must be a class. (given:{:?})",
+                                        val
+                                    )));
+                                };
+                                super_val
+                            } else {
+                                self.globals.object
+                            };
                             let classref = ClassRef::from(id, super_val);
-                            eprintln!("super:{}", self.val_pp(super_val));
                             let val = if is_module {
                                 PackedValue::module(&mut self.globals, classref)
                             } else {
                                 PackedValue::class(&mut self.globals, classref)
                             };
                             self.class().constants.insert(id, val);
-                            (val, classref)
+                            val
                         }
                     };
 
-                    self.class_stack.push(classref);
+                    self.class_stack.push(val);
 
                     self.eval_send(methodref, val, VecArray::new0(), None, None)?;
                     self.pc += 10;
@@ -860,7 +846,7 @@ impl VM {
                         self.add_object_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as an instance method of the class.
-                        let classref = self.class_stack.last().unwrap().clone();
+                        let classref = self.class();
                         self.add_instance_method(classref, id, methodref);
                     }
                     self.exec_stack.push(PackedValue::symbol(id));
@@ -874,8 +860,8 @@ impl VM {
                         self.add_object_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a class method of the class.
-                        let classref = self.class_stack.last().unwrap().clone();
-                        self.add_class_method(classref, id, methodref);
+                        let classref = self.class();
+                        self.add_singleton_method(classref, id, methodref);
                     }
                     self.exec_stack.push(PackedValue::symbol(id));
                     self.pc += 9;
@@ -1112,7 +1098,19 @@ impl VM {
         }
     }
 
-    fn get_constant(&self, mut class: ClassRef, id: IdentId) -> Result<PackedValue, RubyError> {
+    // Search class stack for the constant.
+    fn get_env_const(&self, id: IdentId) -> Option<PackedValue> {
+        for class in self.class_stack.iter().rev() {
+            match class.as_module().unwrap().constants.get(&id) {
+                Some(val) => return Some(val.clone()),
+                None => {}
+            }
+        }
+        None
+    }
+
+    // Search class inheritance chain for the constant.
+    fn get_super_const(&self, mut class: ClassRef, id: IdentId) -> Result<PackedValue, RubyError> {
         loop {
             match class.constants.get(&id) {
                 Some(val) => {
@@ -1683,7 +1681,7 @@ impl VM {
 }
 
 impl VM {
-    pub fn add_class_method(
+    pub fn add_singleton_method(
         &mut self,
         mut class: ClassRef,
         id: IdentId,

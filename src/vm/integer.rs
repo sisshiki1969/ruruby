@@ -5,7 +5,6 @@ pub fn init_integer(globals: &mut Globals) -> PackedValue {
     let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "times", integer_times);
     globals.add_builtin_instance_method(class, "chr", integer_chr);
-    //globals.add_builtin_class_method(class, "new", integer_new);
     PackedValue::class(globals, class)
 }
 

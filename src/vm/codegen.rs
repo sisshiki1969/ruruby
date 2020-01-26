@@ -645,7 +645,7 @@ impl Codegen {
                         format!("GET_CONST_TOP '{}'", ident_name(globals, iseq, pc + 1))
                     }
                     Inst::SET_CONST => format!("SET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
-                    Inst::GET_SCOPE => format!("SET_SCOPE '{}'", ident_name(globals, iseq, pc + 1)),
+                    Inst::GET_SCOPE => format!("GET_SCOPE '{}'", ident_name(globals, iseq, pc + 1)),
                     Inst::GET_INSTANCE_VAR => {
                         format!("GET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
                     }

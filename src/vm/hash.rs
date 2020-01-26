@@ -36,7 +36,6 @@ pub fn init_hash(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "length", hash_length);
     globals.add_builtin_instance_method(class, "size", hash_length);
     globals.add_builtin_instance_method(class, "values", hash_values);
-    //globals.add_builtin_class_method(class, "new", range_new);
     PackedValue::class(globals, class)
 }
 

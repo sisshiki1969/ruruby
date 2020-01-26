@@ -38,31 +38,16 @@ pub struct Globals {
 impl Globals {
     pub fn new() -> Self {
         let mut ident_table = IdentifierTable::new();
-        let object_id = ident_table.get_ident_id("Object");
+        let object_id = IdentId::OBJECT;
         let module_id = ident_table.get_ident_id("Module");
         let class_id = ident_table.get_ident_id("Class");
         let object_class = ClassRef::from_no_superclass(object_id);
         let nil = PackedValue::nil();
-        let object = PackedValue::object(ObjectRef::new(ObjectInfo {
-            class: nil, // dummy for boot strapping
-            kind: ObjKind::Class(object_class),
-            instance_var: HashMap::new(),
-            singleton: None,
-        }));
+        let object = PackedValue::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
-        let module = PackedValue::object(ObjectRef::new(ObjectInfo {
-            class: nil, // dummy for boot strapping
-            kind: ObjKind::Class(module_class),
-            instance_var: HashMap::new(),
-            singleton: None,
-        }));
+        let module = PackedValue::bootstrap_class(module_class);
         let class_class = ClassRef::from(class_id, module);
-        let class = PackedValue::object(ObjectRef::new(ObjectInfo {
-            class: nil, // dummy for boot strapping
-            kind: ObjKind::Class(class_class),
-            instance_var: HashMap::new(),
-            singleton: None,
-        }));
+        let class = PackedValue::bootstrap_class(class_class);
         object.as_object().unwrap().class = class;
         module.as_object().unwrap().class = class;
         class.as_object().unwrap().class = class;
@@ -75,8 +60,8 @@ impl Globals {
             class_version: 0,
             main_object,
             object_class,
-            module_class: module_class,
-            class_class: class_class,
+            module_class,
+            class_class,
             object,
             module,
             class,
@@ -153,7 +138,6 @@ impl Globals {
         let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
         classref.class_method.insert(id, func_ref);
-        //classref.clone().add_class_method(id, func_ref);
     }
 
     pub fn add_builtin_instance_method(

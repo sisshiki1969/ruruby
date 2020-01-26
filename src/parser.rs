@@ -591,19 +591,12 @@ impl Parser {
 
     fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
         // EXPR : MLHS `=' MRHS
-        let mut new_lvar = vec![];
-        if let NodeKind::Ident(id, _) = node.kind {
-            new_lvar.push(id);
-        };
         let mut mlhs = vec![node];
         loop {
             if self.peek_no_term()?.kind == TokenKind::Punct(Punct::Assign) {
                 break;
             }
             let node = self.parse_function()?;
-            if let NodeKind::Ident(id, _) = node.kind {
-                new_lvar.push(id);
-            };
             mlhs.push(node);
             if !self.consume_punct_no_term(Punct::Comma)? {
                 break;
@@ -616,8 +609,8 @@ impl Parser {
         }
 
         let (mrhs, _) = self.parse_args(None)?;
-        for lvar in new_lvar {
-            self.add_local_var_if_new(lvar);
+        for lhs in &mlhs {
+            self.check_lhs(lhs)?;
         }
         return Ok(Node::new_mul_assign(mlhs, mrhs));
     }
@@ -734,6 +727,10 @@ impl Parser {
     fn check_lhs(&mut self, lhs: &Node) -> Result<(), RubyError> {
         if let NodeKind::Ident(id, _) = lhs.kind {
             self.add_local_var_if_new(id);
+        } else if let NodeKind::Const { toplevel: _, id: _ } = lhs.kind {
+            if self.context_mut().kind == ContextKind::Method {
+                return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment."));
+            }
         };
         Ok(())
     }
@@ -1818,8 +1815,10 @@ impl Parser {
             };
             self.parse_expr()?
         } else {
-            Node::new_const(IdentId::OBJECT, true, loc)
+            let loc = loc.merge(self.prev_loc());
+            Node::new_nil(loc)
         };
+        let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
         let id = self.get_ident_id(&name);
         self.context_stack.push(Context::new_class(None));
