@@ -1,8 +1,7 @@
 use crate::vm::*;
 
-pub fn init_module(globals: &mut Globals) -> ClassRef {
-    let id = globals.get_ident_id("Module");
-    let class = ClassRef::from(id, globals.object_class);
+pub fn init_module(globals: &mut Globals) {
+    let class = globals.module_class;
     globals.add_builtin_instance_method(class, "constants", constants);
     globals.add_builtin_instance_method(class, "instance_methods", instance_methods);
     globals.add_builtin_instance_method(class, "attr_accessor", attr_accessor);
@@ -11,7 +10,6 @@ pub fn init_module(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(class, "attr_writer", attr_writer);
     globals.add_builtin_instance_method(class, "module_function", module_function);
     globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
-    class
 }
 
 fn constants(
@@ -60,7 +58,7 @@ fn instance_methods(
                     )
                     .cloned()
                     .collect();
-                match class.superclass {
+                match class.superclass() {
                     Some(superclass) => class = superclass,
                     None => break,
                 };

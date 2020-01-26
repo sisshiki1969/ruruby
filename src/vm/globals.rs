@@ -9,16 +9,29 @@ pub struct Globals {
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
     pub main_object: ObjectRef,
-    pub integer_class: ClassRef,
-    pub array_class: ClassRef,
+
+    pub integer: PackedValue,
+    pub array: PackedValue,
+    pub class: PackedValue,
+    pub module: PackedValue,
+    pub procobj: PackedValue,
+    pub method: PackedValue,
+    pub range: PackedValue,
+    pub hash: PackedValue,
+    pub regexp: PackedValue,
+    pub string: PackedValue,
+    pub object: PackedValue,
+
+    //pub integer_class: ClassRef,
+    //pub array_class: ClassRef,
     pub class_class: ClassRef,
     pub module_class: ClassRef,
-    pub proc_class: ClassRef,
-    pub method_class: ClassRef,
-    pub range_class: ClassRef,
-    pub hash_class: ClassRef,
-    pub regexp_class: ClassRef,
-    pub string_class: ClassRef,
+    //pub proc_class: ClassRef,
+    //pub method_class: ClassRef,
+    //pub range_class: ClassRef,
+    //pub hash_class: ClassRef,
+    //pub regexp_class: ClassRef,
+    //pub string_class: ClassRef,
     pub object_class: ClassRef,
 }
 
@@ -26,37 +39,67 @@ impl Globals {
     pub fn new() -> Self {
         let mut ident_table = IdentifierTable::new();
         let object_id = ident_table.get_ident_id("Object");
+        let module_id = ident_table.get_ident_id("Module");
+        let class_id = ident_table.get_ident_id("Class");
         let object_class = ClassRef::from_no_superclass(object_id);
-        let main_object = ObjectRef::from(object_class);
+        let nil = PackedValue::nil();
+        let object = PackedValue::object(ObjectRef::new(ObjectInfo {
+            class: nil, // dummy for boot strapping
+            kind: ObjKind::Class(object_class),
+            instance_var: HashMap::new(),
+            singleton: None,
+        }));
+        let module_class = ClassRef::from(module_id, object);
+        let module = PackedValue::object(ObjectRef::new(ObjectInfo {
+            class: nil, // dummy for boot strapping
+            kind: ObjKind::Class(module_class),
+            instance_var: HashMap::new(),
+            singleton: None,
+        }));
+        let class_class = ClassRef::from(class_id, module);
+        let class = PackedValue::object(ObjectRef::new(ObjectInfo {
+            class: nil, // dummy for boot strapping
+            kind: ObjKind::Class(class_class),
+            instance_var: HashMap::new(),
+            singleton: None,
+        }));
+        object.as_object().unwrap().class = class;
+        module.as_object().unwrap().class = class;
+        class.as_object().unwrap().class = class;
+
+        let main_object = ObjectRef::from(object);
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
             method_cache: MethodCache::new(),
             class_version: 0,
             main_object,
-            integer_class: object_class,
-            array_class: object_class,
-            module_class: object_class,
-            class_class: object_class,
-            proc_class: object_class,
-            method_class: object_class,
-            range_class: object_class,
-            hash_class: object_class,
-            regexp_class: object_class,
-            string_class: object_class,
             object_class,
+            module_class: module_class,
+            class_class: class_class,
+            object,
+            module,
+            class,
+            integer: nil, // dummy
+            array: nil,   // dummy
+            procobj: nil, // dummy
+            method: nil,  // dummy
+            range: nil,   // dummy
+            hash: nil,    // dummy
+            regexp: nil,  // dummy
+            string: nil,  // dummy
         };
         object::init_object(&mut globals);
-        globals.integer_class = integer::init_integer(&mut globals);
-        globals.array_class = array::init_array(&mut globals);
-        globals.module_class = module::init_module(&mut globals);
-        globals.class_class = class::init_class(&mut globals);
-        globals.proc_class = procobj::init_proc(&mut globals);
-        globals.method_class = method::init_method(&mut globals);
-        globals.range_class = range::init_range(&mut globals);
-        globals.string_class = string::init_string(&mut globals);
-        globals.hash_class = hash::init_hash(&mut globals);
-        globals.regexp_class = regexp::init_regexp(&mut globals);
+        module::init_module(&mut globals);
+        class::init_class(&mut globals);
+        globals.integer = integer::init_integer(&mut globals);
+        globals.array = array::init_array(&mut globals);
+        globals.procobj = procobj::init_proc(&mut globals);
+        globals.method = method::init_method(&mut globals);
+        globals.range = range::init_range(&mut globals);
+        globals.string = string::init_string(&mut globals);
+        globals.hash = hash::init_hash(&mut globals);
+        globals.regexp = regexp::init_regexp(&mut globals);
         globals
     }
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
@@ -147,7 +190,7 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => self.get_ident_name(oref.classref.name).to_string(),
+                ObjKind::Ordinary => self.get_ident_name(oref.class().name).to_string(),
             },
         }
     }

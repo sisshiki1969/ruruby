@@ -8,12 +8,12 @@ pub struct ClassInfo {
     pub instance_method: MethodTable,
     pub class_method: MethodTable,
     pub constants: ValueTable,
-    pub superclass: Option<ClassRef>,
+    pub superclass: Option<PackedValue>,
     pub is_singleton: bool,
 }
 
 impl ClassInfo {
-    pub fn new(name: impl Into<Option<IdentId>>, superclass: Option<ClassRef>) -> Self {
+    pub fn new(name: impl Into<Option<IdentId>>, superclass: Option<PackedValue>) -> Self {
         ClassInfo {
             name: name.into(),
             instance_method: HashMap::new(),
@@ -32,7 +32,7 @@ impl ClassRef {
         ClassRef::new(ClassInfo::new(id, None))
     }
 
-    pub fn from(id: impl Into<Option<IdentId>>, superclass: ClassRef) -> Self {
+    pub fn from(id: impl Into<Option<IdentId>>, superclass: PackedValue) -> Self {
         ClassRef::new(ClassInfo::new(id, Some(superclass)))
     }
 
@@ -43,15 +43,20 @@ impl ClassRef {
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.instance_method.get(&id)
     }
+
+    pub fn superclass(&self) -> Option<ClassRef> {
+        match self.superclass {
+            Some(superclass) => Some(superclass.as_class().unwrap()),
+            None => None,
+        }
+    }
 }
 
-pub fn init_class(globals: &mut Globals) -> ClassRef {
-    let class_id = globals.get_ident_id("Class");
-    let class = ClassRef::from(class_id, globals.module_class);
+pub fn init_class(globals: &mut Globals) {
+    let class = globals.class_class;
     globals.add_builtin_instance_method(class, "new", class_new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
     globals.add_builtin_class_method(class, "new", class_class_new);
-    class
 }
 
 /// Built-in function "new".
@@ -62,7 +67,7 @@ fn class_class_new(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let id = vm.globals.get_ident_id("nil");
-    let classref = ClassRef::from(id, vm.globals.object_class);
+    let classref = ClassRef::from(id, vm.globals.object);
     let val = PackedValue::class(&mut vm.globals, classref);
 
     Ok(val)
@@ -76,7 +81,7 @@ fn class_new(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = vm.val_as_class(receiver)?;
-    let instance = ObjectRef::from(class);
+    let instance = ObjectRef::from(receiver);
     let new_instance = PackedValue::object(instance);
     // call initialize method.
     if let Some(methodref) = class.get_instance_method(IdentId::INITIALIZE) {
@@ -95,7 +100,7 @@ fn superclass(
 ) -> VMResult {
     let class = vm.val_as_class(receiver)?;
     match class.superclass {
-        Some(superclass) => Ok(PackedValue::class(&mut vm.globals, superclass)),
+        Some(superclass) => Ok(superclass),
         None => Ok(PackedValue::nil()),
     }
 }

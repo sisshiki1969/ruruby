@@ -63,23 +63,25 @@ impl VM {
         let mut globals = Globals::new();
 
         macro_rules! set_builtin_class {
-            ($name:expr, $class:ident) => {
+            ($name:expr, $class_object:ident) => {
                 let id = globals.get_ident_id($name);
-                let class = PackedValue::class(&globals, globals.$class);
-                globals.object_class.constants.insert(id, class);
+                globals
+                    .object_class
+                    .constants
+                    .insert(id, globals.$class_object);
             };
         }
 
-        set_builtin_class!("Object", object_class);
-        set_builtin_class!("Module", module_class);
-        set_builtin_class!("Class", class_class);
-        set_builtin_class!("Integer", integer_class);
-        set_builtin_class!("Array", array_class);
-        set_builtin_class!("Proc", proc_class);
-        set_builtin_class!("Range", range_class);
-        set_builtin_class!("String", string_class);
-        set_builtin_class!("Hash", hash_class);
-        set_builtin_class!("Method", method_class);
+        set_builtin_class!("Object", object);
+        set_builtin_class!("Module", module);
+        set_builtin_class!("Class", class);
+        set_builtin_class!("Integer", integer);
+        set_builtin_class!("Array", array);
+        set_builtin_class!("Proc", procobj);
+        set_builtin_class!("Range", range);
+        set_builtin_class!("String", string);
+        set_builtin_class!("Hash", hash);
+        set_builtin_class!("Method", method);
 
         let id = globals.get_ident_id("StandardError");
         let class = PackedValue::class(&globals, globals.class_class);
@@ -818,7 +820,7 @@ impl VM {
                             val.clone(),
                             match val.as_module() {
                                 Some(classref) => {
-                                    if classref.superclass != Some(superclass) {
+                                    if classref.superclass() != Some(superclass) {
                                         return Err(self.error_type(format!(
                                             "superclass mismatch for class {}.",
                                             self.globals.get_ident_name(id),
@@ -835,7 +837,7 @@ impl VM {
                             },
                         ),
                         None => {
-                            let classref = ClassRef::from(id, superclass);
+                            let classref = ClassRef::from(id, super_val);
                             let val = if is_module {
                                 PackedValue::module(&mut self.globals, classref)
                             } else {
@@ -1118,7 +1120,7 @@ impl VM {
                 Some(val) => {
                     return Ok(val.clone());
                 }
-                None => match class.superclass {
+                None => match class.superclass() {
                     Some(superclass) => {
                         class = superclass;
                     }
@@ -1551,7 +1553,7 @@ impl VM {
                     format! {"Class({})", self.globals.get_ident_name(cref.name)}
                 }
                 ObjKind::Ordinary => {
-                    format! {"Instance({}:{:?})", self.globals.get_ident_name(oref.classref.name), oref}
+                    format! {"Instance({}:{:?})", self.globals.get_ident_name(oref.class().name), oref}
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
@@ -1617,7 +1619,7 @@ impl VM {
                     }
                 },
                 ObjKind::Ordinary => {
-                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.classref.name), oref.id()}
+                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.class().name), oref.id()}
                 }
                 _ => self.val_to_s(val),
             },
@@ -1725,7 +1727,7 @@ impl VM {
         loop {
             match class.get_instance_method(method) {
                 Some(methodref) => return Ok(*methodref),
-                None => match class.superclass {
+                None => match class.superclass() {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);

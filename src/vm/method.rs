@@ -169,12 +169,12 @@ impl MethodObjRef {
     }
 }
 
-pub fn init_method(globals: &mut Globals) -> ClassRef {
+pub fn init_method(globals: &mut Globals) -> PackedValue {
     let proc_id = globals.get_ident_id("Method");
-    let method = ClassRef::from(proc_id, globals.object_class);
-    globals.add_builtin_instance_method(method, "call", method_call);
+    let class = ClassRef::from(proc_id, globals.object);
+    globals.add_builtin_instance_method(class, "call", method_call);
     //globals.add_builtin_class_method(method, "new", proc_new);
-    method
+    PackedValue::class(globals, class)
 }
 
 fn method_call(

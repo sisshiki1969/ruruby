@@ -204,16 +204,13 @@ impl Builtin {
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let target = match args[0].as_module() {
-                Some(class) => class,
-                None => return Err(vm.error_type("An argument must be a Module or Class.")),
-            };
+            let target = vm.val_as_module(args[0])?;
             let mut recv_class = receiver.get_class(&vm.globals);
             loop {
                 if recv_class == target {
                     return Ok(PackedValue::true_val());
                 }
-                recv_class = match recv_class.superclass {
+                recv_class = match recv_class.superclass() {
                     Some(class) => class,
                     None => return Ok(PackedValue::false_val()),
                 }

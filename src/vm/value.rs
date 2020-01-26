@@ -261,9 +261,9 @@ impl PackedValue {
 
     pub fn get_class(&self, globals: &Globals) -> ClassRef {
         match self.unpack() {
-            Value::FixNum(_) => globals.integer_class,
-            Value::String(_) => globals.string_class,
-            Value::Object(oref) => oref.classref,
+            Value::FixNum(_) => globals.integer.as_class().unwrap(),
+            Value::String(_) => globals.string.as_class().unwrap(),
+            Value::Object(oref) => oref.class().clone(),
             _ => globals.object_class,
         }
     }
@@ -755,8 +755,10 @@ mod tests {
 
     #[test]
     fn pack_instance() {
+        let globals = Globals::new();
         let class_ref = ClassRef::from_no_superclass(IdentId::from(1usize));
-        let expect = Value::Object(ObjectRef::from(class_ref));
+        let class = PackedValue::class(&globals, class_ref);
+        let expect = Value::Object(ObjectRef::from(class));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

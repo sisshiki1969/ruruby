@@ -19,25 +19,25 @@ impl ArrayRef {
     }
 }
 
-pub fn init_array(globals: &mut Globals) -> ClassRef {
+pub fn init_array(globals: &mut Globals) -> PackedValue {
     let array_id = globals.get_ident_id("Array");
-    let array_class = ClassRef::from(array_id, globals.object_class);
-    globals.add_builtin_instance_method(array_class, "push", array::array_push);
-    globals.add_builtin_instance_method(array_class, "<<", array::array_push);
-    globals.add_builtin_instance_method(array_class, "pop", array::array_pop);
-    globals.add_builtin_instance_method(array_class, "length", array::array_length);
-    globals.add_builtin_instance_method(array_class, "size", array::array_length);
-    globals.add_builtin_instance_method(array_class, "*", array::array_mul);
-    globals.add_builtin_instance_method(array_class, "+", array::array_add);
-    globals.add_builtin_instance_method(array_class, "-", array::array_sub);
-    globals.add_builtin_instance_method(array_class, "map", array::array_map);
-    globals.add_builtin_instance_method(array_class, "each", array::array_each);
-    globals.add_builtin_instance_method(array_class, "include?", array::array_include);
-    globals.add_builtin_instance_method(array_class, "reverse", array::array_reverse);
-    globals.add_builtin_instance_method(array_class, "reverse!", array::array_reverse_);
-    globals.add_builtin_instance_method(array_class, "transpose", array::array_transpose);
-    globals.add_builtin_class_method(array_class, "new", array::array_new);
-    array_class
+    let class = ClassRef::from(array_id, globals.object);
+    globals.add_builtin_instance_method(class, "push", array::array_push);
+    globals.add_builtin_instance_method(class, "<<", array::array_push);
+    globals.add_builtin_instance_method(class, "pop", array::array_pop);
+    globals.add_builtin_instance_method(class, "length", array::array_length);
+    globals.add_builtin_instance_method(class, "size", array::array_length);
+    globals.add_builtin_instance_method(class, "*", array::array_mul);
+    globals.add_builtin_instance_method(class, "+", array::array_add);
+    globals.add_builtin_instance_method(class, "-", array::array_sub);
+    globals.add_builtin_instance_method(class, "map", array::array_map);
+    globals.add_builtin_instance_method(class, "each", array::array_each);
+    globals.add_builtin_instance_method(class, "include?", array::array_include);
+    globals.add_builtin_instance_method(class, "reverse", array::array_reverse);
+    globals.add_builtin_instance_method(class, "reverse!", array::array_reverse_);
+    globals.add_builtin_instance_method(class, "transpose", array::array_transpose);
+    globals.add_builtin_class_method(class, "new", array::array_new);
+    PackedValue::class(globals, class)
 }
 
 // Class methods

@@ -9,8 +9,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectInfo {
-    pub classref: ClassRef,
-    pub singleton: Option<ClassRef>,
+    pub class: PackedValue,
+    pub singleton: Option<PackedValue>,
     pub instance_var: ValueTable,
     pub kind: ObjKind,
 }
@@ -30,9 +30,9 @@ pub enum ObjKind {
 }
 
 impl ObjectInfo {
-    pub fn new(classref: ClassRef) -> Self {
+    pub fn new(class: PackedValue) -> Self {
         ObjectInfo {
-            classref,
+            class,
             instance_var: HashMap::new(),
             kind: ObjKind::Ordinary,
             singleton: None,
@@ -41,7 +41,7 @@ impl ObjectInfo {
 
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
-            classref: globals.class_class,
+            class: globals.class,
             instance_var: HashMap::new(),
             kind: ObjKind::Class(classref),
             singleton: None,
@@ -50,7 +50,7 @@ impl ObjectInfo {
 
     pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
-            classref: globals.module_class,
+            class: globals.module,
             instance_var: HashMap::new(),
             kind: ObjKind::Module(classref),
             singleton: None,
@@ -59,7 +59,7 @@ impl ObjectInfo {
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
-            classref: globals.array_class,
+            class: globals.array,
             instance_var: HashMap::new(),
             kind: ObjKind::Array(arrayref),
             singleton: None,
@@ -68,7 +68,7 @@ impl ObjectInfo {
 
     pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
-            classref: globals.array_class,
+            class: globals.array,
             instance_var: HashMap::new(),
             kind: ObjKind::SplatArray(arrayref),
             singleton: None,
@@ -77,7 +77,7 @@ impl ObjectInfo {
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         ObjectInfo {
-            classref: globals.hash_class,
+            class: globals.hash,
             instance_var: HashMap::new(),
             kind: ObjKind::Hash(hashref),
             singleton: None,
@@ -86,7 +86,7 @@ impl ObjectInfo {
 
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
         ObjectInfo {
-            classref: globals.regexp_class,
+            class: globals.regexp,
             instance_var: HashMap::new(),
             kind: ObjKind::Regexp(regexpref),
             singleton: None,
@@ -95,7 +95,7 @@ impl ObjectInfo {
 
     pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {
         ObjectInfo {
-            classref: globals.range_class,
+            class: globals.range,
             instance_var: HashMap::new(),
             kind: ObjKind::Range(rangeref),
             singleton: None,
@@ -104,7 +104,7 @@ impl ObjectInfo {
 
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         ObjectInfo {
-            classref: globals.proc_class,
+            class: globals.procobj,
             instance_var: HashMap::new(),
             kind: ObjKind::Proc(procref),
             singleton: None,
@@ -113,7 +113,7 @@ impl ObjectInfo {
 
     pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
         ObjectInfo {
-            classref: globals.method_class,
+            class: globals.method,
             instance_var: HashMap::new(),
             kind: ObjKind::Method(methodref),
             singleton: None,
@@ -124,8 +124,8 @@ impl ObjectInfo {
 pub type ObjectRef = Ref<ObjectInfo>;
 
 impl ObjectRef {
-    pub fn from(classref: ClassRef) -> Self {
-        ObjectRef::new(ObjectInfo::new(classref))
+    pub fn from(class: PackedValue) -> Self {
+        ObjectRef::new(ObjectInfo::new(class))
     }
 
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
@@ -172,8 +172,12 @@ impl ObjectRef {
         ))
     }
 
-    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.classref.instance_method.get(&id)
+    pub fn class(&self) -> ClassRef {
+        self.class.as_class().unwrap()
+    }
+
+    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
+        self.class().instance_method.get(&id).cloned()
     }
 }
 
@@ -213,13 +217,13 @@ fn singleton_class(
 ) -> VMResult {
     match receiver.unpack() {
         Value::Object(mut obj) => match obj.singleton {
-            Some(class) => Ok(PackedValue::class(&vm.globals, class)),
+            Some(class) => Ok(class),
             None => {
                 let mut singleton_class = ClassRef::from_no_superclass(None);
                 singleton_class.is_singleton = true;
-                obj.singleton = Some(singleton_class);
-                let obj = PackedValue::class(&vm.globals, singleton_class);
-                Ok(obj)
+                let singleton_obj = PackedValue::class(&vm.globals, singleton_class);
+                obj.singleton = Some(singleton_obj);
+                Ok(singleton_obj)
             }
         },
         _ => Err(vm.error_type("Can not define singleton.")),

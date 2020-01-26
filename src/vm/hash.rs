@@ -20,9 +20,9 @@ impl HashRef {
     }
 }
 
-pub fn init_hash(globals: &mut Globals) -> ClassRef {
+pub fn init_hash(globals: &mut Globals) -> PackedValue {
     let id = globals.get_ident_id("Hash");
-    let class = ClassRef::from(id, globals.object_class);
+    let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "clear", hash_clear);
     globals.add_builtin_instance_method(class, "clone", hash_clone);
     globals.add_builtin_instance_method(class, "dup", hash_clone);
@@ -37,7 +37,7 @@ pub fn init_hash(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(class, "size", hash_length);
     globals.add_builtin_instance_method(class, "values", hash_values);
     //globals.add_builtin_class_method(class, "new", range_new);
-    class
+    PackedValue::class(globals, class)
 }
 
 fn hash_clear(

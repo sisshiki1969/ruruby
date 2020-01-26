@@ -1,12 +1,12 @@
 use crate::vm::*;
 
-pub fn init_integer(globals: &mut Globals) -> ClassRef {
+pub fn init_integer(globals: &mut Globals) -> PackedValue {
     let id = globals.get_ident_id("Integer");
-    let class = ClassRef::from(id, globals.object_class);
+    let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "times", integer_times);
     globals.add_builtin_instance_method(class, "chr", integer_chr);
     //globals.add_builtin_class_method(class, "new", integer_new);
-    class
+    PackedValue::class(globals, class)
 }
 
 // Class methods
