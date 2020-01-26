@@ -74,6 +74,12 @@ impl Globals {
             regexp: nil,  // dummy
             string: nil,  // dummy
         };
+        // Generate singleton class for Object
+        let mut singleton_class = ClassRef::from(None, globals.class);
+        singleton_class.is_singleton = true;
+        let singleton_obj = PackedValue::class(&globals, singleton_class);
+        globals.object.as_object().unwrap().singleton = Some(singleton_obj);
+
         object::init_object(&mut globals);
         module::init_module(&mut globals);
         class::init_class(&mut globals);
@@ -127,9 +133,34 @@ impl Globals {
         self.method_table.get_mut_method(method)
     }
 
+    pub fn get_singleton_class(&self, obj: PackedValue) -> Result<PackedValue, ()> {
+        match obj.unpack() {
+            Value::Object(mut obj) => match obj.singleton {
+                Some(class) => Ok(class),
+                None => {
+                    let mut singleton_class = if let ObjKind::Class(cref) = obj.kind {
+                        match cref.superclass {
+                            Some(superclass) => {
+                                ClassRef::from(None, self.get_singleton_class(superclass)?)
+                            }
+                            None => ClassRef::from_no_superclass(None),
+                        }
+                    } else {
+                        ClassRef::from_no_superclass(None)
+                    };
+                    singleton_class.is_singleton = true;
+                    let singleton_obj = PackedValue::class(&self, singleton_class);
+                    obj.singleton = Some(singleton_obj);
+                    Ok(singleton_obj)
+                }
+            },
+            _ => Err(()),
+        }
+    }
+
     pub fn add_builtin_class_method(
         &mut self,
-        mut classref: ClassRef,
+        obj: PackedValue,
         name: impl Into<String>,
         func: BuiltinFunc,
     ) {
@@ -137,7 +168,12 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
-        classref.class_method.insert(id, func_ref);
+        let singleton = self.get_singleton_class(obj).unwrap();
+        singleton
+            .as_class()
+            .unwrap()
+            .instance_method
+            .insert(id, func_ref);
     }
 
     pub fn add_builtin_instance_method(
@@ -185,13 +221,13 @@ impl Globals {
         &mut self,
         id: usize,
         class: ClassRef,
-        is_class_method: bool,
+        //is_class_method: bool,
         method: MethodRef,
     ) {
         self.method_cache.table[id] = Some(MethodCacheEntry {
             class,
             version: self.class_version,
-            is_class_method,
+            //is_class_method,
             method,
         });
     }
@@ -207,34 +243,15 @@ impl Globals {
     pub fn get_method_from_cache(
         &mut self,
         cache_slot: usize,
-        receiver: PackedValue,
+        rec_class: ClassRef,
     ) -> Option<MethodRef> {
-        let (rec_class, class_method) = match receiver.as_class() {
-            Some(cref) => (cref, true),
-            None => (receiver.get_classref(&self), false),
-        };
         match self.get_method_cache_entry(cache_slot) {
             Some(MethodCacheEntry {
                 class,
                 version,
-                is_class_method,
                 method,
-            }) if *class == rec_class
-                && *version == self.class_version
-                && *is_class_method == class_method =>
-            {
-                Some(*method)
-            }
-            _ => {
-                /*
-                eprintln!(
-                    "cache miss! {:?} {:?} {:?}",
-                    receiver.unpack(),
-                    rec_class,
-                    class_method
-                );*/
-                None
-            }
+            }) if *class == rec_class && *version == self.class_version => Some(*method),
+            _ => None,
         }
     }
 }
@@ -243,7 +260,7 @@ impl Globals {
 pub struct MethodCacheEntry {
     class: ClassRef,
     version: usize,
-    is_class_method: bool,
+    //is_class_method: bool,
     method: MethodRef,
 }
 

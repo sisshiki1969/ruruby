@@ -195,7 +195,7 @@ fn class(
     _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = receiver.get_class(&vm.globals);
+    let class = receiver.get_class_object(&vm.globals);
     Ok(class)
 }
 
@@ -215,19 +215,7 @@ fn singleton_class(
     _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    match receiver.unpack() {
-        Value::Object(mut obj) => match obj.singleton {
-            Some(class) => Ok(class),
-            None => {
-                let mut singleton_class = ClassRef::from_no_superclass(None);
-                singleton_class.is_singleton = true;
-                let singleton_obj = PackedValue::class(&vm.globals, singleton_class);
-                obj.singleton = Some(singleton_obj);
-                Ok(singleton_obj)
-            }
-        },
-        _ => Err(vm.error_type("Can not define singleton.")),
-    }
+    vm.get_singleton_class(receiver)
 }
 
 fn inspect(

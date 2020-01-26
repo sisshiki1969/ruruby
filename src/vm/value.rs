@@ -268,12 +268,26 @@ impl PackedValue {
         }
     }
 
-    pub fn get_class(&self, globals: &Globals) -> PackedValue {
+    pub fn get_class_for_method(&self, globals: &Globals) -> ClassRef {
+        match self.has_singleton_class() {
+            Some(singleton) => singleton.as_class().unwrap(),
+            None => self.get_classref(globals),
+        }
+    }
+
+    pub fn get_class_object(&self, globals: &Globals) -> PackedValue {
         match self.unpack() {
             Value::FixNum(_) => globals.integer,
             Value::String(_) => globals.string,
             Value::Object(oref) => oref.class,
             _ => globals.object,
+        }
+    }
+
+    pub fn superclass(&self) -> Option<PackedValue> {
+        match self.as_module() {
+            Some(class) => class.superclass,
+            None => None,
         }
     }
 
@@ -307,6 +321,13 @@ impl PackedValue {
 
     pub fn is_packed_value(&self) -> bool {
         self.0 & 0b0111 != 0 || self.0 <= 0x20
+    }
+
+    pub fn has_singleton_class(&self) -> Option<PackedValue> {
+        match self.unpack() {
+            Value::Object(obj) => obj.singleton,
+            _ => None,
+        }
     }
 
     pub fn as_fixnum(&self) -> Option<i64> {
@@ -538,6 +559,10 @@ impl PackedValue {
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
+        PackedValue::object(ObjectRef::new_class(globals, class_ref))
+    }
+
+    pub fn plain_class(globals: &Globals, class_ref: ClassRef) -> Self {
         PackedValue::object(ObjectRef::new_class(globals, class_ref))
     }
 

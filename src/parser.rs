@@ -1488,22 +1488,12 @@ impl Parser {
                     self.get()?;
                     let end_loc = self.prev_loc();
                     nodes.push(Node::new_string(s.clone(), end_loc));
-                    eprintln!("REGEXP");
-                    for node in &nodes {
-                        eprintln!("{:?}", node);
-                    }
                     return Ok(Node::new_regexp(nodes, tok.loc.merge(end_loc)));
                 }
                 TokenKind::InterString(s) => {
                     self.get()?;
                     nodes.push(Node::new_string(s.clone(), self.prev_loc()));
                 }
-                /*
-                TokenKind::OpenString(s) => {
-                    let s = s.clone();
-                    self.get()?;
-                    self.parse_interporated_string_literal(&s)?;
-                }*/
                 TokenKind::EOF => {
                     let loc = self.loc();
                     return Err(self.error_unexpected(loc, "Unexpectd EOF."));

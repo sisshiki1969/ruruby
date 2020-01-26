@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub instance_method: MethodTable,
-    pub class_method: MethodTable,
+    //pub class_method: MethodTable,
     pub constants: ValueTable,
     pub superclass: Option<PackedValue>,
     pub is_singleton: bool,
@@ -17,7 +17,7 @@ impl ClassInfo {
         ClassInfo {
             name: name.into(),
             instance_method: HashMap::new(),
-            class_method: HashMap::new(),
+            //class_method: HashMap::new(),
             constants: HashMap::new(),
             superclass,
             is_singleton: false,
@@ -36,9 +36,9 @@ impl ClassRef {
         ClassRef::new(ClassInfo::new(id, Some(superclass)))
     }
 
-    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
+    /*pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.class_method.get(&id)
-    }
+    }*/
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.instance_method.get(&id)
@@ -56,7 +56,7 @@ pub fn init_class(globals: &mut Globals) {
     let class = globals.class_class;
     globals.add_builtin_instance_method(class, "new", class_new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
-    globals.add_builtin_class_method(class, "new", class_class_new);
+    globals.add_builtin_class_method(globals.class, "new", class_class_new);
 }
 
 /// Built-in function "new".

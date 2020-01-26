@@ -22,9 +22,10 @@ impl ProcRef {
 pub fn init_proc(globals: &mut Globals) -> PackedValue {
     let proc_id = globals.get_ident_id("Proc");
     let class = ClassRef::from(proc_id, globals.object);
+    let obj = PackedValue::class(globals, class);
     globals.add_builtin_instance_method(class, "call", proc_call);
-    globals.add_builtin_class_method(class, "new", proc_new);
-    PackedValue::class(globals, class)
+    globals.add_builtin_class_method(obj, "new", proc_new);
+    obj
 }
 
 // Class methods

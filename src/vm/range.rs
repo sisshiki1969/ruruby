@@ -23,14 +23,15 @@ impl RangeRef {
 pub fn init_range(globals: &mut Globals) -> PackedValue {
     let id = globals.get_ident_id("Range");
     let class = ClassRef::from(id, globals.object);
+    let obj = PackedValue::class(globals, class);
     globals.add_builtin_instance_method(class, "map", range_map);
     globals.add_builtin_instance_method(class, "begin", range_begin);
     globals.add_builtin_instance_method(class, "first", range_first);
     globals.add_builtin_instance_method(class, "end", range_end);
     globals.add_builtin_instance_method(class, "last", range_last);
     globals.add_builtin_instance_method(class, "to_a", range_toa);
-    globals.add_builtin_class_method(class, "new", range_new);
-    PackedValue::class(globals, class)
+    globals.add_builtin_class_method(obj, "new", range_new);
+    obj
 }
 
 fn range_new(

@@ -22,6 +22,7 @@ impl ArrayRef {
 pub fn init_array(globals: &mut Globals) -> PackedValue {
     let array_id = globals.get_ident_id("Array");
     let class = ClassRef::from(array_id, globals.object);
+    let obj = PackedValue::class(globals, class);
     globals.add_builtin_instance_method(class, "push", array::array_push);
     globals.add_builtin_instance_method(class, "<<", array::array_push);
     globals.add_builtin_instance_method(class, "pop", array::array_pop);
@@ -36,8 +37,8 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "reverse", array::array_reverse);
     globals.add_builtin_instance_method(class, "reverse!", array::array_reverse_);
     globals.add_builtin_instance_method(class, "transpose", array::array_transpose);
-    globals.add_builtin_class_method(class, "new", array::array_new);
-    PackedValue::class(globals, class)
+    globals.add_builtin_class_method(obj, "new", array::array_new);
+    obj
 }
 
 // Class methods

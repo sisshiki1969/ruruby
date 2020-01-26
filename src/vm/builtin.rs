@@ -182,17 +182,8 @@ impl Builtin {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
             };
-            let method = match receiver.as_class() {
-                Some(class) => match class.get_class_method(name) {
-                    Some(method) => method.clone(),
-                    None => return Err(vm.error_type("Method not found.")),
-                },
-                None => match receiver.get_classref(&vm.globals).get_instance_method(name) {
-                    Some(method) => method.clone(),
-                    None => return Err(vm.error_type("Method not found.")),
-                },
-            };
-
+            let recv_class = receiver.get_class_for_method(&vm.globals);
+            let method = vm.get_instance_method(recv_class, name)?;
             let val = PackedValue::method(&vm.globals, name, receiver, method);
             Ok(val)
         }

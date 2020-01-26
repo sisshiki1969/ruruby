@@ -860,8 +860,8 @@ impl VM {
                         self.add_object_method(id, methodref);
                     } else {
                         // A method defined in a class definition is registered as a class method of the class.
-                        let classref = self.class();
-                        self.add_singleton_method(classref, id, methodref);
+                        let cur_class = self.class_stack.last().unwrap().clone();
+                        self.add_singleton_method(cur_class, id, methodref)?;
                     }
                     self.exec_stack.push(PackedValue::symbol(id));
                     self.pc += 9;
@@ -1077,22 +1077,19 @@ impl VM {
         receiver: PackedValue,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        match self.globals.get_method_from_cache(cache_slot, receiver) {
+        let rec_class = receiver.get_class_for_method(&self.globals);
+        match self.globals.get_method_from_cache(cache_slot, rec_class) {
             Some(method) => Ok(method),
             _ => {
-                let (rec_class, class_method, method) = match receiver.as_class() {
-                    Some(rec_class) => {
-                        let method = self.get_class_method(rec_class, method_id)?;
-                        (rec_class, true, method)
-                    }
-                    None => {
-                        let rec_class = receiver.get_classref(&self.globals);
-                        let method = self.get_instance_method(rec_class, method_id)?;
-                        (rec_class, false, method)
-                    }
-                };
+                /*
+                eprintln!(
+                    "cache miss! {} {}",
+                    self.val_pp(receiver),
+                    self.globals.get_ident_name(method_id)
+                );*/
+                let method = self.get_instance_method(rec_class, method_id)?;
                 self.globals
-                    .set_method_cache_entry(cache_slot, rec_class, class_method, method);
+                    .set_method_cache_entry(cache_slot, rec_class, method);
                 Ok(method)
             }
         }
@@ -1683,12 +1680,15 @@ impl VM {
 impl VM {
     pub fn add_singleton_method(
         &mut self,
-        mut class: ClassRef,
+        obj: PackedValue,
         id: IdentId,
         info: MethodRef,
-    ) -> Option<MethodRef> {
+    ) -> Result<(), RubyError> {
         self.globals.class_version += 1;
-        class.class_method.insert(id, info)
+        let singleton = self.get_singleton_class(obj)?;
+        let mut singleton_class = singleton.as_class().unwrap();
+        singleton_class.instance_method.insert(id, info);
+        Ok(())
     }
 
     pub fn add_instance_method(
@@ -1701,15 +1701,13 @@ impl VM {
         class.instance_method.insert(id, info)
     }
 
-    pub fn get_class_method(
+    pub fn get_singleton_method(
         &self,
-        class: ClassRef,
+        obj: PackedValue,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        match class.get_class_method(method) {
-            Some(methodref) => Ok(*methodref),
-            None => self.get_instance_method(self.globals.class_class, method),
-        }
+        let class = obj.get_class_for_method(&self.globals);
+        Ok(self.get_instance_method(class, method)?.clone())
     }
 
     pub fn get_instance_method(
@@ -1745,6 +1743,27 @@ impl VM {
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
         self.add_instance_method(self.globals.object_class, id, info);
+    }
+
+    pub fn get_singleton_class(&mut self, obj: PackedValue) -> VMResult {
+        match obj.unpack() {
+            Value::Object(mut objref) => match objref.singleton {
+                Some(class) => Ok(class),
+                None => {
+                    let mut singleton_class = match obj.superclass() {
+                        Some(superclass) => {
+                            ClassRef::from(None, self.get_singleton_class(superclass)?)
+                        }
+                        None => ClassRef::from_no_superclass(None),
+                    };
+                    singleton_class.is_singleton = true;
+                    let singleton_obj = PackedValue::class(&self.globals, singleton_class);
+                    objref.singleton = Some(singleton_obj);
+                    Ok(singleton_obj)
+                }
+            },
+            _ => Err(self.error_type("Can not define singleton.")),
+        }
     }
 }
 
