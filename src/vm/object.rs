@@ -196,7 +196,7 @@ fn class(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = receiver.get_class(&vm.globals);
-    Ok(PackedValue::class(&mut vm.globals, class))
+    Ok(class)
 }
 
 fn object_id(

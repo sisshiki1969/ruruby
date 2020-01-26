@@ -289,6 +289,32 @@ fn int_index() {
 }
 
 #[test]
+fn objects() {
+    let program = r#"
+        assert(nil, Object.superclass)
+        assert(Object, Module.superclass)
+        assert(Module, Class.superclass)
+        assert(Object, Integer.superclass)
+        assert(Object, Regexp.superclass)
+        assert(Object, String.superclass)
+        assert(Object, Range.superclass)
+        assert(Object, Proc.superclass)
+        assert(Object, Method.superclass)
+
+        assert(Class, Module.class)
+        assert(Class, Class.class)
+        assert(Class, Integer.class)
+        assert(Class, Regexp.class)
+        assert(Class, String.class)
+        assert(Class, Range.class)
+        assert(Class, Proc.class)
+        assert(Class, Method.class)
+    "#;
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn triple_equal() {
     let program = r#"
         assert(true, 1 === 1)
@@ -667,7 +693,10 @@ fn array1() {
     let program = "
     assert([1,2,3]*0, [])
     assert([1,2,3]*1, [1,2,3])
-    assert([nil]*5, [nil,nil,nil,nil,nil])";
+    assert([nil]*5, [nil,nil,nil,nil,nil])
+    assert([1,2,3]+[3,4,5], [1,2,3,3,4,5])
+    assert([1,2,3]-[3,4,5], [1,2])
+    ";
     let expected = Value::Nil;
     eval_script(program, expected);
 }

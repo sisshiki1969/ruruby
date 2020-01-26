@@ -187,7 +187,7 @@ impl Builtin {
                     Some(method) => method.clone(),
                     None => return Err(vm.error_type("Method not found.")),
                 },
-                None => match receiver.get_class(&vm.globals).get_instance_method(name) {
+                None => match receiver.get_classref(&vm.globals).get_instance_method(name) {
                     Some(method) => method.clone(),
                     None => return Err(vm.error_type("Method not found.")),
                 },
@@ -205,7 +205,7 @@ impl Builtin {
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let target = vm.val_as_module(args[0])?;
-            let mut recv_class = receiver.get_class(&vm.globals);
+            let mut recv_class = receiver.get_classref(&vm.globals);
             loop {
                 if recv_class == target {
                     return Ok(PackedValue::true_val());

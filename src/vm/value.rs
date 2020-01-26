@@ -259,12 +259,21 @@ impl PackedValue {
         self.0
     }
 
-    pub fn get_class(&self, globals: &Globals) -> ClassRef {
+    pub fn get_classref(&self, globals: &Globals) -> ClassRef {
         match self.unpack() {
             Value::FixNum(_) => globals.integer.as_class().unwrap(),
             Value::String(_) => globals.string.as_class().unwrap(),
             Value::Object(oref) => oref.class().clone(),
             _ => globals.object_class,
+        }
+    }
+
+    pub fn get_class(&self, globals: &Globals) -> PackedValue {
+        match self.unpack() {
+            Value::FixNum(_) => globals.integer,
+            Value::String(_) => globals.string,
+            Value::Object(oref) => oref.class,
+            _ => globals.object,
         }
     }
 

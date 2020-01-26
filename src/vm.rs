@@ -82,6 +82,7 @@ impl VM {
         set_builtin_class!("String", string);
         set_builtin_class!("Hash", hash);
         set_builtin_class!("Method", method);
+        set_builtin_class!("Regexp", regexp);
 
         let id = globals.get_ident_id("StandardError");
         let class = PackedValue::class(&globals, globals.class_class);
@@ -411,7 +412,7 @@ impl VM {
                     let lhs = self.exec_stack.pop().unwrap();
                     let rhs = self.exec_stack.pop().unwrap();
                     let res = match lhs.as_class() {
-                        Some(class) if rhs.get_class(&self.globals) == class => true,
+                        Some(class) if rhs.get_classref(&self.globals) == class => true,
                         _ => match self.eval_eq(lhs, rhs) {
                             Ok(res) => res,
                             Err(_) => false,
@@ -483,13 +484,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
-                    let id = read32(iseq, self.pc + 1);
+                    let id = read_id(iseq, self.pc + 1);
                     let class = self.class();
-                    let val = if id == 0 {
-                        PackedValue::class(&self.globals, class)
-                    } else {
-                        self.get_constant(class, IdentId::from(id))?
-                    };
+                    let val = self.get_constant(class, id)?;
                     self.exec_stack.push(val);
                     self.pc += 5;
                 }
@@ -838,6 +835,7 @@ impl VM {
                         ),
                         None => {
                             let classref = ClassRef::from(id, super_val);
+                            eprintln!("super:{}", self.val_pp(super_val));
                             let val = if is_module {
                                 PackedValue::module(&mut self.globals, classref)
                             } else {
@@ -1102,7 +1100,7 @@ impl VM {
                         (rec_class, true, method)
                     }
                     None => {
-                        let rec_class = receiver.get_class(&self.globals);
+                        let rec_class = receiver.get_classref(&self.globals);
                         let method = self.get_instance_method(rec_class, method_id)?;
                         (rec_class, false, method)
                     }
@@ -1436,9 +1434,7 @@ impl VM {
             (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
             (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
-            (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
-                (ObjKind::Ordinary, ObjKind::Ordinary) => Ok(lhs == rhs),
-                (ObjKind::Class(lhs), ObjKind::Class(rhs)) => Ok(lhs == rhs),
+            (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
                     let lhs = &lhs.elements;
                     let rhs = &rhs.elements;
@@ -1459,7 +1455,7 @@ impl VM {
                         Ok(false)
                     }
                 }
-                _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
+                (_, _) => Ok(lhs_o == rhs_o),
             },
             _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
         }

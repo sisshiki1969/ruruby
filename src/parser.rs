@@ -1818,7 +1818,7 @@ impl Parser {
             };
             self.parse_expr()?
         } else {
-            Node::new_const(IdentId::from(0usize), false, loc)
+            Node::new_const(IdentId::OBJECT, true, loc)
         };
         self.consume_term()?;
         let id = self.get_ident_id(&name);
