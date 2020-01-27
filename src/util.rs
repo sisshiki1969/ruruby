@@ -159,7 +159,9 @@ impl SourceInfo {
             found = true;
             eprintln!(
                 "{}",
-                self.code[(line.1 as usize)..(line.2 as usize)].iter().collect::<String>()
+                self.code[(line.1 as usize)..(line.2 as usize)]
+                    .iter()
+                    .collect::<String>()
             );
             use std::cmp::*;
             let read = if loc.0 <= line.1 {
@@ -186,15 +188,22 @@ impl SourceInfo {
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
-            let length: usize = self.code[loc.0 as usize..loc.1 as usize].iter().map(|x| calc_width(x)).sum();
+            let length: usize = self.code[loc.0 as usize..loc.1 as usize]
+                .iter()
+                .map(|x| calc_width(x))
+                .sum();
             let is_cr = self.code[loc.1 as usize] == '\n';
             eprintln!("line: {}", line.0);
             eprintln!(
                 "{}",
                 if !is_cr {
-                    self.code[(line.1 as usize)..=(loc.1 as usize)].iter().collect::<String>()
+                    self.code[(line.1 as usize)..=(loc.1 as usize)]
+                        .iter()
+                        .collect::<String>()
                 } else {
-                    self.code[(line.1 as usize)..(loc.1 as usize)].iter().collect::<String>()
+                    self.code[(line.1 as usize)..(loc.1 as usize)]
+                        .iter()
+                        .collect::<String>()
                 }
             );
             eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
@@ -318,5 +327,10 @@ impl IdentifierTable {
 
     pub fn get_name(&self, id: IdentId) -> &String {
         self.table_rev.get(&id.0.get()).unwrap()
+    }
+
+    pub fn add_postfix(&mut self, id: IdentId, postfix: &str) -> IdentId {
+        let new_name = self.get_name(id).to_string() + postfix;
+        self.get_ident_id(new_name)
     }
 }

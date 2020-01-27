@@ -18,9 +18,10 @@ fn constants(
     _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
-    let v: Vec<PackedValue> = class
-        .constants
+    let v: Vec<PackedValue> = receiver
+        .as_object()
+        .unwrap()
+        .var_table
         .keys()
         .map(|k| PackedValue::symbol(k.clone()))
         .collect();
@@ -77,12 +78,11 @@ fn attr_accessor(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(vm, class, id);
-            define_writer(vm, class, id);
+            define_reader(vm, receiver, id);
+            define_writer(vm, receiver, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -96,11 +96,10 @@ fn attr_reader(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(vm, class, id);
+            define_reader(vm, receiver, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -114,11 +113,10 @@ fn attr_writer(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_writer(vm, class, id);
+            define_writer(vm, receiver, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -126,15 +124,14 @@ fn attr_writer(
     Ok(PackedValue::nil())
 }
 
-fn define_reader(vm: &mut VM, class: ClassRef, id: IdentId) {
+fn define_reader(vm: &mut VM, class: PackedValue, id: IdentId) {
     let info = MethodInfo::AttrReader { id };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, id, methodref);
 }
 
-fn define_writer(vm: &mut VM, class: ClassRef, id: IdentId) {
-    let assign_name = vm.globals.get_ident_name(id).to_string() + "=";
-    let assign_id = vm.globals.get_ident_id(assign_name);
+fn define_writer(vm: &mut VM, class: PackedValue, id: IdentId) {
+    let assign_id = vm.globals.ident_table.add_postfix(id, "=");
     let info = MethodInfo::AttrWriter { id };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, assign_id, methodref);

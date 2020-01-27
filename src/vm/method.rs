@@ -187,6 +187,6 @@ fn method_call(
         None => return Err(vm.error_unimplemented("Expected Method object.")),
     };
     vm.eval_send(method.method, method.receiver, args, None, block)?;
-    let res = vm.exec_stack.pop().unwrap();
+    let res = vm.stack_pop();
     Ok(res)
 }

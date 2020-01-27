@@ -118,7 +118,7 @@ fn hash_select(
             None,
             None,
         )?;
-        let b = vm.exec_stack.pop().unwrap();
+        let b = vm.stack_pop();
         if vm.val_to_bool(b) {
             res.insert(k.clone(), v.clone());
         };

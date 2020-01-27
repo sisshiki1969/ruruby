@@ -38,7 +38,7 @@ fn integer_times(
                     None,
                     None,
                 )?;
-                vm.exec_stack.pop().unwrap();
+                vm.stack_pop();
             }
         }
     }

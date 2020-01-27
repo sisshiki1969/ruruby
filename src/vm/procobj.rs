@@ -66,6 +66,6 @@ fn proc_call(
         None,
         None,
     )?;
-    let res = vm.exec_stack.pop().unwrap();
+    let res = vm.stack_pop();
     Ok(res)
 }

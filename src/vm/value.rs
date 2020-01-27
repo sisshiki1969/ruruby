@@ -299,6 +299,24 @@ impl PackedValue {
         }
     }
 
+    pub fn set_var(&mut self, id: IdentId, val: PackedValue) {
+        self.as_object().unwrap().var_table.insert(id, val);
+    }
+
+    pub fn get_var(&self, id: IdentId) -> Option<PackedValue> {
+        self.as_object().unwrap().var_table.get(&id).cloned()
+    }
+
+    pub fn set_var_if_exists(&self, id: IdentId, val: PackedValue) -> bool {
+        match self.as_object().unwrap().var_table.get_mut(&id) {
+            Some(entry) => {
+                *entry = val;
+                true
+            }
+            None => false,
+        }
+    }
+
     pub fn is_packed_fixnum(&self) -> bool {
         self.0 & 0b1 == 1
     }

@@ -144,7 +144,7 @@ fn range_map(
             None,
             None,
         )?;
-        res.push(vm.exec_stack.pop().unwrap());
+        res.push(vm.stack_pop());
     }
     let res = PackedValue::array_from(&vm.globals, res);
     Ok(res)

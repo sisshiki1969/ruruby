@@ -8,7 +8,7 @@ pub struct Globals {
     method_cache: MethodCache,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
-    pub main_object: ObjectRef,
+    pub main_object: PackedValue,
 
     pub integer: PackedValue,
     pub array: PackedValue,
@@ -52,7 +52,7 @@ impl Globals {
         module.as_object().unwrap().class = class;
         class.as_object().unwrap().class = class;
 
-        let main_object = ObjectRef::from(object);
+        let main_object = PackedValue::object(ObjectRef::from(object));
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub method_table: MethodTable,
-    pub constants: ValueTable,
+    //pub constants: ValueTable,
     pub superclass: PackedValue,
     pub is_singleton: bool,
 }
@@ -16,7 +16,7 @@ impl ClassInfo {
         ClassInfo {
             name: name.into(),
             method_table: HashMap::new(),
-            constants: HashMap::new(),
+            //constants: HashMap::new(),
             superclass,
             is_singleton: false,
         }
@@ -82,7 +82,7 @@ fn class_new(
     if let Some(methodref) = class.get_instance_method(IdentId::INITIALIZE) {
         let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
         vm.vm_run(new_instance, iseq, None, args, None, None)?;
-        vm.exec_stack.pop().unwrap();
+        vm.stack_pop();
     };
     Ok(new_instance)
 }
