@@ -10,7 +10,7 @@ use std::collections::HashMap;
 pub struct ObjectInfo {
     pub class: PackedValue,
     pub singleton: Option<PackedValue>,
-    pub instance_var: ValueTable,
+    pub var_table: ValueTable,
     pub kind: ObjKind,
 }
 
@@ -31,7 +31,7 @@ impl ObjectInfo {
     pub fn new(class: PackedValue) -> Self {
         ObjectInfo {
             class,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Ordinary,
             singleton: None,
         }
@@ -40,7 +40,7 @@ impl ObjectInfo {
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
             class: globals.class,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Class(classref),
             singleton: None,
         }
@@ -49,7 +49,7 @@ impl ObjectInfo {
     pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
             class: globals.module,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Module(classref),
             singleton: None,
         }
@@ -58,7 +58,7 @@ impl ObjectInfo {
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
             class: globals.array,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Array(arrayref),
             singleton: None,
         }
@@ -67,7 +67,7 @@ impl ObjectInfo {
     pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
             class: globals.array,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::SplatArray(arrayref),
             singleton: None,
         }
@@ -76,7 +76,7 @@ impl ObjectInfo {
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         ObjectInfo {
             class: globals.hash,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Hash(hashref),
             singleton: None,
         }
@@ -85,7 +85,7 @@ impl ObjectInfo {
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
         ObjectInfo {
             class: globals.regexp,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Regexp(regexpref),
             singleton: None,
         }
@@ -94,7 +94,7 @@ impl ObjectInfo {
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         ObjectInfo {
             class: globals.procobj,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Proc(procref),
             singleton: None,
         }
@@ -103,7 +103,7 @@ impl ObjectInfo {
     pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
         ObjectInfo {
             class: globals.method,
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             kind: ObjKind::Method(methodref),
             singleton: None,
         }
@@ -162,7 +162,7 @@ impl ObjectRef {
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.class().instance_method.get(&id).cloned()
+        self.class().method_table.get(&id).cloned()
     }
 }
 

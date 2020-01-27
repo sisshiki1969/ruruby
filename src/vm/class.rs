@@ -5,7 +5,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
     pub name: Option<IdentId>,
-    pub instance_method: MethodTable,
+    pub method_table: MethodTable,
     pub constants: ValueTable,
     pub superclass: PackedValue,
     pub is_singleton: bool,
@@ -15,8 +15,7 @@ impl ClassInfo {
     pub fn new(name: impl Into<Option<IdentId>>, superclass: PackedValue) -> Self {
         ClassInfo {
             name: name.into(),
-            instance_method: HashMap::new(),
-            //class_method: HashMap::new(),
+            method_table: HashMap::new(),
             constants: HashMap::new(),
             superclass,
             is_singleton: false,
@@ -36,11 +35,13 @@ impl ClassRef {
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.instance_method.get(&id)
+        self.method_table.get(&id)
     }
 
     pub fn superclass(&self) -> Option<ClassRef> {
-        if self.superclass.is_nil() { None } else {
+        if self.superclass.is_nil() {
+            None
+        } else {
             Some(self.superclass.as_class().unwrap())
         }
     }

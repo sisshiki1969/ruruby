@@ -39,7 +39,7 @@ fn instance_methods(
     match inherited_too {
         false => {
             let v = class
-                .instance_method
+                .method_table
                 .keys()
                 .map(|k| PackedValue::symbol(k.clone()))
                 .collect();
@@ -51,7 +51,7 @@ fn instance_methods(
                 v = v
                     .union(
                         &class
-                            .instance_method
+                            .method_table
                             .keys()
                             .map(|k| PackedValue::symbol(*k))
                             .collect(),

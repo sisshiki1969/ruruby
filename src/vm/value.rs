@@ -294,7 +294,7 @@ impl PackedValue {
                 } else {
                     Some(superclass)
                 }
-            },
+            }
             None => None,
         }
     }
@@ -563,7 +563,7 @@ impl PackedValue {
         PackedValue::object(ObjectRef::new(ObjectInfo {
             class: PackedValue::nil(), // dummy for boot strapping
             kind: ObjKind::Class(classref),
-            instance_var: HashMap::new(),
+            var_table: HashMap::new(),
             singleton: None,
         }))
     }

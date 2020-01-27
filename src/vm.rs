@@ -512,13 +512,13 @@ impl VM {
                     let var_id = read_id(iseq, self.pc + 1);
                     let mut self_obj = self.context().self_value.as_object().unwrap();
                     let new_val = self.exec_stack.pop().unwrap();
-                    self_obj.instance_var.insert(var_id, new_val);
+                    self_obj.var_table.insert(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, self.pc + 1);
                     let self_obj = self.context().self_value.as_object().unwrap();
-                    let val = match self_obj.instance_var.get(&var_id) {
+                    let val = match self_obj.var_table.get(&var_id) {
                         Some(val) => val.clone(),
                         None => PackedValue::nil(),
                     };
@@ -1648,7 +1648,7 @@ impl VM {
                 val
             }
             MethodInfo::AttrReader { id } => match receiver.unpack() {
-                Value::Object(oref) => match oref.instance_var.get(id) {
+                Value::Object(oref) => match oref.var_table.get(id) {
                     Some(v) => v.clone(),
                     None => PackedValue::nil(),
                 },
@@ -1656,7 +1656,7 @@ impl VM {
             },
             MethodInfo::AttrWriter { id } => match receiver.unpack() {
                 Value::Object(mut oref) => {
-                    oref.instance_var.insert(*id, args[0]);
+                    oref.var_table.insert(*id, args[0]);
                     args[0]
                 }
                 _ => unreachable!("AttrReader must be used only for class instance."),
@@ -1686,7 +1686,7 @@ impl VM {
         self.globals.class_version += 1;
         let singleton = self.get_singleton_class(obj)?;
         let mut singleton_class = singleton.as_class().unwrap();
-        singleton_class.instance_method.insert(id, info);
+        singleton_class.method_table.insert(id, info);
         Ok(())
     }
 
@@ -1697,7 +1697,7 @@ impl VM {
         info: MethodRef,
     ) -> Option<MethodRef> {
         self.globals.class_version += 1;
-        class.instance_method.insert(id, info)
+        class.method_table.insert(id, info)
     }
 
     pub fn get_singleton_method(

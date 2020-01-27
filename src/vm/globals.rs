@@ -114,7 +114,7 @@ impl Globals {
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.object_class.instance_method.insert(id, info);
+        self.object_class.method_table.insert(id, info);
     }
 
     pub fn get_object_method(&self, id: IdentId) -> Option<&MethodRef> {
@@ -172,7 +172,7 @@ impl Globals {
         singleton
             .as_class()
             .unwrap()
-            .instance_method
+            .method_table
             .insert(id, func_ref);
     }
 
@@ -186,7 +186,7 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let methodref = self.add_method(info);
-        classref.instance_method.insert(id, methodref);
+        classref.method_table.insert(id, methodref);
     }
 
     pub fn get_class_name(&self, val: PackedValue) -> String {
