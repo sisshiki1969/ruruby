@@ -139,11 +139,11 @@ impl Globals {
                 Some(class) => Ok(class),
                 None => {
                     let mut singleton_class = if let ObjKind::Class(cref) = obj.kind {
-                        match cref.superclass {
-                            Some(superclass) => {
-                                ClassRef::from(None, self.get_singleton_class(superclass)?)
-                            }
-                            None => ClassRef::from_no_superclass(None),
+                        let superclass = cref.superclass;
+                        if superclass.is_nil() {
+                            ClassRef::from_no_superclass(None)
+                        } else {
+                            ClassRef::from(None, self.get_singleton_class(superclass)?)
                         }
                     } else {
                         ClassRef::from_no_superclass(None)

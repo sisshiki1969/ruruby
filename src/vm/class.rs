@@ -6,14 +6,13 @@ use std::collections::HashMap;
 pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub instance_method: MethodTable,
-    //pub class_method: MethodTable,
     pub constants: ValueTable,
-    pub superclass: Option<PackedValue>,
+    pub superclass: PackedValue,
     pub is_singleton: bool,
 }
 
 impl ClassInfo {
-    pub fn new(name: impl Into<Option<IdentId>>, superclass: Option<PackedValue>) -> Self {
+    pub fn new(name: impl Into<Option<IdentId>>, superclass: PackedValue) -> Self {
         ClassInfo {
             name: name.into(),
             instance_method: HashMap::new(),
@@ -29,25 +28,20 @@ pub type ClassRef = Ref<ClassInfo>;
 
 impl ClassRef {
     pub fn from_no_superclass(id: impl Into<Option<IdentId>>) -> Self {
-        ClassRef::new(ClassInfo::new(id, None))
+        ClassRef::new(ClassInfo::new(id, PackedValue::nil()))
     }
 
     pub fn from(id: impl Into<Option<IdentId>>, superclass: PackedValue) -> Self {
-        ClassRef::new(ClassInfo::new(id, Some(superclass)))
+        ClassRef::new(ClassInfo::new(id, superclass))
     }
-
-    /*pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.class_method.get(&id)
-    }*/
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
         self.instance_method.get(&id)
     }
 
     pub fn superclass(&self) -> Option<ClassRef> {
-        match self.superclass {
-            Some(superclass) => Some(superclass.as_class().unwrap()),
-            None => None,
+        if self.superclass.is_nil() { None } else {
+            Some(self.superclass.as_class().unwrap())
         }
     }
 }
@@ -99,8 +93,5 @@ fn superclass(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = vm.val_as_class(receiver)?;
-    match class.superclass {
-        Some(superclass) => Ok(superclass),
-        None => Ok(PackedValue::nil()),
-    }
+    Ok(class.superclass)
 }

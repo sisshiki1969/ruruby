@@ -30,7 +30,7 @@ pub use globals::*;
 pub use hash::*;
 pub use method::*;
 pub use module::*;
-use object::*;
+pub use object::*;
 #[cfg(feature = "perf")]
 use perf::*;
 use range::*;
@@ -800,7 +800,7 @@ impl VM {
                     let val = match self.globals.object_class.constants.get(&id) {
                         Some(val) => {
                             let classref = self.val_as_module(val.clone())?;
-                            if !super_val.is_nil() && classref.superclass != Some(super_val) {
+                            if !super_val.is_nil() && classref.superclass != super_val {
                                 return Err(self.error_type(format!(
                                     "superclass mismatch for class {}.",
                                     self.globals.get_ident_name(id),

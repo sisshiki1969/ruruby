@@ -243,16 +243,14 @@ impl PackedValue {
             Value::FloatNum(self.as_packed_flonum())
         } else if self.is_packed_symbol() {
             Value::Symbol(self.as_packed_symbol())
-        } else if self.0 == NIL_VALUE {
-            Value::Nil
-        } else if self.0 == TRUE_VALUE {
-            Value::Bool(true)
-        } else if self.0 == FALSE_VALUE {
-            Value::Bool(false)
-        } else if self.0 == UNINITIALIZED {
-            Value::Uninitialized
         } else {
-            unreachable!("Illegal packed value.")
+            match self.0 {
+                NIL_VALUE => Value::Nil,
+                TRUE_VALUE => Value::Bool(true),
+                FALSE_VALUE => Value::Bool(false),
+                UNINITIALIZED => Value::Uninitialized,
+                _ => unreachable!("Illegal packed value."),
+            }
         }
     }
 
@@ -289,7 +287,14 @@ impl PackedValue {
 
     pub fn superclass(&self) -> Option<PackedValue> {
         match self.as_module() {
-            Some(class) => class.superclass,
+            Some(class) => {
+                let superclass = class.superclass;
+                if superclass.is_nil() {
+                    None
+                } else {
+                    Some(superclass)
+                }
+            },
             None => None,
         }
     }

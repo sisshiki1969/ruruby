@@ -70,14 +70,11 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
 }
 
 fn repl_vm() {
-    /*
     println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
     println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
     println!("Value: {}", std::mem::size_of::<Value>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-    */
-    println!("Value: {}", std::mem::size_of::<Value>());
     println!(
         "Option<PackedValue>: {}",
         std::mem::size_of::<Option<PackedValue>>()
