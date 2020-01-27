@@ -199,13 +199,14 @@ impl Globals {
             Value::FloatNum(_) => "Float".to_string(),
             Value::String(_) => "String".to_string(),
             Value::Symbol(_) => "Symbol".to_string(),
+            Value::Range(_) => "Range".to_string(),
             Value::Char(_) => "Char".to_string(),
             Value::Object(oref) => match oref.kind {
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::SplatArray(_) => "[SplatArray]".to_string(),
                 ObjKind::Hash(_) => "Hash".to_string(),
                 ObjKind::Regexp(_) => "Regexp".to_string(),
-                ObjKind::Range(_) => "Range".to_string(),
+
                 ObjKind::Class(_) => "Class".to_string(),
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),

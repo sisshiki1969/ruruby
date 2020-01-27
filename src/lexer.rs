@@ -7,15 +7,15 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
     len: usize,
-    token_start_pos: usize,
-    pos: usize,
+    token_start_pos: u32,
+    pos: u32,
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
     reserved: HashMap<String, Reserved>,
     reserved_rev: HashMap<Reserved, String>,
     quote_state: Vec<QuoteState>,
     pub source_info: SourceInfoRef,
-    state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
+    state_save: Vec<(u32, u32)>, // (token_start_pos, pos)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -99,17 +99,17 @@ impl Lexer {
         self.reserved_rev.get(&reserved).unwrap()
     }
 
-    fn error_unexpected(&self, pos: usize) -> RubyError {
+    fn error_unexpected(&self, pos: u32) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos])),
+            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos as usize])),
             self.source_info,
             0,
             loc,
         )
     }
 
-    fn error_eof(&self, pos: usize) -> RubyError {
+    fn error_eof(&self, pos: u32) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, 0, loc)
     }
@@ -135,7 +135,7 @@ impl Lexer {
 
     pub fn init(&mut self, code_text: impl Into<String>) {
         let mut code = code_text.into().chars().collect::<Vec<char>>();
-        self.pos = self.source_info.code.len();
+        self.pos = self.source_info.code.len() as u32;
         self.source_info.code.append(&mut code);
         self.len = self.source_info.code.len();
     }
@@ -684,10 +684,10 @@ impl Lexer {
     /// Get one char and move to the next.
     /// Returns Ok(char) or RubyError if the cursor reached EOF.
     fn get(&mut self) -> Result<char, RubyError> {
-        if self.pos >= self.len {
+        if self.pos as usize >= self.len {
             Err(self.error_eof(self.pos))
         } else {
-            let ch = self.source_info.code[self.pos];
+            let ch = self.source_info.code[self.pos as usize];
             self.pos += 1;
             Ok(ch)
         }
@@ -701,9 +701,9 @@ impl Lexer {
     /// Consume the next char, if the char is equal to the given one.
     /// Return true if the token was consumed.
     fn consume(&mut self, ch: char) -> bool {
-        if self.pos >= self.len {
+        if self.pos as usize >= self.len {
             false
-        } else if ch == self.source_info.code[self.pos] {
+        } else if ch == self.source_info.code[self.pos as usize] {
             self.pos += 1;
             true
         } else {
@@ -714,10 +714,10 @@ impl Lexer {
     /// Consume the next char, if the char is numeric char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_numeric(&mut self) -> Option<char> {
-        if self.pos >= self.len {
+        if self.pos as usize >= self.len {
             return None;
         };
-        let ch = self.source_info.code[self.pos];
+        let ch = self.source_info.code[self.pos as usize];
         if ch.is_numeric() {
             self.pos += 1;
             Some(ch)
@@ -729,10 +729,10 @@ impl Lexer {
     /// Consume the next char, if the char is ascii-whitespace char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_whitespace(&mut self) -> bool {
-        if self.pos >= self.len {
+        if self.pos as usize >= self.len {
             return false;
         };
-        if self.source_info.code[self.pos].is_ascii_whitespace() {
+        if self.source_info.code[self.pos as usize].is_ascii_whitespace() {
             self.pos += 1;
             true
         } else {
@@ -743,10 +743,10 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&mut self) -> Result<char, RubyError> {
-        if self.pos >= self.len {
+        if self.pos as usize >= self.len {
             Err(self.error_eof(self.pos))
         } else {
-            Ok(self.source_info.code[self.pos])
+            Ok(self.source_info.code[self.pos as usize])
         }
     }
 
@@ -849,7 +849,7 @@ impl Lexer {
         Annot::new(TokenKind::LineTerm, self.cur_loc())
     }
 
-    fn new_eof(&self, pos: usize) -> Token {
+    fn new_eof(&self, pos: u32) -> Token {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 }

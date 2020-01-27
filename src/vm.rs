@@ -677,7 +677,7 @@ impl VM {
                     };
                     let exclude_val = self.exec_stack.pop().unwrap();
                     let exclude_end = self.val_to_bool(exclude_val);
-                    let range = PackedValue::range(&mut self.globals, start, end, exclude_end);
+                    let range = PackedValue::range(start, end, exclude_end);
                     self.exec_stack.push(range);
                     self.pc += 1;
                 }
@@ -1429,6 +1429,13 @@ impl VM {
             (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
             (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
+            (Value::Range(lhs), Value::Range(rhs)) => {
+                if lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
             (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
                     let lhs = &lhs.elements;
@@ -1442,13 +1449,6 @@ impl VM {
                         }
                     }
                     Ok(true)
-                }
-                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    if lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude {
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
                 }
                 (_, _) => Ok(lhs_o == rhs_o),
             },
@@ -1537,7 +1537,12 @@ impl VM {
             Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
             Value::Symbol(i) => format!(":{}", self.globals.get_ident_name(i)),
-
+            Value::Range(rinfo) => {
+                let start = self.val_to_s(rinfo.start);
+                let end = self.val_to_s(rinfo.end);
+                let sym = if rinfo.exclude { "..." } else { ".." };
+                format!("({}{}{})", start, sym, end)
+            }
             Value::Char(c) => format!("{:x}", c),
             Value::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => {
@@ -1557,12 +1562,6 @@ impl VM {
                         format! {"[{}]", result}
                     }
                 },
-                ObjKind::Range(rref) => {
-                    let start = self.val_to_s(rref.start);
-                    let end = self.val_to_s(rref.end);
-                    let sym = if rref.exclude { "..." } else { ".." };
-                    format!("({}{}{})", start, sym, end)
-                }
                 _ => format!("{:?}", oref.kind),
             },
         }

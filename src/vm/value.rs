@@ -19,6 +19,7 @@ pub enum Value {
     FloatNum(f64),
     String(Box<String>),
     Symbol(IdentId),
+    Range(RangeInfo),
     Object(ObjectRef),
     Char(u8),
 }
@@ -263,6 +264,7 @@ impl PackedValue {
         match self.unpack() {
             Value::FixNum(_) => globals.integer.as_class().unwrap(),
             Value::String(_) => globals.string.as_class().unwrap(),
+            Value::Range(_) => globals.range.as_class().unwrap(),
             Value::Object(oref) => oref.class().clone(),
             _ => globals.object_class,
         }
@@ -279,6 +281,7 @@ impl PackedValue {
         match self.unpack() {
             Value::FixNum(_) => globals.integer,
             Value::String(_) => globals.string,
+            Value::Range(_) => globals.range,
             Value::Object(oref) => oref.class,
             _ => globals.object,
         }
@@ -432,13 +435,15 @@ impl PackedValue {
         }
     }
 
-    pub fn as_range(&self) -> Option<RangeRef> {
-        match self.as_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Range(rref) => Some(rref),
+    pub fn as_range(&self) -> Option<&RangeInfo> {
+        if self.is_packed_value() {
+            return None;
+        }
+        unsafe {
+            match &*(self.0 as *mut Value) {
+                Value::Range(rinfo) => Some(rinfo),
                 _ => None,
-            },
-            None => None,
+            }
         }
     }
 
@@ -590,9 +595,9 @@ impl PackedValue {
         PackedValue::object(ObjectRef::new_regexp(globals, regexp_ref))
     }
 
-    pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
-        let rref = range::RangeRef::new_range(start, end, exclude);
-        PackedValue::object(ObjectRef::new_range(globals, rref))
+    pub fn range(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+        let info = RangeInfo::new(start, end, exclude);
+        PackedValue(Value::pack_as_boxed(Value::Range(info)))
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
@@ -770,13 +775,9 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let globals = Globals::new();
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
-        let expect = Value::Object(ObjectRef::new_range(
-            &globals,
-            range::RangeRef::new_range(from, to, false),
-        ));
+        let expect = Value::Range(RangeInfo::new(from, to, false));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -788,7 +789,7 @@ mod tests {
         let globals = Globals::new();
         let expect = Value::Object(ObjectRef::new_class(
             &globals,
-            ClassRef::from_no_superclass(IdentId::from(1usize)),
+            ClassRef::from_no_superclass(IdentId::from(1)),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {
@@ -799,7 +800,7 @@ mod tests {
     #[test]
     fn pack_instance() {
         let globals = Globals::new();
-        let class_ref = ClassRef::from_no_superclass(IdentId::from(1usize));
+        let class_ref = ClassRef::from_no_superclass(IdentId::from(1));
         let class = PackedValue::class(&globals, class_ref);
         let expect = Value::Object(ObjectRef::from(class));
         let got = expect.clone().pack().unpack();
@@ -810,7 +811,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        let expect = Value::Symbol(IdentId::from(12345usize));
+        let expect = Value::Symbol(IdentId::from(12345));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

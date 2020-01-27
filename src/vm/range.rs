@@ -7,16 +7,13 @@ pub struct RangeInfo {
     pub exclude: bool,
 }
 
-pub type RangeRef = Ref<RangeInfo>;
-
-impl RangeRef {
-    pub fn new_range(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
-        let info = RangeInfo {
+impl RangeInfo {
+    pub fn new(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+        RangeInfo {
             start,
             end,
             exclude,
-        };
-        RangeRef::new(info)
+        }
     }
 }
 
@@ -48,7 +45,7 @@ fn range_new(
     } else {
         vm.val_to_bool(args[2])
     };
-    Ok(PackedValue::range(&vm.globals, start, end, exclude_end))
+    Ok(PackedValue::range(start, end, exclude_end))
 }
 
 fn range_begin(

@@ -1,13 +1,13 @@
 use core::ptr::NonNull;
 use std::collections::HashMap;
 
-const INITIALIZE: usize = 1;
-const OBJECT: usize = 2;
-const NEW: usize = 3;
-const _ADD: usize = 4;
-const _SUB: usize = 5;
-const _MUL: usize = 6;
-const _POW: usize = 7;
+const INITIALIZE: u32 = 1;
+const OBJECT: u32 = 2;
+const NEW: u32 = 3;
+const _ADD: u32 = 4;
+const _SUB: u32 = 5;
+const _MUL: u32 = 6;
+const _POW: u32 = 7;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -26,7 +26,7 @@ impl<T> Annot<T> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Loc(pub usize, pub usize);
+pub struct Loc(pub u32, pub u32);
 
 impl Loc {
     pub fn new(loc: Loc) -> Self {
@@ -113,7 +113,6 @@ pub type SourceInfoRef = Ref<SourceInfo>;
 pub struct SourceInfo {
     pub path: String,
     pub code: Vec<char>,
-    //pub line_pos: Vec<(usize, usize, usize)>, // (line_no, line_top_pos, line_end_pos)
 }
 
 impl SourceInfoRef {
@@ -127,7 +126,6 @@ impl SourceInfo {
         SourceInfo {
             path: path.into(),
             code: vec![],
-            //line_pos: vec![],
         }
     }
     pub fn show_file_name(&self) {
@@ -136,18 +134,18 @@ impl SourceInfo {
 
     /// Show the location of the Loc in the source code using '^^^'.
     pub fn show_loc(&self, loc: &Loc) {
-        let mut line = 1;
-        let mut line_top_pos = 0;
+        let mut line: u32 = 1;
+        let mut line_top_pos: u32 = 0;
         let mut line_pos = vec![];
         for (pos, ch) in self.code.iter().enumerate() {
             if *ch == '\n' {
-                line_pos.push((line, line_top_pos, pos));
+                line_pos.push((line, line_top_pos, pos as u32));
                 line += 1;
-                line_top_pos = pos + 1;
+                line_top_pos = pos as u32 + 1;
             }
         }
-        if line_top_pos <= self.code.len() - 1 {
-            line_pos.push((line, line_top_pos, self.code.len() - 1));
+        if line_top_pos as usize <= self.code.len() - 1 {
+            line_pos.push((line, line_top_pos, self.code.len() as u32 - 1));
         }
 
         let mut found = false;
@@ -161,18 +159,18 @@ impl SourceInfo {
             found = true;
             eprintln!(
                 "{}",
-                self.code[(line.1)..(line.2)].iter().collect::<String>()
+                self.code[(line.1 as usize)..(line.2 as usize)].iter().collect::<String>()
             );
             use std::cmp::*;
             let read = if loc.0 <= line.1 {
                 0
             } else {
-                self.code[(line.1)..(loc.0)]
+                self.code[(line.1 as usize)..(loc.0 as usize)]
                     .iter()
                     .map(|x| calc_width(x))
                     .sum()
             };
-            let length: usize = self.code[max(loc.0, line.1)..min(loc.1, line.2)]
+            let length: usize = self.code[max(loc.0, line.1) as usize..min(loc.1, line.2) as usize]
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
@@ -184,19 +182,19 @@ impl SourceInfo {
                 Some(line) => (line.0 + 1, line.2 + 1, loc.1),
                 None => (1, 0, loc.1),
             };
-            let read = self.code[(line.1)..(loc.0)]
+            let read = self.code[(line.1 as usize)..(loc.0 as usize)]
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
-            let length: usize = self.code[loc.0..loc.1].iter().map(|x| calc_width(x)).sum();
-            let is_cr = self.code[loc.1] == '\n';
+            let length: usize = self.code[loc.0 as usize..loc.1 as usize].iter().map(|x| calc_width(x)).sum();
+            let is_cr = self.code[loc.1 as usize] == '\n';
             eprintln!("line: {}", line.0);
             eprintln!(
                 "{}",
                 if !is_cr {
-                    self.code[(line.1)..=(loc.1)].iter().collect::<String>()
+                    self.code[(line.1 as usize)..=(loc.1 as usize)].iter().collect::<String>()
                 } else {
-                    self.code[(line.1)..(loc.1)].iter().collect::<String>()
+                    self.code[(line.1 as usize)..(loc.1 as usize)].iter().collect::<String>()
                 }
             );
             eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
@@ -215,7 +213,7 @@ impl SourceInfo {
 //------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdentId(std::num::NonZeroUsize);
+pub struct IdentId(std::num::NonZeroU32);
 
 impl std::hash::Hash for IdentId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -225,26 +223,19 @@ impl std::hash::Hash for IdentId {
 
 impl Into<usize> for IdentId {
     fn into(self) -> usize {
-        self.0.get()
+        self.0.get() as usize
     }
 }
 
 impl Into<u32> for IdentId {
     fn into(self) -> u32 {
-        self.0.get() as u32
+        self.0.get()
     }
 }
 
 impl From<u32> for IdentId {
     fn from(id: u32) -> Self {
-        let id = unsafe { std::num::NonZeroUsize::new_unchecked(id as usize) };
-        IdentId(id)
-    }
-}
-
-impl From<usize> for IdentId {
-    fn from(id: usize) -> Self {
-        let id = unsafe { std::num::NonZeroUsize::new_unchecked(id) };
+        let id = unsafe { std::num::NonZeroU32::new_unchecked(id) };
         IdentId(id)
     }
 }
@@ -266,7 +257,7 @@ impl std::ops::Deref for OptionalId {
 
 macro_rules! to {
     ($constant:ident) => {
-        unsafe { std::num::NonZeroUsize::new_unchecked($constant) }
+        unsafe { std::num::NonZeroU32::new_unchecked($constant) }
     };
 }
 
@@ -282,9 +273,9 @@ impl IdentId {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdentifierTable {
-    table: HashMap<String, usize>,
-    table_rev: HashMap<usize, String>,
-    ident_id: usize,
+    table: HashMap<String, u32>,
+    table_rev: HashMap<u32, String>,
+    ident_id: u32,
 }
 
 impl IdentifierTable {
@@ -305,7 +296,7 @@ impl IdentifierTable {
         table
     }
 
-    fn set_ident_id(&mut self, name: impl Into<String>, id: usize) {
+    fn set_ident_id(&mut self, name: impl Into<String>, id: u32) {
         let name = name.into();
         self.table.insert(name.clone(), id);
         self.table_rev.insert(id, name);

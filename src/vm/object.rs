@@ -2,7 +2,6 @@ use super::array::ArrayRef;
 use super::class::ClassRef;
 use super::hash::HashRef;
 use super::procobj::ProcRef;
-use super::range::RangeRef;
 use super::regexp::RegexpRef;
 use crate::vm::*;
 use std::collections::HashMap;
@@ -23,7 +22,6 @@ pub enum ObjKind {
     Array(ArrayRef),
     SplatArray(ArrayRef), // internal use only.
     Hash(HashRef),
-    Range(RangeRef),
     Proc(ProcRef),
     Regexp(RegexpRef),
     Method(MethodObjRef),
@@ -93,15 +91,6 @@ impl ObjectInfo {
         }
     }
 
-    pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {
-        ObjectInfo {
-            class: globals.range,
-            instance_var: HashMap::new(),
-            kind: ObjKind::Range(rangeref),
-            singleton: None,
-        }
-    }
-
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         ObjectInfo {
             class: globals.procobj,
@@ -150,10 +139,6 @@ impl ObjectRef {
 
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
         ObjectRef::new(ObjectInfo::new_regexp(globals, regexpref))
-    }
-
-    pub fn new_range(globals: &Globals, rangeref: RangeRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_range(globals, rangeref))
     }
 
     pub fn new_proc(globals: &Globals, context: ContextRef) -> Self {
