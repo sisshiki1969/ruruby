@@ -102,7 +102,10 @@ impl Lexer {
     fn error_unexpected(&self, pos: u32) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos as usize])),
+            ParseErrKind::SyntaxError(format!(
+                "Unexpected char. '{}'",
+                self.source_info.code[pos as usize]
+            )),
             self.source_info,
             0,
             loc,
@@ -402,7 +405,12 @@ impl Lexer {
         var_kind: VarKind,
     ) -> Result<Token, RubyError> {
         // read identifier or reserved keyword
-        let mut tok = String::new();
+        let mut tok = match var_kind {
+            VarKind::ClassVar => String::from("@@"),
+            VarKind::GlobalVar => String::from("$"),
+            VarKind::InstanceVar => String::from("@"),
+            VarKind::Identifier => String::new(),
+        };
         let is_const = match ch.into() {
             Some(ch) => {
                 tok.push(ch);
@@ -901,6 +909,9 @@ mod test {
         (InstanceVar($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_instance_var($item, Loc($loc_0, $loc_1))
         };
+        (GlobalVar($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_global_var($item, Loc($loc_0, $loc_1))
+        };
         (Space, $loc_0:expr, $loc_1:expr) => {
             Token::new_space(Loc($loc_0, $loc_1))
         };
@@ -969,9 +980,16 @@ mod test {
     }
 
     #[test]
-    fn identifier2() {
+    fn instance_var() {
         let program = "@amber";
-        let ans = vec![Token![InstanceVar("amber"), 0, 5], Token![EOF, 6]];
+        let ans = vec![Token![InstanceVar("@amber"), 0, 5], Token![EOF, 6]];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn global_var() {
+        let program = "$amber";
+        let ans = vec![Token![GlobalVar("$amber"), 0, 5], Token![EOF, 6]];
         assert_tokens(program, ans);
     }
 

@@ -125,16 +125,27 @@ fn attr_writer(
 }
 
 fn define_reader(vm: &mut VM, class: PackedValue, id: IdentId) {
-    let info = MethodInfo::AttrReader { id };
+    let instance_var_id = get_instance_var(vm, id);
+    let info = MethodInfo::AttrReader {
+        id: instance_var_id,
+    };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, id, methodref);
 }
 
 fn define_writer(vm: &mut VM, class: PackedValue, id: IdentId) {
     let assign_id = vm.globals.ident_table.add_postfix(id, "=");
-    let info = MethodInfo::AttrWriter { id };
+    let instance_var_id = get_instance_var(vm, id);
+    let info = MethodInfo::AttrWriter {
+        id: instance_var_id,
+    };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, assign_id, methodref);
+}
+
+fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
+    vm.globals
+        .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
 }
 
 fn module_function(

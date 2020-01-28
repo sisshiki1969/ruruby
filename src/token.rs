@@ -147,6 +147,10 @@ impl Token {
         Annot::new(TokenKind::Const(ident.into()), loc)
     }
 
+    pub fn new_global_var(ident: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::GlobalVar(ident.into()), loc)
+    }
+
     pub fn new_reserved(ident: Reserved, loc: Loc) -> Self {
         Annot::new(TokenKind::Reserved(ident), loc)
     }

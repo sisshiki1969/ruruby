@@ -1552,7 +1552,7 @@ impl VM {
             Value::FixNum(i) => i.to_string(),
             Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
-            Value::Symbol(i) => format!(":{}", self.globals.get_ident_name(i)),
+            Value::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
             Value::Range(rinfo) => {
                 let start = self.val_to_s(rinfo.start);
                 let end = self.val_to_s(rinfo.end);
@@ -1561,11 +1561,9 @@ impl VM {
             }
             Value::Char(c) => format!("{:x}", c),
             Value::Object(oref) => match oref.kind {
-                ObjKind::Class(cref) => {
-                    format! {"Class({})", self.globals.get_ident_name(cref.name)}
-                }
+                ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
-                    format! {"Instance({}:{:?})", self.globals.get_ident_name(oref.class().name), oref}
+                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.class().name), oref}
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),

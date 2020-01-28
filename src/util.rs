@@ -4,10 +4,11 @@ use std::collections::HashMap;
 const INITIALIZE: u32 = 1;
 const OBJECT: u32 = 2;
 const NEW: u32 = 3;
-const _ADD: u32 = 4;
-const _SUB: u32 = 5;
-const _MUL: u32 = 6;
-const _POW: u32 = 7;
+const NAME: u32 = 4;
+const _ADD: u32 = 5;
+const _SUB: u32 = 6;
+const _MUL: u32 = 7;
+const _POW: u32 = 8;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -274,6 +275,7 @@ impl IdentId {
     pub const INITIALIZE: IdentId = IdentId(to!(INITIALIZE));
     pub const OBJECT: IdentId = IdentId(to!(OBJECT));
     pub const NEW: IdentId = IdentId(to!(NEW));
+    pub const NAME: IdentId = IdentId(to!(NAME));
     pub const _ADD: IdentId = IdentId(to!(_ADD));
     pub const _SUB: IdentId = IdentId(to!(_SUB));
     pub const _MUL: IdentId = IdentId(to!(_MUL));
@@ -298,6 +300,7 @@ impl IdentifierTable {
         table.set_ident_id("initialize", INITIALIZE);
         table.set_ident_id("Object", OBJECT);
         table.set_ident_id("new", NEW);
+        table.set_ident_id("name", NAME);
         table.set_ident_id("+", _ADD);
         table.set_ident_id("-", _SUB);
         table.set_ident_id("*", _MUL);
