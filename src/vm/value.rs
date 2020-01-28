@@ -19,8 +19,7 @@ pub enum Value {
     FloatNum(f64),
     String(Box<String>),
     Symbol(IdentId),
-    Range(RangeInfo),
-    Object(ObjectRef),
+    Object(ObjectInfo),
     Char(u8),
 }
 
@@ -187,7 +186,7 @@ impl std::hash::Hash for PackedValue {
         if self.is_packed_value() {
             self.0.hash(state);
         } else {
-            let lhs = unsafe { (*(self.0 as *mut Value)).clone() };
+            let lhs = unsafe { &(*(self.0 as *mut Value)) };
             match lhs {
                 Value::String(lhs) => lhs.hash(state),
                 _ => self.0.hash(state),
@@ -210,7 +209,6 @@ impl PartialEq for PackedValue {
             (Value::String(lhs), Value::String(rhs)) => lhs == rhs,
             (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
             (Value::Symbol(lhs), Value::Symbol(rhs)) => lhs == rhs,
-
             (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
                     if lhs.elements.len() != rhs.elements.len() {
@@ -262,16 +260,20 @@ impl PackedValue {
         match self.unpack() {
             Value::FixNum(_) => globals.integer.as_class().unwrap(),
             Value::String(_) => globals.string.as_class().unwrap(),
-            Value::Range(_) => globals.range.as_class().unwrap(),
-            Value::Object(oref) => oref.class().clone(),
+            Value::Object(oref) => oref.as_ref().class().clone(),
             _ => globals.object_class,
         }
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> PackedValue {
-        match self.has_singleton_class() {
-            Some(singleton) => singleton,
-            None => self.get_class_object(globals),
+        match self.unpack() {
+            Value::FixNum(_) => globals.integer,
+            Value::String(_) => globals.string,
+            Value::Object(info) => match info.singleton {
+                Some(singleton) => singleton,
+                None => info.class,
+            },
+            _ => globals.object,
         }
     }
 
@@ -279,8 +281,7 @@ impl PackedValue {
         match self.unpack() {
             Value::FixNum(_) => globals.integer,
             Value::String(_) => globals.string,
-            Value::Range(_) => globals.range,
-            Value::Object(oref) => oref.class,
+            Value::Object(info) => info.class,
             _ => globals.object,
         }
     }
@@ -397,8 +398,8 @@ impl PackedValue {
             return None;
         }
         unsafe {
-            match *(self.0 as *mut Value) {
-                Value::Object(oref) => Some(oref),
+            match &*(self.0 as *mut Value) {
+                Value::Object(oref) => Some(oref.as_ref()),
                 _ => None,
             }
         }
@@ -464,15 +465,13 @@ impl PackedValue {
         }
     }
 
-    pub fn as_range(&self) -> Option<&RangeInfo> {
-        if self.is_packed_value() {
-            return None;
-        }
-        unsafe {
-            match &*(self.0 as *mut Value) {
-                Value::Range(rinfo) => Some(rinfo),
+    pub fn as_range(&self) -> Option<RangeInfo> {
+        match self.as_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Range(info) => Some(info.clone()),
                 _ => None,
-            }
+            },
+            None => None,
         }
     }
 
@@ -579,58 +578,65 @@ impl PackedValue {
         PackedValue((id as u64) << 32 | TAG_SYMBOL)
     }
 
-    pub fn object(obj_ref: ObjectRef) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::Object(obj_ref)))
+    fn object(obj_info: ObjectInfo) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::Object(obj_info)))
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
-        PackedValue::object(ObjectRef::new(ObjectInfo {
+        PackedValue::object(ObjectInfo {
             class: PackedValue::nil(), // dummy for boot strapping
             kind: ObjKind::Class(classref),
             var_table: HashMap::new(),
             singleton: None,
-        }))
+        })
+    }
+
+    pub fn ordinary_object(class: PackedValue) -> Self {
+        PackedValue::object(ObjectInfo::new_ordinary(class))
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectRef::new_class(globals, class_ref))
+        PackedValue::object(ObjectInfo::new_class(globals, class_ref))
     }
 
     pub fn plain_class(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectRef::new_class(globals, class_ref))
+        PackedValue::object(ObjectInfo::new_class(globals, class_ref))
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectRef::new_module(globals, class_ref))
+        PackedValue::object(ObjectInfo::new_module(globals, class_ref))
     }
 
     pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
-        PackedValue::object(ObjectRef::new_array(globals, array_ref))
+        PackedValue::object(ObjectInfo::new_array(globals, array_ref))
     }
 
     pub fn array_from(globals: &Globals, ary: Vec<PackedValue>) -> Self {
-        PackedValue::object(ObjectRef::new_array(globals, ArrayRef::from(ary)))
+        PackedValue::object(ObjectInfo::new_array(globals, ArrayRef::from(ary)))
     }
 
     pub fn splat(globals: &Globals, array_ref: ArrayRef) -> Self {
-        PackedValue::object(ObjectRef::new_splat(globals, array_ref))
+        PackedValue::object(ObjectInfo::new_splat(globals, array_ref))
     }
 
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
-        PackedValue::object(ObjectRef::new_hash(globals, hash_ref))
+        PackedValue::object(ObjectInfo::new_hash(globals, hash_ref))
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: regexp::RegexpRef) -> Self {
-        PackedValue::object(ObjectRef::new_regexp(globals, regexp_ref))
+        PackedValue::object(ObjectInfo::new_regexp(globals, regexp_ref))
     }
 
-    pub fn range(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+    pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        PackedValue(Value::pack_as_boxed(Value::Range(info)))
+        PackedValue::object(ObjectInfo::new_range(globals, info))
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        PackedValue::object(ObjectRef::new_proc(globals, context))
+        PackedValue::object(ObjectInfo::new_proc(
+            globals,
+            procobj::ProcRef::from(context),
+        ))
     }
 
     pub fn method(
@@ -639,7 +645,10 @@ impl PackedValue {
         receiver: PackedValue,
         method: MethodRef,
     ) -> Self {
-        PackedValue::object(ObjectRef::new_method(globals, name, receiver, method))
+        PackedValue::object(ObjectInfo::new_method(
+            globals,
+            MethodObjRef::from(name, receiver, method),
+        ))
     }
 }
 
@@ -804,9 +813,13 @@ mod tests {
 
     #[test]
     fn pack_range() {
+        let globals = Globals::new();
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
-        let expect = Value::Range(RangeInfo::new(from, to, false));
+        let expect = Value::Object(ObjectInfo::new_range(
+            &globals,
+            RangeInfo::new(from, to, false),
+        ));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -816,7 +829,7 @@ mod tests {
     #[test]
     fn pack_class() {
         let globals = Globals::new();
-        let expect = Value::Object(ObjectRef::new_class(
+        let expect = Value::Object(ObjectInfo::new_class(
             &globals,
             ClassRef::from(IdentId::from(1), None),
         ));
@@ -831,7 +844,7 @@ mod tests {
         let globals = Globals::new();
         let class_ref = ClassRef::from(IdentId::from(1), None);
         let class = PackedValue::class(&globals, class_ref);
-        let expect = Value::Object(ObjectRef::from(class));
+        let expect = Value::Object(ObjectInfo::new_ordinary(class));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

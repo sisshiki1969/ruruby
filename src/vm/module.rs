@@ -134,8 +134,8 @@ fn define_reader(vm: &mut VM, class: PackedValue, id: IdentId) {
 }
 
 fn define_writer(vm: &mut VM, class: PackedValue, id: IdentId) {
-    let assign_id = vm.globals.ident_table.add_postfix(id, "=");
     let instance_var_id = get_instance_var(vm, id);
+    let assign_id = vm.globals.ident_table.add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };

@@ -45,7 +45,7 @@ fn range_new(
     } else {
         vm.val_to_bool(args[2])
     };
-    Ok(PackedValue::range(start, end, exclude_end))
+    Ok(PackedValue::range(&vm.globals, start, end, exclude_end))
 }
 
 fn range_begin(

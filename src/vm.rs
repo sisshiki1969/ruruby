@@ -692,7 +692,7 @@ impl VM {
                     };
                     let exclude_val = self.stack_pop();
                     let exclude_end = self.val_to_bool(exclude_val);
-                    let range = PackedValue::range(start, end, exclude_end);
+                    let range = PackedValue::range(&self.globals, start, end, exclude_end);
                     self.stack_push(range);
                     self.pc += 1;
                 }
@@ -1192,7 +1192,7 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs + rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
                 (Value::Object(l_ref), _) => {
-                    return self.fallback_to_method(IdentId::_ADD, lhs, rhs, l_ref)
+                    return self.fallback_to_method(IdentId::_ADD, lhs, rhs, l_ref.as_ref())
                 }
                 (_, _) => return Err(self.error_undefined_op("+", rhs, lhs)),
             }
@@ -1215,7 +1215,7 @@ impl VM {
                         IdentId::_ADD,
                         lhs,
                         PackedValue::fixnum(i as i64),
-                        l_ref,
+                        l_ref.as_ref(),
                     )
                 }
                 _ => return Err(self.error_undefined_op("+", PackedValue::fixnum(i as i64), lhs)),
@@ -1243,7 +1243,7 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs - rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs - rhs),
                 (Value::Object(l_ref), _) => {
-                    return self.fallback_to_method(IdentId::_SUB, lhs, rhs, l_ref)
+                    return self.fallback_to_method(IdentId::_SUB, lhs, rhs, l_ref.as_ref())
                 }
                 (_, _) => return Err(self.error_undefined_op("-", rhs, lhs)),
             }
@@ -1266,7 +1266,7 @@ impl VM {
                         IdentId::_SUB,
                         lhs,
                         PackedValue::fixnum(i as i64),
-                        l_ref,
+                        l_ref.as_ref(),
                     )
                 }
                 _ => return Err(self.error_undefined_op("-", PackedValue::fixnum(i as i64), lhs)),
@@ -1294,7 +1294,7 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs * rhs as f64),
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
                 (Value::Object(l_ref), _) => {
-                    return self.fallback_to_method(IdentId::_MUL, lhs, rhs, l_ref);
+                    return self.fallback_to_method(IdentId::_MUL, lhs, rhs, l_ref.as_ref());
                 }
                 (_, _) => return Err(self.error_undefined_op("*", rhs, lhs)),
             }
@@ -1356,7 +1356,7 @@ impl VM {
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs.powf(rhs)),
                 (Value::Object(l_ref), _) => {
                     let method = IdentId::_POW;
-                    match l_ref.get_instance_method(method) {
+                    match l_ref.as_ref().get_instance_method(method) {
                         Some(mref) => {
                             self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
                         }
@@ -1376,7 +1376,7 @@ impl VM {
             (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(PackedValue::fixnum(lhs << rhs)),
             (Value::Object(l_ref), _) => {
                 let method = self.globals.get_ident_id("<<");
-                match l_ref.get_instance_method(method) {
+                match l_ref.as_ref().get_instance_method(method) {
                     Some(mref) => {
                         self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
                         Ok(self.stack_pop())
@@ -1445,13 +1445,6 @@ impl VM {
             (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
             (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
             (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
-            (Value::Range(lhs), Value::Range(rhs)) => {
-                if lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude {
-                    Ok(true)
-                } else {
-                    Ok(false)
-                }
-            }
             (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
                     let lhs = &lhs.elements;
@@ -1465,6 +1458,13 @@ impl VM {
                         }
                     }
                     Ok(true)
+                }
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                    if lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude {
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
                 }
                 (_, _) => Ok(lhs_o == rhs_o),
             },
@@ -1553,17 +1553,11 @@ impl VM {
             Value::FloatNum(f) => f.to_string(),
             Value::String(s) => format!("{}", s),
             Value::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
-            Value::Range(rinfo) => {
-                let start = self.val_to_s(rinfo.start);
-                let end = self.val_to_s(rinfo.end);
-                let sym = if rinfo.exclude { "..." } else { ".." };
-                format!("({}{}{})", start, sym, end)
-            }
             Value::Char(c) => format!("{:x}", c),
             Value::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
-                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.class().name), oref}
+                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.as_ref().class().name), oref}
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
@@ -1576,6 +1570,12 @@ impl VM {
                         format! {"[{}]", result}
                     }
                 },
+                ObjKind::Range(rinfo) => {
+                    let start = self.val_to_s(rinfo.start);
+                    let end = self.val_to_s(rinfo.end);
+                    let sym = if rinfo.exclude { "..." } else { ".." };
+                    format!("({}{}{})", start, sym, end)
+                }
                 _ => format!("{:?}", oref.kind),
             },
         }
@@ -1623,7 +1623,7 @@ impl VM {
                     }
                 },
                 ObjKind::Ordinary => {
-                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.class().name), oref.id()}
+                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.as_ref().class().name), oref.as_ref().id()}
                 }
                 _ => self.val_to_s(val),
             },
@@ -1661,19 +1661,19 @@ impl VM {
                 }
                 val
             }
-            MethodInfo::AttrReader { id } => match receiver.unpack() {
-                Value::Object(oref) => match oref.var_table.get(id) {
+            MethodInfo::AttrReader { id } => match receiver.as_object() {
+                Some(oref) => match oref.var_table.get(id) {
                     Some(v) => v.clone(),
                     None => PackedValue::nil(),
                 },
-                _ => unreachable!("AttrReader must be used only for class instance."),
+                None => unreachable!("AttrReader must be used only for class instance."),
             },
-            MethodInfo::AttrWriter { id } => match receiver.unpack() {
-                Value::Object(mut oref) => {
+            MethodInfo::AttrWriter { id } => match receiver.as_object() {
+                Some(mut oref) => {
                     oref.var_table.insert(*id, args[0]);
                     args[0]
                 }
-                _ => unreachable!("AttrReader must be used only for class instance."),
+                None => unreachable!("AttrReader must be used only for class instance."),
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
@@ -1750,23 +1750,9 @@ impl VM {
     }
 
     pub fn get_singleton_class(&mut self, obj: PackedValue) -> VMResult {
-        match obj.unpack() {
-            Value::Object(mut objref) => match objref.singleton {
-                Some(class) => Ok(class),
-                None => {
-                    let mut singleton_class = match obj.superclass() {
-                        Some(superclass) => {
-                            ClassRef::from(None, self.get_singleton_class(superclass)?)
-                        }
-                        None => ClassRef::from(None, None),
-                    };
-                    singleton_class.is_singleton = true;
-                    let singleton_obj = PackedValue::class(&self.globals, singleton_class);
-                    objref.singleton = Some(singleton_obj);
-                    Ok(singleton_obj)
-                }
-            },
-            _ => Err(self.error_type("Can not define singleton.")),
+        match self.globals.get_singleton_class(obj) {
+            Ok(val) => Ok(val),
+            Err(()) => Err(self.error_type("Can not define singleton.")),
         }
     }
 }

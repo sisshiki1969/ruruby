@@ -77,8 +77,7 @@ fn class_new(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let instance = ObjectRef::from(receiver);
-    let new_instance = PackedValue::object(instance);
+    let new_instance = PackedValue::ordinary_object(receiver);
     // call initialize method.
     if let Some(methodref) = receiver.get_instance_method(IdentId::INITIALIZE) {
         let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;

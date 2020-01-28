@@ -19,6 +19,7 @@ pub enum ObjKind {
     Ordinary,
     Class(ClassRef),
     Module(ClassRef),
+    Range(RangeInfo),
     Array(ArrayRef),
     SplatArray(ArrayRef), // internal use only.
     Hash(HashRef),
@@ -28,7 +29,13 @@ pub enum ObjKind {
 }
 
 impl ObjectInfo {
-    pub fn new(class: PackedValue) -> Self {
+    pub fn as_ref(&self) -> ObjectRef {
+        Ref(unsafe {
+            core::ptr::NonNull::new_unchecked(self as *const ObjectInfo as *mut ObjectInfo)
+        })
+    }
+
+    pub fn new_ordinary(class: PackedValue) -> Self {
         ObjectInfo {
             class,
             var_table: HashMap::new(),
@@ -91,6 +98,15 @@ impl ObjectInfo {
         }
     }
 
+    pub fn new_range(globals: &Globals, info: RangeInfo) -> Self {
+        ObjectInfo {
+            class: globals.range,
+            var_table: HashMap::new(),
+            kind: ObjKind::Range(info),
+            singleton: None,
+        }
+    }
+
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         ObjectInfo {
             class: globals.procobj,
@@ -113,50 +129,6 @@ impl ObjectInfo {
 pub type ObjectRef = Ref<ObjectInfo>;
 
 impl ObjectRef {
-    pub fn from(class: PackedValue) -> Self {
-        ObjectRef::new(ObjectInfo::new(class))
-    }
-
-    pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_class(globals, classref))
-    }
-
-    pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_module(globals, classref))
-    }
-
-    pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_array(globals, arrayref))
-    }
-
-    pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_splat(globals, arrayref))
-    }
-
-    pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_hash(globals, hashref))
-    }
-
-    pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_regexp(globals, regexpref))
-    }
-
-    pub fn new_proc(globals: &Globals, context: ContextRef) -> Self {
-        ObjectRef::new(ObjectInfo::new_proc(globals, ProcRef::from(context)))
-    }
-
-    pub fn new_method(
-        globals: &Globals,
-        name: IdentId,
-        receiver: PackedValue,
-        method: MethodRef,
-    ) -> Self {
-        ObjectRef::new(ObjectInfo::new_method(
-            globals,
-            MethodObjRef::from(name, receiver, method),
-        ))
-    }
-
     pub fn class(&self) -> ClassRef {
         self.class.as_class().unwrap()
     }
