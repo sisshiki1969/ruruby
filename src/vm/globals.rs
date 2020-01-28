@@ -41,7 +41,7 @@ impl Globals {
         let object_id = IdentId::OBJECT;
         let module_id = ident_table.get_ident_id("Module");
         let class_id = ident_table.get_ident_id("Class");
-        let object_class = ClassRef::from_no_superclass(object_id);
+        let object_class = ClassRef::from(object_id, None);
         let nil = PackedValue::nil();
         let object = PackedValue::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
@@ -117,8 +117,8 @@ impl Globals {
         self.object_class.method_table.insert(id, info);
     }
 
-    pub fn get_object_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.object_class.get_instance_method(id)
+    pub fn get_object_method(&self, id: IdentId) -> Option<MethodRef> {
+        self.object.get_instance_method(id)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
@@ -141,12 +141,12 @@ impl Globals {
                     let mut singleton_class = if let ObjKind::Class(cref) = obj.kind {
                         let superclass = cref.superclass;
                         if superclass.is_nil() {
-                            ClassRef::from_no_superclass(None)
+                            ClassRef::from(None, None)
                         } else {
                             ClassRef::from(None, self.get_singleton_class(superclass)?)
                         }
                     } else {
-                        ClassRef::from_no_superclass(None)
+                        ClassRef::from(None, None)
                     };
                     singleton_class.is_singleton = true;
                     let singleton_obj = PackedValue::class(&self, singleton_class);
@@ -221,7 +221,7 @@ impl Globals {
     pub fn set_method_cache_entry(
         &mut self,
         id: usize,
-        class: ClassRef,
+        class: PackedValue,
         //is_class_method: bool,
         method: MethodRef,
     ) {
@@ -244,7 +244,7 @@ impl Globals {
     pub fn get_method_from_cache(
         &mut self,
         cache_slot: usize,
-        rec_class: ClassRef,
+        rec_class: PackedValue,
     ) -> Option<MethodRef> {
         match self.get_method_cache_entry(cache_slot) {
             Some(MethodCacheEntry {
@@ -259,7 +259,7 @@ impl Globals {
 
 #[derive(Debug, Clone)]
 pub struct MethodCacheEntry {
-    class: ClassRef,
+    class: PackedValue,
     version: usize,
     //is_class_method: bool,
     method: MethodRef,

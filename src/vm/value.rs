@@ -268,10 +268,10 @@ impl PackedValue {
         }
     }
 
-    pub fn get_class_for_method(&self, globals: &Globals) -> ClassRef {
+    pub fn get_class_object_for_method(&self, globals: &Globals) -> PackedValue {
         match self.has_singleton_class() {
-            Some(singleton) => singleton.as_class().unwrap(),
-            None => self.get_classref(globals),
+            Some(singleton) => singleton,
+            None => self.get_class_object(globals),
         }
     }
 
@@ -317,6 +317,12 @@ impl PackedValue {
         }
     }
 
+    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
+        self.as_class().unwrap().method_table.get(&id).cloned()
+    }
+}
+
+impl PackedValue {
     pub fn is_packed_fixnum(&self) -> bool {
         self.0 & 0b1 == 1
     }
@@ -812,7 +818,7 @@ mod tests {
         let globals = Globals::new();
         let expect = Value::Object(ObjectRef::new_class(
             &globals,
-            ClassRef::from_no_superclass(IdentId::from(1)),
+            ClassRef::from(IdentId::from(1), None),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {
@@ -823,7 +829,7 @@ mod tests {
     #[test]
     fn pack_instance() {
         let globals = Globals::new();
-        let class_ref = ClassRef::from_no_superclass(IdentId::from(1));
+        let class_ref = ClassRef::from(IdentId::from(1), None);
         let class = PackedValue::class(&globals, class_ref);
         let expect = Value::Object(ObjectRef::from(class));
         let got = expect.clone().pack().unpack();

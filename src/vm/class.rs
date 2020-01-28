@@ -6,7 +6,6 @@ use std::collections::HashMap;
 pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub method_table: MethodTable,
-    //pub constants: ValueTable,
     pub superclass: PackedValue,
     pub is_singleton: bool,
 }
@@ -16,7 +15,6 @@ impl ClassInfo {
         ClassInfo {
             name: name.into(),
             method_table: HashMap::new(),
-            //constants: HashMap::new(),
             superclass,
             is_singleton: false,
         }
@@ -26,16 +24,20 @@ impl ClassInfo {
 pub type ClassRef = Ref<ClassInfo>;
 
 impl ClassRef {
+    /*
     pub fn from_no_superclass(id: impl Into<Option<IdentId>>) -> Self {
         ClassRef::new(ClassInfo::new(id, PackedValue::nil()))
-    }
+    }*/
 
-    pub fn from(id: impl Into<Option<IdentId>>, superclass: PackedValue) -> Self {
+    pub fn from(
+        id: impl Into<Option<IdentId>>,
+        superclass: impl Into<Option<PackedValue>>,
+    ) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => PackedValue::nil(),
+        };
         ClassRef::new(ClassInfo::new(id, superclass))
-    }
-
-    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.method_table.get(&id)
     }
 
     pub fn superclass(&self) -> Option<ClassRef> {
@@ -75,12 +77,11 @@ fn class_new(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
     let instance = ObjectRef::from(receiver);
     let new_instance = PackedValue::object(instance);
     // call initialize method.
-    if let Some(methodref) = class.get_instance_method(IdentId::INITIALIZE) {
-        let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
+    if let Some(methodref) = receiver.get_instance_method(IdentId::INITIALIZE) {
+        let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;
         vm.vm_run(new_instance, iseq, None, args, None, None)?;
         vm.stack_pop();
     };

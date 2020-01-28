@@ -1089,7 +1089,7 @@ impl VM {
         receiver: PackedValue,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_for_method(&self.globals);
+        let rec_class = receiver.get_class_object_for_method(&self.globals);
         match self.globals.get_method_from_cache(cache_slot, rec_class) {
             Some(method) => Ok(method),
             _ => {
@@ -1714,29 +1714,20 @@ impl VM {
         obj.as_module().unwrap().method_table.insert(id, info)
     }
 
-    pub fn get_singleton_method(
-        &self,
-        obj: PackedValue,
-        method: IdentId,
-    ) -> Result<MethodRef, RubyError> {
-        let class = obj.get_class_for_method(&self.globals);
-        Ok(self.get_instance_method(class, method)?.clone())
-    }
-
     pub fn get_instance_method(
         &self,
-        classref: ClassRef,
+        mut class: PackedValue,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let mut class = classref;
         loop {
             match class.get_instance_method(method) {
-                Some(methodref) => return Ok(*methodref),
+                Some(methodref) => return Ok(methodref),
                 None => match class.superclass() {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);
-                        let class_name = self.globals.get_ident_name(classref.name);
+                        let class_name =
+                            self.globals.get_ident_name(class.as_class().unwrap().name);
                         return Err(self.error_nomethod(format!(
                             "no method `{}' found for {}",
                             method_name, class_name
@@ -1767,7 +1758,7 @@ impl VM {
                         Some(superclass) => {
                             ClassRef::from(None, self.get_singleton_class(superclass)?)
                         }
-                        None => ClassRef::from_no_superclass(None),
+                        None => ClassRef::from(None, None),
                     };
                     singleton_class.is_singleton = true;
                     let singleton_obj = PackedValue::class(&self.globals, singleton_class);
