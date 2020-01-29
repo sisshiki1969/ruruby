@@ -1186,15 +1186,19 @@ impl VM {
                 PackedValue::flonum(rhs.as_packed_flonum() + lhs.as_packed_flonum())
             }
         } else {
-            match (lhs.unpack(), rhs.unpack()) {
-                (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs + rhs),
-                (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 + rhs),
-                (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs + rhs as f64),
-                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
-                (Value::Object(l_ref), _) => {
-                    return self.fallback_to_method(IdentId::_ADD, lhs, rhs, l_ref.as_ref())
-                }
-                (_, _) => return Err(self.error_undefined_op("+", rhs, lhs)),
+            match lhs.as_object() {
+                Some(oref) => return self.fallback_to_method(IdentId::_ADD, lhs, rhs, oref),
+                None => match (lhs.unpack(), rhs.unpack()) {
+                    (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs + rhs),
+                    (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
+                        PackedValue::flonum(lhs as f64 + rhs)
+                    }
+                    (Value::FloatNum(lhs), Value::FixNum(rhs)) => {
+                        PackedValue::flonum(lhs + rhs as f64)
+                    }
+                    (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs + rhs),
+                    (_, _) => return Err(self.error_undefined_op("+", rhs, lhs)),
+                },
             }
         };
         self.stack_push(val);
@@ -1288,15 +1292,19 @@ impl VM {
                 PackedValue::flonum(lhs.as_packed_flonum() * rhs.as_packed_flonum())
             }
         } else {
-            match (lhs.unpack(), rhs.unpack()) {
-                (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs * rhs),
-                (Value::FixNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs as f64 * rhs),
-                (Value::FloatNum(lhs), Value::FixNum(rhs)) => PackedValue::flonum(lhs * rhs as f64),
-                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
-                (Value::Object(l_ref), _) => {
-                    return self.fallback_to_method(IdentId::_MUL, lhs, rhs, l_ref.as_ref());
-                }
-                (_, _) => return Err(self.error_undefined_op("*", rhs, lhs)),
+            match lhs.as_object() {
+                Some(oref) => return self.fallback_to_method(IdentId::_MUL, lhs, rhs, oref),
+                None => match (lhs.unpack(), rhs.unpack()) {
+                    (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs * rhs),
+                    (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
+                        PackedValue::flonum(lhs as f64 * rhs)
+                    }
+                    (Value::FloatNum(lhs), Value::FixNum(rhs)) => {
+                        PackedValue::flonum(lhs * rhs as f64)
+                    }
+                    (Value::FloatNum(lhs), Value::FloatNum(rhs)) => PackedValue::flonum(lhs * rhs),
+                    (_, _) => return Err(self.error_undefined_op("*", rhs, lhs)),
+                },
             }
         };
         self.stack_push(val);

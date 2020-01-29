@@ -266,14 +266,16 @@ impl PackedValue {
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> PackedValue {
-        match self.unpack() {
-            Value::FixNum(_) => globals.integer,
-            Value::String(_) => globals.string,
-            Value::Object(info) => match info.singleton {
+        match self.as_object() {
+            Some(oref) => match oref.singleton {
                 Some(singleton) => singleton,
-                None => info.class,
+                None => oref.class,
             },
-            _ => globals.object,
+            None => match self.unpack() {
+                Value::FixNum(_) => globals.integer,
+                Value::String(_) => globals.string,
+                _ => globals.object,
+            },
         }
     }
 
@@ -357,9 +359,9 @@ impl PackedValue {
     }
 
     pub fn has_singleton_class(&self) -> Option<PackedValue> {
-        match self.unpack() {
-            Value::Object(obj) => obj.singleton,
-            _ => None,
+        match self.as_object() {
+            Some(oref) => oref.singleton,
+            None => None,
         }
     }
 
