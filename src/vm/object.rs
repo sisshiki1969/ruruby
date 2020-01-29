@@ -8,9 +8,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectInfo {
-    pub class: PackedValue,
-    pub singleton: Option<PackedValue>,
-    pub var_table: ValueTable,
+    class: PackedValue,
+    var_table: Box<ValueTable>,
     pub kind: ObjKind,
 }
 
@@ -35,93 +34,91 @@ impl ObjectInfo {
         })
     }
 
+    pub fn new_bootstrap(classref: ClassRef) -> Self {
+        ObjectInfo {
+            class: PackedValue::nil(), // dummy for boot strapping
+            kind: ObjKind::Class(classref),
+            var_table: Box::new(HashMap::new()),
+        }
+    }
+
     pub fn new_ordinary(class: PackedValue) -> Self {
         ObjectInfo {
             class,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Ordinary,
-            singleton: None,
         }
     }
 
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
             class: globals.class,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Class(classref),
-            singleton: None,
         }
     }
 
     pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
             class: globals.module,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Module(classref),
-            singleton: None,
         }
     }
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
             class: globals.array,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Array(arrayref),
-            singleton: None,
         }
     }
 
     pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
             class: globals.array,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::SplatArray(arrayref),
-            singleton: None,
         }
     }
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         ObjectInfo {
             class: globals.hash,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Hash(hashref),
-            singleton: None,
         }
     }
 
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
         ObjectInfo {
             class: globals.regexp,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Regexp(regexpref),
-            singleton: None,
         }
     }
 
     pub fn new_range(globals: &Globals, info: RangeInfo) -> Self {
         ObjectInfo {
             class: globals.range,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Range(info),
-            singleton: None,
         }
     }
 
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         ObjectInfo {
             class: globals.procobj,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Proc(procref),
-            singleton: None,
         }
     }
 
     pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
         ObjectInfo {
             class: globals.method,
-            var_table: HashMap::new(),
+            var_table: Box::new(HashMap::new()),
             kind: ObjKind::Method(methodref),
-            singleton: None,
         }
     }
 }
@@ -129,12 +126,47 @@ impl ObjectInfo {
 pub type ObjectRef = Ref<ObjectInfo>;
 
 impl ObjectRef {
-    pub fn class(&self) -> ClassRef {
-        self.class.as_class().unwrap()
+    pub fn class(&self) -> PackedValue {
+        self.class
+    }
+
+    pub fn search_class(&self) -> PackedValue {
+        let mut class = self.class;
+        loop {
+            if class.as_class().is_singleton {
+                class = class.as_object().class;
+            } else {
+                return class;
+            }
+        }
+    }
+
+    pub fn set_class(&mut self, class: PackedValue) {
+        self.class = class;
+    }
+
+    pub fn get_var(&self, id: IdentId) -> Option<PackedValue> {
+        self.var_table.get(&id).cloned()
+    }
+
+    pub fn get_mut_var(&mut self, id: IdentId) -> Option<&mut PackedValue> {
+        self.var_table.get_mut(&id)
+    }
+
+    pub fn set_var(&mut self, id: IdentId, val: PackedValue) {
+        self.var_table.insert(id, val);
+    }
+
+    pub fn var_table(&mut self) -> &mut ValueTable {
+        &mut self.var_table
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.class().method_table.get(&id).cloned()
+        self.search_class()
+            .as_class()
+            .method_table
+            .get(&id)
+            .cloned()
     }
 }
 

@@ -195,15 +195,19 @@ impl Builtin {
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let target = vm.val_as_module(args[0])?;
-            let mut recv_class = receiver.get_classref(&vm.globals);
+            let mut recv_class = receiver.get_class_object(&vm.globals);
+            let mut c = 0;
             loop {
-                if recv_class == target {
+                eprintln!("{}: {}", c, vm.val_pp(recv_class));
+                c += 1;
+                if recv_class == args[0] {
+                    eprintln!("true");
                     return Ok(PackedValue::true_val());
                 }
-                recv_class = match recv_class.superclass() {
-                    Some(class) => class,
-                    None => return Ok(PackedValue::false_val()),
+                recv_class = recv_class.as_class().superclass;
+                if recv_class.is_nil() {
+                    eprintln!("false");
+                    return Ok(PackedValue::false_val());
                 }
             }
         }

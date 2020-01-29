@@ -48,9 +48,9 @@ impl Globals {
         let module = PackedValue::bootstrap_class(module_class);
         let class_class = ClassRef::from(class_id, module);
         let class = PackedValue::bootstrap_class(class_class);
-        object.as_object().unwrap().class = class;
-        module.as_object().unwrap().class = class;
-        class.as_object().unwrap().class = class;
+        object.as_object().set_class(class);
+        module.as_object().set_class(class);
+        class.as_object().set_class(class);
 
         let main_object = PackedValue::ordinary_object(object);
         let mut globals = Globals {
@@ -78,7 +78,7 @@ impl Globals {
         let mut singleton_class = ClassRef::from(None, globals.class);
         singleton_class.is_singleton = true;
         let singleton_obj = PackedValue::class(&globals, singleton_class);
-        globals.object.as_object().unwrap().singleton = Some(singleton_obj);
+        globals.object.as_object().set_class(singleton_obj);
 
         object::init_object(&mut globals);
         module::init_module(&mut globals);
@@ -134,10 +134,12 @@ impl Globals {
     }
 
     pub fn get_singleton_class(&self, obj: PackedValue) -> Result<PackedValue, ()> {
-        match obj.as_object() {
-            Some(mut oref) => match oref.singleton {
-                Some(class) => Ok(class),
-                None => {
+        match obj.is_object() {
+            Some(mut oref) => {
+                let class = oref.class();
+                if class.as_class().is_singleton {
+                    Ok(class)
+                } else {
                     let mut singleton_class = if let ObjKind::Class(cref) = oref.kind {
                         let superclass = cref.superclass;
                         if superclass.is_nil() {
@@ -150,10 +152,11 @@ impl Globals {
                     };
                     singleton_class.is_singleton = true;
                     let singleton_obj = PackedValue::class(&self, singleton_class);
-                    oref.singleton = Some(singleton_obj);
+                    singleton_obj.as_object().set_class(class);
+                    oref.set_class(singleton_obj);
                     Ok(singleton_obj)
                 }
-            },
+            }
             _ => Err(()),
         }
     }
@@ -169,11 +172,7 @@ impl Globals {
         let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
         let singleton = self.get_singleton_class(obj).unwrap();
-        singleton
-            .as_class()
-            .unwrap()
-            .method_table
-            .insert(id, func_ref);
+        singleton.as_class().method_table.insert(id, func_ref);
     }
 
     pub fn add_builtin_instance_method(
@@ -210,7 +209,9 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => self.get_ident_name(oref.as_ref().class().name).to_string(),
+                ObjKind::Ordinary => self
+                    .get_ident_name(oref.as_ref().search_class().as_class().name)
+                    .to_string(),
             },
         }
     }

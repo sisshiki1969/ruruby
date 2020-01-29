@@ -429,8 +429,8 @@ impl VM {
                 Inst::TEQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let res = match lhs.as_class() {
-                        Some(class) if rhs.get_classref(&self.globals) == class => true,
+                    let res = match lhs.is_class() {
+                        Some(_) if rhs.get_class_object(&self.globals) == lhs => true,
                         _ => match self.eval_eq(lhs, rhs) {
                             Ok(res) => res,
                             Err(_) => false,
@@ -525,15 +525,15 @@ impl VM {
                 }
                 Inst::SET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, self.pc + 1);
-                    let mut self_obj = self.context().self_value.as_object().unwrap();
+                    let mut self_obj = self.context().self_value.as_object();
                     let new_val = self.stack_pop();
-                    self_obj.var_table.insert(var_id, new_val);
+                    self_obj.set_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = read_id(iseq, self.pc + 1);
-                    let self_obj = self.context().self_value.as_object().unwrap();
-                    let val = match self_obj.var_table.get(&var_id) {
+                    let self_obj = self.context().self_value.as_object();
+                    let val = match self_obj.get_var(var_id) {
                         Some(val) => val.clone(),
                         None => PackedValue::nil(),
                     };
@@ -556,7 +556,7 @@ impl VM {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
                     let arg_num = args.len();
-                    match self.stack_pop().as_object() {
+                    match self.stack_pop().is_object() {
                         Some(oref) => {
                             match oref.kind {
                                 ObjKind::Array(mut aref) => {
@@ -686,9 +686,8 @@ impl VM {
                 Inst::CREATE_RANGE => {
                     let start = self.stack_pop();
                     let end = self.stack_pop();
-                    match (start.unpack(), end.unpack()) {
-                        (Value::FixNum(_), Value::FixNum(_)) => {}
-                        _ => return Err(self.error_argument("Bad value for range.")),
+                    if !start.is_packed_fixnum() || !end.is_packed_fixnum() {
+                        return Err(self.error_argument("Bad value for range."));
                     };
                     let exclude_val = self.stack_pop();
                     let exclude_end = self.val_to_bool(exclude_val);
@@ -825,7 +824,7 @@ impl VM {
                         }
                         None => {
                             let super_val = if !super_val.is_nil() {
-                                if super_val.as_class().is_none() {
+                                if super_val.is_class().is_none() {
                                     let val = self.val_pp(super_val);
                                     return Err(self.error_type(format!(
                                         "Superclass must be a class. (given:{:?})",
@@ -900,7 +899,7 @@ impl VM {
                 Inst::TAKE => {
                     let len = read32(iseq, self.pc + 1) as usize;
                     let val = self.stack_pop();
-                    match val.as_object() {
+                    match val.is_object() {
                         Some(obj) => match obj.kind {
                             ObjKind::Array(info) => push_some(self, &info.elements, len),
                             _ => push_one(self, val, len),
@@ -1053,7 +1052,7 @@ impl VM {
 
 impl VM {
     pub fn val_as_class(&self, val: PackedValue) -> Result<ClassRef, RubyError> {
-        match val.as_class() {
+        match val.is_class() {
             Some(class_ref) => Ok(class_ref),
             None => {
                 let val = self.val_pp(val);
@@ -1186,7 +1185,7 @@ impl VM {
                 PackedValue::flonum(rhs.as_packed_flonum() + lhs.as_packed_flonum())
             }
         } else {
-            match lhs.as_object() {
+            match lhs.is_object() {
                 Some(oref) => return self.fallback_to_method(IdentId::_ADD, lhs, rhs, oref),
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs + rhs),
@@ -1292,7 +1291,7 @@ impl VM {
                 PackedValue::flonum(lhs.as_packed_flonum() * rhs.as_packed_flonum())
             }
         } else {
-            match lhs.as_object() {
+            match lhs.is_object() {
                 Some(oref) => return self.fallback_to_method(IdentId::_MUL, lhs, rhs, oref),
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs * rhs),
@@ -1565,7 +1564,7 @@ impl VM {
             Value::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
-                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.as_ref().class().name), oref}
+                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.as_ref().search_class().as_class().name), oref}
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
@@ -1631,7 +1630,7 @@ impl VM {
                     }
                 },
                 ObjKind::Ordinary => {
-                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.as_ref().class().name), oref.as_ref().id()}
+                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.as_ref().search_class().as_class().name), oref.as_ref().id()}
                 }
                 _ => self.val_to_s(val),
             },
@@ -1669,16 +1668,16 @@ impl VM {
                 }
                 val
             }
-            MethodInfo::AttrReader { id } => match receiver.as_object() {
-                Some(oref) => match oref.var_table.get(id) {
+            MethodInfo::AttrReader { id } => match receiver.is_object() {
+                Some(oref) => match oref.get_var(*id) {
                     Some(v) => v.clone(),
                     None => PackedValue::nil(),
                 },
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
-            MethodInfo::AttrWriter { id } => match receiver.as_object() {
+            MethodInfo::AttrWriter { id } => match receiver.is_object() {
                 Some(mut oref) => {
-                    oref.var_table.insert(*id, args[0]);
+                    oref.set_var(*id, args[0]);
                     args[0]
                 }
                 None => unreachable!("AttrReader must be used only for class instance."),
@@ -1707,7 +1706,7 @@ impl VM {
     ) -> Result<(), RubyError> {
         self.globals.class_version += 1;
         let singleton = self.get_singleton_class(obj)?;
-        let mut singleton_class = singleton.as_class().unwrap();
+        let mut singleton_class = singleton.as_class();
         singleton_class.method_table.insert(id, info);
         Ok(())
     }
@@ -1734,8 +1733,7 @@ impl VM {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);
-                        let class_name =
-                            self.globals.get_ident_name(class.as_class().unwrap().name);
+                        let class_name = self.globals.get_ident_name(class.as_class().name);
                         return Err(self.error_nomethod(format!(
                             "no method `{}' found for {}",
                             method_name, class_name

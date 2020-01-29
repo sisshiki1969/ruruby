@@ -20,8 +20,7 @@ fn constants(
 ) -> VMResult {
     let v: Vec<PackedValue> = receiver
         .as_object()
-        .unwrap()
-        .var_table
+        .var_table()
         .keys()
         .map(|k| PackedValue::symbol(k.clone()))
         .collect();

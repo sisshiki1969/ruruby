@@ -44,7 +44,7 @@ impl ClassRef {
         if self.superclass.is_nil() {
             None
         } else {
-            Some(self.superclass.as_class().unwrap())
+            Some(self.superclass.as_class())
         }
     }
 }

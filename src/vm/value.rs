@@ -17,7 +17,7 @@ pub enum Value {
     Bool(bool),
     FixNum(i64),
     FloatNum(f64),
-    String(Box<String>),
+    String(String),
     Symbol(IdentId),
     Object(ObjectInfo),
     Char(u8),
@@ -200,15 +200,31 @@ impl PartialEq for PackedValue {
         if self.0 == other.0 {
             return true;
         };
+        match (self.as_string(), other.as_string()) {
+            (Some(lhs), Some(rhs)) => return lhs == rhs,
+            (None, None) => {}
+            _ => return false,
+        };
+        match (self.as_array(), other.as_array()) {
+            (Some(lhs), Some(rhs)) => {
+                if lhs.elements.len() != rhs.elements.len() {
+                    false
+                } else {
+                    for i in 0..lhs.elements.len() {
+                        if lhs.elements[i] != rhs.elements[i] {
+                            return false;
+                        };
+                    }
+                    true
+                }
+            }
+            _ => false,
+        }
+        /*
         match (self.unpack(), other.unpack()) {
-            (Value::Nil, Value::Nil) => true,
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
             (Value::FixNum(lhs), Value::FloatNum(rhs)) => lhs as f64 == rhs,
             (Value::FloatNum(lhs), Value::FixNum(rhs)) => lhs == rhs as f64,
             (Value::String(lhs), Value::String(rhs)) => lhs == rhs,
-            (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
-            (Value::Symbol(lhs), Value::Symbol(rhs)) => lhs == rhs,
             (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
                     if lhs.elements.len() != rhs.elements.len() {
@@ -225,7 +241,7 @@ impl PartialEq for PackedValue {
                 _ => lhs == rhs,
             },
             _ => false,
-        }
+        }*/
     }
 }
 
@@ -256,21 +272,9 @@ impl PackedValue {
         self.0
     }
 
-    pub fn get_classref(&self, globals: &Globals) -> ClassRef {
-        match self.unpack() {
-            Value::FixNum(_) => globals.integer.as_class().unwrap(),
-            Value::String(_) => globals.string.as_class().unwrap(),
-            Value::Object(oref) => oref.as_ref().class().clone(),
-            _ => globals.object_class,
-        }
-    }
-
     pub fn get_class_object_for_method(&self, globals: &Globals) -> PackedValue {
-        match self.as_object() {
-            Some(oref) => match oref.singleton {
-                Some(singleton) => singleton,
-                None => oref.class,
-            },
+        match self.is_object() {
+            Some(oref) => oref.class(),
             None => match self.unpack() {
                 Value::FixNum(_) => globals.integer,
                 Value::String(_) => globals.string,
@@ -280,11 +284,13 @@ impl PackedValue {
     }
 
     pub fn get_class_object(&self, globals: &Globals) -> PackedValue {
-        match self.unpack() {
-            Value::FixNum(_) => globals.integer,
-            Value::String(_) => globals.string,
-            Value::Object(info) => info.class,
-            _ => globals.object,
+        match self.is_object() {
+            Some(oref) => oref.search_class(),
+            None => match self.unpack() {
+                Value::FixNum(_) => globals.integer,
+                Value::String(_) => globals.string,
+                _ => globals.object,
+            },
         }
     }
 
@@ -303,15 +309,15 @@ impl PackedValue {
     }
 
     pub fn set_var(&mut self, id: IdentId, val: PackedValue) {
-        self.as_object().unwrap().var_table.insert(id, val);
+        self.as_object().set_var(id, val);
     }
 
     pub fn get_var(&self, id: IdentId) -> Option<PackedValue> {
-        self.as_object().unwrap().var_table.get(&id).cloned()
+        self.as_object().get_var(id)
     }
 
     pub fn set_var_if_exists(&self, id: IdentId, val: PackedValue) -> bool {
-        match self.as_object().unwrap().var_table.get_mut(&id) {
+        match self.as_object().get_mut_var(id) {
             Some(entry) => {
                 *entry = val;
                 true
@@ -321,7 +327,7 @@ impl PackedValue {
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.as_class().unwrap().method_table.get(&id).cloned()
+        self.as_class().method_table.get(&id).cloned()
     }
 }
 
@@ -358,13 +364,6 @@ impl PackedValue {
         self.0 & 0b0111 != 0 || self.0 <= 0x20
     }
 
-    pub fn has_singleton_class(&self) -> Option<PackedValue> {
-        match self.as_object() {
-            Some(oref) => oref.singleton,
-            None => None,
-        }
-    }
-
     pub fn as_fixnum(&self) -> Option<i64> {
         if self.is_packed_fixnum() {
             Some(self.as_packed_fixnum())
@@ -395,7 +394,11 @@ impl PackedValue {
         }
     }
 
-    pub fn as_object(&self) -> Option<ObjectRef> {
+    pub fn as_object(&self) -> ObjectRef {
+        self.is_object().unwrap()
+    }
+
+    pub fn is_object(&self) -> Option<ObjectRef> {
         if self.is_packed_value() {
             return None;
         }
@@ -407,8 +410,12 @@ impl PackedValue {
         }
     }
 
-    pub fn as_class(&self) -> Option<ClassRef> {
-        match self.as_object() {
+    pub fn as_class(&self) -> ClassRef {
+        self.is_class().unwrap()
+    }
+
+    pub fn is_class(&self) -> Option<ClassRef> {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) => Some(cref),
                 _ => None,
@@ -418,7 +425,7 @@ impl PackedValue {
     }
 
     pub fn as_module(&self) -> Option<ClassRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) | ObjKind::Module(cref) => Some(cref),
                 _ => None,
@@ -428,7 +435,7 @@ impl PackedValue {
     }
 
     pub fn as_array(&self) -> Option<ArrayRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Array(aref) => Some(aref),
                 _ => None,
@@ -438,7 +445,7 @@ impl PackedValue {
     }
 
     pub fn as_splat(&self) -> Option<ArrayRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::SplatArray(aref) => Some(aref),
                 _ => None,
@@ -448,7 +455,7 @@ impl PackedValue {
     }
 
     pub fn as_hash(&self) -> Option<HashRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Hash(href) => Some(href),
                 _ => None,
@@ -458,7 +465,7 @@ impl PackedValue {
     }
 
     pub fn as_regexp(&self) -> Option<regexp::RegexpRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Regexp(regref) => Some(regref),
                 _ => None,
@@ -468,7 +475,7 @@ impl PackedValue {
     }
 
     pub fn as_range(&self) -> Option<RangeInfo> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match &oref.kind {
                 ObjKind::Range(info) => Some(info.clone()),
                 _ => None,
@@ -478,7 +485,7 @@ impl PackedValue {
     }
 
     pub fn as_proc(&self) -> Option<procobj::ProcRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
                 _ => None,
@@ -488,7 +495,7 @@ impl PackedValue {
     }
 
     pub fn as_method(&self) -> Option<method::MethodObjRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Method(mref) => Some(mref),
                 _ => None,
@@ -572,7 +579,7 @@ impl PackedValue {
     }
 
     pub fn string(string: String) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::String(Box::new(string))))
+        PackedValue(Value::pack_as_boxed(Value::String(string)))
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -585,12 +592,7 @@ impl PackedValue {
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
-        PackedValue::object(ObjectInfo {
-            class: PackedValue::nil(), // dummy for boot strapping
-            kind: ObjKind::Class(classref),
-            var_table: HashMap::new(),
-            singleton: None,
-        })
+        PackedValue::object(ObjectInfo::new_bootstrap(classref))
     }
 
     pub fn ordinary_object(class: PackedValue) -> Self {
@@ -806,7 +808,7 @@ mod tests {
 
     #[test]
     fn pack_string() {
-        let expect = Value::String(Box::new("Ruby".to_string()));
+        let expect = Value::String("Ruby".to_string());
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
