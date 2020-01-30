@@ -197,54 +197,9 @@ impl std::hash::Hash for PackedValue {
 
 impl PartialEq for PackedValue {
     fn eq(&self, other: &Self) -> bool {
-        if self.0 == other.0 {
-            return true;
-        };
-        match (self.as_string(), other.as_string()) {
-            (Some(lhs), Some(rhs)) => return lhs == rhs,
-            (None, None) => {}
-            _ => return false,
-        };
-        match (self.as_array(), other.as_array()) {
-            (Some(lhs), Some(rhs)) => {
-                if lhs.elements.len() != rhs.elements.len() {
-                    false
-                } else {
-                    for i in 0..lhs.elements.len() {
-                        if lhs.elements[i] != rhs.elements[i] {
-                            return false;
-                        };
-                    }
-                    true
-                }
-            }
-            _ => false,
-        }
-        /*
-        match (self.unpack(), other.unpack()) {
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => lhs as f64 == rhs,
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => lhs == rhs as f64,
-            (Value::String(lhs), Value::String(rhs)) => lhs == rhs,
-            (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
-                    if lhs.elements.len() != rhs.elements.len() {
-                        false
-                    } else {
-                        for i in 0..lhs.elements.len() {
-                            if lhs.elements[i] != rhs.elements[i] {
-                                return false;
-                            };
-                        }
-                        true
-                    }
-                }
-                _ => lhs == rhs,
-            },
-            _ => false,
-        }*/
+        self.0 == other.0
     }
 }
-
 impl Eq for PackedValue {}
 
 impl PackedValue {
@@ -653,6 +608,60 @@ impl PackedValue {
             globals,
             MethodObjRef::from(name, receiver, method),
         ))
+    }
+}
+
+impl PackedValue {
+    pub fn equal(self, other: PackedValue) -> bool {
+        if self == other {
+            return true;
+        };
+        match (self.is_packed_num(), other.is_packed_num()) {
+            (false, false) => {}
+            (true, true) => match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
+                (true, false) => return self.as_packed_fixnum() as f64 == other.as_packed_flonum(),
+                (false, true) => return self.as_packed_flonum() == other.as_packed_fixnum() as f64,
+                _ => return false,
+            },
+            _ => return false,
+        }
+        if self.is_packed_symbol() || other.is_packed_symbol() {
+            return false;
+        }
+        match (&self.unpack(), &other.unpack()) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => *lhs as f64 == *rhs,
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => *lhs == *rhs as f64,
+            (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
+            (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                    let lhs = &lhs.elements;
+                    let rhs = &rhs.elements;
+                    if lhs.len() != rhs.len() {
+                        return false;
+                    }
+                    for i in 0..lhs.len() {
+                        if !lhs[i].equal(rhs[i]) {
+                            return false;
+                        }
+                    }
+                    true
+                }
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                    if lhs.start.equal(rhs.start)
+                        && lhs.end.equal(rhs.end)
+                        && lhs.exclude == rhs.exclude
+                    {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                (_, _) => false,
+            },
+            _ => false,
+        }
     }
 }
 

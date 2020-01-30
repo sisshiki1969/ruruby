@@ -642,9 +642,12 @@ impl VM {
                                 }
                                 ObjKind::Hash(href) => {
                                     self.check_args_num(arg_num, 1, 2)?;
-                                    let key = args[0];
-                                    let val = match href.map.get(&key) {
-                                        Some(val) => val.clone(),
+                                    let key = href.map.keys().find(|x| x.equal(args[0]));
+                                    let val = match key {
+                                        Some(key) => match href.map.get(key) {
+                                            Some(val) => val.clone(),
+                                            None => PackedValue::nil(),
+                                        },
                                         None => PackedValue::nil(),
                                     };
                                     self.stack_push(val);
@@ -1431,52 +1434,7 @@ impl VM {
     }
 
     pub fn eval_eq(&self, rhs: PackedValue, lhs: PackedValue) -> Result<bool, RubyError> {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(*lhs == *rhs);
-        }
-        if lhs.is_packed_num() && rhs.is_packed_num() {
-            if lhs.is_packed_fixnum() {
-                return Ok(lhs.as_packed_fixnum() as f64 == rhs.as_packed_flonum());
-            } else if rhs.is_packed_fixnum() {
-                return Ok(lhs.as_packed_flonum() == rhs.as_packed_fixnum() as f64);
-            } else {
-                return Ok(*lhs == *rhs);
-            }
-        }
-        match (&lhs.unpack(), &rhs.unpack()) {
-            (Value::Nil, Value::Nil) => Ok(true),
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => Ok(lhs == rhs),
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => Ok(lhs == rhs),
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => Ok(*lhs as f64 == *rhs),
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => Ok(*lhs == *rhs as f64),
-            (Value::String(lhs), Value::String(rhs)) => Ok(lhs == rhs),
-            (Value::Bool(lhs), Value::Bool(rhs)) => Ok(lhs == rhs),
-            (Value::Symbol(lhs), Value::Symbol(rhs)) => Ok(lhs == rhs),
-            (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
-                    let lhs = &lhs.elements;
-                    let rhs = &rhs.elements;
-                    if lhs.len() != rhs.len() {
-                        return Ok(false);
-                    }
-                    for i in 0..lhs.len() {
-                        if !self.eval_eq(lhs[i], rhs[i])? {
-                            return Ok(false);
-                        }
-                    }
-                    Ok(true)
-                }
-                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    if lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude {
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
-                }
-                (_, _) => Ok(lhs_o == rhs_o),
-            },
-            _ => Err(self.error_nomethod(format!("NoMethodError: {:?} == {:?}", lhs, rhs))),
-        }
+        Ok(rhs.equal(lhs))
     }
 
     fn eval_ge(&mut self, rhs: PackedValue, lhs: PackedValue) -> VMResult {

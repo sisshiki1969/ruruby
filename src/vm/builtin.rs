@@ -85,7 +85,7 @@ impl Builtin {
             if args.len() != 2 {
                 panic!("Invalid number of arguments.");
             }
-            if !vm.eval_eq(args[0].clone(), args[1].clone())? {
+            if !args[0].clone().equal(args[1].clone()) {
                 panic!(
                     "Assertion error: Expected: {} Actual: {}",
                     vm.val_pp(args[0]),

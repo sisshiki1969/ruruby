@@ -174,18 +174,28 @@ fn array_sub(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let mut lhs = receiver
+    let lhs_v = &receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?
-        .elements
-        .clone();
-    let rhs = args[0]
+        .elements;
+    let rhs_v = &args[0]
         .as_array()
         .ok_or(vm.error_nomethod("An arg must be an array."))?
-        .elements
-        .clone();
-    lhs.retain(|x| !rhs.contains(x));
-    Ok(PackedValue::array_from(&vm.globals, lhs))
+        .elements;
+    let mut v = vec![];
+    for lhs in lhs_v {
+        let mut flag = true;
+        for rhs in rhs_v {
+            if lhs.clone().equal(rhs.clone()) {
+                flag = false;
+                break;
+            }
+        }
+        if flag {
+            v.push(lhs.clone())
+        }
+    }
+    Ok(PackedValue::array_from(&vm.globals, v))
 }
 
 fn array_map(
@@ -257,13 +267,7 @@ fn array_include(
     let aref = receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
-    let res = aref
-        .elements
-        .iter()
-        .any(|x| match vm.eval_eq(x.clone(), target) {
-            Ok(res) => res,
-            Err(_) => false,
-        });
+    let res = aref.elements.iter().any(|x| x.clone().equal(target));
     Ok(PackedValue::bool(res))
 }
 

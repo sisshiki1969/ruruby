@@ -134,7 +134,9 @@ fn hash_has_key(
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = receiver.as_hash().unwrap();
-    Ok(PackedValue::bool(hash.map.contains_key(&args[0])))
+    Ok(PackedValue::bool(
+        hash.map.keys().find(|x| x.equal(args[0])).is_some(),
+    ))
 }
 
 fn hash_has_value(
@@ -145,7 +147,7 @@ fn hash_has_value(
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = receiver.as_hash().unwrap();
-    let res = hash.map.values().any(|&x| x == args[0]);
+    let res = hash.map.values().find(|x| x.equal(args[0])).is_some();
     Ok(PackedValue::bool(res))
 }
 
