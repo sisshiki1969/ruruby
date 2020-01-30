@@ -197,8 +197,21 @@ impl std::hash::Hash for PackedValue {
 }
 
 impl PartialEq for PackedValue {
+    // eql?()
+    // Regexp, Array, Hash must be implemented.
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        if self.is_packed_value() || other.is_packed_value() {
+            self.0 == other.0
+        } else {
+            let lhs = unsafe { &(*(self.0 as *mut Value)) };
+            let rhs = unsafe { &(*(other.0 as *mut Value)) };
+            match (lhs, rhs) {
+                (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
+                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
+                (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
+                _ => self.0 == other.0,
+            }
+        }
     }
 }
 impl Eq for PackedValue {}
@@ -613,8 +626,9 @@ impl PackedValue {
 }
 
 impl PackedValue {
+    // ==
     pub fn equal(self, other: PackedValue) -> bool {
-        if self == other {
+        if self.id() == other.id() {
             return true;
         };
         match (self.is_packed_num(), other.is_packed_num()) {

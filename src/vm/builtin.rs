@@ -200,7 +200,7 @@ impl Builtin {
             loop {
                 eprintln!("{}: {}", c, vm.val_pp(recv_class));
                 c += 1;
-                if recv_class == args[0] {
+                if recv_class.id() == args[0].id() {
                     eprintln!("true");
                     return Ok(PackedValue::true_val());
                 }

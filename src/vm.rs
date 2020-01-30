@@ -430,7 +430,7 @@ impl VM {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let res = match lhs.is_class() {
-                        Some(_) if rhs.get_class_object(&self.globals) == lhs => true,
+                        Some(_) if rhs.get_class_object(&self.globals).id() == lhs.id() => true,
                         _ => match self.eval_eq(lhs, rhs) {
                             Ok(res) => res,
                             Err(_) => false,
@@ -817,7 +817,7 @@ impl VM {
                     let val = match self.globals.object.get_var(id) {
                         Some(val) => {
                             let classref = self.val_as_module(val.clone())?;
-                            if !super_val.is_nil() && classref.superclass != super_val {
+                            if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                                 return Err(self.error_type(format!(
                                     "superclass mismatch for class {}.",
                                     self.globals.get_ident_name(id),
