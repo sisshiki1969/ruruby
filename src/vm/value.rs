@@ -145,8 +145,9 @@ impl Value {
     }
 
     fn pack_fixnum(num: i64) -> u64 {
-        let top = ((num as u64) >> 62) & 0b11;
-        if top == 0b00 || top == 0b11 {
+        let mut top = (num as u64) >> 62;
+        top = top ^ (top >> 1);
+        if top & 0b1 == 0 {
             ((num << 1) as u64) | 0b1
         } else {
             Value::pack_as_boxed(Value::FixNum(num))
