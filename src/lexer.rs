@@ -327,6 +327,8 @@ impl Lexer {
                             }
                         } else if self.consume('>') {
                             return Ok(self.new_punct(Punct::FatArrow));
+                        } else if self.consume('~') {
+                            return Ok(self.new_punct(Punct::Match));
                         } else {
                             return Ok(self.new_punct(Punct::Assign));
                         }

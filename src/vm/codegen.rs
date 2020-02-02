@@ -981,6 +981,13 @@ impl Codegen {
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::TEQ);
                     }
+                    BinOp::Match => {
+                        let method = globals.get_ident_id("=~");
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.loc = loc;
+                        self.gen_send(globals, iseq, method, 1, 0, None);
+                    }
                     BinOp::Ge => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;

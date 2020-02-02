@@ -801,7 +801,7 @@ impl Parser {
     // 4==4==4 => SyntaxError
     fn parse_arg_eq(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_comp()?;
-        // TODO: Support <==> === =~ !~
+        // TODO: Support <==> === !~
         if self.consume_punct_no_term(Punct::Eq)? {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
@@ -811,6 +811,9 @@ impl Parser {
         } else if self.consume_punct_no_term(Punct::TEq)? {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::TEq, lhs, rhs))
+        } else if self.consume_punct_no_term(Punct::Match)? {
+            let rhs = self.parse_arg_comp()?;
+            Ok(Node::new_binop(BinOp::Match, lhs, rhs))
         } else {
             Ok(lhs)
         }

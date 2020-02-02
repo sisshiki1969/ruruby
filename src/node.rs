@@ -139,6 +139,7 @@ pub enum BinOp {
     Le,
     LAnd,
     LOr,
+    Match,
 }
 
 #[derive(Debug, Clone, PartialEq)]

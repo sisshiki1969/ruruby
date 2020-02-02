@@ -128,6 +128,7 @@ pub enum Punct {
     Le,
     LAnd,
     LOr,
+    Match,
 
     Backslash,
     Arrow,
