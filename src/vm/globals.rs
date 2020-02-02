@@ -93,6 +93,7 @@ impl Globals {
         globals.regexp = regexp::init_regexp(&mut globals);
         globals
     }
+
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
         let name = name.into();
         let id = self.get_ident_id(&name);

@@ -8,7 +8,7 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "attr", attr_reader);
     globals.add_builtin_instance_method(class, "attr_reader", attr_reader);
     globals.add_builtin_instance_method(class, "attr_writer", attr_writer);
-    //globals.add_builtin_instance_method(class, "module_function", module_function);
+    globals.add_builtin_instance_method(class, "module_function", module_function);
     globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
 }
 
@@ -146,7 +146,7 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
     vm.globals
         .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
 }
-/*
+
 fn module_function(
     _vm: &mut VM,
     receiver: PackedValue,
@@ -154,7 +154,7 @@ fn module_function(
     _block: Option<MethodRef>,
 ) -> VMResult {
     Ok(receiver)
-}*/
+}
 
 fn singleton_class(
     vm: &mut VM,

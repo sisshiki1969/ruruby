@@ -61,6 +61,12 @@ pub enum NodeKind {
         when_: Vec<CaseBranch>,
         else_: Box<Node>,
     },
+    Begin {
+        body: Box<Node>,
+        rescue: Vec<(Node, Node)>, // (ex_class_list, ex_param)
+        else_: Box<Node>,
+        ensure: Box<Node>,
+    },
     Proc {
         params: NodeVec,
         body: Box<Node>,
@@ -208,6 +214,10 @@ impl Node {
             loc = loc.merge(node.loc());
         };
         Node::new(NodeKind::CompStmt(nodes), loc)
+    }
+
+    pub fn new_nop(loc: Loc) -> Self {
+        Node::new(NodeKind::CompStmt(vec![]), loc)
     }
 
     pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
@@ -396,6 +406,24 @@ impl Node {
                 cond: Box::new(cond),
                 when_,
                 else_: Box::new(else_),
+            },
+            loc,
+        )
+    }
+
+    pub fn new_begin(
+        body: Node,
+        rescue: Vec<(Node, Node)>,
+        else_: Node,
+        ensure: Node,
+        loc: Loc,
+    ) -> Self {
+        Node::new(
+            NodeKind::Begin {
+                body: Box::new(body),
+                rescue,
+                else_: Box::new(else_),
+                ensure: Box::new(ensure),
             },
             loc,
         )

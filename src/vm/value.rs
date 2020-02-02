@@ -189,7 +189,19 @@ impl std::hash::Hash for PackedValue {
         } else {
             let lhs = unsafe { &(*(self.0 as *mut Value)) };
             match lhs {
+                Value::FixNum(lhs) => lhs.hash(state),
+                Value::FloatNum(lhs) => (*lhs as u64).hash(state),
                 Value::String(lhs) => lhs.hash(state),
+                Value::Object(lhs) => match lhs.kind {
+                    ObjKind::Array(lhs) => lhs.elements.hash(state),
+                    ObjKind::Hash(lhs) => {
+                        for (key, val) in lhs.map.iter() {
+                            key.hash(state);
+                            val.hash(state);
+                        }
+                    }
+                    _ => self.0.hash(state),
+                },
                 _ => self.0.hash(state),
             };
         }
@@ -197,7 +209,8 @@ impl std::hash::Hash for PackedValue {
 }
 
 impl PartialEq for PackedValue {
-    // eql?()
+    // Object#eql?()
+    // This type of equality is used for comparison for keys of Hash.
     // Regexp, Array, Hash must be implemented.
     fn eq(&self, other: &Self) -> bool {
         if self.is_packed_value() || other.is_packed_value() {
@@ -209,6 +222,11 @@ impl PartialEq for PackedValue {
                 (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
                 (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
                 (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
+                (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                    (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.map == rhs.map,
+                    _ => lhs.kind == rhs.kind,
+                },
                 _ => self.0 == other.0,
             }
         }

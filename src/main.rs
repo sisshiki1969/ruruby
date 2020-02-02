@@ -5,7 +5,7 @@ extern crate ruruby;
 extern crate rustyline;
 
 use ansi_term::Colour::Red;
-use clap::{App, Arg};
+use clap::{App, AppSettings, Arg};
 use ruruby::error::*;
 use ruruby::loader::*;
 use ruruby::parser::{LvarCollector, Parser};
@@ -16,12 +16,9 @@ fn main() {
         .version("0.0.1")
         .author("monochrome")
         .about("A toy Ruby interpreter")
-        .arg(
-            Arg::with_name("eval")
-                .help("Execute using AST evaluator")
-                .long("eval"),
-        )
-        .arg(Arg::with_name("file").help("Input file name").index(1));
+        .arg(Arg::with_name("file").help("Input file name").index(1))
+        .setting(AppSettings::TrailingVarArg)
+        .arg(Arg::with_name("rest"));
     let app_matches = app.get_matches();
     match app_matches.value_of("file") {
         Some(file_name) => {

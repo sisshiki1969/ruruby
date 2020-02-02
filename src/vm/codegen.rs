@@ -1153,6 +1153,14 @@ impl Codegen {
 
                 self.write_disp_from_cur(iseq, src);
             }
+            NodeKind::Begin {
+                body,
+                rescue: _,
+                else_: _,
+                ensure: _,
+            } => {
+                self.gen(globals, iseq, body, use_value)?;
+            }
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];
                 self.gen(globals, iseq, cond, true)?;

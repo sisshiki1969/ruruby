@@ -3,6 +3,7 @@ mod builtin;
 mod class;
 mod codegen;
 mod context;
+mod file;
 mod globals;
 mod hash;
 mod integer;
@@ -80,6 +81,10 @@ impl VM {
         set_builtin_class!("Hash", hash);
         set_builtin_class!("Method", method);
         set_builtin_class!("Regexp", regexp);
+
+        let id = globals.get_ident_id("File");
+        let file = file::init_file(&mut globals);
+        globals.object.set_var(id, file);
 
         let id = globals.get_ident_id("StandardError");
         let class = PackedValue::class(&globals, globals.class_class);
@@ -245,7 +250,7 @@ impl VM {
             Some(kw_arg) => {
                 let keyword = kw_arg.as_hash().unwrap();
                 for (k, v) in keyword.map.iter() {
-                    eprintln!("{} {}", self.val_pp(*k), self.val_pp(*v));
+                    //eprintln!("{} {}", self.val_pp(*k), self.val_pp(*v));
                     let id = k.as_symbol().unwrap();
                     match iseq.keyword_params.get(&id) {
                         Some(lvar) => {
@@ -642,12 +647,8 @@ impl VM {
                                 }
                                 ObjKind::Hash(href) => {
                                     self.check_args_num(arg_num, 1, 2)?;
-                                    let key = href.map.keys().find(|x| x.equal(args[0]));
-                                    let val = match key {
-                                        Some(key) => match href.map.get(key) {
-                                            Some(val) => val.clone(),
-                                            None => PackedValue::nil(),
-                                        },
+                                    let val = match href.map.get(&args[0]) {
+                                        Some(val) => val.clone(),
                                         None => PackedValue::nil(),
                                     };
                                     self.stack_push(val);
@@ -770,7 +771,7 @@ impl VM {
 
                     let keyword = if kw_args_num != 0 {
                         let val = self.stack_pop();
-                        eprintln!("{}", self.val_pp(val));
+                        //eprintln!("{}", self.val_pp(val));
                         Some(val)
                     } else {
                         None
@@ -795,7 +796,7 @@ impl VM {
 
                     let keyword = if kw_args_num != 0 {
                         let val = self.stack_pop();
-                        eprintln!("{}", self.val_pp(val));
+                        //eprintln!("{}", self.val_pp(val));
                         Some(val)
                     } else {
                         None

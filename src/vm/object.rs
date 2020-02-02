@@ -176,6 +176,15 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "object_id", object_id);
     globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
     globals.add_builtin_instance_method(object, "inspect", inspect);
+    globals.add_builtin_instance_method(object, "eql?", eql);
+
+    {
+        use std::env;
+        let id = globals.get_ident_id("ARGV");
+        let res = env::args().map(|x| PackedValue::string(x)).collect();
+        let argv = PackedValue::array_from(&globals, res);
+        globals.object.set_var(id, argv);
+    }
 }
 
 fn class(
@@ -215,4 +224,9 @@ fn inspect(
 ) -> VMResult {
     let inspect = vm.val_pp(receiver);
     Ok(PackedValue::string(inspect))
+}
+
+fn eql(vm: &mut VM, receiver: PackedValue, args: VecArray, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    Ok(PackedValue::bool(receiver == args[0]))
 }

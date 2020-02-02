@@ -73,6 +73,7 @@ impl Lexer {
             "next" => Reserved::Next,
             "nil" => Reserved::Nil,
             "return" => Reserved::Return,
+            "rescue" => Reserved::Rescue,
             "self" => Reserved::Self_,
             "then" => Reserved::Then,
             "true" => Reserved::True,
@@ -462,7 +463,7 @@ impl Lexer {
             Some(reserved) => Ok(self.new_reserved(*reserved)),
             None => {
                 if is_const {
-                    Ok(self.new_const(tok))
+                    Ok(self.new_const(tok, has_suffix))
                 } else if var_kind == VarKind::InstanceVar {
                     Ok(self.new_instance_var(tok))
                 } else {
@@ -805,8 +806,8 @@ impl Lexer {
         Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
     }
 
-    fn new_const(&self, ident: impl Into<String>) -> Token {
-        Annot::new(TokenKind::Const(ident.into()), self.cur_loc())
+    fn new_const(&self, ident: impl Into<String>, has_suffix: bool) -> Token {
+        Annot::new(TokenKind::Const(ident.into(), has_suffix), self.cur_loc())
     }
 
     fn new_reserved(&self, ident: Reserved) -> Token {

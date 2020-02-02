@@ -325,6 +325,16 @@ impl Parser {
         }
     }
 
+    fn consume_const(&mut self) -> Result<bool, RubyError> {
+        match self.peek()?.kind {
+            TokenKind::Const(_, _) => {
+                self.get()?;
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
+
     fn consume_reserved_no_skip_line_term(&mut self, expect: Reserved) -> Result<bool, RubyError> {
         if TokenKind::Reserved(expect) == self.peek_no_term()?.kind {
             self.get()?;
@@ -384,7 +394,7 @@ impl Parser {
     /// If not, return RubyError.
     fn expect_const(&mut self) -> Result<IdentId, RubyError> {
         let name = match &self.get()?.kind {
-            TokenKind::Const(s) => s.clone(),
+            TokenKind::Const(s, _) => s.clone(),
             _ => {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
             }
@@ -395,7 +405,7 @@ impl Parser {
     fn token_as_symbol(&self, token: &Token) -> String {
         match token.kind.clone() {
             TokenKind::Ident(ident, _) => ident,
-            TokenKind::Const(ident) => ident,
+            TokenKind::Const(ident, _) => ident,
             TokenKind::InstanceVar(ident) => ident,
             TokenKind::StringLit(ident) => ident,
             TokenKind::Reserved(reserved) => {
@@ -656,7 +666,7 @@ impl Parser {
         match tok.kind {
             TokenKind::Ident(_, _)
             | TokenKind::InstanceVar(_)
-            | TokenKind::Const(_)
+            | TokenKind::Const(_, _)
             | TokenKind::NumLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
@@ -1194,8 +1204,13 @@ impl Parser {
                 let id = self.get_ident_id(name);
                 return Ok(Node::new_global_var(id, loc));
             }
-            TokenKind::Const(name) => {
+            TokenKind::Const(name, has_suffix) => {
                 let id = self.get_ident_id(name);
+                if *has_suffix {
+                    if self.peek_no_term()?.kind == TokenKind::Punct(Punct::LParen) {
+                        return Ok(Node::new_identifier(id, false, loc));
+                    }
+                };
                 Ok(Node::new_const(id, false, loc))
             }
             TokenKind::NumLit(num) => Ok(Node::new_integer(*num, loc)),
@@ -1414,11 +1429,7 @@ impl Parser {
             TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
             TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
             TokenKind::Reserved(Reserved::Self_) => Ok(Node::new_self(loc)),
-            TokenKind::Reserved(Reserved::Begin) => {
-                let node = self.parse_comp_stmt()?;
-                self.expect_reserved(Reserved::End)?;
-                Ok(node)
-            }
+            TokenKind::Reserved(Reserved::Begin) => Ok(self.parse_begin()?),
             TokenKind::EOF => return Err(self.error_eof(loc)),
             _ => {
                 return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
@@ -1658,8 +1669,7 @@ impl Parser {
         };
         self.context_stack.push(Context::new_method());
         let args = self.parse_params()?;
-        let body = self.parse_comp_stmt()?;
-        self.expect_reserved(Reserved::End)?;
+        let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         //#[cfg(feature = "verbose")]
         //eprintln!("Parsed def name:{}", self.ident_table.get_name(id));
@@ -1796,7 +1806,7 @@ impl Parser {
         //  end
         let loc = self.prev_loc();
         let name = match &self.get()?.kind {
-            TokenKind::Const(s) => s.clone(),
+            TokenKind::Const(s, _) => s.clone(),
             _ => return Err(self.error_unexpected(loc, "Class/Module name must be CONSTANT.")),
         };
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
@@ -1812,8 +1822,7 @@ impl Parser {
         self.consume_term()?;
         let id = self.get_ident_id(&name);
         self.context_stack.push(Context::new_class(None));
-        let body = self.parse_comp_stmt()?;
-        self.expect_reserved(Reserved::End)?;
+        let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
         eprintln!(
@@ -1842,5 +1851,25 @@ impl Parser {
             }
             _ => Err(self.error_unexpected(self.prev_loc(), "Invalid symbol literal.")),
         }
+    }
+
+    fn parse_begin(&mut self) -> Result<Node, RubyError> {
+        let body = self.parse_comp_stmt()?;
+        if self.consume_reserved(Reserved::Rescue)? {
+            if self.consume_const()? {}
+            if self.consume_punct_no_term(Punct::FatArrow)? {
+                self.expect_ident()?;
+            }
+            self.parse_comp_stmt()?;
+        }
+        self.expect_reserved(Reserved::End)?;
+        let loc = body.loc();
+        Ok(Node::new_begin(
+            body,
+            vec![],
+            Node::new_nop(loc),
+            Node::new_nop(loc),
+            loc,
+        ))
     }
 }
