@@ -851,6 +851,10 @@ impl VM {
                     };
 
                     self.class_stack.push(val);
+                    let method = self.globals.get_method_info(methodref);
+                    let mut class_stack = self.class_stack.clone();
+                    class_stack.reverse();
+                    method.as_iseq(&self)?.class_stack = Some(class_stack);
                     self.eval_send(methodref, val, VecArray::new0(), None, None)?;
                     self.pc += 10;
                     self.class_stack.pop().unwrap();
@@ -858,6 +862,10 @@ impl VM {
                 Inst::DEF_METHOD => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
+                    let method = self.globals.get_method_info(methodref);
+                    let mut class_stack = self.class_stack.clone();
+                    class_stack.reverse();
+                    method.as_iseq(&self)?.class_stack = Some(class_stack);
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered as an object method.
                         self.add_object_method(id, methodref);
@@ -871,6 +879,10 @@ impl VM {
                 Inst::DEF_CLASS_METHOD => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
                     let methodref = MethodRef::from(read32(iseq, self.pc + 5));
+                    let method = self.globals.get_method_info(methodref);
+                    let mut class_stack = self.class_stack.clone();
+                    class_stack.reverse();
+                    method.as_iseq(&self)?.class_stack = Some(class_stack);
                     if self.class_stack.len() == 0 {
                         // A method defined in "top level" is registered as an object method.
                         self.add_object_method(id, methodref);
@@ -1112,7 +1124,21 @@ impl VM {
 
     // Search class stack for the constant.
     fn get_env_const(&self, id: IdentId) -> Option<PackedValue> {
-        for class in self.class_stack.iter().rev() {
+        let mut class_stack = None;
+        for context in self.context_stack.iter().rev() {
+            match context.iseq_ref.class_stack.as_ref() {
+                Some(stack) => {
+                    class_stack = Some(stack);
+                    break;
+                }
+                None => {}
+            }
+        }
+        let class_stack = match class_stack {
+            Some(stack) => stack,
+            None => return None,
+        };
+        for class in class_stack {
             match class.get_var(id) {
                 Some(val) => return Some(val.clone()),
                 None => {}
@@ -1685,6 +1711,7 @@ impl VM {
         mut class: PackedValue,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
+        let original_class = class;
         loop {
             match class.get_instance_method(method) {
                 Some(methodref) => return Ok(methodref),
@@ -1692,7 +1719,8 @@ impl VM {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);
-                        let class_name = self.globals.get_ident_name(class.as_class().name);
+                        let class_name =
+                            self.globals.get_ident_name(original_class.as_class().name);
                         return Err(self.error_nomethod(format!(
                             "no method `{}' found for {}",
                             method_name, class_name

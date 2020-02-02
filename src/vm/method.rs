@@ -71,6 +71,7 @@ pub struct ISeqInfo {
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
+    pub class_stack: Option<Vec<PackedValue>>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
 }
@@ -105,6 +106,7 @@ impl ISeqInfo {
             iseq,
             lvar,
             lvars,
+            class_stack: None,
             iseq_sourcemap,
             source_info,
         }

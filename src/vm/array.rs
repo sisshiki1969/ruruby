@@ -26,8 +26,10 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "push", array::array_push);
     globals.add_builtin_instance_method(class, "<<", array::array_push);
     globals.add_builtin_instance_method(class, "pop", array::array_pop);
+    globals.add_builtin_instance_method(class, "shift", array::array_shift);
     globals.add_builtin_instance_method(class, "length", array::array_length);
     globals.add_builtin_instance_method(class, "size", array::array_length);
+    globals.add_builtin_instance_method(class, "empty?", array::array_empty);
     globals.add_builtin_instance_method(class, "*", array::array_mul);
     globals.add_builtin_instance_method(class, "+", array::array_add);
     globals.add_builtin_instance_method(class, "-", array::array_sub);
@@ -92,14 +94,31 @@ fn array_push(
 fn array_pop(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
     let mut aref = receiver
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     let res = aref.elements.pop().unwrap_or(PackedValue::nil());
     Ok(res)
+}
+
+fn array_shift(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let new = aref.elements.split_off(1);
+    let res = aref.elements.clone();
+    aref.elements = new;
+    Ok(res[0])
 }
 
 fn array_length(
@@ -112,6 +131,19 @@ fn array_length(
         .as_array()
         .ok_or(vm.error_nomethod("Receiver must be an array."))?;
     let res = PackedValue::fixnum(aref.elements.len() as i64);
+    Ok(res)
+}
+
+fn array_empty(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let aref = receiver
+        .as_array()
+        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let res = PackedValue::bool(aref.elements.is_empty());
     Ok(res)
 }
 
