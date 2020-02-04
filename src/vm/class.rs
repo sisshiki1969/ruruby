@@ -4,21 +4,19 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
-    pub name: IdentId,
-    pub instance_method: MethodTable,
-    pub class_method: MethodTable,
-    pub constants: ValueTable,
-    pub superclass: Option<ClassRef>,
+    pub name: Option<IdentId>,
+    pub method_table: MethodTable,
+    pub superclass: PackedValue,
+    pub is_singleton: bool,
 }
 
 impl ClassInfo {
-    pub fn new(name: IdentId, superclass: Option<ClassRef>) -> Self {
+    pub fn new(name: impl Into<Option<IdentId>>, superclass: PackedValue) -> Self {
         ClassInfo {
-            name,
-            instance_method: HashMap::new(),
-            class_method: HashMap::new(),
-            constants: HashMap::new(),
+            name: name.into(),
+            method_table: HashMap::new(),
             superclass,
+            is_singleton: false,
         }
     }
 }
@@ -26,30 +24,36 @@ impl ClassInfo {
 pub type ClassRef = Ref<ClassInfo>;
 
 impl ClassRef {
-    pub fn from_no_superclass(id: IdentId) -> Self {
-        ClassRef::new(ClassInfo::new(id, None))
+    /*
+    pub fn from_no_superclass(id: impl Into<Option<IdentId>>) -> Self {
+        ClassRef::new(ClassInfo::new(id, PackedValue::nil()))
+    }*/
+
+    pub fn from(
+        id: impl Into<Option<IdentId>>,
+        superclass: impl Into<Option<PackedValue>>,
+    ) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => PackedValue::nil(),
+        };
+        ClassRef::new(ClassInfo::new(id, superclass))
     }
 
-    pub fn from(id: IdentId, superclass: ClassRef) -> Self {
-        ClassRef::new(ClassInfo::new(id, Some(superclass)))
-    }
-
-    pub fn get_class_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.class_method.get(&id)
-    }
-
-    pub fn get_instance_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.instance_method.get(&id)
+    pub fn superclass(&self) -> Option<ClassRef> {
+        if self.superclass.is_nil() {
+            None
+        } else {
+            Some(self.superclass.as_class())
+        }
     }
 }
 
-pub fn init_class(globals: &mut Globals) -> ClassRef {
-    let class_id = globals.get_ident_id("Class");
-    let class = ClassRef::from(class_id, globals.module_class);
+pub fn init_class(globals: &mut Globals) {
+    let class = globals.class_class;
     globals.add_builtin_instance_method(class, "new", class_new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
-    globals.add_builtin_class_method(class, "new", class_class_new);
-    class
+    globals.add_builtin_class_method(globals.class, "new", class_class_new);
 }
 
 /// Built-in function "new".
@@ -60,7 +64,7 @@ fn class_class_new(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let id = vm.globals.get_ident_id("nil");
-    let classref = ClassRef::from(id, vm.globals.object_class);
+    let classref = ClassRef::from(id, vm.globals.object);
     let val = PackedValue::class(&mut vm.globals, classref);
 
     Ok(val)
@@ -73,14 +77,12 @@ fn class_new(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
-    let instance = ObjectRef::from(class);
-    let new_instance = PackedValue::object(instance);
+    let new_instance = PackedValue::ordinary_object(receiver);
     // call initialize method.
-    if let Some(methodref) = class.get_instance_method(IdentId::INITIALIZE) {
-        let iseq = vm.globals.get_method_info(*methodref).as_iseq(&vm)?;
+    if let Some(methodref) = receiver.get_instance_method(IdentId::INITIALIZE) {
+        let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;
         vm.vm_run(new_instance, iseq, None, args, None, None)?;
-        vm.exec_stack.pop().unwrap();
+        vm.stack_pop();
     };
     Ok(new_instance)
 }
@@ -92,8 +94,5 @@ fn superclass(
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = vm.val_as_class(receiver)?;
-    match class.superclass {
-        Some(superclass) => Ok(PackedValue::class(&mut vm.globals, superclass)),
-        None => Ok(PackedValue::nil()),
-    }
+    Ok(class.superclass)
 }

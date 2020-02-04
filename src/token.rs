@@ -39,7 +39,7 @@ pub enum TokenKind {
     Ident(String, bool),
     InstanceVar(String),
     GlobalVar(String),
-    Const(String),
+    Const(String, bool),
     NumLit(i64),
     FloatLit(f64),
     StringLit(String),
@@ -77,6 +77,7 @@ pub enum Reserved {
     Next,
     Nil,
     Return,
+    Rescue,
     Self_,
     Then,
     True,
@@ -127,6 +128,7 @@ pub enum Punct {
     Le,
     LAnd,
     LOr,
+    Match,
 
     Backslash,
     Arrow,
@@ -143,8 +145,12 @@ impl Token {
         Annot::new(TokenKind::InstanceVar(ident.into()), loc)
     }
 
-    pub fn new_const(ident: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::Const(ident.into()), loc)
+    pub fn new_const(ident: impl Into<String>, has_suffix: bool, loc: Loc) -> Self {
+        Annot::new(TokenKind::Const(ident.into(), has_suffix), loc)
+    }
+
+    pub fn new_global_var(ident: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::GlobalVar(ident.into()), loc)
     }
 
     pub fn new_reserved(ident: Reserved, loc: Loc) -> Self {
@@ -195,7 +201,7 @@ impl Token {
         Annot::new(TokenKind::LineTerm, loc)
     }
 
-    pub fn new_eof(pos: usize) -> Self {
+    pub fn new_eof(pos: u32) -> Self {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 
@@ -225,7 +231,7 @@ impl Token {
 
     pub fn can_be_symbol(&self) -> bool {
         match self.kind {
-            TokenKind::Const(_)
+            TokenKind::Const(_, _)
             | TokenKind::Ident(_, _)
             | TokenKind::InstanceVar(_)
             | TokenKind::Reserved(_)
@@ -238,7 +244,11 @@ impl Token {
         match self.kind {
             TokenKind::EOF | TokenKind::InterString(_) | TokenKind::CloseString(_) => true,
             TokenKind::Reserved(reserved) => match reserved {
-                Reserved::Else | Reserved::Elsif | Reserved::End | Reserved::When => true,
+                Reserved::Else
+                | Reserved::Elsif
+                | Reserved::End
+                | Reserved::When
+                | Reserved::Rescue => true,
                 _ => false,
             },
             TokenKind::Punct(punct) => match punct {

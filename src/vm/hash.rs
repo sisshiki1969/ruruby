@@ -20,9 +20,9 @@ impl HashRef {
     }
 }
 
-pub fn init_hash(globals: &mut Globals) -> ClassRef {
+pub fn init_hash(globals: &mut Globals) -> PackedValue {
     let id = globals.get_ident_id("Hash");
-    let class = ClassRef::from(id, globals.object_class);
+    let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "clear", hash_clear);
     globals.add_builtin_instance_method(class, "clone", hash_clone);
     globals.add_builtin_instance_method(class, "dup", hash_clone);
@@ -31,13 +31,17 @@ pub fn init_hash(globals: &mut Globals) -> ClassRef {
     globals.add_builtin_instance_method(class, "empty?", hash_empty);
     globals.add_builtin_instance_method(class, "select", hash_select);
     globals.add_builtin_instance_method(class, "has_key?", hash_has_key);
+    globals.add_builtin_instance_method(class, "key?", hash_has_key);
+    globals.add_builtin_instance_method(class, "include?", hash_has_key);
+    globals.add_builtin_instance_method(class, "member?", hash_has_key);
     globals.add_builtin_instance_method(class, "has_value?", hash_has_value);
     globals.add_builtin_instance_method(class, "keys", hash_keys);
     globals.add_builtin_instance_method(class, "length", hash_length);
     globals.add_builtin_instance_method(class, "size", hash_length);
     globals.add_builtin_instance_method(class, "values", hash_values);
-    //globals.add_builtin_class_method(class, "new", range_new);
-    class
+    globals.add_builtin_instance_method(class, "each_value", each_value);
+    globals.add_builtin_instance_method(class, "each", each);
+    PackedValue::class(globals, class)
 }
 
 fn hash_clear(
@@ -119,7 +123,7 @@ fn hash_select(
             None,
             None,
         )?;
-        let b = vm.exec_stack.pop().unwrap();
+        let b = vm.stack_pop();
         if vm.val_to_bool(b) {
             res.insert(k.clone(), v.clone());
         };
@@ -146,7 +150,7 @@ fn hash_has_value(
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = receiver.as_hash().unwrap();
-    let res = hash.map.values().any(|&x| x == args[0]);
+    let res = hash.map.values().find(|&&x| x == args[0]).is_some();
     Ok(PackedValue::bool(res))
 }
 
@@ -187,4 +191,55 @@ fn hash_values(
         vec.push(val.clone());
     }
     Ok(PackedValue::array_from(&vm.globals, vec))
+}
+
+fn each_value(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    block: Option<MethodRef>,
+) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let hash = receiver.as_hash().unwrap();
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let context = vm.context();
+    for (_, v) in &hash.map {
+        vm.vm_run(
+            context.self_value,
+            iseq,
+            Some(context),
+            VecArray::new1(v.clone()),
+            None,
+            None,
+        )?;
+        vm.stack_pop();
+    }
+    let res = receiver;
+    Ok(res)
+}
+
+fn each(vm: &mut VM, receiver: PackedValue, args: VecArray, block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let hash = receiver.as_hash().unwrap();
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let context = vm.context();
+    for (k, v) in &hash.map {
+        vm.vm_run(
+            context.self_value,
+            iseq,
+            Some(context),
+            VecArray::new2(k.clone(), v.clone()),
+            None,
+            None,
+        )?;
+        vm.stack_pop();
+    }
+    let res = receiver;
+    Ok(res)
 }

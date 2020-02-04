@@ -1,3 +1,3 @@
 #!/bin/sh
 set -x
-cargo run --features verbose -- ../optcarrot/lib/optcarrot.rb
+RUST_BACKTRACE=1 cargo run --features verbose -- ../optcarrot/bin/optcarrot-bench

@@ -16,6 +16,9 @@ impl Builtin {
         globals.add_builtin_method("method", builtin_method);
         globals.add_builtin_method("is_a?", builtin_isa);
         globals.add_builtin_method("to_s", builtin_tos);
+        globals.add_builtin_method("Integer", builtin_integer);
+        globals.add_builtin_method("__dir__", builtin_dir);
+        globals.add_builtin_method("raise", builtin_raise);
 
         /// Built-in function "puts".
         fn builtin_puts(
@@ -85,7 +88,7 @@ impl Builtin {
             if args.len() != 2 {
                 panic!("Invalid number of arguments.");
             }
-            if !vm.eval_eq(args[0].clone(), args[1].clone())? {
+            if !args[0].clone().equal(args[1].clone()) {
                 panic!(
                     "Assertion error: Expected: {} Actual: {}",
                     vm.val_pp(args[0]),
@@ -124,11 +127,19 @@ impl Builtin {
             let mut path = vm.root_path.last().unwrap().clone();
 
             let file_name = match args[0].as_string() {
-                Some(string) => string,
+                Some(string) => PathBuf::from(string),
                 None => return Err(vm.error_argument("file name must be a string.")),
             };
             path.pop();
-            path.push(file_name);
+            //path.push(file_name);
+            for p in file_name.iter() {
+                if p == ".." {
+                    path.pop();
+                } else {
+                    path.push(p);
+                }
+            }
+            path.set_extension("rb");
             require(vm, path)?;
             Ok(PackedValue::bool(true))
         }
@@ -154,7 +165,7 @@ impl Builtin {
             #[cfg(feature = "verbose")]
             eprintln!("reading:{}", absolute_path.to_string_lossy());
             vm.root_path.push(path);
-            vm.class_stack.push(vm.globals.object_class);
+            vm.class_stack.push(vm.globals.object);
             vm.run(absolute_path.to_str().unwrap(), program)?;
             vm.class_stack.pop().unwrap();
             vm.root_path.pop().unwrap();
@@ -182,17 +193,8 @@ impl Builtin {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
             };
-            let method = match receiver.as_class() {
-                Some(class) => match class.get_class_method(name) {
-                    Some(method) => method.clone(),
-                    None => return Err(vm.error_type("Method not found.")),
-                },
-                None => match receiver.get_class(&vm.globals).get_instance_method(name) {
-                    Some(method) => method.clone(),
-                    None => return Err(vm.error_type("Method not found.")),
-                },
-            };
-
+            let recv_class = receiver.get_class_object_for_method(&vm.globals);
+            let method = vm.get_instance_method(recv_class, name)?;
             let val = PackedValue::method(&vm.globals, name, receiver, method);
             Ok(val)
         }
@@ -204,18 +206,14 @@ impl Builtin {
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let target = match args[0].as_module() {
-                Some(class) => class,
-                None => return Err(vm.error_type("An argument must be a Module or Class.")),
-            };
-            let mut recv_class = receiver.get_class(&vm.globals);
+            let mut recv_class = receiver.get_class_object(&vm.globals);
             loop {
-                if recv_class == target {
+                if recv_class.id() == args[0].id() {
                     return Ok(PackedValue::true_val());
                 }
-                recv_class = match recv_class.superclass {
-                    Some(class) => class,
-                    None => return Ok(PackedValue::false_val()),
+                recv_class = recv_class.as_class().superclass;
+                if recv_class.is_nil() {
+                    return Ok(PackedValue::false_val());
                 }
             }
         }
@@ -229,6 +227,73 @@ impl Builtin {
             vm.check_args_num(args.len(), 0, 0)?;
             let s = vm.val_to_s(receiver);
             Ok(PackedValue::string(s))
+        }
+
+        fn builtin_integer(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            vm.check_args_num(args.len(), 1, 1)?;
+            let val = if args[0].is_packed_value() {
+                if args[0].is_packed_fixnum() {
+                    args[0].as_packed_fixnum()
+                } else if args[0].is_packed_num() {
+                    args[0].as_packed_flonum().trunc() as i64
+                } else {
+                    return Err(vm.error_type(format!(
+                        "Can not convert {} into Integer.",
+                        vm.val_pp(args[0])
+                    )));
+                }
+            } else {
+                match args[0].unpack() {
+                    Value::FixNum(num) => num,
+                    Value::FloatNum(num) => num as i64,
+                    Value::String(s) => match s.parse::<i64>() {
+                        Ok(num) => num,
+                        Err(_) => {
+                            return Err(vm.error_type(format!(
+                                "Invalid value for Integer(): {}",
+                                vm.val_pp(args[0])
+                            )))
+                        }
+                    },
+                    _ => {
+                        return Err(vm.error_type(format!(
+                            "Can not convert {} into Integer.",
+                            vm.val_pp(args[0])
+                        )))
+                    }
+                }
+            };
+            Ok(PackedValue::fixnum(val))
+        }
+
+        fn builtin_dir(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            vm.check_args_num(args.len(), 0, 0)?;
+            let mut path = vm.root_path.last().unwrap().clone();
+            path.pop();
+            Ok(PackedValue::string(path.to_string_lossy().to_string()))
+        }
+
+        fn builtin_raise(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            vm.check_args_num(args.len(), 0, 2)?;
+            for i in 0..args.len() {
+                eprintln!("{}", vm.val_pp(args[i]));
+            }
+            Err(vm.error_unimplemented("error"))
         }
     }
 }

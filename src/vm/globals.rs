@@ -8,57 +8,92 @@ pub struct Globals {
     method_cache: MethodCache,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
-    pub main_object: ObjectRef,
-    pub integer_class: ClassRef,
-    pub array_class: ClassRef,
+    pub main_object: PackedValue,
+
+    pub integer: PackedValue,
+    pub array: PackedValue,
+    pub class: PackedValue,
+    pub module: PackedValue,
+    pub procobj: PackedValue,
+    pub method: PackedValue,
+    pub range: PackedValue,
+    pub hash: PackedValue,
+    pub regexp: PackedValue,
+    pub string: PackedValue,
+    pub object: PackedValue,
+
+    //pub integer_class: ClassRef,
+    //pub array_class: ClassRef,
     pub class_class: ClassRef,
     pub module_class: ClassRef,
-    pub proc_class: ClassRef,
-    pub method_class: ClassRef,
-    pub range_class: ClassRef,
-    pub hash_class: ClassRef,
-    pub regexp_class: ClassRef,
-    pub string_class: ClassRef,
+    //pub proc_class: ClassRef,
+    //pub method_class: ClassRef,
+    //pub range_class: ClassRef,
+    //pub hash_class: ClassRef,
+    //pub regexp_class: ClassRef,
+    //pub string_class: ClassRef,
     pub object_class: ClassRef,
 }
 
 impl Globals {
     pub fn new() -> Self {
         let mut ident_table = IdentifierTable::new();
-        let object_id = ident_table.get_ident_id("Object");
-        let object_class = ClassRef::from_no_superclass(object_id);
-        let main_object = ObjectRef::from(object_class);
+        let object_id = IdentId::OBJECT;
+        let module_id = ident_table.get_ident_id("Module");
+        let class_id = ident_table.get_ident_id("Class");
+        let object_class = ClassRef::from(object_id, None);
+        let nil = PackedValue::nil();
+        let object = PackedValue::bootstrap_class(object_class);
+        let module_class = ClassRef::from(module_id, object);
+        let module = PackedValue::bootstrap_class(module_class);
+        let class_class = ClassRef::from(class_id, module);
+        let class = PackedValue::bootstrap_class(class_class);
+        object.as_object().set_class(class);
+        module.as_object().set_class(class);
+        class.as_object().set_class(class);
+
+        let main_object = PackedValue::ordinary_object(object);
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
             method_cache: MethodCache::new(),
             class_version: 0,
             main_object,
-            integer_class: object_class,
-            array_class: object_class,
-            module_class: object_class,
-            class_class: object_class,
-            proc_class: object_class,
-            method_class: object_class,
-            range_class: object_class,
-            hash_class: object_class,
-            regexp_class: object_class,
-            string_class: object_class,
             object_class,
+            module_class,
+            class_class,
+            object,
+            module,
+            class,
+            integer: nil, // dummy
+            array: nil,   // dummy
+            procobj: nil, // dummy
+            method: nil,  // dummy
+            range: nil,   // dummy
+            hash: nil,    // dummy
+            regexp: nil,  // dummy
+            string: nil,  // dummy
         };
+        // Generate singleton class for Object
+        let mut singleton_class = ClassRef::from(None, globals.class);
+        singleton_class.is_singleton = true;
+        let singleton_obj = PackedValue::class(&globals, singleton_class);
+        globals.object.as_object().set_class(singleton_obj);
+
         object::init_object(&mut globals);
-        globals.integer_class = integer::init_integer(&mut globals);
-        globals.array_class = array::init_array(&mut globals);
-        globals.module_class = module::init_module(&mut globals);
-        globals.class_class = class::init_class(&mut globals);
-        globals.proc_class = procobj::init_proc(&mut globals);
-        globals.method_class = method::init_method(&mut globals);
-        globals.range_class = range::init_range(&mut globals);
-        globals.string_class = string::init_string(&mut globals);
-        globals.hash_class = hash::init_hash(&mut globals);
-        globals.regexp_class = regexp::init_regexp(&mut globals);
+        module::init_module(&mut globals);
+        class::init_class(&mut globals);
+        globals.integer = integer::init_integer(&mut globals);
+        globals.array = array::init_array(&mut globals);
+        globals.procobj = procobj::init_proc(&mut globals);
+        globals.method = method::init_method(&mut globals);
+        globals.range = range::init_range(&mut globals);
+        globals.string = string::init_string(&mut globals);
+        globals.hash = hash::init_hash(&mut globals);
+        globals.regexp = regexp::init_regexp(&mut globals);
         globals
     }
+
     pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
         let name = name.into();
         let id = self.get_ident_id(&name);
@@ -67,8 +102,12 @@ impl Globals {
         self.add_object_method(id, methodref);
     }
 
-    pub fn get_ident_name(&self, id: IdentId) -> &String {
-        self.ident_table.get_name(id)
+    pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {
+        let id = id.into();
+        match id {
+            Some(id) => self.ident_table.get_name(id),
+            None => &"",
+        }
     }
 
     pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
@@ -76,11 +115,11 @@ impl Globals {
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.object_class.instance_method.insert(id, info);
+        self.object_class.method_table.insert(id, info);
     }
 
-    pub fn get_object_method(&self, id: IdentId) -> Option<&MethodRef> {
-        self.object_class.get_instance_method(id)
+    pub fn get_object_method(&self, id: IdentId) -> Option<MethodRef> {
+        self.object.get_instance_method(id)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
@@ -95,9 +134,37 @@ impl Globals {
         self.method_table.get_mut_method(method)
     }
 
+    pub fn get_singleton_class(&self, obj: PackedValue) -> Result<PackedValue, ()> {
+        match obj.is_object() {
+            Some(mut oref) => {
+                let class = oref.class();
+                if class.as_class().is_singleton {
+                    Ok(class)
+                } else {
+                    let mut singleton_class = if let ObjKind::Class(cref) = oref.kind {
+                        let superclass = cref.superclass;
+                        if superclass.is_nil() {
+                            ClassRef::from(None, None)
+                        } else {
+                            ClassRef::from(None, self.get_singleton_class(superclass)?)
+                        }
+                    } else {
+                        ClassRef::from(None, None)
+                    };
+                    singleton_class.is_singleton = true;
+                    let singleton_obj = PackedValue::class(&self, singleton_class);
+                    singleton_obj.as_object().set_class(class);
+                    oref.set_class(singleton_obj);
+                    Ok(singleton_obj)
+                }
+            }
+            _ => Err(()),
+        }
+    }
+
     pub fn add_builtin_class_method(
         &mut self,
-        mut classref: ClassRef,
+        obj: PackedValue,
         name: impl Into<String>,
         func: BuiltinFunc,
     ) {
@@ -105,8 +172,8 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
-        classref.class_method.insert(id, func_ref);
-        //classref.clone().add_class_method(id, func_ref);
+        let singleton = self.get_singleton_class(obj).unwrap();
+        singleton.as_class().method_table.insert(id, func_ref);
     }
 
     pub fn add_builtin_instance_method(
@@ -119,7 +186,7 @@ impl Globals {
         let id = self.get_ident_id(&name);
         let info = MethodInfo::BuiltinFunc { name, func };
         let methodref = self.add_method(info);
-        classref.instance_method.insert(id, methodref);
+        classref.method_table.insert(id, methodref);
     }
 
     pub fn get_class_name(&self, val: PackedValue) -> String {
@@ -143,7 +210,9 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => self.get_ident_name(oref.classref.name).clone(),
+                ObjKind::Ordinary => self
+                    .get_ident_name(oref.as_ref().search_class().as_class().name)
+                    .to_string(),
             },
         }
     }
@@ -153,14 +222,14 @@ impl Globals {
     pub fn set_method_cache_entry(
         &mut self,
         id: usize,
-        class: ClassRef,
-        is_class_method: bool,
+        class: PackedValue,
+        //is_class_method: bool,
         method: MethodRef,
     ) {
         self.method_cache.table[id] = Some(MethodCacheEntry {
             class,
             version: self.class_version,
-            is_class_method,
+            //is_class_method,
             method,
         });
     }
@@ -176,43 +245,24 @@ impl Globals {
     pub fn get_method_from_cache(
         &mut self,
         cache_slot: usize,
-        receiver: PackedValue,
+        rec_class: PackedValue,
     ) -> Option<MethodRef> {
-        let (rec_class, class_method) = match receiver.as_class() {
-            Some(cref) => (cref, true),
-            None => (receiver.get_class(&self), false),
-        };
         match self.get_method_cache_entry(cache_slot) {
             Some(MethodCacheEntry {
                 class,
                 version,
-                is_class_method,
                 method,
-            }) if *class == rec_class
-                && *version == self.class_version
-                && *is_class_method == class_method =>
-            {
-                Some(*method)
-            }
-            _ => {
-                /*
-                eprintln!(
-                    "cache miss! {:?} {:?} {:?}",
-                    receiver.unpack(),
-                    rec_class,
-                    class_method
-                );*/
-                None
-            }
+            }) if class.id() == rec_class.id() && *version == self.class_version => Some(*method),
+            _ => None,
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct MethodCacheEntry {
-    class: ClassRef,
+    class: PackedValue,
     version: usize,
-    is_class_method: bool,
+    //is_class_method: bool,
     method: MethodRef,
 }
 

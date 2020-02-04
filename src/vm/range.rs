@@ -7,30 +7,28 @@ pub struct RangeInfo {
     pub exclude: bool,
 }
 
-pub type RangeRef = Ref<RangeInfo>;
-
-impl RangeRef {
-    pub fn new_range(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
-        let info = RangeInfo {
+impl RangeInfo {
+    pub fn new(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+        RangeInfo {
             start,
             end,
             exclude,
-        };
-        RangeRef::new(info)
+        }
     }
 }
 
-pub fn init_range(globals: &mut Globals) -> ClassRef {
+pub fn init_range(globals: &mut Globals) -> PackedValue {
     let id = globals.get_ident_id("Range");
-    let class = ClassRef::from(id, globals.object_class);
+    let class = ClassRef::from(id, globals.object);
+    let obj = PackedValue::class(globals, class);
     globals.add_builtin_instance_method(class, "map", range_map);
     globals.add_builtin_instance_method(class, "begin", range_begin);
     globals.add_builtin_instance_method(class, "first", range_first);
     globals.add_builtin_instance_method(class, "end", range_end);
     globals.add_builtin_instance_method(class, "last", range_last);
     globals.add_builtin_instance_method(class, "to_a", range_toa);
-    globals.add_builtin_class_method(class, "new", range_new);
-    class
+    globals.add_builtin_class_method(obj, "new", range_new);
+    obj
 }
 
 fn range_new(
@@ -146,7 +144,7 @@ fn range_map(
             None,
             None,
         )?;
-        res.push(vm.exec_stack.pop().unwrap());
+        res.push(vm.stack_pop());
     }
     let res = PackedValue::array_from(&vm.globals, res);
     Ok(res)

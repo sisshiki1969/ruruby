@@ -19,12 +19,13 @@ impl ProcRef {
     }
 }
 
-pub fn init_proc(globals: &mut Globals) -> ClassRef {
+pub fn init_proc(globals: &mut Globals) -> PackedValue {
     let proc_id = globals.get_ident_id("Proc");
-    let proc_class = ClassRef::from(proc_id, globals.object_class);
-    globals.add_builtin_instance_method(proc_class, "call", proc_call);
-    globals.add_builtin_class_method(proc_class, "new", proc_new);
-    proc_class
+    let class = ClassRef::from(proc_id, globals.object);
+    let obj = PackedValue::class(globals, class);
+    globals.add_builtin_instance_method(class, "call", proc_call);
+    globals.add_builtin_class_method(obj, "new", proc_new);
+    obj
 }
 
 // Class methods
@@ -65,6 +66,6 @@ fn proc_call(
         None,
         None,
     )?;
-    let res = vm.exec_stack.pop().unwrap();
+    let res = vm.stack_pop();
     Ok(res)
 }

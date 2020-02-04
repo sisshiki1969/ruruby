@@ -347,7 +347,7 @@ impl Codegen {
             NodeKind::Send {
                 receiver, method, ..
             } => {
-                let name = globals.get_ident_name(*method).clone() + "=";
+                let name = globals.get_ident_name(*method).to_string() + "=";
                 let assign_id = globals.get_ident_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
@@ -645,7 +645,7 @@ impl Codegen {
                         format!("GET_CONST_TOP '{}'", ident_name(globals, iseq, pc + 1))
                     }
                     Inst::SET_CONST => format!("SET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
-                    Inst::GET_SCOPE => format!("SET_SCOPE '{}'", ident_name(globals, iseq, pc + 1)),
+                    Inst::GET_SCOPE => format!("GET_SCOPE '{}'", ident_name(globals, iseq, pc + 1)),
                     Inst::GET_INSTANCE_VAR => {
                         format!("GET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
                     }
@@ -981,6 +981,13 @@ impl Codegen {
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::TEQ);
                     }
+                    BinOp::Match => {
+                        let method = globals.get_ident_id("=~");
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.loc = loc;
+                        self.gen_send(globals, iseq, method, 1, 0, None);
+                    }
                     BinOp::Ge => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
@@ -1152,6 +1159,14 @@ impl Codegen {
                 }
 
                 self.write_disp_from_cur(iseq, src);
+            }
+            NodeKind::Begin {
+                body,
+                rescue: _,
+                else_: _,
+                ensure: _,
+            } => {
+                self.gen(globals, iseq, body, use_value)?;
             }
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];

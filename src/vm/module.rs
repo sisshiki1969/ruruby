@@ -1,15 +1,15 @@
 use crate::vm::*;
 
-pub fn init_module(globals: &mut Globals) -> ClassRef {
-    let id = globals.get_ident_id("Module");
-    let class = ClassRef::from(id, globals.object_class);
+pub fn init_module(globals: &mut Globals) {
+    let class = globals.module_class;
     globals.add_builtin_instance_method(class, "constants", constants);
+    globals.add_builtin_instance_method(class, "instance_methods", instance_methods);
     globals.add_builtin_instance_method(class, "attr_accessor", attr_accessor);
     globals.add_builtin_instance_method(class, "attr", attr_reader);
     globals.add_builtin_instance_method(class, "attr_reader", attr_reader);
     globals.add_builtin_instance_method(class, "attr_writer", attr_writer);
     globals.add_builtin_instance_method(class, "module_function", module_function);
-    class
+    globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
 }
 
 fn constants(
@@ -18,13 +18,57 @@ fn constants(
     _args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
-    let v: Vec<PackedValue> = class
-        .constants
+    let v: Vec<PackedValue> = receiver
+        .as_object()
+        .var_table()
         .keys()
         .map(|k| PackedValue::symbol(k.clone()))
         .collect();
     Ok(PackedValue::array_from(&vm.globals, v))
+}
+
+fn instance_methods(
+    vm: &mut VM,
+    receiver: PackedValue,
+    args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let mut class = vm.val_as_module(receiver)?;
+    vm.check_args_num(args.len(), 0, 1)?;
+    let inherited_too = args.len() == 0 || vm.val_to_bool(args[0]);
+    match inherited_too {
+        false => {
+            let v = class
+                .method_table
+                .keys()
+                .map(|k| PackedValue::symbol(k.clone()))
+                .collect();
+            Ok(PackedValue::array_from(&vm.globals, v))
+        }
+        true => {
+            let mut v = std::collections::HashSet::new();
+            loop {
+                v = v
+                    .union(
+                        &class
+                            .method_table
+                            .keys()
+                            .map(|k| PackedValue::symbol(*k))
+                            .collect(),
+                    )
+                    .cloned()
+                    .collect();
+                match class.superclass() {
+                    Some(superclass) => class = superclass,
+                    None => break,
+                };
+            }
+            Ok(PackedValue::array_from(
+                &vm.globals,
+                v.iter().cloned().collect(),
+            ))
+        }
+    }
 }
 
 fn attr_accessor(
@@ -33,12 +77,11 @@ fn attr_accessor(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(vm, class, id);
-            define_writer(vm, class, id);
+            define_reader(vm, receiver, id);
+            define_writer(vm, receiver, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -52,11 +95,10 @@ fn attr_reader(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(vm, class, id);
+            define_reader(vm, receiver, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -70,11 +112,10 @@ fn attr_writer(
     args: VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_writer(vm, class, id);
+            define_writer(vm, receiver, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -82,18 +123,28 @@ fn attr_writer(
     Ok(PackedValue::nil())
 }
 
-fn define_reader(vm: &mut VM, class: ClassRef, id: IdentId) {
-    let info = MethodInfo::AttrReader { id };
+fn define_reader(vm: &mut VM, class: PackedValue, id: IdentId) {
+    let instance_var_id = get_instance_var(vm, id);
+    let info = MethodInfo::AttrReader {
+        id: instance_var_id,
+    };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, id, methodref);
 }
 
-fn define_writer(vm: &mut VM, class: ClassRef, id: IdentId) {
-    let assign_name = vm.globals.get_ident_name(id).clone() + "=";
-    let assign_id = vm.globals.get_ident_id(assign_name);
-    let info = MethodInfo::AttrWriter { id };
+fn define_writer(vm: &mut VM, class: PackedValue, id: IdentId) {
+    let instance_var_id = get_instance_var(vm, id);
+    let assign_id = vm.globals.ident_table.add_postfix(id, "=");
+    let info = MethodInfo::AttrWriter {
+        id: instance_var_id,
+    };
     let methodref = vm.globals.add_method(info);
     vm.add_instance_method(class, assign_id, methodref);
+}
+
+fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
+    vm.globals
+        .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
 }
 
 fn module_function(
@@ -103,4 +154,14 @@ fn module_function(
     _block: Option<MethodRef>,
 ) -> VMResult {
     Ok(receiver)
+}
+
+fn singleton_class(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let class = vm.val_as_module(receiver)?;
+    Ok(PackedValue::bool(class.is_singleton))
 }

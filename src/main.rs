@@ -5,7 +5,7 @@ extern crate ruruby;
 extern crate rustyline;
 
 use ansi_term::Colour::Red;
-use clap::{App, Arg};
+use clap::{App, AppSettings, Arg};
 use ruruby::error::*;
 use ruruby::loader::*;
 use ruruby::parser::{LvarCollector, Parser};
@@ -16,12 +16,9 @@ fn main() {
         .version("0.0.1")
         .author("monochrome")
         .about("A toy Ruby interpreter")
-        .arg(
-            Arg::with_name("eval")
-                .help("Execute using AST evaluator")
-                .long("eval"),
-        )
-        .arg(Arg::with_name("file").help("Input file name").index(1));
+        .arg(Arg::with_name("file").help("Input file name").index(1))
+        .setting(AppSettings::TrailingVarArg)
+        .arg(Arg::with_name("rest"));
     let app_matches = app.get_matches();
     match app_matches.value_of("file") {
         Some(file_name) => {
@@ -70,14 +67,11 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
 }
 
 fn repl_vm() {
-    /*
     println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
     println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
     println!("Value: {}", std::mem::size_of::<Value>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-    */
-    println!("Value: {}", std::mem::size_of::<Value>());
     println!(
         "Option<PackedValue>: {}",
         std::mem::size_of::<Option<PackedValue>>()
@@ -91,10 +85,8 @@ fn repl_vm() {
     parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
-    let main = vm.globals.main_object;
-    let main_object = PackedValue::object(main);
     let context = ContextRef::from(
-        main_object,
+        vm.globals.main_object,
         None,
         ISeqRef::new(ISeqInfo::new(
             0,

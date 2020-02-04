@@ -8,7 +8,7 @@ pub enum LoadError {
 
 pub fn load_file(file_name: impl Into<String>) -> Result<(std::path::PathBuf, String), LoadError> {
     let file_name = file_name.into();
-    let path = std::path::Path::new(&file_name).with_extension("rb");
+    let path = std::path::Path::new(&file_name); //.with_extension("rb");
     let absolute_path = match path.canonicalize() {
         Ok(path) => path,
         Err(ioerr) => {

@@ -49,7 +49,7 @@ fn nil_lit1() {
 #[test]
 fn string_lit1() {
     let program = r#""open "  "windows""#;
-    let expected = Value::String(Box::new("open windows".to_string()));
+    let expected = Value::String("open windows".to_string());
     eval_script(program, expected);
 }
 
@@ -57,7 +57,7 @@ fn string_lit1() {
 fn string_lit2() {
     let program = r#""open "
     "windows""#;
-    let expected = Value::String(Box::new("windows".to_string()));
+    let expected = Value::String("windows".to_string());
     eval_script(program, expected);
 }
 
@@ -68,7 +68,7 @@ fn interpolated_string_lit1() {
     f = "fibonacci";
     "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
     "###;
-    let expected = Value::String(Box::new("fibonacci  fibo(20) = 6765".to_string()));
+    let expected = Value::String("fibonacci  fibo(20) = 6765".to_string());
     eval_script(program, expected);
 }
 
@@ -284,6 +284,32 @@ fn int_index() {
         assert(0, i[7])
         assert(0, i[700])
     ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn objects() {
+    let program = r#"
+        assert(nil, Object.superclass)
+        assert(Object, Module.superclass)
+        assert(Module, Class.superclass)
+        assert(Object, Integer.superclass)
+        assert(Object, Regexp.superclass)
+        assert(Object, String.superclass)
+        assert(Object, Range.superclass)
+        assert(Object, Proc.superclass)
+        assert(Object, Method.superclass)
+
+        assert(Class, Module.class)
+        assert(Class, Class.class)
+        assert(Class, Integer.class)
+        assert(Class, Regexp.class)
+        assert(Class, String.class)
+        assert(Class, Range.class)
+        assert(Class, Proc.class)
+        assert(Class, Method.class)
+    "#;
     let expected = Value::Nil;
     eval_script(program, expected);
 }
@@ -667,7 +693,10 @@ fn array1() {
     let program = "
     assert([1,2,3]*0, [])
     assert([1,2,3]*1, [1,2,3])
-    assert([nil]*5, [nil,nil,nil,nil,nil])";
+    assert([nil]*5, [nil,nil,nil,nil,nil])
+    assert([1,2,3]+[3,4,5], [1,2,3,3,4,5])
+    assert([1,2,3]-[3,4,5], [1,2])
+    ";
     let expected = Value::Nil;
     eval_script(program, expected);
 }
@@ -1267,7 +1296,7 @@ fn is_a() {
         obj = S.new
         assert true, obj.is_a?(S)
         assert true, obj.is_a?(C)
-        assert true, obj.is_a?(Object)
+        #assert true, obj.is_a?(Object)
         assert false, obj.is_a?(Integer)
         assert false, obj.is_a?(Array)
         assert false, obj.is_a?(M)

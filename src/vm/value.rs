@@ -17,9 +17,9 @@ pub enum Value {
     Bool(bool),
     FixNum(i64),
     FloatNum(f64),
-    String(Box<String>),
+    String(String),
     Symbol(IdentId),
-    Object(ObjectRef),
+    Object(ObjectInfo),
     Char(u8),
 }
 
@@ -145,8 +145,9 @@ impl Value {
     }
 
     fn pack_fixnum(num: i64) -> u64 {
-        let top = ((num as u64) >> 62) & 0b11;
-        if top == 0b00 || top == 0b11 {
+        let mut top = (num as u64) >> 62;
+        top = top ^ (top >> 1);
+        if top & 0b1 == 0 {
             ((num << 1) as u64) | 0b1
         } else {
             Value::pack_as_boxed(Value::FixNum(num))
@@ -186,9 +187,21 @@ impl std::hash::Hash for PackedValue {
         if self.is_packed_value() {
             self.0.hash(state);
         } else {
-            let lhs = unsafe { (*(self.0 as *mut Value)).clone() };
+            let lhs = unsafe { &(*(self.0 as *mut Value)) };
             match lhs {
+                Value::FixNum(lhs) => lhs.hash(state),
+                Value::FloatNum(lhs) => (*lhs as u64).hash(state),
                 Value::String(lhs) => lhs.hash(state),
+                Value::Object(lhs) => match lhs.kind {
+                    ObjKind::Array(lhs) => lhs.elements.hash(state),
+                    ObjKind::Hash(lhs) => {
+                        for (key, val) in lhs.map.iter() {
+                            key.hash(state);
+                            val.hash(state);
+                        }
+                    }
+                    _ => self.0.hash(state),
+                },
                 _ => self.0.hash(state),
             };
         }
@@ -196,40 +209,29 @@ impl std::hash::Hash for PackedValue {
 }
 
 impl PartialEq for PackedValue {
+    // Object#eql?()
+    // This type of equality is used for comparison for keys of Hash.
+    // Regexp, Array, Hash must be implemented.
     fn eq(&self, other: &Self) -> bool {
-        if self.0 == other.0 {
-            return true;
-        };
-        match (self.unpack(), other.unpack()) {
-            (Value::Nil, Value::Nil) => true,
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => lhs as f64 == rhs,
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => lhs == rhs as f64,
-            (Value::String(lhs), Value::String(rhs)) => lhs == rhs,
-            (Value::Bool(lhs), Value::Bool(rhs)) => lhs == rhs,
-            (Value::Symbol(lhs), Value::Symbol(rhs)) => lhs == rhs,
-
-            (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
-                    if lhs.elements.len() != rhs.elements.len() {
-                        false
-                    } else {
-                        for i in 0..lhs.elements.len() {
-                            if lhs.elements[i] != rhs.elements[i] {
-                                return false;
-                            };
-                        }
-                        true
-                    }
-                }
-                _ => lhs == rhs,
-            },
-            _ => false,
+        if self.is_packed_value() || other.is_packed_value() {
+            self.0 == other.0
+        } else {
+            let lhs = unsafe { &(*(self.0 as *mut Value)) };
+            let rhs = unsafe { &(*(other.0 as *mut Value)) };
+            match (lhs, rhs) {
+                (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
+                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
+                (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
+                (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                    (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.map == rhs.map,
+                    _ => lhs.kind == rhs.kind,
+                },
+                _ => self.0 == other.0,
+            }
         }
     }
 }
-
 impl Eq for PackedValue {}
 
 impl PackedValue {
@@ -242,28 +244,81 @@ impl PackedValue {
             Value::FloatNum(self.as_packed_flonum())
         } else if self.is_packed_symbol() {
             Value::Symbol(self.as_packed_symbol())
-        } else if self.0 == NIL_VALUE {
-            Value::Nil
-        } else if self.0 == TRUE_VALUE {
-            Value::Bool(true)
-        } else if self.0 == FALSE_VALUE {
-            Value::Bool(false)
-        } else if self.0 == UNINITIALIZED {
-            Value::Uninitialized
         } else {
-            unreachable!("Illegal packed value.")
+            match self.0 {
+                NIL_VALUE => Value::Nil,
+                TRUE_VALUE => Value::Bool(true),
+                FALSE_VALUE => Value::Bool(false),
+                UNINITIALIZED => Value::Uninitialized,
+                _ => unreachable!("Illegal packed value."),
+            }
         }
     }
 
-    pub fn get_class(&self, globals: &Globals) -> ClassRef {
-        match self.unpack() {
-            Value::FixNum(_) => globals.integer_class,
-            Value::String(_) => globals.string_class,
-            Value::Object(oref) => oref.classref,
-            _ => globals.object_class,
+    pub fn id(&self) -> u64 {
+        self.0
+    }
+
+    pub fn get_class_object_for_method(&self, globals: &Globals) -> PackedValue {
+        match self.is_object() {
+            Some(oref) => oref.class(),
+            None => match self.unpack() {
+                Value::FixNum(_) => globals.integer,
+                Value::String(_) => globals.string,
+                _ => globals.object,
+            },
         }
     }
 
+    pub fn get_class_object(&self, globals: &Globals) -> PackedValue {
+        match self.is_object() {
+            Some(oref) => oref.search_class(),
+            None => match self.unpack() {
+                Value::FixNum(_) => globals.integer,
+                Value::String(_) => globals.string,
+                _ => globals.object,
+            },
+        }
+    }
+
+    pub fn superclass(&self) -> Option<PackedValue> {
+        match self.as_module() {
+            Some(class) => {
+                let superclass = class.superclass;
+                if superclass.is_nil() {
+                    None
+                } else {
+                    Some(superclass)
+                }
+            }
+            None => None,
+        }
+    }
+
+    pub fn set_var(&mut self, id: IdentId, val: PackedValue) {
+        self.as_object().set_var(id, val);
+    }
+
+    pub fn get_var(&self, id: IdentId) -> Option<PackedValue> {
+        self.as_object().get_var(id)
+    }
+
+    pub fn set_var_if_exists(&self, id: IdentId, val: PackedValue) -> bool {
+        match self.as_object().get_mut_var(id) {
+            Some(entry) => {
+                *entry = val;
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
+        self.as_class().method_table.get(&id).cloned()
+    }
+}
+
+impl PackedValue {
     pub fn is_packed_fixnum(&self) -> bool {
         self.0 & 0b1 == 1
     }
@@ -326,20 +381,28 @@ impl PackedValue {
         }
     }
 
-    pub fn as_object(&self) -> Option<ObjectRef> {
+    pub fn as_object(&self) -> ObjectRef {
+        self.is_object().unwrap()
+    }
+
+    pub fn is_object(&self) -> Option<ObjectRef> {
         if self.is_packed_value() {
             return None;
         }
         unsafe {
-            match *(self.0 as *mut Value) {
-                Value::Object(oref) => Some(oref),
+            match &*(self.0 as *mut Value) {
+                Value::Object(oref) => Some(oref.as_ref()),
                 _ => None,
             }
         }
     }
 
-    pub fn as_class(&self) -> Option<ClassRef> {
-        match self.as_object() {
+    pub fn as_class(&self) -> ClassRef {
+        self.is_class().unwrap()
+    }
+
+    pub fn is_class(&self) -> Option<ClassRef> {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) => Some(cref),
                 _ => None,
@@ -349,7 +412,7 @@ impl PackedValue {
     }
 
     pub fn as_module(&self) -> Option<ClassRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) | ObjKind::Module(cref) => Some(cref),
                 _ => None,
@@ -359,7 +422,7 @@ impl PackedValue {
     }
 
     pub fn as_array(&self) -> Option<ArrayRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Array(aref) => Some(aref),
                 _ => None,
@@ -369,7 +432,7 @@ impl PackedValue {
     }
 
     pub fn as_splat(&self) -> Option<ArrayRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::SplatArray(aref) => Some(aref),
                 _ => None,
@@ -379,7 +442,7 @@ impl PackedValue {
     }
 
     pub fn as_hash(&self) -> Option<HashRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Hash(href) => Some(href),
                 _ => None,
@@ -389,7 +452,7 @@ impl PackedValue {
     }
 
     pub fn as_regexp(&self) -> Option<regexp::RegexpRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Regexp(regref) => Some(regref),
                 _ => None,
@@ -398,10 +461,10 @@ impl PackedValue {
         }
     }
 
-    pub fn as_range(&self) -> Option<RangeRef> {
-        match self.as_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Range(rref) => Some(rref),
+    pub fn as_range(&self) -> Option<RangeInfo> {
+        match self.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Range(info) => Some(info.clone()),
                 _ => None,
             },
             None => None,
@@ -409,7 +472,7 @@ impl PackedValue {
     }
 
     pub fn as_proc(&self) -> Option<procobj::ProcRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
                 _ => None,
@@ -419,7 +482,7 @@ impl PackedValue {
     }
 
     pub fn as_method(&self) -> Option<method::MethodObjRef> {
-        match self.as_object() {
+        match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Method(mref) => Some(mref),
                 _ => None,
@@ -503,7 +566,7 @@ impl PackedValue {
     }
 
     pub fn string(string: String) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::String(Box::new(string))))
+        PackedValue(Value::pack_as_boxed(Value::String(string)))
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -511,45 +574,60 @@ impl PackedValue {
         PackedValue((id as u64) << 32 | TAG_SYMBOL)
     }
 
-    pub fn object(obj_ref: ObjectRef) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::Object(obj_ref)))
+    fn object(obj_info: ObjectInfo) -> Self {
+        PackedValue(Value::pack_as_boxed(Value::Object(obj_info)))
+    }
+
+    pub fn bootstrap_class(classref: ClassRef) -> Self {
+        PackedValue::object(ObjectInfo::new_bootstrap(classref))
+    }
+
+    pub fn ordinary_object(class: PackedValue) -> Self {
+        PackedValue::object(ObjectInfo::new_ordinary(class))
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectRef::new_class(globals, class_ref))
+        PackedValue::object(ObjectInfo::new_class(globals, class_ref))
+    }
+
+    pub fn plain_class(globals: &Globals, class_ref: ClassRef) -> Self {
+        PackedValue::object(ObjectInfo::new_class(globals, class_ref))
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectRef::new_module(globals, class_ref))
+        PackedValue::object(ObjectInfo::new_module(globals, class_ref))
     }
 
     pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
-        PackedValue::object(ObjectRef::new_array(globals, array_ref))
+        PackedValue::object(ObjectInfo::new_array(globals, array_ref))
     }
 
     pub fn array_from(globals: &Globals, ary: Vec<PackedValue>) -> Self {
-        PackedValue::object(ObjectRef::new_array(globals, ArrayRef::from(ary)))
+        PackedValue::object(ObjectInfo::new_array(globals, ArrayRef::from(ary)))
     }
 
     pub fn splat(globals: &Globals, array_ref: ArrayRef) -> Self {
-        PackedValue::object(ObjectRef::new_splat(globals, array_ref))
+        PackedValue::object(ObjectInfo::new_splat(globals, array_ref))
     }
 
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
-        PackedValue::object(ObjectRef::new_hash(globals, hash_ref))
+        PackedValue::object(ObjectInfo::new_hash(globals, hash_ref))
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: regexp::RegexpRef) -> Self {
-        PackedValue::object(ObjectRef::new_regexp(globals, regexp_ref))
+        PackedValue::object(ObjectInfo::new_regexp(globals, regexp_ref))
     }
 
     pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
-        let rref = range::RangeRef::new_range(start, end, exclude);
-        PackedValue::object(ObjectRef::new_range(globals, rref))
+        let info = RangeInfo::new(start, end, exclude);
+        PackedValue::object(ObjectInfo::new_range(globals, info))
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        PackedValue::object(ObjectRef::new_proc(globals, context))
+        PackedValue::object(ObjectInfo::new_proc(
+            globals,
+            procobj::ProcRef::from(context),
+        ))
     }
 
     pub fn method(
@@ -558,7 +636,65 @@ impl PackedValue {
         receiver: PackedValue,
         method: MethodRef,
     ) -> Self {
-        PackedValue::object(ObjectRef::new_method(globals, name, receiver, method))
+        PackedValue::object(ObjectInfo::new_method(
+            globals,
+            MethodObjRef::from(name, receiver, method),
+        ))
+    }
+}
+
+impl PackedValue {
+    // ==
+    pub fn equal(self, other: PackedValue) -> bool {
+        if self.id() == other.id() {
+            return true;
+        };
+        match (self.is_packed_num(), other.is_packed_num()) {
+            (false, false) => {}
+            (true, true) => match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
+                (true, false) => return self.as_packed_fixnum() as f64 == other.as_packed_flonum(),
+                (false, true) => return self.as_packed_flonum() == other.as_packed_fixnum() as f64,
+                _ => return false,
+            },
+            _ => return false,
+        }
+        if self.is_packed_symbol() || other.is_packed_symbol() {
+            return false;
+        }
+        match (&self.unpack(), &other.unpack()) {
+            (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
+            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
+            (Value::FixNum(lhs), Value::FloatNum(rhs)) => *lhs as f64 == *rhs,
+            (Value::FloatNum(lhs), Value::FixNum(rhs)) => *lhs == *rhs as f64,
+            (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
+            (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                    let lhs = &lhs.elements;
+                    let rhs = &rhs.elements;
+                    if lhs.len() != rhs.len() {
+                        return false;
+                    }
+                    for i in 0..lhs.len() {
+                        if !lhs[i].equal(rhs[i]) {
+                            return false;
+                        }
+                    }
+                    true
+                }
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                    if lhs.start.equal(rhs.start)
+                        && lhs.end.equal(rhs.end)
+                        && lhs.exclude == rhs.exclude
+                    {
+                        true
+                    } else {
+                        false
+                    }
+                }
+                (_, _) => false,
+            },
+            _ => false,
+        }
     }
 }
 
@@ -714,7 +850,7 @@ mod tests {
 
     #[test]
     fn pack_string() {
-        let expect = Value::String(Box::new("Ruby".to_string()));
+        let expect = Value::String("Ruby".to_string());
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -726,9 +862,9 @@ mod tests {
         let globals = Globals::new();
         let from = Value::FixNum(7).pack();
         let to = Value::FixNum(36).pack();
-        let expect = Value::Object(ObjectRef::new_range(
+        let expect = Value::Object(ObjectInfo::new_range(
             &globals,
-            range::RangeRef::new_range(from, to, false),
+            RangeInfo::new(from, to, false),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {
@@ -739,9 +875,9 @@ mod tests {
     #[test]
     fn pack_class() {
         let globals = Globals::new();
-        let expect = Value::Object(ObjectRef::new_class(
+        let expect = Value::Object(ObjectInfo::new_class(
             &globals,
-            ClassRef::from_no_superclass(IdentId::from(1usize)),
+            ClassRef::from(IdentId::from(1), None),
         ));
         let got = expect.clone().pack().unpack();
         if expect != got {
@@ -751,8 +887,10 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let class_ref = ClassRef::from_no_superclass(IdentId::from(1usize));
-        let expect = Value::Object(ObjectRef::from(class_ref));
+        let globals = Globals::new();
+        let class_ref = ClassRef::from(IdentId::from(1), None);
+        let class = PackedValue::class(&globals, class_ref);
+        let expect = Value::Object(ObjectInfo::new_ordinary(class));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -761,7 +899,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        let expect = Value::Symbol(IdentId::from(12345usize));
+        let expect = Value::Symbol(IdentId::from(12345));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

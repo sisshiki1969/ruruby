@@ -71,6 +71,7 @@ pub struct ISeqInfo {
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
+    pub class_stack: Option<Vec<PackedValue>>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
 }
@@ -105,6 +106,7 @@ impl ISeqInfo {
             iseq,
             lvar,
             lvars,
+            class_stack: None,
             iseq_sourcemap,
             source_info,
         }
@@ -121,7 +123,7 @@ impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
             table: vec![MethodInfo::AttrReader {
-                id: IdentId::from(1usize),
+                id: IdentId::from(1),
             }],
             method_id: 1,
         }
@@ -169,12 +171,11 @@ impl MethodObjRef {
     }
 }
 
-pub fn init_method(globals: &mut Globals) -> ClassRef {
+pub fn init_method(globals: &mut Globals) -> PackedValue {
     let proc_id = globals.get_ident_id("Method");
-    let method = ClassRef::from(proc_id, globals.object_class);
-    globals.add_builtin_instance_method(method, "call", method_call);
-    //globals.add_builtin_class_method(method, "new", proc_new);
-    method
+    let class = ClassRef::from(proc_id, globals.object);
+    globals.add_builtin_instance_method(class, "call", method_call);
+    PackedValue::class(globals, class)
 }
 
 fn method_call(
@@ -188,6 +189,6 @@ fn method_call(
         None => return Err(vm.error_unimplemented("Expected Method object.")),
     };
     vm.eval_send(method.method, method.receiver, args, None, block)?;
-    let res = vm.exec_stack.pop().unwrap();
+    let res = vm.stack_pop();
     Ok(res)
 }
