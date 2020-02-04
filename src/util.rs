@@ -193,7 +193,7 @@ impl SourceInfo {
                 .iter()
                 .map(|x| calc_width(x))
                 .sum();
-            let is_cr = self.code[loc.1 as usize] == '\n';
+            let is_cr = loc.1 as usize >= self.code.len() || self.code[loc.1 as usize] == '\n';
             eprintln!("line: {}", line.0);
             eprintln!(
                 "{}",

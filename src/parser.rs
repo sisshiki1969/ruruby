@@ -643,6 +643,9 @@ impl Parser {
 
     fn parse_arglist(&mut self) -> Result<(Vec<Node>, Vec<(IdentId, Node)>), RubyError> {
         let first_arg = self.parse_arg()?;
+        if self.is_line_term()? {
+            return Ok((vec![first_arg], vec![]));
+        }
 
         if first_arg.is_operation() && self.is_command()? {
             let nodes =
@@ -652,7 +655,7 @@ impl Parser {
 
         let mut args = vec![first_arg];
         let mut kw_args = vec![];
-        if self.consume_punct(Punct::Comma)? {
+        if self.consume_punct_no_term(Punct::Comma)? {
             let res = self.parse_args(None)?;
             let mut new_args = res.0;
             kw_args = res.1;
@@ -1006,84 +1009,78 @@ impl Parser {
             }
         }
         loop {
-            let tok = self.peek()?;
-            node = match tok.kind {
-                TokenKind::Punct(Punct::Dot) => {
-                    // PRIMARY-METHOD :
-                    // | PRIMARY . FNAME BLOCK => completed: true
-                    // | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
-                    // | PRIMARY . FNAME => completed: false
-                    self.get()?;
-                    let tok = self.get()?.clone();
-                    let method = match &tok.kind {
-                        TokenKind::Ident(s, has_suffix) => {
-                            if *has_suffix {
-                                if self.consume_punct_no_term(Punct::Question)? {
-                                    s.clone() + "?"
-                                } else if self.consume_punct_no_term(Punct::Not)? {
-                                    s.clone() + "!"
-                                } else {
-                                    s.clone()
-                                }
+            //let tok = self.peek()?;
+            node = if self.consume_punct(Punct::Dot)? {
+                // PRIMARY-METHOD :
+                // | PRIMARY . FNAME BLOCK => completed: true
+                // | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
+                // | PRIMARY . FNAME => completed: false
+                let tok = self.get()?.clone();
+                let method = match &tok.kind {
+                    TokenKind::Ident(s, has_suffix) => {
+                        if *has_suffix {
+                            if self.consume_punct_no_term(Punct::Question)? {
+                                s.clone() + "?"
+                            } else if self.consume_punct_no_term(Punct::Not)? {
+                                s.clone() + "!"
                             } else {
                                 s.clone()
                             }
+                        } else {
+                            s.clone()
                         }
-                        TokenKind::Reserved(r) => {
-                            let string = self.lexer.get_string_from_reserved(*r);
-                            string.clone()
-                        }
-                        _ => {
-                            return Err(self
-                                .error_unexpected(tok.loc(), "method name must be an identifier."))
-                        }
-                    };
-                    let id = self.get_ident_id(method);
-                    let mut args = vec![];
-                    let mut kw_args = vec![];
-                    let mut completed = false;
-                    if self.consume_punct_no_term(Punct::LParen)? {
-                        let res = self.parse_args(Punct::RParen)?;
-                        args = res.0;
-                        kw_args = res.1;
-                        completed = true;
                     }
-                    let block = self.parse_block()?;
-                    if block.is_some() {
-                        completed = true;
-                    };
-                    let node = match node.kind {
-                        NodeKind::Ident(id, _) => {
-                            Node::new_send(Node::new_self(loc), id, vec![], vec![], None, true, loc)
-                        }
-                        _ => node,
-                    };
-                    Node::new_send(
-                        node,
-                        id,
-                        args,
-                        kw_args,
-                        block,
-                        completed,
-                        loc.merge(self.prev_loc()),
-                    )
+                    TokenKind::Reserved(r) => {
+                        let string = self.lexer.get_string_from_reserved(*r);
+                        string.clone()
+                    }
+                    _ => {
+                        return Err(
+                            self.error_unexpected(tok.loc(), "method name must be an identifier.")
+                        )
+                    }
+                };
+                let id = self.get_ident_id(method);
+                let mut args = vec![];
+                let mut kw_args = vec![];
+                let mut completed = false;
+                if self.consume_punct_no_term(Punct::LParen)? {
+                    let res = self.parse_args(Punct::RParen)?;
+                    args = res.0;
+                    kw_args = res.1;
+                    completed = true;
                 }
-                TokenKind::Punct(Punct::LBracket) => {
-                    if node.is_operation() {
-                        return Ok(node);
-                    };
-                    self.get()?;
-                    let (mut args, _) = self.parse_args(Punct::RBracket)?;
-                    args.reverse();
-                    Node::new_array_member(node, args)
-                }
-                TokenKind::Punct(Punct::Scope) => {
-                    self.get()?;
-                    let id = self.expect_const()?;
-                    Node::new_scope(node, id, self.prev_loc())
-                }
-                _ => return Ok(node),
-            }
+                let block = self.parse_block()?;
+                if block.is_some() {
+                    completed = true;
+                };
+                let node = match node.kind {
+                    NodeKind::Ident(id, _) => {
+                        Node::new_send(Node::new_self(loc), id, vec![], vec![], None, true, loc)
+                    }
+                    _ => node,
+                };
+                Node::new_send(
+                    node,
+                    id,
+                    args,
+                    kw_args,
+                    block,
+                    completed,
+                    loc.merge(self.prev_loc()),
+                )
+            } else if self.consume_punct_no_term(Punct::Scope)? {
+                let id = self.expect_const()?;
+                Node::new_scope(node, id, self.prev_loc())
+            } else if node.is_operation() {
+                return Ok(node);
+            } else if self.consume_punct_no_term(Punct::LBracket)? {
+                let (mut args, _) = self.parse_args(Punct::RBracket)?;
+                args.reverse();
+                Node::new_array_member(node, args)
+            } else {
+                return Ok(node);
+            };
         }
     }
 

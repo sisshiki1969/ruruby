@@ -18,6 +18,7 @@ impl Builtin {
         globals.add_builtin_method("to_s", builtin_tos);
         globals.add_builtin_method("Integer", builtin_integer);
         globals.add_builtin_method("__dir__", builtin_dir);
+        globals.add_builtin_method("raise", builtin_raise);
 
         /// Built-in function "puts".
         fn builtin_puts(
@@ -280,6 +281,19 @@ impl Builtin {
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
             Ok(PackedValue::string(path.to_string_lossy().to_string()))
+        }
+
+        fn builtin_raise(
+            vm: &mut VM,
+            _receiver: PackedValue,
+            args: VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            vm.check_args_num(args.len(), 0, 2)?;
+            for i in 0..args.len() {
+                eprintln!("{}", vm.val_pp(args[i]));
+            }
+            Err(vm.error_unimplemented("error"))
         }
     }
 }
