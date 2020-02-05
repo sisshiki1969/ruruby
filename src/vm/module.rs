@@ -15,7 +15,7 @@ pub fn init_module(globals: &mut Globals) {
 fn constants(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let v: Vec<PackedValue> = receiver
@@ -30,7 +30,7 @@ fn constants(
 fn instance_methods(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut class = vm.val_as_module(receiver)?;
@@ -74,7 +74,7 @@ fn instance_methods(
 fn attr_accessor(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     for arg in args.iter() {
@@ -92,7 +92,7 @@ fn attr_accessor(
 fn attr_reader(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     for arg in args.iter() {
@@ -109,7 +109,7 @@ fn attr_reader(
 fn attr_writer(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     for arg in args.iter() {
@@ -150,7 +150,7 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
 fn module_function(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     Ok(receiver)
@@ -159,7 +159,7 @@ fn module_function(
 fn singleton_class(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = vm.val_as_module(receiver)?;

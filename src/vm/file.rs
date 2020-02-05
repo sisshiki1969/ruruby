@@ -14,7 +14,7 @@ pub fn init_file(globals: &mut Globals) -> PackedValue {
 fn join(
     vm: &mut VM,
     _receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;

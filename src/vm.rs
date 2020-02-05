@@ -165,14 +165,8 @@ impl VM {
             false,
         )?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
-        self.vm_run(
-            self.globals.main_object,
-            iseq,
-            None,
-            VecArray::new0(),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new0();
+        self.vm_run(self.globals.main_object, iseq, None, &arg, None, None)?;
         let val = self.stack_pop();
         #[cfg(feature = "perf")]
         {
@@ -230,7 +224,7 @@ impl VM {
         self_value: PackedValue,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
-        args: VecArray,
+        args: &VecArray,
         kw_arg: Option<PackedValue>,
         block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
@@ -787,7 +781,7 @@ impl VM {
                     } else {
                         None
                     };
-                    self.eval_send(methodref, receiver, args, keyword, block)?;
+                    self.eval_send(methodref, receiver, &args, keyword, block)?;
                     self.pc += 21;
                 }
                 Inst::SEND_SELF => {
@@ -812,7 +806,7 @@ impl VM {
                     } else {
                         None
                     };
-                    self.eval_send(methodref, receiver, args, keyword, block)?;
+                    self.eval_send(methodref, receiver, &args, keyword, block)?;
                     self.pc += 21;
                 }
                 Inst::DEF_CLASS => {
@@ -860,7 +854,8 @@ impl VM {
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
                     method.as_iseq(&self)?.class_stack = Some(class_stack);
-                    self.eval_send(methodref, val, VecArray::new0(), None, None)?;
+                    let arg = VecArray::new0();
+                    self.eval_send(methodref, val, &arg, None, None)?;
                     self.pc += 10;
                     self.class_stack.pop().unwrap();
                 }
@@ -1198,7 +1193,8 @@ impl VM {
     ) -> Result<(), RubyError> {
         match l_ref.get_instance_method(method) {
             Some(mref) => {
-                self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
+                let arg = VecArray::new1(rhs);
+                self.eval_send(mref.clone(), lhs, &arg, None, None)?;
                 Ok(())
             }
             None => {
@@ -1400,7 +1396,8 @@ impl VM {
                     let method = IdentId::_POW;
                     match l_ref.as_ref().get_instance_method(method) {
                         Some(mref) => {
-                            self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
+                            let arg = VecArray::new1(rhs);
+                            self.eval_send(mref.clone(), lhs, &arg, None, None)?;
                         }
                         None => return Err(self.error_undefined_op("**", rhs, lhs)),
                     };
@@ -1420,7 +1417,8 @@ impl VM {
                 let method = self.globals.get_ident_id("<<");
                 match l_ref.as_ref().get_instance_method(method) {
                     Some(mref) => {
-                        self.eval_send(mref.clone(), lhs, VecArray::new1(rhs), None, None)?;
+                        let arg = VecArray::new1(rhs);
+                        self.eval_send(mref.clone(), lhs, &arg, None, None)?;
                         Ok(self.stack_pop())
                     }
                     None => return Err(self.error_undefined_op("<<", rhs, lhs)),
@@ -1634,7 +1632,7 @@ impl VM {
         &mut self,
         methodref: MethodRef,
         receiver: PackedValue,
-        args: VecArray,
+        args: &VecArray,
         keyword: Option<PackedValue>,
         block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
@@ -1674,7 +1672,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = iseq.clone();
-                self.vm_run(receiver, iseq, None, args, keyword, block)?;
+                self.vm_run(receiver, iseq, None, &args, keyword, block)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);

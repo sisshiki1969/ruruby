@@ -68,7 +68,7 @@ impl Context {
         }
     }
 
-    pub fn set_arguments(&mut self, globals: &Globals, args: VecArray) {
+    pub fn set_arguments(&mut self, globals: &Globals, args: &VecArray) {
         let arg_len = args.len();
         let req_len = self.iseq_ref.req_params;
         let opt_len = self.iseq_ref.opt_params;

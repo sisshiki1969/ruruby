@@ -34,7 +34,7 @@ pub fn init_range(globals: &mut Globals) -> PackedValue {
 fn range_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let len = args.len();
@@ -51,7 +51,7 @@ fn range_new(
 fn range_begin(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let range = receiver.as_range().unwrap();
@@ -61,7 +61,7 @@ fn range_begin(
 fn range_end(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let range = receiver.as_range().unwrap();
@@ -71,7 +71,7 @@ fn range_end(
 fn range_first(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let range = receiver.as_range().unwrap();
@@ -97,7 +97,7 @@ fn range_first(
 fn range_last(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let range = receiver.as_range().unwrap();
@@ -123,7 +123,7 @@ fn range_last(
 fn range_map(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let range = receiver.as_range().unwrap();
@@ -136,14 +136,8 @@ fn range_map(
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "Start")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        vm.vm_run(
-            context.self_value,
-            iseq,
-            Some(context),
-            VecArray::new1(PackedValue::fixnum(i)),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new1(PackedValue::fixnum(i));
+        vm.vm_run(context.self_value, iseq, Some(context), &arg, None, None)?;
         res.push(vm.stack_pop());
     }
     let res = PackedValue::array_from(&vm.globals, res);
@@ -153,7 +147,7 @@ fn range_map(
 fn range_toa(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let range = receiver.as_range().unwrap();

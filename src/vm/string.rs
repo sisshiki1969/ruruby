@@ -17,7 +17,7 @@ pub fn init_string(globals: &mut Globals) -> PackedValue {
 fn string_start_with(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
@@ -33,7 +33,7 @@ fn string_start_with(
 fn string_to_sym(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
@@ -45,7 +45,7 @@ fn string_to_sym(
 fn string_split(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
@@ -100,7 +100,7 @@ fn string_split(
 fn string_gsub(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
@@ -123,7 +123,7 @@ fn string_gsub(
 fn string_rmatch(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
@@ -143,7 +143,7 @@ fn string_rmatch(
 fn string_tr(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
@@ -157,7 +157,7 @@ fn string_tr(
 fn string_size(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;

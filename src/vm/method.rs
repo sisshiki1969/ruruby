@@ -1,7 +1,7 @@
 use crate::vm::*;
 
 pub type BuiltinFunc =
-    fn(vm: &mut VM, receiver: PackedValue, args: VecArray, block: Option<MethodRef>) -> VMResult;
+    fn(vm: &mut VM, receiver: PackedValue, args: &VecArray, block: Option<MethodRef>) -> VMResult;
 
 pub type MethodTable = HashMap<IdentId, MethodRef>;
 
@@ -181,7 +181,7 @@ pub fn init_method(globals: &mut Globals) -> PackedValue {
 fn method_call(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let method = match receiver.as_method() {

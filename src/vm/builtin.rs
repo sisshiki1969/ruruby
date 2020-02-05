@@ -24,7 +24,7 @@ impl Builtin {
         fn builtin_puts(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             fn flatten(vm: &VM, val: PackedValue) {
@@ -46,7 +46,7 @@ impl Builtin {
         fn builtin_p(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             for arg in args.iter() {
@@ -63,7 +63,7 @@ impl Builtin {
         fn builtin_print(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             for arg in args.iter() {
@@ -82,7 +82,7 @@ impl Builtin {
         fn builtin_assert(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             if args.len() != 2 {
@@ -103,7 +103,7 @@ impl Builtin {
         fn builtin_require(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
@@ -120,7 +120,7 @@ impl Builtin {
         fn builtin_require_relative(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
@@ -176,7 +176,7 @@ impl Builtin {
         fn builtin_block_given(
             vm: &mut VM,
             _receiver: PackedValue,
-            _args: VecArray,
+            _args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             Ok(PackedValue::bool(vm.context().block.is_some()))
@@ -185,7 +185,7 @@ impl Builtin {
         fn builtin_method(
             vm: &mut VM,
             receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
@@ -202,7 +202,7 @@ impl Builtin {
         fn builtin_isa(
             vm: &mut VM,
             receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
@@ -221,7 +221,7 @@ impl Builtin {
         fn builtin_tos(
             vm: &mut VM,
             receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
@@ -232,7 +232,7 @@ impl Builtin {
         fn builtin_integer(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
@@ -274,7 +274,7 @@ impl Builtin {
         fn builtin_dir(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
@@ -286,7 +286,7 @@ impl Builtin {
         fn builtin_raise(
             vm: &mut VM,
             _receiver: PackedValue,
-            args: VecArray,
+            args: &VecArray,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 0, 2)?;

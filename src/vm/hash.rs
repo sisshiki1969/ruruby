@@ -47,7 +47,7 @@ pub fn init_hash(globals: &mut Globals) -> PackedValue {
 fn hash_clear(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut hash = receiver.as_hash().unwrap();
@@ -58,7 +58,7 @@ fn hash_clear(
 fn hash_clone(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let hash = receiver.as_hash().unwrap();
@@ -68,7 +68,7 @@ fn hash_clone(
 fn hash_compact(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut hash = receiver.as_hash().unwrap().dup();
@@ -79,7 +79,7 @@ fn hash_compact(
 fn hash_delete(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
@@ -94,7 +94,7 @@ fn hash_delete(
 fn hash_empty(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let hash = receiver.as_hash().unwrap();
@@ -104,7 +104,7 @@ fn hash_empty(
 fn hash_select(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let hash = receiver.as_hash().unwrap();
@@ -115,14 +115,8 @@ fn hash_select(
     let mut res = HashMap::new();
     let context = vm.context();
     for (k, v) in hash.map.iter() {
-        vm.vm_run(
-            context.self_value,
-            iseq,
-            Some(context),
-            VecArray::new2(k.clone(), v.clone()),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new2(k.clone(), v.clone());
+        vm.vm_run(context.self_value, iseq, Some(context), &arg, None, None)?;
         let b = vm.stack_pop();
         if vm.val_to_bool(b) {
             res.insert(k.clone(), v.clone());
@@ -134,7 +128,7 @@ fn hash_select(
 fn hash_has_key(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
@@ -145,7 +139,7 @@ fn hash_has_key(
 fn hash_has_value(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
@@ -157,7 +151,7 @@ fn hash_has_value(
 fn hash_length(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let hash = receiver.as_hash().unwrap();
@@ -168,7 +162,7 @@ fn hash_length(
 fn hash_keys(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let hash = receiver.as_hash().unwrap();
@@ -182,7 +176,7 @@ fn hash_keys(
 fn hash_values(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let hash = receiver.as_hash().unwrap();
@@ -196,7 +190,7 @@ fn hash_values(
 fn each_value(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
@@ -207,21 +201,15 @@ fn each_value(
     };
     let context = vm.context();
     for (_, v) in &hash.map {
-        vm.vm_run(
-            context.self_value,
-            iseq,
-            Some(context),
-            VecArray::new1(v.clone()),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new1(v.clone());
+        vm.vm_run(context.self_value, iseq, Some(context), &arg, None, None)?;
         vm.stack_pop();
     }
     let res = receiver;
     Ok(res)
 }
 
-fn each(vm: &mut VM, receiver: PackedValue, args: VecArray, block: Option<MethodRef>) -> VMResult {
+fn each(vm: &mut VM, receiver: PackedValue, args: &VecArray, block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = receiver.as_hash().unwrap();
     let iseq = match block {
@@ -230,14 +218,8 @@ fn each(vm: &mut VM, receiver: PackedValue, args: VecArray, block: Option<Method
     };
     let context = vm.context();
     for (k, v) in &hash.map {
-        vm.vm_run(
-            context.self_value,
-            iseq,
-            Some(context),
-            VecArray::new2(k.clone(), v.clone()),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new2(k.clone(), v.clone());
+        vm.vm_run(context.self_value, iseq, Some(context), &arg, None, None)?;
         vm.stack_pop();
     }
     let res = receiver;

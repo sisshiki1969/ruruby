@@ -48,7 +48,7 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
 fn array_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 2)?;
@@ -79,7 +79,7 @@ fn array_new(
 fn array_push(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut aref = receiver
@@ -94,7 +94,7 @@ fn array_push(
 fn array_pop(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
@@ -108,7 +108,7 @@ fn array_pop(
 fn array_shift(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
@@ -124,7 +124,7 @@ fn array_shift(
 fn array_length(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
@@ -137,7 +137,7 @@ fn array_length(
 fn array_empty(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
@@ -150,7 +150,7 @@ fn array_empty(
 fn array_mul(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
@@ -183,7 +183,7 @@ fn array_mul(
 fn array_add(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut lhs = receiver
@@ -203,7 +203,7 @@ fn array_add(
 fn array_sub(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let lhs_v = &receiver
@@ -233,7 +233,7 @@ fn array_sub(
 fn array_map(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
@@ -246,14 +246,8 @@ fn array_map(
     let mut res = vec![];
     let context = vm.context();
     for i in &aref.elements {
-        vm.vm_run(
-            context.self_value,
-            iseq,
-            Some(context),
-            VecArray::new1(i.clone()),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new1(i.clone());
+        vm.vm_run(context.self_value, iseq, Some(context), &arg, None, None)?;
         res.push(vm.stack_pop());
     }
     let res = PackedValue::array_from(&vm.globals, res);
@@ -263,7 +257,7 @@ fn array_map(
 fn array_each(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let aref = receiver
@@ -275,14 +269,8 @@ fn array_each(
     };
     let context = vm.context();
     for i in &aref.elements {
-        vm.vm_run(
-            context.self_value,
-            iseq,
-            Some(context),
-            VecArray::new1(i.clone()),
-            None,
-            None,
-        )?;
+        let arg = VecArray::new1(i.clone());
+        vm.vm_run(context.self_value, iseq, Some(context), &arg, None, None)?;
         vm.stack_pop();
     }
     let res = receiver;
@@ -292,7 +280,7 @@ fn array_each(
 fn array_include(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let target = args[0];
@@ -306,7 +294,7 @@ fn array_include(
 fn array_reverse(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
@@ -321,7 +309,7 @@ fn array_reverse(
 fn array_reverse_(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
@@ -335,7 +323,7 @@ fn array_reverse_(
 fn array_transpose(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;

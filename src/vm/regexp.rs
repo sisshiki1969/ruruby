@@ -37,7 +37,7 @@ pub fn init_regexp(globals: &mut Globals) -> PackedValue {
 fn array_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.check_args_num(args.len(), 0, 2)?;
@@ -68,7 +68,7 @@ fn array_new(
 fn regexp_push(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let mut aref = receiver

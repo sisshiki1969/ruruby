@@ -60,7 +60,7 @@ pub fn init_class(globals: &mut Globals) {
 fn class_class_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let id = vm.globals.get_ident_id("nil");
@@ -74,14 +74,14 @@ fn class_class_new(
 fn class_new(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let new_instance = PackedValue::ordinary_object(receiver);
     // call initialize method.
     if let Some(methodref) = receiver.get_instance_method(IdentId::INITIALIZE) {
         let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;
-        vm.vm_run(new_instance, iseq, None, args, None, None)?;
+        vm.vm_run(new_instance, iseq, None, &args, None, None)?;
         vm.stack_pop();
     };
     Ok(new_instance)
@@ -90,7 +90,7 @@ fn class_new(
 fn superclass(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = vm.val_as_class(receiver)?;

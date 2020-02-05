@@ -194,7 +194,7 @@ pub fn init_object(globals: &mut Globals) {
 fn class(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let class = receiver.get_class_object(&vm.globals);
@@ -204,7 +204,7 @@ fn class(
 fn object_id(
     _vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let id = receiver.id();
@@ -214,7 +214,7 @@ fn object_id(
 fn singleton_class(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     vm.get_singleton_class(receiver)
@@ -223,14 +223,14 @@ fn singleton_class(
 fn inspect(
     vm: &mut VM,
     receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let inspect = vm.val_pp(receiver);
     Ok(PackedValue::string(inspect))
 }
 
-fn eql(vm: &mut VM, receiver: PackedValue, args: VecArray, _block: Option<MethodRef>) -> VMResult {
+fn eql(vm: &mut VM, receiver: PackedValue, args: &VecArray, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     Ok(PackedValue::bool(receiver == args[0]))
 }

@@ -33,7 +33,7 @@ pub fn init_proc(globals: &mut Globals) -> PackedValue {
 fn proc_new(
     vm: &mut VM,
     _receiver: PackedValue,
-    _args: VecArray,
+    _args: &VecArray,
     block: Option<MethodRef>,
 ) -> VMResult {
     let procobj = match block {
@@ -51,7 +51,7 @@ fn proc_new(
 fn proc_call(
     vm: &mut VM,
     receiver: PackedValue,
-    args: VecArray,
+    args: &VecArray,
     _block: Option<MethodRef>,
 ) -> VMResult {
     let pref = match receiver.as_proc() {
@@ -62,7 +62,7 @@ fn proc_call(
         pref.context.self_value,
         pref.context.iseq_ref,
         pref.context.outer,
-        args,
+        &args,
         None,
         None,
     )?;
