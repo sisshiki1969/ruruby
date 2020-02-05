@@ -181,7 +181,11 @@ pub fn init_object(globals: &mut Globals) {
     {
         use std::env;
         let id = globals.get_ident_id("ARGV");
-        let res = env::args().map(|x| PackedValue::string(x)).collect();
+        let res = env::args()
+            .enumerate()
+            .filter(|(i, _)| *i > 1)
+            .map(|(_, x)| PackedValue::string(x))
+            .collect();
         let argv = PackedValue::array_from(&globals, res);
         globals.object.set_var(id, argv);
     }

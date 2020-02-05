@@ -284,7 +284,12 @@ impl VM {
                 );
             }
             match iseq[self.pc] {
-                Inst::END | Inst::RETURN => {
+                Inst::END => {
+                    self.context_stack.pop().unwrap();
+                    self.pc = old_pc;
+                    return Ok(());
+                }
+                Inst::RETURN => {
                     self.context_stack.pop().unwrap();
                     self.pc = old_pc;
                     return Ok(());
