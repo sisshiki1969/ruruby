@@ -310,7 +310,7 @@ impl VM {
                     self.stack_push(PackedValue::fixnum(num as i64));
                 }
                 Inst::PUSH_FLONUM => {
-                    let num = unsafe { std::mem::transmute(read64(iseq, self.pc + 1)) };
+                    let num = f64::from_bits(read64(iseq, self.pc + 1));
                     self.pc += 9;
                     self.stack_push(PackedValue::flonum(num));
                 }

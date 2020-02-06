@@ -158,7 +158,7 @@ impl Value {
         if num == 0.0 {
             return ZERO;
         }
-        let unum: u64 = unsafe { std::mem::transmute(num) };
+        let unum = f64::to_bits(num);
         let exp = (unum >> 60) & 0b111;
         if exp == 4 || exp == 3 {
             ((unum & !(0b0110u64 << 60)) | (0b0100u64 << 60)).rotate_left(3)
@@ -526,7 +526,7 @@ impl PackedValue {
         }
         .rotate_right(3);
         //eprintln!("after  unpack:{:064b}", num);
-        unsafe { std::mem::transmute(num) }
+        f64::from_bits(num)
     }
 
     pub fn as_packed_symbol(&self) -> IdentId {

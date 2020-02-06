@@ -615,9 +615,9 @@ impl Codegen {
                     Inst::ADDI => format!("ADDI {}", read32(iseq, pc + 1) as i32),
                     Inst::SUBI => format!("SUBI {}", read32(iseq, pc + 1) as i32),
                     Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", read64(iseq, pc + 1) as i64),
-                    Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", unsafe {
-                        std::mem::transmute::<u64, f64>(read64(iseq, pc + 1))
-                    }),
+                    Inst::PUSH_FLONUM => {
+                        format!("PUSH_FLONUM {}", f64::from_bits(read64(iseq, pc + 1)))
+                    }
 
                     Inst::JMP => format!("JMP {:>05}", pc as i32 + 5 + read32(iseq, pc + 1) as i32),
                     Inst::JMP_IF_FALSE => format!(
@@ -747,7 +747,7 @@ impl Codegen {
             }
             NodeKind::Float(num) => {
                 iseq.push(Inst::PUSH_FLONUM);
-                unsafe { self.push64(iseq, std::mem::transmute(*num)) };
+                self.push64(iseq, f64::to_bits(*num));
             }
             NodeKind::String(s) => {
                 self.gen_string(globals, iseq, s);
