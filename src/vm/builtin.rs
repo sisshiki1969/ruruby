@@ -1,6 +1,7 @@
 use super::value::*;
 use crate::loader::*;
 use crate::vm::*;
+use rand;
 
 pub struct Builtin {}
 
@@ -19,6 +20,7 @@ impl Builtin {
         globals.add_builtin_method("Integer", builtin_integer);
         globals.add_builtin_method("__dir__", builtin_dir);
         globals.add_builtin_method("raise", builtin_raise);
+        globals.add_builtin_method("rand", builtin_rand);
 
         /// Built-in function "puts".
         fn builtin_puts(
@@ -294,6 +296,16 @@ impl Builtin {
                 eprintln!("{}", vm.val_pp(args[i]));
             }
             Err(vm.error_unimplemented("error"))
+        }
+
+        fn builtin_rand(
+            _vm: &mut VM,
+            _receiver: PackedValue,
+            _args: &VecArray,
+            _block: Option<MethodRef>,
+        ) -> VMResult {
+            let num = rand::random();
+            Ok(PackedValue::flonum(num))
         }
     }
 }

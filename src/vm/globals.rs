@@ -80,17 +80,17 @@ impl Globals {
         let singleton_obj = PackedValue::class(&globals, singleton_class);
         globals.object.as_object().set_class(singleton_obj);
 
-        object::init_object(&mut globals);
+        init_object(&mut globals);
         module::init_module(&mut globals);
         class::init_class(&mut globals);
-        globals.integer = integer::init_integer(&mut globals);
-        globals.array = array::init_array(&mut globals);
-        globals.procobj = procobj::init_proc(&mut globals);
-        globals.method = method::init_method(&mut globals);
-        globals.range = range::init_range(&mut globals);
-        globals.string = string::init_string(&mut globals);
-        globals.hash = hash::init_hash(&mut globals);
-        globals.regexp = regexp::init_regexp(&mut globals);
+        globals.integer = init_integer(&mut globals);
+        globals.array = init_array(&mut globals);
+        globals.procobj = init_proc(&mut globals);
+        globals.method = init_method(&mut globals);
+        globals.range = init_range(&mut globals);
+        globals.string = init_string(&mut globals);
+        globals.hash = init_hash(&mut globals);
+        globals.regexp = init_regexp(&mut globals);
         globals
     }
 

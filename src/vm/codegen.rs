@@ -117,8 +117,9 @@ impl Codegen {
         self.push32(iseq, id.into());
     }
 
-    fn gen_add(&mut self, iseq: &mut ISeq) {
+    fn gen_add(&mut self, iseq: &mut ISeq, globals: &mut Globals) {
         iseq.push(Inst::ADD);
+        self.push32(iseq, globals.add_method_cache_entry() as u32);
     }
 
     fn gen_addi(&mut self, iseq: &mut ISeq, i: i32) {
@@ -893,7 +894,7 @@ impl Codegen {
                             self.gen(globals, iseq, lhs, true)?;
                             self.gen(globals, iseq, rhs, true)?;
                             self.save_loc(iseq, loc);
-                            self.gen_add(iseq);
+                            self.gen_add(iseq, globals);
                         }
                     },
                     BinOp::Sub => match rhs.kind {
@@ -914,6 +915,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::MUL);
+                        self.push32(iseq, globals.add_method_cache_entry() as u32);
                     }
                     BinOp::Div => {
                         self.gen(globals, iseq, lhs, true)?;

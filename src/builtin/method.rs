@@ -1,4 +1,6 @@
+use crate::error::RubyError;
 use crate::vm::*;
+use std::collections::HashMap;
 
 pub type BuiltinFunc =
     fn(vm: &mut VM, receiver: PackedValue, args: &VecArray, block: Option<MethodRef>) -> VMResult;
@@ -6,7 +8,7 @@ pub type BuiltinFunc =
 pub type MethodTable = HashMap<IdentId, MethodRef>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MethodRef(usize);
+pub struct MethodRef(u32);
 
 impl std::hash::Hash for MethodRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -16,13 +18,13 @@ impl std::hash::Hash for MethodRef {
 
 impl Into<u32> for MethodRef {
     fn into(self) -> u32 {
-        self.0 as u32
+        self.0
     }
 }
 
 impl From<u32> for MethodRef {
     fn from(id: u32) -> Self {
-        MethodRef(id as usize)
+        MethodRef(id)
     }
 }
 
@@ -116,7 +118,7 @@ impl ISeqInfo {
 #[derive(Debug, Clone)]
 pub struct GlobalMethodTable {
     table: Vec<MethodInfo>,
-    method_id: usize,
+    method_id: u32,
 }
 
 impl GlobalMethodTable {
@@ -136,11 +138,11 @@ impl GlobalMethodTable {
     }
 
     pub fn get_method(&self, method: MethodRef) -> &MethodInfo {
-        &self.table[method.0]
+        &self.table[method.0 as usize]
     }
 
     pub fn get_mut_method(&mut self, method: MethodRef) -> &mut MethodInfo {
-        &mut self.table[method.0]
+        &mut self.table[method.0 as usize]
     }
 }
 

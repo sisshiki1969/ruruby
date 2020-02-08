@@ -23,23 +23,23 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     let array_id = globals.get_ident_id("Array");
     let class = ClassRef::from(array_id, globals.object);
     let obj = PackedValue::class(globals, class);
-    globals.add_builtin_instance_method(class, "push", array::array_push);
-    globals.add_builtin_instance_method(class, "<<", array::array_push);
-    globals.add_builtin_instance_method(class, "pop", array::array_pop);
-    globals.add_builtin_instance_method(class, "shift", array::array_shift);
-    globals.add_builtin_instance_method(class, "length", array::array_length);
-    globals.add_builtin_instance_method(class, "size", array::array_length);
-    globals.add_builtin_instance_method(class, "empty?", array::array_empty);
-    globals.add_builtin_instance_method(class, "*", array::array_mul);
-    globals.add_builtin_instance_method(class, "+", array::array_add);
-    globals.add_builtin_instance_method(class, "-", array::array_sub);
-    globals.add_builtin_instance_method(class, "map", array::array_map);
-    globals.add_builtin_instance_method(class, "each", array::array_each);
-    globals.add_builtin_instance_method(class, "include?", array::array_include);
-    globals.add_builtin_instance_method(class, "reverse", array::array_reverse);
-    globals.add_builtin_instance_method(class, "reverse!", array::array_reverse_);
-    globals.add_builtin_instance_method(class, "transpose", array::array_transpose);
-    globals.add_builtin_class_method(obj, "new", array::array_new);
+    globals.add_builtin_instance_method(class, "push", array_push);
+    globals.add_builtin_instance_method(class, "<<", array_push);
+    globals.add_builtin_instance_method(class, "pop", array_pop);
+    globals.add_builtin_instance_method(class, "shift", array_shift);
+    globals.add_builtin_instance_method(class, "length", array_length);
+    globals.add_builtin_instance_method(class, "size", array_length);
+    globals.add_builtin_instance_method(class, "empty?", array_empty);
+    globals.add_builtin_instance_method(class, "*", array_mul);
+    globals.add_builtin_instance_method(class, "+", array_add);
+    globals.add_builtin_instance_method(class, "-", array_sub);
+    globals.add_builtin_instance_method(class, "map", array_map);
+    globals.add_builtin_instance_method(class, "each", array_each);
+    globals.add_builtin_instance_method(class, "include?", array_include);
+    globals.add_builtin_instance_method(class, "reverse", array_reverse);
+    globals.add_builtin_instance_method(class, "reverse!", array_reverse_);
+    globals.add_builtin_instance_method(class, "transpose", array_transpose);
+    globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
 

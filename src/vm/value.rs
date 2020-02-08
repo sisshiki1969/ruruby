@@ -451,7 +451,7 @@ impl PackedValue {
         }
     }
 
-    pub fn as_regexp(&self) -> Option<regexp::RegexpRef> {
+    pub fn as_regexp(&self) -> Option<RegexpRef> {
         match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Regexp(regref) => Some(regref),
@@ -471,7 +471,7 @@ impl PackedValue {
         }
     }
 
-    pub fn as_proc(&self) -> Option<procobj::ProcRef> {
+    pub fn as_proc(&self) -> Option<ProcRef> {
         match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
@@ -481,7 +481,7 @@ impl PackedValue {
         }
     }
 
-    pub fn as_method(&self) -> Option<method::MethodObjRef> {
+    pub fn as_method(&self) -> Option<MethodObjRef> {
         match self.is_object() {
             Some(oref) => match oref.kind {
                 ObjKind::Method(mref) => Some(mref),
@@ -614,7 +614,7 @@ impl PackedValue {
         PackedValue::object(ObjectInfo::new_hash(globals, hash_ref))
     }
 
-    pub fn regexp(globals: &Globals, regexp_ref: regexp::RegexpRef) -> Self {
+    pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
         PackedValue::object(ObjectInfo::new_regexp(globals, regexp_ref))
     }
 
@@ -624,10 +624,7 @@ impl PackedValue {
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        PackedValue::object(ObjectInfo::new_proc(
-            globals,
-            procobj::ProcRef::from(context),
-        ))
+        PackedValue::object(ObjectInfo::new_proc(globals, ProcRef::from(context)))
     }
 
     pub fn method(

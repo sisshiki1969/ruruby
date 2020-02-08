@@ -483,6 +483,7 @@ impl Parser {
 
     fn parse_comp_stmt(&mut self) -> Result<Node, RubyError> {
         // COMP_STMT : (STMT (TERM STMT)*)? (TERM+)?
+        self.peek()?;
         let loc = self.loc();
         let mut nodes = vec![];
 

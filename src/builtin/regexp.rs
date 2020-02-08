@@ -28,7 +28,7 @@ impl RegexpRef {
 pub fn init_regexp(globals: &mut Globals) -> PackedValue {
     let id = globals.get_ident_id("Regexp");
     let class = ClassRef::from(id, globals.object);
-    globals.add_builtin_instance_method(class, "push", regexp::regexp_push);
+    globals.add_builtin_instance_method(class, "push", regexp_push);
     PackedValue::class(globals, class)
 }
 

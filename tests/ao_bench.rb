@@ -76,7 +76,7 @@ class Sphere
     if d > 0.0 then
       t = - b - Math.sqrt(d)
 
-      if t > 0.0 and t < isect.t then
+      if t > 0.0 && t < isect.t then
         isect.t = t
         isect.hit = true
         isect.pl = Vec.new(ray.org.x + ray.dir.x * t, 
@@ -111,7 +111,7 @@ class Plane
 
     t = -(ray.org.vdot(@n) + d) / v
 
-    if t > 0.0 and t < isect.t then
+    if t > 0.0 && t < isect.t then
       isect.hit = true
       isect.t = t
       isect.n = @n
@@ -168,11 +168,11 @@ def otherBasis(basis, n)
   basis[2] = Vec.new(n.x, n.y, n.z)
   basis[1] = Vec.new(0.0, 0.0, 0.0)
   
-  if n.x < 0.6 and n.x > -0.6 then
+  if n.x < 0.6 && n.x > -0.6 then
     basis[1].x = 1.0
-  elsif n.y < 0.6 and n.y > -0.6 then
+  elsif n.y < 0.6 && n.y > -0.6 then
     basis[1].y = 1.0
-  elsif n.z < 0.6 and n.z > -0.6 then
+  elsif n.z < 0.6 && n.z > -0.6 then
     basis[1].z = 1.0
   else
     basis[1].x = 1.0
@@ -282,9 +282,9 @@ class Scene
         r = rad.x / (nsf * nsf)
         g = rad.y / (nsf * nsf)
         b = rad.z / (nsf * nsf)
-        printf("%c", clamp(r))
-        printf("%c", clamp(g))
-        printf("%c", clamp(b))
+        print(clamp(r).chr)
+        print(clamp(g).chr)
+        print(clamp(b).chr)
       end
       nil
     end
@@ -294,8 +294,8 @@ class Scene
 end
 
 # File.open("ao.ppm", "w") do |fp|
-  printf("P6\n")
-  printf("%d %d\n", IMAGE_WIDTH, IMAGE_HEIGHT)
-  printf("255\n", IMAGE_WIDTH, IMAGE_HEIGHT)
+  print("P6\n")
+  print("#{ IMAGE_WIDTH } #{ IMAGE_HEIGHT }\n")
+  print("255\n")
   Scene.new.render(IMAGE_WIDTH, IMAGE_HEIGHT, NSUBSAMPLES)
 # end

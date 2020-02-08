@@ -1,8 +1,3 @@
-use super::array::ArrayRef;
-use super::class::ClassRef;
-use super::hash::HashRef;
-use super::procobj::ProcRef;
-use super::regexp::RegexpRef;
 use crate::vm::*;
 use std::collections::HashMap;
 
@@ -177,6 +172,7 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
     globals.add_builtin_instance_method(object, "inspect", inspect);
     globals.add_builtin_instance_method(object, "eql?", eql);
+    globals.add_builtin_instance_method(object, "to_i", toi);
 
     {
         use std::env;
@@ -233,4 +229,23 @@ fn inspect(
 fn eql(vm: &mut VM, receiver: PackedValue, args: &VecArray, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     Ok(PackedValue::bool(receiver == args[0]))
+}
+
+fn toi(
+    vm: &mut VM,
+    receiver: PackedValue,
+    _args: &VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    //vm.check_args_num(args.len(), 1, 1)?;
+    let num = if receiver.is_packed_num() {
+        if receiver.is_packed_fixnum() {
+            receiver.as_packed_fixnum()
+        } else {
+            f64::trunc(receiver.as_packed_flonum()) as i64
+        }
+    } else {
+        return Err(vm.error_type("Must be a number."));
+    };
+    Ok(PackedValue::fixnum(num))
 }

@@ -5,6 +5,7 @@ pub fn init_integer(globals: &mut Globals) -> PackedValue {
     let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "times", integer_times);
     globals.add_builtin_instance_method(class, "chr", integer_chr);
+    globals.add_builtin_instance_method(class, "to_f", integer_tof);
     PackedValue::class(globals, class)
 }
 
@@ -25,8 +26,8 @@ fn integer_times(
     match block {
         None => return Ok(PackedValue::nil()),
         Some(method) => {
-            let self_value = vm.context().self_value;
             let context = vm.context();
+            let self_value = context.self_value;
             let info = vm.globals.get_method_info(method);
             let iseq = info.as_iseq(&vm)?;
             for i in 0..num {
@@ -48,4 +49,14 @@ fn integer_chr(
 ) -> VMResult {
     let num = receiver.as_fixnum().unwrap();
     Ok(Value::Char(num as u8).pack())
+}
+
+fn integer_tof(
+    _vm: &mut VM,
+    receiver: PackedValue,
+    _args: &VecArray,
+    _block: Option<MethodRef>,
+) -> VMResult {
+    let num = receiver.as_fixnum().unwrap();
+    Ok(PackedValue::flonum(num as f64))
 }

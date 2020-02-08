@@ -484,17 +484,17 @@ impl Lexer {
                 return self.lex_bin_number();
             }
         };
-        let mut int = ch.to_string();
+        let mut s = ch.to_string();
         let mut decimal_flag = false;
         loop {
             if let Some(ch) = self.consume_numeric() {
-                int.push(ch);
+                s.push(ch);
             } else if self.consume('_') {
             } else if !decimal_flag && self.consume('.') {
                 if let Some(ch) = self.consume_numeric() {
                     decimal_flag = true;
-                    int.push('.');
-                    int.push(ch);
+                    s.push('.');
+                    s.push(ch);
                 } else {
                     self.push_back();
                     break;
@@ -503,11 +503,31 @@ impl Lexer {
                 break;
             }
         }
+        if self.consume('e') || self.consume('E') {
+            s.push('e');
+            if self.consume('-') {
+                s.push('-');
+            }
+            if let Some(ch) = self.consume_numeric() {
+                s.push(ch);
+            } else {
+                return Err(self.error_unexpected(self.pos));
+            }
+            loop {
+                if let Some(ch) = self.consume_numeric() {
+                    s.push(ch);
+                } else if self.consume('_') {
+                } else {
+                    break;
+                }
+            }
+            decimal_flag = true;
+        }
         if decimal_flag {
-            let f = int.parse::<f64>().unwrap();
+            let f = s.parse::<f64>().unwrap();
             Ok(self.new_floatlit(f))
         } else {
-            let i = int.parse::<i64>().unwrap();
+            let i = s.parse::<i64>().unwrap();
             Ok(self.new_numlit(i))
         }
     }
@@ -729,7 +749,7 @@ impl Lexer {
             return None;
         };
         let ch = self.source_info.code[self.pos as usize];
-        if ch.is_numeric() {
+        if ch.is_ascii() && ch.is_numeric() {
             self.pos += 1;
             Some(ch)
         } else {

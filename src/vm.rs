@@ -1,40 +1,29 @@
-mod array;
 mod builtin;
 mod class;
 mod codegen;
 mod context;
 mod file;
 mod globals;
-mod hash;
-mod integer;
-mod method;
 mod module;
-mod object;
 #[cfg(feature = "perf")]
 mod perf;
-mod procobj;
-mod range;
-mod regexp;
-mod string;
 pub mod value;
 mod vm_inst;
 
+pub use crate::builtin::*;
 use crate::error::{RubyError, RuntimeErrKind};
 use crate::parser::*;
 pub use crate::parser::{LvarCollector, LvarId, ParseResult};
 pub use crate::util::*;
-use array::*;
 pub use class::*;
-use codegen::{Codegen, ISeq, ISeqPos};
+pub use codegen::{Codegen, ISeq, ISeqPos};
+
 pub use context::*;
 pub use globals::*;
-pub use hash::*;
-pub use method::*;
 pub use module::*;
-pub use object::*;
+
 #[cfg(feature = "perf")]
 use perf::*;
-use range::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 pub use value::*;
@@ -81,6 +70,10 @@ impl VM {
         set_builtin_class!("Hash", hash);
         set_builtin_class!("Method", method);
         set_builtin_class!("Regexp", regexp);
+
+        let id = globals.get_ident_id("Math");
+        let math = init_math(&mut globals);
+        globals.object.set_var(id, math);
 
         let id = globals.get_ident_id("File");
         let file = file::init_file(&mut globals);
@@ -328,8 +321,9 @@ impl VM {
                 Inst::ADD => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    self.eval_add(lhs, rhs)?;
-                    self.pc += 1;
+                    let cache = read32(iseq, self.pc + 1);
+                    self.eval_add(lhs, rhs, cache)?;
+                    self.pc += 5;
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
@@ -352,8 +346,9 @@ impl VM {
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    self.eval_mul(lhs, rhs)?;
-                    self.pc += 1;
+                    let cache = read32(iseq, self.pc + 1);
+                    self.eval_mul(lhs, rhs, cache)?;
+                    self.pc += 5;
                 }
                 Inst::POW => {
                     let lhs = self.stack_pop();
@@ -733,7 +728,7 @@ impl VM {
                         'o' => arg.insert_str(0, "(?o)"),
                         _ => {}
                     };
-                    let regexpref = match regexp::RegexpRef::from_string(&arg) {
+                    let regexpref = match RegexpRef::from_string(&arg) {
                         Ok(regex) => regex,
                         Err(err) => {
                             return Err(self.error_argument(format!(
@@ -1204,7 +1199,12 @@ impl VM {
         }
     }
 
-    fn eval_add(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
+    fn eval_add(
+        &mut self,
+        rhs: PackedValue,
+        lhs: PackedValue,
+        cache_slot: u32,
+    ) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             PackedValue::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2)
         } else if rhs.is_packed_num() && lhs.is_packed_num() {
@@ -1217,7 +1217,13 @@ impl VM {
             }
         } else {
             match lhs.is_object() {
-                Some(oref) => return self.fallback_to_method(IdentId::_ADD, lhs, rhs, oref),
+                Some(_oref) => {
+                    let methodref =
+                        self.get_method_from_cache(cache_slot as usize, lhs, IdentId::_ADD)?;
+                    let arg = VecArray::new1(rhs);
+                    self.eval_send(methodref, lhs, &arg, None, None)?;
+                    return Ok(());
+                }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs + rhs),
                     (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
@@ -1310,7 +1316,12 @@ impl VM {
         Ok(())
     }
 
-    fn eval_mul(&mut self, rhs: PackedValue, lhs: PackedValue) -> Result<(), RubyError> {
+    fn eval_mul(
+        &mut self,
+        rhs: PackedValue,
+        lhs: PackedValue,
+        cache_slot: u32,
+    ) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             PackedValue::fixnum(lhs.as_packed_fixnum() * rhs.as_packed_fixnum())
         } else if lhs.is_packed_num() && rhs.is_packed_num() {
@@ -1323,7 +1334,13 @@ impl VM {
             }
         } else {
             match lhs.is_object() {
-                Some(oref) => return self.fallback_to_method(IdentId::_MUL, lhs, rhs, oref),
+                Some(_oref) => {
+                    let methodref =
+                        self.get_method_from_cache(cache_slot as usize, lhs, IdentId::_MUL)?;
+                    let arg = VecArray::new1(rhs);
+                    self.eval_send(methodref, lhs, &arg, None, None)?;
+                    return Ok(());
+                }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (Value::FixNum(lhs), Value::FixNum(rhs)) => PackedValue::fixnum(lhs * rhs),
                     (Value::FixNum(lhs), Value::FloatNum(rhs)) => {
@@ -1822,7 +1839,10 @@ impl VM {
         Ok(PackedValue::procobj(&self.globals, context))
     }
 
-    fn create_context_from_method(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
+    pub fn create_context_from_method(
+        &mut self,
+        method: MethodRef,
+    ) -> Result<ContextRef, RubyError> {
         let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
         let outer = self.context();
         Ok(ContextRef::from(outer.self_value, None, iseq, Some(outer)))
