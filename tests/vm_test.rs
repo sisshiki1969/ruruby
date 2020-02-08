@@ -838,24 +838,6 @@ fn define_binop() {
 }
 
 #[test]
-fn attr_accessor() {
-    let program = "
-    class Foo
-        attr_accessor :car, :cdr
-    end
-    bar = Foo.new
-    assert nil, bar.car
-    assert nil, bar.cdr
-    bar.car = 1000
-    bar.cdr = :something
-    assert 1000, bar.car
-    assert :something, bar.cdr
-    ";
-    let expected = Value::Nil;
-    eval_script(program, expected);
-}
-
-#[test]
 fn lambda_literal() {
     let program = "
         f0 = ->{100}
@@ -981,7 +963,7 @@ fn is_a() {
         obj = S.new
         assert true, obj.is_a?(S)
         assert true, obj.is_a?(C)
-        #assert true, obj.is_a?(Object)
+        assert true, obj.is_a?(Object)
         assert false, obj.is_a?(Integer)
         assert false, obj.is_a?(Array)
         assert false, obj.is_a?(M)

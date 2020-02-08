@@ -57,12 +57,7 @@ pub fn init_class(globals: &mut Globals) {
 }
 
 /// Built-in function "new".
-fn class_class_new(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn class_class_new(vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
     let id = vm.globals.get_ident_id("nil");
     let classref = ClassRef::from(id, vm.globals.object);
     let val = PackedValue::class(&mut vm.globals, classref);
@@ -71,28 +66,20 @@ fn class_class_new(
 }
 
 /// Built-in function "new".
-fn class_new(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let new_instance = PackedValue::ordinary_object(receiver);
+fn class_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let new_instance = PackedValue::ordinary_object(args.self_value);
     // call initialize method.
-    if let Some(methodref) = receiver.get_instance_method(IdentId::INITIALIZE) {
+    if let Some(methodref) = args.self_value.get_instance_method(IdentId::INITIALIZE) {
         let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;
-        vm.vm_run(new_instance, iseq, None, &args, None, None)?;
+        let mut args = args.clone();
+        args.self_value = new_instance;
+        vm.vm_run(iseq, None, &args, None, None)?;
         vm.stack_pop();
     };
     Ok(new_instance)
 }
 
-fn superclass(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let class = vm.val_as_class(receiver)?;
+fn superclass(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let class = vm.val_as_class(args.self_value)?;
     Ok(class.superclass)
 }

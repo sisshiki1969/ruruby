@@ -1,9 +1,9 @@
 def func(y)
-    [1,2,3,4].each{|x|
+    Proc.new{|x|
         puts x
-        return 100 if x == y
+        next 100 if x == y
+        777
     }
-    200
 end
 
-puts func(3)
+puts func(3).call(4)

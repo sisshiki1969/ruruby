@@ -12,13 +12,9 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
 }
 
-fn constants(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let v: Vec<PackedValue> = receiver
+fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let v: Vec<PackedValue> = args
+        .self_value
         .as_object()
         .var_table()
         .keys()
@@ -27,13 +23,8 @@ fn constants(
     Ok(PackedValue::array_from(&vm.globals, v))
 }
 
-fn instance_methods(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let mut class = vm.val_as_module(receiver)?;
+fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let mut class = vm.val_as_module(args.self_value)?;
     vm.check_args_num(args.len(), 0, 1)?;
     let inherited_too = args.len() == 0 || vm.val_to_bool(args[0]);
     match inherited_too {
@@ -41,7 +32,7 @@ fn instance_methods(
             let v = class
                 .method_table
                 .keys()
-                .map(|k| PackedValue::symbol(k.clone()))
+                .map(|k| PackedValue::symbol(*k))
                 .collect();
             Ok(PackedValue::array_from(&vm.globals, v))
         }
@@ -71,17 +62,12 @@ fn instance_methods(
     }
 }
 
-fn attr_accessor(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    for arg in args.iter() {
-        if arg.is_packed_symbol() {
-            let id = arg.as_packed_symbol();
-            define_reader(vm, receiver, id);
-            define_writer(vm, receiver, id);
+fn attr_accessor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    for i in 0..args.len() {
+        if args[i].is_packed_symbol() {
+            let id = args[i].as_packed_symbol();
+            define_reader(vm, args.self_value, id);
+            define_writer(vm, args.self_value, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -89,16 +75,11 @@ fn attr_accessor(
     Ok(PackedValue::nil())
 }
 
-fn attr_reader(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    for arg in args.iter() {
-        if arg.is_packed_symbol() {
-            let id = arg.as_packed_symbol();
-            define_reader(vm, receiver, id);
+fn attr_reader(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    for i in 0..args.len() {
+        if args[i].is_packed_symbol() {
+            let id = args[i].as_packed_symbol();
+            define_reader(vm, args.self_value, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -106,16 +87,11 @@ fn attr_reader(
     Ok(PackedValue::nil())
 }
 
-fn attr_writer(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    for arg in args.iter() {
-        if arg.is_packed_symbol() {
-            let id = arg.as_packed_symbol();
-            define_writer(vm, receiver, id);
+fn attr_writer(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    for i in 0..args.len() {
+        if args[i].is_packed_symbol() {
+            let id = args[i].as_packed_symbol();
+            define_writer(vm, args.self_value, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -147,21 +123,11 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
         .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
 }
 
-fn module_function(
-    _vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    Ok(receiver)
+fn module_function(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    Ok(args.self_value)
 }
 
-fn singleton_class(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let class = vm.val_as_module(receiver)?;
+fn singleton_class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let class = vm.val_as_module(args.self_value)?;
     Ok(PackedValue::bool(class.is_singleton))
 }

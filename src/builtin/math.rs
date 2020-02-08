@@ -14,12 +14,7 @@ pub fn init_math(globals: &mut Globals) -> PackedValue {
 
 // Instance methods
 
-fn sqrt(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn sqrt(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -34,12 +29,7 @@ fn sqrt(
     Ok(res)
 }
 
-fn cos(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn cos(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -54,12 +44,7 @@ fn cos(
     Ok(res)
 }
 
-fn sin(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn sin(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {

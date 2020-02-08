@@ -11,12 +11,7 @@ pub fn init_file(globals: &mut Globals) -> PackedValue {
 
 // Class methods
 
-fn join(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn join(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     let mut path = PathBuf::from(match args[0].as_string() {
         Some(s) => s,

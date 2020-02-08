@@ -14,14 +14,9 @@ pub fn init_string(globals: &mut Globals) -> PackedValue {
     PackedValue::class(globals, class)
 }
 
-fn string_start_with(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn string_start_with(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let string = receiver.as_string().unwrap();
+    let string = args.self_value.as_string().unwrap();
     let arg = match args[0].as_string() {
         Some(arg) => arg,
         None => return Err(vm.error_argument("An arg must be a String.")),
@@ -30,26 +25,16 @@ fn string_start_with(
     Ok(PackedValue::bool(res))
 }
 
-fn string_to_sym(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn string_to_sym(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let string = receiver.as_string().unwrap();
+    let string = args.self_value.as_string().unwrap();
     let id = vm.globals.get_ident_id(string);
     Ok(PackedValue::symbol(id))
 }
 
-fn string_split(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn string_split(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
-    let string = receiver.as_string().unwrap();
+    let string = args.self_value.as_string().unwrap();
     let sep = args[0].as_string().unwrap();
     let lim = if args.len() > 1 {
         args[1].expect_fixnum(vm, "Second arg must be Integer.")?
@@ -97,14 +82,9 @@ fn string_split(
     }
 }
 
-fn string_gsub(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    vm.check_args_num(args.len(), 1, 2)?;
-    let given = receiver.as_string().unwrap();
+fn string_gsub(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 2, 2)?;
+    let given = args.self_value.as_string().unwrap();
     let regexp = if let Some(s) = args[0].as_string() {
         match regex::Regex::new(&regex::escape(&s)) {
             Ok(re) => re,
@@ -120,14 +100,9 @@ fn string_gsub(
     Ok(PackedValue::string(res))
 }
 
-fn string_rmatch(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn string_rmatch(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let given = receiver.as_string().unwrap();
+    let given = args.self_value.as_string().unwrap();
     let regexp = if let Some(re) = args[0].as_regexp() {
         re.regexp.clone()
     } else {
@@ -140,27 +115,17 @@ fn string_rmatch(
     Ok(res)
 }
 
-fn string_tr(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn string_tr(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
-    let rec = receiver.as_string().unwrap();
+    let rec = args.self_value.as_string().unwrap();
     let from = args[0].as_string().unwrap();
     let to = args[1].as_string().unwrap();
     let res = rec.replace(from, to);
     Ok(PackedValue::string(res))
 }
 
-fn string_size(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn string_size(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let rec = receiver.as_string().unwrap();
+    let rec = args.self_value.as_string().unwrap();
     Ok(PackedValue::fixnum(rec.chars().count() as i64))
 }

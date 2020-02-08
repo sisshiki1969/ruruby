@@ -25,7 +25,121 @@ pub enum Value {
 
 const VEC_ARRAY_SIZE: usize = 8;
 
-pub enum VecArray {
+#[derive(Debug, Clone)]
+pub struct Args {
+    pub self_value: PackedValue,
+    pub block: PackedValue,
+    args: ArgsArray,
+}
+
+impl Args {
+    pub fn new(len: usize) -> Self {
+        Args {
+            self_value: PackedValue::nil(),
+            block: PackedValue::nil(),
+            args: ArgsArray::new(len),
+        }
+    }
+
+    pub fn push(&mut self, val: PackedValue) {
+        self.args.push(val);
+    }
+
+    pub fn new0(self_value: PackedValue, block: impl Into<Option<PackedValue>>) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new0(),
+        }
+    }
+
+    pub fn new1(
+        self_value: PackedValue,
+        block: impl Into<Option<PackedValue>>,
+        arg: PackedValue,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new1(arg),
+        }
+    }
+
+    pub fn new2(
+        self_value: PackedValue,
+        block: impl Into<Option<PackedValue>>,
+        arg0: PackedValue,
+        arg1: PackedValue,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new2(arg0, arg1),
+        }
+    }
+
+    pub fn new3(
+        self_value: PackedValue,
+        block: impl Into<Option<PackedValue>>,
+        arg0: PackedValue,
+        arg1: PackedValue,
+        arg2: PackedValue,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new3(arg0, arg1, arg2),
+        }
+    }
+
+    pub fn new4(
+        self_value: PackedValue,
+        block: impl Into<Option<PackedValue>>,
+        arg0: PackedValue,
+        arg1: PackedValue,
+        arg2: PackedValue,
+        arg3: PackedValue,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new4(arg0, arg1, arg2, arg3),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.args.len()
+    }
+
+    pub fn get_slice(&self, start: usize, end: usize) -> &[PackedValue] {
+        self.args.get_slice(start, end)
+    }
+}
+
+impl Index<usize> for Args {
+    type Output = PackedValue;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.args[index]
+    }
+}
+
+impl IndexMut<usize> for Args {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.args.index_mut(index)
+    }
+}
+
+impl Deref for Args {
+    type Target = [PackedValue];
+
+    fn deref(&self) -> &Self::Target {
+        self.args.deref()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum ArgsArray {
     Array {
         len: usize,
         ary: [PackedValue; VEC_ARRAY_SIZE],
@@ -33,27 +147,27 @@ pub enum VecArray {
     Vec(Vec<PackedValue>),
 }
 
-impl VecArray {
-    pub fn new(len: usize) -> Self {
+impl ArgsArray {
+    fn new(len: usize) -> Self {
         if len <= VEC_ARRAY_SIZE {
-            VecArray::Array {
+            ArgsArray::Array {
                 len,
                 ary: [PackedValue::uninitialized(); VEC_ARRAY_SIZE],
             }
         } else {
-            VecArray::Vec(vec![PackedValue::uninitialized(); len])
+            ArgsArray::Vec(vec![PackedValue::uninitialized(); len])
         }
     }
 
-    pub fn push(&mut self, val: PackedValue) {
+    fn push(&mut self, val: PackedValue) {
         if self.len() == VEC_ARRAY_SIZE {
             let mut ary = self.get_slice(0, VEC_ARRAY_SIZE).to_vec();
             ary.push(val);
-            unsafe { std::ptr::write(self, VecArray::Vec(ary)) };
+            unsafe { std::ptr::write(self, ArgsArray::Vec(ary)) };
         } else {
             match self {
-                VecArray::Vec(ref mut v) => v.push(val),
-                VecArray::Array {
+                ArgsArray::Vec(ref mut v) => v.push(val),
+                ArgsArray::Array {
                     ref mut len,
                     ref mut ary,
                 } => {
@@ -64,68 +178,85 @@ impl VecArray {
         }
     }
 
-    pub fn new0() -> Self {
-        VecArray::Array {
+    fn new0() -> Self {
+        ArgsArray::Array {
             len: 0,
             ary: [PackedValue::uninitialized(); VEC_ARRAY_SIZE],
         }
     }
 
-    pub fn new1(arg: PackedValue) -> Self {
+    fn new1(arg: PackedValue) -> Self {
         let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
         ary[0] = arg;
-        VecArray::Array { len: 1, ary }
+        ArgsArray::Array { len: 1, ary }
     }
 
-    pub fn new2(arg0: PackedValue, arg1: PackedValue) -> Self {
+    fn new2(arg0: PackedValue, arg1: PackedValue) -> Self {
         let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
         ary[0] = arg0;
         ary[1] = arg1;
-        VecArray::Array { len: 2, ary }
+        ArgsArray::Array { len: 2, ary }
     }
 
-    pub fn len(&self) -> usize {
+    fn new3(arg0: PackedValue, arg1: PackedValue, arg2: PackedValue) -> Self {
+        let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
+        ary[0] = arg0;
+        ary[1] = arg1;
+        ary[2] = arg2;
+        ArgsArray::Array { len: 3, ary }
+    }
+
+    fn new4(arg0: PackedValue, arg1: PackedValue, arg2: PackedValue, arg3: PackedValue) -> Self {
+        let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
+        ary[0] = arg0;
+        ary[1] = arg1;
+        ary[2] = arg2;
+        ary[3] = arg3;
+        ArgsArray::Array { len: 4, ary }
+    }
+
+    fn len(&self) -> usize {
         match self {
-            VecArray::Array { len, .. } => *len,
-            VecArray::Vec(v) => v.len(),
+            ArgsArray::Array { len, .. } => *len,
+            ArgsArray::Vec(v) => v.len(),
         }
     }
 
-    pub fn get_slice(&self, start: usize, end: usize) -> &[PackedValue] {
+    fn get_slice(&self, start: usize, end: usize) -> &[PackedValue] {
         match self {
-            VecArray::Array { ary, .. } => &ary[start..end],
-            VecArray::Vec(v) => &v[start..end],
+            ArgsArray::Array { ary, .. } => &ary[start..end],
+            ArgsArray::Vec(v) => &v[start..end],
         }
     }
 }
 
-impl Index<usize> for VecArray {
+impl Index<usize> for ArgsArray {
     type Output = PackedValue;
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            VecArray::Array { ary, .. } => &ary[index],
-            VecArray::Vec(v) => &v[index],
+            ArgsArray::Array { ary, .. } => &ary[index],
+            ArgsArray::Vec(v) => &v[index],
         }
     }
 }
 
-impl IndexMut<usize> for VecArray {
+impl IndexMut<usize> for ArgsArray {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            VecArray::Array { ary, .. } => &mut ary[index],
-            VecArray::Vec(v) => &mut v[index],
+            ArgsArray::Array { ary, .. } => &mut ary[index],
+            ArgsArray::Vec(v) => &mut v[index],
         }
     }
 }
 
-impl Deref for VecArray {
+impl Deref for ArgsArray {
     type Target = [PackedValue];
 
     fn deref(&self) -> &Self::Target {
         match self {
-            VecArray::Array { len, ary } => &ary[0..*len],
-            VecArray::Vec(v) => &v,
+            ArgsArray::Array { len, ary } => &ary[0..*len],
+            ArgsArray::Vec(v) => &v,
         }
     }
 }
@@ -233,6 +364,12 @@ impl PartialEq for PackedValue {
     }
 }
 impl Eq for PackedValue {}
+
+impl Default for PackedValue {
+    fn default() -> Self {
+        PackedValue::nil()
+    }
+}
 
 impl PackedValue {
     pub fn unpack(self) -> Value {

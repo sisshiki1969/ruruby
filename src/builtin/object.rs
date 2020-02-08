@@ -187,62 +187,38 @@ pub fn init_object(globals: &mut Globals) {
     }
 }
 
-fn class(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let class = receiver.get_class_object(&vm.globals);
+fn class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let class = args.self_value.get_class_object(&vm.globals);
     Ok(class)
 }
 
-fn object_id(
-    _vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let id = receiver.id();
+fn object_id(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let id = args.self_value.id();
     Ok(PackedValue::fixnum(id as i64))
 }
 
-fn singleton_class(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    vm.get_singleton_class(receiver)
+fn singleton_class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.get_singleton_class(args.self_value)
 }
 
-fn inspect(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let inspect = vm.val_pp(receiver);
+fn inspect(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let inspect = vm.val_pp(args.self_value);
     Ok(PackedValue::string(inspect))
 }
 
-fn eql(vm: &mut VM, receiver: PackedValue, args: &VecArray, _block: Option<MethodRef>) -> VMResult {
+fn eql(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    Ok(PackedValue::bool(receiver == args[0]))
+    Ok(PackedValue::bool(args.self_value == args[0]))
 }
 
-fn toi(
-    vm: &mut VM,
-    receiver: PackedValue,
-    _args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn toi(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     //vm.check_args_num(args.len(), 1, 1)?;
-    let num = if receiver.is_packed_num() {
-        if receiver.is_packed_fixnum() {
-            receiver.as_packed_fixnum()
+    let self_ = args.self_value;
+    let num = if self_.is_packed_num() {
+        if self_.is_packed_fixnum() {
+            self_.as_packed_fixnum()
         } else {
-            f64::trunc(receiver.as_packed_flonum()) as i64
+            f64::trunc(self_.as_packed_flonum()) as i64
         }
     } else {
         return Err(vm.error_type("Must be a number."));
