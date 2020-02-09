@@ -369,12 +369,12 @@ fn for2() {
 #[test]
 fn for3() {
     let program = "
-            y = 0
-            for x in 0..9
+        y = 0
+        for x in 0..9
             if x == 5 then break end
             y=y+x
-            end
-            y";
+        end
+        y";
     let expected = Value::FixNum(10);
     eval_script(program, expected);
 }
@@ -382,12 +382,12 @@ fn for3() {
 #[test]
 fn for4() {
     let program = "
-            y = 0
-            for x in 0..9
+        y = 0
+        for x in 0..9
             if x == 5 then next end
             y=y+x
-            end
-            y";
+        end
+        y";
     let expected = Value::FixNum(40);
     eval_script(program, expected);
 }
@@ -439,6 +439,20 @@ fn until1() {
 fn until2() {
     let program = "
         assert((a = 0; a+=1 until a == 5; a), 5)
+    ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
+fn proc_next() {
+    let program = "
+        p = Proc.new { |x|
+            next 100 if x == 7
+            200
+        }
+        assert(200, p.call(1))
+        assert(100, p.call(7))
     ";
     let expected = Value::Nil;
     eval_script(program, expected);

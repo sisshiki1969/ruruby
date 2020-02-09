@@ -8,10 +8,56 @@ use std::collections::HashMap;
 pub struct Codegen {
     // Codegen State
     //pub class_stack: Vec<IdentId>,
-    pub loop_stack: Vec<Vec<(ISeqPos, EscapeKind)>>,
-    pub context_stack: Vec<Context>,
+    loop_stack: Vec<LoopInfo>,
+    context_stack: Vec<Context>,
     pub loc: Loc,
     pub source_info: SourceInfoRef,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct LoopInfo {
+    state: LoopState,
+    escape: Vec<EscapeInfo>,
+}
+
+impl LoopInfo {
+    fn new_top() -> Self {
+        LoopInfo {
+            state: LoopState::Top,
+            escape: vec![],
+        }
+    }
+
+    fn new_loop() -> Self {
+        LoopInfo {
+            state: LoopState::Loop,
+            escape: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum LoopState {
+    Loop,
+    Top,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct EscapeInfo {
+    pos: ISeqPos,
+    kind: EscapeKind,
+}
+
+impl EscapeInfo {
+    fn new(pos: ISeqPos, kind: EscapeKind) -> Self {
+        EscapeInfo { pos, kind }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum EscapeKind {
+    Break,
+    Next,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,12 +95,6 @@ impl Context {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum EscapeKind {
-    Break,
-    Next,
-}
-
 pub type ISeq = Vec<u8>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,16 +116,12 @@ impl Codegen {
         Codegen {
             context_stack: vec![Context::new()],
             //class_stack: vec![],
-            loop_stack: vec![],
+            loop_stack: vec![LoopInfo::new_top()],
             loc: Loc(0, 0),
             source_info,
         }
     }
-    /*
-        pub fn set_context(&mut self, lvar_table: HashMap<IdentId, LvarId>) {
-            self.context_stack = vec![Context::from(lvar_table, false)];
-        }
-    */
+
     pub fn current(iseq: &ISeq) -> ISeqPos {
         ISeqPos::from_usize(iseq.len())
     }
@@ -1090,7 +1126,7 @@ impl Codegen {
                     NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => id,
                     _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
                 };
-                self.loop_stack.push(vec![]);
+                self.loop_stack.push(LoopInfo::new_loop());
                 let loop_continue;
                 match &iter.kind {
                     NodeKind::Range {
@@ -1120,12 +1156,12 @@ impl Codegen {
                     self.gen(globals, iseq, iter, true)?;
                 }
                 let src = self.gen_jmp(iseq);
-                for p in self.loop_stack.pop().unwrap() {
-                    match p.1 {
+                for p in self.loop_stack.pop().unwrap().escape {
+                    match p.kind {
                         EscapeKind::Break => {
-                            self.write_disp_from_cur(iseq, p.0);
+                            self.write_disp_from_cur(iseq, p.pos);
                         }
-                        EscapeKind::Next => self.write_disp(iseq, p.0, loop_continue),
+                        EscapeKind::Next => self.write_disp(iseq, p.pos, loop_continue),
                     }
                 }
                 if !use_value {
@@ -1135,7 +1171,7 @@ impl Codegen {
                 self.write_disp_from_cur(iseq, src);
             }
             NodeKind::While { cond, body } => {
-                self.loop_stack.push(vec![]);
+                self.loop_stack.push(LoopInfo::new_loop());
 
                 let loop_start = Codegen::current(iseq);
                 self.gen(globals, iseq, cond, true)?;
@@ -1148,12 +1184,12 @@ impl Codegen {
                     self.gen_push_nil(iseq);
                 }
                 let src = self.gen_jmp(iseq);
-                for p in self.loop_stack.pop().unwrap() {
-                    match p.1 {
+                for p in self.loop_stack.pop().unwrap().escape {
+                    match p.kind {
                         EscapeKind::Break => {
-                            self.write_disp_from_cur(iseq, p.0);
+                            self.write_disp_from_cur(iseq, p.pos);
                         }
-                        EscapeKind::Next => self.write_disp(iseq, p.0, loop_start),
+                        EscapeKind::Next => self.write_disp(iseq, p.pos, loop_start),
                     }
                 }
                 if !use_value {
@@ -1267,7 +1303,7 @@ impl Codegen {
                 let block_ref = match block {
                     Some(block) => match &block.kind {
                         NodeKind::Proc { params, body, lvar } => {
-                            self.loop_stack.push(vec![]);
+                            self.loop_stack.push(LoopInfo::new_top());
                             let methodref =
                                 self.gen_iseq(globals, params, body, lvar, true, true)?;
                             self.loop_stack.pop().unwrap();
@@ -1340,8 +1376,8 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::Return(node) => {
-                self.gen(globals, iseq, node, true)?;
+            NodeKind::Return(val) => {
+                self.gen(globals, iseq, val, true)?;
                 self.gen_return(iseq);
             }
             NodeKind::Break => {
@@ -1349,7 +1385,7 @@ impl Codegen {
                 let src = self.gen_jmp(iseq);
                 match self.loop_stack.last_mut() {
                     Some(x) => {
-                        x.push((src, EscapeKind::Break));
+                        x.escape.push(EscapeInfo::new(src, EscapeKind::Break));
                     }
                     None => {
                         return Err(
@@ -1358,24 +1394,35 @@ impl Codegen {
                     }
                 }
             }
-            NodeKind::Next => {
-                if use_value {
-                    self.gen_push_nil(iseq);
-                }
-                let src = self.gen_jmp(iseq);
-                match self.loop_stack.last_mut() {
-                    Some(x) => {
-                        x.push((src, EscapeKind::Next));
-                    }
-                    None => {
-                        return Err(
-                            self.error_syntax("Can't escape from eval with next.", self.loc)
-                        );
-                    }
+            NodeKind::Next(val) => {
+                let loc = node.loc();
+                if self.loop_stack.last().unwrap().state == LoopState::Top {
+                    match self.context_stack.last() {
+                        Some(cxt) => match cxt.kind {
+                            ContextKind::Block => {
+                                self.gen(globals, iseq, val, true)?;
+                                self.gen_return(iseq);
+                            }
+                            ContextKind::Method => {
+                                return Err(self.error_syntax("Invalid next.", loc.merge(self.loc)));
+                            }
+                        },
+                        None => {
+                            return Err(self.error_syntax(
+                                "Can't escape from eval with next.",
+                                loc.merge(self.loc),
+                            ));
+                        }
+                    };
+                } else {
+                    self.gen(globals, iseq, val, use_value)?;
+                    let src = self.gen_jmp(iseq);
+                    let x = self.loop_stack.last_mut().unwrap();
+                    x.escape.push(EscapeInfo::new(src, EscapeKind::Next));
                 }
             }
             NodeKind::Proc { params, body, lvar } => {
-                self.loop_stack.push(vec![]);
+                self.loop_stack.push(LoopInfo::new_top());
                 let methodref = self.gen_iseq(globals, params, body, lvar, true, true)?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);

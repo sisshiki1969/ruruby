@@ -351,8 +351,7 @@ impl VM {
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = read32(iseq, self.pc + 1);
-                    self.eval_mul(lhs, rhs, cache)?;
+                    self.eval_mul(lhs, rhs, iseq)?;
                     self.pc += 5;
                 }
                 Inst::POW => {
@@ -1225,7 +1224,7 @@ impl VM {
         } else {
             match lhs.is_object() {
                 Some(_oref) => {
-                    let cache = self.read32(iseq, self.pc + 1);
+                    let cache = self.read32(iseq, 1);
                     let methodref =
                         self.get_method_from_cache(cache as usize, lhs, IdentId::_ADD)?;
                     let arg = Args::new1(lhs, None, rhs);
@@ -1328,7 +1327,7 @@ impl VM {
         &mut self,
         rhs: PackedValue,
         lhs: PackedValue,
-        cache_slot: u32,
+        iseq: &ISeq,
     ) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             PackedValue::fixnum(lhs.as_packed_fixnum() * rhs.as_packed_fixnum())
@@ -1343,8 +1342,9 @@ impl VM {
         } else {
             match lhs.is_object() {
                 Some(_oref) => {
+                    let cache = self.read32(iseq, 1);
                     let methodref =
-                        self.get_method_from_cache(cache_slot as usize, lhs, IdentId::_MUL)?;
+                        self.get_method_from_cache(cache as usize, lhs, IdentId::_MUL)?;
                     let arg = Args::new1(lhs, None, rhs);
                     self.eval_send(methodref, &arg, None, None)?;
                     return Ok(());

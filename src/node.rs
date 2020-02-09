@@ -73,7 +73,7 @@ pub enum NodeKind {
         lvar: LvarCollector,
     },
     Break,
-    Next,
+    Next(Box<Node>),
     Return(Box<Node>),
 
     Param(IdentId),
@@ -434,13 +434,14 @@ impl Node {
         Node::new(NodeKind::Break, loc)
     }
 
-    pub fn new_next(loc: Loc) -> Self {
-        Node::new(NodeKind::Next, loc)
+    pub fn new_next(val: Node, loc: Loc) -> Self {
+        let loc = loc.merge(val.loc());
+        Node::new(NodeKind::Next(Box::new(val)), loc)
     }
 
-    pub fn new_return(node: Node, loc: Loc) -> Self {
-        let loc = loc.merge(node.loc());
-        Node::new(NodeKind::Return(Box::new(node)), loc)
+    pub fn new_return(val: Node, loc: Loc) -> Self {
+        let loc = loc.merge(val.loc());
+        Node::new(NodeKind::Return(Box::new(val)), loc)
     }
 
     pub fn new_proc(params: NodeVec, body: Node, lvar: LvarCollector, loc: Loc) -> Self {

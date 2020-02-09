@@ -75,7 +75,7 @@ impl Builtin {
                     vm.val_pp(args[1]),
                 );
             } else {
-                println!("Assert OK: {:?}", vm.val_pp(args.self_value));
+                println!("Assert OK: {:?}", vm.val_pp(args[0]));
                 Ok(PackedValue::nil())
             }
         }
