@@ -36,11 +36,23 @@ pub enum MethodInfo {
 }
 
 impl MethodInfo {
+    pub fn default() -> Self {
+        MethodInfo::AttrReader {
+            id: IdentId::from(0),
+        }
+    }
+
     pub fn as_iseq(&self, vm: &VM) -> Result<ISeqRef, RubyError> {
         if let MethodInfo::RubyFunc { iseq } = self {
             Ok(iseq.clone())
         } else {
             Err(vm.error_unimplemented("Methodref is illegal."))
+        }
+    }
+
+    pub fn set_iseq_kind(&mut self, kind: ISeqKind) {
+        if let MethodInfo::RubyFunc { iseq } = self {
+            iseq.kind = kind;
         }
     }
 }
@@ -60,6 +72,7 @@ pub type ISeqRef = Ref<ISeqInfo>;
 
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
+    pub method: MethodRef,
     pub req_params: usize,
     pub opt_params: usize,
     pub rest_param: bool,
@@ -75,10 +88,18 @@ pub struct ISeqInfo {
     pub class_stack: Option<Vec<PackedValue>>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
+    pub kind: ISeqKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ISeqKind {
+    Method,
+    Proc(MethodRef),
 }
 
 impl ISeqInfo {
     pub fn new(
+        method: MethodRef,
         req_params: usize,
         opt_params: usize,
         rest_param: bool,
@@ -92,9 +113,11 @@ impl ISeqInfo {
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
+        kind: ISeqKind,
     ) -> Self {
         let lvars = lvar.len();
         ISeqInfo {
+            method,
             req_params,
             opt_params,
             rest_param,
@@ -110,7 +133,28 @@ impl ISeqInfo {
             class_stack: None,
             iseq_sourcemap,
             source_info,
+            kind,
         }
+    }
+
+    pub fn default(method: MethodRef) -> Self {
+        ISeqInfo::new(
+            method,
+            0,
+            0,
+            false,
+            0,
+            false,
+            0,
+            0,
+            vec![],
+            std::collections::HashMap::new(),
+            vec![],
+            LvarCollector::new(),
+            vec![],
+            SourceInfoRef::empty(),
+            ISeqKind::Method,
+        )
     }
 }
 
@@ -129,11 +173,23 @@ impl GlobalMethodTable {
             method_id: 1,
         }
     }
+
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
         let new_method = MethodRef(self.method_id);
         self.method_id += 1;
         self.table.push(info);
         new_method
+    }
+
+    pub fn new_method(&mut self) -> MethodRef {
+        let new_method = MethodRef(self.method_id);
+        self.method_id += 1;
+        self.table.push(MethodInfo::default());
+        new_method
+    }
+
+    pub fn set_method(&mut self, method: MethodRef, info: MethodInfo) {
+        self.table[method.0 as usize] = info;
     }
 
     pub fn get_method(&self, method: MethodRef) -> &MethodInfo {

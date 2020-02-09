@@ -3,23 +3,21 @@ use crate::util::{Loc, SourceInfoRef};
 #[derive(Debug, Clone, PartialEq)]
 pub struct RubyError {
     pub kind: RubyErrorKind,
-    source_info: SourceInfoRef,
+    pub info: Vec<(SourceInfoRef, Loc)>,
     level: usize,
-    loc: Loc,
 }
 
 impl RubyError {
     pub fn new(kind: RubyErrorKind, source_info: SourceInfoRef, level: usize, loc: Loc) -> Self {
         RubyError {
             kind,
-            source_info,
+            info: vec![(source_info, loc)],
             level,
-            loc,
         }
     }
 
     pub fn loc(&self) -> Loc {
-        self.loc
+        self.info[0].1
     }
 
     pub fn level(&self) -> usize {
@@ -30,12 +28,12 @@ impl RubyError {
         self.level = level;
     }
 
-    pub fn show_file_name(&self) {
-        self.source_info.show_file_name()
+    pub fn show_file_name(&self, pos: usize) {
+        self.info[pos].0.show_file_name()
     }
 
-    pub fn show_loc(&self) {
-        self.source_info.show_loc(&self.loc);
+    pub fn show_loc(&self, pos: usize) {
+        self.info[pos].0.show_loc(&self.info[pos].1);
     }
 
     pub fn show_err(&self) {

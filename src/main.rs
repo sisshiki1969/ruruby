@@ -59,9 +59,12 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
     match vm.run(absolute_path.to_str().unwrap(), program) {
         Ok(_) => {}
         Err(err) => {
-            err.show_file_name();
-            err.show_loc();
             err.show_err();
+            for i in 0..err.info.len() {
+                eprint!("{}:", i);
+                err.show_file_name(i);
+                err.show_loc(i);
+            }
         }
     };
 }
@@ -72,10 +75,6 @@ fn repl_vm() {
     println!("Value: {}", std::mem::size_of::<Value>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-    println!(
-        "Option<PackedValue>: {}",
-        std::mem::size_of::<Option<PackedValue>>()
-    );
     println!("IdentId: {}", std::mem::size_of::<IdentId>());
     println!("OptionalID: {}", std::mem::size_of::<OptionalId>());
     let mut rl = rustyline::Editor::<()>::new();
@@ -85,26 +84,9 @@ fn repl_vm() {
     parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
-    let context = ContextRef::from(
-        vm.globals.main_object,
-        None,
-        ISeqRef::new(ISeqInfo::new(
-            0,
-            0,
-            false,
-            0,
-            false,
-            0,
-            0,
-            vec![],
-            std::collections::HashMap::new(),
-            vec![],
-            LvarCollector::new(),
-            vec![],
-            SourceInfoRef::empty(),
-        )),
-        None,
-    );
+    let method = vm.globals.new_method();
+    let info = ISeqInfo::default(method);
+    let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline =
@@ -134,7 +116,7 @@ fn repl_vm() {
                         println!("=> {}", res_str);
                     }
                     Err(err) => {
-                        err.show_loc();
+                        err.show_loc(0);
                         err.show_err();
                         vm.exec_stack.clear();
                     }
@@ -147,7 +129,7 @@ fn repl_vm() {
                 if RubyErrorKind::ParseErr(ParseErrKind::UnexpectedEOF) == err.kind {
                     continue;
                 }
-                err.show_loc();
+                err.show_loc(0);
                 err.show_err();
                 program = String::new();
             }

@@ -126,6 +126,14 @@ impl Globals {
         self.method_table.add_method(info)
     }
 
+    pub fn new_method(&mut self) -> MethodRef {
+        self.method_table.new_method()
+    }
+
+    pub fn set_method(&mut self, method: MethodRef, info: MethodInfo) {
+        self.method_table.set_method(method, info);
+    }
+
     pub fn get_method_info(&self, method: MethodRef) -> &MethodInfo {
         self.method_table.get_method(method)
     }

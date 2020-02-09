@@ -11,8 +11,8 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
             }
         }
         Err(err) => {
-            err.show_loc();
-            eprintln!("{:?}", err.kind);
+            err.show_err();
+            err.show_loc(0);
             panic!("Got error: {:?}", err);
         }
     }

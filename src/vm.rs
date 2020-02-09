@@ -48,6 +48,22 @@ pub struct VM {
     perf: Perf,
 }
 
+macro_rules! send {
+    ($self:ident, $method:expr, $args:expr, $keyword:expr, $block:expr) => {
+        match $self.eval_send($method, $args, $keyword, $block) {
+            Ok(_) => {}
+            Err(mut err) => {
+                $self.context_stack.pop().unwrap();
+                if !$self.context_stack.is_empty() {
+                    $self.pc = $self.context().pc;
+                    err.info.push(($self.source_info(), $self.get_loc()));
+                }
+                return Err(err);
+            }
+        };
+    };
+}
+
 impl VM {
     pub fn new() -> Self {
         let mut globals = Globals::new();
@@ -259,8 +275,11 @@ impl VM {
     }
 
     pub fn vm_run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
+        if self.context_stack.len() != 0 {
+            self.context().pc = self.pc
+        };
         self.context_stack.push(context);
-        let old_pc = self.pc;
+        //let old_pc = self.pc;
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         loop {
@@ -279,12 +298,20 @@ impl VM {
             match iseq[self.pc] {
                 Inst::END => {
                     self.context_stack.pop().unwrap();
-                    self.pc = old_pc;
+                    if !self.context_stack.is_empty() {
+                        self.pc = self.context().pc;
+                    }
                     return Ok(());
                 }
                 Inst::RETURN => {
+                    if let ISeqKind::Proc(method) = context.iseq_ref.kind {
+                        let m: u32 = method.into();
+                        eprintln!("Return from block {}", m);
+                    }
                     self.context_stack.pop().unwrap();
-                    self.pc = old_pc;
+                    if !self.context_stack.is_empty() {
+                        self.pc = self.context().pc;
+                    }
                     return Ok(());
                 }
                 Inst::PUSH_NIL => {
@@ -781,7 +808,7 @@ impl VM {
                     } else {
                         None
                     };
-                    self.eval_send(methodref, &args, keyword, block)?;
+                    send!(self, methodref, &args, keyword, block);
                     self.pc += 21;
                 }
                 Inst::SEND_SELF => {
@@ -807,7 +834,7 @@ impl VM {
                     } else {
                         None
                     };
-                    self.eval_send(methodref, &args, keyword, block)?;
+                    send!(self, methodref, &args, keyword, block);
                     self.pc += 21;
                 }
                 Inst::DEF_CLASS => {
@@ -856,7 +883,7 @@ impl VM {
                     class_stack.reverse();
                     method.as_iseq(&self)?.class_stack = Some(class_stack);
                     let arg = Args::new0(val, None);
-                    self.eval_send(methodref, &arg, None, None)?;
+                    send!(self, methodref, &arg, None, None);
                     self.pc += 10;
                     self.class_stack.pop().unwrap();
                 }
@@ -1027,6 +1054,7 @@ impl VM {
             loc,
         )
     }
+
     pub fn error_internal(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
@@ -1035,14 +1063,17 @@ impl VM {
             loc,
         )
     }
+
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info(), loc)
     }
+
     pub fn error_type(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Type(msg.into()), self.source_info(), loc)
     }
+
     pub fn error_argument(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
@@ -1051,10 +1082,12 @@ impl VM {
             loc,
         )
     }
+
     pub fn error_index(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(RuntimeErrKind::Index(msg.into()), self.source_info(), loc)
     }
+
     pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
         if min <= len && len <= max {
             Ok(())
@@ -1195,7 +1228,7 @@ impl VM {
         match l_ref.get_instance_method(method) {
             Some(mref) => {
                 let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(mref.clone(), &arg, None, None)?;
+                send!(self, mref.clone(), &arg, None, None);
                 Ok(())
             }
             None => {
@@ -1228,7 +1261,7 @@ impl VM {
                     let methodref =
                         self.get_method_from_cache(cache as usize, lhs, IdentId::_ADD)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    self.eval_send(methodref, &arg, None, None)?;
+                    send!(self, methodref, &arg, None, None);
                     return Ok(());
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
@@ -1346,7 +1379,7 @@ impl VM {
                     let methodref =
                         self.get_method_from_cache(cache as usize, lhs, IdentId::_MUL)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    self.eval_send(methodref, &arg, None, None)?;
+                    send!(self, methodref, &arg, None, None);
                     return Ok(());
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
@@ -1422,7 +1455,7 @@ impl VM {
                     match l_ref.as_ref().get_instance_method(method) {
                         Some(mref) => {
                             let arg = Args::new1(lhs, None, rhs);
-                            self.eval_send(mref.clone(), &arg, None, None)?;
+                            send!(self, mref.clone(), &arg, None, None);
                         }
                         None => return Err(self.error_undefined_op("**", rhs, lhs)),
                     };
@@ -1443,7 +1476,7 @@ impl VM {
                 match l_ref.as_ref().get_instance_method(method) {
                     Some(mref) => {
                         let arg = Args::new1(lhs, None, rhs);
-                        self.eval_send(mref.clone(), &arg, None, None)?;
+                        send!(self, mref.clone(), &arg, None, None);
                         Ok(self.stack_pop())
                     }
                     None => return Err(self.error_undefined_op("<<", rhs, lhs)),
@@ -1695,7 +1728,7 @@ impl VM {
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
             MethodInfo::RubyFunc { iseq } => {
-                let iseq = iseq.clone();
+                let iseq = *iseq;
                 self.vm_run(iseq, None, &args, keyword, block)?;
                 #[cfg(feature = "perf")]
                 {

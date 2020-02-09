@@ -8,6 +8,7 @@ use std::collections::HashMap;
 pub struct Codegen {
     // Codegen State
     //pub class_stack: Vec<IdentId>,
+    method_stack: Vec<MethodRef>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
     pub loc: Loc,
@@ -114,8 +115,8 @@ impl ISeqPos {
 impl Codegen {
     pub fn new(source_info: SourceInfoRef) -> Self {
         Codegen {
+            method_stack: vec![],
             context_stack: vec![Context::new()],
-            //class_stack: vec![],
             loop_stack: vec![LoopInfo::new_top()],
             loc: Loc(0, 0),
             source_info,
@@ -501,6 +502,10 @@ impl Codegen {
         use_value: bool,
         is_block: bool,
     ) -> Result<MethodRef, RubyError> {
+        let methodref = globals.new_method();
+        if !is_block {
+            self.method_stack.push(methodref)
+        }
         let save_loc = self.loc;
         let mut req_params = 0;
         let mut opt_params = 0;
@@ -575,6 +580,7 @@ impl Codegen {
 
         let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
+                methodref,
                 req_params,
                 opt_params,
                 rest_param,
@@ -592,9 +598,18 @@ impl Codegen {
                 lvar_collector.clone(),
                 iseq_sourcemap,
                 self.source_info,
+                if is_block {
+                    ISeqKind::Proc(*self.method_stack.last().unwrap())
+                } else {
+                    ISeqKind::Method
+                },
             )),
         };
-        let methodref = globals.add_method(info);
+
+        if !is_block {
+            self.method_stack.pop();
+        }
+        globals.set_method(methodref, info);
         #[cfg(feature = "emit-iseq")]
         {
             let info = globals.get_method_info(methodref);
