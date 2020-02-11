@@ -27,6 +27,7 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "<<", array_push);
     globals.add_builtin_instance_method(class, "pop", array_pop);
     globals.add_builtin_instance_method(class, "shift", array_shift);
+    globals.add_builtin_instance_method(class, "unshift", array_unshift);
     globals.add_builtin_instance_method(class, "length", array_length);
     globals.add_builtin_instance_method(class, "size", array_length);
     globals.add_builtin_instance_method(class, "empty?", array_empty);
@@ -41,6 +42,15 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "transpose", array_transpose);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
+}
+
+macro_rules! self_array {
+    ($args:ident, $vm:ident) => {
+        $args
+            .self_value
+            .as_array()
+            .ok_or($vm.error_nomethod("Receiver must be an array."))?;
+    };
 }
 
 // Class methods
@@ -72,62 +82,56 @@ fn array_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
 // Instance methods
 
 fn array_push(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    let mut aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
-    for i in 0..args.len() {
-        aref.elements.push(args[i]);
+    let mut aref = self_array!(args, vm);
+    for arg in args.get_slice(0, args.len()) {
+        aref.elements.push(*arg);
     }
     Ok(args.self_value)
 }
 
 fn array_pop(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let mut aref = self_array!(args, vm);
     let res = aref.elements.pop().unwrap_or_default();
     Ok(res)
 }
 
 fn array_shift(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let mut aref = self_array!(args, vm);
     let new = aref.elements.split_off(1);
-    let res = aref.elements.clone();
+    let res = aref.elements[0];
     aref.elements = new;
-    Ok(res[0])
+    Ok(res)
+}
+
+fn array_unshift(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    //vm.check_args_num(args.len(), 0, 0)?;
+    if args.len() == 0 {
+        return Ok(args.self_value);
+    }
+    let mut new = args.get_slice(0, args.len()).to_owned();
+    let mut aref = self_array!(args, vm);
+    new.append(&mut aref.elements);
+    aref.elements = new;
+    Ok(args.self_value)
 }
 
 fn array_length(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let res = PackedValue::fixnum(aref.elements.len() as i64);
     Ok(res)
 }
 
 fn array_empty(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let res = PackedValue::bool(aref.elements.is_empty());
     Ok(res)
 }
 
 fn array_mul(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let v = match args[0].unpack() {
         Value::FixNum(num) => match num {
             i if i < 0 => return Err(vm.error_argument("Negative argument.")),
@@ -195,10 +199,7 @@ fn array_sub(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
 }
 
 fn array_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let iseq = match block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
@@ -216,10 +217,7 @@ fn array_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
 }
 
 fn array_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let iseq = match block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
@@ -236,20 +234,14 @@ fn array_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
 
 fn array_include(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let target = args[0];
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let res = aref.elements.iter().any(|x| x.clone().equal(target));
     Ok(PackedValue::bool(res))
 }
 
 fn array_reverse(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     let mut res = aref.elements.clone();
     res.reverse();
     Ok(PackedValue::array_from(&vm.globals, res))
@@ -257,20 +249,14 @@ fn array_reverse(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
 
 fn array_reverse_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let mut aref = self_array!(args, vm);
     aref.elements.reverse();
     Ok(args.self_value)
 }
 
 fn array_transpose(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
+    let aref = self_array!(args, vm);
     if aref.elements.len() == 0 {
         return Ok(PackedValue::array_from(&vm.globals, vec![]));
     }

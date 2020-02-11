@@ -70,13 +70,9 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
 }
 
 fn repl_vm() {
-    println!("MethodRef: {}", std::mem::size_of::<MethodRef>());
-    println!("PackedValue: {}", std::mem::size_of::<PackedValue>());
     println!("Value: {}", std::mem::size_of::<Value>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-    println!("IdentId: {}", std::mem::size_of::<IdentId>());
-    println!("OptionalID: {}", std::mem::size_of::<OptionalId>());
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
@@ -118,7 +114,7 @@ fn repl_vm() {
                     Err(err) => {
                         err.show_loc(0);
                         err.show_err();
-                        vm.stack_clear();
+                        vm.clear();
                     }
                 }
                 level = 0;

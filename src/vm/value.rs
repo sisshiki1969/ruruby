@@ -803,6 +803,8 @@ impl PackedValue {
             (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
             (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                    lhs.elements == rhs.elements
+                    /*
                     let lhs = &lhs.elements;
                     let rhs = &rhs.elements;
                     if lhs.len() != rhs.len() {
@@ -813,18 +815,14 @@ impl PackedValue {
                             return false;
                         }
                     }
-                    true
+                    true*/
                 }
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    if lhs.start.equal(rhs.start)
+                    lhs.start.equal(rhs.start)
                         && lhs.end.equal(rhs.end)
                         && lhs.exclude == rhs.exclude
-                    {
-                        true
-                    } else {
-                        false
-                    }
                 }
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.map == rhs.map,
                 (_, _) => false,
             },
             _ => false,

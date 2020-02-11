@@ -1,4 +1,4 @@
-use crate::vm::value::Value;
+pub use crate::vm::value::Value;
 use crate::vm::*;
 
 pub fn eval_script(script: impl Into<String>, expected: Value) {

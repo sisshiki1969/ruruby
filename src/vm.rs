@@ -38,14 +38,28 @@ pub struct VM {
     // Global info
     pub globals: Globals,
     pub root_path: Vec<PathBuf>,
-    pub global_var: ValueTable,
+    global_var: ValueTable,
     // VM state
-    pub context_stack: Vec<ContextRef>,
-    pub class_stack: Vec<PackedValue>,
+    context_stack: Vec<ContextRef>,
+    class_stack: Vec<PackedValue>,
+    define_mode: Vec<DefineMode>,
     exec_stack: Vec<PackedValue>,
-    pub pc: usize,
+    pc: usize,
     #[cfg(feature = "perf")]
     perf: Perf,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DefineMode {
+    module_function: bool,
+}
+
+impl DefineMode {
+    pub fn default() -> Self {
+        DefineMode {
+            module_function: false,
+        }
+    }
 }
 
 macro_rules! try_err {
@@ -56,8 +70,6 @@ macro_rules! try_err {
                 if let RubyErrorKind::MethodReturn(m) = err.kind {
                     if $self.context().iseq_ref.method == m {
                         let result = $self.stack_pop();
-                        eprintln!("method_return catched.");
-                        eprintln!("top: {}", $self.val_pp(result));
                         let prev_len = $self.context().stack_len;
                         $self.exec_stack.truncate(prev_len);
                         $self.stack_push(result);
@@ -115,6 +127,7 @@ impl VM {
             root_path: vec![],
             global_var: HashMap::new(),
             class_stack: vec![],
+            define_mode: vec![DefineMode::default()],
             context_stack: vec![],
             exec_stack: vec![],
             pc: 0,
@@ -133,6 +146,31 @@ impl VM {
         self.context().iseq_ref.source_info
     }
 
+    pub fn stack_push(&mut self, val: PackedValue) {
+        self.exec_stack.push(val)
+    }
+
+    pub fn stack_pop(&mut self) -> PackedValue {
+        self.exec_stack.pop().unwrap()
+    }
+
+    pub fn clear(&mut self) {
+        self.exec_stack.clear();
+        self.class_stack.clear();
+        self.define_mode.clear();
+        self.context_stack.clear();
+    }
+
+    pub fn class_push(&mut self, val: PackedValue) {
+        self.class_stack.push(val);
+        self.define_mode.push(DefineMode::default());
+    }
+
+    pub fn class_pop(&mut self) -> PackedValue {
+        self.define_mode.pop().unwrap();
+        self.class_stack.pop().unwrap()
+    }
+
     pub fn classref(&self) -> ClassRef {
         if self.class_stack.len() == 0 {
             self.globals.object_class
@@ -149,39 +187,16 @@ impl VM {
         }
     }
 
-    fn read32(&self, iseq: &ISeq, offset: usize) -> u32 {
-        let pc = self.pc + offset;
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
-        unsafe { *ptr }
+    pub fn define_mode(&self) -> &DefineMode {
+        self.define_mode.last().unwrap()
     }
 
-    pub fn stack_push(&mut self, val: PackedValue) {
-        self.exec_stack.push(val)
+    pub fn define_mode_mut(&mut self) -> &mut DefineMode {
+        self.define_mode.last_mut().unwrap()
     }
 
-    pub fn stack_pop(&mut self) -> PackedValue {
-        self.exec_stack.pop().unwrap()
-    }
-
-    pub fn stack_clear(&mut self) {
-        self.exec_stack.clear()
-    }
-
-    fn unwind_context(&mut self, err: &mut RubyError) {
-        self.context_stack.pop().unwrap();
-        if let Some(context) = self.context_stack.last_mut() {
-            self.pc = context.pc;
-            err.info.push((self.source_info(), self.get_loc()));
-        };
-    }
-
-    /// Get local variable table.
-    fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.context();
-        for _ in 0..outer {
-            context = context.outer.unwrap();
-        }
-        context
+    pub fn set_pc(&mut self, pc: usize) {
+        self.pc = pc;
     }
 
     pub fn run(&mut self, path: impl Into<String>, program: String) -> VMResult {
@@ -238,6 +253,7 @@ impl VM {
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         context.iseq_ref = iseq;
         context.adjust_lvar_size();
+        context.pc = 0;
 
         self.vm_run_context(context)?;
         let val = self.stack_pop();
@@ -297,6 +313,7 @@ impl VM {
         self.vm_run_context(ContextRef::new_local(&context))
     }
 
+    /// Main routine for VM execution.
     fn vm_run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
         if let Some(prev_context) = self.context_stack.last_mut() {
             prev_context.pc = self.pc;
@@ -902,7 +919,7 @@ impl VM {
                         }
                     };
 
-                    self.class_stack.push(val);
+                    self.class_push(val);
                     let method = self.globals.get_method_info(methodref);
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
@@ -910,7 +927,7 @@ impl VM {
                     let arg = Args::new0(val, None);
                     try_err!(self, self.eval_send(methodref, &arg, None, None));
                     self.pc += 10;
-                    self.class_stack.pop().unwrap();
+                    self.class_pop();
                 }
                 Inst::DEF_METHOD => {
                     let id = IdentId::from(read32(iseq, self.pc + 1));
@@ -919,13 +936,10 @@ impl VM {
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
                     method.as_iseq(&self)?.class_stack = Some(class_stack);
-                    if self.class_stack.len() == 0 {
-                        // A method defined in "top level" is registered as an object method.
-                        self.add_object_method(id, methodref);
-                    } else {
-                        // A method defined in a class definition is registered as an instance method of the class.
-                        self.add_instance_method(self.class(), id, methodref);
-                    }
+                    self.define_method(id, methodref);
+                    if self.define_mode().module_function {
+                        self.define_singleton_method(id, methodref)?;
+                    };
                     self.stack_push(PackedValue::symbol(id));
                     self.pc += 9;
                 }
@@ -936,13 +950,10 @@ impl VM {
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
                     method.as_iseq(&self)?.class_stack = Some(class_stack);
-                    if self.class_stack.len() == 0 {
-                        // A method defined in "top level" is registered as an object method.
-                        self.add_object_method(id, methodref);
-                    } else {
-                        // A method defined in a class definition is registered as a class method of the class.
-                        self.add_singleton_method(self.class(), id, methodref)?;
-                    }
+                    self.define_singleton_method(id, methodref)?;
+                    if self.define_mode().module_function {
+                        self.define_method(id, methodref);
+                    };
                     self.stack_push(PackedValue::symbol(id));
                     self.pc += 9;
                 }
@@ -1154,6 +1165,12 @@ impl VM {
 }
 
 impl VM {
+    fn read32(&self, iseq: &ISeq, offset: usize) -> u32 {
+        let pc = self.pc + offset;
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
+        unsafe { *ptr }
+    }
+
     fn get_loc(&self) -> Loc {
         let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
         sourcemap
@@ -1161,30 +1178,6 @@ impl VM {
             .find(|x| x.0 == ISeqPos::from_usize(self.pc))
             .unwrap_or(&(ISeqPos::from_usize(0), Loc(0, 0)))
             .1
-    }
-
-    fn get_method_from_cache(
-        &mut self,
-        cache_slot: usize,
-        receiver: PackedValue,
-        method_id: IdentId,
-    ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_object_for_method(&self.globals);
-        match self.globals.get_method_from_cache(cache_slot, rec_class) {
-            Some(method) => Ok(method),
-            _ => {
-                /*
-                eprintln!(
-                    "cache miss! {} {}",
-                    self.val_pp(receiver),
-                    self.globals.get_ident_name(method_id)
-                );*/
-                let method = self.get_instance_method(rec_class, method_id)?;
-                self.globals
-                    .set_method_cache_entry(cache_slot, rec_class, method);
-                Ok(method)
-            }
-        }
     }
 
     // Search class stack for the constant.
@@ -1248,7 +1241,35 @@ impl VM {
     }
 }
 
+// Utilities for method call
+
 impl VM {
+    /// Get a method from the method cache if saved in it.
+    /// Otherwise, search a class chain for the method.
+    fn get_method_from_cache(
+        &mut self,
+        cache_slot: usize,
+        receiver: PackedValue,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
+        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        match self.globals.get_method_from_cache(cache_slot, rec_class) {
+            Some(method) => Ok(method),
+            _ => {
+                /*
+                eprintln!(
+                    "cache miss! {} {}",
+                    self.val_pp(receiver),
+                    self.globals.get_ident_name(method_id)
+                );*/
+                let method = self.get_instance_method(rec_class, method_id)?;
+                self.globals
+                    .set_method_cache_entry(cache_slot, rec_class, method);
+                Ok(method)
+            }
+        }
+    }
+
     fn fallback_to_method(
         &mut self,
         method: IdentId,
@@ -1620,6 +1641,8 @@ impl VM {
     }
 }
 
+// API's for handling values.
+
 impl VM {
     pub fn val_to_bool(&self, val: PackedValue) -> bool {
         !val.is_nil() && !val.is_false_val() && !val.is_uninitialized()
@@ -1773,7 +1796,34 @@ impl VM {
     }
 }
 
+// API's for handling instance/singleton methods.
+
 impl VM {
+    pub fn define_method(&mut self, id: IdentId, method: MethodRef) {
+        if self.class_stack.len() == 0 {
+            // A method defined in "top level" is registered as an object method.
+            self.add_object_method(id, method);
+        } else {
+            // A method defined in a class definition is registered as an instance method of the class.
+            self.add_instance_method(self.class(), id, method);
+        }
+    }
+
+    pub fn define_singleton_method(
+        &mut self,
+        id: IdentId,
+        method: MethodRef,
+    ) -> Result<(), RubyError> {
+        if self.class_stack.len() == 0 {
+            // A method defined in "top level" is registered as an object method.
+            self.add_object_method(id, method);
+            Ok(())
+        } else {
+            // A method defined in a class definition is registered as an instance method of the class.
+            self.add_singleton_method(self.class(), id, method)
+        }
+    }
+
     pub fn add_singleton_method(
         &mut self,
         obj: PackedValue,
@@ -1842,6 +1892,23 @@ impl VM {
 }
 
 impl VM {
+    fn unwind_context(&mut self, err: &mut RubyError) {
+        self.context_stack.pop().unwrap();
+        if let Some(context) = self.context_stack.last_mut() {
+            self.pc = context.pc;
+            err.info.push((self.source_info(), self.get_loc()));
+        };
+    }
+
+    /// Get local variable table.
+    fn get_outer_context(&mut self, outer: u32) -> ContextRef {
+        let mut context = self.context();
+        for _ in 0..outer {
+            context = context.outer.unwrap();
+        }
+        context
+    }
+
     fn get_array_index(&self, idx_arg: i64, len: usize) -> Result<usize, RubyError> {
         if idx_arg < 0 {
             let i = len as i64 + idx_arg;
@@ -1885,16 +1952,16 @@ impl VM {
     }
 
     fn pop_args_to_ary(&mut self, arg_num: usize) -> Args {
-        let mut args = Args::new(arg_num);
-        for i in 0..arg_num {
+        let mut args = Args::new(0);
+        for _ in 0..arg_num {
             let val = self.stack_pop();
             match val.as_splat() {
                 Some(ary) => {
                     for elem in &ary.elements {
-                        args[i] = *elem;
+                        args.push(*elem);
                     }
                 }
-                None => args[i] = val,
+                None => args.push(val),
             };
         }
         args

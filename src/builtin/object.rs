@@ -173,6 +173,8 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "inspect", inspect);
     globals.add_builtin_instance_method(object, "eql?", eql);
     globals.add_builtin_instance_method(object, "to_i", toi);
+    globals.add_builtin_instance_method(object, "instance_variable_set", instance_variable_set);
+    globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
 
     {
         use std::env;
@@ -224,4 +226,31 @@ fn toi(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         return Err(vm.error_type("Must be a number."));
     };
     Ok(PackedValue::fixnum(num))
+}
+
+fn instance_variable_set(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 2, 2)?;
+    let name = args[0];
+    let val = args[1];
+    let var_id = match name.as_symbol() {
+        Some(symbol) => symbol,
+        None => match name.as_string() {
+            Some(s) => vm.globals.get_ident_id(s),
+            None => return Err(vm.error_type("1st arg must be Symbol or String.")),
+        },
+    };
+    let mut self_obj = args.self_value.as_object();
+    self_obj.set_var(var_id, val);
+    Ok(val)
+}
+
+fn instance_variables(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut receiver = args.self_value.as_object();
+    let res = receiver
+        .var_table()
+        .keys()
+        .map(|x| PackedValue::symbol(*x))
+        .collect();
+    Ok(PackedValue::array_from(&vm.globals, res))
 }

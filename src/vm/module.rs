@@ -123,11 +123,77 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
         .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
 }
 
-fn module_function(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    Ok(args.self_value)
+fn module_function(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    vm.define_mode_mut().module_function = true;
+    Ok(PackedValue::nil())
 }
 
 fn singleton_class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let class = vm.val_as_module(args.self_value)?;
     Ok(PackedValue::bool(class.is_singleton))
+}
+
+#[cfg(test)]
+mod test {
+    use crate::test::*;
+
+    #[test]
+    fn module_function() {
+        let program = r#"
+    class Foo
+        module_function
+        def bar
+            123
+        end
+    end
+    assert(123, Foo.bar)
+    assert(123, Foo.new.bar)
+    "#;
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn attr_accessor() {
+        let program = "
+    class Foo
+        attr_accessor :car, :cdr
+    end
+    bar = Foo.new
+    assert nil, bar.car
+    assert nil, bar.cdr
+    bar.car = 1000
+    bar.cdr = :something
+    assert 1000, bar.car
+    assert :something, bar.cdr
+    ";
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn module_methods() {
+        let program = r#"
+    class A
+        Foo = 100
+        Bar = 200
+        def fn
+            puts "fn"
+        end
+        def fo
+            puts "fo"
+        end
+    end
+    def ary_cmp(a,b)
+        return false if a - b != []
+        return false if b - a != []
+        true
+    end
+    assert(true, ary_cmp(A.constants, [:Bar, :Foo]))
+    assert(true, ary_cmp(A.instance_methods - Class.instance_methods, [:fn, :fo]))
+    "#;
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
 }

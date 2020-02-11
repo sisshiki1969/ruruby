@@ -139,9 +139,9 @@ impl Builtin {
             #[cfg(feature = "verbose")]
             eprintln!("reading:{}", absolute_path.to_string_lossy());
             vm.root_path.push(path);
-            vm.class_stack.push(vm.globals.object);
+            vm.class_push(vm.globals.object);
             vm.run(absolute_path.to_str().unwrap(), program)?;
-            vm.class_stack.pop().unwrap();
+            vm.class_pop();
             vm.root_path.pop().unwrap();
             Ok(())
         }
