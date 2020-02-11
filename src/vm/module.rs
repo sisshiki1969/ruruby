@@ -10,17 +10,51 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "attr_writer", attr_writer);
     globals.add_builtin_instance_method(class, "module_function", module_function);
     globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
+    globals.add_builtin_instance_method(class, "const_get", const_get);
 }
 
 fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    let v: Vec<PackedValue> = args
-        .self_value
-        .as_object()
-        .var_table()
-        .keys()
-        .map(|k| PackedValue::symbol(k.clone()))
-        .collect();
+    let mut v: Vec<PackedValue> = vec![];
+    let mut class = args.self_value;
+    loop {
+        v.append(
+            &mut class
+                .as_object()
+                .var_table()
+                .keys()
+                .filter(|x| {
+                    vm.globals
+                        .get_ident_name(**x)
+                        .chars()
+                        .nth(0)
+                        .unwrap()
+                        .is_ascii_uppercase()
+                })
+                .map(|k| PackedValue::symbol(*k))
+                .collect(),
+        );
+        match class.superclass() {
+            Some(superclass) => {
+                if superclass == vm.globals.object {
+                    break;
+                } else {
+                    class = superclass
+                };
+            }
+            None => break,
+        }
+    }
     Ok(PackedValue::array_from(&vm.globals, v))
+}
+
+fn const_get(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let name = match args[0].as_symbol() {
+        Some(symbol) => symbol,
+        None => return Err(vm.error_type("1st arg must be Symbol.")),
+    };
+    let val = vm.get_super_const(args.self_value, name)?;
+    Ok(val)
 }
 
 fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -149,6 +183,33 @@ mod test {
     end
     assert(123, Foo.bar)
     assert(123, Foo.new.bar)
+    "#;
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn constants() {
+        let program = r#"
+    class Foo
+        Bar = 100
+        Ker = 777
+    end
+    
+    class Bar < Foo
+        Doo = 555
+    end
+    
+    def ary_cmp(a,b)
+        return false if a - b != []
+        return false if b - a != []
+        true
+    end
+
+    assert(100, Foo.const_get(:Bar))
+    assert(100, Bar.const_get(:Bar))
+    assert(true, ary_cmp(Foo.constants, [:Bar, :Ker]))
+    assert(true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker]))
     "#;
         let expected = Value::Nil;
         eval_script(program, expected);

@@ -1206,7 +1206,7 @@ impl VM {
     }
 
     // Search class inheritance chain for the constant.
-    fn get_super_const(
+    pub fn get_super_const(
         &self,
         mut class: PackedValue,
         id: IdentId,

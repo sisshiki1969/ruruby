@@ -250,7 +250,32 @@ fn instance_variables(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VM
     let res = receiver
         .var_table()
         .keys()
+        .filter(|x| vm.globals.get_ident_name(**x).chars().nth(0) == Some('@'))
         .map(|x| PackedValue::symbol(*x))
         .collect();
     Ok(PackedValue::array_from(&vm.globals, res))
+}
+
+#[cfg(test)]
+mod test {
+    use crate::test::*;
+
+    #[test]
+    fn instance_variables() {
+        let program = r#"
+        obj = Object.new
+        obj.instance_variable_set("@foo", "foo")
+        obj.instance_variable_set(:@bar, 777)
+
+        def ary_cmp(a,b)
+            return false if a - b != []
+            return false if b - a != []
+            true
+        end
+
+        assert(true, ary_cmp([:@foo, :@bar], obj.instance_variables))
+        "#;
+        let expected = Value::Nil;
+        eval_script(program, expected);
+    }
 }
