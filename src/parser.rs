@@ -1016,10 +1016,10 @@ impl Parser {
                 // | PRIMARY . FNAME BLOCK => completed: true
                 // | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
                 // | PRIMARY . FNAME => completed: false
-                let tok = self.get()?.clone();
-                let method = match &tok.kind {
+                let tok = self.get()?;
+                let id = match &tok.kind {
                     TokenKind::Ident(s, has_suffix) => {
-                        if *has_suffix {
+                        let name = if *has_suffix {
                             if self.consume_punct_no_term(Punct::Question)? {
                                 s.clone() + "?"
                             } else if self.consume_punct_no_term(Punct::Not)? {
@@ -1029,19 +1029,20 @@ impl Parser {
                             }
                         } else {
                             s.clone()
-                        }
+                        };
+                        self.get_ident_id(name)
                     }
                     TokenKind::Reserved(r) => {
-                        let string = self.lexer.get_string_from_reserved(*r);
-                        string.clone()
+                        let string = self.lexer.get_string_from_reserved(*r).to_owned();
+                        self.get_ident_id(string)
                     }
+                    TokenKind::Punct(p) => self.parse_op_definable(p)?,
                     _ => {
                         return Err(
                             self.error_unexpected(tok.loc(), "method name must be an identifier.")
                         )
                     }
                 };
-                let id = self.get_ident_id(method);
                 let mut args = vec![];
                 let mut kw_args = vec![];
                 let mut completed = false;
@@ -1656,7 +1657,7 @@ impl Parser {
         //      [ensure COMPSTMT]
         //  end
         let mut is_class_method = false;
-        let tok = self.get()?.clone();
+        let tok = self.get()?;
         let id = match tok.kind {
             TokenKind::Reserved(Reserved::Self_) => {
                 is_class_method = true;
@@ -1687,6 +1688,18 @@ impl Parser {
             TokenKind::Punct(Punct::Plus) => self.get_ident_id("+"),
             TokenKind::Punct(Punct::Minus) => self.get_ident_id("-"),
             TokenKind::Punct(Punct::Mul) => self.get_ident_id("*"),
+            TokenKind::Punct(Punct::LBracket) => {
+                if self.consume_punct_no_term(Punct::RBracket)? {
+                    if self.consume_punct_no_term(Punct::Assign)? {
+                        self.get_ident_id("[]=")
+                    } else {
+                        self.get_ident_id("[]")
+                    }
+                } else {
+                    let loc = self.loc();
+                    return Err(self.error_unexpected(loc, "Expected `]'"));
+                }
+            }
             _ => {
                 let loc = self.loc();
                 return Err(self.error_unexpected(loc, "Expected identifier or operator."));

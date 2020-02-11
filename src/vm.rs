@@ -627,44 +627,21 @@ impl VM {
                 Inst::SET_ARRAY_ELEM => {
                     let arg_num = read32(iseq, self.pc + 1) as usize;
                     let args = self.pop_args(arg_num);
-                    let arg_num = args.len();
-                    match self.stack_pop().is_object() {
+                    let receiver = self.stack_pop();
+                    let val = self.stack_pop();
+                    match receiver.is_object() {
                         Some(oref) => {
                             match oref.kind {
-                                ObjKind::Array(mut aref) => {
-                                    self.check_args_num(arg_num, 1, 2)?;
-                                    let index = args[0].expect_fixnum(&self, "Index")?;
-                                    if arg_num == 1 && index >= aref.elements.len() as i64 {
-                                        let padding = index as usize - aref.elements.len();
-                                        aref.elements
-                                            .append(&mut vec![PackedValue::nil(); padding]);
-                                        aref.elements.push(self.stack_pop());
-                                    } else {
-                                        let index =
-                                            self.get_array_index(index, aref.elements.len())?;
-                                        let val = self.stack_pop();
-                                        if arg_num == 1 {
-                                            aref.elements[index] = val;
-                                        } else {
-                                            let len = args[1].expect_fixnum(&self, "Index")?;
-                                            if len < 0 {
-                                                return Err(self.error_index(format!(
-                                                    "Negative length. {}",
-                                                    len
-                                                )));
-                                            } else {
-                                                let len = len as usize;
-                                                let end =
-                                                    std::cmp::min(aref.elements.len(), index + len);
-                                                aref.elements.drain(index..end);
-                                                aref.elements.insert(index, val);
-                                            }
-                                        }
+                                ObjKind::Array(_) => {
+                                    let mut arg = Args::new0(receiver, None);
+                                    for item in args {
+                                        arg.push(item);
                                     }
+                                    arg.push(val);
+                                    array_set_elem(self, &arg, None)?;
                                 }
                                 ObjKind::Hash(mut href) => {
                                     let key = args[0];
-                                    let val = self.stack_pop();
                                     href.map.insert(key, val);
                                 }
                                 _ => {
@@ -1909,15 +1886,16 @@ impl VM {
         context
     }
 
-    fn get_array_index(&self, idx_arg: i64, len: usize) -> Result<usize, RubyError> {
-        if idx_arg < 0 {
-            let i = len as i64 + idx_arg;
+    /// Calculate array index.
+    pub fn get_array_index(&self, index: i64, len: usize) -> Result<usize, RubyError> {
+        if index < 0 {
+            let i = len as i64 + index;
             if i < 0 {
                 return Err(self.error_unimplemented("Index out of range."));
             };
             Ok(i as usize)
-        } else if idx_arg < len as i64 {
-            Ok(idx_arg as usize)
+        } else if index < len as i64 {
+            Ok(index as usize)
         } else {
             return Err(self.error_unimplemented("Index out of range."));
         }

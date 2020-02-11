@@ -175,6 +175,7 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "to_i", toi);
     globals.add_builtin_instance_method(object, "instance_variable_set", instance_variable_set);
     globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
+    globals.add_builtin_instance_method(object, "floor", floor);
 
     {
         use std::env;
@@ -254,6 +255,19 @@ fn instance_variables(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VM
         .map(|x| PackedValue::symbol(*x))
         .collect();
     Ok(PackedValue::array_from(&vm.globals, res))
+}
+
+fn floor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let rec = args.self_value;
+    if rec.is_packed_fixnum() {
+        Ok(rec)
+    } else if rec.is_packed_num() {
+        let res = rec.as_packed_flonum().floor() as i64;
+        Ok(PackedValue::fixnum(res))
+    } else {
+        Err(vm.error_type("Receiver must be Integer of Float."))
+    }
 }
 
 #[cfg(test)]

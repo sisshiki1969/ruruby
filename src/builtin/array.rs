@@ -1,3 +1,4 @@
+use crate::error::RubyError;
 use crate::vm::*;
 
 #[derive(Debug, Clone)]
@@ -23,6 +24,7 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     let array_id = globals.get_ident_id("Array");
     let class = ClassRef::from(array_id, globals.object);
     let obj = PackedValue::class(globals, class);
+    globals.add_builtin_instance_method(class, "[]=", array_set_elem);
     globals.add_builtin_instance_method(class, "push", array_push);
     globals.add_builtin_instance_method(class, "<<", array_push);
     globals.add_builtin_instance_method(class, "pop", array_pop);
@@ -35,11 +37,14 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "+", array_add);
     globals.add_builtin_instance_method(class, "-", array_sub);
     globals.add_builtin_instance_method(class, "map", array_map);
+    globals.add_builtin_instance_method(class, "flat_map", array_flat_map);
     globals.add_builtin_instance_method(class, "each", array_each);
     globals.add_builtin_instance_method(class, "include?", array_include);
     globals.add_builtin_instance_method(class, "reverse", array_reverse);
     globals.add_builtin_instance_method(class, "reverse!", array_reverse_);
     globals.add_builtin_instance_method(class, "transpose", array_transpose);
+    globals.add_builtin_instance_method(class, "min", array_min);
+    globals.add_builtin_instance_method(class, "fill", array_fill);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -80,6 +85,35 @@ fn array_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
 }
 
 // Instance methods
+
+pub fn array_set_elem(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 2, 3)?;
+    let mut aref = self_array!(args, vm);
+    let val = if args.len() == 3 { args[2] } else { args[1] };
+    let index = args[0].expect_fixnum(&vm, "Index")?;
+    if args.len() == 2 {
+        if index >= aref.elements.len() as i64 {
+            let padding = index as usize - aref.elements.len();
+            aref.elements.append(&mut vec![PackedValue::nil(); padding]);
+            aref.elements.push(val);
+        } else {
+            let index = vm.get_array_index(index, aref.elements.len())?;
+            aref.elements[index] = val;
+        }
+    } else {
+        let index = vm.get_array_index(index, aref.elements.len())?;
+        let len = args[1].expect_fixnum(&vm, "Length")?;
+        if len < 0 {
+            return Err(vm.error_index(format!("Negative length. {}", len)));
+        } else {
+            let len = len as usize;
+            let end = std::cmp::min(aref.elements.len(), index + len);
+            aref.elements.drain(index..end);
+            aref.elements.insert(index, val);
+        }
+    };
+    Ok(val)
+}
 
 fn array_push(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let mut aref = self_array!(args, vm);
@@ -206,11 +240,64 @@ fn array_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     };
     let mut res = vec![];
     let context = vm.context();
-    let mut arg = Args::new1(context.self_value, None, PackedValue::nil());
-    for i in &aref.elements {
-        arg[0] = *i;
+    let param_num = iseq.req_params;
+    let mut arg = Args::new(param_num);
+    arg.self_value = context.self_value;
+    for elem in &aref.elements {
+        if param_num == 0 {
+        } else if param_num == 1 {
+            arg[0] = *elem;
+        } else {
+            match elem.as_array() {
+                Some(ary) => {
+                    for i in 0..param_num {
+                        arg[i] = ary.elements[i];
+                    }
+                }
+                None => arg[0] = *elem,
+            }
+        }
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
         res.push(vm.stack_pop());
+    }
+    let res = PackedValue::array_from(&vm.globals, res);
+    Ok(res)
+}
+
+fn array_flat_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+    let aref = self_array!(args, vm);
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let mut res = vec![];
+    let context = vm.context();
+    let param_num = iseq.req_params;
+    let mut arg = Args::new(param_num);
+    arg.self_value = context.self_value;
+    for elem in &aref.elements {
+        if param_num == 0 {
+        } else if param_num == 1 {
+            arg[0] = *elem;
+        } else {
+            match elem.as_array() {
+                Some(ary) => {
+                    for i in 0..param_num {
+                        arg[i] = ary.elements[i];
+                    }
+                }
+                None => arg[0] = *elem,
+            }
+        }
+
+        vm.vm_run(iseq, Some(context), &arg, None, None)?;
+        let ary = vm.stack_pop();
+        match ary.as_array() {
+            Some(mut ary) => {
+                res.append(&mut ary.elements);
+            }
+            None => res.push(ary),
+        }
     }
     let res = PackedValue::array_from(&vm.globals, res);
     Ok(res)
@@ -285,4 +372,41 @@ fn array_transpose(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRes
     //aref.elements.reverse();
     let res = PackedValue::array_from(&vm.globals, trans);
     Ok(res)
+}
+
+fn array_min(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    fn to_float(vm: &VM, val: PackedValue) -> Result<f64, RubyError> {
+        if val.is_packed_fixnum() {
+            Ok(val.as_packed_fixnum() as f64)
+        } else if val.is_packed_num() {
+            Ok(val.as_packed_flonum())
+        } else {
+            Err(vm.error_type("Currently, each element must be Numeric."))
+        }
+    }
+
+    let aref = self_array!(args, vm);
+    if aref.elements.len() == 0 {
+        return Ok(PackedValue::nil());
+    }
+    let mut min_obj = aref.elements[0];
+    let mut min = to_float(vm, min_obj)?;
+    for elem in &aref.elements {
+        let elem_f = to_float(vm, *elem)?;
+        if elem_f < min {
+            min_obj = *elem;
+            min = elem_f;
+        }
+    }
+
+    return Ok(min_obj);
+}
+
+fn array_fill(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let mut aref = self_array!(args, vm);
+    for elem in &mut aref.elements {
+        *elem = args[0];
+    }
+    Ok(args.self_value)
 }

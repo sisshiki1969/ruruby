@@ -1,13 +1,5 @@
-class Foo
-    Bar = 100
-    Ker = 777
+a = [[1,2,3],[4,5,6],[7,8,9]].map do |x,y|
+    [y,x]
 end
 
-class Bar < Foo
-    Doo = 555
-end
-
-p Foo.const_get(:Bar)
-p Bar.const_get(:Bar)
-p Foo.constants
-p Bar.constants
+p a

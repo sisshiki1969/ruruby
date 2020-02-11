@@ -22,6 +22,7 @@ pub fn init_range(globals: &mut Globals) -> PackedValue {
     let class = ClassRef::from(id, globals.object);
     let obj = PackedValue::class(globals, class);
     globals.add_builtin_instance_method(class, "map", range_map);
+    globals.add_builtin_instance_method(class, "each", range_each);
     globals.add_builtin_instance_method(class, "begin", range_begin);
     globals.add_builtin_instance_method(class, "first", range_first);
     globals.add_builtin_instance_method(class, "end", range_end);
@@ -104,7 +105,7 @@ fn range_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let mut res = vec![];
     let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
-    let end = range.end.expect_fixnum(&vm, "Start")? + if range.exclude { 0 } else { 1 };
+    let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, PackedValue::fixnum(i));
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
@@ -112,6 +113,23 @@ fn range_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     }
     let res = PackedValue::array_from(&vm.globals, res);
     Ok(res)
+}
+
+fn range_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+    let range = args.self_value.as_range().unwrap();
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let context = vm.context();
+    let start = range.start.expect_fixnum(&vm, "Start")?;
+    let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    for i in start..end {
+        let arg = Args::new1(context.self_value, None, PackedValue::fixnum(i));
+        vm.vm_run(iseq, Some(context), &arg, None, None)?;
+        vm.stack_pop();
+    }
+    Ok(args.self_value)
 }
 
 fn range_toa(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {

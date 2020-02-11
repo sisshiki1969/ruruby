@@ -44,11 +44,14 @@ impl Builtin {
             for i in 0..args.len() {
                 println!("{}", vm.val_pp(args[i]));
             }
-            Ok(if args.len() == 1 {
-                args.self_value
+            if args.len() == 1 {
+                Ok(args[0])
             } else {
-                PackedValue::array_from(&vm.globals, args.to_vec())
-            })
+                Ok(PackedValue::array_from(
+                    &vm.globals,
+                    args.get_slice(0, args.len()).to_vec(),
+                ))
+            }
         }
 
         /// Built-in function "print".
