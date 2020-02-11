@@ -459,6 +459,23 @@ fn proc_next() {
 }
 
 #[test]
+fn proc_return() {
+    let program = "
+        def func(y)
+            [1,2,3,4].each do |x|
+                return 100 if x == y
+            end
+            0
+        end
+
+        assert(100, func(3))
+        assert(0, func(7))
+        ";
+    let expected = Value::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn local_var1() {
     let program = "
             ruby = 7

@@ -118,7 +118,7 @@ fn repl_vm() {
                     Err(err) => {
                         err.show_loc(0);
                         err.show_err();
-                        vm.exec_stack.clear();
+                        vm.stack_clear();
                     }
                 }
                 level = 0;

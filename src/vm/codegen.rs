@@ -225,6 +225,10 @@ impl Codegen {
         ISeqPos(iseq.len())
     }
 
+    fn gen_end(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::END);
+    }
+
     fn gen_return(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::RETURN);
     }
@@ -575,7 +579,7 @@ impl Codegen {
         self.gen(globals, &mut iseq, node, use_value)?;
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
-        iseq.push(Inst::END);
+        self.gen_end(&mut iseq);
         self.loc = save_loc;
 
         let info = MethodInfo::RubyFunc {
@@ -1416,7 +1420,7 @@ impl Codegen {
                         Some(cxt) => match cxt.kind {
                             ContextKind::Block => {
                                 self.gen(globals, iseq, val, true)?;
-                                self.gen_return(iseq);
+                                self.gen_end(iseq);
                             }
                             ContextKind::Method => {
                                 return Err(self.error_syntax("Invalid next.", loc.merge(self.loc)));

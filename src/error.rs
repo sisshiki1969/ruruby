@@ -1,4 +1,5 @@
 use crate::util::{Loc, SourceInfoRef};
+use crate::vm::method::MethodRef;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RubyError {
@@ -50,6 +51,9 @@ impl RubyError {
                 RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
                 RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
             },
+            RubyErrorKind::MethodReturn(_) => {
+                eprintln!("LocalJumpError");
+            }
         }
     }
 }
@@ -58,6 +62,7 @@ impl RubyError {
 pub enum RubyErrorKind {
     ParseErr(ParseErrKind),
     RuntimeErr(RuntimeErrKind),
+    MethodReturn(MethodRef),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +89,7 @@ impl RubyError {
         let kind = RubyErrorKind::RuntimeErr(err);
         RubyError::new(kind, source_info, 0, loc)
     }
+
     pub fn new_parse_err(
         err: ParseErrKind,
         source_info: SourceInfoRef,
@@ -92,5 +98,9 @@ impl RubyError {
     ) -> Self {
         let kind = RubyErrorKind::ParseErr(err);
         RubyError::new(kind, source_info, level, loc)
+    }
+
+    pub fn new_method_return(method: MethodRef, source_info: SourceInfoRef, loc: Loc) -> Self {
+        RubyError::new(RubyErrorKind::MethodReturn(method), source_info, 0, loc)
     }
 }

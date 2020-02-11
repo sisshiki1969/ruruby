@@ -13,6 +13,7 @@ pub struct Context {
     pub pc: usize,
     pub outer: Option<ContextRef>,
     pub on_stack: bool,
+    pub stack_len: usize,
 }
 
 pub type ContextRef = Ref<Context>;
@@ -39,6 +40,7 @@ impl Context {
             pc: 0,
             outer,
             on_stack: true,
+            stack_len: 0,
         }
     }
 
