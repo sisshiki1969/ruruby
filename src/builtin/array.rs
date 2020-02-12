@@ -3,11 +3,11 @@ use crate::vm::*;
 
 #[derive(Debug, Clone)]
 pub struct ArrayInfo {
-    pub elements: Vec<PackedValue>,
+    pub elements: Vec<Value>,
 }
 
 impl ArrayInfo {
-    pub fn new(elements: Vec<PackedValue>) -> Self {
+    pub fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
     }
 }
@@ -15,15 +15,15 @@ impl ArrayInfo {
 pub type ArrayRef = Ref<ArrayInfo>;
 
 impl ArrayRef {
-    pub fn from(elements: Vec<PackedValue>) -> Self {
+    pub fn from(elements: Vec<Value>) -> Self {
         ArrayRef::new(ArrayInfo::new(elements))
     }
 }
 
-pub fn init_array(globals: &mut Globals) -> PackedValue {
+pub fn init_array(globals: &mut Globals) -> Value {
     let array_id = globals.get_ident_id("Array");
     let class = ClassRef::from(array_id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "[]=", array_set_elem);
     globals.add_builtin_instance_method(class, "push", array_push);
     globals.add_builtin_instance_method(class, "<<", array_push);
@@ -45,6 +45,7 @@ pub fn init_array(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "transpose", array_transpose);
     globals.add_builtin_instance_method(class, "min", array_min);
     globals.add_builtin_instance_method(class, "fill", array_fill);
+    globals.add_builtin_instance_method(class, "clear", array_clear);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -65,8 +66,8 @@ fn array_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
-            Value::FixNum(num) if num >= 0 => vec![PackedValue::nil(); num as usize],
-            Value::Object(oref) => match oref.kind {
+            RValue::FixNum(num) if num >= 0 => vec![Value::nil(); num as usize],
+            RValue::Object(oref) => match oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
                 _ => return Err(vm.error_nomethod("Invalid arguments")),
             },
@@ -80,7 +81,7 @@ fn array_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         }
         _ => unreachable!(),
     };
-    let array = PackedValue::array_from(&vm.globals, array_vec);
+    let array = Value::array_from(&vm.globals, array_vec);
     Ok(array)
 }
 
@@ -94,7 +95,7 @@ pub fn array_set_elem(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VM
     if args.len() == 2 {
         if index >= aref.elements.len() as i64 {
             let padding = index as usize - aref.elements.len();
-            aref.elements.append(&mut vec![PackedValue::nil(); padding]);
+            aref.elements.append(&mut vec![Value::nil(); padding]);
             aref.elements.push(val);
         } else {
             let index = vm.get_array_index(index, aref.elements.len())?;
@@ -153,13 +154,13 @@ fn array_unshift(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
 
 fn array_length(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let aref = self_array!(args, vm);
-    let res = PackedValue::fixnum(aref.elements.len() as i64);
+    let res = Value::fixnum(aref.elements.len() as i64);
     Ok(res)
 }
 
 fn array_empty(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let aref = self_array!(args, vm);
-    let res = PackedValue::bool(aref.elements.is_empty());
+    let res = Value::bool(aref.elements.is_empty());
     Ok(res)
 }
 
@@ -167,14 +168,14 @@ fn array_mul(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let aref = self_array!(args, vm);
     let v = match args[0].unpack() {
-        Value::FixNum(num) => match num {
+        RValue::FixNum(num) => match num {
             i if i < 0 => return Err(vm.error_argument("Negative argument.")),
             0 => vec![],
             1 => aref.elements.clone(),
             _ => {
                 let len = aref.elements.len();
                 let src = &aref.elements[0..len];
-                let mut v = vec![PackedValue::nil(); len * num as usize];
+                let mut v = vec![Value::nil(); len * num as usize];
                 //println!("dest:{:?} src:{:?}", aref.elements, src);
                 let mut i = 0;
                 for _ in 0..num {
@@ -186,7 +187,7 @@ fn array_mul(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         },
         _ => return Err(vm.error_nomethod(" ")),
     };
-    let res = PackedValue::array_from(&vm.globals, v);
+    let res = Value::array_from(&vm.globals, v);
     Ok(res)
 }
 
@@ -203,7 +204,7 @@ fn array_add(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         .elements
         .clone();
     lhs.append(&mut rhs);
-    Ok(PackedValue::array_from(&vm.globals, lhs))
+    Ok(Value::array_from(&vm.globals, lhs))
 }
 
 fn array_sub(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -229,7 +230,7 @@ fn array_sub(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             v.push(*lhs)
         }
     }
-    Ok(PackedValue::array_from(&vm.globals, v))
+    Ok(Value::array_from(&vm.globals, v))
 }
 
 fn array_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
@@ -260,7 +261,7 @@ fn array_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
         res.push(vm.stack_pop());
     }
-    let res = PackedValue::array_from(&vm.globals, res);
+    let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
 
@@ -299,7 +300,7 @@ fn array_flat_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResul
             None => res.push(ary),
         }
     }
-    let res = PackedValue::array_from(&vm.globals, res);
+    let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
 
@@ -310,7 +311,7 @@ fn array_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();
-    let mut arg = Args::new1(context.self_value, None, PackedValue::nil());
+    let mut arg = Args::new1(context.self_value, None, Value::nil());
     for i in &aref.elements {
         arg[0] = *i;
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
@@ -323,7 +324,7 @@ fn array_include(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
     let target = args[0];
     let aref = self_array!(args, vm);
     let res = aref.elements.iter().any(|x| x.clone().equal(target));
-    Ok(PackedValue::bool(res))
+    Ok(Value::bool(res))
 }
 
 fn array_reverse(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -331,7 +332,7 @@ fn array_reverse(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
     let aref = self_array!(args, vm);
     let mut res = aref.elements.clone();
     res.reverse();
-    Ok(PackedValue::array_from(&vm.globals, res))
+    Ok(Value::array_from(&vm.globals, res))
 }
 
 fn array_reverse_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -345,7 +346,7 @@ fn array_transpose(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRes
     vm.check_args_num(args.len(), 0, 0)?;
     let aref = self_array!(args, vm);
     if aref.elements.len() == 0 {
-        return Ok(PackedValue::array_from(&vm.globals, vec![]));
+        return Ok(Value::array_from(&vm.globals, vec![]));
     }
     let mut vec = vec![];
     for elem in &aref.elements {
@@ -366,16 +367,16 @@ fn array_transpose(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRes
             }
             temp.push(v[i]);
         }
-        let ary = PackedValue::array_from(&vm.globals, temp);
+        let ary = Value::array_from(&vm.globals, temp);
         trans.push(ary);
     }
     //aref.elements.reverse();
-    let res = PackedValue::array_from(&vm.globals, trans);
+    let res = Value::array_from(&vm.globals, trans);
     Ok(res)
 }
 
 fn array_min(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    fn to_float(vm: &VM, val: PackedValue) -> Result<f64, RubyError> {
+    fn to_float(vm: &VM, val: Value) -> Result<f64, RubyError> {
         if val.is_packed_fixnum() {
             Ok(val.as_packed_fixnum() as f64)
         } else if val.is_packed_num() {
@@ -387,7 +388,7 @@ fn array_min(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
 
     let aref = self_array!(args, vm);
     if aref.elements.len() == 0 {
-        return Ok(PackedValue::nil());
+        return Ok(Value::nil());
     }
     let mut min_obj = aref.elements[0];
     let mut min = to_float(vm, min_obj)?;
@@ -408,5 +409,12 @@ fn array_fill(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     for elem in &mut aref.elements {
         *elem = args[0];
     }
+    Ok(args.self_value)
+}
+
+fn array_clear(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut aref = self_array!(args, vm);
+    aref.elements.clear();
     Ok(args.self_value)
 }

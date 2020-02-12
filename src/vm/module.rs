@@ -14,7 +14,7 @@ pub fn init_module(globals: &mut Globals) {
 }
 
 fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
-    let mut v: Vec<PackedValue> = vec![];
+    let mut v: Vec<Value> = vec![];
     let mut class = args.self_value;
     loop {
         v.append(
@@ -30,7 +30,7 @@ fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
                         .unwrap()
                         .is_ascii_uppercase()
                 })
-                .map(|k| PackedValue::symbol(*k))
+                .map(|k| Value::symbol(*k))
                 .collect(),
         );
         match class.superclass() {
@@ -44,7 +44,7 @@ fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             None => break,
         }
     }
-    Ok(PackedValue::array_from(&vm.globals, v))
+    Ok(Value::array_from(&vm.globals, v))
 }
 
 fn const_get(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -66,9 +66,9 @@ fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRe
             let v = class
                 .method_table
                 .keys()
-                .map(|k| PackedValue::symbol(*k))
+                .map(|k| Value::symbol(*k))
                 .collect();
-            Ok(PackedValue::array_from(&vm.globals, v))
+            Ok(Value::array_from(&vm.globals, v))
         }
         true => {
             let mut v = std::collections::HashSet::new();
@@ -78,7 +78,7 @@ fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRe
                         &class
                             .method_table
                             .keys()
-                            .map(|k| PackedValue::symbol(*k))
+                            .map(|k| Value::symbol(*k))
                             .collect(),
                     )
                     .cloned()
@@ -88,10 +88,7 @@ fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRe
                     None => break,
                 };
             }
-            Ok(PackedValue::array_from(
-                &vm.globals,
-                v.iter().cloned().collect(),
-            ))
+            Ok(Value::array_from(&vm.globals, v.iter().cloned().collect()))
         }
     }
 }
@@ -106,7 +103,7 @@ fn attr_accessor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
     }
-    Ok(PackedValue::nil())
+    Ok(Value::nil())
 }
 
 fn attr_reader(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -118,7 +115,7 @@ fn attr_reader(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
     }
-    Ok(PackedValue::nil())
+    Ok(Value::nil())
 }
 
 fn attr_writer(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -130,10 +127,10 @@ fn attr_writer(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
     }
-    Ok(PackedValue::nil())
+    Ok(Value::nil())
 }
 
-fn define_reader(vm: &mut VM, class: PackedValue, id: IdentId) {
+fn define_reader(vm: &mut VM, class: Value, id: IdentId) {
     let instance_var_id = get_instance_var(vm, id);
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
@@ -142,7 +139,7 @@ fn define_reader(vm: &mut VM, class: PackedValue, id: IdentId) {
     vm.add_instance_method(class, id, methodref);
 }
 
-fn define_writer(vm: &mut VM, class: PackedValue, id: IdentId) {
+fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
     let instance_var_id = get_instance_var(vm, id);
     let assign_id = vm.globals.ident_table.add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
@@ -160,12 +157,12 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
 fn module_function(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     vm.define_mode_mut().module_function = true;
-    Ok(PackedValue::nil())
+    Ok(Value::nil())
 }
 
 fn singleton_class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let class = vm.val_as_module(args.self_value)?;
-    Ok(PackedValue::bool(class.is_singleton))
+    Ok(Value::bool(class.is_singleton))
 }
 
 #[cfg(test)]
@@ -184,7 +181,7 @@ mod test {
     assert(123, Foo.bar)
     assert(123, Foo.new.bar)
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 
@@ -211,7 +208,7 @@ mod test {
     assert(true, ary_cmp(Foo.constants, [:Bar, :Ker]))
     assert(true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker]))
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 
@@ -229,7 +226,7 @@ mod test {
     assert 1000, bar.car
     assert :something, bar.cdr
     ";
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 
@@ -254,7 +251,7 @@ mod test {
     assert(true, ary_cmp(A.constants, [:Bar, :Foo]))
     assert(true, ary_cmp(A.instance_methods - Class.instance_methods, [:fn, :fo]))
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 }

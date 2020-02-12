@@ -1,6 +1,6 @@
 use crate::vm::*;
 
-pub fn init_string(globals: &mut Globals) -> PackedValue {
+pub fn init_string(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("String");
     let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "start_with?", string_start_with);
@@ -11,7 +11,7 @@ pub fn init_string(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "=~", string_rmatch);
     globals.add_builtin_instance_method(class, "tr", string_tr);
     globals.add_builtin_instance_method(class, "size", string_size);
-    PackedValue::class(globals, class)
+    Value::class(globals, class)
 }
 
 fn string_start_with(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -22,14 +22,14 @@ fn string_start_with(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMR
         None => return Err(vm.error_argument("An arg must be a String.")),
     };
     let res = string.starts_with(arg);
-    Ok(PackedValue::bool(res))
+    Ok(Value::bool(res))
 }
 
 fn string_to_sym(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let string = args.self_value.as_string().unwrap();
     let id = vm.globals.get_ident_id(string);
-    Ok(PackedValue::symbol(id))
+    Ok(Value::symbol(id))
 }
 
 fn string_split(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -42,15 +42,15 @@ fn string_split(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
         0
     };
     if lim == 1 {
-        let vec = vec![PackedValue::string(string.to_string())];
-        let ary = PackedValue::array_from(&vm.globals, vec);
+        let vec = vec![Value::string(string.to_string())];
+        let ary = Value::array_from(&vm.globals, vec);
         return Ok(ary);
     } else if lim < 0 {
         let vec = string
             .split(sep)
-            .map(|x| PackedValue::string(x.to_string()))
+            .map(|x| Value::string(x.to_string()))
             .collect();
-        let ary = PackedValue::array_from(&vm.globals, vec);
+        let ary = Value::array_from(&vm.globals, vec);
         return Ok(ary);
     } else if lim == 0 {
         let mut vec: Vec<&str> = string.split(sep).collect();
@@ -66,18 +66,15 @@ fn string_split(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
                 None => break,
             }
         }
-        let vec = vec
-            .iter()
-            .map(|x| PackedValue::string(x.to_string()))
-            .collect();
-        let ary = PackedValue::array_from(&vm.globals, vec);
+        let vec = vec.iter().map(|x| Value::string(x.to_string())).collect();
+        let ary = Value::array_from(&vm.globals, vec);
         return Ok(ary);
     } else {
         let vec = string
             .splitn(lim as usize, sep)
-            .map(|x| PackedValue::string(x.to_string()))
+            .map(|x| Value::string(x.to_string()))
             .collect();
-        let ary = PackedValue::array_from(&vm.globals, vec);
+        let ary = Value::array_from(&vm.globals, vec);
         return Ok(ary);
     }
 }
@@ -97,7 +94,7 @@ fn string_gsub(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     };
     let replace = args[1].as_string().unwrap();
     let res = regexp.replace_all(&given, replace.as_str()).to_string();
-    Ok(PackedValue::string(res))
+    Ok(Value::string(res))
 }
 
 fn string_rmatch(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -109,8 +106,8 @@ fn string_rmatch(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
         return Err(vm.error_argument("1st arg must be RegExp."));
     };
     let res = match regexp.find(given) {
-        Some(mat) => PackedValue::fixnum(mat.start() as i64),
-        None => PackedValue::nil(),
+        Some(mat) => Value::fixnum(mat.start() as i64),
+        None => Value::nil(),
     };
     Ok(res)
 }
@@ -121,11 +118,11 @@ fn string_tr(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let from = args[0].as_string().unwrap();
     let to = args[1].as_string().unwrap();
     let res = rec.replace(from, to);
-    Ok(PackedValue::string(res))
+    Ok(Value::string(res))
 }
 
 fn string_size(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let rec = args.self_value.as_string().unwrap();
-    Ok(PackedValue::fixnum(rec.chars().count() as i64))
+    Ok(Value::fixnum(rec.chars().count() as i64))
 }

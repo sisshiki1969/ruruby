@@ -5,55 +5,55 @@ extern crate test;
 use ruruby::lexer::Lexer;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::test::eval_script;
-use ruruby::vm::value::Value;
+use ruruby::vm::value::RValue;
 use ruruby::vm::*;
 use test::Bencher;
 
 #[test]
 fn expr1() {
     let program = "4*(4+7*3)-95";
-    let expected = Value::FixNum(5);
+    let expected = RValue::FixNum(5);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr2() {
     let program = "2.0 + 4.0";
-    let expected = Value::FloatNum(6.0);
+    let expected = RValue::FloatNum(6.0);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr3() {
     let program = "5.0 / 2";
-    let expected = Value::FloatNum(2.5);
+    let expected = RValue::FloatNum(2.5);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr4() {
     let program = "15<<30";
-    let expected = Value::FixNum(16106127360);
+    let expected = RValue::FixNum(16106127360);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr5() {
     let program = "23456>>3";
-    let expected = Value::FixNum(2932);
+    let expected = RValue::FixNum(2932);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr6() {
     let program = "24+17 >> 3 == 5";
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 #[test]
 fn expr7() {
     let program = "864 == 3+24<<5";
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -66,7 +66,7 @@ fn expr8() {
         assert(201, -275&475)
         assert(-1301, 487555|-25879)
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -76,7 +76,7 @@ fn expr9() {
         a=19
         a==17?23*45:14+7
         ";
-    let expected = Value::FixNum(21);
+    let expected = RValue::FixNum(21);
     eval_script(program, expected);
 }
 
@@ -98,21 +98,21 @@ fn expr10() {
         assert(false, !0)
         assert(false, !"windows")
         "#;
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
 #[test]
 fn op1() {
     let program = "4==5";
-    let expected = Value::Bool(false);
+    let expected = RValue::Bool(false);
     eval_script(program, expected);
 }
 
 #[test]
 fn op2() {
     let program = "4!=5";
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -125,7 +125,7 @@ fn op3() {
         assert(true, 12345678==12345678)
         assert(true, 1234.5678==1234.5678)
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -138,7 +138,7 @@ fn op4() {
         assert(false, 12345678!=12345678)
         assert(false, 1234.5678!=1234.5678)
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -150,14 +150,14 @@ fn op9() {
         assert(4, nil || 4)
         assert(nil, nil || nil)
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
 #[test]
 fn op10() {
     let program = "4==4 && 4!=5 && 3<4 && 5>4 && 4<=4 && 4>=4";
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -166,7 +166,7 @@ fn int1() {
     let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
     let i2 = 0x4000_0000_0000_0005u64 as i64;
     let program = format!("{}+6=={}", i1, i2);
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -175,7 +175,7 @@ fn int2() {
     let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
     let i2 = 0x4000_0000_0000_0005u64 as i64;
     let program = format!("{}-6=={}", i2, i1);
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -184,7 +184,7 @@ fn int3() {
     let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
     let i2 = 0xc000_0000_0000_0005u64 as i64;
     let program = format!("{}+6=={}", i1, i2);
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -193,7 +193,7 @@ fn int4() {
     let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
     let i2 = 0xc000_0000_0000_0005u64 as i64;
     let program = format!("{}-6=={}", i2, i1);
-    let expected = Value::Bool(true);
+    let expected = RValue::Bool(true);
     eval_script(program, expected);
 }
 
@@ -212,7 +212,7 @@ fn int_index() {
         assert(0, i[7])
         assert(0, i[700])
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -238,7 +238,7 @@ fn objects() {
         assert(Class, Proc.class)
         assert(Class, Method.class)
     "#;
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -256,14 +256,14 @@ fn triple_equal() {
         assert(true, String === "ruby")
         assert(false, String === 100)
     "#;
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
 #[test]
 fn if1() {
     let program = "if 5*4==16 +4 then 4;2*3+1 end";
-    let expected = Value::FixNum(7);
+    let expected = RValue::FixNum(7);
     eval_script(program, expected);
 }
 
@@ -274,7 +274,7 @@ fn if2() {
         4
         3*3
         -2 end";
-    let expected = Value::FixNum(-2);
+    let expected = RValue::FixNum(-2);
     eval_script(program, expected);
 }
 
@@ -283,7 +283,7 @@ fn if3() {
     let program = "if 5*9==16 +4
         7 elsif 4==4+9 then 8 elsif 3==1+2 then 10
         else 12 end";
-    let expected = Value::FixNum(10);
+    let expected = RValue::FixNum(10);
     eval_script(program, expected);
 }
 
@@ -296,49 +296,49 @@ fn if4() {
             4
             5
             end";
-    let expected = Value::FixNum(5);
+    let expected = RValue::FixNum(5);
     eval_script(program, expected);
 }
 
 #[test]
 fn if5() {
     let program = "a = 77 if 1+2 == 3";
-    let expected = Value::FixNum(77);
+    let expected = RValue::FixNum(77);
     eval_script(program, expected);
 }
 
 #[test]
 fn if6() {
     let program = "a = 77 if 1+3 == 3";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
 #[test]
 fn unless1() {
     let program = "a = 5; unless a > 3 then 10 else 50 end";
-    let expected = Value::FixNum(50);
+    let expected = RValue::FixNum(50);
     eval_script(program, expected);
 }
 
 #[test]
 fn unless2() {
     let program = "a = 5; unless a < 3 then 10 else 50 end";
-    let expected = Value::FixNum(10);
+    let expected = RValue::FixNum(10);
     eval_script(program, expected);
 }
 
 #[test]
 fn unless3() {
     let program = "a = 5; a = 7 unless a == 3; a";
-    let expected = Value::FixNum(7);
+    let expected = RValue::FixNum(7);
     eval_script(program, expected);
 }
 
 #[test]
 fn unless4() {
     let program = "a = 5; a = 7 unless a == 5; a";
-    let expected = Value::FixNum(5);
+    let expected = RValue::FixNum(5);
     eval_script(program, expected);
 }
 
@@ -350,7 +350,7 @@ fn for1() {
             y=y+x
             end
             y";
-    let expected = Value::FixNum(45);
+    let expected = RValue::FixNum(45);
     eval_script(program, expected);
 }
 
@@ -362,7 +362,7 @@ fn for2() {
             y=y+x
             end
             y";
-    let expected = Value::FixNum(36);
+    let expected = RValue::FixNum(36);
     eval_script(program, expected);
 }
 
@@ -375,7 +375,7 @@ fn for3() {
             y=y+x
         end
         y";
-    let expected = Value::FixNum(10);
+    let expected = RValue::FixNum(10);
     eval_script(program, expected);
 }
 
@@ -388,7 +388,7 @@ fn for4() {
             y=y+x
         end
         y";
-    let expected = Value::FixNum(40);
+    let expected = RValue::FixNum(40);
     eval_script(program, expected);
 }
 
@@ -398,7 +398,7 @@ fn for5() {
         assert(for a in 0..2 do end, 0..2)
         assert(for a in 0..2 do if a == 1 then break end end, nil)
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -410,7 +410,7 @@ fn while1() {
         assert((a = 0; while a < 5 do puts a; a+=1 end), nil)
         assert((a = 0; while a < 5 do puts a; break if a == 3; a+=1 end), nil)
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -419,7 +419,7 @@ fn while2() {
     let program = "
         assert((a = 0; a+=1 while a < 5; a), 5)
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -431,7 +431,7 @@ fn until1() {
         assert((a = 0; until a == 4 do puts a; a+=1 end), nil)
         assert((a = 0; until a == 4 do puts a; break if a == 3; a+=1 end), nil)
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -440,7 +440,7 @@ fn until2() {
     let program = "
         assert((a = 0; a+=1 until a == 5; a), 5)
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -454,7 +454,7 @@ fn proc_next() {
         assert(200, p.call(1))
         assert(100, p.call(7))
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -471,7 +471,7 @@ fn proc_return() {
         assert(100, func(3))
         assert(0, func(7))
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -481,7 +481,7 @@ fn local_var1() {
             ruby = 7
             mruby = (ruby - 4) * 5
             mruby - ruby";
-    let expected = Value::FixNum(8);
+    let expected = RValue::FixNum(8);
     eval_script(program, expected);
 }
 
@@ -497,7 +497,7 @@ fn global_var() {
                 end
             end
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -509,7 +509,7 @@ fn mul_assign1() {
             assert(2,b)
             assert(3,c)
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -520,7 +520,7 @@ fn mul_assign2() {
             assert(1,d)
             assert(2,e)
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -532,7 +532,7 @@ fn mul_assign3() {
             assert(2,g)
             assert(nil,h)
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -543,7 +543,7 @@ fn mul_assign4() {
             assert([1,2,3],f)
             assert([1,2,3],(f=1,2,3))
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -554,7 +554,7 @@ fn mul_assign5() {
             assert([a,b,c],[1,2,nil])
             assert(d,[1,2])
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -565,7 +565,7 @@ fn mul_assign6() {
             assert([a,b,c],[1,2,3])
             assert(d,[1,2,3,4,5])
             ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -580,7 +580,7 @@ fn mul_assign7() {
         a = *[1,2,3]
         assert(a,[1,2,3])
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -590,7 +590,7 @@ fn const1() {
             Ruby = 777
             Ruby = Ruby * 2
             Ruby / 111";
-    let expected = Value::FixNum(14);
+    let expected = RValue::FixNum(14);
     eval_script(program, expected);
 }
 
@@ -612,7 +612,7 @@ fn const2() {
             end
             Foo.new.foo
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -622,7 +622,7 @@ fn range1() {
     assert(Range.new(5,10), 5..10)
     assert(Range.new(5,10, false), 5..10)
     assert(Range.new(5,10, true), 5...10)";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -639,7 +639,7 @@ fn range2() {
     assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
     assert(Range.new(5,10,true).last(4), [6,7,8,9])
     assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -649,7 +649,7 @@ fn regexp1() {
     assert("abc!!g", "abcdefg".gsub(/def/, "!!"))
     assert("2.5".gsub(".", ","), "2,5")
     "#;
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -669,7 +669,7 @@ fn method1() {
     m = Foo.method(:boo)
     assert("class 99", m.call(99))
     "#;
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -692,7 +692,7 @@ fn local_scope() {
         assert(3,Foo.new.bar)
         assert(10,Foo.new.boo(5))
         assert(1,a)";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -710,7 +710,7 @@ fn class1() {
         end
 
         Vec.new.len(3,4)";
-    let expected = Value::FixNum(25);
+    let expected = RValue::FixNum(25);
     eval_script(program, expected);
 }
 
@@ -740,7 +740,7 @@ fn class2() {
         assert(101, Vec.get_xxx)
         assert(102, Vec.get_xxx)
         assert(103, Vec.get_xxx)";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -756,7 +756,7 @@ fn class3() {
         assert(Class, Bar.class)
         assert(Bar, Bar.new.class)
         assert(Integer, -3456.class)";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -780,7 +780,7 @@ fn initialize() {
     v2 = v1.add(Vec.new(4.7, 8))
     assert(7.7, v2.x)
     assert(13.9, v2.y)";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -804,7 +804,7 @@ fn define_binop() {
     assert v.x, 5
     assert v.y, 9
     ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -817,7 +817,7 @@ fn lambda_literal() {
         assert 100, f0.call
         assert 300, f1.call(50)
         assert 35, f2.call(5,7)";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -837,7 +837,7 @@ fn closure1() {
         assert 101, p.call
         assert 102, p.call
         assert 103, p.call";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -849,7 +849,7 @@ fn closure2() {
         assert 5, f.call.call.call
         a = 7;
         assert 7, f.call.call.call";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -877,7 +877,7 @@ fn method_chain1() {
             .inc()
             .a
         assert 2, ans2";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -900,7 +900,7 @@ fn method_chain2() {
         assert [4,4,4,4], [1,2,3,4].map do || 4 end
         assert [7,7,7,7], [1,2,3,4].map do | | 7 end
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -917,7 +917,7 @@ fn assign_op() {
         assert 2, a&=2
         assert 11, a|=9
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -939,6 +939,6 @@ fn is_a() {
         assert false, obj.is_a?(Array)
         assert false, obj.is_a?(M)
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }

@@ -19,10 +19,10 @@ impl ProcRef {
     }
 }
 
-pub fn init_proc(globals: &mut Globals) -> PackedValue {
+pub fn init_proc(globals: &mut Globals) -> Value {
     let proc_id = globals.get_ident_id("Proc");
     let class = ClassRef::from(proc_id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "call", proc_call);
     globals.add_builtin_class_method(obj, "new", proc_new);
     obj
@@ -34,7 +34,7 @@ fn proc_new(vm: &mut VM, _args: &Args, block: Option<MethodRef>) -> VMResult {
     let procobj = match block {
         Some(block) => {
             let context = vm.create_context_from_method(block)?;
-            PackedValue::procobj(&vm.globals, context)
+            Value::procobj(&vm.globals, context)
         }
         None => return Err(vm.error_type("Needs block.")),
     };

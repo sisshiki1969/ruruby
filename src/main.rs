@@ -70,7 +70,7 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
 }
 
 fn repl_vm() {
-    println!("Value: {}", std::mem::size_of::<Value>());
+    println!("RValue: {}", std::mem::size_of::<RValue>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     let mut rl = rustyline::Editor::<()>::new();

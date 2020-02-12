@@ -85,7 +85,7 @@ pub struct ISeqInfo {
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
-    pub class_stack: Option<Vec<PackedValue>>,
+    pub class_stack: Option<Vec<Value>>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
@@ -93,7 +93,8 @@ pub struct ISeqInfo {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ISeqKind {
-    Method,
+    Other,
+    Method(IdentId),
     Proc(MethodRef),
 }
 
@@ -153,7 +154,7 @@ impl ISeqInfo {
             LvarCollector::new(),
             vec![],
             SourceInfoRef::empty(),
-            ISeqKind::Method,
+            ISeqKind::Method(IdentId::from(0)),
         )
     }
 }
@@ -206,12 +207,12 @@ impl GlobalMethodTable {
 #[derive(Debug, Clone)]
 pub struct MethodObjInfo {
     pub name: IdentId,
-    pub receiver: PackedValue,
+    pub receiver: Value,
     pub method: MethodRef,
 }
 
 impl MethodObjInfo {
-    pub fn new(name: IdentId, receiver: PackedValue, method: MethodRef) -> Self {
+    pub fn new(name: IdentId, receiver: Value, method: MethodRef) -> Self {
         MethodObjInfo {
             name,
             receiver,
@@ -223,16 +224,16 @@ impl MethodObjInfo {
 pub type MethodObjRef = Ref<MethodObjInfo>;
 
 impl MethodObjRef {
-    pub fn from(name: IdentId, receiver: PackedValue, method: MethodRef) -> Self {
+    pub fn from(name: IdentId, receiver: Value, method: MethodRef) -> Self {
         MethodObjRef::new(MethodObjInfo::new(name, receiver, method))
     }
 }
 
-pub fn init_method(globals: &mut Globals) -> PackedValue {
+pub fn init_method(globals: &mut Globals) -> Value {
     let proc_id = globals.get_ident_id("Method");
     let class = ClassRef::from(proc_id, globals.object);
     globals.add_builtin_instance_method(class, "call", method_call);
-    PackedValue::class(globals, class)
+    Value::class(globals, class)
 }
 
 fn method_call(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {

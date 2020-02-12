@@ -505,6 +505,7 @@ impl Codegen {
         lvar_collector: &LvarCollector,
         use_value: bool,
         is_block: bool,
+        name: Option<IdentId>,
     ) -> Result<MethodRef, RubyError> {
         let methodref = globals.new_method();
         if !is_block {
@@ -604,8 +605,10 @@ impl Codegen {
                 self.source_info,
                 if is_block {
                     ISeqKind::Proc(*self.method_stack.last().unwrap())
+                } else if name.is_some() {
+                    ISeqKind::Method(name.unwrap())
                 } else {
-                    ISeqKind::Method
+                    ISeqKind::Other
                 },
             )),
         };
@@ -1324,7 +1327,7 @@ impl Codegen {
                         NodeKind::Proc { params, body, lvar } => {
                             self.loop_stack.push(LoopInfo::new_top());
                             let methodref =
-                                self.gen_iseq(globals, params, body, lvar, true, true)?;
+                                self.gen_iseq(globals, params, body, lvar, true, true, None)?;
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
                         }
@@ -1359,7 +1362,8 @@ impl Codegen {
                 };
             }
             NodeKind::MethodDef(id, params, body, lvar) => {
-                let methodref = self.gen_iseq(globals, params, body, lvar, true, false)?;
+                let methodref =
+                    self.gen_iseq(globals, params, body, lvar, true, false, Some(*id))?;
                 iseq.push(Inst::DEF_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
@@ -1368,7 +1372,8 @@ impl Codegen {
                 };
             }
             NodeKind::ClassMethodDef(id, params, body, lvar) => {
-                let methodref = self.gen_iseq(globals, params, body, lvar, true, false)?;
+                let methodref =
+                    self.gen_iseq(globals, params, body, lvar, true, false, Some(*id))?;
                 iseq.push(Inst::DEF_CLASS_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
@@ -1384,7 +1389,7 @@ impl Codegen {
                 lvar,
             } => {
                 let loc = node.loc();
-                let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false)?;
+                let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false, None)?;
                 self.gen(globals, iseq, superclass, true)?;
                 self.save_loc(iseq, loc);
                 iseq.push(Inst::DEF_CLASS);
@@ -1442,7 +1447,7 @@ impl Codegen {
             }
             NodeKind::Proc { params, body, lvar } => {
                 self.loop_stack.push(LoopInfo::new_top());
-                let methodref = self.gen_iseq(globals, params, body, lvar, true, true)?;
+                let methodref = self.gen_iseq(globals, params, body, lvar, true, true, None)?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
                 self.push32(iseq, methodref.into());

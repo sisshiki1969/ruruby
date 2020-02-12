@@ -1,5 +1,17 @@
-a = [[1,2,3],[4,5,6],[7,8,9]].map do |x,y|
-    [y,x]
+class Foo
+    def func(a,b)
+        puts "hi!"
+        p a,b
+    end
 end
 
-p a
+class Bar < Foo
+    def func(a,b)
+        puts "ho!"
+        super
+    end
+end
+
+Foo.new.func(3,4)
+
+Bar.new.func(3,4)

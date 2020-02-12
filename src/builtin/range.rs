@@ -2,13 +2,13 @@ use crate::vm::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RangeInfo {
-    pub start: PackedValue,
-    pub end: PackedValue,
+    pub start: Value,
+    pub end: Value,
     pub exclude: bool,
 }
 
 impl RangeInfo {
-    pub fn new(start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+    pub fn new(start: Value, end: Value, exclude: bool) -> Self {
         RangeInfo {
             start,
             end,
@@ -17,10 +17,10 @@ impl RangeInfo {
     }
 }
 
-pub fn init_range(globals: &mut Globals) -> PackedValue {
+pub fn init_range(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Range");
     let class = ClassRef::from(id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "map", range_map);
     globals.add_builtin_instance_method(class, "each", range_each);
     globals.add_builtin_instance_method(class, "begin", range_begin);
@@ -41,7 +41,7 @@ fn range_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     } else {
         vm.val_to_bool(args[2])
     };
-    Ok(PackedValue::range(&vm.globals, start, end, exclude_end))
+    Ok(Value::range(&vm.globals, start, end, exclude_end))
 }
 
 fn range_begin(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -70,9 +70,9 @@ fn range_first(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
         end = start + arg - 1;
     };
     for i in start..=end {
-        v.push(PackedValue::fixnum(i));
+        v.push(Value::fixnum(i));
     }
-    Ok(PackedValue::array_from(&vm.globals, v))
+    Ok(Value::array_from(&vm.globals, v))
 }
 
 fn range_last(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -91,9 +91,9 @@ fn range_last(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         start = end - arg + 1;
     };
     for i in start..=end {
-        v.push(PackedValue::fixnum(i));
+        v.push(Value::fixnum(i));
     }
-    Ok(PackedValue::array_from(&vm.globals, v))
+    Ok(Value::array_from(&vm.globals, v))
 }
 
 fn range_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
@@ -107,11 +107,11 @@ fn range_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(context.self_value, None, PackedValue::fixnum(i));
+        let arg = Args::new1(context.self_value, None, Value::fixnum(i));
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
         res.push(vm.stack_pop());
     }
-    let res = PackedValue::array_from(&vm.globals, res);
+    let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
 
@@ -125,7 +125,7 @@ fn range_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(context.self_value, None, PackedValue::fixnum(i));
+        let arg = Args::new1(context.self_value, None, Value::fixnum(i));
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
         vm.stack_pop();
     }
@@ -139,12 +139,12 @@ fn range_toa(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let mut v = vec![];
     if range.exclude {
         for i in start..end {
-            v.push(PackedValue::fixnum(i));
+            v.push(Value::fixnum(i));
         }
     } else {
         for i in start..=end {
-            v.push(PackedValue::fixnum(i));
+            v.push(Value::fixnum(i));
         }
     }
-    Ok(PackedValue::array_from(&vm.globals, v))
+    Ok(Value::array_from(&vm.globals, v))
 }

@@ -3,11 +3,11 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct HashInfo {
-    pub map: HashMap<PackedValue, PackedValue>,
+    pub map: HashMap<Value, Value>,
 }
 
 impl HashInfo {
-    pub fn new(map: HashMap<PackedValue, PackedValue>) -> Self {
+    pub fn new(map: HashMap<Value, Value>) -> Self {
         HashInfo { map }
     }
 }
@@ -15,12 +15,12 @@ impl HashInfo {
 pub type HashRef = Ref<HashInfo>;
 
 impl HashRef {
-    pub fn from(map: HashMap<PackedValue, PackedValue>) -> Self {
+    pub fn from(map: HashMap<Value, Value>) -> Self {
         HashRef::new(HashInfo::new(map))
     }
 }
 
-pub fn init_hash(globals: &mut Globals) -> PackedValue {
+pub fn init_hash(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Hash");
     let class = ClassRef::from(id, globals.object);
     globals.add_builtin_instance_method(class, "clear", hash_clear);
@@ -42,7 +42,8 @@ pub fn init_hash(globals: &mut Globals) -> PackedValue {
     globals.add_builtin_instance_method(class, "each_value", each_value);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "merge", merge);
-    PackedValue::class(globals, class)
+    globals.add_builtin_instance_method(class, "fetch", fetch);
+    Value::class(globals, class)
 }
 
 macro_rules! as_hash {
@@ -60,13 +61,13 @@ fn hash_clear(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
 
 fn hash_clone(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
-    Ok(PackedValue::hash(&vm.globals, hash.dup()))
+    Ok(Value::hash(&vm.globals, hash.dup()))
 }
 
 fn hash_compact(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let mut hash = as_hash!(args.self_value, vm).dup();
-    hash.map.retain(|_, &mut v| v != PackedValue::nil());
-    Ok(PackedValue::hash(&vm.globals, hash))
+    hash.map.retain(|_, &mut v| v != Value::nil());
+    Ok(Value::hash(&vm.globals, hash))
 }
 
 fn hash_delete(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -74,14 +75,14 @@ fn hash_delete(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     let mut hash = as_hash!(args.self_value, vm);
     let res = match hash.map.remove(&args[0]) {
         Some(v) => v,
-        None => PackedValue::nil(),
+        None => Value::nil(),
     };
     Ok(res)
 }
 
 fn hash_empty(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
-    Ok(PackedValue::bool(hash.map.len() == 0))
+    Ok(Value::bool(hash.map.len() == 0))
 }
 
 fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
@@ -92,12 +93,7 @@ fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     };
     let mut res = HashMap::new();
     let context = vm.context();
-    let mut arg = Args::new2(
-        args.self_value,
-        None,
-        PackedValue::nil(),
-        PackedValue::nil(),
-    );
+    let mut arg = Args::new2(args.self_value, None, Value::nil(), Value::nil());
     for (k, v) in hash.map.iter() {
         arg[0] = *k;
         arg[1] = *v;
@@ -107,26 +103,26 @@ fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
             res.insert(k.clone(), v.clone());
         };
     }
-    Ok(PackedValue::hash(&vm.globals, HashRef::from(res)))
+    Ok(Value::hash(&vm.globals, HashRef::from(res)))
 }
 
 fn hash_has_key(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
-    Ok(PackedValue::bool(hash.map.contains_key(&args[0])))
+    Ok(Value::bool(hash.map.contains_key(&args[0])))
 }
 
 fn hash_has_value(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
     let res = hash.map.values().find(|&&x| x == args[0]).is_some();
-    Ok(PackedValue::bool(res))
+    Ok(Value::bool(res))
 }
 
 fn hash_length(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     let len = hash.map.len();
-    Ok(PackedValue::fixnum(len as i64))
+    Ok(Value::fixnum(len as i64))
 }
 
 fn hash_keys(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -135,7 +131,7 @@ fn hash_keys(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     for key in hash.map.keys() {
         vec.push(key.clone());
     }
-    Ok(PackedValue::array_from(&vm.globals, vec))
+    Ok(Value::array_from(&vm.globals, vec))
 }
 
 fn hash_values(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -144,7 +140,7 @@ fn hash_values(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     for val in hash.map.values() {
         vec.push(val.clone());
     }
-    Ok(PackedValue::array_from(&vm.globals, vec))
+    Ok(Value::array_from(&vm.globals, vec))
 }
 
 fn each_value(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
@@ -155,7 +151,7 @@ fn each_value(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();
-    let mut arg = Args::new1(context.self_value, None, PackedValue::nil());
+    let mut arg = Args::new1(context.self_value, None, Value::nil());
     for (_, v) in &hash.map {
         arg[0] = *v;
         vm.vm_run(iseq, Some(context), &arg, None, None)?;
@@ -172,12 +168,7 @@ fn each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();
-    let mut arg = Args::new2(
-        context.self_value,
-        None,
-        PackedValue::nil(),
-        PackedValue::nil(),
-    );
+    let mut arg = Args::new2(context.self_value, None, Value::nil(), Value::nil());
     for (k, v) in &hash.map {
         arg[0] = *k;
         arg[1] = *v;
@@ -195,7 +186,23 @@ fn merge(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             new.map.insert(*k, *v);
         }
     }
-    Ok(PackedValue::hash(&vm.globals, new))
+    Ok(Value::hash(&vm.globals, new))
+}
+
+fn fetch(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 2)?;
+    let key = args[0];
+    let default = if args.len() == 2 {
+        args[1]
+    } else {
+        Value::nil()
+    };
+    let hash = as_hash!(args.self_value, vm);
+    let val = match hash.map.get(&key) {
+        Some(val) => val.clone(),
+        None => default,
+    };
+    Ok(val)
 }
 
 #[cfg(test)]
@@ -215,7 +222,7 @@ mod test {
     assert(h["ruby"], "string")
     assert(h[:ruby], "symbol")
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 
@@ -230,7 +237,7 @@ mod test {
     assert(h[7.7], "7.7")
     assert(h[:ruby], "string")
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 
@@ -259,7 +266,7 @@ mod test {
     h2.clear()
     assert(h2.empty?, true)
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 
@@ -274,7 +281,7 @@ mod test {
         assert({"a"=>100, "b"=>357, "c"=>300, "d"=>400}, h1.merge(h2, h3)) 
         assert({"a"=>100, "b"=>200}, h1)
     "#;
-        let expected = Value::Nil;
+        let expected = RValue::Nil;
         eval_script(program, expected);
     }
 }

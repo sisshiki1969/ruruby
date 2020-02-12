@@ -2,7 +2,7 @@
 extern crate ruruby;
 extern crate test;
 use ruruby::test::eval_script;
-use ruruby::vm::value::Value;
+use ruruby::vm::value::RValue;
 use test::Bencher;
 
 #[test]
@@ -13,7 +13,7 @@ fn func1() {
             end
     
             func(1,2,3)";
-    let expected = Value::FixNum(6);
+    let expected = RValue::FixNum(6);
     eval_script(program, expected);
 }
 
@@ -30,7 +30,7 @@ fn func2() {
             end
     
             fact(5)";
-    let expected = Value::FixNum(120);
+    let expected = RValue::FixNum(120);
     eval_script(program, expected);
 }
 
@@ -46,7 +46,7 @@ fn func3(b: &mut Bencher) {
             end
 
             fibo(20)";
-    let expected = Value::FixNum(6765);
+    let expected = RValue::FixNum(6765);
     b.iter(|| eval_script(program, expected.clone()));
 }
 
@@ -60,7 +60,7 @@ fn func4() {
         end
     
         fact(5)";
-    let expected = Value::FixNum(120);
+    let expected = RValue::FixNum(120);
     eval_script(program, expected);
 }
 
@@ -84,7 +84,7 @@ fn optional_param() {
         assert([5,7,2], fx(5,7))
         assert([5,7,10], fx(5,7,10))
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -100,7 +100,7 @@ fn parameters() {
         assert([1,2,3,4,100,77,[],5,6,88], fn(1,2,3,4,5,6,kw:88))
         assert([1,2,3,4,5,6,[7,8],9,10,55], fn(1,2,3,4,5,6,7,8,9,10,kw:55))
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }
 
@@ -112,6 +112,6 @@ fn return1() {
         end
         assert(fn, [1,2,3])
         ";
-    let expected = Value::Nil;
+    let expected = RValue::Nil;
     eval_script(program, expected);
 }

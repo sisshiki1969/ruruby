@@ -1,10 +1,10 @@
 use crate::vm::*;
 use std::path::*;
 
-pub fn init_file(globals: &mut Globals) -> PackedValue {
+pub fn init_file(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("File");
     let class = ClassRef::from(id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "join", join);
     obj
 }
@@ -29,5 +29,5 @@ fn join(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             path.push(p);
         }
     }
-    Ok(PackedValue::string(path.to_string_lossy().to_string()))
+    Ok(Value::string(path.to_string_lossy().to_string()))
 }

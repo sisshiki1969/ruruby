@@ -1,9 +1,9 @@
 use crate::vm::*;
 
-pub fn init_math(globals: &mut Globals) -> PackedValue {
+pub fn init_math(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Math");
     let class = ClassRef::from(id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "sqrt", sqrt);
     globals.add_builtin_class_method(obj, "cos", cos);
     globals.add_builtin_class_method(obj, "sin", sin);
@@ -25,7 +25,7 @@ fn sqrt(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = PackedValue::flonum(num.sqrt());
+    let res = Value::flonum(num.sqrt());
     Ok(res)
 }
 
@@ -40,7 +40,7 @@ fn cos(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = PackedValue::flonum(num.cos());
+    let res = Value::flonum(num.cos());
     Ok(res)
 }
 
@@ -55,6 +55,6 @@ fn sin(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = PackedValue::flonum(num.sin());
+    let res = Value::flonum(num.sin());
     Ok(res)
 }
