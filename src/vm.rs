@@ -734,11 +734,8 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SPLAT => {
-                    let array = self.stack_pop();
-                    let res = match array.as_array() {
-                        Some(array) => Value::splat(&self.globals, array),
-                        None => array,
-                    };
+                    let val = self.stack_pop();
+                    let res = Value::splat(&self.globals, val);
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -1891,11 +1888,32 @@ impl VM {
         for _ in 0..arg_num {
             let val = self.stack_pop();
             match val.as_splat() {
-                Some(ary) => {
-                    for elem in &ary.elements {
-                        args.push(elem.clone());
-                    }
-                }
+                Some(inner) => match inner.is_object() {
+                    Some(obj) => match &obj.kind {
+                        ObjKind::Array(aref) => {
+                            for elem in &aref.elements {
+                                args.push(*elem);
+                            }
+                        }
+                        ObjKind::Range(rref) => {
+                            let start = if rref.start.is_packed_fixnum() {
+                                rref.start.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range start not fixnum.")
+                            };
+                            let end = if rref.end.is_packed_fixnum() {
+                                rref.end.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range end not fixnum.")
+                            } + if rref.exclude { 0 } else { 1 };
+                            for i in start..end {
+                                args.push(Value::fixnum(i));
+                            }
+                        }
+                        _ => args.push(inner),
+                    },
+                    None => args.push(inner),
+                },
                 None => {
                     args.push(val);
                 }
@@ -1919,12 +1937,35 @@ impl VM {
         for _ in 0..arg_num {
             let val = self.stack_pop();
             match val.as_splat() {
-                Some(ary) => {
-                    for elem in &ary.elements {
-                        args.push(*elem);
-                    }
+                Some(inner) => match inner.is_object() {
+                    Some(obj) => match &obj.kind {
+                        ObjKind::Array(aref) => {
+                            for elem in &aref.elements {
+                                args.push(*elem);
+                            }
+                        }
+                        ObjKind::Range(rref) => {
+                            let start = if rref.start.is_packed_fixnum() {
+                                rref.start.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range start not fixnum.")
+                            };
+                            let end = if rref.end.is_packed_fixnum() {
+                                rref.end.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range end not fixnum.")
+                            } + if rref.exclude { 0 } else { 1 };
+                            for i in start..end {
+                                args.push(Value::fixnum(i));
+                            }
+                        }
+                        _ => args.push(inner),
+                    },
+                    None => args.push(inner),
+                },
+                None => {
+                    args.push(val);
                 }
-                None => args.push(val),
             };
         }
         args

@@ -564,10 +564,10 @@ impl Value {
         }
     }
 
-    pub fn as_splat(&self) -> Option<ArrayRef> {
+    pub fn as_splat(&self) -> Option<Value> {
         match self.is_object() {
             Some(oref) => match oref.kind {
-                ObjKind::SplatArray(aref) => Some(aref),
+                ObjKind::Splat(val) => Some(val),
                 _ => None,
             },
             None => None,
@@ -739,8 +739,8 @@ impl Value {
         Value::object(ObjectInfo::new_array(globals, ArrayRef::from(ary)))
     }
 
-    pub fn splat(globals: &Globals, array_ref: ArrayRef) -> Self {
-        Value::object(ObjectInfo::new_splat(globals, array_ref))
+    pub fn splat(globals: &Globals, val: Value) -> Self {
+        Value::object(ObjectInfo::new_splat(globals, val))
     }
 
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {

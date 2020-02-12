@@ -210,7 +210,7 @@ impl Globals {
             RValue::Char(_) => "Char".to_string(),
             RValue::Object(oref) => match oref.kind {
                 ObjKind::Array(_) => "Array".to_string(),
-                ObjKind::SplatArray(_) => "[SplatArray]".to_string(),
+                ObjKind::Splat(_) => "[Splat]".to_string(),
                 ObjKind::Hash(_) => "Hash".to_string(),
                 ObjKind::Regexp(_) => "Regexp".to_string(),
                 ObjKind::Range(_) => "Range".to_string(),

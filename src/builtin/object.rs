@@ -15,7 +15,7 @@ pub enum ObjKind {
     Module(ClassRef),
     Range(RangeInfo),
     Array(ArrayRef),
-    SplatArray(ArrayRef), // internal use only.
+    Splat(Value), // internal use only.
     Hash(HashRef),
     Proc(ProcRef),
     Regexp(RegexpRef),
@@ -69,11 +69,11 @@ impl ObjectInfo {
         }
     }
 
-    pub fn new_splat(globals: &Globals, arrayref: ArrayRef) -> Self {
+    pub fn new_splat(globals: &Globals, val: Value) -> Self {
         ObjectInfo {
             class: globals.array,
             var_table: Box::new(HashMap::new()),
-            kind: ObjKind::SplatArray(arrayref),
+            kind: ObjKind::Splat(val),
         }
     }
 
