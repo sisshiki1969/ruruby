@@ -46,6 +46,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "min", array_min);
     globals.add_builtin_instance_method(class, "fill", array_fill);
     globals.add_builtin_instance_method(class, "clear", array_clear);
+    globals.add_builtin_instance_method(class, "uniq!", array_uniq_);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -417,4 +418,26 @@ fn array_clear(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     let mut aref = self_array!(args, vm);
     aref.elements.clear();
     Ok(args.self_value)
+}
+
+fn array_uniq_(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut aref = self_array!(args, vm);
+    let mut set = std::collections::HashSet::new();
+    match block {
+        None => {
+            aref.elements.retain(|x| set.insert(*x));
+            Ok(args.self_value)
+        }
+        Some(block) => {
+            let context = vm.context();
+            aref.elements.retain(|x| {
+                let block_args = Args::new1(context.self_value, None, *x);
+                vm.eval_send(block, &block_args, None, None).unwrap();
+                let res = vm.stack_pop();
+                set.insert(res)
+            });
+            Ok(args.self_value)
+        }
+    }
 }
