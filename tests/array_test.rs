@@ -49,7 +49,10 @@ fn array2() {
     assert(a[3,9], [4,5,6,7])
     assert(a[*b], [4,5,6,7])
     assert(a[3,3], [4,5,6])
-    assert(a[*c], [4,5,6])";
+    assert(a[*c], [4,5,6])
+    assert(a[7], nil)
+    assert(a[7,3], [])
+    ";
     let expected = RValue::Nil;
     eval_script(program, expected);
 }

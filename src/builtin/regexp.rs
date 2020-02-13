@@ -1,7 +1,7 @@
 use crate::vm::*;
-use regex::Regex;
+use regex::{Error, Regex};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RegexpInfo {
     pub regexp: Regex,
 }
@@ -19,7 +19,7 @@ impl RegexpRef {
         RegexpRef::new(RegexpInfo::new(reg))
     }
 
-    pub fn from_string(reg_str: &String) -> Result<Self, regex::Error> {
+    pub fn from_string(reg_str: &String) -> Result<Self, Error> {
         let regex = Regex::new(reg_str)?;
         Ok(RegexpRef::new(RegexpInfo::new(regex)))
     }

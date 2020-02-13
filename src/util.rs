@@ -60,6 +60,10 @@ impl<T> Ref<T> {
         unsafe { &*self.0.as_ptr() }
     }
 
+    pub fn inner_mut(&self) -> &mut T {
+        unsafe { &mut *self.0.as_ptr() }
+    }
+
     pub fn id(&self) -> u64 {
         self.0.as_ptr() as u64
     }

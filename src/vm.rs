@@ -20,6 +20,7 @@ pub use codegen::{Codegen, ISeq, ISeqPos};
 
 pub use context::*;
 pub use globals::*;
+use hash::IdentValue;
 pub use module::*;
 
 #[cfg(feature = "perf")]
@@ -309,15 +310,29 @@ impl VM {
         match kw_arg {
             Some(kw_arg) if kw.is_none() => {
                 let keyword = kw_arg.as_hash().unwrap();
-                for (k, v) in keyword.map.iter() {
-                    //eprintln!("{} {}", self.val_pp(*k), self.val_pp(*v));
-                    let id = k.as_symbol().unwrap();
-                    match iseq.keyword_params.get(&id) {
-                        Some(lvar) => {
-                            *context.get_mut_lvar(*lvar) = *v;
+                match keyword.inner() {
+                    HashInfo::Map(map) => {
+                        for (k, v) in map.iter() {
+                            let id = k.as_symbol().unwrap();
+                            match iseq.keyword_params.get(&id) {
+                                Some(lvar) => {
+                                    *context.get_mut_lvar(*lvar) = *v;
+                                }
+                                None => return Err(self.error_argument("Undefined keyword.")),
+                            };
                         }
-                        None => return Err(self.error_argument("Undefined keyword.")),
-                    };
+                    }
+                    HashInfo::IdentMap(map) => {
+                        for (k, v) in map.iter() {
+                            let id = k.as_symbol().unwrap();
+                            match iseq.keyword_params.get(&id) {
+                                Some(lvar) => {
+                                    *context.get_mut_lvar(*lvar) = *v;
+                                }
+                                None => return Err(self.error_argument("Undefined keyword.")),
+                            };
+                        }
+                    }
                 }
             }
             _ => {}
@@ -652,10 +667,16 @@ impl VM {
                                     arg.push(val);
                                     array_set_elem(self, &arg, None)?;
                                 }
-                                ObjKind::Hash(mut href) => {
-                                    let key = args[0];
-                                    href.map.insert(key, val);
-                                }
+                                ObjKind::Hash(href) => match href.inner_mut() {
+                                    HashInfo::Map(map) => {
+                                        let key = args[0];
+                                        map.insert(key, val);
+                                    }
+                                    HashInfo::IdentMap(map) => {
+                                        let key = IdentValue(args[0]);
+                                        map.insert(key, val);
+                                    }
+                                },
                                 _ => {
                                     return Err(self.error_unimplemented(
                                         "Currently, []= is supported only for Array and Hash.",
@@ -684,12 +705,20 @@ impl VM {
                                     let index = args[0].expect_fixnum(&self, "Index")?;
                                     let index = self.get_array_index(index, aref.elements.len())?;
                                     if arg_num == 1 {
-                                        let elem = aref.elements[index];
-                                        self.stack_push(elem);
+                                        if index >= aref.elements.len() {
+                                            self.stack_push(Value::nil());
+                                        } else {
+                                            let elem = aref.elements[index];
+                                            self.stack_push(elem);
+                                        }
                                     } else {
                                         let len = args[1].expect_fixnum(&self, "Index")?;
                                         if len < 0 {
                                             self.stack_push(Value::nil());
+                                        } else if index >= aref.elements.len() {
+                                            let ary_object =
+                                                Value::array_from(&self.globals, vec![]);
+                                            self.stack_push(ary_object);
                                         } else {
                                             let len = len as usize;
                                             let end =
@@ -702,7 +731,7 @@ impl VM {
                                 }
                                 ObjKind::Hash(href) => {
                                     self.check_args_num(arg_num, 1, 2)?;
-                                    let val = match href.map.get(&args[0]) {
+                                    let val = match href.get(&args[0]) {
                                         Some(val) => val.clone(),
                                         None => Value::nil(),
                                     };
@@ -1667,29 +1696,58 @@ impl VM {
                         format! {"[{}]", result}
                     }
                 },
-                ObjKind::Hash(href) => match href.map.len() {
+                ObjKind::Hash(href) => match href.len() {
                     0 => "{}".to_string(),
                     _ => {
                         let mut result = "".to_string();
                         let mut first = true;
-                        for (k, v) in &href.map {
-                            result = if first {
-                                format!("{} => {}", self.val_pp(k.clone()), self.val_pp(v.clone()))
-                            } else {
-                                format!(
-                                    "{}, {} => {}",
-                                    result,
-                                    self.val_pp(k.clone()),
-                                    self.val_pp(v.clone())
-                                )
-                            };
-                            first = false;
+                        match href.inner() {
+                            HashInfo::Map(map) => {
+                                for (k, v) in map {
+                                    result = if first {
+                                        format!("{} => {}", self.val_pp(*k), self.val_pp(*v))
+                                    } else {
+                                        format!(
+                                            "{}, {} => {}",
+                                            result,
+                                            self.val_pp(*k),
+                                            self.val_pp(*v)
+                                        )
+                                    };
+                                    first = false;
+                                }
+                            }
+                            HashInfo::IdentMap(map) => {
+                                for (k, v) in map {
+                                    result = if first {
+                                        format!("{} => {}", self.val_pp(k.0), self.val_pp(*v))
+                                    } else {
+                                        format!(
+                                            "{}, {} => {}",
+                                            result,
+                                            self.val_pp(k.0),
+                                            self.val_pp(*v)
+                                        )
+                                    };
+                                    first = false;
+                                }
+                            }
                         }
+
                         format! {"{{{}}}", result}
                     }
                 },
                 ObjKind::Ordinary => {
-                    format! {"#<{}:0x{:x}>", self.globals.get_ident_name(oref.as_ref().search_class().as_class().name), oref.as_ref().id()}
+                    let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.as_ref().search_class().as_class().name), oref.as_ref().id()};
+                    for (k, v) in oref.as_ref().var_table() {
+                        s = format!(
+                            "{} {}={}",
+                            s,
+                            self.globals.get_ident_name(*k),
+                            self.val_pp(*v)
+                        );
+                    }
+                    format!("{}>", s)
                 }
                 _ => self.val_to_s(val),
             },
@@ -1876,10 +1934,8 @@ impl VM {
                 return Err(self.error_unimplemented("Index out of range."));
             };
             Ok(i as usize)
-        } else if index < len as i64 {
-            Ok(index as usize)
         } else {
-            return Err(self.error_unimplemented("Index out of range."));
+            Ok(index as usize)
         }
     }
 

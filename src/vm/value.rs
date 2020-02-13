@@ -314,19 +314,27 @@ impl std::hash::Hash for Value {
         if self.is_packed_value() {
             self.0.hash(state);
         } else {
-            let lhs = unsafe { &(*(self.0 as *mut RValue)) };
+            let lhs = unsafe { &*(self.0 as *mut RValue) };
             match lhs {
                 RValue::FixNum(lhs) => lhs.hash(state),
                 RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
                 RValue::String(lhs) => lhs.hash(state),
                 RValue::Object(lhs) => match lhs.kind {
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
-                    ObjKind::Hash(lhs) => {
-                        for (key, val) in lhs.map.iter() {
-                            key.hash(state);
-                            val.hash(state);
+                    ObjKind::Hash(lhs) => match lhs.inner() {
+                        HashInfo::Map(map) => {
+                            for (key, val) in map.iter() {
+                                key.hash(state);
+                                val.hash(state);
+                            }
                         }
-                    }
+                        HashInfo::IdentMap(map) => {
+                            for (key, val) in map.iter() {
+                                key.hash(state);
+                                val.hash(state);
+                            }
+                        }
+                    },
                     _ => self.0.hash(state),
                 },
                 _ => self.0.hash(state),
@@ -351,7 +359,11 @@ impl PartialEq for Value {
                 (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
                 (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
                     (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.map == rhs.map,
+                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+                        (HashInfo::Map(lhs), HashInfo::Map(rhs)) => lhs == rhs,
+                        (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
+                        _ => false,
+                    },
                     _ => lhs.kind == rhs.kind,
                 },
                 _ => self.0 == other.0,
@@ -813,7 +825,11 @@ impl Value {
                         && lhs.end.equal(rhs.end)
                         && lhs.exclude == rhs.exclude
                 }
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.map == rhs.map,
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => lhs == rhs,
+                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
+                    _ => false,
+                },
                 (_, _) => false,
             },
             _ => false,
