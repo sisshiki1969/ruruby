@@ -1,7 +1,7 @@
-use crate::vm::value::Value;
+pub use crate::vm::value::RValue;
 use crate::vm::*;
 
-pub fn eval_script(script: impl Into<String>, expected: Value) {
+pub fn eval_script(script: impl Into<String>, expected: RValue) {
     let mut vm = VM::new();
     match vm.run("", script.into()) {
         Ok(res) => {
@@ -11,8 +11,8 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
             }
         }
         Err(err) => {
-            err.show_loc();
-            eprintln!("{:?}", err.kind);
+            err.show_err();
+            err.show_loc(0);
             panic!("Got error: {:?}", err);
         }
     }

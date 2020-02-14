@@ -11,7 +11,7 @@ const TRUE_VALUE: u64 = 0x14;
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value {
+pub enum RValue {
     Uninitialized,
     Nil,
     Bool(bool),
@@ -25,35 +25,145 @@ pub enum Value {
 
 const VEC_ARRAY_SIZE: usize = 8;
 
-pub enum VecArray {
-    Array {
-        len: usize,
-        ary: [PackedValue; VEC_ARRAY_SIZE],
-    },
-    Vec(Vec<PackedValue>),
+#[derive(Debug, Clone)]
+pub struct Args {
+    pub self_value: Value,
+    pub block: Value,
+    args: ArgsArray,
 }
 
-impl VecArray {
+impl Args {
     pub fn new(len: usize) -> Self {
-        if len <= VEC_ARRAY_SIZE {
-            VecArray::Array {
-                len,
-                ary: [PackedValue::uninitialized(); VEC_ARRAY_SIZE],
-            }
-        } else {
-            VecArray::Vec(vec![PackedValue::uninitialized(); len])
+        Args {
+            self_value: Value::nil(),
+            block: Value::nil(),
+            args: ArgsArray::new(len),
         }
     }
 
-    pub fn push(&mut self, val: PackedValue) {
+    pub fn push(&mut self, val: Value) {
+        self.args.push(val);
+    }
+
+    pub fn new0(self_value: Value, block: impl Into<Option<Value>>) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new0(),
+        }
+    }
+
+    pub fn new1(self_value: Value, block: impl Into<Option<Value>>, arg: Value) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new1(arg),
+        }
+    }
+
+    pub fn new2(
+        self_value: Value,
+        block: impl Into<Option<Value>>,
+        arg0: Value,
+        arg1: Value,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new2(arg0, arg1),
+        }
+    }
+
+    pub fn new3(
+        self_value: Value,
+        block: impl Into<Option<Value>>,
+        arg0: Value,
+        arg1: Value,
+        arg2: Value,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new3(arg0, arg1, arg2),
+        }
+    }
+
+    pub fn new4(
+        self_value: Value,
+        block: impl Into<Option<Value>>,
+        arg0: Value,
+        arg1: Value,
+        arg2: Value,
+        arg3: Value,
+    ) -> Self {
+        Args {
+            self_value,
+            block: block.into().unwrap_or_default(),
+            args: ArgsArray::new4(arg0, arg1, arg2, arg3),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.args.len()
+    }
+
+    pub fn get_slice(&self, start: usize, end: usize) -> &[Value] {
+        self.args.get_slice(start, end)
+    }
+}
+
+impl Index<usize> for Args {
+    type Output = Value;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.args[index]
+    }
+}
+
+impl IndexMut<usize> for Args {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.args.index_mut(index)
+    }
+}
+
+impl Deref for Args {
+    type Target = [Value];
+
+    fn deref(&self) -> &Self::Target {
+        self.args.deref()
+    }
+}
+
+#[derive(Debug, Clone)]
+enum ArgsArray {
+    Array {
+        len: usize,
+        ary: [Value; VEC_ARRAY_SIZE],
+    },
+    Vec(Vec<Value>),
+}
+
+impl ArgsArray {
+    fn new(len: usize) -> Self {
+        if len <= VEC_ARRAY_SIZE {
+            ArgsArray::Array {
+                len,
+                ary: [Value::uninitialized(); VEC_ARRAY_SIZE],
+            }
+        } else {
+            ArgsArray::Vec(vec![Value::uninitialized(); len])
+        }
+    }
+
+    fn push(&mut self, val: Value) {
         if self.len() == VEC_ARRAY_SIZE {
             let mut ary = self.get_slice(0, VEC_ARRAY_SIZE).to_vec();
             ary.push(val);
-            unsafe { std::ptr::write(self, VecArray::Vec(ary)) };
+            unsafe { std::ptr::write(self, ArgsArray::Vec(ary)) };
         } else {
             match self {
-                VecArray::Vec(ref mut v) => v.push(val),
-                VecArray::Array {
+                ArgsArray::Vec(ref mut v) => v.push(val),
+                ArgsArray::Array {
                     ref mut len,
                     ref mut ary,
                 } => {
@@ -64,83 +174,100 @@ impl VecArray {
         }
     }
 
-    pub fn new0() -> Self {
-        VecArray::Array {
+    fn new0() -> Self {
+        ArgsArray::Array {
             len: 0,
-            ary: [PackedValue::uninitialized(); VEC_ARRAY_SIZE],
+            ary: [Value::uninitialized(); VEC_ARRAY_SIZE],
         }
     }
 
-    pub fn new1(arg: PackedValue) -> Self {
-        let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
+    fn new1(arg: Value) -> Self {
+        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
         ary[0] = arg;
-        VecArray::Array { len: 1, ary }
+        ArgsArray::Array { len: 1, ary }
     }
 
-    pub fn new2(arg0: PackedValue, arg1: PackedValue) -> Self {
-        let mut ary = [PackedValue::uninitialized(); VEC_ARRAY_SIZE];
+    fn new2(arg0: Value, arg1: Value) -> Self {
+        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
         ary[0] = arg0;
         ary[1] = arg1;
-        VecArray::Array { len: 2, ary }
+        ArgsArray::Array { len: 2, ary }
     }
 
-    pub fn len(&self) -> usize {
+    fn new3(arg0: Value, arg1: Value, arg2: Value) -> Self {
+        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
+        ary[0] = arg0;
+        ary[1] = arg1;
+        ary[2] = arg2;
+        ArgsArray::Array { len: 3, ary }
+    }
+
+    fn new4(arg0: Value, arg1: Value, arg2: Value, arg3: Value) -> Self {
+        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
+        ary[0] = arg0;
+        ary[1] = arg1;
+        ary[2] = arg2;
+        ary[3] = arg3;
+        ArgsArray::Array { len: 4, ary }
+    }
+
+    fn len(&self) -> usize {
         match self {
-            VecArray::Array { len, .. } => *len,
-            VecArray::Vec(v) => v.len(),
+            ArgsArray::Array { len, .. } => *len,
+            ArgsArray::Vec(v) => v.len(),
         }
     }
 
-    pub fn get_slice(&self, start: usize, end: usize) -> &[PackedValue] {
+    fn get_slice(&self, start: usize, end: usize) -> &[Value] {
         match self {
-            VecArray::Array { ary, .. } => &ary[start..end],
-            VecArray::Vec(v) => &v[start..end],
+            ArgsArray::Array { ary, .. } => &ary[start..end],
+            ArgsArray::Vec(v) => &v[start..end],
         }
     }
 }
 
-impl Index<usize> for VecArray {
-    type Output = PackedValue;
+impl Index<usize> for ArgsArray {
+    type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            VecArray::Array { ary, .. } => &ary[index],
-            VecArray::Vec(v) => &v[index],
+            ArgsArray::Array { ary, .. } => &ary[index],
+            ArgsArray::Vec(v) => &v[index],
         }
     }
 }
 
-impl IndexMut<usize> for VecArray {
+impl IndexMut<usize> for ArgsArray {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            VecArray::Array { ary, .. } => &mut ary[index],
-            VecArray::Vec(v) => &mut v[index],
+            ArgsArray::Array { ary, .. } => &mut ary[index],
+            ArgsArray::Vec(v) => &mut v[index],
         }
     }
 }
 
-impl Deref for VecArray {
-    type Target = [PackedValue];
+impl Deref for ArgsArray {
+    type Target = [Value];
 
     fn deref(&self) -> &Self::Target {
         match self {
-            VecArray::Array { len, ary } => &ary[0..*len],
-            VecArray::Vec(v) => &v,
+            ArgsArray::Array { len, ary } => &ary[0..*len],
+            ArgsArray::Vec(v) => &v,
         }
     }
 }
 
-impl Value {
-    pub fn pack(self) -> PackedValue {
+impl RValue {
+    pub fn pack(self) -> Value {
         match self {
-            Value::Uninitialized => PackedValue::uninitialized(),
-            Value::Nil => PackedValue::nil(),
-            Value::Bool(b) if b => PackedValue::true_val(),
-            Value::Bool(_) => PackedValue::false_val(),
-            Value::FixNum(num) => PackedValue::fixnum(num),
-            Value::FloatNum(num) => PackedValue::flonum(num),
-            Value::Symbol(id) => PackedValue::symbol(id),
-            _ => PackedValue(Value::pack_as_boxed(self)),
+            RValue::Uninitialized => Value::uninitialized(),
+            RValue::Nil => Value::nil(),
+            RValue::Bool(b) if b => Value::true_val(),
+            RValue::Bool(_) => Value::false_val(),
+            RValue::FixNum(num) => Value::fixnum(num),
+            RValue::FloatNum(num) => Value::flonum(num),
+            RValue::Symbol(id) => Value::symbol(id),
+            _ => Value(RValue::pack_as_boxed(self)),
         }
     }
 
@@ -150,7 +277,7 @@ impl Value {
         if top & 0b1 == 0 {
             ((num << 1) as u64) | 0b1
         } else {
-            Value::pack_as_boxed(Value::FixNum(num))
+            RValue::pack_as_boxed(RValue::FixNum(num))
         }
     }
 
@@ -163,43 +290,51 @@ impl Value {
         if exp == 4 || exp == 3 {
             ((unum & !(0b0110u64 << 60)) | (0b0100u64 << 60)).rotate_left(3)
         } else {
-            Value::pack_as_boxed(Value::FloatNum(num))
+            RValue::pack_as_boxed(RValue::FloatNum(num))
         }
     }
 
-    fn pack_as_boxed(val: Value) -> u64 {
+    fn pack_as_boxed(val: RValue) -> u64 {
         Box::into_raw(Box::new(val)) as u64
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PackedValue(u64);
+pub struct Value(u64);
 
-impl std::ops::Deref for PackedValue {
+impl std::ops::Deref for Value {
     type Target = u64;
     fn deref(&self) -> &u64 {
         &self.0
     }
 }
 
-impl std::hash::Hash for PackedValue {
+impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         if self.is_packed_value() {
             self.0.hash(state);
         } else {
-            let lhs = unsafe { &(*(self.0 as *mut Value)) };
+            let lhs = unsafe { &*(self.0 as *mut RValue) };
             match lhs {
-                Value::FixNum(lhs) => lhs.hash(state),
-                Value::FloatNum(lhs) => (*lhs as u64).hash(state),
-                Value::String(lhs) => lhs.hash(state),
-                Value::Object(lhs) => match lhs.kind {
+                RValue::FixNum(lhs) => lhs.hash(state),
+                RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
+                RValue::String(lhs) => lhs.hash(state),
+                RValue::Object(lhs) => match lhs.kind {
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
-                    ObjKind::Hash(lhs) => {
-                        for (key, val) in lhs.map.iter() {
-                            key.hash(state);
-                            val.hash(state);
+                    ObjKind::Hash(lhs) => match lhs.inner() {
+                        HashInfo::Map(map) => {
+                            for (key, val) in map.iter() {
+                                key.hash(state);
+                                val.hash(state);
+                            }
                         }
-                    }
+                        HashInfo::IdentMap(map) => {
+                            for (key, val) in map.iter() {
+                                key.hash(state);
+                                val.hash(state);
+                            }
+                        }
+                    },
                     _ => self.0.hash(state),
                 },
                 _ => self.0.hash(state),
@@ -208,7 +343,7 @@ impl std::hash::Hash for PackedValue {
     }
 }
 
-impl PartialEq for PackedValue {
+impl PartialEq for Value {
     // Object#eql?()
     // This type of equality is used for comparison for keys of Hash.
     // Regexp, Array, Hash must be implemented.
@@ -216,15 +351,19 @@ impl PartialEq for PackedValue {
         if self.is_packed_value() || other.is_packed_value() {
             self.0 == other.0
         } else {
-            let lhs = unsafe { &(*(self.0 as *mut Value)) };
-            let rhs = unsafe { &(*(other.0 as *mut Value)) };
+            let lhs = unsafe { &(*(self.0 as *mut RValue)) };
+            let rhs = unsafe { &(*(other.0 as *mut RValue)) };
             match (lhs, rhs) {
-                (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
-                (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
-                (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
-                (Value::Object(lhs), Value::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => lhs == rhs,
+                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => lhs == rhs,
+                (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
+                (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
                     (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.map == rhs.map,
+                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+                        (HashInfo::Map(lhs), HashInfo::Map(rhs)) => lhs == rhs,
+                        (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
+                        _ => false,
+                    },
                     _ => lhs.kind == rhs.kind,
                 },
                 _ => self.0 == other.0,
@@ -232,24 +371,30 @@ impl PartialEq for PackedValue {
         }
     }
 }
-impl Eq for PackedValue {}
+impl Eq for Value {}
 
-impl PackedValue {
-    pub fn unpack(self) -> Value {
+impl Default for Value {
+    fn default() -> Self {
+        Value::nil()
+    }
+}
+
+impl Value {
+    pub fn unpack(self) -> RValue {
         if !self.is_packed_value() {
-            unsafe { (*(self.0 as *mut Value)).clone() }
+            unsafe { (*(self.0 as *mut RValue)).clone() }
         } else if self.is_packed_fixnum() {
-            Value::FixNum(self.as_packed_fixnum())
+            RValue::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
-            Value::FloatNum(self.as_packed_flonum())
+            RValue::FloatNum(self.as_packed_flonum())
         } else if self.is_packed_symbol() {
-            Value::Symbol(self.as_packed_symbol())
+            RValue::Symbol(self.as_packed_symbol())
         } else {
             match self.0 {
-                NIL_VALUE => Value::Nil,
-                TRUE_VALUE => Value::Bool(true),
-                FALSE_VALUE => Value::Bool(false),
-                UNINITIALIZED => Value::Uninitialized,
+                NIL_VALUE => RValue::Nil,
+                TRUE_VALUE => RValue::Bool(true),
+                FALSE_VALUE => RValue::Bool(false),
+                UNINITIALIZED => RValue::Uninitialized,
                 _ => unreachable!("Illegal packed value."),
             }
         }
@@ -259,29 +404,29 @@ impl PackedValue {
         self.0
     }
 
-    pub fn get_class_object_for_method(&self, globals: &Globals) -> PackedValue {
+    pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
         match self.is_object() {
             Some(oref) => oref.class(),
             None => match self.unpack() {
-                Value::FixNum(_) => globals.integer,
-                Value::String(_) => globals.string,
+                RValue::FixNum(_) => globals.integer,
+                RValue::String(_) => globals.string,
                 _ => globals.object,
             },
         }
     }
 
-    pub fn get_class_object(&self, globals: &Globals) -> PackedValue {
+    pub fn get_class_object(&self, globals: &Globals) -> Value {
         match self.is_object() {
             Some(oref) => oref.search_class(),
             None => match self.unpack() {
-                Value::FixNum(_) => globals.integer,
-                Value::String(_) => globals.string,
+                RValue::FixNum(_) => globals.integer,
+                RValue::String(_) => globals.string,
                 _ => globals.object,
             },
         }
     }
 
-    pub fn superclass(&self) -> Option<PackedValue> {
+    pub fn superclass(&self) -> Option<Value> {
         match self.as_module() {
             Some(class) => {
                 let superclass = class.superclass;
@@ -295,15 +440,15 @@ impl PackedValue {
         }
     }
 
-    pub fn set_var(&mut self, id: IdentId, val: PackedValue) {
+    pub fn set_var(&mut self, id: IdentId, val: Value) {
         self.as_object().set_var(id, val);
     }
 
-    pub fn get_var(&self, id: IdentId) -> Option<PackedValue> {
+    pub fn get_var(&self, id: IdentId) -> Option<Value> {
         self.as_object().get_var(id)
     }
 
-    pub fn set_var_if_exists(&self, id: IdentId, val: PackedValue) -> bool {
+    pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
         match self.as_object().get_mut_var(id) {
             Some(entry) => {
                 *entry = val;
@@ -318,7 +463,7 @@ impl PackedValue {
     }
 }
 
-impl PackedValue {
+impl Value {
     pub fn is_packed_fixnum(&self) -> bool {
         self.0 & 0b1 == 1
     }
@@ -358,8 +503,8 @@ impl PackedValue {
             None
         } else {
             unsafe {
-                match *(self.0 as *mut Value) {
-                    Value::FixNum(i) => Some(i),
+                match *(self.0 as *mut RValue) {
+                    RValue::FixNum(i) => Some(i),
                     _ => None,
                 }
             }
@@ -373,8 +518,8 @@ impl PackedValue {
             Err(vm.error_argument(msg.into() + " must be an Integer."))
         } else {
             unsafe {
-                match *(self.0 as *mut Value) {
-                    Value::FixNum(i) => Ok(i),
+                match *(self.0 as *mut RValue) {
+                    RValue::FixNum(i) => Ok(i),
                     _ => Err(vm.error_argument(msg.into() + " must be an Integer.")),
                 }
             }
@@ -390,8 +535,8 @@ impl PackedValue {
             return None;
         }
         unsafe {
-            match &*(self.0 as *mut Value) {
-                Value::Object(oref) => Some(oref.as_ref()),
+            match &*(self.0 as *mut RValue) {
+                RValue::Object(oref) => Some(oref.as_ref()),
                 _ => None,
             }
         }
@@ -431,10 +576,10 @@ impl PackedValue {
         }
     }
 
-    pub fn as_splat(&self) -> Option<ArrayRef> {
+    pub fn as_splat(&self) -> Option<Value> {
         match self.is_object() {
             Some(oref) => match oref.kind {
-                ObjKind::SplatArray(aref) => Some(aref),
+                ObjKind::Splat(val) => Some(val),
                 _ => None,
             },
             None => None,
@@ -496,8 +641,8 @@ impl PackedValue {
             return None;
         }
         unsafe {
-            match &*(self.0 as *mut Value) {
-                Value::String(string) => Some(string),
+            match &*(self.0 as *mut RValue) {
+                RValue::String(string) => Some(string),
                 _ => None,
             }
         }
@@ -534,115 +679,110 @@ impl PackedValue {
     }
 
     pub fn uninitialized() -> Self {
-        PackedValue(UNINITIALIZED)
+        Value(UNINITIALIZED)
     }
 
     pub fn nil() -> Self {
-        PackedValue(NIL_VALUE)
+        Value(NIL_VALUE)
     }
 
     pub fn true_val() -> Self {
-        PackedValue(TRUE_VALUE)
+        Value(TRUE_VALUE)
     }
 
     pub fn false_val() -> Self {
-        PackedValue(FALSE_VALUE)
+        Value(FALSE_VALUE)
     }
 
     pub fn bool(b: bool) -> Self {
         if b {
-            PackedValue(TRUE_VALUE)
+            Value(TRUE_VALUE)
         } else {
-            PackedValue(FALSE_VALUE)
+            Value(FALSE_VALUE)
         }
     }
 
     pub fn fixnum(num: i64) -> Self {
-        PackedValue(Value::pack_fixnum(num))
+        Value(RValue::pack_fixnum(num))
     }
 
     pub fn flonum(num: f64) -> Self {
-        PackedValue(Value::pack_flonum(num))
+        Value(RValue::pack_flonum(num))
     }
 
     pub fn string(string: String) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::String(string)))
+        Value(RValue::pack_as_boxed(RValue::String(string)))
     }
 
     pub fn symbol(id: IdentId) -> Self {
         let id: u32 = id.into();
-        PackedValue((id as u64) << 32 | TAG_SYMBOL)
+        Value((id as u64) << 32 | TAG_SYMBOL)
     }
 
     fn object(obj_info: ObjectInfo) -> Self {
-        PackedValue(Value::pack_as_boxed(Value::Object(obj_info)))
+        Value(RValue::pack_as_boxed(RValue::Object(obj_info)))
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
-        PackedValue::object(ObjectInfo::new_bootstrap(classref))
+        Value::object(ObjectInfo::new_bootstrap(classref))
     }
 
-    pub fn ordinary_object(class: PackedValue) -> Self {
-        PackedValue::object(ObjectInfo::new_ordinary(class))
+    pub fn ordinary_object(class: Value) -> Self {
+        Value::object(ObjectInfo::new_ordinary(class))
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectInfo::new_class(globals, class_ref))
+        Value::object(ObjectInfo::new_class(globals, class_ref))
     }
 
     pub fn plain_class(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectInfo::new_class(globals, class_ref))
+        Value::object(ObjectInfo::new_class(globals, class_ref))
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        PackedValue::object(ObjectInfo::new_module(globals, class_ref))
+        Value::object(ObjectInfo::new_module(globals, class_ref))
     }
 
     pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
-        PackedValue::object(ObjectInfo::new_array(globals, array_ref))
+        Value::object(ObjectInfo::new_array(globals, array_ref))
     }
 
-    pub fn array_from(globals: &Globals, ary: Vec<PackedValue>) -> Self {
-        PackedValue::object(ObjectInfo::new_array(globals, ArrayRef::from(ary)))
+    pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
+        Value::object(ObjectInfo::new_array(globals, ArrayRef::from(ary)))
     }
 
-    pub fn splat(globals: &Globals, array_ref: ArrayRef) -> Self {
-        PackedValue::object(ObjectInfo::new_splat(globals, array_ref))
+    pub fn splat(globals: &Globals, val: Value) -> Self {
+        Value::object(ObjectInfo::new_splat(globals, val))
     }
 
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
-        PackedValue::object(ObjectInfo::new_hash(globals, hash_ref))
+        Value::object(ObjectInfo::new_hash(globals, hash_ref))
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
-        PackedValue::object(ObjectInfo::new_regexp(globals, regexp_ref))
+        Value::object(ObjectInfo::new_regexp(globals, regexp_ref))
     }
 
-    pub fn range(globals: &Globals, start: PackedValue, end: PackedValue, exclude: bool) -> Self {
+    pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        PackedValue::object(ObjectInfo::new_range(globals, info))
+        Value::object(ObjectInfo::new_range(globals, info))
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        PackedValue::object(ObjectInfo::new_proc(globals, ProcRef::from(context)))
+        Value::object(ObjectInfo::new_proc(globals, ProcRef::from(context)))
     }
 
-    pub fn method(
-        globals: &Globals,
-        name: IdentId,
-        receiver: PackedValue,
-        method: MethodRef,
-    ) -> Self {
-        PackedValue::object(ObjectInfo::new_method(
+    pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {
+        Value::object(ObjectInfo::new_method(
             globals,
             MethodObjRef::from(name, receiver, method),
         ))
     }
 }
 
-impl PackedValue {
+impl Value {
     // ==
-    pub fn equal(self, other: PackedValue) -> bool {
+    pub fn equal(self, other: Value) -> bool {
         if self.id() == other.id() {
             return true;
         };
@@ -659,13 +799,15 @@ impl PackedValue {
             return false;
         }
         match (&self.unpack(), &other.unpack()) {
-            (Value::FixNum(lhs), Value::FixNum(rhs)) => lhs == rhs,
-            (Value::FloatNum(lhs), Value::FloatNum(rhs)) => lhs == rhs,
-            (Value::FixNum(lhs), Value::FloatNum(rhs)) => *lhs as f64 == *rhs,
-            (Value::FloatNum(lhs), Value::FixNum(rhs)) => *lhs == *rhs as f64,
-            (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
-            (Value::Object(lhs_o), Value::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
+            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => lhs == rhs,
+            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => lhs == rhs,
+            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
+            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
+            (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
+            (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                    lhs.elements == rhs.elements
+                    /*
                     let lhs = &lhs.elements;
                     let rhs = &rhs.elements;
                     if lhs.len() != rhs.len() {
@@ -676,18 +818,18 @@ impl PackedValue {
                             return false;
                         }
                     }
-                    true
+                    true*/
                 }
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    if lhs.start.equal(rhs.start)
+                    lhs.start.equal(rhs.start)
                         && lhs.end.equal(rhs.end)
                         && lhs.exclude == rhs.exclude
-                    {
-                        true
-                    } else {
-                        false
-                    }
                 }
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => lhs == rhs,
+                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
+                    _ => false,
+                },
                 (_, _) => false,
             },
             _ => false,
@@ -701,7 +843,7 @@ mod tests {
 
     #[test]
     fn pack_bool1() {
-        let expect = Value::Bool(true);
+        let expect = RValue::Bool(true);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -710,7 +852,7 @@ mod tests {
 
     #[test]
     fn pack_bool2() {
-        let expect = Value::Bool(false);
+        let expect = RValue::Bool(false);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -719,7 +861,7 @@ mod tests {
 
     #[test]
     fn pack_nil() {
-        let expect = Value::Nil;
+        let expect = RValue::Nil;
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -728,7 +870,7 @@ mod tests {
 
     #[test]
     fn pack_uninit() {
-        let expect = Value::Uninitialized;
+        let expect = RValue::Uninitialized;
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -737,7 +879,7 @@ mod tests {
 
     #[test]
     fn pack_integer1() {
-        let expect = Value::FixNum(12054);
+        let expect = RValue::FixNum(12054);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -754,9 +896,9 @@ mod tests {
             0x7fff_ffff_ffff_ffff as u64 as i64,
         ];
         for expect in expect_ary.iter() {
-            let got = match Value::FixNum(*expect).pack().as_fixnum() {
+            let got = match RValue::FixNum(*expect).pack().as_fixnum() {
                 Some(int) => int,
-                None => panic!("Expect:{:?} Got:Invalid Value"),
+                None => panic!("Expect:{:?} Got:Invalid RValue"),
             };
             if *expect != got {
                 panic!("Expect:{:?} Got:{:?}", *expect, got)
@@ -766,7 +908,7 @@ mod tests {
 
     #[test]
     fn pack_integer2() {
-        let expect = Value::FixNum(-58993);
+        let expect = RValue::FixNum(-58993);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -775,7 +917,7 @@ mod tests {
 
     #[test]
     fn pack_integer3() {
-        let expect = Value::FixNum(0x8000_0000_0000_0000 as u64 as i64);
+        let expect = RValue::FixNum(0x8000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -784,7 +926,7 @@ mod tests {
 
     #[test]
     fn pack_integer4() {
-        let expect = Value::FixNum(0x4000_0000_0000_0000 as u64 as i64);
+        let expect = RValue::FixNum(0x4000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -793,7 +935,7 @@ mod tests {
 
     #[test]
     fn pack_integer5() {
-        let expect = Value::FixNum(0x7fff_ffff_ffff_ffff as u64 as i64);
+        let expect = RValue::FixNum(0x7fff_ffff_ffff_ffff as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -802,7 +944,7 @@ mod tests {
 
     #[test]
     fn pack_float0() {
-        let expect = Value::FloatNum(0.0);
+        let expect = RValue::FloatNum(0.0);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -811,7 +953,7 @@ mod tests {
 
     #[test]
     fn pack_float1() {
-        let expect = Value::FloatNum(100.0);
+        let expect = RValue::FloatNum(100.0);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -820,7 +962,7 @@ mod tests {
 
     #[test]
     fn pack_float2() {
-        let expect = Value::FloatNum(13859.628547);
+        let expect = RValue::FloatNum(13859.628547);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -829,7 +971,7 @@ mod tests {
 
     #[test]
     fn pack_float3() {
-        let expect = Value::FloatNum(-5282.2541156);
+        let expect = RValue::FloatNum(-5282.2541156);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -838,7 +980,7 @@ mod tests {
 
     #[test]
     fn pack_char() {
-        let expect = Value::Char(123);
+        let expect = RValue::Char(123);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -847,7 +989,7 @@ mod tests {
 
     #[test]
     fn pack_string() {
-        let expect = Value::String("Ruby".to_string());
+        let expect = RValue::String("Ruby".to_string());
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -857,9 +999,9 @@ mod tests {
     #[test]
     fn pack_range() {
         let globals = Globals::new();
-        let from = Value::FixNum(7).pack();
-        let to = Value::FixNum(36).pack();
-        let expect = Value::Object(ObjectInfo::new_range(
+        let from = RValue::FixNum(7).pack();
+        let to = RValue::FixNum(36).pack();
+        let expect = RValue::Object(ObjectInfo::new_range(
             &globals,
             RangeInfo::new(from, to, false),
         ));
@@ -872,7 +1014,7 @@ mod tests {
     #[test]
     fn pack_class() {
         let globals = Globals::new();
-        let expect = Value::Object(ObjectInfo::new_class(
+        let expect = RValue::Object(ObjectInfo::new_class(
             &globals,
             ClassRef::from(IdentId::from(1), None),
         ));
@@ -886,8 +1028,8 @@ mod tests {
     fn pack_instance() {
         let globals = Globals::new();
         let class_ref = ClassRef::from(IdentId::from(1), None);
-        let class = PackedValue::class(&globals, class_ref);
-        let expect = Value::Object(ObjectInfo::new_ordinary(class));
+        let class = Value::class(&globals, class_ref);
+        let expect = RValue::Object(ObjectInfo::new_ordinary(class));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -896,7 +1038,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        let expect = Value::Symbol(IdentId::from(12345));
+        let expect = RValue::Symbol(IdentId::from(12345));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

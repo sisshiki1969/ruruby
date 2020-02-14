@@ -153,9 +153,7 @@ impl Inst {
             | Inst::PUSH_TRUE
             | Inst::PUSH_FALSE
             | Inst::PUSH_SELF
-            | Inst::ADD
             | Inst::SUB
-            | Inst::MUL
             | Inst::DIV
             | Inst::REM
             | Inst::POW
@@ -196,6 +194,8 @@ impl Inst {
             | Inst::JMP_IF_FALSE
             | Inst::DUP
             | Inst::TAKE
+            | Inst::ADD
+            | Inst::MUL
             | Inst::ADDI
             | Inst::SUBI
             | Inst::CREATE_HASH => 5,

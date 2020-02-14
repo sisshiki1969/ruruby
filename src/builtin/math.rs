@@ -1,9 +1,9 @@
 use crate::vm::*;
 
-pub fn init_math(globals: &mut Globals) -> PackedValue {
+pub fn init_math(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Math");
     let class = ClassRef::from(id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "sqrt", sqrt);
     globals.add_builtin_class_method(obj, "cos", cos);
     globals.add_builtin_class_method(obj, "sin", sin);
@@ -14,12 +14,7 @@ pub fn init_math(globals: &mut Globals) -> PackedValue {
 
 // Instance methods
 
-fn sqrt(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn sqrt(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -30,16 +25,11 @@ fn sqrt(
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = PackedValue::flonum(num.sqrt());
+    let res = Value::flonum(num.sqrt());
     Ok(res)
 }
 
-fn cos(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn cos(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -50,16 +40,11 @@ fn cos(
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = PackedValue::flonum(num.cos());
+    let res = Value::flonum(num.cos());
     Ok(res)
 }
 
-fn sin(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn sin(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -70,6 +55,6 @@ fn sin(
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = PackedValue::flonum(num.sin());
+    let res = Value::flonum(num.sin());
     Ok(res)
 }

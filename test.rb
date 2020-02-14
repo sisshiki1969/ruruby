@@ -1,9 +1,17 @@
-def func(y)
-    [1,2,3,4].each{|x|
-        puts x
-        return 100 if x == y
-    }
-    200
+class Foo
+    def func(a,b)
+        puts "hi!"
+        p a,b
+    end
 end
 
-puts func(3)
+class Bar < Foo
+    def func(a,b)
+        puts "ho!"
+        super
+    end
+end
+
+Foo.new.func(3,4)
+
+Bar.new.func(3,4)

@@ -19,10 +19,10 @@ impl ProcRef {
     }
 }
 
-pub fn init_proc(globals: &mut Globals) -> PackedValue {
+pub fn init_proc(globals: &mut Globals) -> Value {
     let proc_id = globals.get_ident_id("Proc");
     let class = ClassRef::from(proc_id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "call", proc_call);
     globals.add_builtin_class_method(obj, "new", proc_new);
     obj
@@ -30,16 +30,11 @@ pub fn init_proc(globals: &mut Globals) -> PackedValue {
 
 // Class methods
 
-fn proc_new(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    _args: &VecArray,
-    block: Option<MethodRef>,
-) -> VMResult {
+fn proc_new(vm: &mut VM, _args: &Args, block: Option<MethodRef>) -> VMResult {
     let procobj = match block {
         Some(block) => {
             let context = vm.create_context_from_method(block)?;
-            PackedValue::procobj(&vm.globals, context)
+            Value::procobj(&vm.globals, context)
         }
         None => return Err(vm.error_type("Needs block.")),
     };
@@ -48,24 +43,14 @@ fn proc_new(
 
 // Instance methods
 
-fn proc_call(
-    vm: &mut VM,
-    receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
-    let pref = match receiver.as_proc() {
+fn proc_call(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let pref = match args.self_value.as_proc() {
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
     };
-    vm.vm_run(
-        pref.context.self_value,
-        pref.context.iseq_ref,
-        pref.context.outer,
-        &args,
-        None,
-        None,
-    )?;
+    let mut args = args.clone();
+    args.self_value = pref.context.self_value;
+    vm.vm_run(pref.context.iseq_ref, pref.context.outer, &args, None, None)?;
     let res = vm.stack_pop();
     Ok(res)
 }

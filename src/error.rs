@@ -1,25 +1,24 @@
 use crate::util::{Loc, SourceInfoRef};
+use crate::vm::method::MethodRef;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RubyError {
     pub kind: RubyErrorKind,
-    source_info: SourceInfoRef,
+    pub info: Vec<(SourceInfoRef, Loc)>,
     level: usize,
-    loc: Loc,
 }
 
 impl RubyError {
     pub fn new(kind: RubyErrorKind, source_info: SourceInfoRef, level: usize, loc: Loc) -> Self {
         RubyError {
             kind,
-            source_info,
+            info: vec![(source_info, loc)],
             level,
-            loc,
         }
     }
 
     pub fn loc(&self) -> Loc {
-        self.loc
+        self.info[0].1
     }
 
     pub fn level(&self) -> usize {
@@ -30,12 +29,12 @@ impl RubyError {
         self.level = level;
     }
 
-    pub fn show_file_name(&self) {
-        self.source_info.show_file_name()
+    pub fn show_file_name(&self, pos: usize) {
+        self.info[pos].0.show_file_name()
     }
 
-    pub fn show_loc(&self) {
-        self.source_info.show_loc(&self.loc);
+    pub fn show_loc(&self, pos: usize) {
+        self.info[pos].0.show_loc(&self.info[pos].1);
     }
 
     pub fn show_err(&self) {
@@ -52,6 +51,9 @@ impl RubyError {
                 RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
                 RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
             },
+            RubyErrorKind::MethodReturn(_) => {
+                eprintln!("LocalJumpError");
+            }
         }
     }
 }
@@ -60,6 +62,7 @@ impl RubyError {
 pub enum RubyErrorKind {
     ParseErr(ParseErrKind),
     RuntimeErr(RuntimeErrKind),
+    MethodReturn(MethodRef),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,6 +89,7 @@ impl RubyError {
         let kind = RubyErrorKind::RuntimeErr(err);
         RubyError::new(kind, source_info, 0, loc)
     }
+
     pub fn new_parse_err(
         err: ParseErrKind,
         source_info: SourceInfoRef,
@@ -94,5 +98,9 @@ impl RubyError {
     ) -> Self {
         let kind = RubyErrorKind::ParseErr(err);
         RubyError::new(kind, source_info, level, loc)
+    }
+
+    pub fn new_method_return(method: MethodRef, source_info: SourceInfoRef, loc: Loc) -> Self {
+        RubyError::new(RubyErrorKind::MethodReturn(method), source_info, 0, loc)
     }
 }

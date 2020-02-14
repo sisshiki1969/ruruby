@@ -1,22 +1,17 @@
 use crate::vm::*;
 use std::path::*;
 
-pub fn init_file(globals: &mut Globals) -> PackedValue {
+pub fn init_file(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("File");
     let class = ClassRef::from(id, globals.object);
-    let obj = PackedValue::class(globals, class);
+    let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "join", join);
     obj
 }
 
 // Class methods
 
-fn join(
-    vm: &mut VM,
-    _receiver: PackedValue,
-    args: &VecArray,
-    _block: Option<MethodRef>,
-) -> VMResult {
+fn join(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     let mut path = PathBuf::from(match args[0].as_string() {
         Some(s) => s,
@@ -34,5 +29,5 @@ fn join(
             path.push(p);
         }
     }
-    Ok(PackedValue::string(path.to_string_lossy().to_string()))
+    Ok(Value::string(path.to_string_lossy().to_string()))
 }

@@ -23,13 +23,8 @@ impl Builtin {
         globals.add_builtin_method("rand", builtin_rand);
 
         /// Built-in function "puts".
-        fn builtin_puts(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
-            fn flatten(vm: &VM, val: PackedValue) {
+        fn builtin_puts(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+            fn flatten(vm: &VM, val: Value) {
                 match val.as_array() {
                     None => println!("{}", vm.val_to_s(val)),
                     Some(aref) => {
@@ -39,58 +34,44 @@ impl Builtin {
                     }
                 }
             }
-            for arg in args.iter() {
-                flatten(vm, arg.clone());
+            for i in 0..args.len() {
+                flatten(vm, args[i]);
             }
-            Ok(PackedValue::nil())
+            Ok(Value::nil())
         }
 
-        fn builtin_p(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
-            for arg in args.iter() {
-                println!("{}", vm.val_pp(*arg));
+        fn builtin_p(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+            for i in 0..args.len() {
+                println!("{}", vm.val_pp(args[i]));
             }
-            Ok(if args.len() == 1 {
-                args[0]
+            if args.len() == 1 {
+                Ok(args[0])
             } else {
-                PackedValue::array_from(&vm.globals, args.to_vec())
-            })
+                Ok(Value::array_from(
+                    &vm.globals,
+                    args.get_slice(0, args.len()).to_vec(),
+                ))
+            }
         }
 
         /// Built-in function "print".
-        fn builtin_print(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
-            for arg in args.iter() {
-                if let Value::Char(ch) = arg.unpack() {
+        fn builtin_print(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+            for i in 0..args.len() {
+                if let RValue::Char(ch) = args[i].unpack() {
                     let v = [ch];
                     use std::io::{self, Write};
                     io::stdout().write(&v).unwrap();
                 } else {
-                    print!("{}", vm.val_to_s(arg.clone()));
+                    print!("{}", vm.val_to_s(args[i].clone()));
                 }
             }
-            Ok(PackedValue::nil())
+            Ok(Value::nil())
         }
 
         /// Built-in function "assert".
-        fn builtin_assert(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
-            if args.len() != 2 {
-                panic!("Invalid number of arguments.");
-            }
-            if !args[0].clone().equal(args[1].clone()) {
+        fn builtin_assert(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+            vm.check_args_num(args.len(), 2, 2)?;
+            if !args[0].equal(args[1]) {
                 panic!(
                     "Assertion error: Expected: {} Actual: {}",
                     vm.val_pp(args[0]),
@@ -98,16 +79,11 @@ impl Builtin {
                 );
             } else {
                 println!("Assert OK: {:?}", vm.val_pp(args[0]));
-                Ok(PackedValue::nil())
+                Ok(Value::nil())
             }
         }
 
-        fn builtin_require(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_require(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let file_name = match args[0].as_string() {
                 Some(string) => string,
@@ -116,13 +92,12 @@ impl Builtin {
             let mut path = std::env::current_dir().unwrap();
             path.push(file_name);
             require(vm, path)?;
-            Ok(PackedValue::bool(true))
+            Ok(Value::bool(true))
         }
 
         fn builtin_require_relative(
             vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
+            args: &Args,
             _block: Option<MethodRef>,
         ) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
@@ -143,7 +118,7 @@ impl Builtin {
             }
             path.set_extension("rb");
             require(vm, path)?;
-            Ok(PackedValue::bool(true))
+            Ok(Value::bool(true))
         }
 
         fn require(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
@@ -167,130 +142,96 @@ impl Builtin {
             #[cfg(feature = "verbose")]
             eprintln!("reading:{}", absolute_path.to_string_lossy());
             vm.root_path.push(path);
-            vm.class_stack.push(vm.globals.object);
+            vm.class_push(vm.globals.object);
             vm.run(absolute_path.to_str().unwrap(), program)?;
-            vm.class_stack.pop().unwrap();
+            vm.class_pop();
             vm.root_path.pop().unwrap();
             Ok(())
         }
 
         /// Built-in function "block_given?".
-        fn builtin_block_given(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            _args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
-            Ok(PackedValue::bool(vm.context().block.is_some()))
+        fn builtin_block_given(vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
+            Ok(Value::bool(vm.context().block.is_some()))
         }
 
-        fn builtin_method(
-            vm: &mut VM,
-            receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_method(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let name = match args[0].as_symbol() {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
             };
-            let recv_class = receiver.get_class_object_for_method(&vm.globals);
+            let recv_class = args.self_value.get_class_object_for_method(&vm.globals);
             let method = vm.get_instance_method(recv_class, name)?;
-            let val = PackedValue::method(&vm.globals, name, receiver, method);
+            let val = Value::method(&vm.globals, name, args.self_value, method);
             Ok(val)
         }
 
-        fn builtin_isa(
-            vm: &mut VM,
-            receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_isa(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let mut recv_class = receiver.get_class_object(&vm.globals);
+            let mut recv_class = args.self_value.get_class_object(&vm.globals);
             loop {
                 if recv_class.id() == args[0].id() {
-                    return Ok(PackedValue::true_val());
+                    return Ok(Value::true_val());
                 }
                 recv_class = recv_class.as_class().superclass;
                 if recv_class.is_nil() {
-                    return Ok(PackedValue::false_val());
+                    return Ok(Value::false_val());
                 }
             }
         }
 
-        fn builtin_tos(
-            vm: &mut VM,
-            receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_tos(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
-            let s = vm.val_to_s(receiver);
-            Ok(PackedValue::string(s))
+            let s = vm.val_to_s(args.self_value);
+            Ok(Value::string(s))
         }
 
-        fn builtin_integer(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_integer(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let val = if args[0].is_packed_value() {
-                if args[0].is_packed_fixnum() {
-                    args[0].as_packed_fixnum()
-                } else if args[0].is_packed_num() {
-                    args[0].as_packed_flonum().trunc() as i64
+            let self_ = args[0];
+            let val = if self_.is_packed_value() {
+                if self_.is_packed_fixnum() {
+                    self_.as_packed_fixnum()
+                } else if self_.is_packed_num() {
+                    self_.as_packed_flonum().trunc() as i64
                 } else {
                     return Err(vm.error_type(format!(
                         "Can not convert {} into Integer.",
-                        vm.val_pp(args[0])
+                        vm.val_pp(self_)
                     )));
                 }
             } else {
-                match args[0].unpack() {
-                    Value::FixNum(num) => num,
-                    Value::FloatNum(num) => num as i64,
-                    Value::String(s) => match s.parse::<i64>() {
+                match self_.unpack() {
+                    RValue::FixNum(num) => num,
+                    RValue::FloatNum(num) => num as i64,
+                    RValue::String(s) => match s.parse::<i64>() {
                         Ok(num) => num,
                         Err(_) => {
                             return Err(vm.error_type(format!(
                                 "Invalid value for Integer(): {}",
-                                vm.val_pp(args[0])
+                                vm.val_pp(self_)
                             )))
                         }
                     },
                     _ => {
                         return Err(vm.error_type(format!(
                             "Can not convert {} into Integer.",
-                            vm.val_pp(args[0])
+                            vm.val_pp(self_)
                         )))
                     }
                 }
             };
-            Ok(PackedValue::fixnum(val))
+            Ok(Value::fixnum(val))
         }
 
-        fn builtin_dir(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_dir(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
-            Ok(PackedValue::string(path.to_string_lossy().to_string()))
+            Ok(Value::string(path.to_string_lossy().to_string()))
         }
 
-        fn builtin_raise(
-            vm: &mut VM,
-            _receiver: PackedValue,
-            args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_raise(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
             vm.check_args_num(args.len(), 0, 2)?;
             for i in 0..args.len() {
                 eprintln!("{}", vm.val_pp(args[i]));
@@ -298,14 +239,9 @@ impl Builtin {
             Err(vm.error_unimplemented("error"))
         }
 
-        fn builtin_rand(
-            _vm: &mut VM,
-            _receiver: PackedValue,
-            _args: &VecArray,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_rand(_vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
             let num = rand::random();
-            Ok(PackedValue::flonum(num))
+            Ok(Value::flonum(num))
         }
     }
 }

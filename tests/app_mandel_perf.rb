@@ -18,12 +18,12 @@ class Complexe
   def abs2; @r*@r + @i*@i; end
 end
 
-size = 100 # ARGV[0].to_i
+size = 200 # ARGV[0].to_i
 
 puts("P4\n#{size} #{size}")
 
-ITER = 49                           # Iterations - 1 for easy for..in looping
-LIMIT_SQUARED = 4.0                 # Presquared limit
+iTER = 49                           # Iterations - 1 for easy for..in looping
+lIMIT_SQUARED = 4.0                 # Presquared limit
 
 byte_acc = 0
 bit_num = 0
@@ -38,9 +38,9 @@ for y in 0..count_size
     escape = false
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
-    for dummy in 0..ITER
+    for dummy in 0..iTER
       z = z * z + c
-      if z.abs2 > LIMIT_SQUARED
+      if z.abs2 > lIMIT_SQUARED
         escape = true
         break
       end
