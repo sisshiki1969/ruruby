@@ -1,3 +1,4 @@
+mod args;
 mod builtin;
 mod class;
 mod codegen;
@@ -15,6 +16,7 @@ use crate::error::{RubyError, RubyErrorKind, RuntimeErrKind};
 use crate::parser::*;
 pub use crate::parser::{LvarCollector, LvarId, ParseResult};
 pub use crate::util::*;
+pub use args::*;
 pub use class::*;
 pub use codegen::{Codegen, ISeq, ISeqPos};
 
@@ -1646,7 +1648,13 @@ impl VM {
             },
             RValue::FixNum(i) => i.to_string(),
             RValue::FloatNum(f) => f.to_string(),
-            RValue::String(s) => format!("{}", s),
+            RValue::String(s) => match s {
+                RString::Str(s) => format!("{}", s),
+                RString::Bytes(b) => match String::from_utf8(b) {
+                    Ok(s) => format!("{}", s),
+                    Err(_) => "<ByteArray>".to_string(),
+                },
+            },
             RValue::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
             RValue::Char(c) => format!("{:x}", c),
             RValue::Object(oref) => match oref.kind {
@@ -1679,7 +1687,13 @@ impl VM {
     pub fn val_pp(&self, val: Value) -> String {
         match val.unpack() {
             RValue::Nil => "nil".to_string(),
-            RValue::String(s) => format!("\"{}\"", s),
+            RValue::String(s) => match s {
+                RString::Str(s) => format!("\"{}\"", s),
+                RString::Bytes(b) => match String::from_utf8(b) {
+                    Ok(s) => format!("\"{}\"", s),
+                    Err(_) => "<ByteArray>".to_string(),
+                },
+            },
             RValue::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},

@@ -2,7 +2,7 @@
 extern crate ruruby;
 extern crate test;
 use ruruby::test::eval_script;
-use ruruby::vm::value::RValue;
+use ruruby::vm::*;
 
 #[test]
 fn bool_lit1() {
@@ -28,7 +28,7 @@ fn nil_lit1() {
 #[test]
 fn string_lit1() {
     let program = r#""open "  "windows""#;
-    let expected = RValue::String("open windows".to_string());
+    let expected = RValue::String(RString::Str("open windows".to_string()));
     eval_script(program, expected);
 }
 
@@ -36,7 +36,7 @@ fn string_lit1() {
 fn string_lit2() {
     let program = r#""open "
     "windows""#;
-    let expected = RValue::String("windows".to_string());
+    let expected = RValue::String(RString::Str("windows".to_string()));
     eval_script(program, expected);
 }
 
@@ -47,7 +47,7 @@ fn interpolated_string_lit1() {
     f = "fibonacci";
     "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
     "###;
-    let expected = RValue::String("fibonacci  fibo(20) = 6765".to_string());
+    let expected = RValue::String(RString::Str("fibonacci  fibo(20) = 6765".to_string()));
     eval_script(program, expected);
 }
 

@@ -205,8 +205,8 @@ impl Builtin {
                     RValue::FixNum(num) => num,
                     RValue::FloatNum(num) => num as i64,
                     RValue::String(s) => match s.parse::<i64>() {
-                        Ok(num) => num,
-                        Err(_) => {
+                        Some(num) => num,
+                        None => {
                             return Err(vm.error_type(format!(
                                 "Invalid value for Integer(): {}",
                                 vm.val_pp(self_)

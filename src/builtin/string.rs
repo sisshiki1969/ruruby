@@ -1,4 +1,51 @@
 use crate::vm::*;
+use std::string::FromUtf8Error;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RString {
+    Str(String),
+    Bytes(Vec<u8>),
+}
+
+use std::str::FromStr;
+impl RString {
+    pub fn new_string(string: String) -> Self {
+        RString::Str(string)
+    }
+
+    pub fn new_bytes(bytes: Vec<u8>) -> Self {
+        RString::Bytes(bytes)
+    }
+
+    pub fn to_str(self) -> Result<Self, FromUtf8Error> {
+        match self {
+            RString::Str(_) => Ok(self),
+            RString::Bytes(bytes) => match String::from_utf8(bytes) {
+                Ok(s) => Ok(Self::new_string(s)),
+                Err(err) => Err(err),
+            },
+        }
+    }
+
+    pub fn parse<F: FromStr>(&self) -> Option<F> {
+        match self {
+            RString::Str(s) => FromStr::from_str(s).ok(),
+            RString::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
+                Ok(s) => FromStr::from_str(&s).ok(),
+                Err(_) => None,
+            },
+        }
+    }
+}
+
+impl std::hash::Hash for RString {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            RString::Str(s) => s.hash(state),
+            RString::Bytes(b) => b.hash(state),
+        };
+    }
+}
 
 pub fn init_string(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("String");
