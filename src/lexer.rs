@@ -695,6 +695,15 @@ impl Lexer {
         }
     }
 
+    fn char_to_hex(&self, c: char) -> Result<u32, RubyError> {
+        match c {
+            ch @ '0'..='9' => Ok(ch as u32 - '0' as u32),
+            ch @ 'a'..='f' => Ok(ch as u32 - 'a' as u32 + 10),
+            ch @ 'A'..='F' => Ok(ch as u32 - 'A' as u32 + 10),
+            _ => Err(self.error_unexpected(self.pos - 1)),
+        }
+    }
+
     fn read_escaped_char(&mut self) -> Result<char, RubyError> {
         let ch = match self.get()? {
             c @ '\'' | c @ '"' | c @ '?' | c @ '\\' => c,
@@ -705,6 +714,16 @@ impl Lexer {
             'r' => '\x0d',
             't' => '\x09',
             'v' => '\x0b',
+            'x' => {
+                let c1 = self.get()?;
+                let c1 = self.char_to_hex(c1)?;
+                let c2 = self.get()?;
+                let c2 = self.char_to_hex(c2)?;
+                match std::char::from_u32(c1 * 16 + c2) {
+                    Some(c) => c,
+                    None => return Err(self.error_unexpected(self.pos)),
+                }
+            }
             c => c,
         };
         Ok(ch)

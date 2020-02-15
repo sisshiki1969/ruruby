@@ -75,10 +75,10 @@ fn binread(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(vm.error_internal(format!("Can not open file. {:?}", &filename))),
     };
-    let mut contents = String::new();
-    match file.read_to_string(&mut contents) {
+    let mut contents = vec![];
+    match file.read_to_end(&mut contents) {
         Ok(file) => file,
-        Err(_) => return Err(vm.error_internal("File content is invalid as UTF8.")),
+        Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
-    Ok(Value::string(contents))
+    Ok(Value::bytes(contents))
 }

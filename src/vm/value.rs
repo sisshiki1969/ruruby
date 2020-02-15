@@ -412,6 +412,19 @@ impl Value {
         }
     }
 
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        if self.is_packed_value() {
+            return None;
+        }
+        unsafe {
+            match &*(self.0 as *mut RValue) {
+                RValue::String(RString::Bytes(b)) => Some(b),
+                RValue::String(RString::Str(s)) => Some(s.as_bytes()),
+                _ => None,
+            }
+        }
+    }
+
     pub fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
             Some(self.as_packed_symbol())
@@ -476,6 +489,10 @@ impl Value {
 
     pub fn string(string: String) -> Self {
         Value(RValue::pack_as_boxed(RValue::String(RString::Str(string))))
+    }
+
+    pub fn bytes(bytes: Vec<u8>) -> Self {
+        Value(RValue::pack_as_boxed(RValue::String(RString::Bytes(bytes))))
     }
 
     pub fn symbol(id: IdentId) -> Self {

@@ -17,11 +17,14 @@ impl RString {
         RString::Bytes(bytes)
     }
 
-    pub fn to_str(self) -> Result<Self, FromUtf8Error> {
+    pub fn to_str(&mut self) -> Result<(), FromUtf8Error> {
         match self {
-            RString::Str(_) => Ok(self),
-            RString::Bytes(bytes) => match String::from_utf8(bytes) {
-                Ok(s) => Ok(Self::new_string(s)),
+            RString::Str(_) => Ok(()),
+            RString::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
+                Ok(s) => {
+                    std::mem::replace(self, RString::Str(s));
+                    Ok(())
+                }
                 Err(err) => Err(err),
             },
         }
@@ -58,6 +61,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "=~", string_rmatch);
     globals.add_builtin_instance_method(class, "tr", string_tr);
     globals.add_builtin_instance_method(class, "size", string_size);
+    globals.add_builtin_instance_method(class, "bytes", string_bytes);
     Value::class(globals, class)
 }
 
@@ -172,4 +176,17 @@ fn string_size(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     vm.check_args_num(args.len(), 0, 0)?;
     let rec = args.self_value.as_string().unwrap();
     Ok(Value::fixnum(rec.chars().count() as i64))
+}
+
+fn string_bytes(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let bytes = match args.self_value.as_bytes() {
+        Some(bytes) => bytes,
+        None => return Err(vm.error_type("Receiver must be String.")),
+    };
+    let mut ary = vec![];
+    for b in bytes {
+        ary.push(Value::fixnum(*b as i64));
+    }
+    Ok(Value::array_from(&vm.globals, ary))
 }

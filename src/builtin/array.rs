@@ -47,6 +47,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "fill", array_fill);
     globals.add_builtin_instance_method(class, "clear", array_clear);
     globals.add_builtin_instance_method(class, "uniq!", array_uniq_);
+    globals.add_builtin_instance_method(class, "slice!", array_slice_);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -440,4 +441,21 @@ fn array_uniq_(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
             Ok(args.self_value)
         }
     }
+}
+
+fn array_slice_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 2, 2)?;
+    let start = args[0].expect_fixnum(vm, "Currently, first arg must be Integer.")?;
+    if start < 0 {
+        return Err(vm.error_argument("First arg must be positive value."));
+    };
+    let len = args[1].expect_fixnum(vm, "Currently, second arg must be Integer")?;
+    if len < 0 {
+        return Err(vm.error_argument("Second arg must be positive value."));
+    };
+    let start = start as usize;
+    let len = len as usize;
+    let mut aref = self_array!(args, vm);
+    let new = aref.elements.drain(start..start + len).collect();
+    Ok(Value::array_from(&vm.globals, new))
 }
