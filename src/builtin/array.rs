@@ -48,6 +48,11 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "clear", array_clear);
     globals.add_builtin_instance_method(class, "uniq!", array_uniq_);
     globals.add_builtin_instance_method(class, "slice!", array_slice_);
+    globals.add_builtin_instance_method(class, "max", array_max);
+    globals.add_builtin_instance_method(class, "first", array_first);
+    globals.add_builtin_instance_method(class, "last", array_last);
+    globals.add_builtin_instance_method(class, "dup", array_dup);
+    globals.add_builtin_instance_method(class, "clone", array_dup);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -108,12 +113,21 @@ pub fn array_set_elem(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VM
         let len = args[1].expect_fixnum(&vm, "Length")?;
         if len < 0 {
             return Err(vm.error_index(format!("Negative length. {}", len)));
-        } else {
-            let len = len as usize;
-            let end = std::cmp::min(aref.elements.len(), index + len);
-            aref.elements.drain(index..end);
-            aref.elements.insert(index, val);
-        }
+        };
+        let len = len as usize;
+        let end = std::cmp::min(aref.elements.len(), index + len);
+        match val.as_array() {
+            Some(mut val) => {
+                let mut tail = aref.elements.split_off(end);
+                aref.elements.split_off(index);
+                aref.elements.append(&mut val.elements.clone());
+                aref.elements.append(&mut tail);
+            }
+            None => {
+                aref.elements.drain(index..end);
+                aref.elements.insert(index, val);
+            }
+        };
     };
     Ok(val)
 }
@@ -458,4 +472,45 @@ fn array_slice_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
     let mut aref = self_array!(args, vm);
     let new = aref.elements.drain(start..start + len).collect();
     Ok(Value::array_from(&vm.globals, new))
+}
+
+fn array_max(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = self_array!(args, vm);
+    if aref.elements.len() == 0 {
+        return Ok(Value::nil());
+    }
+    let mut max = aref.elements[0];
+    for elem in &aref.elements {
+        if vm.eval_gt(max, *elem)? == Value::true_val() {
+            max = *elem;
+        };
+    }
+    Ok(max)
+}
+
+fn array_first(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = self_array!(args, vm);
+    if aref.elements.len() == 0 {
+        Ok(Value::nil())
+    } else {
+        Ok(aref.elements[0])
+    }
+}
+
+fn array_last(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = self_array!(args, vm);
+    if aref.elements.len() == 0 {
+        Ok(Value::nil())
+    } else {
+        Ok(*aref.elements.last().unwrap())
+    }
+}
+
+fn array_dup(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = self_array!(args, vm);
+    Ok(Value::array_from(&vm.globals, aref.elements.clone()))
 }

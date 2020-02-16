@@ -87,18 +87,19 @@ impl std::hash::Hash for Value {
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
                     ObjKind::Hash(lhs) => match lhs.inner() {
                         HashInfo::Map(map) => {
-                            for (key, val) in map.iter() {
+                            for (key, val) in map {
                                 key.hash(state);
                                 val.hash(state);
                             }
                         }
                         HashInfo::IdentMap(map) => {
-                            for (key, val) in map.iter() {
+                            for (key, val) in map {
                                 key.hash(state);
                                 val.hash(state);
                             }
                         }
                     },
+                    ObjKind::Method(lhs) => lhs.inner().hash(state),
                     _ => self.0.hash(state),
                 },
                 _ => self.0.hash(state),
@@ -110,7 +111,7 @@ impl std::hash::Hash for Value {
 impl PartialEq for Value {
     // Object#eql?()
     // This type of equality is used for comparison for keys of Hash.
-    // Regexp, Array, Hash must be implemented.
+    // Regexp, Range etc must be implemented.
     fn eq(&self, other: &Self) -> bool {
         if self.is_packed_value() || other.is_packed_value() {
             self.0 == other.0
@@ -128,6 +129,7 @@ impl PartialEq for Value {
                         (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
                         _ => false,
                     },
+                    (ObjKind::Method(lhs), ObjKind::Method(rhs)) => lhs.inner() == rhs.inner(),
                     _ => lhs.kind == rhs.kind,
                 },
                 _ => self.0 == other.0,
@@ -586,21 +588,7 @@ impl Value {
             (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
             (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
             (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
-                    lhs.elements == rhs.elements
-                    /*
-                    let lhs = &lhs.elements;
-                    let rhs = &rhs.elements;
-                    if lhs.len() != rhs.len() {
-                        return false;
-                    }
-                    for i in 0..lhs.len() {
-                        if !lhs[i].equal(rhs[i]) {
-                            return false;
-                        }
-                    }
-                    true*/
-                }
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
                     lhs.start.equal(rhs.start)
                         && lhs.end.equal(rhs.end)

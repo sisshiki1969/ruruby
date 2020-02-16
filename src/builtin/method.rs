@@ -204,7 +204,7 @@ impl GlobalMethodTable {
 
 //----------------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodObjInfo {
     pub name: IdentId,
     pub receiver: Value,
@@ -236,7 +236,7 @@ pub fn init_method(globals: &mut Globals) -> Value {
     Value::class(globals, class)
 }
 
-fn method_call(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+pub fn method_call(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let method = match args.self_value.as_method() {
         Some(method) => method,
         None => return Err(vm.error_unimplemented("Expected Method object.")),

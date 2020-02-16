@@ -1,17 +1,9 @@
-class Foo
-    def func(a,b)
-        puts "hi!"
-        p a,b
-    end
+def func
 end
 
-class Bar < Foo
-    def func(a,b)
-        puts "ho!"
-        super
-    end
-end
+m1 = method(:func)
+m2 = method(:func)
 
-Foo.new.func(3,4)
-
-Bar.new.func(3,4)
+h = {}
+h[m1] = 100
+p h[m2]

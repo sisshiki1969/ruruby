@@ -739,6 +739,13 @@ impl VM {
                                     };
                                     self.stack_push(val);
                                 }
+                                ObjKind::Method(mref) => {
+                                    let mut new_args = Args::new0(mref.receiver, None);
+                                    for arg in args {
+                                        new_args.push(arg);
+                                    }
+                                    self.eval_send(mref.method, &new_args, None, None)?;
+                                }
                                 _ => {
                                     return Err(self.error_unimplemented(
                                         "Currently, [] is supported only for Array and Hash.",
@@ -1603,7 +1610,7 @@ impl VM {
         }
     }
 
-    fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::bool(lhs.as_packed_fixnum() > rhs.as_packed_fixnum()));
         }

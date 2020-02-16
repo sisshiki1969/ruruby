@@ -695,7 +695,8 @@ impl Parser {
     }
 
     fn parse_arg(&mut self) -> Result<Node, RubyError> {
-        self.parse_arg_assign()
+        let node = self.parse_arg_assign()?;
+        Ok(node)
     }
 
     fn parse_arg_assign(&mut self) -> Result<Node, RubyError> {
@@ -977,37 +978,44 @@ impl Parser {
         }
     }
 
+    fn parse_function_args(&mut self, node: Node) -> Result<Node, RubyError> {
+        let loc = node.loc();
+        if self.consume_punct_no_term(Punct::LParen)? {
+            // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
+            let (args, kw_args) = self.parse_args(Punct::RParen)?;
+            let block = self.parse_block()?;
+
+            Ok(Node::new_send(
+                Node::new_self(loc),
+                node.as_method_name().unwrap(),
+                args,
+                kw_args,
+                block,
+                true,
+                loc,
+            ))
+        } else if let Some(block) = self.parse_block()? {
+            // PRIMARY-METHOD : FNAME BLOCK
+            Ok(Node::new_send(
+                Node::new_self(loc),
+                node.as_method_name().unwrap(),
+                vec![],
+                vec![],
+                Some(block),
+                true,
+                loc,
+            ))
+        } else {
+            Ok(node)
+        }
+    }
+
     fn parse_function(&mut self) -> Result<Node, RubyError> {
         // <一次式メソッド呼び出し>
         let mut node = self.parse_primary()?;
         let loc = node.loc();
         if node.is_operation() {
-            if self.consume_punct_no_term(Punct::LParen)? {
-                // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-                let (args, kw_args) = self.parse_args(Punct::RParen)?;
-                let block = self.parse_block()?;
-
-                node = Node::new_send(
-                    Node::new_self(loc),
-                    node.as_method_name().unwrap(),
-                    args,
-                    kw_args,
-                    block,
-                    true,
-                    loc,
-                );
-            } else if let Some(block) = self.parse_block()? {
-                // PRIMARY-METHOD : FNAME BLOCK
-                node = Node::new_send(
-                    Node::new_self(loc),
-                    node.as_method_name().unwrap(),
-                    vec![],
-                    vec![],
-                    Some(block),
-                    true,
-                    loc,
-                );
-            }
+            node = self.parse_function_args(node)?;
         }
         loop {
             //let tok = self.peek()?;
@@ -1195,7 +1203,18 @@ impl Parser {
                     Ok(Node::new_lvar(id, loc))
                 } else {
                     // FUNCTION or COMMAND or LHS for assignment
-                    Ok(Node::new_identifier(id, false, loc))
+                    let node = Node::new_identifier(id, false, loc);
+                    match self.peek_no_term()?.kind {
+                        // Assignment
+                        TokenKind::Punct(Punct::AssignOp(_))
+                        | TokenKind::Punct(Punct::Assign)
+                        // Multiple assignment
+                        | TokenKind::Punct(Punct::Comma) => Ok(node),
+                        TokenKind::Punct(Punct::LParen)
+                        | TokenKind::Punct(Punct::LBrace) 
+                        | TokenKind::Reserved(Reserved::Do) => Ok(self.parse_function_args(node)?),
+                        _ => Ok(node)
+                    }
                 }
             }
             TokenKind::InstanceVar(name) => {

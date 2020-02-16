@@ -177,6 +177,9 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
     globals.add_builtin_instance_method(object, "floor", floor);
     globals.add_builtin_instance_method(object, "super", super_);
+    globals.add_builtin_instance_method(object, "equal?", equal);
+    globals.add_builtin_instance_method(object, "send", send);
+    globals.add_builtin_instance_method(object, "yield", object_yield);
 
     {
         use std::env;
@@ -299,6 +302,42 @@ fn super_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     }
 }
 
+fn equal(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    Ok(Value::bool(args.self_value.id() == args[0].id()))
+}
+
+fn send(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 100)?;
+    let receiver = args.self_value;
+    let method_id = match args[0].as_symbol() {
+        Some(symbol) => symbol,
+        None => return Err(vm.error_argument("Must be a symbol.")),
+    };
+    let rec_class = receiver.get_class_object_for_method(&vm.globals);
+    let method = vm.get_instance_method(rec_class, method_id)?;
+
+    let mut new_args = Args::new(args.len() - 1);
+    for i in 0..args.len() - 1 {
+        new_args[i] = args[i + 1];
+    }
+    new_args.self_value = args.self_value;
+    vm.eval_send(method, &new_args, None, block)?;
+    let res = vm.stack_pop();
+    Ok(res)
+}
+
+fn object_yield(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let context = vm.context();
+    let method = match context.block {
+        Some(block) => block,
+        None => return Err(vm.error_argument("Yield needs block.")),
+    };
+    vm.eval_send(method, &args, None, None)?;
+    let res = vm.stack_pop();
+    Ok(res)
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -317,6 +356,65 @@ mod test {
         end
 
         assert(true, ary_cmp([:@foo, :@bar], obj.instance_variables))
+        "#;
+        let expected = RValue::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn object_send() {
+        let program = r#"
+        class Foo
+            def foo(); "foo" end
+            def bar(); "bar" end
+            def baz(); "baz" end
+        end
+
+        # 任意のキーとメソッド(の名前)の関係をハッシュに保持しておく
+        # レシーバの情報がここにはないことに注意
+        methods = {1 => :foo, 2 => :bar, 3 => :baz}
+
+        # キーを使って関連するメソッドを呼び出す
+        # レシーバは任意(Foo クラスのインスタンスである必要もない)
+        assert "foo", Foo.new.send(methods[1])
+        assert "bar", Foo.new.send(methods[2])
+        assert "baz", Foo.new.send(methods[3])
+        "#;
+        let expected = RValue::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn object_yield() {
+        let program = r#"
+        # ブロック付きメソッドの定義、
+        # その働きは与えられたブロック(手続き)に引数1, 2を渡して実行すること
+        def foo
+            yield(1,2)
+        end
+
+        # fooに「2引数手続き、その働きは引数を配列に括ってpで印字する」というものを渡して実行させる
+        assert [1, 2], foo {|a,b| [a, b]}  # => [1, 2] (要するに p [1, 2] を実行した)
+        # 今度は「2引数手続き、その働きは足し算をしてpで印字する」というものを渡して実行させる
+        assert 3, foo {|a, b| p a + b}  # => 3 (要するに p 1 + 2 を実行した)
+
+        # 今度のブロック付きメソッドの働きは、
+        # 与えられたブロックに引数10を渡して起動し、続けざまに引数20を渡して起動し、
+        # さらに引数30を渡して起動すること
+        def bar
+            a = []
+            a << yield(10)
+            a << yield(20)
+            a << yield(30)
+        end
+
+        # barに「1引数手続き、その働きは引数に3を足してpで印字する」というものを渡して実行させる
+        assert [13, 23, 33], bar {|v| v + 3 }
+        # => 13
+        #    23
+        #    33 (同じブロックが3つのyieldで3回起動された。
+        #        具体的には 10 + 3; 20 + 3; 30 + 3 を実行した)
+
         "#;
         let expected = RValue::Nil;
         eval_script(program, expected);

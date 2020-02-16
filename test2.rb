@@ -1,9 +1,4 @@
-def calc(x,y)
-    x * y
+def func(a,b)
 end
 
-100_000.times do |x|
-    1000.times do |y|
-        calc(x,y)
-    end
-end
+a = func 4,5
