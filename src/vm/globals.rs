@@ -80,7 +80,6 @@ impl Globals {
         let singleton_obj = Value::class(&globals, singleton_class);
         globals.object.as_object().set_class(singleton_obj);
 
-        init_object(&mut globals);
         module::init_module(&mut globals);
         class::init_class(&mut globals);
         globals.integer = init_integer(&mut globals);
@@ -91,6 +90,7 @@ impl Globals {
         globals.string = init_string(&mut globals);
         globals.hash = init_hash(&mut globals);
         globals.regexp = init_regexp(&mut globals);
+        init_object(&mut globals);
         globals
     }
 
