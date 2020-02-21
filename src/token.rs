@@ -36,10 +36,10 @@ impl std::fmt::Display for Token {
 pub enum TokenKind {
     Nop,
     EOF,
-    Ident(String, bool),
+    Ident(String, bool, bool),
     InstanceVar(String),
     GlobalVar(String),
-    Const(String, bool),
+    Const(String, bool, bool),
     NumLit(i64),
     FloatLit(f64),
     StringLit(String),
@@ -137,16 +137,32 @@ pub enum Punct {
 
 #[allow(unused)]
 impl Token {
-    pub fn new_ident(ident: impl Into<String>, has_suffix: bool, loc: Loc) -> Self {
-        Annot::new(TokenKind::Ident(ident.into(), has_suffix), loc)
+    pub fn new_ident(
+        ident: impl Into<String>,
+        has_suffix: bool,
+        trailing_space: bool,
+        loc: Loc,
+    ) -> Self {
+        Annot::new(
+            TokenKind::Ident(ident.into(), has_suffix, trailing_space),
+            loc,
+        )
     }
 
     pub fn new_instance_var(ident: impl Into<String>, loc: Loc) -> Self {
         Annot::new(TokenKind::InstanceVar(ident.into()), loc)
     }
 
-    pub fn new_const(ident: impl Into<String>, has_suffix: bool, loc: Loc) -> Self {
-        Annot::new(TokenKind::Const(ident.into(), has_suffix), loc)
+    pub fn new_const(
+        ident: impl Into<String>,
+        has_suffix: bool,
+        trailing_space: bool,
+        loc: Loc,
+    ) -> Self {
+        Annot::new(
+            TokenKind::Const(ident.into(), has_suffix, trailing_space),
+            loc,
+        )
     }
 
     pub fn new_global_var(ident: impl Into<String>, loc: Loc) -> Self {
@@ -231,8 +247,8 @@ impl Token {
 
     pub fn can_be_symbol(&self) -> bool {
         match self.kind {
-            TokenKind::Const(_, _)
-            | TokenKind::Ident(_, _)
+            TokenKind::Const(_, _, _)
+            | TokenKind::Ident(_, _, _)
             | TokenKind::InstanceVar(_)
             | TokenKind::Reserved(_)
             | TokenKind::StringLit(_) => true,

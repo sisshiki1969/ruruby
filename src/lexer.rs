@@ -448,10 +448,6 @@ impl Lexer {
                 break;
             }
         }
-        let has_suffix = match self.peek() {
-            Ok(ch) if ch == '!' || ch == '?' || ch == ':' || ch == '=' || ch == '(' => true,
-            _ => false,
-        };
         match var_kind {
             VarKind::InstanceVar => {
                 return Ok(self.new_instance_var(tok));
@@ -461,15 +457,30 @@ impl Lexer {
             }
             _ => {}
         }
+
         match self.reserved.get(&tok) {
             Some(reserved) => Ok(self.new_reserved(*reserved)),
             None => {
                 if is_const {
-                    Ok(self.new_const(tok, has_suffix))
-                } else if var_kind == VarKind::InstanceVar {
-                    Ok(self.new_instance_var(tok))
+                    let (has_suffix, trailing_space) = match self.peek() {
+                        Ok(ch) if ch == ':' || ch == '=' || ch == '(' => (true, false),
+                        Ok(ch) if ch.is_ascii_whitespace() => (false, true),
+                        _ => (false, false),
+                    };
+                    Ok(self.new_const(tok, has_suffix, trailing_space))
                 } else {
-                    Ok(self.new_ident(tok, has_suffix))
+                    match self.peek() {
+                        Ok(ch) if ch == '!' || ch == '?' => {
+                            tok.push(self.get()?);
+                        }
+                        _ => {}
+                    };
+                    let (has_suffix, trailing_space) = match self.peek() {
+                        Ok(ch) if ch == ':' || ch == '=' || ch == '(' => (true, false),
+                        Ok(ch) if ch.is_ascii_whitespace() => (false, true),
+                        _ => (false, false),
+                    };
+                    Ok(self.new_ident(tok, has_suffix, trailing_space))
                 }
             }
         }
@@ -835,8 +846,8 @@ impl Lexer {
 }
 
 impl Lexer {
-    fn new_ident(&self, ident: impl Into<String>, has_suffix: bool) -> Token {
-        Token::new_ident(ident.into(), has_suffix, self.cur_loc())
+    fn new_ident(&self, ident: impl Into<String>, has_suffix: bool, trailing_space: bool) -> Token {
+        Token::new_ident(ident.into(), has_suffix, trailing_space, self.cur_loc())
     }
 
     fn new_instance_var(&self, ident: impl Into<String>) -> Token {
@@ -847,8 +858,11 @@ impl Lexer {
         Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
     }
 
-    fn new_const(&self, ident: impl Into<String>, has_suffix: bool) -> Token {
-        Annot::new(TokenKind::Const(ident.into(), has_suffix), self.cur_loc())
+    fn new_const(&self, ident: impl Into<String>, has_suffix: bool, trailing_space: bool) -> Token {
+        Annot::new(
+            TokenKind::Const(ident.into(), has_suffix, trailing_space),
+            self.cur_loc(),
+        )
     }
 
     fn new_reserved(&self, ident: Reserved) -> Token {
@@ -945,8 +959,8 @@ mod test {
     }
 
     macro_rules! Token (
-        (Ident($item:expr, $flag:expr), $loc_0:expr, $loc_1:expr) => {
-            Token::new_ident($item, $flag, Loc($loc_0, $loc_1))
+        (Ident($item:expr, $flag:expr, $space:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_ident($item, $flag, $space, Loc($loc_0, $loc_1))
         };
         (InstanceVar($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_instance_var($item, Loc($loc_0, $loc_1))
@@ -1005,9 +1019,9 @@ mod test {
         let program = r#""this is #{item1} and #{item2}. ""#;
         let ans = vec![
             Token![OpenString("this is "), 0, 10],
-            Token![Ident("item1", false), 11, 15],
+            Token![Ident("item1", false, false), 11, 15],
             Token![InterString(" and "), 16, 23],
-            Token![Ident("item2", false), 24, 28],
+            Token![Ident("item2", false, false), 24, 28],
             Token![CloseString(". "), 29, 32],
             Token![EOF, 33],
         ];
@@ -1017,7 +1031,7 @@ mod test {
     #[test]
     fn identifier1() {
         let program = "amber";
-        let ans = vec![Token![Ident("amber", false), 0, 4], Token![EOF, 5]];
+        let ans = vec![Token![Ident("amber", false, false), 0, 4], Token![EOF, 5]];
         assert_tokens(program, ans);
     }
 
@@ -1111,12 +1125,12 @@ mod test {
     fn lexer_test1() {
         let program = "a = 1\n if a==5 then 5 else 8";
         let ans = vec![
-            Token![Ident("a", false), 0, 0],
+            Token![Ident("a", false, true), 0, 0],
             Token![Punct(Punct::Assign), 2, 2],
             Token![NumLit(1), 4, 4],
             Token![LineTerm, 5, 5],
             Token![Reserved(Reserved::If), 7, 8],
-            Token![Ident("a", true), 10, 10],
+            Token![Ident("a", true, false), 10, 10],
             Token![Punct(Punct::Eq), 11, 12],
             Token![NumLit(5), 13, 13],
             Token![Reserved(Reserved::Then), 15, 18],
@@ -1138,13 +1152,13 @@ mod test {
             10 # also a comment";
         let ans = vec![
             Token![LineTerm, 0, 0],
-            Token![Ident("a", false), 9, 9],
+            Token![Ident("a", false, true), 9, 9],
             Token![Punct(Punct::Assign), 11, 11],
             Token![NumLit(0), 13, 13],
             Token![Punct(Punct::Semi), 14, 14],
             Token![LineTerm, 15, 15],
             Token![Reserved(Reserved::If), 24, 25],
-            Token![Ident("a", false), 27, 27],
+            Token![Ident("a", false, true), 27, 27],
             Token![Punct(Punct::Eq), 29, 30],
             Token![NumLit(1000), 32, 36],
             Token![Reserved(Reserved::Then), 38, 41],

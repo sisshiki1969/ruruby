@@ -380,7 +380,7 @@ impl Codegen {
         lhs: &Node,
     ) -> Result<(), RubyError> {
         match &lhs.kind {
-            NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, *id),
+            NodeKind::Ident(id) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, *id),
             NodeKind::Const { id, toplevel: _ } => {
                 self.gen_set_const(iseq, *id);
             }
@@ -898,7 +898,7 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::Ident(id, _) => {
+            NodeKind::Ident(id) => {
                 self.gen_send_self(globals, iseq, *id, 0, 0, None);
                 if !use_value {
                     self.gen_pop(iseq)
@@ -1145,7 +1145,7 @@ impl Codegen {
             }
             NodeKind::For { param, iter, body } => {
                 let id = match param.kind {
-                    NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => id,
+                    NodeKind::Ident(id) | NodeKind::LocalVar(id) => id,
                     _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
                 };
                 self.loop_stack.push(LoopInfo::new_loop());

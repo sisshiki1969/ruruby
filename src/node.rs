@@ -21,7 +21,7 @@ pub enum NodeKind {
     RegExp(Vec<Node>),
 
     LocalVar(IdentId),
-    Ident(IdentId, bool),
+    Ident(IdentId),
     InstanceVar(IdentId),
     GlobalVar(IdentId),
     Const {
@@ -278,8 +278,8 @@ impl Node {
         Node::new(NodeKind::BlockParam(id), loc)
     }
 
-    pub fn new_identifier(id: IdentId, has_suffix: bool, loc: Loc) -> Self {
-        Node::new(NodeKind::Ident(id, has_suffix), loc)
+    pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::Ident(id), loc)
     }
 
     pub fn new_symbol(id: IdentId, loc: Loc) -> Self {
@@ -458,23 +458,21 @@ impl Node {
 
     pub fn is_operation(&self) -> bool {
         match self.kind {
-            NodeKind::Ident(_, _) => true,
+            NodeKind::Ident(_) => true,
             _ => false,
         }
     }
 
     pub fn is_lvar(&self) -> bool {
         match self.kind {
-            NodeKind::Ident(_, false) | NodeKind::LocalVar(_) => true,
+            NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
             _ => false,
         }
     }
 
     pub fn as_method_name(&self) -> Option<IdentId> {
         match self.kind {
-            NodeKind::Const { id, .. } | NodeKind::Ident(id, _) | NodeKind::LocalVar(id) => {
-                Some(id)
-            }
+            NodeKind::Const { id, .. } | NodeKind::Ident(id) | NodeKind::LocalVar(id) => Some(id),
             _ => None,
         }
     }
@@ -484,7 +482,7 @@ impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             NodeKind::BinOp(op, lhs, rhs) => write!(f, "({:?}: {}, {})", op, lhs, rhs),
-            NodeKind::Ident(id, _) => write!(f, "(Ident {:?})", id),
+            NodeKind::Ident(id) => write!(f, "(Ident {:?})", id),
             NodeKind::LocalVar(id) => write!(f, "(LocalVar {:?})", id),
             NodeKind::Send {
                 receiver,
