@@ -1265,15 +1265,12 @@ impl VM {
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_object_for_method(&self.globals);
+        if rec_class.is_nil() {
+            return Err(self.error_unimplemented("receiver's class in nil."));
+        };
         match self.globals.get_method_from_cache(cache_slot, rec_class) {
             Some(method) => Ok(method),
             _ => {
-                /*
-                eprintln!(
-                    "cache miss! {} {}",
-                    self.val_pp(receiver),
-                    self.globals.get_ident_name(method_id)
-                );*/
                 let method = self.get_instance_method(rec_class, method_id)?;
                 self.globals
                     .set_method_cache_entry(cache_slot, rec_class, method);
