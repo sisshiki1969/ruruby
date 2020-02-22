@@ -11,6 +11,7 @@ pub fn init_file(globals: &mut Globals) -> Value {
     globals.add_builtin_class_method(obj, "basename", basename);
     globals.add_builtin_class_method(obj, "extname", extname);
     globals.add_builtin_class_method(obj, "binread", binread);
+    globals.add_builtin_class_method(obj, "read", read);
     obj
 }
 
@@ -81,4 +82,25 @@ fn binread(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
     Ok(Value::bytes(contents))
+}
+
+fn read(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let len = args.len();
+    vm.check_args_num(len, 1, 1)?;
+    let filename = match string_to_path(vm, args[0])?.canonicalize() {
+        Ok(file) => file,
+        Err(_) => {
+            return Err(vm.error_argument(format!("Invalid filename. {}", vm.val_pp(args[0]))))
+        }
+    };
+    let mut file = match File::open(&filename) {
+        Ok(file) => file,
+        Err(_) => return Err(vm.error_internal(format!("Can not open file. {:?}", &filename))),
+    };
+    let mut contents = String::new();
+    match file.read_to_string(&mut contents) {
+        Ok(file) => file,
+        Err(_) => return Err(vm.error_internal("Could not read the file.")),
+    };
+    Ok(Value::string(contents))
 }

@@ -16,9 +16,9 @@ fn main() {
         .version("0.0.1")
         .author("monochrome")
         .about("A toy Ruby interpreter")
-        .arg(Arg::with_name("file").help("Input file name").index(1))
         .setting(AppSettings::TrailingVarArg)
-        .arg(Arg::with_name("rest").multiple(true));
+        .arg(Arg::from_usage("[file] 'Input file name'"))
+        .arg(Arg::from_usage("[rest]... 'Additional ARGV'"));
     let app_matches = app.get_matches();
     match app_matches.value_of("file") {
         Some(file_name) => {
