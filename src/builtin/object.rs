@@ -181,18 +181,7 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "equal?", equal);
     globals.add_builtin_instance_method(object, "send", send);
     globals.add_builtin_instance_method(object, "yield", object_yield);
-
-    {
-        use std::env;
-        let id = globals.get_ident_id("ARGV");
-        let res = env::args()
-            .enumerate()
-            .filter(|(i, _)| *i > 1)
-            .map(|(_, x)| Value::string(x))
-            .collect();
-        let argv = Value::array_from(&globals, res);
-        globals.object.set_var(id, argv);
-    }
+    globals.add_builtin_instance_method(object, "eval", eval);
 }
 
 fn class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
@@ -341,6 +330,16 @@ fn object_yield(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
     };
     vm.eval_send(method, &args, None, None)?;
     let res = vm.stack_pop();
+    Ok(res)
+}
+
+fn eval(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let program = match args[0].as_string() {
+        Some(s) => s,
+        None => return Err(vm.error_argument("1st arg must be String.")),
+    };
+    let res = vm.run("path", program.to_string(), Some(args.self_value))?;
     Ok(res)
 }
 

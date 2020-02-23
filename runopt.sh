@@ -1,3 +1,3 @@
 #!/bin/sh
 set -x
-RUST_BACKTRACE=1 cargo run --release -- ../optcarrot/bin/optcarrot-bench
+RUST_BACKTRACE=1 cargo run --release -- ../optcarrot/bin/optcarrot-bench --load-ppu=../optcarrot/ppu.rb

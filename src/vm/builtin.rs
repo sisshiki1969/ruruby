@@ -143,7 +143,7 @@ impl Builtin {
             eprintln!("reading:{}", absolute_path.to_string_lossy());
             vm.root_path.push(path);
             vm.class_push(vm.globals.object);
-            vm.run(absolute_path.to_str().unwrap(), program)?;
+            vm.run(absolute_path.to_str().unwrap(), program, None)?;
             vm.class_pop();
             vm.root_path.pop().unwrap();
             Ok(())

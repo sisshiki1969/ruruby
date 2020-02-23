@@ -17,21 +17,25 @@ fn main() {
         .author("monochrome")
         .about("A toy Ruby interpreter")
         .setting(AppSettings::TrailingVarArg)
-        .arg(Arg::from_usage("[file] 'Input file name'"))
-        .arg(Arg::from_usage("[rest]... 'Additional ARGV'"));
-    let app_matches = app.get_matches();
-    match app_matches.value_of("file") {
-        Some(file_name) => {
-            let mut vm = VM::new();
-            exec_file(&mut vm, "struct.rb");
-            exec_file(&mut vm, file_name);
-            return;
-        }
+        .arg(Arg::from_usage("[file]... 'Input file name'").multiple(true));
+    let m = app.get_matches();
+    let args: Vec<&str> = match m.values_of("file") {
+        Some(val) => val.collect(),
         None => {
             repl_vm();
             return;
         }
     };
+    eprintln!("{:?}", args);
+    let mut vm = VM::new();
+    let id = vm.globals.get_ident_id("ARGV");
+    let mut res: Vec<Value> = args.iter().map(|x| Value::string(x.to_string())).collect();
+    res.remove(0);
+    let argv = Value::array_from(&vm.globals, res);
+    vm.globals.object.set_var(id, argv);
+    exec_file(&mut vm, "struct.rb");
+    exec_file(&mut vm, args[0]);
+    return;
 }
 
 fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
@@ -56,7 +60,7 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
     #[cfg(feature = "verbose")]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
-    match vm.run(absolute_path.to_str().unwrap(), program) {
+    match vm.run(absolute_path.to_str().unwrap(), program, None) {
         Ok(_) => {}
         Err(err) => {
             err.show_err();

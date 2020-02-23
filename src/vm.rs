@@ -202,7 +202,12 @@ impl VM {
         self.pc = pc;
     }
 
-    pub fn run(&mut self, path: impl Into<String>, program: String) -> VMResult {
+    pub fn run(
+        &mut self,
+        path: impl Into<String>,
+        program: String,
+        self_value: Option<Value>,
+    ) -> VMResult {
         let mut parser = Parser::new();
         std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let result = parser.parse_program(path, program)?;
@@ -222,7 +227,11 @@ impl VM {
             None,
         )?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
-        let arg = Args::new0(self.globals.main_object, None);
+        let self_value = match self_value {
+            Some(val) => val,
+            None => self.globals.main_object,
+        };
+        let arg = Args::new0(self_value, None);
         self.vm_run(iseq, None, &arg, None, None)?;
         let val = self.stack_pop();
         #[cfg(feature = "perf")]
