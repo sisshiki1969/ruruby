@@ -1501,7 +1501,7 @@ impl Parser {
                 _ => Ok(false),
             },
             TokenKind::Reserved(r) => match r {
-                Reserved::False | Reserved::Nil | Reserved::True => Ok(true),
+                Reserved::False | Reserved::Nil | Reserved::True | Reserved::Self_=> Ok(true),
                 _ => Ok(false),
             },
             _ => Ok(false),
@@ -1712,15 +1712,6 @@ impl Parser {
             TokenKind::Ident(name, has_suffix, _) => {
                 if has_suffix {
                     match self.peek_no_term()?.kind {
-                        /*
-                        TokenKind::Punct(Punct::Question) => {
-                            self.get()?;
-                            self.get_ident_id(name + "?")
-                        }
-                        TokenKind::Punct(Punct::Not) => {
-                            self.get()?;
-                            self.get_ident_id(name + "!")
-                        }*/
                         TokenKind::Punct(Punct::Assign) => {
                             self.get()?;
                             self.get_ident_id(name + "=")
@@ -1755,8 +1746,6 @@ impl Parser {
         let args = self.parse_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        //#[cfg(feature = "verbose")]
-        //eprintln!("Parsed def name:{}", self.ident_table.get_name(id));
         if is_class_method {
             Ok(Node::new_class_method_decl(id, args, body, lvar))
         } else {

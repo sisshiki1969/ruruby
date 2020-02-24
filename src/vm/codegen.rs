@@ -1231,21 +1231,36 @@ impl Codegen {
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];
                 self.gen(globals, iseq, cond, true)?;
+                let mut next = None;
                 for branch in when_ {
                     let mut jmp_dest = vec![];
+                    match next {
+                        Some(next) => {
+                            self.write_disp_from_cur(iseq, next);
+                        }
+                        None => {}
+                    }
                     for elem in &branch.when {
                         self.gen_dup(iseq, 1);
                         self.gen(globals, iseq, elem, true)?;
                         self.save_loc(iseq, elem.loc);
                         iseq.push(Inst::TEQ);
+                        iseq.push(Inst::NOT);
                         jmp_dest.push(self.gen_jmp_if_false(iseq));
+                    }
+                    next = Some(self.gen_jmp(iseq));
+                    for dest in jmp_dest {
+                        self.write_disp_from_cur(iseq, dest);
                     }
                     self.gen_pop(iseq);
                     self.gen(globals, iseq, &branch.body, use_value)?;
                     end.push(self.gen_jmp(iseq));
-                    for dest in jmp_dest {
-                        self.write_disp_from_cur(iseq, dest);
+                }
+                match next {
+                    Some(next) => {
+                        self.write_disp_from_cur(iseq, next);
                     }
+                    None => {}
                 }
                 self.gen_pop(iseq);
                 self.gen(globals, iseq, &else_, use_value)?;

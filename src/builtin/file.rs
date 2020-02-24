@@ -1,3 +1,4 @@
+use crate::error::RubyError;
 use crate::vm::*;
 use std::fs::File;
 use std::io::Read;

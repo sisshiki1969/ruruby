@@ -7,6 +7,7 @@ pub fn init_integer(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "step", integer_step);
     globals.add_builtin_instance_method(class, "chr", integer_chr);
     globals.add_builtin_instance_method(class, "to_f", integer_tof);
+    globals.add_builtin_instance_method(class, "even?", integer_even);
     Value::class(globals, class)
 }
 
@@ -84,4 +85,9 @@ fn integer_chr(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
 fn integer_tof(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap();
     Ok(Value::flonum(num as f64))
+}
+
+fn integer_even(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let num = args.self_value.as_fixnum().unwrap();
+    Ok(Value::bool(num % 2 == 0))
 }

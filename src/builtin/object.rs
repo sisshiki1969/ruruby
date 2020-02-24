@@ -339,7 +339,12 @@ fn eval(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         Some(s) => s,
         None => return Err(vm.error_argument("1st arg must be String.")),
     };
-    let res = vm.run("path", program.to_string(), Some(args.self_value))?;
+    let method = vm.parse_program("path", program.to_string())?;
+    let iseq = vm.globals.get_method_info(method).as_iseq(&vm)?;
+    let context = vm.context();
+    let args = Args::new0(context.self_value, None);
+    vm.vm_run(iseq, Some(context), &args, None, None)?;
+    let res = vm.stack_pop();
     Ok(res)
 }
 

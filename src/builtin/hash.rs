@@ -81,6 +81,7 @@ pub fn init_hash(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "size", hash_length);
     globals.add_builtin_instance_method(class, "values", hash_values);
     globals.add_builtin_instance_method(class, "each_value", each_value);
+    globals.add_builtin_instance_method(class, "each_key", each_key);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "merge", merge);
     globals.add_builtin_instance_method(class, "fetch", fetch);
@@ -260,6 +261,35 @@ fn each_value(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         HashInfo::IdentMap(map) => {
             for (_, v) in map {
                 arg[0] = *v;
+                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.stack_pop();
+            }
+        }
+    };
+
+    Ok(args.self_value)
+}
+
+fn each_key(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let hash = as_hash!(args.self_value, vm);
+    let iseq = match block {
+        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        None => return Err(vm.error_argument("Currently, needs block.")),
+    };
+    let context = vm.context();
+    let mut arg = Args::new1(context.self_value, None, Value::nil());
+    match hash.inner() {
+        HashInfo::Map(map) => {
+            for (k, _v) in map {
+                arg[0] = *k;
+                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.stack_pop();
+            }
+        }
+        HashInfo::IdentMap(map) => {
+            for (k, _v) in map {
+                arg[0] = **k;
                 vm.vm_run(iseq, Some(context), &arg, None, None)?;
                 vm.stack_pop();
             }

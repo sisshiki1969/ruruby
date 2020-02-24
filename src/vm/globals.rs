@@ -6,6 +6,7 @@ pub struct Globals {
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
     method_cache: MethodCache,
+    pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
     pub main_object: Value,
@@ -57,6 +58,7 @@ impl Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
             method_cache: MethodCache::new(),
+            instant: std::time::Instant::now(),
             class_version: 0,
             main_object,
             object_class,

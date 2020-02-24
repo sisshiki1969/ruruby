@@ -3,7 +3,6 @@ mod builtin;
 mod class;
 mod codegen;
 mod context;
-mod file;
 mod globals;
 mod module;
 #[cfg(feature = "perf")]
@@ -121,6 +120,10 @@ impl VM {
         let file = file::init_file(&mut globals);
         globals.object.set_var(id, file);
 
+        let id = globals.get_ident_id("Process");
+        let file = process::init_process(&mut globals);
+        globals.object.set_var(id, file);
+
         let id = globals.get_ident_id("StandardError");
         let class = Value::class(&globals, globals.class_class);
         globals.object.set_var(id, class);
@@ -202,12 +205,11 @@ impl VM {
         self.pc = pc;
     }
 
-    pub fn run(
+    pub fn parse_program(
         &mut self,
         path: impl Into<String>,
         program: String,
-        self_value: Option<Value>,
-    ) -> VMResult {
+    ) -> Result<MethodRef, RubyError> {
         let mut parser = Parser::new();
         std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let result = parser.parse_program(path, program)?;
@@ -226,6 +228,16 @@ impl VM {
             false,
             None,
         )?;
+        Ok(methodref)
+    }
+
+    pub fn run(
+        &mut self,
+        path: impl Into<String>,
+        program: String,
+        self_value: Option<Value>,
+    ) -> VMResult {
+        let methodref = self.parse_program(path, program)?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let self_value = match self_value {
             Some(val) => val,

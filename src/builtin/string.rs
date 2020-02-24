@@ -62,6 +62,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "tr", string_tr);
     globals.add_builtin_instance_method(class, "size", string_size);
     globals.add_builtin_instance_method(class, "bytes", string_bytes);
+    globals.add_builtin_instance_method(class, "sum", string_sum);
     Value::class(globals, class)
 }
 
@@ -189,4 +190,17 @@ fn string_bytes(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
         ary.push(Value::fixnum(*b as i64));
     }
     Ok(Value::array_from(&vm.globals, ary))
+}
+
+fn string_sum(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let bytes = match args.self_value.as_bytes() {
+        Some(bytes) => bytes,
+        None => return Err(vm.error_type("Receiver must be String.")),
+    };
+    let mut sum = 0;
+    for b in bytes {
+        sum += *b as u64;
+    }
+    Ok(Value::fixnum((sum & ((1 << 16) - 1)) as i64))
 }

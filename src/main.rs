@@ -26,7 +26,6 @@ fn main() {
             return;
         }
     };
-    eprintln!("{:?}", args);
     let mut vm = VM::new();
     let id = vm.globals.get_ident_id("ARGV");
     let mut res: Vec<Value> = args.iter().map(|x| Value::string(x.to_string())).collect();
