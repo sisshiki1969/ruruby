@@ -721,10 +721,10 @@ impl VM {
                     match receiver.is_object() {
                         Some(oref) => {
                             match &oref.kind {
-                                ObjKind::Array(_) => {
+                                ObjKind::Array(mut aref) => {
                                     args.self_value = receiver;
                                     args.push(val);
-                                    array_set_elem(self, &args, None)?;
+                                    aref.set_elem(self, &args)?;
                                 }
                                 ObjKind::Hash(mut href) => href.insert(args[0], val),
                                 _ => {
@@ -751,9 +751,9 @@ impl VM {
                     match receiver.is_object() {
                         Some(oref) => {
                             match &oref.kind {
-                                ObjKind::Array(_) => {
+                                ObjKind::Array(aref) => {
                                     args.self_value = receiver;
-                                    let val = array_get_elem(self, &args, None)?;
+                                    let val = aref.get_elem(self, &args)?;
                                     self.stack_push(val);
                                 }
                                 ObjKind::Hash(href) => {
