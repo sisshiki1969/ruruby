@@ -1,6 +1,5 @@
 pub struct Inst;
 impl Inst {
-    pub const END: u8 = 0;
     pub const PUSH_FIXNUM: u8 = 1;
     pub const PUSH_FLONUM: u8 = 2;
     pub const PUSH_TRUE: u8 = 3;
@@ -32,16 +31,13 @@ impl Inst {
     pub const SUBI: u8 = 28;
     pub const POW: u8 = 29;
 
-    pub const JMP: u8 = 80;
-    pub const JMP_IF_FALSE: u8 = 81;
-    pub const RETURN: u8 = 82;
-
     pub const SET_LOCAL: u8 = 30;
     pub const GET_LOCAL: u8 = 31;
     pub const GET_CONST: u8 = 32;
     pub const SET_CONST: u8 = 33;
     pub const GET_CONST_TOP: u8 = 34;
     pub const GET_SCOPE: u8 = 35;
+
     pub const GET_INSTANCE_VAR: u8 = 36;
     pub const SET_INSTANCE_VAR: u8 = 37;
     pub const GET_GLOBAL_VAR: u8 = 90;
@@ -70,13 +66,18 @@ impl Inst {
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
     pub const DEF_CLASS_METHOD: u8 = 72;
+
+    pub const JMP: u8 = 80;
+    pub const JMP_IF_FALSE: u8 = 81;
+    pub const END: u8 = 0;
+    pub const RETURN: u8 = 82;
+    pub const OPT_CASE: u8 = 83;
 }
 
 #[allow(dead_code)]
 impl Inst {
     pub fn inst_name(inst: u8) -> &'static str {
         match inst {
-            Inst::END => "END",
             Inst::PUSH_FIXNUM => "PUSH_FIXNUM",
             Inst::PUSH_FLONUM => "PUSH_FLONUM",
             Inst::PUSH_TRUE => "PUSH_TRUE",
@@ -87,15 +88,13 @@ impl Inst {
             Inst::PUSH_SELF => "PUSH_SELF",
 
             Inst::ADD => "ADD",
-            Inst::ADDI => "ADDI",
             Inst::SUB => "SUB",
-            Inst::SUBI => "SUBI",
             Inst::MUL => "MUL",
             Inst::DIV => "DIV",
             Inst::REM => "REM",
-            Inst::POW => "POW",
             Inst::EQ => "EQ",
             Inst::NE => "NE",
+            Inst::TEQ => "TEQ",
             Inst::GT => "GT",
             Inst::GE => "GE",
             Inst::NOT => "NOT",
@@ -106,16 +105,16 @@ impl Inst {
             Inst::BIT_XOR => "BIT_XOR",
             Inst::BIT_NOT => "BIT_NOT",
 
-            Inst::JMP => "JMP",
-            Inst::JMP_IF_FALSE => "JMP_IF_FALSE",
-            Inst::RETURN => "RETURN",
+            Inst::ADDI => "ADDI",
+            Inst::SUBI => "SUBI",
+            Inst::POW => "POW",
 
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
             Inst::GET_CONST => "GET_CONST",
+            Inst::SET_CONST => "SET_CONST",
             Inst::GET_CONST_TOP => "GET_CONSTTOP",
             Inst::GET_SCOPE => "GET_SCOPE",
-            Inst::SET_CONST => "SET_CONST",
 
             Inst::GET_INSTANCE_VAR => "GET_INST_VAR",
             Inst::SET_INSTANCE_VAR => "SET_INST_VAR",
@@ -123,15 +122,17 @@ impl Inst {
             Inst::SET_GLOBAL_VAR => "SET_GLBL_VAR",
             Inst::GET_ARRAY_ELEM => "GET_ARY_ELEM",
             Inst::SET_ARRAY_ELEM => "SET_ARY_ELEM",
+
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SELF",
+
             Inst::CHECK_LOCAL => "CHECK_LOCAL",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
             Inst::CREATE_PROC => "CREATE_PROC",
             Inst::CREATE_HASH => "CREATE_HASH",
-            Inst::CREATE_REGEXP => "CREATE_REGEXP",
+            Inst::CREATE_REGEXP => "CREATE_REGEX",
 
             Inst::POP => "POP",
             Inst::DUP => "DUP",
@@ -139,9 +140,17 @@ impl Inst {
             Inst::SPLAT => "SPLAT",
             Inst::CONCAT_STRING => "CONCAT_STR",
             Inst::TO_S => "TO_S",
+
             Inst::DEF_CLASS => "DEF_CLASS",
             Inst::DEF_METHOD => "DEF_METHOD",
-            Inst::DEF_CLASS_METHOD => "DEF_CLASS_METHOD",
+            Inst::DEF_CLASS_METHOD => "DEF_CMETHOD",
+
+            Inst::JMP => "JMP",
+            Inst::JMP_IF_FALSE => "JMP_IF_FALSE",
+            Inst::END => "END",
+            Inst::RETURN => "RETURN",
+            Inst::OPT_CASE => "OPT_CASE",
+
             _ => "undefined",
         }
     }
@@ -207,6 +216,7 @@ impl Inst {
             | Inst::DEF_METHOD
             | Inst::DEF_CLASS_METHOD => 9,
             Inst::DEF_CLASS => 10,
+            Inst::OPT_CASE => 13,
             Inst::SEND | Inst::SEND_SELF => 21,
             _ => 1,
         }

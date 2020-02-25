@@ -233,6 +233,13 @@ impl Codegen {
         iseq.push(Inst::RETURN);
     }
 
+    fn gen_opt_case(&mut self, iseq: &mut ISeq, hash_id: u64) -> ISeqPos {
+        iseq.push(Inst::OPT_CASE);
+        self.push64(iseq, hash_id);
+        self.push32(iseq, 0);
+        ISeqPos(iseq.len())
+    }
+
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_LOCAL);
         let (outer, lvar_id) = match self.get_local_var(id) {
@@ -683,6 +690,19 @@ impl Codegen {
                         "JMP_IF_FALSE {:>05}",
                         pc as i32 + 5 + read32(iseq, pc + 1) as i32
                     ),
+                    Inst::OPT_CASE => {
+                        let val = Value::from(read64(iseq, pc + 1));
+                        let info = val.as_hash().unwrap();
+                        let map = match info.inner_mut() {
+                            HashInfo::Map(map) => map,
+                            _ => panic!(),
+                        };
+                        format!(
+                            "OPT_CASE {:>05} {:?}",
+                            pc as i32 + 13 + read32(iseq, pc + 9) as i32,
+                            map,
+                        )
+                    }
                     Inst::SET_LOCAL => {
                         let frame = read32(iseq, pc + 5);
                         format!("SET_LOCAL outer:{} LvarId:{}", frame, read32(iseq, pc + 1))
@@ -743,7 +763,7 @@ impl Codegen {
                         format!("DEF_METHOD '{}'", ident_name(globals, iseq, pc + 1))
                     }
                     Inst::DEF_CLASS_METHOD => {
-                        format!("DEF_CLASS_METHOD '{}'", ident_name(globals, iseq, pc + 1))
+                        format!("DEF_SMETHOD '{}'", ident_name(globals, iseq, pc + 1))
                     }
                     _ => format!("undefined"),
                 }
@@ -1231,38 +1251,74 @@ impl Codegen {
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];
                 self.gen(globals, iseq, cond, true)?;
-                let mut next = None;
+                let mut opt_flag = true;
                 for branch in when_ {
-                    let mut jmp_dest = vec![];
+                    for elem in &branch.when {
+                        match elem.kind {
+                            NodeKind::Integer(_) => (),
+                            _ => {
+                                opt_flag = false;
+                                break;
+                            }
+                        }
+                    }
+                    if !opt_flag {
+                        break;
+                    }
+                }
+                if opt_flag {
+                    let mut href = HashRef::from(HashMap::new());
+                    let hash = Value::hash(globals, href).id();
+                    self.save_cur_loc(iseq);
+                    let start = self.gen_opt_case(iseq, hash);
+                    for branch in when_ {
+                        let disp = start.disp(Codegen::current(iseq));
+                        let v = Value::fixnum(disp as i64);
+                        for elem in &branch.when {
+                            let k = match elem.kind {
+                                NodeKind::Integer(i) => Value::fixnum(i),
+                                _ => unreachable!(),
+                            };
+                            href.insert(k, v);
+                        }
+                        self.gen(globals, iseq, &branch.body, use_value)?;
+                        end.push(self.gen_jmp(iseq));
+                    }
+                    self.write_disp_from_cur(iseq, start);
+                } else {
+                    let mut next = None;
+                    for branch in when_ {
+                        let mut jmp_dest = vec![];
+                        match next {
+                            Some(next) => {
+                                self.write_disp_from_cur(iseq, next);
+                            }
+                            None => {}
+                        }
+                        for elem in &branch.when {
+                            self.gen_dup(iseq, 1);
+                            self.gen(globals, iseq, elem, true)?;
+                            self.save_loc(iseq, elem.loc);
+                            iseq.push(Inst::TEQ);
+                            iseq.push(Inst::NOT);
+                            jmp_dest.push(self.gen_jmp_if_false(iseq));
+                        }
+                        next = Some(self.gen_jmp(iseq));
+                        for dest in jmp_dest {
+                            self.write_disp_from_cur(iseq, dest);
+                        }
+                        self.gen_pop(iseq);
+                        self.gen(globals, iseq, &branch.body, use_value)?;
+                        end.push(self.gen_jmp(iseq));
+                    }
                     match next {
                         Some(next) => {
                             self.write_disp_from_cur(iseq, next);
                         }
                         None => {}
                     }
-                    for elem in &branch.when {
-                        self.gen_dup(iseq, 1);
-                        self.gen(globals, iseq, elem, true)?;
-                        self.save_loc(iseq, elem.loc);
-                        iseq.push(Inst::TEQ);
-                        iseq.push(Inst::NOT);
-                        jmp_dest.push(self.gen_jmp_if_false(iseq));
-                    }
-                    next = Some(self.gen_jmp(iseq));
-                    for dest in jmp_dest {
-                        self.write_disp_from_cur(iseq, dest);
-                    }
                     self.gen_pop(iseq);
-                    self.gen(globals, iseq, &branch.body, use_value)?;
-                    end.push(self.gen_jmp(iseq));
                 }
-                match next {
-                    Some(next) => {
-                        self.write_disp_from_cur(iseq, next);
-                    }
-                    None => {}
-                }
-                self.gen_pop(iseq);
                 self.gen(globals, iseq, &else_, use_value)?;
                 for dest in end {
                     self.write_disp_from_cur(iseq, dest);

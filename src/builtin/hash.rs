@@ -25,6 +25,13 @@ impl HashInfo {
             HashInfo::IdentMap(map) => map.len(),
         }
     }
+
+    pub fn insert(&mut self, k: Value, v: Value) {
+        match self {
+            HashInfo::Map(map) => map.insert(k, v),
+            HashInfo::IdentMap(map) => map.insert(IdentValue(k), v),
+        };
+    }
 }
 
 pub type HashRef = Ref<HashInfo>;

@@ -21,7 +21,6 @@ pub use codegen::{Codegen, ISeq, ISeqPos};
 
 pub use context::*;
 pub use globals::*;
-use hash::IdentValue;
 pub use module::*;
 
 #[cfg(feature = "perf")]
@@ -203,6 +202,46 @@ impl VM {
 
     pub fn set_pc(&mut self, pc: usize) {
         self.pc = pc;
+    }
+
+    pub fn jump_pc(&mut self, inst_offset: i64, disp: i64) {
+        self.pc = ((self.pc as i64) + inst_offset + disp) as usize;
+    }
+
+    fn read32(&self, iseq: &ISeq, offset: usize) -> u32 {
+        let pc = self.pc + offset;
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
+        unsafe { *ptr }
+    }
+
+    fn read_usize(&self, iseq: &ISeq, offset: usize) -> usize {
+        self.read32(iseq, offset) as usize
+    }
+
+    fn read_id(&self, iseq: &ISeq, offset: usize) -> IdentId {
+        IdentId::from(self.read32(iseq, offset))
+    }
+
+    fn read_lvar_id(&self, iseq: &ISeq, offset: usize) -> LvarId {
+        LvarId::from_usize(self.read_usize(iseq, offset))
+    }
+
+    fn read_methodref(&self, iseq: &ISeq, offset: usize) -> MethodRef {
+        MethodRef::from(self.read32(iseq, offset))
+    }
+
+    fn read64(&self, iseq: &ISeq, offset: usize) -> u64 {
+        let pc = self.pc + offset;
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
+        unsafe { *ptr }
+    }
+
+    fn read8(&self, iseq: &ISeq, offset: usize) -> u8 {
+        iseq[self.pc + offset]
+    }
+
+    fn read_disp(&self, iseq: &ISeq, offset: usize) -> i64 {
+        self.read32(iseq, offset) as i32 as i64
     }
 
     pub fn parse_program(
@@ -423,23 +462,23 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
-                    let num = read64(iseq, self.pc + 1);
+                    let num = self.read64(iseq, 1);
                     self.pc += 9;
                     self.stack_push(Value::fixnum(num as i64));
                 }
                 Inst::PUSH_FLONUM => {
-                    let num = f64::from_bits(read64(iseq, self.pc + 1));
+                    let num = f64::from_bits(self.read64(iseq, 1));
                     self.pc += 9;
                     self.stack_push(Value::flonum(num));
                 }
                 Inst::PUSH_STRING => {
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = self.read_id(iseq, 1);
                     let string = self.globals.get_ident_name(id).to_string();
                     self.stack_push(Value::string(string));
                     self.pc += 5;
                 }
                 Inst::PUSH_SYMBOL => {
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = self.read_id(iseq, 1);
                     self.stack_push(Value::symbol(id));
                     self.pc += 5;
                 }
@@ -451,7 +490,7 @@ impl VM {
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
-                    let i = read32(iseq, self.pc + 1) as i32;
+                    let i = self.read32(iseq, 1) as i32;
                     self.eval_addi(lhs, i)?;
                     self.pc += 5;
                 }
@@ -463,7 +502,7 @@ impl VM {
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
-                    let i = read32(iseq, self.pc + 1) as i32;
+                    let i = self.read32(iseq, 1) as i32;
                     self.eval_subi(lhs, i)?;
                     self.pc += 5;
                 }
@@ -593,37 +632,37 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::SET_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1);
-                    let outer = read32(iseq, self.pc + 5);
+                    let id = self.read_lvar_id(iseq, 1);
+                    let outer = self.read32(iseq, 5);
                     let val = self.stack_pop();
                     let mut cref = self.get_outer_context(outer);
                     *cref.get_mut_lvar(id) = val;
                     self.pc += 9;
                 }
                 Inst::GET_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1);
-                    let outer = read32(iseq, self.pc + 5);
+                    let id = self.read_lvar_id(iseq, 1);
+                    let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);
                     let val = cref.get_lvar(id);
                     self.stack_push(val);
                     self.pc += 9;
                 }
                 Inst::CHECK_LOCAL => {
-                    let id = read_lvar_id(iseq, self.pc + 1);
-                    let outer = read32(iseq, self.pc + 5);
+                    let id = self.read_lvar_id(iseq, 1);
+                    let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);
                     let val = cref.get_lvar(id).is_uninitialized();
                     self.stack_push(Value::bool(val));
                     self.pc += 9;
                 }
                 Inst::SET_CONST => {
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = self.read_id(iseq, 1);
                     let val = self.stack_pop();
                     self.class().set_var(id, val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = self.read_id(iseq, 1);
                     let val = match self.get_env_const(id) {
                         Some(val) => val,
                         None => self.get_super_const(self.class(), id)?,
@@ -632,7 +671,7 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_CONST_TOP => {
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = self.read_id(iseq, 1);
                     let class = self.globals.object;
                     let val = self.get_super_const(class, id)?;
                     self.stack_push(val);
@@ -640,20 +679,20 @@ impl VM {
                 }
                 Inst::GET_SCOPE => {
                     let parent = self.stack_pop();
-                    let id = read_id(iseq, self.pc + 1);
+                    let id = self.read_id(iseq, 1);
                     let val = self.get_super_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SET_INSTANCE_VAR => {
-                    let var_id = read_id(iseq, self.pc + 1);
+                    let var_id = self.read_id(iseq, 1);
                     let mut self_obj = self.context().self_value.as_object();
                     let new_val = self.stack_pop();
                     self_obj.set_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
-                    let var_id = read_id(iseq, self.pc + 1);
+                    let var_id = self.read_id(iseq, 1);
                     let self_obj = self.context().self_value.as_object();
                     let val = match self_obj.get_var(var_id) {
                         Some(val) => val.clone(),
@@ -663,43 +702,31 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SET_GLOBAL_VAR => {
-                    let var_id = read_id(iseq, self.pc + 1);
+                    let var_id = self.read_id(iseq, 1);
                     let new_val = self.stack_pop();
                     self.set_global_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_GLOBAL_VAR => {
-                    let var_id = read_id(iseq, self.pc + 1);
+                    let var_id = self.read_id(iseq, 1);
                     let val = self.get_global_var(var_id);
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SET_ARRAY_ELEM => {
-                    let arg_num = read32(iseq, self.pc + 1) as usize;
-                    let args = self.pop_args(arg_num);
+                    let arg_num = self.read_usize(iseq, 1);
+                    let mut args = self.pop_args_to_ary(arg_num);
                     let receiver = self.stack_pop();
                     let val = self.stack_pop();
                     match receiver.is_object() {
                         Some(oref) => {
-                            match oref.kind {
+                            match &oref.kind {
                                 ObjKind::Array(_) => {
-                                    let mut arg = Args::new0(receiver, None);
-                                    for item in args {
-                                        arg.push(item);
-                                    }
-                                    arg.push(val);
-                                    array_set_elem(self, &arg, None)?;
+                                    args.self_value = receiver;
+                                    args.push(val);
+                                    array_set_elem(self, &args, None)?;
                                 }
-                                ObjKind::Hash(href) => match href.inner_mut() {
-                                    HashInfo::Map(map) => {
-                                        let key = args[0];
-                                        map.insert(key, val);
-                                    }
-                                    HashInfo::IdentMap(map) => {
-                                        let key = IdentValue(args[0]);
-                                        map.insert(key, val);
-                                    }
-                                },
+                                ObjKind::Hash(mut href) => href.insert(args[0], val),
                                 _ => {
                                     return Err(self.error_unimplemented(
                                         "Currently, []= is supported only for Array and Hash.",
@@ -717,40 +744,17 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_ARRAY_ELEM => {
-                    let arg_num = read32(iseq, self.pc + 1) as usize;
-                    let args = self.pop_args(arg_num);
+                    let arg_num = self.read_usize(iseq, 1);
+                    let mut args = self.pop_args_to_ary(arg_num);
                     let arg_num = args.len();
-                    match self.stack_pop().unpack() {
-                        RValue::Object(oref) => {
-                            match oref.kind {
-                                ObjKind::Array(aref) => {
-                                    self.check_args_num(arg_num, 1, 2)?;
-                                    let index = args[0].expect_fixnum(&self, "Index")?;
-                                    let index = self.get_array_index(index, aref.elements.len())?;
-                                    if arg_num == 1 {
-                                        if index >= aref.elements.len() {
-                                            self.stack_push(Value::nil());
-                                        } else {
-                                            let elem = aref.elements[index];
-                                            self.stack_push(elem);
-                                        }
-                                    } else {
-                                        let len = args[1].expect_fixnum(&self, "Index")?;
-                                        if len < 0 {
-                                            self.stack_push(Value::nil());
-                                        } else if index >= aref.elements.len() {
-                                            let ary_object =
-                                                Value::array_from(&self.globals, vec![]);
-                                            self.stack_push(ary_object);
-                                        } else {
-                                            let len = len as usize;
-                                            let end =
-                                                std::cmp::min(aref.elements.len(), index + len);
-                                            let ary = (&aref.elements[index..end]).to_vec();
-                                            let ary_object = Value::array_from(&self.globals, ary);
-                                            self.stack_push(ary_object);
-                                        }
-                                    };
+                    let receiver = self.stack_pop();
+                    match receiver.is_object() {
+                        Some(oref) => {
+                            match &oref.kind {
+                                ObjKind::Array(_) => {
+                                    args.self_value = receiver;
+                                    let val = array_get_elem(self, &args, None)?;
+                                    self.stack_push(val);
                                 }
                                 ObjKind::Hash(href) => {
                                     self.check_args_num(arg_num, 1, 2)?;
@@ -761,20 +765,16 @@ impl VM {
                                     self.stack_push(val);
                                 }
                                 ObjKind::Method(mref) => {
-                                    let mut new_args = Args::new0(mref.receiver, None);
-                                    for arg in args {
-                                        new_args.push(arg);
-                                    }
-                                    self.eval_send(mref.method, &new_args, None, None)?;
+                                    args.self_value = mref.receiver;
+                                    self.eval_send(mref.method, &args, None, None)?;
                                 }
-                                _ => {
-                                    return Err(self.error_unimplemented(
-                                        "Currently, [] is supported only for Array and Hash.",
-                                    ))
-                                }
+                                _ => return Err(self.error_unimplemented(
+                                    "Currently, [] is supported only for Array, Method and Hash.",
+                                )),
                             };
                         }
-                        RValue::FixNum(i) => {
+                        None if receiver.is_packed_fixnum() => {
+                            let i = receiver.as_packed_fixnum();
                             self.check_args_num(arg_num, 1, 1)?;
                             let index = args[0].expect_fixnum(&self, "Index")?;
                             let val = if index < 0 || 63 < index {
@@ -784,12 +784,10 @@ impl VM {
                             };
                             self.stack_push(Value::fixnum(val));
                         }
-                        _ => {
-                            return Err(self.error_unimplemented(
-                                "Currently, [] is supported only for Array and Hash.",
-                            ))
-                        }
-                    }
+                        _ => return Err(self.error_unimplemented(
+                            "Currently, [] is supported only for Array, Method, Integer and Hash.",
+                        )),
+                    };
                     self.pc += 5;
                 }
                 Inst::SPLAT => {
@@ -811,20 +809,20 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
-                    let arg_num = read32(iseq, self.pc + 1) as usize;
+                    let arg_num = self.read_usize(iseq, 1);
                     let elems = self.pop_args(arg_num);
                     let array = Value::array_from(&self.globals, elems);
                     self.stack_push(array);
                     self.pc += 5;
                 }
                 Inst::CREATE_PROC => {
-                    let method = MethodRef::from(read32(iseq, self.pc + 1));
+                    let method = self.read_methodref(iseq, 1);
                     let proc_obj = self.create_proc_obj(method)?;
                     self.stack_push(proc_obj);
                     self.pc += 5;
                 }
                 Inst::CREATE_HASH => {
-                    let arg_num = read32(iseq, self.pc + 1) as usize;
+                    let arg_num = self.read_usize(iseq, 1);
                     let key_value = self.pop_key_value_pair(arg_num);
                     let hash = Value::hash(&self.globals, HashRef::from(key_value));
                     self.stack_push(hash);
@@ -859,25 +857,34 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::JMP => {
-                    let disp = read32(iseq, self.pc + 1) as i32 as i64;
-                    self.pc = ((self.pc as i64) + 5 + disp) as usize;
+                    let disp = self.read_disp(iseq, 1);
+                    self.jump_pc(5, disp);
                 }
                 Inst::JMP_IF_FALSE => {
                     let val = self.stack_pop();
                     if self.val_to_bool(val) {
-                        self.pc += 5;
+                        self.jump_pc(5, 0);
                     } else {
-                        let disp = read32(iseq, self.pc + 1) as i32 as i64;
-                        self.pc = ((self.pc as i64) + 5 + disp) as usize;
+                        let disp = self.read_disp(iseq, 1);
+                        self.jump_pc(5, disp);
                     }
+                }
+                Inst::OPT_CASE => {
+                    let val = self.stack_pop();
+                    let hash = Value::from(self.read64(iseq, 1)).as_hash().unwrap();
+                    let disp = match hash.get(&val) {
+                        Some(v) => v.as_fixnum().unwrap(),
+                        None => self.read_disp(iseq, 9),
+                    };
+                    self.jump_pc(13, disp);
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
-                    let method_id = read_id(iseq, self.pc + 1);
-                    let args_num = read32(iseq, self.pc + 5) as usize;
-                    let kw_args_num = read32(iseq, self.pc + 9) as usize;
-                    let cache_slot = read32(iseq, self.pc + 13) as usize;
-                    let block = read32(iseq, self.pc + 17);
+                    let method_id = self.read_id(iseq, 1);
+                    let args_num = self.read_usize(iseq, 5);
+                    let kw_args_num = self.read_usize(iseq, 9);
+                    let cache_slot = self.read_usize(iseq, 13);
+                    let block = self.read32(iseq, 17);
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
 
                     let keyword = if kw_args_num != 0 {
@@ -899,11 +906,11 @@ impl VM {
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
-                    let method_id = read_id(iseq, self.pc + 1);
-                    let args_num = read32(iseq, self.pc + 5) as usize;
-                    let kw_args_num = read32(iseq, self.pc + 9) as usize;
-                    let cache_slot = read32(iseq, self.pc + 13) as usize;
-                    let block = read32(iseq, self.pc + 17);
+                    let method_id = self.read_id(iseq, 1);
+                    let args_num = self.read_usize(iseq, 5);
+                    let kw_args_num = self.read_usize(iseq, 9);
+                    let cache_slot = self.read_usize(iseq, 13);
+                    let block = self.read32(iseq, 17);
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
 
                     let keyword = if kw_args_num != 0 {
@@ -924,9 +931,9 @@ impl VM {
                     self.pc += 21;
                 }
                 Inst::DEF_CLASS => {
-                    let is_module = read8(iseq, self.pc + 1) == 1;
-                    let id = IdentId::from(read32(iseq, self.pc + 2));
-                    let methodref = MethodRef::from(read32(iseq, self.pc + 6));
+                    let is_module = self.read8(iseq, 1) == 1;
+                    let id = self.read_id(iseq, 2);
+                    let methodref = self.read_methodref(iseq, 6);
                     let super_val = self.stack_pop();
                     let val = match self.globals.object.get_var(id) {
                         Some(val) => {
@@ -974,8 +981,8 @@ impl VM {
                     self.class_pop();
                 }
                 Inst::DEF_METHOD => {
-                    let id = IdentId::from(read32(iseq, self.pc + 1));
-                    let methodref = MethodRef::from(read32(iseq, self.pc + 5));
+                    let id = self.read_id(iseq, 1);
+                    let methodref = self.read_methodref(iseq, 5);
                     let method = self.globals.get_method_info(methodref);
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
@@ -988,8 +995,8 @@ impl VM {
                     self.pc += 9;
                 }
                 Inst::DEF_CLASS_METHOD => {
-                    let id = IdentId::from(read32(iseq, self.pc + 1));
-                    let methodref = MethodRef::from(read32(iseq, self.pc + 5));
+                    let id = self.read_id(iseq, 1);
+                    let methodref = self.read_methodref(iseq, 5);
                     let method = self.globals.get_method_info(methodref);
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
@@ -1012,7 +1019,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::DUP => {
-                    let len = read32(iseq, self.pc + 1) as usize;
+                    let len = self.read_usize(iseq, 1);
                     let stack_len = self.exec_stack.len();
                     for i in stack_len - len..stack_len {
                         let val = self.exec_stack[i];
@@ -1021,7 +1028,7 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::TAKE => {
-                    let len = read32(iseq, self.pc + 1) as usize;
+                    let len = self.read_usize(iseq, 1);
                     let val = self.stack_pop();
                     match val.is_object() {
                         Some(obj) => match obj.kind {
@@ -1056,28 +1063,6 @@ impl VM {
                 }
                 _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
             }
-        }
-
-        fn read_id(iseq: &ISeq, pc: usize) -> IdentId {
-            IdentId::from(read32(iseq, pc))
-        }
-
-        fn read_lvar_id(iseq: &ISeq, pc: usize) -> LvarId {
-            LvarId::from_usize(read32(iseq, pc) as usize)
-        }
-
-        fn read64(iseq: &ISeq, pc: usize) -> u64 {
-            let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
-            unsafe { *ptr }
-        }
-
-        fn read32(iseq: &ISeq, pc: usize) -> u32 {
-            let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
-            unsafe { *ptr }
-        }
-
-        fn read8(iseq: &ISeq, pc: usize) -> u8 {
-            iseq[pc]
         }
     }
 }
@@ -1209,12 +1194,6 @@ impl VM {
 }
 
 impl VM {
-    fn read32(&self, iseq: &ISeq, offset: usize) -> u32 {
-        let pc = self.pc + offset;
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
-        unsafe { *ptr }
-    }
-
     fn get_loc(&self) -> Loc {
         let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
         sourcemap

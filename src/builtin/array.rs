@@ -135,6 +135,34 @@ pub fn array_set_elem(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VM
     Ok(val)
 }
 
+pub fn array_get_elem(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+    let arg_num = args.len();
+    vm.check_args_num(arg_num, 1, 2)?;
+    let aref = self_array!(args, vm);
+    let index = args[0].expect_fixnum(&vm, "Index")?;
+    let index = vm.get_array_index(index, aref.elements.len())?;
+    let val = if arg_num == 1 {
+        if index >= aref.elements.len() {
+            Value::nil()
+        } else {
+            aref.elements[index]
+        }
+    } else {
+        let len = args[1].expect_fixnum(&vm, "Index")?;
+        if len < 0 {
+            Value::nil()
+        } else if index >= aref.elements.len() {
+            Value::array_from(&vm.globals, vec![])
+        } else {
+            let len = len as usize;
+            let end = std::cmp::min(aref.elements.len(), index + len);
+            let ary = (&aref.elements[index..end]).to_vec();
+            Value::array_from(&vm.globals, ary)
+        }
+    };
+    Ok(val)
+}
+
 fn array_push(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let mut aref = self_array!(args, vm);
     for arg in args.get_slice(0, args.len()) {

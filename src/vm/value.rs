@@ -170,6 +170,10 @@ impl Value {
         self.0
     }
 
+    pub fn from(id: u64) -> Self {
+        Value(id)
+    }
+
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
         match self.is_object() {
             Some(oref) => oref.class(),
