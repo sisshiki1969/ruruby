@@ -9,6 +9,7 @@ const _ADD: u32 = 5;
 const _SUB: u32 = 6;
 const _MUL: u32 = 7;
 const _POW: u32 = 8;
+const _SHL: u32 = 9;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -284,6 +285,7 @@ impl IdentId {
     pub const _SUB: IdentId = IdentId(to!(_SUB));
     pub const _MUL: IdentId = IdentId(to!(_MUL));
     pub const _POW: IdentId = IdentId(to!(_POW));
+    pub const _SHL: IdentId = IdentId(to!(_SHL));
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -309,6 +311,7 @@ impl IdentifierTable {
         table.set_ident_id("-", _SUB);
         table.set_ident_id("*", _MUL);
         table.set_ident_id("**", _POW);
+        table.set_ident_id("<<", _SHL);
         table
     }
 

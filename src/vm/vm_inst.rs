@@ -172,7 +172,6 @@ impl Inst {
             | Inst::GE
             | Inst::NOT
             | Inst::SHR
-            | Inst::SHL
             | Inst::BIT_OR
             | Inst::BIT_AND
             | Inst::BIT_XOR
@@ -207,6 +206,7 @@ impl Inst {
             | Inst::MUL
             | Inst::ADDI
             | Inst::SUBI
+            | Inst::SHL
             | Inst::CREATE_HASH => 5,
 
             Inst::PUSH_FIXNUM

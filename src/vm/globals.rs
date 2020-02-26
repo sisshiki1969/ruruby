@@ -23,16 +23,8 @@ pub struct Globals {
     pub string: Value,
     pub object: Value,
 
-    //pub integer_class: ClassRef,
-    //pub array_class: ClassRef,
     pub class_class: ClassRef,
     pub module_class: ClassRef,
-    //pub proc_class: ClassRef,
-    //pub method_class: ClassRef,
-    //pub range_class: ClassRef,
-    //pub hash_class: ClassRef,
-    //pub regexp_class: ClassRef,
-    //pub string_class: ClassRef,
     pub object_class: ClassRef,
 }
 
@@ -229,32 +221,25 @@ impl Globals {
 }
 
 impl Globals {
-    pub fn set_method_cache_entry(
-        &mut self,
-        id: usize,
-        class: Value,
-        //is_class_method: bool,
-        method: MethodRef,
-    ) {
-        self.method_cache.table[id] = Some(MethodCacheEntry {
+    pub fn set_method_cache_entry(&mut self, id: u32, class: Value, method: MethodRef) {
+        self.method_cache.table[id as usize] = Some(MethodCacheEntry {
             class,
             version: self.class_version,
-            //is_class_method,
             method,
         });
     }
 
-    pub fn add_method_cache_entry(&mut self) -> usize {
+    pub fn add_method_cache_entry(&mut self) -> u32 {
         self.method_cache.add_entry()
     }
 
-    fn get_method_cache_entry(&self, id: usize) -> &Option<MethodCacheEntry> {
+    fn get_method_cache_entry(&self, id: u32) -> &Option<MethodCacheEntry> {
         self.method_cache.get_entry(id)
     }
 
     pub fn get_method_from_cache(
         &mut self,
-        cache_slot: usize,
+        cache_slot: u32,
         rec_class: Value,
     ) -> Option<MethodRef> {
         match self.get_method_cache_entry(cache_slot) {
@@ -279,7 +264,7 @@ pub struct MethodCacheEntry {
 #[derive(Debug, Clone)]
 pub struct MethodCache {
     table: Vec<Option<MethodCacheEntry>>,
-    id: usize,
+    id: u32,
 }
 
 impl MethodCache {
@@ -289,13 +274,13 @@ impl MethodCache {
             id: 0,
         }
     }
-    fn add_entry(&mut self) -> usize {
+    fn add_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(None);
         self.id - 1
     }
 
-    fn get_entry(&self, id: usize) -> &Option<MethodCacheEntry> {
-        &self.table[id]
+    fn get_entry(&self, id: u32) -> &Option<MethodCacheEntry> {
+        &self.table[id as usize]
     }
 }

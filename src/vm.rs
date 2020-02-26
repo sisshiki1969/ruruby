@@ -542,9 +542,8 @@ impl VM {
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_shl(lhs, rhs)?;
-                    self.stack_push(val);
-                    self.pc += 1;
+                    self.eval_shl(lhs, rhs, iseq)?;
+                    self.pc += 5;
                 }
                 Inst::BIT_AND => {
                     let lhs = self.stack_pop();
@@ -727,18 +726,10 @@ impl VM {
                                     aref.set_elem(self, &args)?;
                                 }
                                 ObjKind::Hash(mut href) => href.insert(args[0], val),
-                                _ => {
-                                    return Err(self.error_unimplemented(
-                                        "Currently, []= is supported only for Array and Hash.",
-                                    ))
-                                }
+                                _ => return Err(self.error_undefined_method("[]=", receiver)),
                             };
                         }
-                        None => {
-                            return Err(self.error_unimplemented(
-                                "Currently, []= is supported only for Array and Hash.",
-                            ))
-                        }
+                        None => return Err(self.error_undefined_method("[]=", receiver)),
                     }
 
                     self.pc += 5;
@@ -768,9 +759,7 @@ impl VM {
                                     args.self_value = mref.receiver;
                                     self.eval_send(mref.method, &args, None, None)?;
                                 }
-                                _ => return Err(self.error_unimplemented(
-                                    "Currently, [] is supported only for Array, Method and Hash.",
-                                )),
+                                _ => return Err(self.error_undefined_method("[]", receiver)),
                             };
                         }
                         None if receiver.is_packed_fixnum() => {
@@ -784,9 +773,7 @@ impl VM {
                             };
                             self.stack_push(Value::fixnum(val));
                         }
-                        _ => return Err(self.error_unimplemented(
-                            "Currently, [] is supported only for Array, Method, Integer and Hash.",
-                        )),
+                        _ => return Err(self.error_undefined_method("[]", receiver)),
                     };
                     self.pc += 5;
                 }
@@ -883,7 +870,7 @@ impl VM {
                     let method_id = self.read_id(iseq, 1);
                     let args_num = self.read_usize(iseq, 5);
                     let kw_args_num = self.read_usize(iseq, 9);
-                    let cache_slot = self.read_usize(iseq, 13);
+                    let cache_slot = self.read32(iseq, 13);
                     let block = self.read32(iseq, 17);
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
 
@@ -909,7 +896,7 @@ impl VM {
                     let method_id = self.read_id(iseq, 1);
                     let args_num = self.read_usize(iseq, 5);
                     let kw_args_num = self.read_usize(iseq, 9);
-                    let cache_slot = self.read_usize(iseq, 13);
+                    let cache_slot = self.read32(iseq, 13);
                     let block = self.read32(iseq, 17);
                     let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
 
@@ -1267,7 +1254,7 @@ impl VM {
     /// Otherwise, search a class chain for the method.
     fn get_method_from_cache(
         &mut self,
-        cache_slot: usize,
+        cache_slot: u32,
         receiver: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
@@ -1319,13 +1306,11 @@ impl VM {
             }
         } else {
             match lhs.is_object() {
-                Some(_oref) => {
+                Some(_) => {
                     let cache = self.read32(iseq, 1);
-                    let methodref =
-                        self.get_method_from_cache(cache as usize, lhs, IdentId::_ADD)?;
+                    let methodref = self.get_method_from_cache(cache, lhs, IdentId::_ADD)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    self.eval_send(methodref, &arg, None, None)?;
-                    return Ok(());
+                    return self.eval_send(methodref, &arg, None, None);
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs + rhs),
@@ -1430,8 +1415,7 @@ impl VM {
             match lhs.is_object() {
                 Some(_oref) => {
                     let cache = self.read32(iseq, 1);
-                    let methodref =
-                        self.get_method_from_cache(cache as usize, lhs, IdentId::_MUL)?;
+                    let methodref = self.get_method_from_cache(cache, lhs, IdentId::_MUL)?;
                     let arg = Args::new1(lhs, None, rhs);
                     self.eval_send(methodref, &arg, None, None)?;
                     return Ok(());
@@ -1520,21 +1504,27 @@ impl VM {
         Ok(())
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs.unpack(), rhs.unpack()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Ok(Value::fixnum(lhs << rhs)),
-            (RValue::Object(l_ref), _) => {
-                let method = self.globals.get_ident_id("<<");
-                match l_ref.as_ref().get_instance_method(method) {
-                    Some(mref) => {
-                        let arg = Args::new1(lhs, None, rhs);
-                        self.eval_send(mref.clone(), &arg, None, None)?;
-                        Ok(self.stack_pop())
-                    }
-                    None => return Err(self.error_undefined_op("<<", rhs, lhs)),
-                }
+    fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<(), RubyError> {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            let val = Value::fixnum(lhs.as_packed_fixnum() << rhs.as_packed_fixnum());
+            self.stack_push(val);
+            return Ok(());
+        };
+        match lhs.is_object() {
+            Some(_) => {
+                let cache = self.read32(iseq, 1);
+                let methodref = self.get_method_from_cache(cache, lhs, IdentId::_SHL)?;
+                let arg = Args::new1(lhs, None, rhs);
+                self.eval_send(methodref, &arg, None, None)
             }
-            (_, _) => return Err(self.error_undefined_op("<<", rhs, lhs)),
+            None => match (lhs.unpack(), rhs.unpack()) {
+                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => {
+                    let val = Value::fixnum(lhs << rhs);
+                    self.stack_push(val);
+                    Ok(())
+                }
+                (_, _) => Err(self.error_undefined_op("<<", rhs, lhs)),
+            },
         }
     }
 

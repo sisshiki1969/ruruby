@@ -1024,6 +1024,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::SHL);
+                        self.push32(iseq, globals.add_method_cache_entry() as u32);
                     }
                     BinOp::BitOr => {
                         self.gen(globals, iseq, lhs, true)?;
