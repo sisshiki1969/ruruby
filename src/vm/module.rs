@@ -35,7 +35,7 @@ fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         );
         match class.superclass() {
             Some(superclass) => {
-                if superclass == vm.globals.object {
+                if superclass == vm.globals.builtins.object {
                     break;
                 } else {
                     class = superclass

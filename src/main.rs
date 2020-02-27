@@ -31,7 +31,7 @@ fn main() {
     let mut res: Vec<Value> = args.iter().map(|x| Value::string(x.to_string())).collect();
     res.remove(0);
     let argv = Value::array_from(&vm.globals, res);
-    vm.globals.object.set_var(id, argv);
+    vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, "struct.rb");
     exec_file(&mut vm, args[0]);
     return;

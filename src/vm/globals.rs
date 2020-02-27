@@ -10,7 +10,16 @@ pub struct Globals {
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
     pub main_object: Value,
+    pub builtins: BuiltinClass,
+    pub class_class: ClassRef,
+    pub module_class: ClassRef,
+    pub object_class: ClassRef,
 
+    case_dispatch: CaseDispatchMap,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuiltinClass {
     pub integer: Value,
     pub array: Value,
     pub class: Value,
@@ -22,10 +31,25 @@ pub struct Globals {
     pub regexp: Value,
     pub string: Value,
     pub object: Value,
+}
 
-    pub class_class: ClassRef,
-    pub module_class: ClassRef,
-    pub object_class: ClassRef,
+impl BuiltinClass {
+    fn new(object: Value, module: Value, class: Value) -> Self {
+        let nil = Value::nil();
+        BuiltinClass {
+            integer: nil,
+            array: nil,
+            class,
+            module,
+            procobj: nil,
+            method: nil,
+            range: nil,
+            hash: nil,
+            regexp: nil,
+            string: nil,
+            object,
+        }
+    }
 }
 
 impl Globals {
@@ -35,15 +59,16 @@ impl Globals {
         let module_id = ident_table.get_ident_id("Module");
         let class_id = ident_table.get_ident_id("Class");
         let object_class = ClassRef::from(object_id, None);
-        let nil = Value::nil();
         let object = Value::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
         let module = Value::bootstrap_class(module_class);
         let class_class = ClassRef::from(class_id, module);
         let class = Value::bootstrap_class(class_class);
+
         object.as_object().set_class(class);
         module.as_object().set_class(class);
         class.as_object().set_class(class);
+        let builtins = BuiltinClass::new(object, module, class);
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
@@ -56,34 +81,25 @@ impl Globals {
             object_class,
             module_class,
             class_class,
-            object,
-            module,
-            class,
-            integer: nil, // dummy
-            array: nil,   // dummy
-            procobj: nil, // dummy
-            method: nil,  // dummy
-            range: nil,   // dummy
-            hash: nil,    // dummy
-            regexp: nil,  // dummy
-            string: nil,  // dummy
+            builtins,
+            case_dispatch: CaseDispatchMap::new(),
         };
         // Generate singleton class for Object
-        let mut singleton_class = ClassRef::from(None, globals.class);
+        let mut singleton_class = ClassRef::from(None, globals.builtins.class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(&globals, singleton_class);
-        globals.object.as_object().set_class(singleton_obj);
+        globals.builtins.object.as_object().set_class(singleton_obj);
 
         module::init_module(&mut globals);
         class::init_class(&mut globals);
-        globals.integer = init_integer(&mut globals);
-        globals.array = init_array(&mut globals);
-        globals.procobj = init_proc(&mut globals);
-        globals.method = init_method(&mut globals);
-        globals.range = init_range(&mut globals);
-        globals.string = init_string(&mut globals);
-        globals.hash = init_hash(&mut globals);
-        globals.regexp = init_regexp(&mut globals);
+        globals.builtins.integer = init_integer(&mut globals);
+        globals.builtins.array = init_array(&mut globals);
+        globals.builtins.procobj = init_proc(&mut globals);
+        globals.builtins.method = init_method(&mut globals);
+        globals.builtins.range = init_range(&mut globals);
+        globals.builtins.string = init_string(&mut globals);
+        globals.builtins.hash = init_hash(&mut globals);
+        globals.builtins.regexp = init_regexp(&mut globals);
         init_object(&mut globals);
         globals
     }
@@ -113,7 +129,7 @@ impl Globals {
     }
 
     pub fn get_object_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.object.get_instance_method(id)
+        self.builtins.object.get_instance_method(id)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
@@ -253,6 +269,20 @@ impl Globals {
     }
 }
 
+impl Globals {
+    pub fn new_case_dispatch_map(&mut self) -> u32 {
+        self.case_dispatch.new_entry()
+    }
+
+    pub fn get_case_dispatch_map(&self, id: u32) -> &HashMap<Value, i32> {
+        self.case_dispatch.get_entry(id)
+    }
+
+    pub fn get_mut_case_dispatch_map(&mut self, id: u32) -> &mut HashMap<Value, i32> {
+        self.case_dispatch.get_mut_entry(id)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MethodCacheEntry {
     class: Value,
@@ -282,5 +312,31 @@ impl MethodCache {
 
     fn get_entry(&self, id: u32) -> &Option<MethodCacheEntry> {
         &self.table[id as usize]
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CaseDispatchMap {
+    table: Vec<HashMap<Value, i32>>,
+    id: u32,
+}
+
+impl CaseDispatchMap {
+    fn new() -> Self {
+        CaseDispatchMap {
+            table: vec![],
+            id: 0,
+        }
+    }
+    fn new_entry(&mut self) -> u32 {
+        self.id += 1;
+        self.table.push(HashMap::new());
+        self.id - 1
+    }
+    fn get_entry(&self, id: u32) -> &HashMap<Value, i32> {
+        &self.table[id as usize]
+    }
+    fn get_mut_entry(&mut self, id: u32) -> &mut HashMap<Value, i32> {
+        &mut self.table[id as usize]
     }
 }

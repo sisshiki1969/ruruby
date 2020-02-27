@@ -50,13 +50,13 @@ pub fn init_class(globals: &mut Globals) {
     let class = globals.class_class;
     globals.add_builtin_instance_method(class, "new", class_new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
-    globals.add_builtin_class_method(globals.class, "new", class_class_new);
+    globals.add_builtin_class_method(globals.builtins.class, "new", class_class_new);
 }
 
 /// Built-in function "new".
 fn class_class_new(vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
     let id = vm.globals.get_ident_id("nil");
-    let classref = ClassRef::from(id, vm.globals.object);
+    let classref = ClassRef::from(id, vm.globals.builtins.object);
     let val = Value::class(&mut vm.globals, classref);
 
     Ok(val)

@@ -70,7 +70,7 @@ impl Eq for IdentValue {}
 
 pub fn init_hash(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Hash");
-    let class = ClassRef::from(id, globals.object);
+    let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "clear", hash_clear);
     globals.add_builtin_instance_method(class, "clone", hash_clone);
     globals.add_builtin_instance_method(class, "dup", hash_clone);

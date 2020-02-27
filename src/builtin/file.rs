@@ -6,7 +6,7 @@ use std::path::*;
 
 pub fn init_file(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("File");
-    let class = ClassRef::from(id, globals.object);
+    let class = ClassRef::from(id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "join", join);
     globals.add_builtin_class_method(obj, "basename", basename);

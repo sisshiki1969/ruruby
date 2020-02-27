@@ -178,9 +178,9 @@ impl Value {
         match self.is_object() {
             Some(oref) => oref.class(),
             None => match self.unpack() {
-                RValue::FixNum(_) => globals.integer,
-                RValue::String(_) => globals.string,
-                _ => globals.object,
+                RValue::FixNum(_) => globals.builtins.integer,
+                RValue::String(_) => globals.builtins.string,
+                _ => globals.builtins.object,
             },
         }
     }
@@ -189,9 +189,9 @@ impl Value {
         match self.is_object() {
             Some(oref) => oref.search_class(),
             None => match self.unpack() {
-                RValue::FixNum(_) => globals.integer,
-                RValue::String(_) => globals.string,
-                _ => globals.object,
+                RValue::FixNum(_) => globals.builtins.integer,
+                RValue::String(_) => globals.builtins.string,
+                _ => globals.builtins.object,
             },
         }
     }

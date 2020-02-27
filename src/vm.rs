@@ -95,7 +95,10 @@ impl VM {
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
                 let id = globals.get_ident_id($name);
-                globals.object.set_var(id, globals.$class_object);
+                globals
+                    .builtins
+                    .object
+                    .set_var(id, globals.builtins.$class_object);
             };
         }
 
@@ -113,19 +116,19 @@ impl VM {
 
         let id = globals.get_ident_id("Math");
         let math = init_math(&mut globals);
-        globals.object.set_var(id, math);
+        globals.builtins.object.set_var(id, math);
 
         let id = globals.get_ident_id("File");
         let file = file::init_file(&mut globals);
-        globals.object.set_var(id, file);
+        globals.builtins.object.set_var(id, file);
 
         let id = globals.get_ident_id("Process");
         let file = process::init_process(&mut globals);
-        globals.object.set_var(id, file);
+        globals.builtins.object.set_var(id, file);
 
         let id = globals.get_ident_id("StandardError");
         let class = Value::class(&globals, globals.class_class);
-        globals.object.set_var(id, class);
+        globals.builtins.object.set_var(id, class);
 
         let mut vm = VM {
             globals,
@@ -186,7 +189,7 @@ impl VM {
 
     pub fn class(&self) -> Value {
         if self.class_stack.len() == 0 {
-            self.globals.object
+            self.globals.builtins.object
         } else {
             *self.class_stack.last().unwrap()
         }
@@ -671,7 +674,7 @@ impl VM {
                 }
                 Inst::GET_CONST_TOP => {
                     let id = self.read_id(iseq, 1);
-                    let class = self.globals.object;
+                    let class = self.globals.builtins.object;
                     let val = self.get_super_const(class, id)?;
                     self.stack_push(val);
                     self.pc += 5;
@@ -858,12 +861,12 @@ impl VM {
                 }
                 Inst::OPT_CASE => {
                     let val = self.stack_pop();
-                    let hash = Value::from(self.read64(iseq, 1)).as_hash().unwrap();
-                    let disp = match hash.get(&val) {
-                        Some(v) => v.as_fixnum().unwrap(),
-                        None => self.read_disp(iseq, 9),
+                    let map = self.globals.get_case_dispatch_map(self.read32(iseq, 1));
+                    let disp = match map.get(&val) {
+                        Some(disp) => *disp as i64,
+                        None => self.read_disp(iseq, 5),
                     };
-                    self.jump_pc(13, disp);
+                    self.jump_pc(9, disp);
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
@@ -922,7 +925,7 @@ impl VM {
                     let id = self.read_id(iseq, 2);
                     let methodref = self.read_methodref(iseq, 6);
                     let super_val = self.stack_pop();
-                    let val = match self.globals.object.get_var(id) {
+                    let val = match self.globals.builtins.object.get_var(id) {
                         Some(val) => {
                             let classref = self.val_as_module(val.clone())?;
                             if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
@@ -944,7 +947,7 @@ impl VM {
                                 };
                                 super_val
                             } else {
-                                self.globals.object
+                                self.globals.builtins.object
                             };
                             let classref = ClassRef::from(id, super_val);
                             let val = if is_module {
@@ -1905,7 +1908,7 @@ impl VM {
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.add_instance_method(self.globals.object, id, info);
+        self.add_instance_method(self.globals.builtins.object, id, info);
     }
 
     pub fn get_singleton_class(&mut self, obj: Value) -> VMResult {

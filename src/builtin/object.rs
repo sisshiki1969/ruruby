@@ -47,7 +47,7 @@ impl ObjectInfo {
 
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
-            class: globals.class,
+            class: globals.builtins.class,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Class(classref),
         }
@@ -55,7 +55,7 @@ impl ObjectInfo {
 
     pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
         ObjectInfo {
-            class: globals.module,
+            class: globals.builtins.module,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Module(classref),
         }
@@ -63,7 +63,7 @@ impl ObjectInfo {
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         ObjectInfo {
-            class: globals.array,
+            class: globals.builtins.array,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Array(arrayref),
         }
@@ -71,7 +71,7 @@ impl ObjectInfo {
 
     pub fn new_splat(globals: &Globals, val: Value) -> Self {
         ObjectInfo {
-            class: globals.array,
+            class: globals.builtins.array,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Splat(val),
         }
@@ -79,7 +79,7 @@ impl ObjectInfo {
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         ObjectInfo {
-            class: globals.hash,
+            class: globals.builtins.hash,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Hash(hashref),
         }
@@ -87,7 +87,7 @@ impl ObjectInfo {
 
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
         ObjectInfo {
-            class: globals.regexp,
+            class: globals.builtins.regexp,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Regexp(regexpref),
         }
@@ -95,7 +95,7 @@ impl ObjectInfo {
 
     pub fn new_range(globals: &Globals, info: RangeInfo) -> Self {
         ObjectInfo {
-            class: globals.range,
+            class: globals.builtins.range,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Range(info),
         }
@@ -103,7 +103,7 @@ impl ObjectInfo {
 
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         ObjectInfo {
-            class: globals.procobj,
+            class: globals.builtins.procobj,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Proc(procref),
         }
@@ -111,7 +111,7 @@ impl ObjectInfo {
 
     pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
         ObjectInfo {
-            class: globals.method,
+            class: globals.builtins.method,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Method(methodref),
         }

@@ -231,7 +231,7 @@ impl MethodObjRef {
 
 pub fn init_method(globals: &mut Globals) -> Value {
     let proc_id = globals.get_ident_id("Method");
-    let class = ClassRef::from(proc_id, globals.object);
+    let class = ClassRef::from(proc_id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "call", method_call);
     Value::class(globals, class)
 }

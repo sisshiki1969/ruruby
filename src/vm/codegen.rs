@@ -233,9 +233,9 @@ impl Codegen {
         iseq.push(Inst::RETURN);
     }
 
-    fn gen_opt_case(&mut self, iseq: &mut ISeq, hash_id: u64) -> ISeqPos {
+    fn gen_opt_case(&mut self, iseq: &mut ISeq, map_id: u32) -> ISeqPos {
         iseq.push(Inst::OPT_CASE);
-        self.push64(iseq, hash_id);
+        self.push32(iseq, map_id);
         self.push32(iseq, 0);
         ISeqPos(iseq.len())
     }
@@ -1268,19 +1268,18 @@ impl Codegen {
                     }
                 }
                 if opt_flag {
-                    let mut href = HashRef::from(HashMap::new());
-                    let hash = Value::hash(globals, href).id();
+                    let map_id = globals.new_case_dispatch_map();
                     self.save_cur_loc(iseq);
-                    let start = self.gen_opt_case(iseq, hash);
+                    let start = self.gen_opt_case(iseq, map_id);
                     for branch in when_ {
-                        let disp = start.disp(Codegen::current(iseq));
-                        let v = Value::fixnum(disp as i64);
+                        let map = globals.get_mut_case_dispatch_map(map_id);
+                        let disp = start.disp(Codegen::current(iseq)) as i32;
                         for elem in &branch.when {
                             let k = match elem.kind {
                                 NodeKind::Integer(i) => Value::fixnum(i),
                                 _ => unreachable!(),
                             };
-                            href.insert(k, v);
+                            map.insert(k, disp);
                         }
                         self.gen(globals, iseq, &branch.body, use_value)?;
                         end.push(self.gen_jmp(iseq));

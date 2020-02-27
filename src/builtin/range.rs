@@ -19,7 +19,7 @@ impl RangeInfo {
 
 pub fn init_range(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Range");
-    let class = ClassRef::from(id, globals.object);
+    let class = ClassRef::from(id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "map", range_map);
     globals.add_builtin_instance_method(class, "each", range_each);

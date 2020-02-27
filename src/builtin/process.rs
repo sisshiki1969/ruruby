@@ -2,7 +2,7 @@ use crate::vm::*;
 
 pub fn init_process(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Process");
-    let class = ClassRef::from(id, globals.object);
+    let class = ClassRef::from(id, globals.builtins.object);
     let mut obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "clock_gettime", clock_gettime);
     let id = globals.get_ident_id("CLOCK_MONOTONIC");

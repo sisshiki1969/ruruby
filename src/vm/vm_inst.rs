@@ -214,9 +214,9 @@ impl Inst {
             | Inst::SET_LOCAL
             | Inst::GET_LOCAL
             | Inst::DEF_METHOD
-            | Inst::DEF_CLASS_METHOD => 9,
+            | Inst::DEF_CLASS_METHOD
+            | Inst::OPT_CASE => 9,
             Inst::DEF_CLASS => 10,
-            Inst::OPT_CASE => 13,
             Inst::SEND | Inst::SEND_SELF => 21,
             _ => 1,
         }

@@ -88,7 +88,7 @@ impl ArrayRef {
 
 pub fn init_array(globals: &mut Globals) -> Value {
     let array_id = globals.get_ident_id("Array");
-    let class = ClassRef::from(array_id, globals.object);
+    let class = ClassRef::from(array_id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "[]=", array_set_elem);
     globals.add_builtin_instance_method(class, "push", array_push);
