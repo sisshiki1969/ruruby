@@ -108,7 +108,6 @@ impl IndexMut<usize> for Args {
 
 impl Deref for Args {
     type Target = [Value];
-
     fn deref(&self) -> &Self::Target {
         self.args.deref()
     }

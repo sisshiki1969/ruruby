@@ -159,15 +159,16 @@ impl Globals {
                 if class.as_class().is_singleton {
                     Ok(class)
                 } else {
-                    let mut singleton_class = if let ObjKind::Class(cref) = oref.kind {
-                        let superclass = cref.superclass;
-                        if superclass.is_nil() {
-                            ClassRef::from(None, None)
-                        } else {
-                            ClassRef::from(None, self.get_singleton_class(superclass)?)
+                    let mut singleton_class = match oref.kind {
+                        ObjKind::Class(cref) | ObjKind::Module(cref) => {
+                            let superclass = cref.superclass;
+                            if superclass.is_nil() {
+                                ClassRef::from(None, None)
+                            } else {
+                                ClassRef::from(None, self.get_singleton_class(superclass)?)
+                            }
                         }
-                    } else {
-                        ClassRef::from(None, None)
+                        _ => ClassRef::from(None, None),
                     };
                     singleton_class.is_singleton = true;
                     let singleton_obj = Value::class(&self, singleton_class);

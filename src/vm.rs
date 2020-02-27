@@ -180,18 +180,16 @@ impl VM {
     }
 
     pub fn classref(&self) -> ClassRef {
-        if self.class_stack.len() == 0 {
-            self.globals.object_class
-        } else {
-            self.class_stack.last().unwrap().as_module().unwrap()
+        match self.class_stack.last() {
+            Some(class) => class.as_module().unwrap(),
+            None => self.globals.object_class,
         }
     }
 
     pub fn class(&self) -> Value {
-        if self.class_stack.len() == 0 {
-            self.globals.builtins.object
-        } else {
-            *self.class_stack.last().unwrap()
+        match self.class_stack.last() {
+            Some(class) => *class,
+            None => self.globals.builtins.object,
         }
     }
 
@@ -414,6 +412,7 @@ impl VM {
         //let old_pc = self.pc;
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
+        let mut self_oref = context.self_value.as_object();
         loop {
             #[cfg(feature = "perf")]
             {
@@ -687,15 +686,15 @@ impl VM {
                 }
                 Inst::SET_INSTANCE_VAR => {
                     let var_id = self.read_id(iseq, 1);
-                    let mut self_obj = self.context().self_value.as_object();
+                    //let mut self_obj = self.context().self_value.as_object();
                     let new_val = self.stack_pop();
-                    self_obj.set_var(var_id, new_val);
+                    self_oref.set_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = self.read_id(iseq, 1);
-                    let self_obj = self.context().self_value.as_object();
-                    let val = match self_obj.get_var(var_id) {
+                    //let self_obj = self.context().self_value.as_object();
+                    let val = match self_oref.get_var(var_id) {
                         Some(val) => val.clone(),
                         None => Value::nil(),
                     };
@@ -928,6 +927,13 @@ impl VM {
                     let super_val = self.stack_pop();
                     let val = match self.globals.builtins.object.get_var(id) {
                         Some(val) => {
+                            if val.is_module().is_some() != is_module {
+                                return Err(self.error_type(format!(
+                                    "{} is not {}.",
+                                    self.globals.get_ident_name(id),
+                                    if is_module { "module" } else { "class" },
+                                )));
+                            };
                             let classref = self.val_as_module(val.clone())?;
                             if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                                 return Err(self.error_type(format!(
@@ -938,7 +944,9 @@ impl VM {
                             val.clone()
                         }
                         None => {
-                            let super_val = if !super_val.is_nil() {
+                            let super_val = if super_val.is_nil() {
+                                self.globals.builtins.object
+                            } else {
                                 if super_val.is_class().is_none() {
                                     let val = self.val_pp(super_val);
                                     return Err(self.error_type(format!(
@@ -947,8 +955,6 @@ impl VM {
                                     )));
                                 };
                                 super_val
-                            } else {
-                                self.globals.builtins.object
                             };
                             let classref = ClassRef::from(id, super_val);
                             let val = if is_module {
@@ -1471,14 +1477,22 @@ impl VM {
 
     fn eval_exp(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            Value::flonum((lhs.as_packed_fixnum() as f64).powf(rhs.as_packed_fixnum() as f64))
+            let lhs = lhs.as_packed_fixnum() as f64;
+            let rhs = rhs.as_packed_fixnum() as f64;
+            Value::flonum(lhs.powf(rhs))
         } else if lhs.is_packed_num() && rhs.is_packed_num() {
             if lhs.is_packed_fixnum() {
-                Value::flonum(lhs.as_packed_fixnum() as f64 * rhs.as_packed_flonum())
+                let lhs = lhs.as_packed_fixnum() as f64;
+                let rhs = rhs.as_packed_flonum();
+                Value::flonum(lhs.powf(rhs))
             } else if rhs.is_packed_fixnum() {
-                Value::flonum(lhs.as_packed_flonum() * rhs.as_packed_fixnum() as f64)
+                let lhs = lhs.as_packed_flonum();
+                let rhs = rhs.as_packed_fixnum() as f64;
+                Value::flonum(lhs.powf(rhs))
             } else {
-                Value::flonum(lhs.as_packed_flonum() * rhs.as_packed_flonum())
+                let lhs = lhs.as_packed_flonum();
+                let rhs = rhs.as_packed_flonum();
+                Value::flonum(lhs.powf(rhs))
             }
         } else {
             match (lhs.unpack(), rhs.unpack()) {
@@ -1697,6 +1711,10 @@ impl VM {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
+                ObjKind::Module(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    None => format! {"#<Module:0x{:x}>", cref.id()},
+                },
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
                     1 => format!("[{}]", self.val_pp(aref.elements[0])),
@@ -1888,11 +1906,10 @@ impl VM {
                     Some(superclass) => class = superclass,
                     None => {
                         let method_name = self.globals.get_ident_name(method);
-                        let class_name =
-                            self.globals.get_ident_name(original_class.as_class().name);
                         return Err(self.error_nomethod(format!(
                             "no method `{}' found for {}",
-                            method_name, class_name
+                            method_name,
+                            self.val_pp(original_class)
                         )));
                     }
                 },

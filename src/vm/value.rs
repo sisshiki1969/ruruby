@@ -336,6 +336,16 @@ impl Value {
         }
     }
 
+    pub fn is_module(&self) -> Option<ClassRef> {
+        match self.is_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Module(cref) => Some(cref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_array(&self) -> Option<ArrayRef> {
         match self.is_object() {
             Some(oref) => match oref.kind {
