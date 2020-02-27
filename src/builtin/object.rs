@@ -184,31 +184,31 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "eval", eval);
 }
 
-fn class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn class(vm: &mut VM, args: &Args) -> VMResult {
     let class = args.self_value.get_class_object(&vm.globals);
     Ok(class)
 }
 
-fn object_id(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn object_id(_vm: &mut VM, args: &Args) -> VMResult {
     let id = args.self_value.id();
     Ok(Value::fixnum(id as i64))
 }
 
-fn singleton_class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
     vm.get_singleton_class(args.self_value)
 }
 
-fn inspect(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn inspect(vm: &mut VM, args: &Args) -> VMResult {
     let inspect = vm.val_pp(args.self_value);
     Ok(Value::string(inspect))
 }
 
-fn eql(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn eql(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     Ok(Value::bool(args.self_value == args[0]))
 }
 
-fn toi(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn toi(vm: &mut VM, args: &Args) -> VMResult {
     //vm.check_args_num(args.len(), 1, 1)?;
     let self_ = args.self_value;
     let num = if self_.is_packed_num() {
@@ -223,7 +223,7 @@ fn toi(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::fixnum(num))
 }
 
-fn instance_variable_set(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn instance_variable_set(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     let name = args[0];
     let val = args[1];
@@ -239,7 +239,7 @@ fn instance_variable_set(vm: &mut VM, args: &Args, _block: Option<MethodRef>) ->
     Ok(val)
 }
 
-fn instance_variables(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn instance_variables(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let mut receiver = args.self_value.as_object();
     let res = receiver
@@ -251,7 +251,7 @@ fn instance_variables(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VM
     Ok(Value::array_from(&vm.globals, res))
 }
 
-fn floor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn floor(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let rec = args.self_value;
     if rec.is_packed_fixnum() {
@@ -264,12 +264,12 @@ fn floor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     }
 }
 
-fn freeze(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn freeze(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     Ok(args.self_value)
 }
 
-fn super_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn super_(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let context = vm.context();
     let iseq = context.iseq_ref.clone();
@@ -290,19 +290,19 @@ fn super_(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
         for i in 0..param_num {
             args.push(context.get_lvar(LvarId::from_usize(i)));
         }
-        vm.eval_send(method, &args, None, None)?;
+        vm.eval_send(method, &args, None)?;
         Ok(vm.stack_pop())
     } else {
         return Err(vm.error_nomethod("super called outside of method"));
     }
 }
 
-fn equal(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn equal(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     Ok(Value::bool(args.self_value.id() == args[0].id()))
 }
 
-fn send(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn send(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 100)?;
     let receiver = args.self_value;
     let method_id = match args[0].as_symbol() {
@@ -317,23 +317,24 @@ fn send(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         new_args[i] = args[i + 1];
     }
     new_args.self_value = args.self_value;
-    vm.eval_send(method, &new_args, None, block)?;
+    new_args.block = args.block;
+    vm.eval_send(method, &new_args, None)?;
     let res = vm.stack_pop();
     Ok(res)
 }
 
-fn object_yield(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
     let context = vm.context();
     let method = match context.block {
         Some(block) => block,
         None => return Err(vm.error_argument("Yield needs block.")),
     };
-    vm.eval_send(method, &args, None, None)?;
+    vm.eval_send(method, &args, None)?;
     let res = vm.stack_pop();
     Ok(res)
 }
 
-fn eval(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn eval(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let program = match args[0].as_string() {
         Some(s) => s,
@@ -343,7 +344,7 @@ fn eval(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     let iseq = vm.globals.get_method_info(method).as_iseq(&vm)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);
-    vm.vm_run(iseq, Some(context), &args, None, None)?;
+    vm.vm_run(iseq, Some(context), &args, None)?;
     let res = vm.stack_pop();
     Ok(res)
 }

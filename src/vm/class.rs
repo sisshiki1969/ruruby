@@ -54,7 +54,7 @@ pub fn init_class(globals: &mut Globals) {
 }
 
 /// Built-in function "new".
-fn class_class_new(vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn class_class_new(vm: &mut VM, _args: &Args) -> VMResult {
     let id = vm.globals.get_ident_id("nil");
     let classref = ClassRef::from(id, vm.globals.builtins.object);
     let val = Value::class(&mut vm.globals, classref);
@@ -63,20 +63,20 @@ fn class_class_new(vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMRe
 }
 
 /// Built-in function "new".
-fn class_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn class_new(vm: &mut VM, args: &Args) -> VMResult {
     let new_instance = Value::ordinary_object(args.self_value);
     // call initialize method.
     if let Some(methodref) = args.self_value.get_instance_method(IdentId::INITIALIZE) {
         let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;
         let mut args = args.clone();
         args.self_value = new_instance;
-        vm.vm_run(iseq, None, &args, None, None)?;
+        vm.vm_run(iseq, None, &args, None)?;
         vm.stack_pop();
     };
     Ok(new_instance)
 }
 
-fn superclass(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn superclass(vm: &mut VM, args: &Args) -> VMResult {
     let class = vm.val_as_class(args.self_value)?;
     Ok(class.superclass)
 }

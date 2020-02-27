@@ -23,7 +23,7 @@ impl Builtin {
         globals.add_builtin_method("rand", builtin_rand);
 
         /// Built-in function "puts".
-        fn builtin_puts(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_puts(vm: &mut VM, args: &Args) -> VMResult {
             fn flatten(vm: &VM, val: Value) {
                 match val.as_array() {
                     None => println!("{}", vm.val_to_s(val)),
@@ -40,7 +40,7 @@ impl Builtin {
             Ok(Value::nil())
         }
 
-        fn builtin_p(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_p(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
                 println!("{}", vm.val_pp(args[i]));
             }
@@ -55,7 +55,7 @@ impl Builtin {
         }
 
         /// Built-in function "print".
-        fn builtin_print(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_print(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
                 if let RValue::Char(ch) = args[i].unpack() {
                     let v = [ch];
@@ -69,7 +69,7 @@ impl Builtin {
         }
 
         /// Built-in function "assert".
-        fn builtin_assert(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_assert(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 2, 2)?;
             if !args[0].equal(args[1]) {
                 panic!(
@@ -83,7 +83,7 @@ impl Builtin {
             }
         }
 
-        fn builtin_require(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_require(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let file_name = match args[0].as_string() {
                 Some(string) => string,
@@ -95,11 +95,7 @@ impl Builtin {
             Ok(Value::bool(true))
         }
 
-        fn builtin_require_relative(
-            vm: &mut VM,
-            args: &Args,
-            _block: Option<MethodRef>,
-        ) -> VMResult {
+        fn builtin_require_relative(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let mut path = vm.root_path.last().unwrap().clone();
 
@@ -150,11 +146,11 @@ impl Builtin {
         }
 
         /// Built-in function "block_given?".
-        fn builtin_block_given(vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_block_given(vm: &mut VM, _args: &Args) -> VMResult {
             Ok(Value::bool(vm.context().block.is_some()))
         }
 
-        fn builtin_method(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_method(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let name = match args[0].as_symbol() {
                 Some(id) => id,
@@ -166,7 +162,7 @@ impl Builtin {
             Ok(val)
         }
 
-        fn builtin_isa(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_isa(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let mut recv_class = args.self_value.get_class_object(&vm.globals);
             loop {
@@ -180,13 +176,13 @@ impl Builtin {
             }
         }
 
-        fn builtin_tos(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_tos(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let s = vm.val_to_s(args.self_value);
             Ok(Value::string(s))
         }
 
-        fn builtin_integer(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_integer(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let self_ = args[0];
             let val = if self_.is_packed_value() {
@@ -224,14 +220,14 @@ impl Builtin {
             Ok(Value::fixnum(val))
         }
 
-        fn builtin_dir(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_dir(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
             Ok(Value::string(path.to_string_lossy().to_string()))
         }
 
-        fn builtin_raise(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_raise(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 2)?;
             for i in 0..args.len() {
                 eprintln!("{}", vm.val_pp(args[i]));
@@ -239,7 +235,7 @@ impl Builtin {
             Err(vm.error_unimplemented("error"))
         }
 
-        fn builtin_rand(_vm: &mut VM, _args: &Args, _block: Option<MethodRef>) -> VMResult {
+        fn builtin_rand(_vm: &mut VM, _args: &Args) -> VMResult {
             let num = rand::random();
             Ok(Value::flonum(num))
         }

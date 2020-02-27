@@ -2,7 +2,7 @@ use crate::error::RubyError;
 use crate::vm::*;
 use std::collections::HashMap;
 
-pub type BuiltinFunc = fn(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult;
+pub type BuiltinFunc = fn(vm: &mut VM, args: &Args) -> VMResult;
 
 pub type MethodTable = HashMap<IdentId, MethodRef>;
 
@@ -236,14 +236,14 @@ pub fn init_method(globals: &mut Globals) -> Value {
     Value::class(globals, class)
 }
 
-pub fn method_call(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+pub fn method_call(vm: &mut VM, args: &Args) -> VMResult {
     let method = match args.self_value.as_method() {
         Some(method) => method,
         None => return Err(vm.error_unimplemented("Expected Method object.")),
     };
     let mut args = args.clone();
     args.self_value = method.receiver;
-    vm.eval_send(method.method, &args, None, block)?;
+    vm.eval_send(method.method, &args, None)?;
     let res = vm.stack_pop();
     Ok(res)
 }

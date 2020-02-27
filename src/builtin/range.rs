@@ -33,7 +33,7 @@ pub fn init_range(globals: &mut Globals) -> Value {
     obj
 }
 
-fn range_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn range_new(vm: &mut VM, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 2, 3)?;
     let (start, end) = (args[0], args[1]);
@@ -45,17 +45,17 @@ fn range_new(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::range(&vm.globals, start, end, exclude_end))
 }
 
-fn range_begin(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn range_begin(_vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     Ok(range.start)
 }
 
-fn range_end(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn range_end(_vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     Ok(range.end)
 }
 
-fn range_first(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn range_first(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     let start = range.start.as_fixnum().unwrap();
     let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
@@ -76,7 +76,7 @@ fn range_first(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn range_last(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn range_last(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     let mut start = range.start.as_fixnum().unwrap();
     let end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
@@ -97,9 +97,9 @@ fn range_last(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn range_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn range_map(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -109,16 +109,16 @@ fn range_map(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg, None, None)?;
+        vm.vm_run(iseq, Some(context), &arg, None)?;
         res.push(vm.stack_pop());
     }
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
 
-fn range_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn range_each(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -127,15 +127,15 @@ fn range_each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg, None, None)?;
+        vm.vm_run(iseq, Some(context), &arg, None)?;
         vm.stack_pop();
     }
     Ok(args.self_value)
 }
 
-fn range_all(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn range_all(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -144,7 +144,7 @@ fn range_all(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg, None, None)?;
+        vm.vm_run(iseq, Some(context), &arg, None)?;
         let res = vm.stack_pop();
         if !vm.val_to_bool(res) {
             return Ok(Value::false_val());
@@ -153,7 +153,7 @@ fn range_all(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn range_toa(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn range_toa(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     let start = range.start.expect_fixnum(&vm, "Range.start")?;
     let end = range.end.expect_fixnum(&vm, "Range.end")?;

@@ -30,8 +30,8 @@ pub fn init_proc(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn proc_new(vm: &mut VM, _args: &Args, block: Option<MethodRef>) -> VMResult {
-    let procobj = match block {
+fn proc_new(vm: &mut VM, args: &Args) -> VMResult {
+    let procobj = match args.block {
         Some(block) => {
             let context = vm.create_context_from_method(block)?;
             Value::procobj(&vm.globals, context)
@@ -43,14 +43,14 @@ fn proc_new(vm: &mut VM, _args: &Args, block: Option<MethodRef>) -> VMResult {
 
 // Instance methods
 
-fn proc_call(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn proc_call(vm: &mut VM, args: &Args) -> VMResult {
     let pref = match args.self_value.as_proc() {
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
     };
     let mut args = args.clone();
     args.self_value = pref.context.self_value;
-    vm.vm_run(pref.context.iseq_ref, pref.context.outer, &args, None, None)?;
+    vm.vm_run(pref.context.iseq_ref, pref.context.outer, &args, None)?;
     let res = vm.stack_pop();
     Ok(res)
 }

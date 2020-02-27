@@ -103,7 +103,7 @@ macro_rules! as_hash {
     };
 }
 
-fn hash_clear(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_clear(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     match hash.inner_mut() {
         HashInfo::Map(map) => map.clear(),
@@ -113,12 +113,12 @@ fn hash_clear(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(args.self_value)
 }
 
-fn hash_clone(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_clone(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     Ok(Value::hash(&vm.globals, hash.dup()))
 }
 
-fn hash_compact(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_compact(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm).dup();
     match hash.inner_mut() {
         HashInfo::Map(map) => map.retain(|_, &mut v| v != Value::nil()),
@@ -127,7 +127,7 @@ fn hash_compact(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
     Ok(Value::hash(&vm.globals, hash))
 }
 
-fn hash_delete(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_delete(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
     let res = match hash.inner_mut() {
@@ -143,14 +143,14 @@ fn hash_delete(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     Ok(res)
 }
 
-fn hash_empty(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_empty(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     Ok(Value::bool(hash.len() == 0))
 }
 
-fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -162,7 +162,7 @@ fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
             for (k, v) in map {
                 arg[0] = *k;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 let b = vm.stack_pop();
                 if vm.val_to_bool(b) {
                     res.insert(k.clone(), v.clone());
@@ -173,7 +173,7 @@ fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
             for (k, v) in map.iter() {
                 arg[0] = k.0;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 let b = vm.stack_pop();
                 if vm.val_to_bool(b) {
                     res.insert(k.0, v.clone());
@@ -185,7 +185,7 @@ fn hash_select(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     Ok(Value::hash(&vm.globals, HashRef::from(res)))
 }
 
-fn hash_has_key(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_has_key(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
     let res = match hash.inner() {
@@ -195,7 +195,7 @@ fn hash_has_key(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult
     Ok(Value::bool(res))
 }
 
-fn hash_has_value(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_has_value(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
     let res = match hash.inner() {
@@ -205,13 +205,13 @@ fn hash_has_value(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResu
     Ok(Value::bool(res))
 }
 
-fn hash_length(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_length(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     let len = hash.len();
     Ok(Value::fixnum(len as i64))
 }
 
-fn hash_keys(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_keys(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     let mut vec = vec![];
     match hash.inner() {
@@ -229,7 +229,7 @@ fn hash_keys(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::array_from(&vm.globals, vec))
 }
 
-fn hash_values(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn hash_values(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     let mut vec = vec![];
     match hash.inner() {
@@ -248,10 +248,10 @@ fn hash_values(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     Ok(Value::array_from(&vm.globals, vec))
 }
 
-fn each_value(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn each_value(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -261,14 +261,14 @@ fn each_value(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         HashInfo::Map(map) => {
             for (_, v) in map {
                 arg[0] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
         HashInfo::IdentMap(map) => {
             for (_, v) in map {
                 arg[0] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
@@ -277,10 +277,10 @@ fn each_value(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     Ok(args.self_value)
 }
 
-fn each_key(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn each_key(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -290,14 +290,14 @@ fn each_key(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
         HashInfo::Map(map) => {
             for (k, _v) in map {
                 arg[0] = *k;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
         HashInfo::IdentMap(map) => {
             for (k, _v) in map {
                 arg[0] = **k;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
@@ -306,10 +306,10 @@ fn each_key(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     Ok(args.self_value)
 }
 
-fn each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn each(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match block {
+    let iseq = match args.block {
         Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
@@ -320,7 +320,7 @@ fn each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
             for (k, v) in map {
                 arg[0] = *k;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
@@ -328,7 +328,7 @@ fn each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
             for (k, v) in map {
                 arg[0] = k.0;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
@@ -337,7 +337,7 @@ fn each(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
     Ok(args.self_value)
 }
 
-fn merge(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn merge(vm: &mut VM, args: &Args) -> VMResult {
     let new = as_hash!(args.self_value, vm).dup();
     match new.inner_mut() {
         HashInfo::Map(new) => {
@@ -379,7 +379,7 @@ fn merge(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::hash(&vm.globals, new))
 }
 
-fn fetch(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn fetch(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
     let key = args[0];
     let default = if args.len() == 2 {
@@ -396,7 +396,7 @@ fn fetch(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(val)
 }
 
-fn compare_by_identity(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn compare_by_identity(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
     let inner = hash.inner_mut();

@@ -286,7 +286,7 @@ impl VM {
             None => self.globals.main_object,
         };
         let arg = Args::new0(self_value, None);
-        self.vm_run(iseq, None, &arg, None, None)?;
+        self.vm_run(iseq, None, &arg, None)?;
         let val = self.stack_pop();
         #[cfg(feature = "perf")]
         {
@@ -348,7 +348,6 @@ impl VM {
         outer: Option<ContextRef>,
         args: &Args,
         kw_arg: Option<Value>,
-        block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
         let kw = if iseq.keyword_params.is_empty() {
             kw_arg
@@ -360,11 +359,11 @@ impl VM {
             iseq.min_params,
             iseq.max_params,
         )?;
-        let mut context = Context::new(args.self_value, block, iseq, outer);
+        let mut context = Context::new(args.self_value, args.block, iseq, outer);
 
         context.set_arguments(&self.globals, args, kw);
         if let Some(id) = iseq.lvar.block_param() {
-            *context.get_mut_lvar(id) = match block {
+            *context.get_mut_lvar(id) = match args.block {
                 Some(block) => {
                     let proc_context = self.create_context_from_method(block)?;
                     Value::procobj(&self.globals, proc_context)
@@ -760,7 +759,7 @@ impl VM {
                                 }
                                 ObjKind::Method(mref) => {
                                     args.self_value = mref.receiver;
-                                    self.eval_send(mref.method, &args, None, None)?;
+                                    self.eval_send(mref.method, &args, None)?;
                                 }
                                 _ => return Err(self.error_undefined_method("[]", receiver)),
                             };
@@ -891,7 +890,8 @@ impl VM {
                     } else {
                         None
                     };
-                    try_err!(self, self.eval_send(methodref, &args, keyword, block));
+                    args.block = block;
+                    try_err!(self, self.eval_send(methodref, &args, keyword));
                     self.pc += 21;
                 }
                 Inst::SEND_SELF => {
@@ -917,7 +917,8 @@ impl VM {
                     } else {
                         None
                     };
-                    try_err!(self, self.eval_send(methodref, &args, keyword, block));
+                    args.block = block;
+                    try_err!(self, self.eval_send(methodref, &args, keyword));
                     self.pc += 21;
                 }
                 Inst::DEF_CLASS => {
@@ -966,7 +967,7 @@ impl VM {
                     class_stack.reverse();
                     method.as_iseq(&self)?.class_stack = Some(class_stack);
                     let arg = Args::new0(val, None);
-                    try_err!(self, self.eval_send(methodref, &arg, None, None));
+                    try_err!(self, self.eval_send(methodref, &arg, None));
                     self.pc += 10;
                     self.class_pop();
                 }
@@ -1286,7 +1287,7 @@ impl VM {
         match l_ref.get_instance_method(method) {
             Some(mref) => {
                 let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(mref.clone(), &arg, None, None)?;
+                self.eval_send(mref.clone(), &arg, None)?;
                 Ok(())
             }
             None => {
@@ -1313,7 +1314,7 @@ impl VM {
                     let cache = self.read32(iseq, 1);
                     let methodref = self.get_method_from_cache(cache, lhs, IdentId::_ADD)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    return self.eval_send(methodref, &arg, None, None);
+                    return self.eval_send(methodref, &arg, None);
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs + rhs),
@@ -1420,7 +1421,7 @@ impl VM {
                     let cache = self.read32(iseq, 1);
                     let methodref = self.get_method_from_cache(cache, lhs, IdentId::_MUL)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    self.eval_send(methodref, &arg, None, None)?;
+                    self.eval_send(methodref, &arg, None)?;
                     return Ok(());
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
@@ -1494,7 +1495,7 @@ impl VM {
                     match l_ref.as_ref().get_instance_method(method) {
                         Some(mref) => {
                             let arg = Args::new1(lhs, None, rhs);
-                            self.eval_send(mref.clone(), &arg, None, None)?;
+                            self.eval_send(mref.clone(), &arg, None)?;
                         }
                         None => return Err(self.error_undefined_op("**", rhs, lhs)),
                     };
@@ -1518,7 +1519,7 @@ impl VM {
                 let cache = self.read32(iseq, 1);
                 let methodref = self.get_method_from_cache(cache, lhs, IdentId::_SHL)?;
                 let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(methodref, &arg, None, None)
+                self.eval_send(methodref, &arg, None)
             }
             None => match (lhs.unpack(), rhs.unpack()) {
                 (RValue::FixNum(lhs), RValue::FixNum(rhs)) => {
@@ -1773,7 +1774,6 @@ impl VM {
         methodref: MethodRef,
         args: &Args,
         keyword: Option<Value>,
-        block: Option<MethodRef>,
     ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
@@ -1788,7 +1788,7 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                let val = func(self, args, block)?;
+                let val = func(self, args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
@@ -1811,7 +1811,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                self.vm_run(iseq, None, &args, keyword, block)?;
+                self.vm_run(iseq, None, &args, keyword)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);

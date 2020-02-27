@@ -1,3 +1,4 @@
+use super::method::MethodRef;
 use super::value::Value;
 use std::ops::Deref;
 use std::ops::{Index, IndexMut};
@@ -7,7 +8,7 @@ const VEC_ARRAY_SIZE: usize = 8;
 #[derive(Debug, Clone)]
 pub struct Args {
     pub self_value: Value,
-    pub block: Value,
+    pub block: Option<MethodRef>,
     args: ArgsArray,
 }
 
@@ -15,7 +16,7 @@ impl Args {
     pub fn new(len: usize) -> Self {
         Args {
             self_value: Value::nil(),
-            block: Value::nil(),
+            block: None,
             args: ArgsArray::new(len),
         }
     }
@@ -24,52 +25,52 @@ impl Args {
         self.args.push(val);
     }
 
-    pub fn new0(self_value: Value, block: impl Into<Option<Value>>) -> Self {
+    pub fn new0(self_value: Value, block: impl Into<Option<MethodRef>>) -> Self {
         Args {
             self_value,
-            block: block.into().unwrap_or_default(),
+            block: block.into(),
             args: ArgsArray::new0(),
         }
     }
 
-    pub fn new1(self_value: Value, block: impl Into<Option<Value>>, arg: Value) -> Self {
+    pub fn new1(self_value: Value, block: impl Into<Option<MethodRef>>, arg: Value) -> Self {
         Args {
             self_value,
-            block: block.into().unwrap_or_default(),
+            block: block.into(),
             args: ArgsArray::new1(arg),
         }
     }
 
     pub fn new2(
         self_value: Value,
-        block: impl Into<Option<Value>>,
+        block: impl Into<Option<MethodRef>>,
         arg0: Value,
         arg1: Value,
     ) -> Self {
         Args {
             self_value,
-            block: block.into().unwrap_or_default(),
+            block: block.into(),
             args: ArgsArray::new2(arg0, arg1),
         }
     }
 
     pub fn new3(
         self_value: Value,
-        block: impl Into<Option<Value>>,
+        block: impl Into<Option<MethodRef>>,
         arg0: Value,
         arg1: Value,
         arg2: Value,
     ) -> Self {
         Args {
             self_value,
-            block: block.into().unwrap_or_default(),
+            block: block.into(),
             args: ArgsArray::new3(arg0, arg1, arg2),
         }
     }
 
     pub fn new4(
         self_value: Value,
-        block: impl Into<Option<Value>>,
+        block: impl Into<Option<MethodRef>>,
         arg0: Value,
         arg1: Value,
         arg2: Value,
@@ -77,7 +78,7 @@ impl Args {
     ) -> Self {
         Args {
             self_value,
-            block: block.into().unwrap_or_default(),
+            block: block.into(),
             args: ArgsArray::new4(arg0, arg1, arg2, arg3),
         }
     }

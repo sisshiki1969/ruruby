@@ -15,13 +15,13 @@ pub fn init_integer(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn integer_times(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn integer_times(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let num = args.self_value.as_fixnum().unwrap();
     if num < 1 {
         return Ok(Value::nil());
     };
-    match block {
+    match args.block {
         None => return Ok(Value::nil()),
         Some(method) => {
             let context = vm.context();
@@ -31,7 +31,7 @@ fn integer_times(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult
             let mut arg = Args::new1(self_value, None, Value::nil());
             for i in 0..num {
                 arg[0] = Value::fixnum(i);
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
             }
         }
@@ -39,7 +39,7 @@ fn integer_times(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult
     Ok(args.self_value)
 }
 
-fn integer_step(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult {
+fn integer_step(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
     let start = args.self_value.as_fixnum().unwrap();
     let limit = args[0].as_fixnum().unwrap();
@@ -53,7 +53,7 @@ fn integer_step(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult 
         1
     };
 
-    match block {
+    match args.block {
         None => return Err(vm.error_argument("Currently, needs block.")),
         Some(method) => {
             let context = vm.context();
@@ -67,7 +67,7 @@ fn integer_step(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult 
                     break;
                 }
                 arg[0] = Value::fixnum(i);
-                vm.vm_run(iseq, Some(context), &arg, None, None)?;
+                vm.vm_run(iseq, Some(context), &arg, None)?;
                 vm.stack_pop();
                 i += step;
             }
@@ -77,17 +77,17 @@ fn integer_step(vm: &mut VM, args: &Args, block: Option<MethodRef>) -> VMResult 
 }
 
 /// Built-in function "chr".
-fn integer_chr(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn integer_chr(_vm: &mut VM, args: &Args) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap();
     Ok(RValue::Char(num as u8).pack())
 }
 
-fn integer_tof(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn integer_tof(_vm: &mut VM, args: &Args) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap();
     Ok(Value::flonum(num as f64))
 }
 
-fn integer_even(_vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn integer_even(_vm: &mut VM, args: &Args) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap();
     Ok(Value::bool(num % 2 == 0))
 }

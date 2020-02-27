@@ -13,7 +13,7 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "const_get", const_get);
 }
 
-fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn constants(vm: &mut VM, args: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = args.self_value;
     loop {
@@ -47,7 +47,7 @@ fn constants(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn const_get(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn const_get(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
@@ -57,7 +57,7 @@ fn const_get(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(val)
 }
 
-fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn instance_methods(vm: &mut VM, args: &Args) -> VMResult {
     let mut class = vm.val_as_module(args.self_value)?;
     vm.check_args_num(args.len(), 0, 1)?;
     let inherited_too = args.len() == 0 || vm.val_to_bool(args[0]);
@@ -93,7 +93,7 @@ fn instance_methods(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMRe
     }
 }
 
-fn attr_accessor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn attr_accessor(vm: &mut VM, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
@@ -106,7 +106,7 @@ fn attr_accessor(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResul
     Ok(Value::nil())
 }
 
-fn attr_reader(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn attr_reader(vm: &mut VM, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
@@ -118,7 +118,7 @@ fn attr_reader(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult 
     Ok(Value::nil())
 }
 
-fn attr_writer(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn attr_writer(vm: &mut VM, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
@@ -154,13 +154,13 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
         .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
 }
 
-fn module_function(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn module_function(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     vm.define_mode_mut().module_function = true;
     Ok(Value::nil())
 }
 
-fn singleton_class(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
     let class = vm.val_as_module(args.self_value)?;
     Ok(Value::bool(class.is_singleton))
 }

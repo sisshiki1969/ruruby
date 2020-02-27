@@ -27,7 +27,7 @@ fn string_to_path(vm: &mut VM, string: Value) -> Result<PathBuf, RubyError> {
 
 // Class methods
 
-fn join(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn join(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     let mut path = string_to_path(vm, args[0])?;
     let arg = string_to_path(vm, args[1])?;
@@ -42,7 +42,7 @@ fn join(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::string(path.to_string_lossy().to_string()))
 }
 
-fn basename(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn basename(vm: &mut VM, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
@@ -53,7 +53,7 @@ fn basename(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(basename)
 }
 
-fn extname(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn extname(vm: &mut VM, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
@@ -64,7 +64,7 @@ fn extname(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::string(extname))
 }
 
-fn binread(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn binread(vm: &mut VM, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 1, 1)?;
     let filename = match string_to_path(vm, args[0])?.canonicalize() {
@@ -85,7 +85,7 @@ fn binread(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
     Ok(Value::bytes(contents))
 }
 
-fn read(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn read(vm: &mut VM, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 1, 1)?;
     let filename = match string_to_path(vm, args[0])?.canonicalize() {

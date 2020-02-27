@@ -36,7 +36,7 @@ pub fn init_regexp(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn regexp_push(vm: &mut VM, args: &Args, _block: Option<MethodRef>) -> VMResult {
+fn regexp_push(vm: &mut VM, args: &Args) -> VMResult {
     let mut aref = args
         .self_value
         .as_array()
