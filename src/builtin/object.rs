@@ -340,7 +340,7 @@ fn eval(vm: &mut VM, args: &Args) -> VMResult {
         Some(s) => s,
         None => return Err(vm.error_argument("1st arg must be String.")),
     };
-    let method = vm.parse_program(std::path::PathBuf::from("path"), program.to_string())?;
+    let method = vm.parse_program(std::path::PathBuf::from("eval"), program)?;
     let iseq = vm.get_iseq(method)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);

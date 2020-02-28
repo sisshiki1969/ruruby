@@ -6,7 +6,8 @@ extern crate rustyline;
 
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
-use ruruby::repl::*;
+mod repl;
+use repl::*;
 use ruruby::vm::*;
 
 fn main() {
@@ -57,7 +58,7 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
     #[cfg(feature = "verbose")]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
-    match vm.run(absolute_path, program, None) {
+    match vm.run(absolute_path, &program, None) {
         Ok(_) => {}
         Err(err) => {
             err.show_err();

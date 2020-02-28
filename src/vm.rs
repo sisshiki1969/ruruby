@@ -248,7 +248,7 @@ impl VM {
     pub fn parse_program(
         &mut self,
         path: PathBuf,
-        program: String,
+        program: &String,
     ) -> Result<MethodRef, RubyError> {
         let mut parser = Parser::new();
         std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
@@ -271,7 +271,7 @@ impl VM {
         Ok(methodref)
     }
 
-    pub fn run(&mut self, path: PathBuf, program: String, self_value: Option<Value>) -> VMResult {
+    pub fn run(&mut self, path: PathBuf, program: &String, self_value: Option<Value>) -> VMResult {
         let method = self.parse_program(path, program)?;
         let iseq = self.get_iseq(method)?;
         let self_value = match self_value {

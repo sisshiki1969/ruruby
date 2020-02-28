@@ -434,7 +434,7 @@ impl Parser {
     pub fn parse_program(
         mut self,
         path: PathBuf,
-        program: String,
+        program: &String,
     ) -> Result<ParseResult, RubyError> {
         self.lexer.init(program);
         self.lexer.source_info.path = path;

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub fn eval_script(script: impl Into<String>, expected: RValue) {
     let mut vm = VM::new();
-    match vm.run(PathBuf::from(""), script.into(), None) {
+    match vm.run(PathBuf::from(""), &script.into(), None) {
         Ok(res) => {
             let res = res.unpack();
             if res != expected {

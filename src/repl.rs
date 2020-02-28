@@ -1,7 +1,7 @@
-use crate::error::*;
-use crate::parser::{LvarCollector, Parser};
-use crate::vm::*;
 use ansi_term::Colour::Red;
+use ruruby::error::*;
+use ruruby::parser::{LvarCollector, Parser};
+use ruruby::vm::*;
 
 pub fn repl_vm() {
     println!("RValue: {}", std::mem::size_of::<RValue>());
