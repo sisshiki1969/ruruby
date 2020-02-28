@@ -1,5 +1,6 @@
 use core::ptr::NonNull;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 const INITIALIZE: u32 = 1;
 const OBJECT: u32 = 2;
@@ -117,25 +118,25 @@ pub type SourceInfoRef = Ref<SourceInfo>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceInfo {
-    pub path: String,
+    pub path: PathBuf,
     pub code: Vec<char>,
 }
 
 impl SourceInfoRef {
     pub fn empty() -> Self {
-        SourceInfoRef::new(SourceInfo::new(""))
+        SourceInfoRef::new(SourceInfo::new(PathBuf::default()))
     }
 }
 
 impl SourceInfo {
-    pub fn new(path: impl Into<String>) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         SourceInfo {
-            path: path.into(),
+            path: path,
             code: vec![],
         }
     }
     pub fn show_file_name(&self) {
-        eprintln!("{}", self.path);
+        eprintln!("{}", self.path.to_string_lossy());
     }
 
     /// Show the location of the Loc in the source code using '^^^'.

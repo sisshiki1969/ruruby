@@ -3,6 +3,7 @@ use crate::lexer::Lexer;
 use crate::node::*;
 use crate::token::*;
 use crate::util::*;
+use std::path::PathBuf;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -432,11 +433,11 @@ impl Parser {
 impl Parser {
     pub fn parse_program(
         mut self,
-        path: impl Into<String>,
+        path: PathBuf,
         program: String,
     ) -> Result<ParseResult, RubyError> {
         self.lexer.init(program);
-        self.lexer.source_info.path = path.into();
+        self.lexer.source_info.path = path;
         self.context_stack.push(Context::new_class(None));
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
@@ -453,12 +454,12 @@ impl Parser {
 
     pub fn parse_program_repl(
         mut self,
-        path: impl Into<String>,
+        path: PathBuf,
         program: String,
         lvar_collector: Option<LvarCollector>,
     ) -> Result<ParseResult, RubyError> {
         self.lexer.init(program);
-        self.lexer.source_info.path = path.into();
+        self.lexer.source_info.path = path;
         self.context_stack.push(Context::new_class(lvar_collector));
         let node = match self.parse_comp_stmt() {
             Ok(node) => node,

@@ -97,7 +97,8 @@ impl Builtin {
 
         fn builtin_require_relative(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let mut path = vm.root_path.last().unwrap().clone();
+            let context = vm.context();
+            let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
 
             let file_name = match args[0].as_string() {
                 Some(string) => PathBuf::from(string),
@@ -139,7 +140,7 @@ impl Builtin {
             eprintln!("reading:{}", absolute_path.to_string_lossy());
             vm.root_path.push(path);
             vm.class_push(vm.globals.builtins.object);
-            vm.run(absolute_path.to_str().unwrap(), program, None)?;
+            vm.run(absolute_path, program, None)?;
             vm.class_pop();
             vm.root_path.pop().unwrap();
             Ok(())

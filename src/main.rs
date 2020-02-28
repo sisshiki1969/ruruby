@@ -59,7 +59,7 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
     #[cfg(feature = "verbose")]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
-    match vm.run(absolute_path.to_str().unwrap(), program, None) {
+    match vm.run(absolute_path, program, None) {
         Ok(_) => {}
         Err(err) => {
             err.show_err();
@@ -70,6 +70,7 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
             }
         }
     };
+    vm.root_path.pop();
 }
 
 fn repl_vm() {
@@ -100,7 +101,7 @@ fn repl_vm() {
         program = format!("{}{}", program, line);
 
         match parser.clone().parse_program_repl(
-            "REPL",
+            std::path::PathBuf::from("REPL"),
             program.clone(),
             Some(lvar_collector.clone()),
         ) {

@@ -91,7 +91,7 @@ impl Lexer {
             reserved,
             reserved_rev,
             quote_state: vec![],
-            source_info: SourceInfoRef::new(SourceInfo::new("")),
+            source_info: SourceInfoRef::new(SourceInfo::new(std::path::PathBuf::default())),
             state_save: vec![],
         }
     }

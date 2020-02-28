@@ -247,7 +247,7 @@ impl VM {
 
     pub fn parse_program(
         &mut self,
-        path: impl Into<String>,
+        path: PathBuf,
         program: String,
     ) -> Result<MethodRef, RubyError> {
         let mut parser = Parser::new();
@@ -271,12 +271,7 @@ impl VM {
         Ok(methodref)
     }
 
-    pub fn run(
-        &mut self,
-        path: impl Into<String>,
-        program: String,
-        self_value: Option<Value>,
-    ) -> VMResult {
+    pub fn run(&mut self, path: PathBuf, program: String, self_value: Option<Value>) -> VMResult {
         let methodref = self.parse_program(path, program)?;
         let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
         let self_value = match self_value {
