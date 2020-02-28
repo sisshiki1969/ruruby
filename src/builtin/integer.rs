@@ -26,8 +26,7 @@ fn integer_times(vm: &mut VM, args: &Args) -> VMResult {
         Some(method) => {
             let context = vm.context();
             let self_value = context.self_value;
-            let info = vm.globals.get_method_info(method);
-            let iseq = info.as_iseq(&vm)?;
+            let iseq = vm.get_iseq(method)?;
             let mut arg = Args::new1(self_value, None, Value::nil());
             for i in 0..num {
                 arg[0] = Value::fixnum(i);
@@ -58,8 +57,7 @@ fn integer_step(vm: &mut VM, args: &Args) -> VMResult {
         Some(method) => {
             let context = vm.context();
             let self_value = context.self_value;
-            let info = vm.globals.get_method_info(method);
-            let iseq = info.as_iseq(&vm)?;
+            let iseq = vm.get_iseq(method)?;
             let mut arg = Args::new1(self_value, None, Value::nil());
             let mut i = start;
             loop {

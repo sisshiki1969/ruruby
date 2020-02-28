@@ -100,7 +100,7 @@ fn range_last(vm: &mut VM, args: &Args) -> VMResult {
 fn range_map(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let mut res = vec![];
@@ -119,7 +119,7 @@ fn range_map(vm: &mut VM, args: &Args) -> VMResult {
 fn range_each(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();
@@ -136,7 +136,7 @@ fn range_each(vm: &mut VM, args: &Args) -> VMResult {
 fn range_all(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();

@@ -151,7 +151,7 @@ fn hash_empty(vm: &mut VM, args: &Args) -> VMResult {
 fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let mut res = HashMap::new();
@@ -252,7 +252,7 @@ fn each_value(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();
@@ -281,7 +281,7 @@ fn each_key(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();
@@ -310,7 +310,7 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let context = vm.context();

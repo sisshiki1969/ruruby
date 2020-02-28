@@ -6,6 +6,7 @@ pub mod lexer;
 pub mod loader;
 pub mod node;
 pub mod parser;
+pub mod repl;
 pub mod test;
 pub mod token;
 pub mod util;
