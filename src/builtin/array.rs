@@ -303,7 +303,7 @@ fn array_sub(vm: &mut VM, args: &Args) -> VMResult {
 fn array_map(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let mut res = vec![];
@@ -335,7 +335,7 @@ fn array_map(vm: &mut VM, args: &Args) -> VMResult {
 fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
     let iseq = match args.block {
-        Some(method) => vm.globals.get_method_info(method).as_iseq(&vm)?,
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
     let mut res = vec![];
@@ -373,11 +373,10 @@ fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
 
 fn array_each(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
-    let info = match args.block {
-        Some(method) => vm.globals.get_method_info(method),
+    let iseq = match args.block {
+        Some(method) => vm.get_iseq(method)?,
         None => return Err(vm.error_argument("Currently, needs block.")),
     };
-    let iseq = info.as_iseq(&vm)?;
     let context = vm.context();
     //let mut arg = Args::new1(context.self_value, None, Value::nil());
     let mut arg = Args::new(iseq.req_params);

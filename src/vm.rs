@@ -277,8 +277,8 @@ impl VM {
         program: String,
         self_value: Option<Value>,
     ) -> VMResult {
-        let methodref = self.parse_program(path, program)?;
-        let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
+        let method = self.parse_program(path, program)?;
+        let iseq = self.get_iseq(method)?;
         let self_value = match self_value {
             Some(val) => val,
             None => self.globals.main_object,
@@ -316,7 +316,7 @@ impl VM {
             false,
             None,
         )?;
-        let iseq = self.globals.get_method_info(methodref).as_iseq(&self)?;
+        let iseq = self.get_iseq(methodref)?;
         context.iseq_ref = iseq;
         context.adjust_lvar_size();
         context.pc = 0;
@@ -923,7 +923,7 @@ impl VM {
                 Inst::DEF_CLASS => {
                     let is_module = self.read8(iseq, 1) == 1;
                     let id = self.read_id(iseq, 2);
-                    let methodref = self.read_methodref(iseq, 6);
+                    let method = self.read_methodref(iseq, 6);
                     let super_val = self.stack_pop();
                     let val = match self.globals.builtins.object.get_var(id) {
                         Some(val) => {
@@ -968,39 +968,39 @@ impl VM {
                     };
 
                     self.class_push(val);
-                    let method = self.globals.get_method_info(methodref);
+                    let mut iseq = self.get_iseq(method)?;
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
-                    method.as_iseq(&self)?.class_stack = Some(class_stack);
+                    iseq.class_stack = Some(class_stack);
                     let arg = Args::new0(val, None);
-                    try_err!(self, self.eval_send(methodref, &arg, None));
+                    try_err!(self, self.eval_send(method, &arg, None));
                     self.pc += 10;
                     self.class_pop();
                 }
                 Inst::DEF_METHOD => {
                     let id = self.read_id(iseq, 1);
-                    let methodref = self.read_methodref(iseq, 5);
-                    let method = self.globals.get_method_info(methodref);
+                    let method = self.read_methodref(iseq, 5);
+                    let mut iseq = self.get_iseq(method)?;
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
-                    method.as_iseq(&self)?.class_stack = Some(class_stack);
-                    self.define_method(id, methodref);
+                    iseq.class_stack = Some(class_stack);
+                    self.define_method(id, method);
                     if self.define_mode().module_function {
-                        self.define_singleton_method(id, methodref)?;
+                        self.define_singleton_method(id, method)?;
                     };
                     self.stack_push(Value::symbol(id));
                     self.pc += 9;
                 }
                 Inst::DEF_CLASS_METHOD => {
                     let id = self.read_id(iseq, 1);
-                    let methodref = self.read_methodref(iseq, 5);
-                    let method = self.globals.get_method_info(methodref);
+                    let method = self.read_methodref(iseq, 5);
+                    let mut iseq = self.get_iseq(method)?;
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
-                    method.as_iseq(&self)?.class_stack = Some(class_stack);
-                    self.define_singleton_method(id, methodref)?;
+                    iseq.class_stack = Some(class_stack);
+                    self.define_singleton_method(id, method)?;
                     if self.define_mode().module_function {
-                        self.define_method(id, methodref);
+                        self.define_method(id, method);
                     };
                     self.stack_push(Value::symbol(id));
                     self.pc += 9;
@@ -2069,8 +2069,12 @@ impl VM {
         &mut self,
         method: MethodRef,
     ) -> Result<ContextRef, RubyError> {
-        let iseq = self.globals.get_method_info(method).as_iseq(&self)?;
+        let iseq = self.get_iseq(method)?;
         let outer = self.context();
         Ok(ContextRef::from(outer.self_value, None, iseq, Some(outer)))
+    }
+
+    pub fn get_iseq(&self, method: MethodRef) -> Result<ISeqRef, RubyError> {
+        self.globals.get_method_info(method).as_iseq(&self)
     }
 }

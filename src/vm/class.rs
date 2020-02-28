@@ -66,8 +66,8 @@ fn class_class_new(vm: &mut VM, _args: &Args) -> VMResult {
 fn class_new(vm: &mut VM, args: &Args) -> VMResult {
     let new_instance = Value::ordinary_object(args.self_value);
     // call initialize method.
-    if let Some(methodref) = args.self_value.get_instance_method(IdentId::INITIALIZE) {
-        let iseq = vm.globals.get_method_info(methodref).as_iseq(&vm)?;
+    if let Some(method) = args.self_value.get_instance_method(IdentId::INITIALIZE) {
+        let iseq = vm.get_iseq(method)?;
         let mut args = args.clone();
         args.self_value = new_instance;
         vm.vm_run(iseq, None, &args, None)?;
