@@ -95,11 +95,16 @@ pub enum NodeKind {
     Send {
         receiver: Box<Node>,
         method: IdentId,
-        args: NodeVec,
-        keyword_arg: Vec<(IdentId, Node)>,
-        block: Option<Box<Node>>,
+        send_args: SendArgs,
         completed: bool,
     }, //receiver, method_name, args
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SendArgs {
+    pub args: NodeVec,
+    pub kw_args: Vec<(IdentId, Node)>,
+    pub block: Option<Box<Node>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -353,24 +358,37 @@ impl Node {
     pub fn new_send(
         receiver: Node,
         method: IdentId,
-        mut args: Vec<Node>,
-        keyword_arg: Vec<(IdentId, Node)>,
-        block: Option<Box<Node>>,
+        mut send_args: SendArgs,
         completed: bool,
         loc: Loc,
     ) -> Self {
-        let loc = match (args.last(), &block) {
+        let loc = match (send_args.args.last(), &send_args.block) {
             (Some(arg), _) => loc.merge(arg.loc),
             _ => loc,
         };
-        args.reverse();
+        send_args.args.reverse();
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
                 method,
-                args,
-                keyword_arg,
-                block,
+                send_args,
+                completed,
+            },
+            loc,
+        )
+    }
+
+    pub fn new_send_noarg(receiver: Node, method: IdentId, completed: bool, loc: Loc) -> Self {
+        let send_args = SendArgs {
+            args: vec![],
+            kw_args: vec![],
+            block: None,
+        };
+        Node::new(
+            NodeKind::Send {
+                receiver: Box::new(receiver),
+                method,
+                send_args,
                 completed,
             },
             loc,
@@ -487,11 +505,11 @@ impl std::fmt::Display for Node {
             NodeKind::Send {
                 receiver,
                 method,
-                args,
+                send_args,
                 ..
             } => {
                 write!(f, "[ Send [{}]: [{:?}]", receiver, method)?;
-                for node in args {
+                for node in &send_args.args {
                     write!(f, "({}) ", node)?;
                 }
                 write!(f, "]")?;

@@ -1389,24 +1389,22 @@ impl Codegen {
             NodeKind::Send {
                 receiver,
                 method,
-                args,
-                keyword_arg,
-                block,
+                send_args,
                 ..
             } => {
                 let loc = self.loc;
-                for arg in args {
+                for arg in &send_args.args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                let kw_len = keyword_arg.len();
+                let kw_len = send_args.kw_args.len();
                 if kw_len != 0 {
-                    for (id, default) in keyword_arg {
+                    for (id, default) in &send_args.kw_args {
                         self.gen_symbol(iseq, *id);
                         self.gen(globals, iseq, default, true)?;
                     }
                     self.gen_create_hash(iseq, kw_len);
                 }
-                let block_ref = match block {
+                let block_ref = match &send_args.block {
                     Some(block) => match &block.kind {
                         NodeKind::Proc { params, body, lvar } => {
                             self.loop_stack.push(LoopInfo::new_top());
@@ -1432,7 +1430,7 @@ impl Codegen {
                         globals,
                         iseq,
                         *method,
-                        args.len(),
+                        send_args.args.len(),
                         if kw_len == 0 { 0 } else { 1 },
                         block_ref,
                     );
@@ -1443,8 +1441,8 @@ impl Codegen {
                         globals,
                         iseq,
                         *method,
-                        args.len(),
-                        keyword_arg.len(),
+                        send_args.args.len(),
+                        send_args.kw_args.len(),
                         block_ref,
                     );
                 };

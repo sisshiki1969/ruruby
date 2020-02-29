@@ -603,22 +603,19 @@ impl Parser {
                 NodeKind::Send {
                     method,
                     receiver,
-                    mut args,
+                    mut send_args,
                     completed: false,
                     ..
                 },
-            mut loc,
+            loc,
         } = node.clone()
         {
-            let mut kw_args = vec![];
             if self.is_command()? {
-                let res = self.parse_arglist()?;
-                args = res.0;
-                kw_args = res.1;
-                loc = loc.merge(args[0].loc());
-            }
-            let block = self.parse_block()?;
-            let node = Node::new_send(*receiver, method, args, kw_args, block, true, loc);
+                send_args = self.parse_arglist()?;
+            } else {
+                send_args.block = self.parse_block()?
+            };
+            let node = Node::new_send(*receiver, method, send_args, true, loc);
             Ok(node)
         } else {
             // EXPR : ARG
@@ -645,50 +642,80 @@ impl Parser {
             return Err(self.error_unexpected(loc, "Expected '='."));
         }
 
-        let (mrhs, _) = self.parse_args(None)?;
+        let mrhs = self.parse_arg_list(None)?;
         for lhs in &mlhs {
             self.check_lhs(lhs)?;
         }
         return Ok(Node::new_mul_assign(mlhs, mrhs));
     }
 
+    fn parse_arg_list(
+        &mut self,
+        punct: impl Into<Option<Punct>>,
+    ) -> Result<Vec<Node>, RubyError> {
+        let (flag, punct) = match punct.into() {
+            Some(punct) => (true, punct),
+            None => (false, Punct::Arrow /* dummy */),
+        };
+        let mut args = vec![];
+        loop {
+            if flag && self.consume_punct(punct)? {
+                return Ok(args);
+            }
+            if self.consume_punct(Punct::Mul)? {
+                // splat argument
+                let loc = self.prev_loc();
+                let array = self.parse_arg()?;
+                args.push(Node::new_splat(array, loc));
+            } else {
+                let node = self.parse_arg()?;
+                args.push(node);
+            }
+            if !self.consume_punct(Punct::Comma)? {
+                break;
+            }
+        }
+        if flag {
+            self.expect_punct(punct)?
+        };
+        Ok(args)
+    }
+
     fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
         // FNAME ARGS
         // FNAME ARGS DO-BLOCK
-        let (args, kw_args) = self.parse_arglist()?;
-        let block = self.parse_block()?;
+        let send_args = self.parse_arglist()?;
         Ok(Node::new_send(
             Node::new_self(loc),
             operation,
-            args,
-            kw_args,
-            block,
+            send_args,
             true,
             loc,
         ))
     }
 
-    fn parse_arglist(&mut self) -> Result<(Vec<Node>, Vec<(IdentId, Node)>), RubyError> {
+    fn parse_arglist(&mut self) -> Result<SendArgs, RubyError> {
         let first_arg = self.parse_arg()?;
         if self.is_line_term()? {
-            return Ok((vec![first_arg], vec![]));
+            return Ok(SendArgs{args:vec![first_arg], kw_args:vec![], block:None});
         }
 
         if first_arg.is_operation() && self.is_command()? {
-            let nodes =
+            let args =
                 vec![self.parse_command(first_arg.as_method_name().unwrap(), first_arg.loc())?];
-            return Ok((nodes, vec![]));
+            return Ok(SendArgs{args, kw_args:vec![], block:None});
         }
 
         let mut args = vec![first_arg];
         let mut kw_args = vec![];
         if self.consume_punct_no_term(Punct::Comma)? {
-            let res = self.parse_args(None)?;
+            let res = self.parse_argument_list(None)?;
             let mut new_args = res.0;
             kw_args = res.1;
             args.append(&mut new_args);
         }
-        Ok((args, kw_args))
+        let block = self.parse_block()?;
+        Ok(SendArgs{args, kw_args, block})
     }
 
     fn is_command(&mut self) -> Result<bool, RubyError> {
@@ -731,7 +758,7 @@ impl Parser {
             return Ok(lhs);
         }
         if self.consume_punct_no_term(Punct::Assign)? {
-            let (mrhs, _) = self.parse_args(None)?;
+            let mrhs = self.parse_arg_list(None)?;
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
         } else if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_term()?.kind {
@@ -1008,26 +1035,24 @@ impl Parser {
         let loc = node.loc();
         if self.consume_punct_no_term(Punct::LParen)? {
             // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-            let (args, kw_args) = self.parse_args(Punct::RParen)?;
+            let (args, kw_args) = self.parse_argument_list(Punct::RParen)?;
             let block = self.parse_block()?;
+            let send_args = SendArgs {args, kw_args, block};
 
             Ok(Node::new_send(
                 Node::new_self(loc),
                 node.as_method_name().unwrap(),
-                args,
-                kw_args,
-                block,
+                send_args,
                 true,
                 loc,
             ))
         } else if let Some(block) = self.parse_block()? {
             // PRIMARY-METHOD : FNAME BLOCK
+            let send_args = SendArgs {args:vec![], kw_args:vec![], block: Some(block)};
             Ok(Node::new_send(
                 Node::new_self(loc),
                 node.as_method_name().unwrap(),
-                vec![],
-                vec![],
-                Some(block),
+                send_args,
                 true,
                 loc,
             ))
@@ -1081,7 +1106,7 @@ impl Parser {
                 let mut kw_args = vec![];
                 let mut completed = false;
                 if self.consume_punct_no_term(Punct::LParen)? {
-                    let res = self.parse_args(Punct::RParen)?;
+                    let res = self.parse_argument_list(Punct::RParen)?;
                     args = res.0;
                     kw_args = res.1;
                     completed = true;
@@ -1092,16 +1117,15 @@ impl Parser {
                 };
                 let node = match node.kind {
                     NodeKind::Ident(id) => {
-                        Node::new_send(Node::new_self(loc), id, vec![], vec![], None, true, loc)
+                        Node::new_send_noarg(Node::new_self(loc), id, true, loc)
                     }
                     _ => node,
                 };
+                let send_args = SendArgs {args, kw_args, block};
                 Node::new_send(
                     node,
                     id,
-                    args,
-                    kw_args,
-                    block,
+                    send_args,
                     completed,
                     loc.merge(self.prev_loc()),
                 )
@@ -1111,7 +1135,7 @@ impl Parser {
             } else if node.is_operation() {
                 return Ok(node);
             } else if self.consume_punct_no_term(Punct::LBracket)? {
-                let (mut args, _) = self.parse_args(Punct::RBracket)?;
+                let mut args = self.parse_arg_list(Punct::RBracket)?;
                 args.reverse();
                 Node::new_array_member(node, args)
             } else {
@@ -1121,8 +1145,9 @@ impl Parser {
     }
 
     /// Parse argument list.
+    /// arg, *arg, kw: arg <punct>
     /// punct: punctuator for terminating arg list. Set None for unparenthesized argument list.
-    fn parse_args(
+    fn parse_argument_list(
         &mut self,
         punct: impl Into<Option<Punct>>,
     ) -> Result<(Vec<Node>, Vec<(IdentId, Node)>), RubyError> {
@@ -1277,7 +1302,7 @@ impl Parser {
                 }
                 Punct::LBracket => {
                     // Array literal
-                    let (mut nodes, _) = self.parse_args(Punct::RBracket)?;
+                    let mut nodes = self.parse_arg_list(Punct::RBracket)?;
                     nodes.reverse();
                     let loc = loc.merge(self.prev_loc());
                     Ok(Node::new_array(nodes, loc))
@@ -1298,12 +1323,9 @@ impl Parser {
                                 let node = self.parse_interporated_string_literal(&s)?;
                                 let method = self.ident_table.get_ident_id("to_sym");
                                 let loc = symbol_loc.merge(node.loc());
-                                return Ok(Node::new_send(
+                                return Ok(Node::new_send_noarg(
                                     node,
                                     method,
-                                    vec![],
-                                    vec![],
-                                    None,
                                     true,
                                     loc,
                                 ));
@@ -1415,7 +1437,7 @@ impl Parser {
                 self.consume_term()?;
                 let mut when_ = vec![];
                 while self.consume_reserved(Reserved::When)? {
-                    let (arg, _) = self.parse_args(None)?;
+                    let arg = self.parse_arg_list(None)?;
                     self.parse_then()?;
                     let body = self.parse_comp_stmt()?;
                     when_.push(CaseBranch::new(arg, body));
