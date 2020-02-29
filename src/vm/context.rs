@@ -132,7 +132,7 @@ impl ContextRef {
         ContextRef::new(Context::new(self_value, block, iseq_ref, outer))
     }
 
-    pub fn new_local(info: &Context) -> Self {
+    pub fn from_local(info: &Context) -> Self {
         let boxed = info as *const Context as *mut Context;
         Ref(unsafe { NonNull::new_unchecked(boxed) })
     }

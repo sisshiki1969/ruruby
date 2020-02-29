@@ -32,7 +32,7 @@ pub fn repl_vm() {
 
         match parser.clone().parse_program_repl(
             std::path::PathBuf::from("REPL"),
-            program.clone(),
+            &program,
             Some(lvar_collector.clone()),
         ) {
             Ok(parse_result) => {

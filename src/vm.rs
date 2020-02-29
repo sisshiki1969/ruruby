@@ -17,6 +17,7 @@ pub use crate::parser::{LvarCollector, LvarId, ParseResult};
 pub use crate::util::*;
 pub use args::*;
 pub use class::*;
+use codegen::ContextKind;
 pub use codegen::{Codegen, ISeq, ISeqPos};
 
 pub use context::*;
@@ -265,10 +266,39 @@ impl VM {
             &result.node,
             &result.lvar_collector,
             true,
-            false,
+            ContextKind::Method,
             None,
         )?;
         Ok(methodref)
+    }
+
+    pub fn parse_program_eval(
+        &mut self,
+        path: PathBuf,
+        program: &String,
+    ) -> Result<MethodRef, RubyError> {
+        let mut parser = Parser::new();
+        std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
+        let ext_lvar = self.context().iseq_ref.lvar.clone();
+        let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
+        self.globals.ident_table = result.ident_table;
+
+        #[cfg(feature = "perf")]
+        {
+            self.perf.set_prev_inst(Perf::CODEGEN);
+        }
+        let mut codegen = Codegen::new(result.source_info);
+        codegen.context_push(ext_lvar);
+        let method = codegen.gen_iseq(
+            &mut self.globals,
+            &vec![],
+            &result.node,
+            &result.lvar_collector,
+            true,
+            ContextKind::Eval,
+            None,
+        )?;
+        Ok(method)
     }
 
     pub fn run(&mut self, path: PathBuf, program: &String, self_value: Option<Value>) -> VMResult {
@@ -308,7 +338,7 @@ impl VM {
             &result.node,
             &result.lvar_collector,
             true,
-            false,
+            ContextKind::Method,
             None,
         )?;
         let iseq = self.get_iseq(methodref)?;
@@ -394,7 +424,7 @@ impl VM {
             }
             _ => {}
         };
-        self.vm_run_context(ContextRef::new_local(&context))
+        self.vm_run_context(ContextRef::from_local(&context))
     }
 
     /// Main routine for VM execution.

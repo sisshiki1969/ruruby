@@ -68,10 +68,11 @@ pub struct Context {
     kind: ContextKind,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-enum ContextKind {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ContextKind {
     Method,
     Block,
+    Eval,
 }
 
 impl Context {
@@ -83,15 +84,11 @@ impl Context {
         }
     }
 
-    fn from(lvar_info: HashMap<IdentId, LvarId>, is_block: bool) -> Self {
+    fn from(lvar_info: HashMap<IdentId, LvarId>, kind: ContextKind) -> Self {
         Context {
             lvar_info,
             iseq_sourcemap: vec![],
-            kind: if is_block {
-                ContextKind::Block
-            } else {
-                ContextKind::Method
-            },
+            kind,
         }
     }
 }
@@ -244,7 +241,10 @@ impl Codegen {
         iseq.push(Inst::SET_LOCAL);
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
-            None => panic!("CodeGen: Illegal LvarId in gen_set_local()."),
+            None => panic!(format!(
+                "CodeGen: Illegal LvarId in gen_set_local(). id:{:?}",
+                id
+            )),
         };
         self.push32(iseq, lvar_id.as_u32());
         self.push32(iseq, outer);
@@ -280,7 +280,7 @@ impl Codegen {
                 Some(id) => return Some((i as u32, id.clone())),
                 None => {}
             };
-            if context.kind != ContextKind::Block {
+            if context.kind == ContextKind::Method {
                 return None;
             }
         }
@@ -503,6 +503,11 @@ impl Codegen {
         self.save_loc(iseq, self.loc)
     }
 
+    pub fn context_push(&mut self, lvar: LvarCollector) {
+        self.context_stack
+            .push(Context::from(lvar.clone_table(), ContextKind::Method));
+    }
+
     /// Generate ISeq.
     pub fn gen_iseq(
         &mut self,
@@ -511,10 +516,14 @@ impl Codegen {
         node: &Node,
         lvar_collector: &LvarCollector,
         use_value: bool,
-        is_block: bool,
+        kind: ContextKind,
         name: Option<IdentId>,
     ) -> Result<MethodRef, RubyError> {
         let methodref = globals.new_method();
+        let is_block = match kind {
+            ContextKind::Method => false,
+            _ => true,
+        };
         if !is_block {
             self.method_stack.push(methodref)
         }
@@ -532,7 +541,7 @@ impl Codegen {
         let mut iseq = ISeq::new();
 
         self.context_stack
-            .push(Context::from(lvar_collector.clone_table(), is_block));
+            .push(Context::from(lvar_collector.clone_table(), kind));
         for (lvar_id, param) in params.iter().enumerate() {
             match &param.kind {
                 NodeKind::Param(id) => {
@@ -610,12 +619,16 @@ impl Codegen {
                 lvar_collector.clone(),
                 iseq_sourcemap,
                 self.source_info,
-                if is_block {
-                    ISeqKind::Proc(*self.method_stack.last().unwrap())
-                } else if name.is_some() {
-                    ISeqKind::Method(name.unwrap())
-                } else {
-                    ISeqKind::Other
+                match kind {
+                    ContextKind::Block => ISeqKind::Proc(*self.method_stack.last().unwrap()),
+                    ContextKind::Eval => ISeqKind::Other,
+                    ContextKind::Method => {
+                        if name.is_some() {
+                            ISeqKind::Method(name.unwrap())
+                        } else {
+                            ISeqKind::Other
+                        }
+                    }
                 },
             )),
         };
@@ -1397,8 +1410,15 @@ impl Codegen {
                     Some(block) => match &block.kind {
                         NodeKind::Proc { params, body, lvar } => {
                             self.loop_stack.push(LoopInfo::new_top());
-                            let methodref =
-                                self.gen_iseq(globals, params, body, lvar, true, true, None)?;
+                            let methodref = self.gen_iseq(
+                                globals,
+                                params,
+                                body,
+                                lvar,
+                                true,
+                                ContextKind::Block,
+                                None,
+                            )?;
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
                         }
@@ -1433,8 +1453,15 @@ impl Codegen {
                 };
             }
             NodeKind::MethodDef(id, params, body, lvar) => {
-                let methodref =
-                    self.gen_iseq(globals, params, body, lvar, true, false, Some(*id))?;
+                let methodref = self.gen_iseq(
+                    globals,
+                    params,
+                    body,
+                    lvar,
+                    true,
+                    ContextKind::Method,
+                    Some(*id),
+                )?;
                 iseq.push(Inst::DEF_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
@@ -1443,8 +1470,15 @@ impl Codegen {
                 };
             }
             NodeKind::ClassMethodDef(id, params, body, lvar) => {
-                let methodref =
-                    self.gen_iseq(globals, params, body, lvar, true, false, Some(*id))?;
+                let methodref = self.gen_iseq(
+                    globals,
+                    params,
+                    body,
+                    lvar,
+                    true,
+                    ContextKind::Method,
+                    Some(*id),
+                )?;
                 iseq.push(Inst::DEF_CLASS_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
@@ -1460,7 +1494,15 @@ impl Codegen {
                 lvar,
             } => {
                 let loc = node.loc();
-                let methodref = self.gen_iseq(globals, &vec![], body, lvar, true, false, None)?;
+                let methodref = self.gen_iseq(
+                    globals,
+                    &vec![],
+                    body,
+                    lvar,
+                    true,
+                    ContextKind::Method,
+                    None,
+                )?;
                 self.gen(globals, iseq, superclass, true)?;
                 self.save_loc(iseq, loc);
                 iseq.push(Inst::DEF_CLASS);
@@ -1498,7 +1540,7 @@ impl Codegen {
                                 self.gen(globals, iseq, val, true)?;
                                 self.gen_end(iseq);
                             }
-                            ContextKind::Method => {
+                            ContextKind::Method | ContextKind::Eval => {
                                 return Err(self.error_syntax("Invalid next.", loc.merge(self.loc)));
                             }
                         },
@@ -1518,7 +1560,8 @@ impl Codegen {
             }
             NodeKind::Proc { params, body, lvar } => {
                 self.loop_stack.push(LoopInfo::new_top());
-                let methodref = self.gen_iseq(globals, params, body, lvar, true, true, None)?;
+                let methodref =
+                    self.gen_iseq(globals, params, body, lvar, true, ContextKind::Block, None)?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
                 self.push32(iseq, methodref.into());

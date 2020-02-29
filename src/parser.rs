@@ -23,10 +23,10 @@ pub struct ParseResult {
 }
 
 impl ParseResult {
-    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
+    pub fn default(node: Node, ident_table:IdentifierTable, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
         ParseResult {
             node,
-            ident_table: IdentifierTable::new(),
+            ident_table,
             lvar_collector,
             source_info,
         }
@@ -436,16 +436,11 @@ impl Parser {
         path: PathBuf,
         program: &String,
     ) -> Result<ParseResult, RubyError> {
-        self.lexer.init(program);
-        self.lexer.source_info.path = path;
-        self.context_stack.push(Context::new_class(None));
-        let node = self.parse_comp_stmt()?;
-        let lvar = self.context_stack.pop().unwrap().lvar;
+        let (node, lvar) = self.parse_program_core(path, program, None)?;
 
         let tok = self.peek()?;
-        if tok.kind == TokenKind::EOF {
-            let mut result = ParseResult::default(node, lvar, self.lexer.source_info);
-            result.ident_table = self.ident_table;
+        if  tok.is_eof() {
+            let result = ParseResult::default(node, self.ident_table, lvar, self.lexer.source_info);
             Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
@@ -455,30 +450,60 @@ impl Parser {
     pub fn parse_program_repl(
         mut self,
         path: PathBuf,
-        program: String,
+        program: &String,
         lvar_collector: Option<LvarCollector>,
     ) -> Result<ParseResult, RubyError> {
-        self.lexer.init(program);
-        self.lexer.source_info.path = path;
-        self.context_stack.push(Context::new_class(lvar_collector));
-        let node = match self.parse_comp_stmt() {
-            Ok(node) => node,
+        let (node, lvar) = match self.parse_program_core(path, program, lvar_collector) {
+            Ok((node, lvar)) => (node, lvar),
             Err(mut err) => {
                 err.set_level(self.context_stack.len() - 1);
                 return Err(err);
             }
         };
-        let lvar = self.context_stack.pop().unwrap().lvar;
-
+    
         let tok = self.peek()?;
-        if tok.kind == TokenKind::EOF {
-            let mut result = ParseResult::default(node, lvar, self.lexer.source_info);
-            std::mem::swap(&mut result.ident_table, &mut self.ident_table);
+        if tok.is_eof() {
+            let result = ParseResult::default(node, self.ident_table, lvar, self.lexer.source_info);
             Ok(result)
         } else {
             let mut err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
             err.set_level(0);
             Err(err)
+        }
+    }
+
+    pub fn parse_program_core(
+        &mut self,
+        path: PathBuf,
+        program: &String,
+        lvar: Option<LvarCollector>,
+    ) -> Result<(Node, LvarCollector), RubyError> {
+        self.lexer.init(path, program);
+        self.context_stack.push(Context::new_class(lvar));
+        let node = self.parse_comp_stmt()?;
+        let lvar = self.context_stack.pop().unwrap().lvar;
+        Ok((node, lvar))
+    }
+
+    pub fn parse_program_eval(
+        mut self,
+        path: PathBuf,
+        program: &String,
+        ext_lvar: LvarCollector,
+    ) -> Result<ParseResult, RubyError> {
+        self.lexer.init(path, program);
+        self.context_stack.push(Context::new_class(Some(ext_lvar)));
+        self.context_stack.push(Context::new_block());
+        let node = self.parse_comp_stmt()?;
+        let lvar = self.context_stack.pop().unwrap().lvar;
+        self.context_stack.pop().unwrap();
+        
+        let tok = self.peek()?;
+        if  tok.is_eof() {
+            let result = ParseResult::default(node, self.ident_table, lvar, self.lexer.source_info);
+            Ok(result)
+        } else {
+            Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
         }
     }
 

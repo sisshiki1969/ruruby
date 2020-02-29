@@ -340,7 +340,7 @@ fn eval(vm: &mut VM, args: &Args) -> VMResult {
         Some(s) => s,
         None => return Err(vm.error_argument("1st arg must be String.")),
     };
-    let method = vm.parse_program(std::path::PathBuf::from("eval"), program)?;
+    let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), program)?;
     let iseq = vm.get_iseq(method)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);
@@ -426,6 +426,18 @@ mod test {
         #    33 (同じブロックが3つのyieldで3回起動された。
         #        具体的には 10 + 3; 20 + 3; 30 + 3 を実行した)
 
+        "#;
+        let expected = RValue::Nil;
+        eval_script(program, expected);
+    }
+
+    #[test]
+    fn object_eval() {
+        let program = r#"
+        a = 100
+        eval("b = 100; assert(100, b);")
+        assert(77, eval("a = 77"))
+        assert(77, a)
         "#;
         let expected = RValue::Nil;
         eval_script(program, expected);

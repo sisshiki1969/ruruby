@@ -119,7 +119,7 @@ impl Lexer {
     }
 
     pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, RubyError> {
-        self.init(code_text);
+        self.init(std::path::PathBuf::new(), code_text);
         let mut tokens = vec![];
         loop {
             match self.get_token() {
@@ -137,11 +137,12 @@ impl Lexer {
         return Ok(LexerResult::new(tokens));
     }
 
-    pub fn init(&mut self, code_text: impl Into<String>) {
+    pub fn init(&mut self, path: std::path::PathBuf, code_text: impl Into<String>) {
         let mut code = code_text.into().chars().collect::<Vec<char>>();
         self.pos = self.source_info.code.len() as u32;
         self.source_info.code.append(&mut code);
         self.len = self.source_info.code.len();
+        self.source_info.path = path;
     }
 
     pub fn get_token(&mut self) -> Result<Token, RubyError> {

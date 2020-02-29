@@ -15,7 +15,7 @@ A toy Ruby implementation by Rust.
     - [x] Hash literal
     - [x] Lambda literal
     - [x] Block literal
-    - [ ] Regular expression literal
+    - [x] Regular expression literal
 - Objects
     - [x] String
     - [x] Range
@@ -44,12 +44,12 @@ A toy Ruby implementation by Rust.
 - Methods
     - [x] Instance Method
     - [x] Class Method
-    - [ ] Singleton Method
+    - [x] Singleton Method
 - Class and Module
     - [x] Subclass / Inheritance
     - [x] Initializer
     - [x] Attribute accessor
-    - [x] Monkey patch (Ad-hoc class definition)
+    - [x] Open class (Ad-hoc class definition)
     - [x] Module
 
 ## How to run ruruby
