@@ -14,7 +14,6 @@ pub use array::*;
 pub use file::*;
 pub use hash::*;
 pub use integer::*;
-pub use math::*;
 pub use method::*;
 pub use object::*;
 pub use process::*;

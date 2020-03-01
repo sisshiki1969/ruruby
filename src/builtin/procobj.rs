@@ -50,7 +50,7 @@ fn proc_call(vm: &mut VM, args: &Args) -> VMResult {
     };
     let mut args = args.clone();
     args.self_value = pref.context.self_value;
-    vm.vm_run(pref.context.iseq_ref, pref.context.outer, &args, None)?;
+    vm.vm_run(pref.context.iseq_ref, pref.context.outer, &args)?;
     let res = vm.stack_pop();
     Ok(res)
 }

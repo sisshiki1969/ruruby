@@ -65,7 +65,7 @@ impl Inst {
 
     pub const DEF_CLASS: u8 = 70;
     pub const DEF_METHOD: u8 = 71;
-    pub const DEF_CLASS_METHOD: u8 = 72;
+    pub const DEF_SMETHOD: u8 = 72;
 
     pub const JMP: u8 = 80;
     pub const JMP_IF_FALSE: u8 = 81;
@@ -143,7 +143,7 @@ impl Inst {
 
             Inst::DEF_CLASS => "DEF_CLASS",
             Inst::DEF_METHOD => "DEF_METHOD",
-            Inst::DEF_CLASS_METHOD => "DEF_CMETHOD",
+            Inst::DEF_SMETHOD => "DEF_CMETHOD",
 
             Inst::JMP => "JMP",
             Inst::JMP_IF_FALSE => "JMP_IF_FALSE",
@@ -214,7 +214,7 @@ impl Inst {
             | Inst::SET_LOCAL
             | Inst::GET_LOCAL
             | Inst::DEF_METHOD
-            | Inst::DEF_CLASS_METHOD
+            | Inst::DEF_SMETHOD
             | Inst::OPT_CASE => 9,
             Inst::DEF_CLASS => 10,
             Inst::SEND | Inst::SEND_SELF => 21,

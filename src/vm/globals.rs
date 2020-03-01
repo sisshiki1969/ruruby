@@ -230,7 +230,7 @@ impl Globals {
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
                 ObjKind::Ordinary => self
-                    .get_ident_name(oref.as_ref().search_class().as_class().name)
+                    .get_ident_name(oref.search_class().as_class().name)
                     .to_string(),
             },
         }
@@ -264,7 +264,9 @@ impl Globals {
                 class,
                 version,
                 method,
-            }) if class.id() == rec_class.id() && *version == self.class_version => Some(*method),
+            }) if class.id() == rec_class.id() && *version == self.class_version && false => {
+                Some(*method)
+            }
             _ => None,
         }
     }

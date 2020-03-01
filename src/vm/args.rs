@@ -9,6 +9,7 @@ const VEC_ARRAY_SIZE: usize = 8;
 pub struct Args {
     pub self_value: Value,
     pub block: Option<MethodRef>,
+    pub kw_arg: Option<Value>,
     args: ArgsArray,
 }
 
@@ -17,6 +18,7 @@ impl Args {
         Args {
             self_value: Value::nil(),
             block: None,
+            kw_arg: None,
             args: ArgsArray::new(len),
         }
     }
@@ -29,6 +31,7 @@ impl Args {
         Args {
             self_value,
             block: block.into(),
+            kw_arg: None,
             args: ArgsArray::new0(),
         }
     }
@@ -37,6 +40,7 @@ impl Args {
         Args {
             self_value,
             block: block.into(),
+            kw_arg: None,
             args: ArgsArray::new1(arg),
         }
     }
@@ -50,6 +54,7 @@ impl Args {
         Args {
             self_value,
             block: block.into(),
+            kw_arg: None,
             args: ArgsArray::new2(arg0, arg1),
         }
     }
@@ -64,6 +69,7 @@ impl Args {
         Args {
             self_value,
             block: block.into(),
+            kw_arg: None,
             args: ArgsArray::new3(arg0, arg1, arg2),
         }
     }
@@ -79,6 +85,7 @@ impl Args {
         Args {
             self_value,
             block: block.into(),
+            kw_arg: None,
             args: ArgsArray::new4(arg0, arg1, arg2, arg3),
         }
     }

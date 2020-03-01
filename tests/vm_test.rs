@@ -922,6 +922,36 @@ fn assign_op() {
 }
 
 #[test]
+fn singleton() {
+    let program = "
+    class Foo
+        def init
+            def self.single
+                77
+            end
+        end
+        def single
+            99
+        end
+    end
+
+    f = Foo.new
+    assert(99, f.single)
+    f.init
+    assert(77, f.single)
+    class Foo
+        def single
+            200
+        end
+    end
+    assert(77, f.single)
+    assert(200, Foo.new.single)
+        ";
+    let expected = RValue::Nil;
+    eval_script(program, expected);
+}
+
+#[test]
 fn is_a() {
     let program = "
         module M

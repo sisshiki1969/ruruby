@@ -30,7 +30,7 @@ fn integer_times(vm: &mut VM, args: &Args) -> VMResult {
             let mut arg = Args::new1(self_value, None, Value::nil());
             for i in 0..num {
                 arg[0] = Value::fixnum(i);
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }
@@ -65,7 +65,7 @@ fn integer_step(vm: &mut VM, args: &Args) -> VMResult {
                     break;
                 }
                 arg[0] = Value::fixnum(i);
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
                 i += step;
             }

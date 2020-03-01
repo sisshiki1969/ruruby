@@ -1749,11 +1749,11 @@ impl Parser {
         //      [else COMPSTMT]
         //      [ensure COMPSTMT]
         //  end
-        let mut is_class_method = false;
+        let mut is_singleton_method = None;
         let tok = self.get()?;
         let id = match tok.kind {
             TokenKind::Reserved(Reserved::Self_) => {
-                is_class_method = true;
+                is_singleton_method = Some(Node::new_self(tok.loc()));
                 self.expect_punct(Punct::Dot)?;
                 self.expect_ident()?
             }
@@ -1794,10 +1794,9 @@ impl Parser {
         let args = self.parse_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        if is_class_method {
-            Ok(Node::new_class_method_decl(id, args, body, lvar))
-        } else {
-            Ok(Node::new_method_decl(id, args, body, lvar))
+        match is_singleton_method {
+            Some(singleton) => Ok(Node::new_singleton_method_decl(singleton, id, args, body, lvar)),
+            None => Ok(Node::new_method_decl(id, args, body, lvar)),
         }
     }
 

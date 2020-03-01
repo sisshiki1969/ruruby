@@ -84,7 +84,7 @@ pub enum NodeKind {
     BlockParam(IdentId),
 
     MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    ClassMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
+    SingletonMethodDef(Box<Node>, IdentId, NodeVec, Box<Node>, LvarCollector), // singleton_class, id, params, body
     ClassDef {
         id: IdentId,
         superclass: Box<Node>,
@@ -322,7 +322,8 @@ impl Node {
         Node::new(NodeKind::MethodDef(id, params, Box::new(body), lvar), loc)
     }
 
-    pub fn new_class_method_decl(
+    pub fn new_singleton_method_decl(
+        singleton: Node,
         id: IdentId,
         params: Vec<Node>,
         body: Node,
@@ -330,7 +331,7 @@ impl Node {
     ) -> Self {
         let loc = body.loc();
         Node::new(
-            NodeKind::ClassMethodDef(id, params, Box::new(body), lvar),
+            NodeKind::SingletonMethodDef(Box::new(singleton), id, params, Box::new(body), lvar),
             loc,
         )
     }

@@ -162,7 +162,7 @@ fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
             for (k, v) in map {
                 arg[0] = *k;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 let b = vm.stack_pop();
                 if vm.val_to_bool(b) {
                     res.insert(k.clone(), v.clone());
@@ -173,7 +173,7 @@ fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
             for (k, v) in map.iter() {
                 arg[0] = k.0;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 let b = vm.stack_pop();
                 if vm.val_to_bool(b) {
                     res.insert(k.0, v.clone());
@@ -261,14 +261,14 @@ fn each_value(vm: &mut VM, args: &Args) -> VMResult {
         HashInfo::Map(map) => {
             for (_, v) in map {
                 arg[0] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }
         HashInfo::IdentMap(map) => {
             for (_, v) in map {
                 arg[0] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }
@@ -290,14 +290,14 @@ fn each_key(vm: &mut VM, args: &Args) -> VMResult {
         HashInfo::Map(map) => {
             for (k, _v) in map {
                 arg[0] = *k;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }
         HashInfo::IdentMap(map) => {
             for (k, _v) in map {
                 arg[0] = **k;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }
@@ -320,7 +320,7 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
             for (k, v) in map {
                 arg[0] = *k;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }
@@ -328,7 +328,7 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
             for (k, v) in map {
                 arg[0] = k.0;
                 arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg, None)?;
+                vm.vm_run(iseq, Some(context), &arg)?;
                 vm.stack_pop();
             }
         }

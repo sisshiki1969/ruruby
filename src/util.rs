@@ -161,7 +161,7 @@ impl SourceInfo {
                 continue;
             }
             if !found {
-                eprintln!("line: {}", line.0)
+                eprintln!("{}:{}", self.path.to_string_lossy(), line.0);
             };
             found = true;
             eprintln!(
@@ -200,7 +200,7 @@ impl SourceInfo {
                 .map(|x| calc_width(x))
                 .sum();
             let is_cr = loc.1 as usize >= self.code.len() || self.code[loc.1 as usize] == '\n';
-            eprintln!("line: {}", line.0);
+            eprintln!("{}:{}", self.path.to_string_lossy(), line.0);
             eprintln!(
                 "{}",
                 if !is_cr {

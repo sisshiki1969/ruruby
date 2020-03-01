@@ -775,7 +775,7 @@ impl Codegen {
                     Inst::DEF_METHOD => {
                         format!("DEF_METHOD '{}'", ident_name(globals, iseq, pc + 1))
                     }
-                    Inst::DEF_CLASS_METHOD => {
+                    Inst::DEF_SMETHOD => {
                         format!("DEF_SMETHOD '{}'", ident_name(globals, iseq, pc + 1))
                     }
                     _ => format!("undefined"),
@@ -1467,7 +1467,7 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::ClassMethodDef(id, params, body, lvar) => {
+            NodeKind::SingletonMethodDef(singleton, id, params, body, lvar) => {
                 let methodref = self.gen_iseq(
                     globals,
                     params,
@@ -1477,7 +1477,8 @@ impl Codegen {
                     ContextKind::Method,
                     Some(*id),
                 )?;
-                iseq.push(Inst::DEF_CLASS_METHOD);
+                self.gen(globals, iseq, singleton, true)?;
+                iseq.push(Inst::DEF_SMETHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
                 if !use_value {

@@ -23,6 +23,10 @@ pub enum ObjKind {
 }
 
 impl ObjectInfo {
+    pub fn id(&self) -> u64 {
+        self as *const ObjectInfo as u64
+    }
+
     pub fn as_ref(&self) -> ObjectRef {
         Ref(unsafe {
             core::ptr::NonNull::new_unchecked(self as *const ObjectInfo as *mut ObjectInfo)
@@ -120,11 +124,13 @@ impl ObjectInfo {
 
 pub type ObjectRef = Ref<ObjectInfo>;
 
-impl ObjectRef {
+impl ObjectInfo {
+    /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.
     pub fn class(&self) -> Value {
         self.class
     }
 
+    /// Return a "real" class of the object.
     pub fn search_class(&self) -> Value {
         let mut class = self.class;
         loop {
@@ -136,6 +142,7 @@ impl ObjectRef {
         }
     }
 
+    /// Set a class for the object.
     pub fn set_class(&mut self, class: Value) {
         self.class = class;
     }
@@ -290,7 +297,7 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
         for i in 0..param_num {
             args.push(context.get_lvar(LvarId::from_usize(i)));
         }
-        vm.eval_send(method, &args, None)?;
+        vm.eval_send(method, &args)?;
         Ok(vm.stack_pop())
     } else {
         return Err(vm.error_nomethod("super called outside of method"));
@@ -318,7 +325,7 @@ fn send(vm: &mut VM, args: &Args) -> VMResult {
     }
     new_args.self_value = args.self_value;
     new_args.block = args.block;
-    vm.eval_send(method, &new_args, None)?;
+    vm.eval_send(method, &new_args)?;
     let res = vm.stack_pop();
     Ok(res)
 }
@@ -329,7 +336,7 @@ fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
         Some(block) => block,
         None => return Err(vm.error_argument("Yield needs block.")),
     };
-    vm.eval_send(method, &args, None)?;
+    vm.eval_send(method, &args)?;
     let res = vm.stack_pop();
     Ok(res)
 }
@@ -344,7 +351,7 @@ fn eval(vm: &mut VM, args: &Args) -> VMResult {
     let iseq = vm.get_iseq(method)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);
-    vm.vm_run(iseq, Some(context), &args, None)?;
+    vm.vm_run(iseq, Some(context), &args)?;
     let res = vm.stack_pop();
     Ok(res)
 }

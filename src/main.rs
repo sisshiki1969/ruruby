@@ -64,7 +64,6 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
             err.show_err();
             for i in 0..err.info.len() {
                 eprint!("{}:", i);
-                err.show_file_name(i);
                 err.show_loc(i);
             }
         }

@@ -243,7 +243,7 @@ pub fn method_call(vm: &mut VM, args: &Args) -> VMResult {
     };
     let mut args = args.clone();
     args.self_value = method.receiver;
-    vm.eval_send(method.method, &args, None)?;
+    vm.eval_send(method.method, &args)?;
     let res = vm.stack_pop();
     Ok(res)
 }

@@ -103,6 +103,14 @@ impl VM {
             };
         }
 
+        macro_rules! set_class {
+            ($name:expr, $class_object:expr) => {
+                let id = globals.get_ident_id($name);
+                let object = $class_object;
+                globals.builtins.object.set_var(id, object);
+            };
+        }
+
         set_builtin_class!("Object", object);
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
@@ -115,21 +123,10 @@ impl VM {
         set_builtin_class!("Method", method);
         set_builtin_class!("Regexp", regexp);
 
-        let id = globals.get_ident_id("Math");
-        let math = init_math(&mut globals);
-        globals.builtins.object.set_var(id, math);
-
-        let id = globals.get_ident_id("File");
-        let file = file::init_file(&mut globals);
-        globals.builtins.object.set_var(id, file);
-
-        let id = globals.get_ident_id("Process");
-        let file = process::init_process(&mut globals);
-        globals.builtins.object.set_var(id, file);
-
-        let id = globals.get_ident_id("StandardError");
-        let class = Value::class(&globals, globals.class_class);
-        globals.builtins.object.set_var(id, class);
+        set_class!("Math", math::init_math(&mut globals));
+        set_class!("File", file::init_file(&mut globals));
+        set_class!("Process", process::init_process(&mut globals));
+        set_class!("StandardError", Value::class(&globals, globals.class_class));
 
         let mut vm = VM {
             globals,
@@ -166,7 +163,7 @@ impl VM {
     pub fn clear(&mut self) {
         self.exec_stack.clear();
         self.class_stack.clear();
-        self.define_mode.clear();
+        self.define_mode = vec![DefineMode::default()];
         self.context_stack.clear();
     }
 
@@ -309,7 +306,7 @@ impl VM {
             None => self.globals.main_object,
         };
         let arg = Args::new0(self_value, None);
-        self.vm_run(iseq, None, &arg, None)?;
+        self.vm_run(iseq, None, &arg)?;
         let val = self.stack_pop();
         #[cfg(feature = "perf")]
         {
@@ -370,10 +367,10 @@ impl VM {
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args: &Args,
-        kw_arg: Option<Value>,
+        //kw_arg: Option<Value>,
     ) -> Result<(), RubyError> {
         let kw = if iseq.keyword_params.is_empty() {
-            kw_arg
+            args.kw_arg
         } else {
             None
         };
@@ -394,7 +391,7 @@ impl VM {
                 None => Value::nil(),
             }
         }
-        match kw_arg {
+        match args.kw_arg {
             Some(kw_arg) if kw.is_none() => {
                 let keyword = kw_arg.as_hash().unwrap();
                 match keyword.inner() {
@@ -783,7 +780,7 @@ impl VM {
                                 }
                                 ObjKind::Method(mref) => {
                                     args.self_value = mref.receiver;
-                                    self.eval_send(mref.method, &args, None)?;
+                                    self.eval_send(mref.method, &args)?;
                                 }
                                 _ => return Err(self.error_undefined_method("[]", receiver)),
                             };
@@ -915,7 +912,8 @@ impl VM {
                         None
                     };
                     args.block = block;
-                    try_err!(self, self.eval_send(methodref, &args, keyword));
+                    args.kw_arg = keyword;
+                    try_err!(self, self.eval_send(methodref, &args));
                     self.pc += 21;
                 }
                 Inst::SEND_SELF => {
@@ -942,7 +940,8 @@ impl VM {
                         None
                     };
                     args.block = block;
-                    try_err!(self, self.eval_send(methodref, &args, keyword));
+                    args.kw_arg = keyword;
+                    try_err!(self, self.eval_send(methodref, &args));
                     self.pc += 21;
                 }
                 Inst::DEF_CLASS => {
@@ -998,7 +997,7 @@ impl VM {
                     class_stack.reverse();
                     iseq.class_stack = Some(class_stack);
                     let arg = Args::new0(val, None);
-                    try_err!(self, self.eval_send(method, &arg, None));
+                    try_err!(self, self.eval_send(method, &arg));
                     self.pc += 10;
                     self.class_pop();
                 }
@@ -1011,19 +1010,20 @@ impl VM {
                     iseq.class_stack = Some(class_stack);
                     self.define_method(id, method);
                     if self.define_mode().module_function {
-                        self.define_singleton_method(id, method)?;
+                        self.define_singleton_method(self.class(), id, method)?;
                     };
                     self.stack_push(Value::symbol(id));
                     self.pc += 9;
                 }
-                Inst::DEF_CLASS_METHOD => {
+                Inst::DEF_SMETHOD => {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
                     let mut class_stack = self.class_stack.clone();
                     class_stack.reverse();
                     iseq.class_stack = Some(class_stack);
-                    self.define_singleton_method(id, method)?;
+                    let singleton = self.stack_pop();
+                    self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
                         self.define_method(id, method);
                     };
@@ -1318,7 +1318,7 @@ impl VM {
         match l_ref.get_instance_method(method) {
             Some(mref) => {
                 let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(mref.clone(), &arg, None)?;
+                self.eval_send(mref.clone(), &arg)?;
                 Ok(())
             }
             None => {
@@ -1345,7 +1345,7 @@ impl VM {
                     let cache = self.read32(iseq, 1);
                     let methodref = self.get_method_from_cache(cache, lhs, IdentId::_ADD)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    return self.eval_send(methodref, &arg, None);
+                    return self.eval_send(methodref, &arg);
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs + rhs),
@@ -1452,7 +1452,7 @@ impl VM {
                     let cache = self.read32(iseq, 1);
                     let methodref = self.get_method_from_cache(cache, lhs, IdentId::_MUL)?;
                     let arg = Args::new1(lhs, None, rhs);
-                    self.eval_send(methodref, &arg, None)?;
+                    self.eval_send(methodref, &arg)?;
                     return Ok(());
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
@@ -1531,10 +1531,10 @@ impl VM {
                 (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs.powf(rhs)),
                 (RValue::Object(l_ref), _) => {
                     let method = IdentId::_POW;
-                    match l_ref.as_ref().get_instance_method(method) {
+                    match l_ref.get_instance_method(method) {
                         Some(mref) => {
                             let arg = Args::new1(lhs, None, rhs);
-                            self.eval_send(mref.clone(), &arg, None)?;
+                            self.eval_send(mref.clone(), &arg)?;
                         }
                         None => return Err(self.error_undefined_op("**", rhs, lhs)),
                     };
@@ -1558,7 +1558,7 @@ impl VM {
                 let cache = self.read32(iseq, 1);
                 let methodref = self.get_method_from_cache(cache, lhs, IdentId::_SHL)?;
                 let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(methodref, &arg, None)
+                self.eval_send(methodref, &arg)
             }
             None => match (lhs.unpack(), rhs.unpack()) {
                 (RValue::FixNum(lhs), RValue::FixNum(rhs)) => {
@@ -1697,7 +1697,7 @@ impl VM {
             RValue::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
-                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.as_ref().search_class().as_class().name), oref}
+                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.search_class().as_class().name), oref}
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
@@ -1722,16 +1722,8 @@ impl VM {
     }
 
     pub fn val_pp(&self, val: Value) -> String {
-        match val.unpack() {
-            RValue::Nil => "nil".to_string(),
-            RValue::String(s) => match s {
-                RString::Str(s) => format!("\"{}\"", s),
-                RString::Bytes(b) => match String::from_utf8(b) {
-                    Ok(s) => format!("\"{}\"", s),
-                    Err(_) => "<ByteArray>".to_string(),
-                },
-            },
-            RValue::Object(oref) => match oref.kind {
+        match val.is_object() {
+            Some(mut oref) => match oref.kind {
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
@@ -1793,8 +1785,8 @@ impl VM {
                     }
                 },
                 ObjKind::Ordinary => {
-                    let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.as_ref().search_class().as_class().name), oref.as_ref().id()};
-                    for (k, v) in oref.as_ref().var_table() {
+                    let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.search_class().as_class().name), oref.id()};
+                    for (k, v) in oref.var_table() {
                         s = format!(
                             "{} {}={}",
                             s,
@@ -1806,7 +1798,17 @@ impl VM {
                 }
                 _ => self.val_to_s(val),
             },
-            _ => self.val_to_s(val),
+            None => match val.unpack() {
+                RValue::Nil => "nil".to_string(),
+                RValue::String(s) => match s {
+                    RString::Str(s) => format!("\"{}\"", s),
+                    RString::Bytes(b) => match String::from_utf8(b) {
+                        Ok(s) => format!("\"{}\"", s),
+                        Err(_) => "<ByteArray>".to_string(),
+                    },
+                },
+                _ => self.val_to_s(val),
+            },
         }
     }
 }
@@ -1816,7 +1818,7 @@ impl VM {
         &mut self,
         methodref: MethodRef,
         args: &Args,
-        keyword: Option<Value>,
+        //keyword: Option<Value>,
     ) -> Result<(), RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
@@ -1854,7 +1856,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                self.vm_run(iseq, None, &args, keyword)?;
+                self.vm_run(iseq, None, &args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
@@ -1871,7 +1873,7 @@ impl VM {
 
 impl VM {
     pub fn define_method(&mut self, id: IdentId, method: MethodRef) {
-        if self.class_stack.len() == 0 {
+        if self.context_stack.len() == 1 {
             // A method defined in "top level" is registered as an object method.
             self.add_object_method(id, method);
         } else {
@@ -1882,16 +1884,17 @@ impl VM {
 
     pub fn define_singleton_method(
         &mut self,
+        obj: Value,
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        if self.class_stack.len() == 0 {
+        if self.context_stack.len() == 1 {
             // A method defined in "top level" is registered as an object method.
             self.add_object_method(id, method);
             Ok(())
         } else {
             // A method defined in a class definition is registered as an instance method of the class.
-            self.add_singleton_method(self.class(), id, method)
+            self.add_singleton_method(obj, id, method)
         }
     }
 
@@ -1918,24 +1921,34 @@ impl VM {
         obj.as_module().unwrap().method_table.insert(id, info)
     }
 
+    pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
+        self.add_instance_method(self.globals.builtins.object, id, info);
+    }
+
     pub fn get_instance_method(
         &self,
         mut class: Value,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
         let original_class = class;
+        let mut singleton_flag = original_class.as_class().is_singleton;
         loop {
             match class.get_instance_method(method) {
                 Some(methodref) => return Ok(methodref),
                 None => match class.superclass() {
                     Some(superclass) => class = superclass,
                     None => {
-                        let method_name = self.globals.get_ident_name(method);
-                        return Err(self.error_nomethod(format!(
-                            "no method `{}' found for {}",
-                            method_name,
-                            self.val_pp(original_class)
-                        )));
+                        if singleton_flag {
+                            singleton_flag = false;
+                            class = original_class.as_object().class();
+                        } else {
+                            let method_name = self.globals.get_ident_name(method);
+                            return Err(self.error_nomethod(format!(
+                                "no method `{}' found for {}",
+                                method_name,
+                                self.val_pp(original_class)
+                            )));
+                        }
                     }
                 },
             };
@@ -1947,10 +1960,6 @@ impl VM {
             Some(info) => Ok(info.clone()),
             None => return Err(self.error_unimplemented("Method not defined.")),
         }
-    }
-
-    pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.add_instance_method(self.globals.builtins.object, id, info);
     }
 
     pub fn get_singleton_class(&mut self, obj: Value) -> VMResult {

@@ -109,7 +109,7 @@ fn range_map(vm: &mut VM, args: &Args) -> VMResult {
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg, None)?;
+        vm.vm_run(iseq, Some(context), &arg)?;
         res.push(vm.stack_pop());
     }
     let res = Value::array_from(&vm.globals, res);
@@ -127,7 +127,7 @@ fn range_each(vm: &mut VM, args: &Args) -> VMResult {
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg, None)?;
+        vm.vm_run(iseq, Some(context), &arg)?;
         vm.stack_pop();
     }
     Ok(args.self_value)
@@ -144,7 +144,7 @@ fn range_all(vm: &mut VM, args: &Args) -> VMResult {
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg, None)?;
+        vm.vm_run(iseq, Some(context), &arg)?;
         let res = vm.stack_pop();
         if !vm.val_to_bool(res) {
             return Ok(Value::false_val());
