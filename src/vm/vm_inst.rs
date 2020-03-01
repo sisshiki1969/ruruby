@@ -26,52 +26,53 @@ impl Inst {
     pub const BIT_AND: u8 = 24;
     pub const BIT_XOR: u8 = 25;
     pub const BIT_NOT: u8 = 26;
+    pub const POW: u8 = 27;
 
-    pub const ADDI: u8 = 27;
-    pub const SUBI: u8 = 28;
-    pub const POW: u8 = 29;
+    pub const ADDI: u8 = 30;
+    pub const SUBI: u8 = 31;
+    pub const IVAR_ADDI: u8 = 32;
 
-    pub const SET_LOCAL: u8 = 30;
-    pub const GET_LOCAL: u8 = 31;
-    pub const GET_CONST: u8 = 32;
-    pub const SET_CONST: u8 = 33;
-    pub const GET_CONST_TOP: u8 = 34;
-    pub const GET_SCOPE: u8 = 35;
+    pub const SET_LOCAL: u8 = 40;
+    pub const GET_LOCAL: u8 = 41;
+    pub const GET_CONST: u8 = 42;
+    pub const SET_CONST: u8 = 43;
+    pub const GET_CONST_TOP: u8 = 44;
+    pub const GET_SCOPE: u8 = 45;
 
-    pub const GET_INSTANCE_VAR: u8 = 36;
-    pub const SET_INSTANCE_VAR: u8 = 37;
-    pub const GET_GLOBAL_VAR: u8 = 90;
-    pub const SET_GLOBAL_VAR: u8 = 91;
-    pub const GET_ARRAY_ELEM: u8 = 38;
-    pub const SET_ARRAY_ELEM: u8 = 39;
+    pub const GET_INSTANCE_VAR: u8 = 46;
+    pub const SET_INSTANCE_VAR: u8 = 47;
+    pub const GET_GLOBAL_VAR: u8 = 48;
+    pub const SET_GLOBAL_VAR: u8 = 49;
+    pub const GET_ARRAY_ELEM: u8 = 50;
+    pub const SET_ARRAY_ELEM: u8 = 51;
 
-    pub const SEND: u8 = 40;
-    pub const SEND_SELF: u8 = 41;
+    pub const CHECK_LOCAL: u8 = 52;
 
-    pub const CHECK_LOCAL: u8 = 42;
+    pub const SEND: u8 = 60;
+    pub const SEND_SELF: u8 = 61;
 
-    pub const CREATE_RANGE: u8 = 50;
-    pub const CREATE_ARRAY: u8 = 51;
-    pub const CREATE_PROC: u8 = 52;
-    pub const CREATE_HASH: u8 = 53;
-    pub const CREATE_REGEXP: u8 = 54;
+    pub const CREATE_RANGE: u8 = 70;
+    pub const CREATE_ARRAY: u8 = 71;
+    pub const CREATE_PROC: u8 = 72;
+    pub const CREATE_HASH: u8 = 73;
+    pub const CREATE_REGEXP: u8 = 74;
 
-    pub const POP: u8 = 60;
-    pub const DUP: u8 = 63;
-    pub const TAKE: u8 = 64;
-    pub const SPLAT: u8 = 65;
-    pub const CONCAT_STRING: u8 = 61;
-    pub const TO_S: u8 = 62;
+    pub const POP: u8 = 80;
+    pub const DUP: u8 = 81;
+    pub const TAKE: u8 = 82;
+    pub const SPLAT: u8 = 83;
+    pub const CONCAT_STRING: u8 = 84;
+    pub const TO_S: u8 = 85;
 
-    pub const DEF_CLASS: u8 = 70;
-    pub const DEF_METHOD: u8 = 71;
-    pub const DEF_SMETHOD: u8 = 72;
+    pub const DEF_CLASS: u8 = 90;
+    pub const DEF_METHOD: u8 = 91;
+    pub const DEF_SMETHOD: u8 = 92;
 
-    pub const JMP: u8 = 80;
-    pub const JMP_IF_FALSE: u8 = 81;
-    pub const END: u8 = 0;
-    pub const RETURN: u8 = 82;
-    pub const OPT_CASE: u8 = 83;
+    pub const JMP: u8 = 100;
+    pub const JMP_IF_FALSE: u8 = 101;
+    pub const END: u8 = 102;
+    pub const RETURN: u8 = 103;
+    pub const OPT_CASE: u8 = 104;
 }
 
 #[allow(dead_code)]
@@ -104,10 +105,11 @@ impl Inst {
             Inst::BIT_AND => "BIT_AND",
             Inst::BIT_XOR => "BIT_XOR",
             Inst::BIT_NOT => "BIT_NOT",
+            Inst::POW => "POW",
 
             Inst::ADDI => "ADDI",
             Inst::SUBI => "SUBI",
-            Inst::POW => "POW",
+            Inst::IVAR_ADDI => "IVAR_ADDI",
 
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
@@ -215,7 +217,8 @@ impl Inst {
             | Inst::GET_LOCAL
             | Inst::DEF_METHOD
             | Inst::DEF_SMETHOD
-            | Inst::OPT_CASE => 9,
+            | Inst::OPT_CASE
+            | Inst::IVAR_ADDI => 9,
             Inst::DEF_CLASS => 10,
             Inst::SEND | Inst::SEND_SELF => 21,
             _ => 1,

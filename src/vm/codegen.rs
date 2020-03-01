@@ -273,9 +273,7 @@ impl Codegen {
     }
 
     fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
-        let len = self.context_stack.len();
-        for i in 0..len {
-            let context = &self.context_stack[len - i - 1];
+        for (i, context) in self.context_stack.iter().rev().enumerate() {
             match context.lvar_info.get(&id) {
                 Some(id) => return Some((i as u32, id.clone())),
                 None => {}
@@ -295,6 +293,15 @@ impl Codegen {
     fn gen_set_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_INSTANCE_VAR);
         self.push32(iseq, id.into());
+    }
+
+    fn gen_ivar_addi(&mut self, iseq: &mut ISeq, id: IdentId, val: u32, use_value: bool) {
+        iseq.push(Inst::IVAR_ADDI);
+        self.push32(iseq, id.into());
+        self.push32(iseq, val);
+        if use_value {
+            self.gen_get_instance_var(iseq, id);
+        }
     }
 
     fn gen_get_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -975,11 +982,11 @@ impl Codegen {
             NodeKind::BinOp(op, lhs, rhs) => {
                 let loc = self.loc;
                 match op {
-                    BinOp::Add => match rhs.kind {
-                        NodeKind::Integer(i) if i as u64 as u32 as i32 as i64 == i => {
+                    BinOp::Add => match (&lhs.kind, &rhs.kind) {
+                        (_, NodeKind::Integer(i)) if *i as i32 as i64 == *i => {
                             self.gen(globals, iseq, lhs, true)?;
                             self.save_loc(iseq, loc);
-                            self.gen_addi(iseq, i as u64 as u32 as i32);
+                            self.gen_addi(iseq, *i as i32);
                         }
                         _ => {
                             self.gen(globals, iseq, lhs, true)?;
@@ -989,10 +996,10 @@ impl Codegen {
                         }
                     },
                     BinOp::Sub => match rhs.kind {
-                        NodeKind::Integer(i) if i as u64 as u32 as i32 as i64 == i => {
+                        NodeKind::Integer(i) if i as i32 as i64 == i => {
                             self.gen(globals, iseq, lhs, true)?;
                             self.save_loc(iseq, loc);
-                            self.gen_subi(iseq, i as u64 as u32 as i32);
+                            self.gen_subi(iseq, i as i32);
                         }
                         _ => {
                             self.gen(globals, iseq, lhs, true)?;
@@ -1348,18 +1355,48 @@ impl Codegen {
                     }
                 });
                 if lhs_len == rhs_len && !splat_flag {
-                    for rhs in mrhs.iter().rev() {
-                        self.gen(globals, iseq, rhs, true)?;
+                    if lhs_len == 1 {
+                        match (&mlhs[0].kind, &mrhs[0].kind) {
+                            (
+                                NodeKind::InstanceVar(id1),
+                                NodeKind::BinOp(
+                                    BinOp::Add,
+                                    box Node {
+                                        kind: NodeKind::InstanceVar(id2),
+                                        ..
+                                    },
+                                    box Node {
+                                        kind: NodeKind::Integer(i),
+                                        ..
+                                    },
+                                ),
+                            ) if *id1 == *id2 && *i as i32 as i64 == *i => {
+                                let loc = mlhs[0].loc.merge(mrhs[0].loc);
+                                self.save_loc(iseq, loc);
+                                self.gen_ivar_addi(iseq, *id1, *i as i32 as u32, use_value);
+                            }
+                            _ => {
+                                self.gen(globals, iseq, &mrhs[0], true)?;
+                                if use_value {
+                                    self.gen_dup(iseq, 1);
+                                };
+                                self.gen_assign(globals, iseq, &mlhs[0])?;
+                            }
+                        }
+                    } else {
+                        for rhs in mrhs.iter().rev() {
+                            self.gen(globals, iseq, rhs, true)?;
+                        }
+                        if use_value {
+                            self.gen_dup(iseq, rhs_len);
+                        }
+                        for lhs in mlhs {
+                            self.gen_assign(globals, iseq, lhs)?;
+                        }
+                        if use_value && rhs_len != 1 {
+                            self.gen_create_array(iseq, rhs_len);
+                        };
                     }
-                    if use_value {
-                        self.gen_dup(iseq, rhs_len);
-                    }
-                    for lhs in mlhs {
-                        self.gen_assign(globals, iseq, lhs)?;
-                    }
-                    if use_value && rhs_len != 1 {
-                        self.gen_create_array(iseq, rhs_len);
-                    };
                 } else if lhs_len == 1 {
                     for rhs in mrhs.iter().rev() {
                         self.gen(globals, iseq, rhs, true)?;

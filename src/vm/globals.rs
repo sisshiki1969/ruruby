@@ -264,9 +264,7 @@ impl Globals {
                 class,
                 version,
                 method,
-            }) if class.id() == rec_class.id() && *version == self.class_version && false => {
-                Some(*method)
-            }
+            }) if class.id() == rec_class.id() && *version == self.class_version => Some(*method),
             _ => None,
         }
     }

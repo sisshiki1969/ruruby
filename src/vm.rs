@@ -363,11 +363,9 @@ impl VM {
     /// Create new context from given args, and run vm on the context.
     pub fn vm_run(
         &mut self,
-        //self_value: Value,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args: &Args,
-        //kw_arg: Option<Value>,
     ) -> Result<(), RubyError> {
         let kw = if iseq.keyword_params.is_empty() {
             args.kw_arg
@@ -431,7 +429,6 @@ impl VM {
             prev_context.stack_len = self.exec_stack.len();
         };
         self.context_stack.push(context);
-        //let old_pc = self.pc;
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
@@ -708,20 +705,36 @@ impl VM {
                 }
                 Inst::SET_INSTANCE_VAR => {
                     let var_id = self.read_id(iseq, 1);
-                    //let mut self_obj = self.context().self_value.as_object();
                     let new_val = self.stack_pop();
                     self_oref.set_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_INSTANCE_VAR => {
                     let var_id = self.read_id(iseq, 1);
-                    //let self_obj = self.context().self_value.as_object();
                     let val = match self_oref.get_var(var_id) {
                         Some(val) => val.clone(),
                         None => Value::nil(),
                     };
                     self.stack_push(val);
                     self.pc += 5;
+                }
+                Inst::IVAR_ADDI => {
+                    let var_id = self.read_id(iseq, 1);
+                    let i = self.read32(iseq, 5) as i32;
+                    match self_oref.get_mut_var(var_id) {
+                        Some(val) => {
+                            self.eval_addi(*val, i)?;
+                            let new_val = self.stack_pop();
+                            *val = new_val;
+                        }
+                        None => {
+                            self.eval_addi(Value::nil(), i)?;
+                            let new_val = self.stack_pop();
+                            self_oref.set_var(var_id, new_val);
+                        }
+                    };
+
+                    self.pc += 9;
                 }
                 Inst::SET_GLOBAL_VAR => {
                     let var_id = self.read_id(iseq, 1);
@@ -993,9 +1006,7 @@ impl VM {
 
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
-                    let mut class_stack = self.class_stack.clone();
-                    class_stack.reverse();
-                    iseq.class_stack = Some(class_stack);
+                    iseq.class_stack = Some(self.gen_class_stack(val));
                     let arg = Args::new0(val, None);
                     try_err!(self, self.eval_send(method, &arg));
                     self.pc += 10;
@@ -1005,9 +1016,7 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    let mut class_stack = self.class_stack.clone();
-                    class_stack.reverse();
-                    iseq.class_stack = Some(class_stack);
+                    iseq.class_stack = Some(self.gen_class_stack(None));
                     self.define_method(id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self.class(), id, method)?;
@@ -1019,8 +1028,7 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    let mut class_stack = self.class_stack.clone();
-                    class_stack.reverse();
+                    let class_stack = self.gen_class_stack(None);
                     iseq.class_stack = Some(class_stack);
                     let singleton = self.stack_pop();
                     self.define_singleton_method(singleton, id, method)?;
@@ -1225,8 +1233,7 @@ impl VM {
             .1
     }
 
-    // Search class stack for the constant.
-    fn get_env_const(&self, id: IdentId) -> Option<Value> {
+    fn get_nearest_class_stack(&self) -> Option<&Vec<Value>> {
         let mut class_stack = None;
         for context in self.context_stack.iter().rev() {
             match context.iseq_ref.class_stack.as_ref() {
@@ -1237,13 +1244,32 @@ impl VM {
                 None => {}
             }
         }
+        class_stack
+    }
+
+    fn gen_class_stack(&self, new_class: impl Into<Option<Value>>) -> Vec<Value> {
+        let new_class = new_class.into();
+        let mut class_stack = match self.get_nearest_class_stack() {
+            Some(stack) => stack.clone(),
+            None => vec![],
+        };
+        match new_class {
+            Some(class) => class_stack.insert(0, class),
+            None => {}
+        };
+        class_stack
+    }
+
+    // Search class stack for the constant.
+    fn get_env_const(&self, id: IdentId) -> Option<Value> {
+        let class_stack = self.get_nearest_class_stack();
         let class_stack = match class_stack {
             Some(stack) => stack,
             None => return None,
         };
         for class in class_stack {
             match class.get_var(id) {
-                Some(val) => return Some(val.clone()),
+                Some(val) => return Some(val),
                 None => {}
             }
         }
@@ -1842,7 +1868,7 @@ impl VM {
             }
             MethodInfo::AttrReader { id } => match args.self_value.is_object() {
                 Some(oref) => match oref.get_var(*id) {
-                    Some(v) => v.clone(),
+                    Some(v) => v,
                     None => Value::nil(),
                 },
                 None => unreachable!("AttrReader must be used only for class instance."),

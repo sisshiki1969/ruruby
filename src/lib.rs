@@ -1,4 +1,5 @@
 //#![feature(test)]
+#![feature(box_patterns)]
 extern crate regex;
 pub mod builtin;
 pub mod error;
