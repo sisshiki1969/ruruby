@@ -153,7 +153,7 @@ impl Codegen {
 
     fn gen_add(&mut self, iseq: &mut ISeq, globals: &mut Globals) {
         iseq.push(Inst::ADD);
-        self.push32(iseq, globals.add_method_cache_entry() as u32);
+        self.push32(iseq, globals.add_inline_cache_entry() as u32);
     }
 
     fn gen_addi(&mut self, iseq: &mut ISeq, i: i32) {
@@ -351,7 +351,7 @@ impl Codegen {
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
         self.push32(iseq, kw_args_num as u32);
-        self.push32(iseq, globals.add_method_cache_entry() as u32);
+        self.push32(iseq, globals.add_inline_cache_entry() as u32);
         self.push32(
             iseq,
             match block {
@@ -376,7 +376,7 @@ impl Codegen {
         self.push32(iseq, method.into());
         self.push32(iseq, args_num as u32);
         self.push32(iseq, kw_args_num as u32);
-        self.push32(iseq, globals.add_method_cache_entry() as u32);
+        self.push32(iseq, globals.add_inline_cache_entry() as u32);
         self.push32(
             iseq,
             match block {
@@ -1013,7 +1013,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::MUL);
-                        self.push32(iseq, globals.add_method_cache_entry() as u32);
+                        self.push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::Div => {
                         self.gen(globals, iseq, lhs, true)?;
@@ -1044,7 +1044,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::SHL);
-                        self.push32(iseq, globals.add_method_cache_entry() as u32);
+                        self.push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::BitOr => {
                         self.gen(globals, iseq, lhs, true)?;

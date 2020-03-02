@@ -511,7 +511,8 @@ impl VM {
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    self.eval_addi(lhs, i)?;
+                    let val = self.eval_addi(lhs, i)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SUB => {
@@ -723,13 +724,11 @@ impl VM {
                     let i = self.read32(iseq, 5) as i32;
                     match self_oref.get_mut_var(var_id) {
                         Some(val) => {
-                            self.eval_addi(*val, i)?;
-                            let new_val = self.stack_pop();
+                            let new_val = self.eval_addi(*val, i)?;
                             *val = new_val;
                         }
                         None => {
-                            self.eval_addi(Value::nil(), i)?;
-                            let new_val = self.stack_pop();
+                            let new_val = self.eval_addi(Value::nil(), i)?;
                             self_oref.set_var(var_id, new_val);
                         }
                     };
@@ -1323,12 +1322,15 @@ impl VM {
         if rec_class.is_nil() {
             return Err(self.error_unimplemented("receiver's class in nil."));
         };
-        match self.globals.get_method_from_cache(cache_slot, rec_class) {
+        match self
+            .globals
+            .get_method_from_inline_cache(cache_slot, rec_class)
+        {
             Some(method) => Ok(method),
             _ => {
                 let method = self.get_instance_method(rec_class, method_id)?;
                 self.globals
-                    .set_method_cache_entry(cache_slot, rec_class, method);
+                    .set_inline_cache_entry(cache_slot, rec_class, method);
                 Ok(method)
             }
         }
@@ -1386,7 +1388,7 @@ impl VM {
         Ok(())
     }
 
-    fn eval_addi(&mut self, lhs: Value, i: i32) -> Result<(), RubyError> {
+    fn eval_addi(&mut self, lhs: Value, i: i32) -> Result<Value, RubyError> {
         let val = if lhs.is_packed_fixnum() {
             Value::fixnum(lhs.as_packed_fixnum() + i as i64)
         } else if lhs.is_packed_num() {
@@ -1396,18 +1398,18 @@ impl VM {
                 RValue::FixNum(lhs) => Value::fixnum(lhs + i as i64),
                 RValue::FloatNum(lhs) => Value::flonum(lhs + i as f64),
                 RValue::Object(l_ref) => {
-                    return self.fallback_to_method(
+                    self.fallback_to_method(
                         IdentId::_ADD,
                         lhs,
                         Value::fixnum(i as i64),
                         l_ref.as_ref(),
-                    )
+                    )?;
+                    return Ok(self.stack_pop());
                 }
                 _ => return Err(self.error_undefined_op("+", Value::fixnum(i as i64), lhs)),
             }
         };
-        self.stack_push(val);
-        Ok(())
+        Ok(val)
     }
 
     fn eval_sub(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -1952,15 +1954,32 @@ impl VM {
     }
 
     pub fn get_instance_method(
-        &self,
+        &mut self,
         mut class: Value,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
+        match self.globals.get_method_cache_entry(class, method) {
+            Some(MethodCacheEntry { version, method }) => {
+                if *version == self.globals.class_version {
+                    return Ok(*method);
+                }
+            }
+            None => {}
+        };
+        /*eprintln!(
+            "SEARCH {} {}",
+            self.val_pp(class),
+            self.globals.get_ident_name(method)
+        );*/
         let original_class = class;
         let mut singleton_flag = original_class.as_class().is_singleton;
         loop {
             match class.get_instance_method(method) {
-                Some(methodref) => return Ok(methodref),
+                Some(methodref) => {
+                    self.globals
+                        .add_method_cache_entry(original_class, method, methodref);
+                    return Ok(methodref);
+                }
                 None => match class.superclass() {
                     Some(superclass) => class = superclass,
                     None => {
@@ -1978,13 +1997,6 @@ impl VM {
                     }
                 },
             };
-        }
-    }
-
-    pub fn get_object_method(&self, method: IdentId) -> Result<MethodRef, RubyError> {
-        match self.globals.get_object_method(method) {
-            Some(info) => Ok(info.clone()),
-            None => return Err(self.error_unimplemented("Method not defined.")),
         }
     }
 

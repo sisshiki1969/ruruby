@@ -5,6 +5,7 @@ pub struct Globals {
     // Global info
     pub ident_table: IdentifierTable,
     method_table: GlobalMethodTable,
+    inline_cache: InlineCache,
     method_cache: MethodCache,
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
@@ -74,6 +75,7 @@ impl Globals {
         let mut globals = Globals {
             ident_table,
             method_table: GlobalMethodTable::new(),
+            inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
             instant: std::time::Instant::now(),
             class_version: 0,
@@ -126,10 +128,6 @@ impl Globals {
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
         self.object_class.method_table.insert(id, info);
-    }
-
-    pub fn get_object_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.builtins.object.get_instance_method(id)
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
@@ -238,35 +236,46 @@ impl Globals {
 }
 
 impl Globals {
-    pub fn set_method_cache_entry(&mut self, id: u32, class: Value, method: MethodRef) {
-        self.method_cache.table[id as usize] = Some(MethodCacheEntry {
+    pub fn set_inline_cache_entry(&mut self, id: u32, class: Value, method: MethodRef) {
+        self.inline_cache.table[id as usize] = Some(InlineCacheEntry {
             class,
             version: self.class_version,
             method,
         });
     }
 
-    pub fn add_method_cache_entry(&mut self) -> u32 {
-        self.method_cache.add_entry()
+    pub fn add_inline_cache_entry(&mut self) -> u32 {
+        self.inline_cache.add_entry()
     }
 
-    fn get_method_cache_entry(&self, id: u32) -> &Option<MethodCacheEntry> {
-        self.method_cache.get_entry(id)
+    fn get_inline_cache_entry(&self, id: u32) -> &Option<InlineCacheEntry> {
+        self.inline_cache.get_entry(id)
     }
 
-    pub fn get_method_from_cache(
+    pub fn get_method_from_inline_cache(
         &mut self,
         cache_slot: u32,
         rec_class: Value,
     ) -> Option<MethodRef> {
-        match self.get_method_cache_entry(cache_slot) {
-            Some(MethodCacheEntry {
+        match self.get_inline_cache_entry(cache_slot) {
+            Some(InlineCacheEntry {
                 class,
                 version,
                 method,
             }) if class.id() == rec_class.id() && *version == self.class_version => Some(*method),
             _ => None,
         }
+    }
+}
+
+impl Globals {
+    pub fn add_method_cache_entry(&mut self, class: Value, id: IdentId, method: MethodRef) {
+        self.method_cache
+            .add_entry(class, id, self.class_version, method);
+    }
+
+    pub fn get_method_cache_entry(&self, class: Value, id: IdentId) -> Option<&MethodCacheEntry> {
+        self.method_cache.get_entry(class, id)
     }
 }
 
@@ -284,23 +293,61 @@ impl Globals {
     }
 }
 
+//-------------------------------------------------------------------------------------------------------------
+//
+//  Global method cache
+//  This supports method cache.
+//
+//-------------------------------------------------------------------------------------------------------------
+
 #[derive(Debug, Clone)]
+pub struct MethodCache(HashMap<(Value, IdentId), MethodCacheEntry>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
+    pub method: MethodRef,
+    pub version: usize,
+}
+
+impl MethodCache {
+    fn new() -> Self {
+        MethodCache(HashMap::new())
+    }
+
+    fn add_entry(&mut self, class: Value, id: IdentId, version: usize, method: MethodRef) {
+        self.0
+            .insert((class, id), MethodCacheEntry { method, version });
+    }
+
+    fn get_entry(&self, class: Value, id: IdentId) -> Option<&MethodCacheEntry> {
+        self.0.get(&(class, id))
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//
+//  Inline method cache
+//  This supports method cache embedded in the instruction sequence directly.
+//
+//-------------------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct InlineCache {
+    table: Vec<Option<InlineCacheEntry>>,
+    id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct InlineCacheEntry {
     class: Value,
     version: usize,
     //is_class_method: bool,
     method: MethodRef,
 }
 
-#[derive(Debug, Clone)]
-pub struct MethodCache {
-    table: Vec<Option<MethodCacheEntry>>,
-    id: u32,
-}
-
-impl MethodCache {
+impl InlineCache {
     fn new() -> Self {
-        MethodCache {
+        InlineCache {
             table: vec![],
             id: 0,
         }
@@ -311,10 +358,17 @@ impl MethodCache {
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> &Option<MethodCacheEntry> {
+    fn get_entry(&self, id: u32) -> &Option<InlineCacheEntry> {
         &self.table[id as usize]
     }
 }
+
+//-------------------------------------------------------------------------------------------------------------
+//
+//  Case dispatch map
+//  This supports optimization for case syntax when all of the when-conditions were fixnum literals.
+//
+//-------------------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct CaseDispatchMap {
@@ -329,14 +383,17 @@ impl CaseDispatchMap {
             id: 0,
         }
     }
+
     fn new_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(HashMap::new());
         self.id - 1
     }
+
     fn get_entry(&self, id: u32) -> &HashMap<Value, i32> {
         &self.table[id as usize]
     }
+
     fn get_mut_entry(&mut self, id: u32) -> &mut HashMap<Value, i32> {
         &mut self.table[id as usize]
     }
