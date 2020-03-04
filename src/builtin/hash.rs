@@ -7,41 +7,6 @@ pub enum HashInfo {
     IdentMap(HashMap<IdentValue, Value>),
 }
 
-impl HashInfo {
-    pub fn new(map: HashMap<Value, Value>) -> Self {
-        HashInfo::Map(map)
-    }
-
-    pub fn get(&self, v: &Value) -> Option<&Value> {
-        match self {
-            HashInfo::Map(map) => map.get(v),
-            HashInfo::IdentMap(map) => map.get(&IdentValue(*v)),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            HashInfo::Map(map) => map.len(),
-            HashInfo::IdentMap(map) => map.len(),
-        }
-    }
-
-    pub fn insert(&mut self, k: Value, v: Value) {
-        match self {
-            HashInfo::Map(map) => map.insert(k, v),
-            HashInfo::IdentMap(map) => map.insert(IdentValue(k), v),
-        };
-    }
-}
-
-pub type HashRef = Ref<HashInfo>;
-
-impl HashRef {
-    pub fn from(map: HashMap<Value, Value>) -> Self {
-        HashRef::new(HashInfo::new(map))
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct IdentValue(pub Value);
 
@@ -61,12 +26,194 @@ impl std::hash::Hash for IdentValue {
 impl PartialEq for IdentValue {
     // Object#eql?()
     // This type of equality is used for comparison for keys of Hash.
-    // Regexp, Array, Hash must be implemented.
     fn eq(&self, other: &Self) -> bool {
         *self.0 == *other.0
     }
 }
 impl Eq for IdentValue {}
+
+use std::collections::hash_map;
+
+pub enum IntoIter {
+    Map(hash_map::IntoIter<Value, Value>),
+    IdentMap(hash_map::IntoIter<IdentValue, Value>),
+}
+
+pub enum Iter<'a> {
+    Map(hash_map::Iter<'a, Value, Value>),
+    IdentMap(hash_map::Iter<'a, IdentValue, Value>),
+}
+
+pub enum IterMut<'a> {
+    Map(hash_map::IterMut<'a, Value, Value>),
+    IdentMap(hash_map::IterMut<'a, IdentValue, Value>),
+}
+
+impl IntoIter {
+    fn new(hash: HashInfo) -> IntoIter {
+        match hash {
+            HashInfo::Map(map) => IntoIter::Map(map.into_iter()),
+            HashInfo::IdentMap(map) => IntoIter::IdentMap(map.into_iter()),
+        }
+    }
+}
+
+macro_rules! define_iter_new {
+    ($ty1: ident, $ty2: ty, $method: ident) => {
+        impl<'a> $ty1<'a> {
+            fn new(hash: $ty2) -> $ty1 {
+                match hash {
+                    HashInfo::Map(map) => $ty1::Map(map.$method()),
+                    HashInfo::IdentMap(map) => $ty1::IdentMap(map.$method()),
+                }
+            }
+        }
+    };
+}
+
+define_iter_new!(Iter, &HashInfo, iter);
+define_iter_new!(IterMut, &mut HashInfo, iter_mut);
+
+impl Iterator for IntoIter {
+    type Item = (Value, Value);
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            IntoIter::Map(map) => match map.next() {
+                Some((k, v)) => Some((k, v)),
+                None => None,
+            },
+            IntoIter::IdentMap(map) => match map.next() {
+                Some((k, v)) => Some((k.0, v)),
+                None => None,
+            },
+        }
+    }
+}
+
+macro_rules! define_iterator {
+    ($ty2:ident) => {
+        impl<'a> Iterator for $ty2<'a> {
+            type Item = (Value, Value);
+            fn next(&mut self) -> Option<Self::Item> {
+                match self {
+                    $ty2::Map(map) => match map.next() {
+                        Some((k, v)) => Some((*k, *v)),
+                        None => None,
+                    },
+                    $ty2::IdentMap(map) => match map.next() {
+                        Some((k, v)) => Some((k.0, *v)),
+                        None => None,
+                    },
+                }
+            }
+        }
+    };
+}
+
+define_iterator!(Iter);
+define_iterator!(IterMut);
+
+macro_rules! define_into_iterator {
+    ($ty1:ty, $ty2:ident) => {
+        impl<'a> IntoIterator for $ty1 {
+            type Item = (Value, Value);
+            type IntoIter = $ty2<'a>;
+            fn into_iter(self) -> $ty2<'a> {
+                $ty2::new(self)
+            }
+        }
+    };
+}
+
+define_into_iterator!(&'a HashInfo, Iter);
+define_into_iterator!(&'a mut HashInfo, IterMut);
+
+impl IntoIterator for HashInfo {
+    type Item = (Value, Value);
+    type IntoIter = IntoIter;
+
+    fn into_iter(self) -> IntoIter {
+        IntoIter::new(self)
+    }
+}
+
+impl HashInfo {
+    pub fn new(map: HashMap<Value, Value>) -> Self {
+        HashInfo::Map(map)
+    }
+
+    pub fn iter(&self) -> Iter {
+        Iter::new(self)
+    }
+
+    pub fn iter_mut(&mut self) -> IterMut {
+        IterMut::new(self)
+    }
+
+    pub fn get(&self, v: &Value) -> Option<&Value> {
+        match self {
+            HashInfo::Map(map) => map.get(v),
+            HashInfo::IdentMap(map) => map.get(&IdentValue(*v)),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            HashInfo::Map(map) => map.len(),
+            HashInfo::IdentMap(map) => map.len(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        match self {
+            HashInfo::Map(map) => map.clear(),
+            HashInfo::IdentMap(map) => map.clear(),
+        }
+    }
+
+    pub fn insert(&mut self, k: Value, v: Value) {
+        match self {
+            HashInfo::Map(map) => map.insert(k, v),
+            HashInfo::IdentMap(map) => map.insert(IdentValue(k), v),
+        };
+    }
+
+    pub fn remove(&mut self, k: Value) -> Option<Value> {
+        match self {
+            HashInfo::Map(map) => map.remove(&k),
+            HashInfo::IdentMap(map) => map.remove(&IdentValue(k)),
+        }
+    }
+
+    pub fn contains_key(&self, k: Value) -> bool {
+        match self {
+            HashInfo::Map(map) => map.contains_key(&k),
+            HashInfo::IdentMap(map) => map.contains_key(&IdentValue(k)),
+        }
+    }
+
+    pub fn keys(&self) -> Vec<Value> {
+        match self {
+            HashInfo::Map(map) => map.keys().cloned().collect(),
+            HashInfo::IdentMap(map) => map.keys().map(|x| x.0).collect(),
+        }
+    }
+
+    pub fn values(&self) -> Vec<Value> {
+        match self {
+            HashInfo::Map(map) => map.values().cloned().collect(),
+            HashInfo::IdentMap(map) => map.values().cloned().collect(),
+        }
+    }
+}
+
+pub type HashRef = Ref<HashInfo>;
+
+impl HashRef {
+    pub fn from(map: HashMap<Value, Value>) -> Self {
+        HashRef::new(HashInfo::new(map))
+    }
+}
 
 pub fn init_hash(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Hash");
@@ -104,12 +251,8 @@ macro_rules! as_hash {
 }
 
 fn hash_clear(vm: &mut VM, args: &Args) -> VMResult {
-    let hash = as_hash!(args.self_value, vm);
-    match hash.inner_mut() {
-        HashInfo::Map(map) => map.clear(),
-        HashInfo::IdentMap(map) => map.clear(),
-    }
-
+    let mut hash = as_hash!(args.self_value, vm);
+    hash.clear();
     Ok(args.self_value)
 }
 
@@ -129,16 +272,10 @@ fn hash_compact(vm: &mut VM, args: &Args) -> VMResult {
 
 fn hash_delete(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let hash = as_hash!(args.self_value, vm);
-    let res = match hash.inner_mut() {
-        HashInfo::Map(map) => match map.remove(&args[0]) {
-            Some(v) => v,
-            None => Value::nil(),
-        },
-        HashInfo::IdentMap(map) => match map.remove(&IdentValue(args[0])) {
-            Some(v) => v,
-            None => Value::nil(),
-        },
+    let mut hash = as_hash!(args.self_value, vm);
+    let res = match hash.remove(args[0]) {
+        Some(v) => v,
+        None => Value::nil(),
     };
     Ok(res)
 }
@@ -157,29 +294,14 @@ fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
     let mut res = HashMap::new();
     let context = vm.context();
     let mut arg = Args::new2(args.self_value, None, Value::nil(), Value::nil());
-    match hash.inner() {
-        HashInfo::Map(map) => {
-            for (k, v) in map {
-                arg[0] = *k;
-                arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                let b = vm.stack_pop();
-                if vm.val_to_bool(b) {
-                    res.insert(k.clone(), v.clone());
-                };
-            }
-        }
-        HashInfo::IdentMap(map) => {
-            for (k, v) in map.iter() {
-                arg[0] = k.0;
-                arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                let b = vm.stack_pop();
-                if vm.val_to_bool(b) {
-                    res.insert(k.0, v.clone());
-                };
-            }
-        }
+    for (k, v) in hash.iter() {
+        arg[0] = k;
+        arg[1] = v;
+        vm.vm_run(iseq, Some(context), &arg)?;
+        let b = vm.stack_pop();
+        if vm.val_to_bool(b) {
+            res.insert(k, v);
+        };
     }
 
     Ok(Value::hash(&vm.globals, HashRef::from(res)))
@@ -188,20 +310,14 @@ fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
 fn hash_has_key(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
-    let res = match hash.inner() {
-        HashInfo::Map(map) => map.contains_key(&args[0]),
-        HashInfo::IdentMap(map) => map.contains_key(&IdentValue(args[0])),
-    };
+    let res = hash.contains_key(args[0]);
     Ok(Value::bool(res))
 }
 
 fn hash_has_value(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let hash = as_hash!(args.self_value, vm);
-    let res = match hash.inner() {
-        HashInfo::Map(map) => map.values().find(|&&x| x == args[0]).is_some(),
-        HashInfo::IdentMap(map) => map.values().find(|&&x| x == args[0]).is_some(),
-    };
+    let res = hash.iter().find(|(_, v)| *v == args[0]).is_some();
     Ok(Value::bool(res))
 }
 
@@ -213,39 +329,12 @@ fn hash_length(vm: &mut VM, args: &Args) -> VMResult {
 
 fn hash_keys(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
-    let mut vec = vec![];
-    match hash.inner() {
-        HashInfo::Map(map) => {
-            for key in map.keys() {
-                vec.push(key.clone());
-            }
-        }
-        HashInfo::IdentMap(map) => {
-            for key in map.keys() {
-                vec.push(key.0.clone());
-            }
-        }
-    };
-    Ok(Value::array_from(&vm.globals, vec))
+    Ok(Value::array_from(&vm.globals, hash.keys()))
 }
 
 fn hash_values(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
-    let mut vec = vec![];
-    match hash.inner() {
-        HashInfo::Map(map) => {
-            for val in map.values() {
-                vec.push(val.clone());
-            }
-        }
-        HashInfo::IdentMap(map) => {
-            for val in map.values() {
-                vec.push(val.clone());
-            }
-        }
-    };
-
-    Ok(Value::array_from(&vm.globals, vec))
+    Ok(Value::array_from(&vm.globals, hash.values()))
 }
 
 fn each_value(vm: &mut VM, args: &Args) -> VMResult {
@@ -257,22 +346,11 @@ fn each_value(vm: &mut VM, args: &Args) -> VMResult {
     };
     let context = vm.context();
     let mut arg = Args::new1(context.self_value, None, Value::nil());
-    match hash.inner() {
-        HashInfo::Map(map) => {
-            for (_, v) in map {
-                arg[0] = *v;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                vm.stack_pop();
-            }
-        }
-        HashInfo::IdentMap(map) => {
-            for (_, v) in map {
-                arg[0] = *v;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                vm.stack_pop();
-            }
-        }
-    };
+    for (_, v) in hash.iter() {
+        arg[0] = v;
+        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.stack_pop();
+    }
 
     Ok(args.self_value)
 }
@@ -286,22 +364,12 @@ fn each_key(vm: &mut VM, args: &Args) -> VMResult {
     };
     let context = vm.context();
     let mut arg = Args::new1(context.self_value, None, Value::nil());
-    match hash.inner() {
-        HashInfo::Map(map) => {
-            for (k, _v) in map {
-                arg[0] = *k;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                vm.stack_pop();
-            }
-        }
-        HashInfo::IdentMap(map) => {
-            for (k, _v) in map {
-                arg[0] = **k;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                vm.stack_pop();
-            }
-        }
-    };
+
+    for (k, _) in hash.iter() {
+        arg[0] = k;
+        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.stack_pop();
+    }
 
     Ok(args.self_value)
 }
@@ -315,24 +383,13 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
     };
     let context = vm.context();
     let mut arg = Args::new2(context.self_value, None, Value::nil(), Value::nil());
-    match hash.inner() {
-        HashInfo::Map(map) => {
-            for (k, v) in map {
-                arg[0] = *k;
-                arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                vm.stack_pop();
-            }
-        }
-        HashInfo::IdentMap(map) => {
-            for (k, v) in map {
-                arg[0] = k.0;
-                arg[1] = *v;
-                vm.vm_run(iseq, Some(context), &arg)?;
-                vm.stack_pop();
-            }
-        }
-    };
+
+    for (k, v) in hash.iter() {
+        arg[0] = k;
+        arg[1] = v;
+        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.stack_pop();
+    }
 
     Ok(args.self_value)
 }
@@ -341,36 +398,18 @@ fn merge(vm: &mut VM, args: &Args) -> VMResult {
     let new = as_hash!(args.self_value, vm).dup();
     match new.inner_mut() {
         HashInfo::Map(new) => {
-            for i in 0..args.len() {
-                let other = as_hash!(args[i], vm);
-                match other.inner() {
-                    HashInfo::Map(other) => {
-                        for (k, v) in other {
-                            new.insert(*k, *v);
-                        }
-                    }
-                    HashInfo::IdentMap(other) => {
-                        for (k, v) in other {
-                            new.insert(k.0, *v);
-                        }
-                    }
+            for arg in args.iter() {
+                let other = as_hash!(arg, vm);
+                for (k, v) in other.iter() {
+                    new.insert(k, v);
                 }
             }
         }
         HashInfo::IdentMap(new) => {
-            for i in 0..args.len() {
-                let other = as_hash!(args[i], vm);
-                match other.inner_mut() {
-                    HashInfo::Map(other) => {
-                        for (k, v) in other {
-                            new.insert(IdentValue(*k), *v);
-                        }
-                    }
-                    HashInfo::IdentMap(other) => {
-                        for (k, v) in other {
-                            new.insert(*k, *v);
-                        }
-                    }
+            for arg in args.iter() {
+                let other = as_hash!(arg, vm);
+                for (k, v) in other.iter() {
+                    new.insert(IdentValue(k), v);
                 }
             }
         }
@@ -402,10 +441,7 @@ fn compare_by_identity(vm: &mut VM, args: &Args) -> VMResult {
     let inner = hash.inner_mut();
     match inner {
         HashInfo::Map(map) => {
-            let mut new_map = HashMap::new();
-            for (k, v) in map {
-                new_map.insert(IdentValue(*k), *v);
-            }
+            let new_map = map.into_iter().map(|(k, v)| (IdentValue(*k), *v)).collect();
             *inner = HashInfo::IdentMap(new_map);
         }
         HashInfo::IdentMap(_) => {}
