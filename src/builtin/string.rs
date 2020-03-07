@@ -259,3 +259,69 @@ fn string_sum(vm: &mut VM, args: &Args) -> VMResult {
     }
     Ok(Value::fixnum((sum & ((1 << 16) - 1)) as i64))
 }
+
+#[cfg(test)]
+mod test {
+    use crate::test::*;
+
+    #[test]
+    fn string_add() {
+        let program = r#"
+        assert "this is a pen", "this is " + "a pen"
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_mul() {
+        let program = r#"
+        assert "rubyrubyrubyruby", "ruby" * 4
+        assert "", "ruby" * 0
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_start_with() {
+        let program = r#"
+        assert true, "ruby".start_with?("r")
+        assert false, "ruby".start_with?("R")
+        assert true, "魁ruby".start_with?("魁")
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_to_sym() {
+        let program = r#"
+        assert :ruby, "ruby".to_sym
+        assert :rust, "rust".to_sym
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_split() {
+        let program = r#"
+        assert ["this", "is", "a", "pen"], "this is a pen       ".split(" ")
+        assert ["this", "is", "a pen"], "this is a pen".split(" ", 3)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_bytes() {
+        let program = r#"
+        assert [97, 98, 99, 100], "abcd".bytes
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_sum() {
+        let program = r#"
+        assert 394, "abcd".sum
+        "#;
+        assert_script(program);
+    }
+}
