@@ -395,25 +395,13 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn merge(vm: &mut VM, args: &Args) -> VMResult {
-    let new = as_hash!(args.self_value, vm).dup();
-    match new.inner_mut() {
-        HashInfo::Map(new) => {
-            for arg in args.iter() {
-                let other = as_hash!(arg, vm);
-                for (k, v) in other.iter() {
-                    new.insert(k, v);
-                }
-            }
+    let mut new = as_hash!(args.self_value, vm).dup();
+    for arg in args.iter() {
+        let other = as_hash!(arg, vm);
+        for (k, v) in other.iter() {
+            new.insert(k, v);
         }
-        HashInfo::IdentMap(new) => {
-            for arg in args.iter() {
-                let other = as_hash!(arg, vm);
-                for (k, v) in other.iter() {
-                    new.insert(IdentValue(k), v);
-                }
-            }
-        }
-    };
+    }
 
     Ok(Value::hash(&vm.globals, new))
 }

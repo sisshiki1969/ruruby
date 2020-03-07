@@ -1,5 +1,5 @@
 use crate::vm::*;
-use regex::{Error, Regex};
+use fancy_regex::{Error, Regex};
 
 #[derive(Debug)]
 pub struct RegexpInfo {

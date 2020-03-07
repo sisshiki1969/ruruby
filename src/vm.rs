@@ -392,29 +392,14 @@ impl VM {
         match args.kw_arg {
             Some(kw_arg) if kw.is_none() => {
                 let keyword = kw_arg.as_hash().unwrap();
-                match keyword.inner() {
-                    HashInfo::Map(map) => {
-                        for (k, v) in map.iter() {
-                            let id = k.as_symbol().unwrap();
-                            match iseq.keyword_params.get(&id) {
-                                Some(lvar) => {
-                                    *context.get_mut_lvar(*lvar) = *v;
-                                }
-                                None => return Err(self.error_argument("Undefined keyword.")),
-                            };
+                for (k, v) in keyword.iter() {
+                    let id = k.as_symbol().unwrap();
+                    match iseq.keyword_params.get(&id) {
+                        Some(lvar) => {
+                            *context.get_mut_lvar(*lvar) = v;
                         }
-                    }
-                    HashInfo::IdentMap(map) => {
-                        for (k, v) in map.iter() {
-                            let id = k.as_symbol().unwrap();
-                            match iseq.keyword_params.get(&id) {
-                                Some(lvar) => {
-                                    *context.get_mut_lvar(*lvar) = *v;
-                                }
-                                None => return Err(self.error_argument("Undefined keyword.")),
-                            };
-                        }
-                    }
+                        None => return Err(self.error_argument("Undefined keyword.")),
+                    };
                 }
             }
             _ => {}
@@ -1356,6 +1341,18 @@ impl VM {
         }
     }
 
+    fn fallback_to_method_with_cache(
+        &mut self,
+        lhs: Value,
+        rhs: Value,
+        method: IdentId,
+        cache: u32,
+    ) -> Result<(), RubyError> {
+        let methodref = self.get_method_from_cache(cache, lhs, method)?;
+        let arg = Args::new1(lhs, None, rhs);
+        return self.eval_send(methodref, &arg);
+    }
+
     fn eval_add(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             Value::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2)
@@ -1371,16 +1368,17 @@ impl VM {
             match lhs.is_object() {
                 Some(_) => {
                     let cache = self.read32(iseq, 1);
-                    let methodref = self.get_method_from_cache(cache, lhs, IdentId::_ADD)?;
-                    let arg = Args::new1(lhs, None, rhs);
-                    return self.eval_send(methodref, &arg);
+                    return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_ADD, cache);
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs + rhs),
                     (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs as f64 + rhs),
                     (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Value::flonum(lhs + rhs as f64),
                     (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs + rhs),
-                    (_, _) => return Err(self.error_undefined_op("+", rhs, lhs)),
+                    (_, _) => {
+                        let cache = self.read32(iseq, 1);
+                        return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_ADD, cache);
+                    }
                 },
             }
         };
@@ -1478,17 +1476,17 @@ impl VM {
             match lhs.is_object() {
                 Some(_oref) => {
                     let cache = self.read32(iseq, 1);
-                    let methodref = self.get_method_from_cache(cache, lhs, IdentId::_MUL)?;
-                    let arg = Args::new1(lhs, None, rhs);
-                    self.eval_send(methodref, &arg)?;
-                    return Ok(());
+                    return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_MUL, cache);
                 }
                 None => match (lhs.unpack(), rhs.unpack()) {
                     (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs * rhs),
                     (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs as f64 * rhs),
                     (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Value::flonum(lhs * rhs as f64),
                     (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs * rhs),
-                    (_, _) => return Err(self.error_undefined_op("*", rhs, lhs)),
+                    (_, _) => {
+                        let cache = self.read32(iseq, 1);
+                        return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_MUL, cache);
+                    }
                 },
             }
         };
@@ -1497,18 +1495,38 @@ impl VM {
     }
 
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs.unpack(), rhs.unpack()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Ok(RValue::FixNum(lhs / rhs).pack()),
-            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => {
-                Ok(RValue::FloatNum((lhs as f64) / rhs).pack())
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            Ok(Value::fixnum(
+                lhs.as_packed_fixnum() / rhs.as_packed_fixnum(),
+            ))
+        } else if lhs.is_packed_num() && rhs.is_packed_num() {
+            if lhs.is_packed_fixnum() {
+                Ok(Value::flonum(
+                    lhs.as_packed_fixnum() as f64 / rhs.as_packed_flonum(),
+                ))
+            } else if rhs.is_packed_fixnum() {
+                Ok(Value::flonum(
+                    lhs.as_packed_flonum() / rhs.as_packed_fixnum() as f64,
+                ))
+            } else {
+                Ok(Value::flonum(
+                    lhs.as_packed_flonum() / rhs.as_packed_flonum(),
+                ))
             }
-            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => {
-                Ok(RValue::FloatNum(lhs / (rhs as f64)).pack())
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Ok(RValue::FixNum(lhs / rhs).pack()),
+                (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => {
+                    Ok(RValue::FloatNum((lhs as f64) / rhs).pack())
+                }
+                (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => {
+                    Ok(RValue::FloatNum(lhs / (rhs as f64)).pack())
+                }
+                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => {
+                    Ok(RValue::FloatNum(lhs / rhs).pack())
+                }
+                (_, _) => return Err(self.error_undefined_op("/", rhs, lhs)),
             }
-            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => {
-                Ok(RValue::FloatNum(lhs / rhs).pack())
-            }
-            (_, _) => return Err(self.error_undefined_op("/", rhs, lhs)),
         }
     }
 
@@ -1776,37 +1794,13 @@ impl VM {
                     _ => {
                         let mut result = "".to_string();
                         let mut first = true;
-                        match href.inner() {
-                            HashInfo::Map(map) => {
-                                for (k, v) in map {
-                                    result = if first {
-                                        format!("{} => {}", self.val_pp(*k), self.val_pp(*v))
-                                    } else {
-                                        format!(
-                                            "{}, {} => {}",
-                                            result,
-                                            self.val_pp(*k),
-                                            self.val_pp(*v)
-                                        )
-                                    };
-                                    first = false;
-                                }
-                            }
-                            HashInfo::IdentMap(map) => {
-                                for (k, v) in map {
-                                    result = if first {
-                                        format!("{} => {}", self.val_pp(k.0), self.val_pp(*v))
-                                    } else {
-                                        format!(
-                                            "{}, {} => {}",
-                                            result,
-                                            self.val_pp(k.0),
-                                            self.val_pp(*v)
-                                        )
-                                    };
-                                    first = false;
-                                }
-                            }
+                        for (k, v) in href.iter() {
+                            result = if first {
+                                format!("{} => {}", self.val_pp(k), self.val_pp(v))
+                            } else {
+                                format!("{}, {} => {}", result, self.val_pp(k), self.val_pp(v))
+                            };
+                            first = false;
                         }
 
                         format! {"{{{}}}", result}

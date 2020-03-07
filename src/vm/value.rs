@@ -85,20 +85,12 @@ impl std::hash::Hash for Value {
                 RValue::String(lhs) => lhs.hash(state),
                 RValue::Object(lhs) => match lhs.kind {
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
-                    ObjKind::Hash(lhs) => match lhs.inner() {
-                        HashInfo::Map(map) => {
-                            for (key, val) in map {
-                                key.hash(state);
-                                val.hash(state);
-                            }
+                    ObjKind::Hash(lhs) => {
+                        for (key, val) in lhs.iter() {
+                            key.hash(state);
+                            val.hash(state);
                         }
-                        HashInfo::IdentMap(map) => {
-                            for (key, val) in map {
-                                key.hash(state);
-                                val.hash(state);
-                            }
-                        }
-                    },
+                    }
                     ObjKind::Method(lhs) => lhs.inner().hash(state),
                     _ => self.0.hash(state),
                 },

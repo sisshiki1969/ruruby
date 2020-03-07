@@ -1,6 +1,6 @@
 //#![feature(test)]
 #![feature(box_patterns)]
-extern crate regex;
+extern crate fancy_regex;
 pub mod builtin;
 pub mod error;
 pub mod lexer;
