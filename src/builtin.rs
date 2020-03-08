@@ -1,4 +1,5 @@
 pub mod array;
+pub mod error;
 pub mod file;
 pub mod hash;
 pub mod integer;
@@ -10,6 +11,7 @@ pub mod procobj;
 pub mod range;
 pub mod regexp;
 pub mod string;
+pub mod structobj;
 pub use array::*;
 pub use file::*;
 pub use hash::*;

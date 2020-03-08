@@ -1,2 +1,2 @@
-s = "ab" * 1000_000_000 + "ac"
-s.gsub(/(a|b|ab)*bc/, "_")
+s = "<do></do><txt>windows</txt>there is a pen."
+s.gsub(/<(txt)>.*<\/(\1)>/, "_")

@@ -126,7 +126,9 @@ impl VM {
         set_class!("Math", math::init_math(&mut globals));
         set_class!("File", file::init_file(&mut globals));
         set_class!("Process", process::init_process(&mut globals));
+        set_class!("Struct", structobj::init_struct(&mut globals));
         set_class!("StandardError", Value::class(&globals, globals.class_class));
+        set_class!("RuntimeError", error::init_error(&mut globals));
 
         let mut vm = VM {
             globals,
@@ -1762,6 +1764,7 @@ impl VM {
                     let sym = if rinfo.exclude { "..." } else { ".." };
                     format!("({}{}{})", start, sym, end)
                 }
+                ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
                 _ => format!("{:?}", oref.kind),
             },
         }
@@ -1806,6 +1809,7 @@ impl VM {
                         format! {"{{{}}}", result}
                     }
                 },
+                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
                 ObjKind::Ordinary => {
                     let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.search_class().as_class().name), oref.id()};
                     for (k, v) in oref.var_table() {
@@ -1823,9 +1827,9 @@ impl VM {
             None => match val.unpack() {
                 RValue::Nil => "nil".to_string(),
                 RValue::String(s) => match s {
-                    RString::Str(s) => format!("\"{}\"", s),
+                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
                     RString::Bytes(b) => match String::from_utf8(b) {
-                        Ok(s) => format!("\"{}\"", s),
+                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
                         Err(_) => "<ByteArray>".to_string(),
                     },
                 },

@@ -27,22 +27,43 @@ impl RegexpRef {
 
 pub fn init_regexp(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Regexp");
-    let class = ClassRef::from(id, globals.builtins.object);
-    globals.add_builtin_instance_method(class, "push", regexp_push);
-    Value::class(globals, class)
+    let classref = ClassRef::from(id, globals.builtins.object);
+    let regexp = Value::class(globals, classref);
+    globals.add_builtin_class_method(regexp, "new", regexp_new);
+    globals.add_builtin_class_method(regexp, "compile", regexp_new);
+    globals.add_builtin_class_method(regexp, "escape", regexp_escape);
+    globals.add_builtin_class_method(regexp, "quote", regexp_escape);
+    regexp
 }
 
 // Class methods
 
-// Instance methods
-
-fn regexp_push(vm: &mut VM, args: &Args) -> VMResult {
-    let mut aref = args
-        .self_value
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
-    for i in 0..args.len() {
-        aref.elements.push(args[i]);
-    }
-    Ok(args.self_value)
+fn regexp_new(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let arg0 = match args[0].as_string() {
+        Some(string) => match RegexpRef::from_string(string) {
+            Ok(re) => re,
+            Err(err) => {
+                return Err(vm.error_argument(format!(
+                    "Invalid string for a regular expression. {:?}",
+                    err
+                )))
+            }
+        },
+        None => return Err(vm.error_argument("Must be String")),
+    };
+    let regexp = Value::regexp(&vm.globals, arg0);
+    Ok(regexp)
 }
+
+fn regexp_escape(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let res = match args[0].as_string() {
+        Some(s) => regex::escape(s),
+        None => return Err(vm.error_argument("Must be String")),
+    };
+    let regexp = Value::string(res);
+    Ok(regexp)
+}
+
+// Instance methods

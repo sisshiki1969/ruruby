@@ -60,6 +60,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "to_sym", string_to_sym);
     globals.add_builtin_instance_method(class, "intern", string_to_sym);
     globals.add_builtin_instance_method(class, "split", string_split);
+    globals.add_builtin_instance_method(class, "sub", string_sub);
     globals.add_builtin_instance_method(class, "gsub", string_gsub);
     globals.add_builtin_instance_method(class, "=~", string_rmatch);
     globals.add_builtin_instance_method(class, "tr", string_tr);
@@ -159,6 +160,65 @@ fn string_split(vm: &mut VM, args: &Args) -> VMResult {
         let ary = Value::array_from(&vm.globals, vec);
         return Ok(ary);
     }
+}
+
+fn replace_one(re: &Regex, given: &String, replace: &String) -> Result<String, String> {
+    let res = match re.captures(given) {
+        Ok(None) => given.to_string(),
+        Ok(Some(captures)) => {
+            let mut res = given.to_string();
+            let c = captures.get(0).unwrap();
+            let mut rep = "".to_string();
+            let mut escape = false;
+            for ch in replace.chars() {
+                if escape {
+                    match ch {
+                        '0'..='9' => {
+                            let i = ch as usize - '0' as usize;
+                            match captures.get(i) {
+                                Some(m) => rep += m.as_str(),
+                                None => {}
+                            };
+                        }
+                        _ => rep.push(ch),
+                    };
+                    escape = false;
+                } else {
+                    if ch != '\\' {
+                        rep.push(ch);
+                    } else {
+                        escape = true;
+                    };
+                }
+            }
+            res.replace_range(c.start()..c.end(), &rep);
+            res
+        }
+        Err(err) => return Err(format!("{:?}", err)),
+    };
+    Ok(res)
+}
+
+fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 2, 2)?;
+    let given = expect_string!(vm, args.self_value);
+    let replace = expect_string!(vm, args[1]);
+    let res = if let Some(s) = args[0].as_string() {
+        match fancy_regex::Regex::new(&regex::escape(&s)) {
+            Ok(re) => replace_one(&re, given, replace),
+            Err(_) => return Err(vm.error_argument("Illegal string for RegExp.")),
+        }
+    } else if let Some(re) = args[0].as_regexp() {
+        replace_one(&re.regexp, given, replace)
+    } else {
+        return Err(vm.error_argument("1st arg must be RegExp or String."));
+    };
+    let res = match res {
+        Ok(res) => res,
+        Err(err) => return Err(vm.error_argument(format!("capture failed. {}", err))),
+    };
+
+    Ok(Value::string(res))
 }
 
 fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {

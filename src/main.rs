@@ -31,7 +31,6 @@ fn main() {
     res.remove(0);
     let argv = Value::array_from(&vm.globals, res);
     vm.globals.builtins.object.set_var(id, argv);
-    exec_file(&mut vm, "struct.rb");
     exec_file(&mut vm, args[0]);
     return;
 }

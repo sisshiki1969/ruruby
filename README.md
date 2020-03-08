@@ -1,5 +1,10 @@
 # ruruby ![](https://github.com/sisshiki1969/ruruby/workflows/Rust/badge.svg)
-A toy Ruby implementation by Rust.
+An alternative Ruby implementation by Rust.
+
+## Feature
+- Purely implemented with Rust. No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
+- Hand-written original parser.
+- Virtual machine execution.
 
 ## Related article
 [Qiita: Rustでつくる（つくれるかもしれない）Ruby](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)
@@ -23,6 +28,7 @@ A toy Ruby implementation by Rust.
     - [x] Hash
     - [x] Proc
     - [x] Method
+    - [x] Regexp
 - Variables
     - [x] Local variable
     - [x] Instance variable
@@ -72,6 +78,7 @@ $ cargo run
 ### Option: Bytecode Trace execution
 ```
 $ cargo run --features trace -- tests/sample.rb
+   Compiling ruruby v0.1.0
     Finished dev [unoptimized + debuginfo] target(s) in 1.83s
      Running `target/debug/ruruby tests/sample.rb`
 PUSH_STRING stack:0
@@ -92,28 +99,32 @@ END stack:1
 ### Option: Emit ByteCode
 ```
 $ cargo run --features emit-iseq -- tests/sample.rb
-    Finished dev [unoptimized + debuginfo] target(s) in 0.03s
+   Compiling ruruby v0.1.0
+    Finished dev [unoptimized + debuginfo] target(s) in 6.72s
      Running `target/debug/ruruby tests/sample.rb`
 -----------------------------------------
-MethodRef(15)
-  00000 PUSH_STRING 
-  00005 SET_LOCAL 0 '0'
-  00014 PUSH_STRING 
-  00019 PUSH_STRING 
+MethodRef(141)
+ 0:w
+block: None
+  00000 PUSH_STRING 152
+  00005 SET_LOCAL outer:0 LvarId:0
+  00014 PUSH_STRING 153
+  00019 PUSH_STRING 154
   00024 CONCAT_STR
-  00025 GET_LOCAL 0 '0'
+  00025 GET_LOCAL outer:0 LvarId:0
   00034 TO_S
   00035 CONCAT_STR
-  00036 PUSH_STRING 
+  00036 PUSH_STRING 155
   00041 CONCAT_STR
   00042 SEND_SELF 'puts' 1 items
-  00051 END
+  00063 END
 Hello world!
 ```
 
 ### Option: Performance analysis per VM instruction
 ```
 $ cargo run --features perf -- tests/sample.rb
+   Compiling ruruby v0.1.0
     Finished dev [unoptimized + debuginfo] target(s) in 3.53s
      Running `target/debug/ruruby tests/sample.rb`
 Hello world!
@@ -122,14 +133,14 @@ Performance analysis for Inst:
 Inst name         count    %time     nsec
                                     /inst
 ------------------------------------------
-END                   1     0.00      953
-PUSH_STRING           4     1.65     2562
-SET_LOCAL             1     0.33     2578
-GET_LOCAL             1     0.00      454
-SEND_SELF             1     0.99     6895
-CONCAT_STR            3     1.65     3354
-TO_S                  1     0.82     5193
-CODEGEN               1    92.42   561408
-EXTERN                1     1.48     9645
+PUSH_STRING           4     6.48    25993
+SET_LOCAL             1     0.19     3756
+GET_LOCAL             1     0.00      382
+SEND_SELF             1     2.58    41261
+CONCAT_STR            3     0.19     1166
+TO_S                  1     0.25     4707
+END                   1     0.06     1044
+CODEGEN               1    87.48  1391588
+EXTERN                1     2.45    39834
 ------------------------------------------
 ```

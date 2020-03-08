@@ -11,6 +11,7 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "module_function", module_function);
     globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
     globals.add_builtin_instance_method(class, "const_get", const_get);
+    globals.add_builtin_instance_method(class, "include", include);
 }
 
 fn constants(vm: &mut VM, args: &Args) -> VMResult {
@@ -163,6 +164,10 @@ fn module_function(vm: &mut VM, args: &Args) -> VMResult {
 fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
     let class = vm.val_as_module(args.self_value)?;
     Ok(Value::bool(class.is_singleton))
+}
+
+fn include(_vm: &mut VM, _args: &Args) -> VMResult {
+    Ok(Value::nil())
 }
 
 #[cfg(test)]
