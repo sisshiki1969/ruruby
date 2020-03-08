@@ -238,7 +238,7 @@ fn objects() {
         assert(Class, Proc.class)
         assert(Class, Method.class)
 
-        assert(Regexp, Regexp.new.class)
+        assert(Regexp, Regexp.new("a").class)
     "#;
     let expected = RValue::Nil;
     eval_script(program, expected);
