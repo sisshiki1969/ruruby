@@ -655,7 +655,7 @@ impl Codegen {
             eprintln!("-----------------------------------------");
             eprintln!("{:?}", methodref);
             for (k, v) in iseq.lvar.table() {
-                eprint!(" {:?}:{}", v.as_u32(), globals.get_ident_name(*k));
+                eprint!("local var: {:?}:{}", v.as_u32(), globals.get_ident_name(*k));
             }
             eprintln!("");
             eprintln!("block: {:?}", iseq.lvar.block());

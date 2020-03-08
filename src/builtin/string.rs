@@ -204,10 +204,8 @@ fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
     let given = expect_string!(vm, args.self_value);
     let replace = expect_string!(vm, args[1]);
     let res = if let Some(s) = args[0].as_string() {
-        match fancy_regex::Regex::new(&regex::escape(&s)) {
-            Ok(re) => replace_one(&re, given, replace),
-            Err(_) => return Err(vm.error_argument("Illegal string for RegExp.")),
-        }
+        let re = vm.regexp_from_string(s)?;
+        replace_one(&re, given, replace)
     } else if let Some(re) = args[0].as_regexp() {
         replace_one(&re.regexp, given, replace)
     } else {
@@ -247,10 +245,8 @@ fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {
     let given = expect_string!(vm, args.self_value);
     let replace = expect_string!(vm, args[1]);
     let res = if let Some(s) = args[0].as_string() {
-        match fancy_regex::Regex::new(&regex::escape(&s)) {
-            Ok(re) => replace_all(&re, given, replace),
-            Err(_) => return Err(vm.error_argument("Illegal string for RegExp.")),
-        }
+        let re = vm.regexp_from_string(s)?;
+        replace_all(&re, given, replace)
     } else if let Some(re) = args[0].as_regexp() {
         replace_all(&re.regexp, given, replace)
     } else {

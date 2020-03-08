@@ -47,6 +47,7 @@ impl Context {
     pub fn get_lvar(&self, id: LvarId) -> Value {
         let id = id.as_usize();
         if id < LVAR_ARRAY_SIZE {
+            //eprintln!("{}", id);
             self.lvar_scope[id]
         } else {
             self.ext_lvar[id - LVAR_ARRAY_SIZE]
@@ -135,10 +136,6 @@ impl ContextRef {
     pub fn from_local(info: &Context) -> Self {
         let boxed = info as *const Context as *mut Context;
         Ref(unsafe { NonNull::new_unchecked(boxed) })
-    }
-
-    pub fn dup_context(&self) -> Context {
-        unsafe { (*self.0.as_ptr()).clone() }
     }
 
     pub fn adjust_lvar_size(&mut self) {

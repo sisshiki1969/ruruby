@@ -32,10 +32,7 @@ pub fn init_proc(globals: &mut Globals) -> Value {
 
 fn proc_new(vm: &mut VM, args: &Args) -> VMResult {
     let procobj = match args.block {
-        Some(block) => {
-            let context = vm.create_context_from_method(block)?;
-            Value::procobj(&vm.globals, context)
-        }
+        Some(block) => vm.create_proc(block)?,
         None => return Err(vm.error_type("Needs block.")),
     };
     Ok(procobj)

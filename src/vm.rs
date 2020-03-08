@@ -648,6 +648,7 @@ impl VM {
                 }
                 Inst::GET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
+                    //eprintln!("id:{:?}", id);
                     let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);
                     let val = cref.get_lvar(id);
@@ -826,7 +827,7 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = self.read_methodref(iseq, 1);
-                    let proc_obj = self.create_proc_obj(method)?;
+                    let proc_obj = self.create_proc(method)?;
                     self.stack_push(proc_obj);
                     self.pc += 5;
                 }
@@ -1160,6 +1161,18 @@ impl VM {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
             RuntimeErrKind::Argument(msg.into()),
+            self.source_info(),
+            loc,
+        )
+    }
+
+    pub fn error_regexp(&self, err: fancy_regex::Error) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(
+            RuntimeErrKind::Regexp(format!(
+                "Invalid string for a regular expression. {:?}",
+                err
+            )),
             self.source_info(),
             loc,
         )
@@ -2125,14 +2138,49 @@ impl VM {
         args
     }
 
-    fn create_proc_obj(&mut self, method: MethodRef) -> Result<Value, RubyError> {
-        let context = self.context_stack.last_mut().unwrap();
-        if context.on_stack {
-            *context = ContextRef::new(context.dup_context());
-            context.on_stack = false;
+    pub fn create_proc(&mut self, method: MethodRef) -> Result<Value, RubyError> {
+        let mut prev_ctx: Option<ContextRef> = None;
+        for context in self.context_stack.iter_mut().rev() {
+            if context.on_stack {
+                let mut heap_context = context.dup();
+                heap_context.on_stack = false;
+                *context = heap_context;
+                match prev_ctx {
+                    Some(mut ctx) => ctx.outer = Some(heap_context),
+                    None => {}
+                };
+                if heap_context.outer.is_none() {
+                    break;
+                }
+                prev_ctx = Some(heap_context);
+            } else {
+                break;
+            }
         }
         let context = self.create_context_from_method(method)?;
         Ok(Value::procobj(&self.globals, context))
+    }
+
+    /// Create new Regexp object from `string`.
+    /// Regular expression meta characters are handled as is.
+    /// Returns RubyError if `string` was invalid regular expression.
+    pub fn create_regexp(&self, string: &String) -> Result<Value, RubyError> {
+        let re = match RegexpRef::from_string(string) {
+            Ok(re) => re,
+            Err(err) => return Err(self.error_regexp(err)),
+        };
+        let regexp = Value::regexp(&self.globals, re);
+        Ok(regexp)
+    }
+
+    /// Create fancy_regex::Regex from `string`.
+    /// Escapes all regular expression meta characters in `string`.
+    /// Returns RubyError if `string` was invalid regular expression.
+    pub fn regexp_from_string(&self, string: &String) -> Result<fancy_regex::Regex, RubyError> {
+        match fancy_regex::Regex::new(&regex::escape(string)) {
+            Ok(re) => Ok(re),
+            Err(err) => Err(self.error_regexp(err)),
+        }
     }
 
     pub fn create_context_from_method(

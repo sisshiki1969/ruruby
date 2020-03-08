@@ -50,6 +50,7 @@ impl RubyError {
                 RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
                 RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
                 RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
+                RuntimeErrKind::Regexp(n) => eprintln!("RegexpError ({})", n),
             },
             RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
@@ -82,6 +83,7 @@ pub enum RuntimeErrKind {
     Argument(String),
     Index(String),
     Type(String),
+    Regexp(String),
 }
 
 impl RubyError {

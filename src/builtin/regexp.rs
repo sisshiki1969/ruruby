@@ -40,20 +40,11 @@ pub fn init_regexp(globals: &mut Globals) -> Value {
 
 fn regexp_new(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let arg0 = match args[0].as_string() {
-        Some(string) => match RegexpRef::from_string(string) {
-            Ok(re) => re,
-            Err(err) => {
-                return Err(vm.error_argument(format!(
-                    "Invalid string for a regular expression. {:?}",
-                    err
-                )))
-            }
-        },
+    let val = match args[0].as_string() {
+        Some(string) => vm.create_regexp(string)?,
         None => return Err(vm.error_argument("Must be String")),
     };
-    let regexp = Value::regexp(&vm.globals, arg0);
-    Ok(regexp)
+    Ok(val)
 }
 
 fn regexp_escape(vm: &mut VM, args: &Args) -> VMResult {

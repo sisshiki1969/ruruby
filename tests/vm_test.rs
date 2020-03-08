@@ -4,7 +4,7 @@ extern crate ruruby;
 extern crate test;
 use ruruby::lexer::Lexer;
 use ruruby::parser::{LvarCollector, Parser};
-use ruruby::test::eval_script;
+use ruruby::test::{assert_script, eval_script};
 use ruruby::vm::value::RValue;
 use ruruby::vm::*;
 use test::Bencher;
@@ -853,6 +853,29 @@ fn closure2() {
         assert 7, f.call.call.call";
     let expected = RValue::Nil;
     eval_script(program, expected);
+}
+
+#[test]
+fn closure3() {
+    let program = r#"
+    def func
+        a = 77 
+        1.times {
+            1.times {
+                return Proc.new{
+                    a = a + 1
+                }
+            }
+        }
+    end
+
+    f = func
+    assert 78, f.call
+    assert 79, f.call
+    assert 80, f.call
+    assert 78, func.call
+    "#;
+    assert_script(program);
 }
 
 #[test]
