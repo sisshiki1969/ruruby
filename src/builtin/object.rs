@@ -279,9 +279,18 @@ fn freeze(vm: &mut VM, args: &Args) -> VMResult {
 fn super_(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let context = vm.context();
-    let iseq = context.iseq_ref.clone();
+    let iseq = context.iseq_ref;
     if let ISeqKind::Method(m) = iseq.kind {
-        let class = iseq.class_stack.as_ref().unwrap()[0];
+        let class = match iseq.class_defined {
+            Some(list) => list.class,
+            None => {
+                return Err(vm.error_nomethod(format!(
+                    "no superclass method `{}' for {}.",
+                    vm.globals.get_ident_name(m),
+                    vm.val_pp(args.self_value),
+                )))
+            }
+        };
         let method = match class.superclass() {
             Some(class) => vm.get_instance_method(class, m)?,
             None => {

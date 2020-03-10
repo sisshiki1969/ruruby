@@ -993,7 +993,7 @@ impl VM {
 
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_stack = Some(self.gen_class_stack(val));
+                    iseq.class_defined = self.gen_class_stack(val);
                     let arg = Args::new0(val, None);
                     try_err!(self, self.eval_send(method, &arg));
                     self.pc += 10;
@@ -1003,7 +1003,7 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_stack = Some(self.gen_class_stack(None));
+                    iseq.class_defined = self.gen_class_stack(None);
                     self.define_method(id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self.class(), id, method)?;
@@ -1015,8 +1015,7 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    let class_stack = self.gen_class_stack(None);
-                    iseq.class_stack = Some(class_stack);
+                    iseq.class_defined = self.gen_class_stack(None);
                     let singleton = self.stack_pop();
                     self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
@@ -1232,12 +1231,12 @@ impl VM {
             .1
     }
 
-    fn get_nearest_class_stack(&self) -> Option<&Vec<Value>> {
+    fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
         let mut class_stack = None;
         for context in self.context_stack.iter().rev() {
-            match context.iseq_ref.class_stack.as_ref() {
-                Some(stack) => {
-                    class_stack = Some(stack);
+            match context.iseq_ref.class_defined {
+                Some(class_list) => {
+                    class_stack = Some(class_list);
                     break;
                 }
                 None => {}
@@ -1246,33 +1245,35 @@ impl VM {
         class_stack
     }
 
-    fn gen_class_stack(&self, new_class: impl Into<Option<Value>>) -> Vec<Value> {
+    /// Return None in top-level.
+    fn gen_class_stack(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
         let new_class = new_class.into();
-        let mut class_stack = match self.get_nearest_class_stack() {
-            Some(stack) => stack.clone(),
-            None => vec![],
-        };
         match new_class {
-            Some(class) => class_stack.insert(0, class),
-            None => {}
-        };
-        class_stack
+            Some(class) => {
+                let outer = self.get_nearest_class_stack();
+                let class_list = ClassList::new(outer, class);
+                Some(ClassListRef::new(class_list))
+            }
+            None => self.get_nearest_class_stack(),
+        }
     }
 
     // Search class stack for the constant.
     fn get_env_const(&self, id: IdentId) -> Option<Value> {
-        let class_stack = self.get_nearest_class_stack();
-        let class_stack = match class_stack {
-            Some(stack) => stack,
+        let mut class_list = match self.get_nearest_class_stack() {
+            Some(list) => list,
             None => return None,
         };
-        for class in class_stack {
-            match class.get_var(id) {
+        loop {
+            match class_list.class.get_var(id) {
                 Some(val) => return Some(val),
                 None => {}
             }
+            class_list = match class_list.outer {
+                Some(class) => class,
+                None => return None,
+            };
         }
-        None
     }
 
     // Search class inheritance chain for the constant.

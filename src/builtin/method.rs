@@ -85,10 +85,30 @@ pub struct ISeqInfo {
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
-    pub class_stack: Option<Vec<Value>>,
+    /// The Class where this method was described.
+    /// This field is set to None when IseqInfo was created by Codegen.
+    /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
+    /// set to Some() in class definition context, or None in the top level.
+    pub class_defined: Option<ClassListRef>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassList {
+    /// The outer class of `class`.
+    pub outer: Option<ClassListRef>,
+    /// The class where ISeqInfo was described.
+    pub class: Value,
+}
+
+pub type ClassListRef = Ref<ClassList>;
+
+impl ClassList {
+    pub fn new(outer: Option<ClassListRef>, class: Value) -> Self {
+        ClassList { outer, class }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -131,7 +151,7 @@ impl ISeqInfo {
             iseq,
             lvar,
             lvars,
-            class_stack: None,
+            class_defined: None,
             iseq_sourcemap,
             source_info,
             kind,
