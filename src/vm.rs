@@ -1546,16 +1546,28 @@ impl VM {
     }
 
     fn eval_rem(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        fn rem_floorf64(self_: f64, other: f64) -> f64 {
+            if self_ > 0.0 && other < 0.0 {
+                ((self_ - 1.0) % other) + other + 1.0
+            } else if self_ < 0.0 && other > 0.0 {
+                ((self_ + 1.0) % other) + other - 1.0
+            } else {
+                self_ % other
+            }
+        }
+        use divrem::*;
         match (lhs.unpack(), rhs.unpack()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Ok(RValue::FixNum(lhs % rhs).pack()),
+            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => {
+                Ok(RValue::FixNum(lhs.rem_floor(rhs)).pack())
+            }
             (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => {
-                Ok(RValue::FloatNum((lhs as f64) % rhs).pack())
+                Ok(RValue::FloatNum(rem_floorf64(lhs as f64, rhs)).pack())
             }
             (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => {
-                Ok(RValue::FloatNum(lhs % (rhs as f64)).pack())
+                Ok(RValue::FloatNum(rem_floorf64(lhs, rhs as f64)).pack())
             }
             (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => {
-                Ok(RValue::FloatNum(lhs % rhs).pack())
+                Ok(RValue::FloatNum(rem_floorf64(lhs, rhs)).pack())
             }
             (_, _) => return Err(self.error_undefined_op("%", rhs, lhs)),
         }
