@@ -70,7 +70,7 @@ fn binread(vm: &mut VM, args: &Args) -> VMResult {
     let filename = match string_to_path(vm, args[0])?.canonicalize() {
         Ok(file) => file,
         Err(_) => {
-            return Err(vm.error_argument(format!("Invalid filename. {}", vm.val_pp(args[0]))))
+            return Err(vm.error_argument(format!("Invalid filename. {}", vm.val_inspect(args[0]))))
         }
     };
     let mut file = match File::open(&filename) {
@@ -91,7 +91,7 @@ fn read(vm: &mut VM, args: &Args) -> VMResult {
     let filename = match string_to_path(vm, args[0])?.canonicalize() {
         Ok(file) => file,
         Err(_) => {
-            return Err(vm.error_argument(format!("Invalid filename. {}", vm.val_pp(args[0]))))
+            return Err(vm.error_argument(format!("Invalid filename. {}", vm.val_inspect(args[0]))))
         }
     };
     let mut file = match File::open(&filename) {

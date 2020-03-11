@@ -42,7 +42,7 @@ impl Builtin {
 
         fn builtin_p(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
-                println!("{}", vm.val_pp(args[i]));
+                println!("{}", vm.val_inspect(args[i]));
             }
             if args.len() == 1 {
                 Ok(args[0])
@@ -57,12 +57,12 @@ impl Builtin {
         /// Built-in function "print".
         fn builtin_print(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
-                if let RValue::Char(ch) = args[i].unpack() {
-                    let v = [ch];
-                    use std::io::{self, Write};
-                    io::stdout().write(&v).unwrap();
-                } else {
-                    print!("{}", vm.val_to_s(args[i].clone()));
+                match args[i].as_bytes() {
+                    Some(bytes) => {
+                        use std::io::{self, Write};
+                        io::stdout().write(bytes).unwrap();
+                    }
+                    None => print!("{}", vm.val_to_s(args[i])),
                 }
             }
             Ok(Value::nil())
@@ -74,11 +74,11 @@ impl Builtin {
             if !args[0].equal(args[1]) {
                 panic!(
                     "Assertion error: Expected: {} Actual: {}",
-                    vm.val_pp(args[0]),
-                    vm.val_pp(args[1]),
+                    vm.val_inspect(args[0]),
+                    vm.val_inspect(args[1]),
                 );
             } else {
-                println!("Assert OK: {:?}", vm.val_pp(args[0]));
+                println!("Assert OK: {:?}", vm.val_inspect(args[0]));
                 Ok(Value::nil())
             }
         }
@@ -194,7 +194,7 @@ impl Builtin {
                 } else {
                     return Err(vm.error_type(format!(
                         "Can not convert {} into Integer.",
-                        vm.val_pp(self_)
+                        vm.val_inspect(self_)
                     )));
                 }
             } else {
@@ -206,14 +206,14 @@ impl Builtin {
                         None => {
                             return Err(vm.error_type(format!(
                                 "Invalid value for Integer(): {}",
-                                vm.val_pp(self_)
+                                vm.val_inspect(self_)
                             )))
                         }
                     },
                     _ => {
                         return Err(vm.error_type(format!(
                             "Can not convert {} into Integer.",
-                            vm.val_pp(self_)
+                            vm.val_inspect(self_)
                         )))
                     }
                 }
@@ -231,7 +231,7 @@ impl Builtin {
         fn builtin_raise(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 2)?;
             for i in 0..args.len() {
-                eprintln!("{}", vm.val_pp(args[i]));
+                eprintln!("{}", vm.val_inspect(args[i]));
             }
             Err(vm.error_unimplemented("error"))
         }

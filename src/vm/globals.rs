@@ -216,7 +216,6 @@ impl Globals {
             RValue::FloatNum(_) => "Float".to_string(),
             RValue::String(_) => "String".to_string(),
             RValue::Symbol(_) => "Symbol".to_string(),
-            RValue::Char(_) => "Char".to_string(),
             RValue::Object(oref) => match oref.kind {
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
@@ -230,6 +229,74 @@ impl Globals {
                 ObjKind::Ordinary => self
                     .get_ident_name(oref.search_class().as_class().name)
                     .to_string(),
+            },
+        }
+    }
+
+    pub fn val_inspect(&self, val: Value) -> String {
+        match val.is_object() {
+            Some(mut oref) => match oref.kind {
+                ObjKind::Class(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.get_ident_name(id)},
+                    None => format! {"#<Class:0x{:x}>", cref.id()},
+                },
+                ObjKind::Module(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.get_ident_name(id)},
+                    None => format! {"#<Module:0x{:x}>", cref.id()},
+                },
+                ObjKind::Array(aref) => match aref.elements.len() {
+                    0 => "[]".to_string(),
+                    1 => format!("[{}]", self.val_inspect(aref.elements[0])),
+                    len => {
+                        let mut result = self.val_inspect(aref.elements[0]);
+                        for i in 1..len {
+                            result = format!("{}, {}", result, self.val_inspect(aref.elements[i]));
+                        }
+                        format! {"[{}]", result}
+                    }
+                },
+                ObjKind::Hash(href) => match href.len() {
+                    0 => "{}".to_string(),
+                    _ => {
+                        let mut result = "".to_string();
+                        let mut first = true;
+                        for (k, v) in href.iter() {
+                            result = if first {
+                                format!("{} => {}", self.val_inspect(k), self.val_inspect(v))
+                            } else {
+                                format!(
+                                    "{}, {} => {}",
+                                    result,
+                                    self.val_inspect(k),
+                                    self.val_inspect(v)
+                                )
+                            };
+                            first = false;
+                        }
+
+                        format! {"{{{}}}", result}
+                    }
+                },
+                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
+                ObjKind::Ordinary => {
+                    let mut s = format! {"#<{}:0x{:x}", self.get_ident_name(oref.search_class().as_class().name), oref.id()};
+                    for (k, v) in oref.var_table() {
+                        s = format!("{} {}={}", s, self.get_ident_name(*k), self.val_inspect(*v));
+                    }
+                    format!("{}>", s)
+                }
+                _ => format!("{:?}", oref.kind),
+            },
+            None => match val.unpack() {
+                RValue::Nil => "nil".to_string(),
+                RValue::String(s) => match s {
+                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                    RString::Bytes(b) => match String::from_utf8(b) {
+                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                        Err(_) => "<ByteArray>".to_string(),
+                    },
+                },
+                _ => format!("{:?}", val),
             },
         }
     }

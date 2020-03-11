@@ -972,7 +972,7 @@ impl VM {
                                 self.globals.builtins.object
                             } else {
                                 if super_val.is_class().is_none() {
-                                    let val = self.val_pp(super_val);
+                                    let val = self.val_inspect(super_val);
                                     return Err(self.error_type(format!(
                                         "Superclass must be a class. (given:{:?})",
                                         val
@@ -1204,7 +1204,7 @@ impl VM {
         match val.is_class() {
             Some(class_ref) => Ok(class_ref),
             None => {
-                let val = self.val_pp(val);
+                let val = self.val_inspect(val);
                 Err(self.error_type(format!("Must be a class. (given:{:?})", val)))
             }
         }
@@ -1214,7 +1214,7 @@ impl VM {
         match val.as_module() {
             Some(class_ref) => Ok(class_ref),
             None => {
-                let val = self.val_pp(val);
+                let val = self.val_inspect(val);
                 Err(self.error_type(format!("Must be a module/class. (given:{:?})", val)))
             }
         }
@@ -1767,7 +1767,6 @@ impl VM {
                 },
             },
             RValue::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
-            RValue::Char(c) => format!("{:x}", c),
             RValue::Object(oref) => match oref.kind {
                 ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
@@ -1796,7 +1795,7 @@ impl VM {
         }
     }
 
-    pub fn val_pp(&self, val: Value) -> String {
+    pub fn val_inspect(&self, val: Value) -> String {
         match val.is_object() {
             Some(mut oref) => match oref.kind {
                 ObjKind::Class(cref) => match cref.name {
@@ -1809,11 +1808,11 @@ impl VM {
                 },
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
-                    1 => format!("[{}]", self.val_pp(aref.elements[0])),
+                    1 => format!("[{}]", self.val_inspect(aref.elements[0])),
                     len => {
-                        let mut result = self.val_pp(aref.elements[0]);
+                        let mut result = self.val_inspect(aref.elements[0]);
                         for i in 1..len {
-                            result = format!("{}, {}", result, self.val_pp(aref.elements[i]));
+                            result = format!("{}, {}", result, self.val_inspect(aref.elements[i]));
                         }
                         format! {"[{}]", result}
                     }
@@ -1825,9 +1824,14 @@ impl VM {
                         let mut first = true;
                         for (k, v) in href.iter() {
                             result = if first {
-                                format!("{} => {}", self.val_pp(k), self.val_pp(v))
+                                format!("{} => {}", self.val_inspect(k), self.val_inspect(v))
                             } else {
-                                format!("{}, {} => {}", result, self.val_pp(k), self.val_pp(v))
+                                format!(
+                                    "{}, {} => {}",
+                                    result,
+                                    self.val_inspect(k),
+                                    self.val_inspect(v)
+                                )
                             };
                             first = false;
                         }
@@ -1843,7 +1847,7 @@ impl VM {
                             "{} {}={}",
                             s,
                             self.globals.get_ident_name(*k),
-                            self.val_pp(*v)
+                            self.val_inspect(*v)
                         );
                     }
                     format!("{}>", s)
@@ -2015,7 +2019,7 @@ impl VM {
                             return Err(self.error_nomethod(format!(
                                 "no method `{}' found for {}",
                                 method_name,
-                                self.val_pp(original_class)
+                                self.val_inspect(original_class)
                             )));
                         }
                     }

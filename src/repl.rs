@@ -42,7 +42,7 @@ pub fn repl_vm() {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
-                        let res_str = vm.val_pp(result);
+                        let res_str = vm.val_inspect(result);
                         println!("=> {}", res_str);
                     }
                     Err(err) => {

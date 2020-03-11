@@ -5,6 +5,8 @@ const UNINITIALIZED: u64 = 0x04;
 const NIL_VALUE: u64 = 0x08;
 const TAG_SYMBOL: u64 = 0x0c;
 const TRUE_VALUE: u64 = 0x14;
+const MASK1: u64 = !(0b0110u64 << 60);
+const MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
@@ -18,7 +20,6 @@ pub enum RValue {
     String(RString),
     Symbol(IdentId),
     Object(ObjectInfo),
-    Char(u8),
 }
 
 impl RValue {
@@ -36,10 +37,9 @@ impl RValue {
     }
 
     fn pack_fixnum(num: i64) -> u64 {
-        let mut top = (num as u64) >> 62;
-        top = top ^ (top >> 1);
+        let top = (num as u64) >> 62 ^ (num as u64) >> 63;
         if top & 0b1 == 0 {
-            ((num << 1) as u64) | 0b1
+            (num << 1) as u64 | 0b1
         } else {
             RValue::pack_as_boxed(RValue::FixNum(num))
         }
@@ -52,7 +52,7 @@ impl RValue {
         let unum = f64::to_bits(num);
         let exp = (unum >> 60) & 0b111;
         if exp == 4 || exp == 3 {
-            ((unum & !(0b0110u64 << 60)) | (0b0100u64 << 60)).rotate_left(3)
+            (unum & MASK1 | MASK2).rotate_left(3)
         } else {
             RValue::pack_as_boxed(RValue::FloatNum(num))
         }
@@ -78,7 +78,7 @@ impl std::hash::Hash for Value {
         if self.is_packed_value() {
             self.0.hash(state);
         } else {
-            let lhs = unsafe { &*(self.0 as *mut RValue) };
+            let lhs = self.rvalue();
             match lhs {
                 RValue::FixNum(lhs) => lhs.hash(state),
                 RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
@@ -108,11 +108,9 @@ impl PartialEq for Value {
         if self.is_packed_value() || other.is_packed_value() {
             self.0 == other.0
         } else {
-            let lhs = unsafe { &(*(self.0 as *mut RValue)) };
-            let rhs = unsafe { &(*(other.0 as *mut RValue)) };
-            match (lhs, rhs) {
-                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => lhs == rhs,
-                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => lhs == rhs,
+            match (self.rvalue(), other.rvalue()) {
+                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
+                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
                 (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
                 (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
                     (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
@@ -121,7 +119,7 @@ impl PartialEq for Value {
                         (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
                         _ => false,
                     },
-                    (ObjKind::Method(lhs), ObjKind::Method(rhs)) => lhs.inner() == rhs.inner(),
+                    (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
                     _ => lhs.kind == rhs.kind,
                 },
                 _ => self.0 == other.0,
@@ -140,7 +138,7 @@ impl Default for Value {
 impl Value {
     pub fn unpack(self) -> RValue {
         if !self.is_packed_value() {
-            unsafe { (*(self.0 as *mut RValue)).clone() }
+            self.rvalue().clone()
         } else if self.is_packed_fixnum() {
             RValue::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
@@ -166,25 +164,51 @@ impl Value {
         Value(id)
     }
 
+    /// Get RValue from Value.
+    /// This method works only if `self` is not a packed value.
+    pub fn rvalue(&self) -> &RValue {
+        unsafe { &*(self.0 as *mut RValue) }
+    }
+
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
-        match self.is_object() {
-            Some(oref) => oref.class(),
-            None => match self.unpack() {
+        if self.is_packed_value() {
+            if self.is_packed_fixnum() {
+                globals.builtins.integer
+            } else if self.is_packed_num() {
+                globals.builtins.object
+            } else if self.is_packed_symbol() {
+                globals.builtins.object
+            } else {
+                globals.builtins.object
+            }
+        } else {
+            match self.rvalue() {
                 RValue::FixNum(_) => globals.builtins.integer,
                 RValue::String(_) => globals.builtins.string,
+                RValue::Object(oref) => oref.class(),
                 _ => globals.builtins.object,
-            },
+            }
         }
     }
 
     pub fn get_class_object(&self, globals: &Globals) -> Value {
-        match self.is_object() {
-            Some(oref) => oref.search_class(),
-            None => match self.unpack() {
+        if self.is_packed_value() {
+            if self.is_packed_fixnum() {
+                globals.builtins.integer
+            } else if self.is_packed_num() {
+                globals.builtins.object
+            } else if self.is_packed_symbol() {
+                globals.builtins.object
+            } else {
+                globals.builtins.object
+            }
+        } else {
+            match self.rvalue() {
                 RValue::FixNum(_) => globals.builtins.integer,
                 RValue::String(_) => globals.builtins.string,
+                RValue::Object(oref) => oref.search_class(),
                 _ => globals.builtins.object,
-            },
+            }
         }
     }
 
@@ -264,27 +288,17 @@ impl Value {
         } else if self.is_packed_value() {
             None
         } else {
-            unsafe {
-                match *(self.0 as *mut RValue) {
-                    RValue::FixNum(i) => Some(i),
-                    _ => None,
-                }
+            match self.rvalue() {
+                RValue::FixNum(i) => Some(*i),
+                _ => None,
             }
         }
     }
 
     pub fn expect_fixnum(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
-        if self.is_packed_fixnum() {
-            Ok(self.as_packed_fixnum())
-        } else if self.is_packed_value() {
-            Err(vm.error_argument(msg.into() + " must be an Integer."))
-        } else {
-            unsafe {
-                match *(self.0 as *mut RValue) {
-                    RValue::FixNum(i) => Ok(i),
-                    _ => Err(vm.error_argument(msg.into() + " must be an Integer.")),
-                }
-            }
+        match self.as_fixnum() {
+            Some(i) => Ok(i),
+            None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
         }
     }
 
@@ -294,10 +308,9 @@ impl Value {
 
     pub fn is_object(&self) -> Option<ObjectRef> {
         if self.is_packed_value() {
-            return None;
-        }
-        unsafe {
-            match &*(self.0 as *mut RValue) {
+            None
+        } else {
+            match self.rvalue() {
                 RValue::Object(oref) => Some(oref.as_ref()),
                 _ => None,
             }
@@ -410,10 +423,9 @@ impl Value {
 
     pub fn as_string(&self) -> Option<&String> {
         if self.is_packed_value() {
-            return None;
-        }
-        unsafe {
-            match &*(self.0 as *mut RValue) {
+            None
+        } else {
+            match self.rvalue() {
                 RValue::String(RString::Str(s)) => Some(s),
                 _ => None,
             }
@@ -422,10 +434,9 @@ impl Value {
 
     pub fn as_bytes(&self) -> Option<&[u8]> {
         if self.is_packed_value() {
-            return None;
-        }
-        unsafe {
-            match &*(self.0 as *mut RValue) {
+            None
+        } else {
+            match self.rvalue() {
                 RValue::String(RString::Bytes(b)) => Some(b),
                 RValue::String(RString::Str(s)) => Some(s.as_bytes()),
                 _ => None,
@@ -575,21 +586,23 @@ impl Value {
         if self.id() == other.id() {
             return true;
         };
-        match (self.is_packed_num(), other.is_packed_num()) {
-            (false, false) => {}
-            (true, true) => match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
-                (true, false) => return self.as_packed_fixnum() as f64 == other.as_packed_flonum(),
-                (false, true) => return self.as_packed_flonum() == other.as_packed_fixnum() as f64,
-                _ => return false,
-            },
-            _ => return false,
-        }
-        if self.is_packed_symbol() || other.is_packed_symbol() {
+        if self.is_packed_value() || other.is_packed_value() {
+            if self.is_packed_num() && other.is_packed_num() {
+                match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
+                    (true, false) => {
+                        return self.as_packed_fixnum() as f64 == other.as_packed_flonum()
+                    }
+                    (false, true) => {
+                        return self.as_packed_flonum() == other.as_packed_fixnum() as f64
+                    }
+                    _ => return false,
+                }
+            }
             return false;
-        }
-        match (&self.unpack(), &other.unpack()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => lhs == rhs,
-            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => lhs == rhs,
+        };
+        match (self.rvalue(), other.rvalue()) {
+            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
+            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
             (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
             (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
             (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
@@ -601,8 +614,8 @@ impl Value {
                         && lhs.exclude == rhs.exclude
                 }
                 (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
-                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => lhs == rhs,
-                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
+                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
+                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
                     _ => false,
                 },
                 (_, _) => false,
@@ -747,15 +760,6 @@ mod tests {
     #[test]
     fn pack_float3() {
         let expect = RValue::FloatNum(-5282.2541156);
-        let got = expect.clone().pack().unpack();
-        if expect != got {
-            panic!("Expect:{:?} Got:{:?}", expect, got)
-        }
-    }
-
-    #[test]
-    fn pack_char() {
-        let expect = RValue::Char(123);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

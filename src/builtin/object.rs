@@ -206,7 +206,7 @@ fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn inspect(vm: &mut VM, args: &Args) -> VMResult {
-    let inspect = vm.val_pp(args.self_value);
+    let inspect = vm.val_inspect(args.self_value);
     Ok(Value::string(inspect))
 }
 
@@ -287,7 +287,7 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
-                    vm.val_pp(args.self_value),
+                    vm.val_inspect(args.self_value),
                 )))
             }
         };
@@ -297,7 +297,7 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
-                    vm.val_pp(args.self_value),
+                    vm.val_inspect(args.self_value),
                 )))
             }
         };

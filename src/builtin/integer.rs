@@ -76,8 +76,8 @@ fn integer_step(vm: &mut VM, args: &Args) -> VMResult {
 
 /// Built-in function "chr".
 fn integer_chr(_vm: &mut VM, args: &Args) -> VMResult {
-    let num = args.self_value.as_fixnum().unwrap();
-    Ok(RValue::Char(num as u8).pack())
+    let num = args.self_value.as_fixnum().unwrap() as u64 as u8;
+    Ok(Value::bytes(vec![num]))
 }
 
 fn integer_tof(_vm: &mut VM, args: &Args) -> VMResult {
