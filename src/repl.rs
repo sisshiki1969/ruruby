@@ -6,6 +6,7 @@ use ruruby::vm::*;
 pub fn repl_vm() {
     println!("RValue: {}", std::mem::size_of::<RValue>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
+    println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();

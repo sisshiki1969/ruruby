@@ -19,6 +19,7 @@ pub enum RValue {
     FloatNum(f64),
     String(RString),
     Symbol(IdentId),
+    Range(RangeInfo),
     Object(ObjectInfo),
 }
 
@@ -75,14 +76,13 @@ impl std::ops::Deref for Value {
 
 impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        if self.is_packed_value() {
-            self.0.hash(state);
-        } else {
-            let lhs = self.rvalue();
-            match lhs {
+        match self.as_rvalue() {
+            None => self.0.hash(state),
+            Some(lhs) => match lhs {
                 RValue::FixNum(lhs) => lhs.hash(state),
                 RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
                 RValue::String(lhs) => lhs.hash(state),
+                RValue::Range(lhs) => lhs.hash(state),
                 RValue::Object(lhs) => match lhs.kind {
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
                     ObjKind::Hash(lhs) => {
@@ -95,7 +95,7 @@ impl std::hash::Hash for Value {
                     _ => self.0.hash(state),
                 },
                 _ => self.0.hash(state),
-            };
+            },
         }
     }
 }
@@ -105,13 +105,13 @@ impl PartialEq for Value {
     // This type of equality is used for comparison for keys of Hash.
     // Regexp, Range etc must be implemented.
     fn eq(&self, other: &Self) -> bool {
-        if self.is_packed_value() || other.is_packed_value() {
-            self.0 == other.0
-        } else {
-            match (self.rvalue(), other.rvalue()) {
+        match (self.as_rvalue(), other.as_rvalue()) {
+            (None, None) => self.0 == other.0,
+            (Some(lhs), Some(rhs)) => match (lhs, rhs) {
                 (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
                 (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
                 (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
+                (RValue::Range(lhs), RValue::Range(rhs)) => *lhs == *rhs,
                 (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
                     (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
                     (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
@@ -122,8 +122,9 @@ impl PartialEq for Value {
                     (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
                     _ => lhs.kind == rhs.kind,
                 },
-                _ => self.0 == other.0,
-            }
+                _ => unreachable!("Illegal eq operand. {:?}, {:?}", *lhs, *rhs),
+            },
+            _ => false,
         }
     }
 }
@@ -166,49 +167,61 @@ impl Value {
 
     /// Get RValue from Value.
     /// This method works only if `self` is not a packed value.
+    pub fn as_rvalue(&self) -> Option<&RValue> {
+        if self.is_packed_value() {
+            None
+        } else {
+            Some(self.rvalue())
+        }
+    }
+
     pub fn rvalue(&self) -> &RValue {
         unsafe { &*(self.0 as *mut RValue) }
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
-        if self.is_packed_value() {
-            if self.is_packed_fixnum() {
-                globals.builtins.integer
-            } else if self.is_packed_num() {
-                globals.builtins.object
-            } else if self.is_packed_symbol() {
-                globals.builtins.object
-            } else {
-                globals.builtins.object
+        match self.as_rvalue() {
+            None => {
+                if self.is_packed_fixnum() {
+                    globals.builtins.integer
+                } else if self.is_packed_num() {
+                    globals.builtins.object
+                } else if self.is_packed_symbol() {
+                    globals.builtins.object
+                } else {
+                    globals.builtins.object
+                }
             }
-        } else {
-            match self.rvalue() {
+            Some(rval) => match rval {
                 RValue::FixNum(_) => globals.builtins.integer,
                 RValue::String(_) => globals.builtins.string,
+                RValue::Range(_) => globals.builtins.range,
                 RValue::Object(oref) => oref.class(),
                 _ => globals.builtins.object,
-            }
+            },
         }
     }
 
     pub fn get_class_object(&self, globals: &Globals) -> Value {
-        if self.is_packed_value() {
-            if self.is_packed_fixnum() {
-                globals.builtins.integer
-            } else if self.is_packed_num() {
-                globals.builtins.object
-            } else if self.is_packed_symbol() {
-                globals.builtins.object
-            } else {
-                globals.builtins.object
+        match self.as_rvalue() {
+            None => {
+                if self.is_packed_fixnum() {
+                    globals.builtins.integer
+                } else if self.is_packed_num() {
+                    globals.builtins.object
+                } else if self.is_packed_symbol() {
+                    globals.builtins.object
+                } else {
+                    globals.builtins.object
+                }
             }
-        } else {
-            match self.rvalue() {
+            Some(rval) => match rval {
                 RValue::FixNum(_) => globals.builtins.integer,
                 RValue::String(_) => globals.builtins.string,
+                RValue::Range(_) => globals.builtins.range,
                 RValue::Object(oref) => oref.search_class(),
                 _ => globals.builtins.object,
-            }
+            },
         }
     }
 
@@ -285,11 +298,9 @@ impl Value {
     pub fn as_fixnum(&self) -> Option<i64> {
         if self.is_packed_fixnum() {
             Some(self.as_packed_fixnum())
-        } else if self.is_packed_value() {
-            None
         } else {
-            match self.rvalue() {
-                RValue::FixNum(i) => Some(*i),
+            match self.as_rvalue() {
+                Some(RValue::FixNum(i)) => Some(*i),
                 _ => None,
             }
         }
@@ -307,13 +318,9 @@ impl Value {
     }
 
     pub fn is_object(&self) -> Option<ObjectRef> {
-        if self.is_packed_value() {
-            None
-        } else {
-            match self.rvalue() {
-                RValue::Object(oref) => Some(oref.as_ref()),
-                _ => None,
-            }
+        match self.as_rvalue() {
+            Some(RValue::Object(oref)) => Some(oref.as_ref()),
+            _ => None,
         }
     }
 
@@ -391,16 +398,6 @@ impl Value {
         }
     }
 
-    pub fn as_range(&self) -> Option<RangeInfo> {
-        match self.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Range(info) => Some(info.clone()),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
     pub fn as_proc(&self) -> Option<ProcRef> {
         match self.is_object() {
             Some(oref) => match oref.kind {
@@ -422,25 +419,20 @@ impl Value {
     }
 
     pub fn as_string(&self) -> Option<&String> {
-        if self.is_packed_value() {
-            None
-        } else {
-            match self.rvalue() {
-                RValue::String(RString::Str(s)) => Some(s),
-                _ => None,
-            }
+        match self.as_rvalue() {
+            Some(RValue::String(RString::Str(s))) => Some(s),
+            _ => None,
         }
     }
 
     pub fn as_bytes(&self) -> Option<&[u8]> {
-        if self.is_packed_value() {
-            None
-        } else {
-            match self.rvalue() {
+        match self.as_rvalue() {
+            Some(rval) => match rval {
                 RValue::String(RString::Bytes(b)) => Some(b),
                 RValue::String(RString::Str(s)) => Some(s.as_bytes()),
                 _ => None,
-            }
+            },
+            _ => None,
         }
     }
 
@@ -449,6 +441,13 @@ impl Value {
             Some(self.as_packed_symbol())
         } else {
             None
+        }
+    }
+
+    pub fn as_range(&self) -> Option<&RangeInfo> {
+        match self.as_rvalue() {
+            Some(RValue::Range(info)) => Some(info),
+            _ => None,
         }
     }
 
@@ -519,6 +518,11 @@ impl Value {
         Value((id as u64) << 32 | TAG_SYMBOL)
     }
 
+    pub fn range(start: Value, end: Value, exclude: bool) -> Self {
+        let info = RangeInfo::new(start, end, exclude);
+        Value(RValue::pack_as_boxed(RValue::Range(info)))
+    }
+
     fn object(obj_info: ObjectInfo) -> Self {
         Value(RValue::pack_as_boxed(RValue::Object(obj_info)))
     }
@@ -563,11 +567,6 @@ impl Value {
         Value::object(ObjectInfo::new_regexp(globals, regexp_ref))
     }
 
-    pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
-        let info = RangeInfo::new(start, end, exclude);
-        Value::object(ObjectInfo::new_range(globals, info))
-    }
-
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
         Value::object(ObjectInfo::new_proc(globals, ProcRef::from(context)))
     }
@@ -606,13 +605,12 @@ impl Value {
             (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
             (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
             (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
+            (RValue::Range(lhs), RValue::Range(rhs)) => {
+                lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
+            }
             (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    lhs.start.equal(rhs.start)
-                        && lhs.end.equal(rhs.end)
-                        && lhs.exclude == rhs.exclude
-                }
+
                 (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
                     (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
                     (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
@@ -777,13 +775,9 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let globals = Globals::new();
         let from = RValue::FixNum(7).pack();
         let to = RValue::FixNum(36).pack();
-        let expect = RValue::Object(ObjectInfo::new_range(
-            &globals,
-            RangeInfo::new(from, to, false),
-        ));
+        let expect = RValue::Range(RangeInfo::new(from, to, false));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

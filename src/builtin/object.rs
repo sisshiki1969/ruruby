@@ -13,7 +13,6 @@ pub enum ObjKind {
     Ordinary,
     Class(ClassRef),
     Module(ClassRef),
-    Range(RangeInfo),
     Array(ArrayRef),
     Splat(Value), // internal use only.
     Hash(HashRef),
@@ -94,14 +93,6 @@ impl ObjectInfo {
             class: globals.builtins.regexp,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Regexp(regexpref),
-        }
-    }
-
-    pub fn new_range(globals: &Globals, info: RangeInfo) -> Self {
-        ObjectInfo {
-            class: globals.builtins.range,
-            var_table: Box::new(HashMap::new()),
-            kind: ObjKind::Range(info),
         }
     }
 

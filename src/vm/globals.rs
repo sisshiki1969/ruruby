@@ -216,12 +216,12 @@ impl Globals {
             RValue::FloatNum(_) => "Float".to_string(),
             RValue::String(_) => "String".to_string(),
             RValue::Symbol(_) => "Symbol".to_string(),
+            RValue::Range(_) => "Range".to_string(),
             RValue::Object(oref) => match oref.kind {
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
                 ObjKind::Hash(_) => "Hash".to_string(),
                 ObjKind::Regexp(_) => "Regexp".to_string(),
-                ObjKind::Range(_) => "Range".to_string(),
                 ObjKind::Class(_) => "Class".to_string(),
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
