@@ -331,12 +331,14 @@ fn send(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
-    let context = vm.context();
-    let method = match context.block {
+    let outer = vm.caller_context();
+    let method = match vm.context().block {
         Some(block) => block,
         None => return Err(vm.error_argument("Yield needs block.")),
     };
-    vm.eval_send(method, &args)?;
+    let args = args.clone();
+    let iseq = vm.get_iseq(method)?;
+    vm.vm_run(iseq, Some(outer), &args)?;
     let res = vm.stack_pop();
     Ok(res)
 }

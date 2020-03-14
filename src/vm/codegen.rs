@@ -1500,8 +1500,8 @@ impl Codegen {
                 iseq.push(Inst::DEF_METHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
-                if !use_value {
-                    self.gen_pop(iseq)
+                if use_value {
+                    self.gen_symbol(iseq, *id);
                 };
             }
             NodeKind::SingletonMethodDef(singleton, id, params, body, lvar) => {
@@ -1518,8 +1518,8 @@ impl Codegen {
                 iseq.push(Inst::DEF_SMETHOD);
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
-                if !use_value {
-                    self.gen_pop(iseq)
+                if use_value {
+                    self.gen_symbol(iseq, *id);
                 };
             }
             NodeKind::ClassDef {
@@ -1546,7 +1546,7 @@ impl Codegen {
                 self.push32(iseq, (*id).into());
                 self.push32(iseq, methodref.into());
                 if !use_value {
-                    self.gen_pop(iseq)
+                    self.gen_pop(iseq);
                 };
             }
             NodeKind::Return(val) => {

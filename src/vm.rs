@@ -150,6 +150,14 @@ impl VM {
         *self.context_stack.last().unwrap()
     }
 
+    pub fn caller_context(&self) -> ContextRef {
+        let len = self.context_stack.len();
+        if len < 2 {
+            unreachable!("caller_context(): context_stack.len is {}", len)
+        };
+        self.context_stack[len - 2]
+    }
+
     pub fn source_info(&self) -> SourceInfoRef {
         self.context().iseq_ref.source_info
     }
@@ -385,7 +393,7 @@ impl VM {
         if let Some(id) = iseq.lvar.block_param() {
             *context.get_mut_lvar(id) = match args.block {
                 Some(block) => {
-                    let proc_context = self.create_context_from_method(block)?;
+                    let proc_context = self.create_block_context(block)?;
                     Value::procobj(&self.globals, proc_context)
                 }
                 None => Value::nil(),
@@ -993,7 +1001,7 @@ impl VM {
 
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_stack(val);
+                    iseq.class_defined = self.gen_class_defined(val);
                     let arg = Args::new0(val, None);
                     try_err!(self, self.eval_send(method, &arg));
                     self.pc += 10;
@@ -1003,25 +1011,25 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_stack(None);
+                    iseq.class_defined = self.gen_class_defined(None);
                     self.define_method(id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self.class(), id, method)?;
                     };
-                    self.stack_push(Value::symbol(id));
+                    //self.stack_push(Value::symbol(id));
                     self.pc += 9;
                 }
                 Inst::DEF_SMETHOD => {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_stack(None);
+                    iseq.class_defined = self.gen_class_defined(None);
                     let singleton = self.stack_pop();
                     self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
                         self.define_method(id, method);
                     };
-                    self.stack_push(Value::symbol(id));
+                    //self.stack_push(Value::symbol(id));
                     self.pc += 9;
                 }
                 Inst::TO_S => {
@@ -1246,7 +1254,7 @@ impl VM {
     }
 
     /// Return None in top-level.
-    fn gen_class_stack(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
+    fn gen_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
         let new_class = new_class.into();
         match new_class {
             Some(class) => {
@@ -2157,6 +2165,7 @@ impl VM {
         args
     }
 
+    /// Create new Proc object from `method`.
     pub fn create_proc(&mut self, method: MethodRef) -> Result<Value, RubyError> {
         let mut prev_ctx: Option<ContextRef> = None;
         for context in self.context_stack.iter_mut().rev() {
@@ -2176,7 +2185,7 @@ impl VM {
                 break;
             }
         }
-        let context = self.create_context_from_method(method)?;
+        let context = self.create_block_context(method)?;
         Ok(Value::procobj(&self.globals, context))
     }
 
@@ -2202,10 +2211,7 @@ impl VM {
         }
     }
 
-    pub fn create_context_from_method(
-        &mut self,
-        method: MethodRef,
-    ) -> Result<ContextRef, RubyError> {
+    pub fn create_block_context(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
         let iseq = self.get_iseq(method)?;
         let outer = self.context();
         Ok(ContextRef::from(outer.self_value, None, iseq, Some(outer)))
