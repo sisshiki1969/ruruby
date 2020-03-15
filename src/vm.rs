@@ -404,8 +404,6 @@ macro_rules! try_err {
                         let result = $self.stack_pop();
                         let prev_len = $self.context().stack_len;
                         $self.exec_stack.truncate(prev_len);
-                        //$self.stack_push(result);
-
                         $self.unwind_context(&mut err);
                         return Ok(result);
                     };
@@ -659,7 +657,6 @@ impl VM {
                 }
                 Inst::GET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
-                    //eprintln!("id:{:?}", id);
                     let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);
                     let val = cref.get_lvar(id);
@@ -746,7 +743,7 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
-                Inst::SET_ARRAY_ELEM => {
+                Inst::SET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
                     let mut args = self.pop_args_to_ary(arg_num);
                     let receiver = self.stack_pop();
@@ -768,35 +765,30 @@ impl VM {
 
                     self.pc += 5;
                 }
-                Inst::GET_ARRAY_ELEM => {
+                Inst::GET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
                     let mut args = self.pop_args_to_ary(arg_num);
                     let arg_num = args.len();
                     let receiver = self.stack_pop();
-                    match receiver.is_object() {
-                        Some(oref) => {
-                            match &oref.kind {
-                                ObjKind::Array(aref) => {
-                                    args.self_value = receiver;
-                                    let val = aref.get_elem(self, &args)?;
-                                    self.stack_push(val);
+                    let val = match receiver.is_object() {
+                        Some(oref) => match &oref.kind {
+                            ObjKind::Array(aref) => {
+                                args.self_value = receiver;
+                                aref.get_elem(self, &args)?
+                            }
+                            ObjKind::Hash(href) => {
+                                self.check_args_num(arg_num, 1, 2)?;
+                                match href.get(&args[0]) {
+                                    Some(val) => val.clone(),
+                                    None => Value::nil(),
                                 }
-                                ObjKind::Hash(href) => {
-                                    self.check_args_num(arg_num, 1, 2)?;
-                                    let val = match href.get(&args[0]) {
-                                        Some(val) => val.clone(),
-                                        None => Value::nil(),
-                                    };
-                                    self.stack_push(val);
-                                }
-                                ObjKind::Method(mref) => {
-                                    args.self_value = mref.receiver;
-                                    let val = self.eval_send(mref.method, &args)?;
-                                    self.stack_push(val);
-                                }
-                                _ => return Err(self.error_undefined_method("[]", receiver)),
-                            };
-                        }
+                            }
+                            ObjKind::Method(mref) => {
+                                args.self_value = mref.receiver;
+                                self.eval_send(mref.method, &args)?
+                            }
+                            _ => return Err(self.error_undefined_method("[]", receiver)),
+                        },
                         None if receiver.is_packed_fixnum() => {
                             let i = receiver.as_packed_fixnum();
                             self.check_args_num(arg_num, 1, 1)?;
@@ -806,10 +798,11 @@ impl VM {
                             } else {
                                 (i >> index) & 1
                             };
-                            self.stack_push(Value::fixnum(val));
+                            Value::fixnum(val)
                         }
                         _ => return Err(self.error_undefined_method("[]", receiver)),
                     };
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SPLAT => {
@@ -911,7 +904,6 @@ impl VM {
 
                     let keyword = if kw_args_num != 0 {
                         let val = self.stack_pop();
-                        //eprintln!("{}", self.val_pp(val));
                         Some(val)
                     } else {
                         None
@@ -939,7 +931,6 @@ impl VM {
 
                     let keyword = if kw_args_num != 0 {
                         let val = self.stack_pop();
-                        //eprintln!("{}", self.val_pp(val));
                         Some(val)
                     } else {
                         None
@@ -1020,7 +1011,6 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_singleton_method(self.class(), id, method)?;
                     };
-                    //self.stack_push(Value::symbol(id));
                     self.pc += 9;
                 }
                 Inst::DEF_SMETHOD => {
@@ -1033,7 +1023,6 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_method(id, method);
                     };
-                    //self.stack_push(Value::symbol(id));
                     self.pc += 9;
                 }
                 Inst::TO_S => {
@@ -1417,7 +1406,6 @@ macro_rules! eval_op {
                 }
             }
         };
-        //$self.stack_push(val);
         return Ok(val);
     };
 }
@@ -1902,7 +1890,6 @@ impl VM {
                 val
             }
         };
-        //self.stack_push(val);
         Ok(val)
     }
 }

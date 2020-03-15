@@ -186,12 +186,12 @@ impl Codegen {
     }
 
     fn gen_get_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
-        iseq.push(Inst::GET_ARRAY_ELEM);
+        iseq.push(Inst::GET_INDEX);
         self.push32(iseq, num_args as u32);
     }
 
     fn gen_set_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
-        iseq.push(Inst::SET_ARRAY_ELEM);
+        iseq.push(Inst::SET_INDEX);
         self.push32(iseq, num_args as u32);
     }
 
@@ -752,8 +752,8 @@ impl Codegen {
                     Inst::SET_INSTANCE_VAR => {
                         format!("SET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
                     }
-                    Inst::GET_ARRAY_ELEM => format!("GET_ARY_ELEM {} items", read32(iseq, pc + 1)),
-                    Inst::SET_ARRAY_ELEM => format!("SET_ARY_ELEM {} items", read32(iseq, pc + 1)),
+                    Inst::GET_INDEX => format!("GET_INDEX {} items", read32(iseq, pc + 1)),
+                    Inst::SET_INDEX => format!("SET_INDEX {} items", read32(iseq, pc + 1)),
                     Inst::SEND => format!(
                         "SEND '{}' {} items",
                         ident_name(globals, iseq, pc + 1),

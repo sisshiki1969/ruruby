@@ -43,8 +43,8 @@ impl Inst {
     pub const SET_INSTANCE_VAR: u8 = 47;
     pub const GET_GLOBAL_VAR: u8 = 48;
     pub const SET_GLOBAL_VAR: u8 = 49;
-    pub const GET_ARRAY_ELEM: u8 = 50;
-    pub const SET_ARRAY_ELEM: u8 = 51;
+    pub const GET_INDEX: u8 = 50;
+    pub const SET_INDEX: u8 = 51;
 
     pub const CHECK_LOCAL: u8 = 52;
 
@@ -122,8 +122,8 @@ impl Inst {
             Inst::SET_INSTANCE_VAR => "SET_INST_VAR",
             Inst::GET_GLOBAL_VAR => "GET_GLBL_VAR",
             Inst::SET_GLOBAL_VAR => "SET_GLBL_VAR",
-            Inst::GET_ARRAY_ELEM => "GET_ARY_ELEM",
-            Inst::SET_ARRAY_ELEM => "SET_ARY_ELEM",
+            Inst::GET_INDEX => "GET_INDEX",
+            Inst::SET_INDEX => "SET_INDEX",
 
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SELF",
@@ -195,8 +195,8 @@ impl Inst {
             | Inst::SET_INSTANCE_VAR
             | Inst::GET_GLOBAL_VAR
             | Inst::SET_GLOBAL_VAR
-            | Inst::GET_ARRAY_ELEM
-            | Inst::SET_ARRAY_ELEM
+            | Inst::GET_INDEX
+            | Inst::SET_INDEX
             | Inst::CREATE_ARRAY
             | Inst::CREATE_PROC
             | Inst::JMP
