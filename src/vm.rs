@@ -64,29 +64,6 @@ impl DefineMode {
     }
 }
 
-macro_rules! try_err {
-    ($self:ident, $eval:expr) => {
-        match $eval {
-            Ok(_) => {}
-            Err(mut err) => {
-                if let RubyErrorKind::MethodReturn(m) = err.kind {
-                    if $self.context().iseq_ref.method == m {
-                        let result = $self.stack_pop();
-                        let prev_len = $self.context().stack_len;
-                        $self.exec_stack.truncate(prev_len);
-                        $self.stack_push(result);
-
-                        $self.unwind_context(&mut err);
-                        return Ok(());
-                    };
-                };
-                $self.unwind_context(&mut err);
-                return Err(err);
-            }
-        };
-    };
-}
-
 // API's
 
 impl VM {
@@ -316,8 +293,7 @@ impl VM {
             None => self.globals.main_object,
         };
         let arg = Args::new0(self_value, None);
-        self.vm_run(iseq, None, &arg)?;
-        let val = self.stack_pop();
+        let val = self.vm_run(iseq, None, &arg)?;
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -353,8 +329,7 @@ impl VM {
         context.adjust_lvar_size();
         context.pc = 0;
 
-        self.vm_run_context(context)?;
-        let val = self.stack_pop();
+        let val = self.vm_run_context(context)?;
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -376,7 +351,7 @@ impl VM {
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args: &Args,
-    ) -> Result<(), RubyError> {
+    ) -> Result<Value, RubyError> {
         let kw = if iseq.keyword_params.is_empty() {
             args.kw_arg
         } else {
@@ -414,11 +389,37 @@ impl VM {
             }
             _ => {}
         };
-        self.vm_run_context(ContextRef::from_local(&context))
+        let val = self.vm_run_context(ContextRef::from_local(&context))?;
+        Ok(val)
     }
+}
 
+macro_rules! try_err {
+    ($self:ident, $eval:expr) => {
+        match $eval {
+            Ok(val) => $self.stack_push(val),
+            Err(mut err) => {
+                if let RubyErrorKind::MethodReturn(m) = err.kind {
+                    if $self.context().iseq_ref.method == m {
+                        let result = $self.stack_pop();
+                        let prev_len = $self.context().stack_len;
+                        $self.exec_stack.truncate(prev_len);
+                        //$self.stack_push(result);
+
+                        $self.unwind_context(&mut err);
+                        return Ok(result);
+                    };
+                };
+                $self.unwind_context(&mut err);
+                return Err(err);
+            }
+        };
+    };
+}
+
+impl VM {
     /// Main routine for VM execution.
-    fn vm_run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
+    fn vm_run_context(&mut self, context: ContextRef) -> Result<Value, RubyError> {
         if let Some(prev_context) = self.context_stack.last_mut() {
             prev_context.pc = self.pc;
             prev_context.stack_len = self.exec_stack.len();
@@ -446,13 +447,14 @@ impl VM {
                     if !self.context_stack.is_empty() {
                         self.pc = self.context().pc;
                     }
-                    return Ok(());
+                    let val = self.stack_pop();
+                    return Ok(val);
                 }
                 Inst::RETURN => {
                     let res = if let ISeqKind::Proc(method) = context.iseq_ref.kind {
                         Err(self.error_method_return(method))
                     } else {
-                        Ok(())
+                        Ok(self.stack_pop())
                     };
                     self.context_stack.pop().unwrap();
                     if !self.context_stack.is_empty() {
@@ -513,8 +515,8 @@ impl VM {
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    self.eval_sub(lhs, rhs)?;
-                    self.pc += 1;
+                    try_err!(self, self.eval_sub(lhs, rhs, iseq));
+                    self.pc += 5;
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
@@ -525,7 +527,8 @@ impl VM {
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    self.eval_mul(lhs, rhs, iseq)?;
+                    let val = self.eval_mul(lhs, rhs, iseq)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::POW => {
@@ -788,7 +791,8 @@ impl VM {
                                 }
                                 ObjKind::Method(mref) => {
                                     args.self_value = mref.receiver;
-                                    self.eval_send(mref.method, &args)?;
+                                    let val = self.eval_send(mref.method, &args)?;
+                                    self.stack_push(val);
                                 }
                                 _ => return Err(self.error_undefined_method("[]", receiver)),
                             };
@@ -1355,7 +1359,8 @@ impl VM {
         match l_ref.get_instance_method(method) {
             Some(mref) => {
                 let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(mref.clone(), &arg)?;
+                let val = self.eval_send(mref.clone(), &arg)?;
+                self.stack_push(val);
                 Ok(())
             }
             None => {
@@ -1371,43 +1376,56 @@ impl VM {
         rhs: Value,
         method: IdentId,
         cache: u32,
-    ) -> Result<(), RubyError> {
+    ) -> Result<Value, RubyError> {
         let methodref = self.get_method_from_cache(cache, lhs, method)?;
         let arg = Args::new1(lhs, None, rhs);
-        return self.eval_send(methodref, &arg);
+        self.eval_send(methodref, &arg)
     }
+}
 
-    fn eval_add(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<(), RubyError> {
-        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            Value::fixnum(((*rhs as i64) + (*lhs as i64) - 2) / 2)
-        } else if rhs.is_packed_num() && lhs.is_packed_num() {
-            if rhs.is_packed_fixnum() {
-                Value::flonum(rhs.as_packed_fixnum() as f64 + lhs.as_packed_flonum())
-            } else if lhs.is_packed_fixnum() {
-                Value::flonum(rhs.as_packed_flonum() + lhs.as_packed_fixnum() as f64)
+macro_rules! eval_op {
+    ($self:ident, $iseq:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+        let val = if $lhs.is_packed_fixnum() && $rhs.is_packed_fixnum() {
+            Value::fixnum(($lhs.as_packed_fixnum()).$op($rhs.as_packed_fixnum()))
+        } else if $lhs.is_packed_num() && $rhs.is_packed_num() {
+            if $lhs.is_packed_fixnum() {
+                Value::flonum(($lhs.as_packed_fixnum() as f64).$op($rhs.as_packed_flonum()))
+            } else if $rhs.is_packed_fixnum() {
+                Value::flonum($lhs.as_packed_flonum().$op($rhs.as_packed_fixnum() as f64))
             } else {
-                Value::flonum(rhs.as_packed_flonum() + lhs.as_packed_flonum())
+                Value::flonum($lhs.as_packed_flonum().$op($rhs.as_packed_flonum()))
             }
         } else {
-            match lhs.is_object() {
-                Some(_) => {
-                    let cache = self.read32(iseq, 1);
-                    return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_ADD, cache);
-                }
-                None => match (lhs.unpack(), rhs.unpack()) {
-                    (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs + rhs),
-                    (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs as f64 + rhs),
-                    (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Value::flonum(lhs + rhs as f64),
-                    (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs + rhs),
-                    (_, _) => {
-                        let cache = self.read32(iseq, 1);
-                        return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_ADD, cache);
+            match ($lhs.as_rvalue(), $rhs.as_rvalue()) {
+                (Some(lhs), Some(rhs)) => match (lhs, rhs) {
+                    (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs.$op(rhs)),
+                    (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => {
+                        Value::flonum((*lhs as f64).$op(rhs))
+                    }
+                    (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => {
+                        Value::flonum(lhs.$op(*rhs as f64))
+                    }
+                    (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs.$op(rhs)),
+                    _ => {
+                        let cache = $self.read32($iseq, 1);
+                        return $self.fallback_to_method_with_cache($lhs, $rhs, $id, cache);
                     }
                 },
+                _ => {
+                    let cache = $self.read32($iseq, 1);
+                    return $self.fallback_to_method_with_cache($lhs, $rhs, $id, cache);
+                }
             }
         };
-        self.stack_push(val);
-        Ok(())
+        //$self.stack_push(val);
+        return Ok(val);
+    };
+}
+
+impl VM {
+    fn eval_add(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+        use std::ops::Add;
+        eval_op!(self, iseq, rhs, lhs, add, IdentId::_ADD);
     }
 
     fn eval_addi(&mut self, lhs: Value, i: i32) -> Result<Value, RubyError> {
@@ -1434,31 +1452,9 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_sub(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            Value::fixnum(((*lhs as i64) - (*rhs as i64)) / 2)
-        } else if lhs.is_packed_num() && rhs.is_packed_num() {
-            if lhs.is_packed_fixnum() {
-                Value::flonum(lhs.as_packed_fixnum() as f64 - rhs.as_packed_flonum())
-            } else if rhs.is_packed_fixnum() {
-                Value::flonum(lhs.as_packed_flonum() - rhs.as_packed_fixnum() as f64)
-            } else {
-                Value::flonum(lhs.as_packed_flonum() - rhs.as_packed_flonum())
-            }
-        } else {
-            match (lhs.unpack(), rhs.unpack()) {
-                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs - rhs),
-                (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs as f64 - rhs),
-                (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Value::flonum(lhs - rhs as f64),
-                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs - rhs),
-                (RValue::Object(l_ref), _) => {
-                    return self.fallback_to_method(IdentId::_SUB, lhs, rhs, l_ref.as_ref())
-                }
-                (_, _) => return Err(self.error_undefined_op("-", rhs, lhs)),
-            }
-        };
-        self.stack_push(val);
-        Ok(())
+    fn eval_sub(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+        use std::ops::Sub;
+        eval_op!(self, iseq, rhs, lhs, sub, IdentId::_SUB);
     }
 
     fn eval_subi(&mut self, lhs: Value, i: i32) -> Result<(), RubyError> {
@@ -1485,37 +1481,9 @@ impl VM {
         Ok(())
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<(), RubyError> {
-        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            Value::fixnum(lhs.as_packed_fixnum() * rhs.as_packed_fixnum())
-        } else if lhs.is_packed_num() && rhs.is_packed_num() {
-            if lhs.is_packed_fixnum() {
-                Value::flonum(lhs.as_packed_fixnum() as f64 * rhs.as_packed_flonum())
-            } else if rhs.is_packed_fixnum() {
-                Value::flonum(lhs.as_packed_flonum() * rhs.as_packed_fixnum() as f64)
-            } else {
-                Value::flonum(lhs.as_packed_flonum() * rhs.as_packed_flonum())
-            }
-        } else {
-            match lhs.is_object() {
-                Some(_oref) => {
-                    let cache = self.read32(iseq, 1);
-                    return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_MUL, cache);
-                }
-                None => match (lhs.unpack(), rhs.unpack()) {
-                    (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs * rhs),
-                    (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs as f64 * rhs),
-                    (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Value::flonum(lhs * rhs as f64),
-                    (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs * rhs),
-                    (_, _) => {
-                        let cache = self.read32(iseq, 1);
-                        return self.fallback_to_method_with_cache(lhs, rhs, IdentId::_MUL, cache);
-                    }
-                },
-            }
-        };
-        self.stack_push(val);
-        Ok(())
+    fn eval_mul(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+        use std::ops::Mul;
+        eval_op!(self, iseq, rhs, lhs, mul, IdentId::_MUL);
     }
 
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -1584,9 +1552,13 @@ impl VM {
 
     fn eval_exp(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            let lhs = lhs.as_packed_fixnum() as f64;
-            let rhs = rhs.as_packed_fixnum() as f64;
-            Value::flonum(lhs.powf(rhs))
+            let lhs = lhs.as_packed_fixnum();
+            let rhs = rhs.as_packed_fixnum();
+            if 0 <= rhs && rhs <= std::u32::MAX as i64 {
+                Value::fixnum(lhs.pow(rhs as u32))
+            } else {
+                Value::flonum((lhs as f64).powf(rhs as f64))
+            }
         } else if lhs.is_packed_num() && rhs.is_packed_num() {
             if lhs.is_packed_fixnum() {
                 let lhs = lhs.as_packed_fixnum() as f64;
@@ -1613,14 +1585,7 @@ impl VM {
                 (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs.powf(rhs)),
                 (RValue::Object(l_ref), _) => {
                     let method = IdentId::_POW;
-                    match l_ref.get_instance_method(method) {
-                        Some(mref) => {
-                            let arg = Args::new1(lhs, None, rhs);
-                            self.eval_send(mref.clone(), &arg)?;
-                        }
-                        None => return Err(self.error_undefined_op("**", rhs, lhs)),
-                    };
-                    return Ok(());
+                    return self.fallback_to_method(method, lhs, rhs, l_ref.as_ref());
                 }
                 (_, _) => return Err(self.error_undefined_op("**", rhs, lhs)),
             }
@@ -1638,9 +1603,9 @@ impl VM {
         match lhs.is_object() {
             Some(_) => {
                 let cache = self.read32(iseq, 1);
-                let methodref = self.get_method_from_cache(cache, lhs, IdentId::_SHL)?;
-                let arg = Args::new1(lhs, None, rhs);
-                self.eval_send(methodref, &arg)
+                let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
+                self.stack_push(val);
+                Ok(())
             }
             None => match (lhs.unpack(), rhs.unpack()) {
                 (RValue::FixNum(lhs), RValue::FixNum(rhs)) => {
@@ -1766,7 +1731,13 @@ impl VM {
                 false => "false".to_string(),
             },
             RValue::FixNum(i) => i.to_string(),
-            RValue::FloatNum(f) => f.to_string(),
+            RValue::FloatNum(f) => {
+                if f.fract() == 0.0 {
+                    format!("{:.1}", f)
+                } else {
+                    f.to_string()
+                }
+            }
             RValue::String(s) => match s {
                 RString::Str(s) => format!("{}", s),
                 RString::Bytes(b) => match String::from_utf8(b) {
@@ -1875,15 +1846,18 @@ impl VM {
             },
         }
     }
+
+    pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> Result<Value, RubyError> {
+        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let method = self.get_instance_method(rec_class, method_id)?;
+        let args = Args::new0(receiver, None);
+        let val = self.eval_send(method, &args)?;
+        Ok(val)
+    }
 }
 
 impl VM {
-    pub fn eval_send(
-        &mut self,
-        methodref: MethodRef,
-        args: &Args,
-        //keyword: Option<Value>,
-    ) -> Result<(), RubyError> {
+    pub fn eval_send(&mut self, methodref: MethodRef, args: &Args) -> Result<Value, RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
@@ -1920,16 +1894,16 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                self.vm_run(iseq, None, &args)?;
+                let val = self.vm_run(iseq, None, &args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
-                return Ok(());
+                val
             }
         };
-        self.stack_push(val);
-        Ok(())
+        //self.stack_push(val);
+        Ok(val)
     }
 }
 

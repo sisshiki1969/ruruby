@@ -161,8 +161,9 @@ impl Codegen {
         self.push32(iseq, i as u32);
     }
 
-    fn gen_sub(&mut self, iseq: &mut ISeq) {
+    fn gen_sub(&mut self, iseq: &mut ISeq, globals: &mut Globals) {
         iseq.push(Inst::SUB);
+        self.push32(iseq, globals.add_inline_cache_entry() as u32);
     }
 
     fn gen_subi(&mut self, iseq: &mut ISeq, i: i32) {
@@ -1005,7 +1006,7 @@ impl Codegen {
                             self.gen(globals, iseq, lhs, true)?;
                             self.gen(globals, iseq, rhs, true)?;
                             self.save_loc(iseq, loc);
-                            self.gen_sub(iseq);
+                            self.gen_sub(iseq, globals);
                         }
                     },
                     BinOp::Mul => {

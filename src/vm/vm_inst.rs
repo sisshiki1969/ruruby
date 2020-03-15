@@ -164,7 +164,6 @@ impl Inst {
             | Inst::PUSH_TRUE
             | Inst::PUSH_FALSE
             | Inst::PUSH_SELF
-            | Inst::SUB
             | Inst::DIV
             | Inst::REM
             | Inst::POW
@@ -205,6 +204,7 @@ impl Inst {
             | Inst::DUP
             | Inst::TAKE
             | Inst::ADD
+            | Inst::SUB
             | Inst::MUL
             | Inst::ADDI
             | Inst::SUBI

@@ -209,14 +209,23 @@ fn eql(vm: &mut VM, args: &Args) -> VMResult {
 fn toi(vm: &mut VM, args: &Args) -> VMResult {
     //vm.check_args_num(args.len(), 1, 1)?;
     let self_ = args.self_value;
-    let num = if self_.is_packed_num() {
-        if self_.is_packed_fixnum() {
-            self_.as_packed_fixnum()
-        } else {
-            f64::trunc(self_.as_packed_flonum()) as i64
+    let num = match self_.as_rvalue() {
+        Some(rval) => match rval {
+            RValue::FixNum(val) => *val,
+            RValue::FloatNum(val) => f64::trunc(*val) as i64,
+            _ => return Err(vm.error_type("Must be a number.")),
+        },
+        None => {
+            if self_.is_packed_num() {
+                if self_.is_packed_fixnum() {
+                    self_.as_packed_fixnum()
+                } else {
+                    f64::trunc(self_.as_packed_flonum()) as i64
+                }
+            } else {
+                return Err(vm.error_type("Must be a number."));
+            }
         }
-    } else {
-        return Err(vm.error_type("Must be a number."));
     };
     Ok(Value::fixnum(num))
 }
@@ -297,8 +306,8 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
         for i in 0..param_num {
             args.push(context.get_lvar(LvarId::from_usize(i)));
         }
-        vm.eval_send(method, &args)?;
-        Ok(vm.stack_pop())
+        let val = vm.eval_send(method, &args)?;
+        Ok(val)
     } else {
         return Err(vm.error_nomethod("super called outside of method"));
     }
@@ -325,8 +334,7 @@ fn send(vm: &mut VM, args: &Args) -> VMResult {
     }
     new_args.self_value = args.self_value;
     new_args.block = args.block;
-    vm.eval_send(method, &new_args)?;
-    let res = vm.stack_pop();
+    let res = vm.eval_send(method, &new_args)?;
     Ok(res)
 }
 
@@ -338,8 +346,7 @@ fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
     };
     let args = args.clone();
     let iseq = vm.get_iseq(method)?;
-    vm.vm_run(iseq, Some(outer), &args)?;
-    let res = vm.stack_pop();
+    let res = vm.vm_run(iseq, Some(outer), &args)?;
     Ok(res)
 }
 
@@ -353,8 +360,7 @@ fn eval(vm: &mut VM, args: &Args) -> VMResult {
     let iseq = vm.get_iseq(method)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);
-    vm.vm_run(iseq, Some(context), &args)?;
-    let res = vm.stack_pop();
+    let res = vm.vm_run(iseq, Some(context), &args)?;
     Ok(res)
 }
 
@@ -377,8 +383,7 @@ mod test {
 
         assert(true, ary_cmp([:@foo, :@bar], obj.instance_variables))
         "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -400,8 +405,7 @@ mod test {
         assert "bar", Foo.new.send(methods[2])
         assert "baz", Foo.new.send(methods[3])
         "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -436,8 +440,7 @@ mod test {
         #        具体的には 10 + 3; 20 + 3; 30 + 3 を実行した)
 
         "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -448,7 +451,26 @@ mod test {
         assert(77, eval("a = 77"))
         assert(77, a)
         "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_yield2() {
+        let program = r#"
+        class Array
+            def iich
+                len = self.size
+                for i in 0...len
+                    puts self[i]
+                    yield self[i]
+                end
+            end
+        end
+
+        sum = 0
+        [1,2,3,4,5].iich{|x| sum += x }
+        assert(15 ,sum)
+        "#;
+        assert_script(program);
     }
 }

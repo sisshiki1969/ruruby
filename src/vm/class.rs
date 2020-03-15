@@ -71,7 +71,6 @@ fn class_new(vm: &mut VM, args: &Args) -> VMResult {
         let mut args = args.clone();
         args.self_value = new_instance;
         vm.vm_run(iseq, None, &args)?;
-        vm.stack_pop();
     };
     Ok(new_instance)
 }

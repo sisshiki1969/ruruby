@@ -325,8 +325,8 @@ fn array_map(vm: &mut VM, args: &Args) -> VMResult {
                 None => arg[0] = *elem,
             }
         }
-        vm.vm_run(iseq, Some(context), &arg)?;
-        res.push(vm.stack_pop());
+        let val = vm.vm_run(iseq, Some(context), &arg)?;
+        res.push(val);
     }
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
@@ -358,8 +358,7 @@ fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
             }
         }
 
-        vm.vm_run(iseq, Some(context), &arg)?;
-        let ary = vm.stack_pop();
+        let ary = vm.vm_run(iseq, Some(context), &arg)?;
         match ary.as_array() {
             Some(mut ary) => {
                 res.append(&mut ary.elements);
@@ -401,7 +400,6 @@ fn array_each(vm: &mut VM, args: &Args) -> VMResult {
         };
 
         vm.vm_run(iseq, Some(context), &arg)?;
-        vm.stack_pop();
     }
     Ok(args.self_value)
 }
@@ -549,8 +547,7 @@ fn array_uniq_(vm: &mut VM, args: &Args) -> VMResult {
             let context = vm.context();
             aref.elements.retain(|x| {
                 let block_args = Args::new1(context.self_value, None, *x);
-                vm.eval_send(block, &block_args).unwrap();
-                let res = vm.stack_pop();
+                let res = vm.eval_send(block, &block_args).unwrap();
                 set.insert(res)
             });
             Ok(args.self_value)

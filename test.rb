@@ -1,11 +1,13 @@
-def iich(arr) # 引数に配列を取る
-    idx = 0
-    while idx < arr.size
-      yield(arr[idx]) # 引数の各要素毎に、その要素を引数にしてブロックを起動
-      idx += 1
+class Array
+    def iich
+        len = self.size
+        for i in 0...len
+            puts self[i]
+            yield self[i]
+        end
     end
 end
 
 sum = 0
-iich([1,2,3,4,5]) {|elem| p sum; sum += elem}
-p sum
+[1,2,3,4,5].iich{|x| sum += x }
+puts sum

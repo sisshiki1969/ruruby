@@ -118,6 +118,16 @@ impl Lexer {
         RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, 0, loc)
     }
 
+    fn error_parse(&self, msg: &String, pos: u32) -> RubyError {
+        let loc = Loc(pos, pos);
+        RubyError::new_parse_err(
+            ParseErrKind::SyntaxError(format!("Parse error. '{}'", msg)),
+            self.source_info,
+            0,
+            loc,
+        )
+    }
+
     pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, RubyError> {
         self.init(std::path::PathBuf::new(), code_text);
         let mut tokens = vec![];
@@ -536,11 +546,15 @@ impl Lexer {
             decimal_flag = true;
         }
         if decimal_flag {
-            let f = s.parse::<f64>().unwrap();
-            Ok(self.new_floatlit(f))
+            match s.parse::<f64>() {
+                Ok(f) => Ok(self.new_floatlit(f)),
+                Err(err) => Err(self.error_parse(&format!("{:?}", err), self.pos)),
+            }
         } else {
-            let i = s.parse::<i64>().unwrap();
-            Ok(self.new_numlit(i))
+            match s.parse::<i64>() {
+                Ok(i) => Ok(self.new_numlit(i)),
+                Err(err) => Err(self.error_parse(&format!("{:?}", err), self.pos)),
+            }
         }
     }
 

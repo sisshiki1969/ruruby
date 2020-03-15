@@ -297,8 +297,7 @@ fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
-        vm.vm_run(iseq, Some(context), &arg)?;
-        let b = vm.stack_pop();
+        let b = vm.vm_run(iseq, Some(context), &arg)?;
         if vm.val_to_bool(b) {
             res.insert(k, v);
         };
@@ -349,7 +348,6 @@ fn each_value(vm: &mut VM, args: &Args) -> VMResult {
     for (_, v) in hash.iter() {
         arg[0] = v;
         vm.vm_run(iseq, Some(context), &arg)?;
-        vm.stack_pop();
     }
 
     Ok(args.self_value)
@@ -368,7 +366,6 @@ fn each_key(vm: &mut VM, args: &Args) -> VMResult {
     for (k, _) in hash.iter() {
         arg[0] = k;
         vm.vm_run(iseq, Some(context), &arg)?;
-        vm.stack_pop();
     }
 
     Ok(args.self_value)
@@ -388,7 +385,6 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
         arg[0] = k;
         arg[1] = v;
         vm.vm_run(iseq, Some(context), &arg)?;
-        vm.stack_pop();
     }
 
     Ok(args.self_value)
