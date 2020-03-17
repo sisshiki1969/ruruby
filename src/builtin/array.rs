@@ -288,7 +288,7 @@ fn array_sub(vm: &mut VM, args: &Args) -> VMResult {
     for lhs in lhs_v {
         let mut flag = true;
         for rhs in rhs_v {
-            if lhs.equal(*rhs) {
+            if vm.eval_eq(*lhs, *rhs)? {
                 flag = false;
                 break;
             }
@@ -407,8 +407,12 @@ fn array_each(vm: &mut VM, args: &Args) -> VMResult {
 fn array_include(vm: &mut VM, args: &Args) -> VMResult {
     let target = args[0];
     let aref = self_array!(args, vm);
-    let res = aref.elements.iter().any(|x| x.clone().equal(target));
-    Ok(Value::bool(res))
+    for item in aref.elements.iter() {
+        if vm.eval_eq(*item, target)? {
+            return Ok(Value::true_val());
+        }
+    }
+    Ok(Value::false_val())
 }
 
 fn array_reverse(vm: &mut VM, args: &Args) -> VMResult {

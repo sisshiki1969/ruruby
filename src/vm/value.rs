@@ -80,7 +80,7 @@ impl std::hash::Hash for Value {
             None => self.0.hash(state),
             Some(lhs) => match lhs {
                 RValue::FixNum(lhs) => lhs.hash(state),
-                RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
+                RValue::FloatNum(lhs) => lhs.to_bits().hash(state),
                 RValue::String(lhs) => lhs.hash(state),
                 RValue::Range(lhs) => lhs.hash(state),
                 RValue::Object(lhs) => match lhs.kind {
@@ -101,28 +101,42 @@ impl std::hash::Hash for Value {
 }
 
 impl PartialEq for Value {
-    // Object#eql?()
-    // This type of equality is used for comparison for keys of Hash.
-    // Regexp, Range etc must be implemented.
     fn eq(&self, other: &Self) -> bool {
-        match (self.as_rvalue(), other.as_rvalue()) {
-            (None, None) => self.0 == other.0,
-            (Some(lhs), Some(rhs)) => match (lhs, rhs) {
-                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
-                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
-                (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
-                (RValue::Range(lhs), RValue::Range(rhs)) => *lhs == *rhs,
-                (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
-                    (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
-                        (HashInfo::Map(lhs), HashInfo::Map(rhs)) => lhs == rhs,
-                        (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => lhs == rhs,
-                        _ => false,
-                    },
-                    (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
-                    _ => lhs.kind == rhs.kind,
+        if self.id() == other.id() {
+            return true;
+        };
+        if self.is_packed_value() || other.is_packed_value() {
+            if self.is_packed_num() && other.is_packed_num() {
+                match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
+                    (true, false) => {
+                        return self.as_packed_fixnum() as f64 == other.as_packed_flonum()
+                    }
+                    (false, true) => {
+                        return self.as_packed_flonum() == other.as_packed_fixnum() as f64
+                    }
+                    _ => return false,
+                }
+            }
+            return false;
+        };
+        match (self.rvalue(), other.rvalue()) {
+            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
+            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
+            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
+            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
+            (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
+            (RValue::Range(lhs), RValue::Range(rhs)) => {
+                lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
+            }
+            (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
+                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
+                    _ => false,
                 },
-                _ => unreachable!("Illegal eq operand. {:?}, {:?}", *lhs, *rhs),
+                (_, _) => false,
             },
             _ => false,
         }
@@ -610,12 +624,7 @@ impl Value {
             }
             (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
-                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
-                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
-                    _ => false,
-                },
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
                 (_, _) => false,
             },
             _ => false,

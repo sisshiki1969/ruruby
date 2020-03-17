@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate ruruby;
 extern crate test;
-use ruruby::test::eval_script;
+use ruruby::test::*;
 use ruruby::vm::*;
 
 #[test]
@@ -57,8 +57,7 @@ fn float_lit1() {
         assert(123000000.0, 12.3e7)
         assert(0.000031, 3.1e-5)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -66,8 +65,7 @@ fn array_lit1() {
     let program = "
         assert([1,2,3], [1,2,3])
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -75,6 +73,5 @@ fn percent_notation() {
     let program = r#"
     assert(%w(We are the champions), ["We", "are", "the", "champions"])
 "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }

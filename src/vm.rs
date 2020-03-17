@@ -1640,66 +1640,31 @@ impl VM {
             _ => Err(self.error_nomethod("NoMethodError: '~'")),
         }
     }
+}
 
+macro_rules! eval_cmp {
+    ($self:ident, $rhs:expr, $lhs:expr, $op:ident) => {
+        match ($lhs.unpack(), $rhs.unpack()) {
+            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
+            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Ok(Value::bool(lhs.$op(&(rhs as f64)))),
+            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Ok(Value::bool((lhs as f64).$op(&rhs))),
+            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
+            (_, _) => Err($self.error_nomethod("NoMethodError: '>='")),
+        }
+    };
+}
+
+impl VM {
     pub fn eval_eq(&self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         Ok(rhs.equal(lhs))
     }
 
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::bool(
-                lhs.as_packed_fixnum() >= rhs.as_packed_fixnum(),
-            ));
-        }
-        if lhs.is_packed_num() && rhs.is_packed_num() {
-            if lhs.is_packed_fixnum() {
-                return Ok(Value::bool(
-                    lhs.as_packed_fixnum() as f64 >= rhs.as_packed_flonum(),
-                ));
-            } else if rhs.is_packed_fixnum() {
-                return Ok(Value::bool(
-                    lhs.as_packed_flonum() >= rhs.as_packed_fixnum() as f64,
-                ));
-            } else {
-                return Ok(Value::bool(
-                    lhs.as_packed_flonum() >= rhs.as_packed_flonum(),
-                ));
-            }
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Ok(Value::bool(lhs >= rhs)),
-            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Ok(Value::bool(lhs >= (rhs as f64))),
-            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Ok(Value::bool(lhs as f64 >= rhs)),
-            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Ok(Value::bool(lhs >= rhs)),
-            (_, _) => Err(self.error_nomethod("NoMethodError: '>='")),
-        }
+        eval_cmp!(self, rhs, lhs, ge)
     }
 
     pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::bool(lhs.as_packed_fixnum() > rhs.as_packed_fixnum()));
-        }
-        if lhs.is_packed_num() && rhs.is_packed_num() {
-            if lhs.is_packed_fixnum() {
-                return Ok(Value::bool(
-                    lhs.as_packed_fixnum() as f64 > rhs.as_packed_flonum(),
-                ));
-            } else if rhs.is_packed_fixnum() {
-                return Ok(Value::bool(
-                    lhs.as_packed_flonum() > rhs.as_packed_fixnum() as f64,
-                ));
-            } else {
-                return Ok(Value::bool(lhs.as_packed_flonum() > rhs.as_packed_flonum()));
-            }
-        }
-        let b = match (lhs.unpack(), rhs.unpack()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::bool(lhs > rhs),
-            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => Value::bool(lhs > (rhs as f64)),
-            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => Value::bool(lhs as f64 > rhs),
-            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::bool(lhs > rhs),
-            (_, _) => return Err(self.error_undefined_op(">", rhs, lhs)),
-        };
-        Ok(b)
+        eval_cmp!(self, rhs, lhs, gt)
     }
 }
 
@@ -2076,12 +2041,12 @@ impl VM {
         args
     }
 
-    fn pop_key_value_pair(&mut self, arg_num: usize) -> HashMap<Value, Value> {
+    fn pop_key_value_pair(&mut self, arg_num: usize) -> HashMap<HashKey, Value> {
         let mut hash = HashMap::new();
         for _ in 0..arg_num {
             let value = self.stack_pop();
             let key = self.stack_pop();
-            hash.insert(key, value);
+            hash.insert(HashKey(key), value);
         }
         hash
     }

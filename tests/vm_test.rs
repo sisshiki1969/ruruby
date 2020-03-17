@@ -66,8 +66,7 @@ fn expr8() {
         assert(201, -275&475)
         assert(-1301, 487555|-25879)
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -101,8 +100,7 @@ fn expr10() {
         assert(false, !0)
         assert(false, !"windows")
         "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -128,8 +126,7 @@ fn op3() {
         assert(true, 12345678==12345678)
         assert(true, 1234.5678==1234.5678)
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -141,8 +138,7 @@ fn op4() {
         assert(false, 12345678!=12345678)
         assert(false, 1234.5678!=1234.5678)
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -153,8 +149,7 @@ fn op9() {
         assert(4, nil || 4)
         assert(nil, nil || nil)
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -215,8 +210,7 @@ fn int_index() {
         assert(0, i[7])
         assert(0, i[700])
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -243,8 +237,7 @@ fn objects() {
 
         assert(Regexp, Regexp.new("a").class)
     "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -261,8 +254,7 @@ fn triple_equal() {
         assert(true, String === "ruby")
         assert(false, String === 100)
     "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -403,8 +395,7 @@ fn for5() {
         assert(for a in 0..2 do end, 0..2)
         assert(for a in 0..2 do if a == 1 then break end end, nil)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -415,8 +406,7 @@ fn while1() {
         assert((a = 0; while a < 5 do puts a; a+=1 end), nil)
         assert((a = 0; while a < 5 do puts a; break if a == 3; a+=1 end), nil)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -424,8 +414,7 @@ fn while2() {
     let program = "
         assert((a = 0; a+=1 while a < 5; a), 5)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -436,8 +425,7 @@ fn until1() {
         assert((a = 0; until a == 4 do puts a; a+=1 end), nil)
         assert((a = 0; until a == 4 do puts a; break if a == 3; a+=1 end), nil)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -445,8 +433,7 @@ fn until2() {
     let program = "
         assert((a = 0; a+=1 until a == 5; a), 5)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -459,8 +446,7 @@ fn proc_next() {
         assert(200, p.call(1))
         assert(100, p.call(7))
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -476,8 +462,7 @@ fn proc_return() {
         assert(100, func(3))
         assert(0, func(7))
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -502,8 +487,7 @@ fn global_var() {
                 end
             end
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -514,8 +498,7 @@ fn mul_assign1() {
             assert(2,b)
             assert(3,c)
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -525,8 +508,7 @@ fn mul_assign2() {
             assert(1,d)
             assert(2,e)
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -537,8 +519,7 @@ fn mul_assign3() {
             assert(2,g)
             assert(nil,h)
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -548,8 +529,7 @@ fn mul_assign4() {
             assert([1,2,3],f)
             assert([1,2,3],(f=1,2,3))
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -559,8 +539,7 @@ fn mul_assign5() {
             assert([a,b,c],[1,2,nil])
             assert(d,[1,2])
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -570,8 +549,7 @@ fn mul_assign6() {
             assert([a,b,c],[1,2,3])
             assert(d,[1,2,3,4,5])
             ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -585,8 +563,7 @@ fn mul_assign7() {
         a = *[1,2,3]
         assert(a,[1,2,3])
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -617,8 +594,7 @@ fn const2() {
             end
             Foo.new.foo
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -627,8 +603,7 @@ fn range1() {
     assert(Range.new(5,10), 5..10)
     assert(Range.new(5,10, false), 5..10)
     assert(Range.new(5,10, true), 5...10)";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -644,8 +619,7 @@ fn range2() {
     assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
     assert(Range.new(5,10,true).last(4), [6,7,8,9])
     assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -654,8 +628,7 @@ fn regexp1() {
     assert("abc!!g", "abcdefg".gsub(/def/, "!!"))
     assert("2.5".gsub(".", ","), "2,5")
     "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -674,8 +647,7 @@ fn method1() {
     m = Foo.method(:boo)
     assert("class 99", m.call(99))
     "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -697,8 +669,7 @@ fn local_scope() {
         assert(3,Foo.new.bar)
         assert(10,Foo.new.boo(5))
         assert(1,a)";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -745,8 +716,7 @@ fn class2() {
         assert(101, Vec.get_xxx)
         assert(102, Vec.get_xxx)
         assert(103, Vec.get_xxx)";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -761,8 +731,7 @@ fn class3() {
         assert(Class, Bar.class)
         assert(Bar, Bar.new.class)
         assert(Integer, -3456.class)";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -785,8 +754,7 @@ fn initialize() {
     v2 = v1.add(Vec.new(4.7, 8))
     assert(7.7, v2.x)
     assert(13.9, v2.y)";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -809,8 +777,7 @@ fn define_binop() {
     assert v.x, 5
     assert v.y, 9
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -822,8 +789,7 @@ fn lambda_literal() {
         assert 100, f0.call
         assert 300, f1.call(50)
         assert 35, f2.call(5,7)";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -842,8 +808,7 @@ fn closure1() {
         assert 101, p.call
         assert 102, p.call
         assert 103, p.call";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -854,8 +819,7 @@ fn closure2() {
         assert 5, f.call.call.call
         a = 7;
         assert 7, f.call.call.call";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -905,8 +869,7 @@ fn method_chain1() {
             .inc()
             .a
         assert 2, ans2";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -928,8 +891,7 @@ fn method_chain2() {
         assert [4,4,4,4], [1,2,3,4].map do || 4 end
         assert [7,7,7,7], [1,2,3,4].map do | | 7 end
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -945,8 +907,7 @@ fn assign_op() {
         assert 2, a&=2
         assert 11, a|=9
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -975,8 +936,7 @@ fn singleton() {
     assert(77, f.single)
     assert(200, Foo.new.single)
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -997,6 +957,5 @@ fn is_a() {
         assert false, obj.is_a?(Array)
         assert false, obj.is_a?(M)
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }

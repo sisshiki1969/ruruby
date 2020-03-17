@@ -71,7 +71,7 @@ impl Builtin {
         /// Built-in function "assert".
         fn builtin_assert(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 2, 2)?;
-            if !args[0].equal(args[1]) {
+            if !vm.eval_eq(args[0], args[1])? {
                 panic!(
                     "Assertion error: Expected: {} Actual: {}",
                     vm.val_inspect(args[0]),

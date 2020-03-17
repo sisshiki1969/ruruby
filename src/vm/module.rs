@@ -186,8 +186,7 @@ mod test {
     assert(123, Foo.bar)
     assert(123, Foo.new.bar)
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -213,8 +212,7 @@ mod test {
     assert(true, ary_cmp(Foo.constants, [:Bar, :Ker]))
     assert(true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker]))
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -231,8 +229,7 @@ mod test {
     assert 1000, bar.car
     assert :something, bar.cdr
     ";
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -249,6 +246,7 @@ mod test {
         end
     end
     def ary_cmp(a,b)
+        puts a,b
         return false if a - b != []
         return false if b - a != []
         true
@@ -256,7 +254,6 @@ mod test {
     assert(true, ary_cmp(A.constants, [:Bar, :Foo]))
     assert(true, ary_cmp(A.instance_methods - Class.instance_methods, [:fn, :fo]))
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 }

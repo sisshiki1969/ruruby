@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate ruruby;
 extern crate test;
-use ruruby::test::eval_script;
+use ruruby::test::*;
 use ruruby::vm::value::RValue;
 use test::Bencher;
 
@@ -84,8 +84,7 @@ fn optional_param() {
         assert([5,7,2], fx(5,7))
         assert([5,7,10], fx(5,7,10))
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -100,8 +99,7 @@ fn parameters() {
         assert([1,2,3,4,100,77,[],5,6,88], fn(1,2,3,4,5,6,kw:88))
         assert([1,2,3,4,5,6,[7,8],9,10,55], fn(1,2,3,4,5,6,7,8,9,10,kw:55))
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -112,6 +110,5 @@ fn return1() {
         end
         assert(fn, [1,2,3])
         ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }

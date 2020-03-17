@@ -1,8 +1,7 @@
 #![feature(test)]
 extern crate ruruby;
 extern crate test;
-use ruruby::test::eval_script;
-use ruruby::vm::value::RValue;
+use ruruby::test::*;
 
 #[test]
 fn array() {
@@ -22,8 +21,7 @@ fn array() {
     assert(a, [1,2,3,4])
     assert(b, [1,2,100,4])
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -35,8 +33,7 @@ fn array1() {
     assert([1,2,3]+[3,4,5], [1,2,3,3,4,5])
     assert([1,2,3]-[3,4,5], [1,2])
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -53,8 +50,7 @@ fn array2() {
     assert(a[7], nil)
     assert(a[7,3], [])
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -65,8 +61,7 @@ fn array3() {
     a[2,3] = 100
     assert(a, [1,2,100,6,7])
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -77,8 +72,7 @@ fn array_push() {
     a << "Ruby"
     assert([1,2,3,4,"Ruby"], a)
     "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -88,8 +82,7 @@ fn array_map() {
     assert(a.map {|| 3 }, [3,3,3])
     assert(a.map {|x| x*3 }, [3,6,9])
     assert(a, [1,2,3])";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -101,8 +94,7 @@ fn array_include() {
     assert(false, a.include?("c++"))
     assert(false, a.include?(:ruby))
     "#;
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -113,8 +105,7 @@ fn array_each() {
     assert([1,2,3], a.each {|x| b+=x })
     assert(6, b)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -126,6 +117,5 @@ fn array_reverse() {
     assert([5,4,3,2,1], a.reverse!)
     assert([5,4,3,2,1], a)
     ";
-    let expected = RValue::Nil;
-    eval_script(program, expected);
+    assert_script(program);
 }

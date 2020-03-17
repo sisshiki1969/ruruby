@@ -1,52 +1,113 @@
 use crate::vm::*;
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashInfo {
-    Map(HashMap<Value, Value>),
-    IdentMap(HashMap<IdentValue, Value>),
+    Map(HashMap<HashKey, Value>),
+    IdentMap(HashMap<IdentKey, Value>),
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct IdentValue(pub Value);
+pub struct HashKey(pub Value);
 
-impl std::ops::Deref for IdentValue {
+impl std::ops::Deref for HashKey {
     type Target = Value;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::hash::Hash for IdentValue {
+impl std::hash::Hash for HashKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self.as_rvalue() {
+            None => self.0.hash(state),
+            Some(lhs) => match lhs {
+                RValue::FixNum(lhs) => lhs.hash(state),
+                RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
+                RValue::String(lhs) => lhs.hash(state),
+                RValue::Range(lhs) => lhs.hash(state),
+                RValue::Object(lhs) => match lhs.kind {
+                    ObjKind::Array(lhs) => lhs.elements.hash(state),
+                    ObjKind::Hash(lhs) => {
+                        for (key, val) in lhs.iter() {
+                            key.hash(state);
+                            val.hash(state);
+                        }
+                    }
+                    ObjKind::Method(lhs) => lhs.inner().hash(state),
+                    _ => self.0.hash(state),
+                },
+                _ => self.0.hash(state),
+            },
+        }
+    }
+}
+
+impl PartialEq for HashKey {
+    // Object#eql?()
+    // This type of equality is used for comparison for keys of Hash.
+    fn eq(&self, other: &Self) -> bool {
+        match (self.as_rvalue(), other.as_rvalue()) {
+            (None, None) => self.0 == other.0,
+            (Some(lhs), Some(rhs)) => match (lhs, rhs) {
+                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
+                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
+                (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
+                (RValue::Range(lhs), RValue::Range(rhs)) => *lhs == *rhs,
+                (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                    (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
+                    (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
+                    _ => lhs.kind == rhs.kind,
+                },
+                _ => unreachable!("Illegal eq operand for HashKey. {:?}, {:?}", *lhs, *rhs),
+            },
+            _ => false,
+        }
+    }
+}
+impl Eq for HashKey {}
+
+#[derive(Debug, Clone, Copy)]
+pub struct IdentKey(pub Value);
+
+impl std::ops::Deref for IdentKey {
+    type Target = Value;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::hash::Hash for IdentKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (*self.0).hash(state);
     }
 }
 
-impl PartialEq for IdentValue {
+impl PartialEq for IdentKey {
     // Object#eql?()
     // This type of equality is used for comparison for keys of Hash.
     fn eq(&self, other: &Self) -> bool {
         *self.0 == *other.0
     }
 }
-impl Eq for IdentValue {}
+impl Eq for IdentKey {}
 
 use std::collections::hash_map;
 
 pub enum IntoIter {
-    Map(hash_map::IntoIter<Value, Value>),
-    IdentMap(hash_map::IntoIter<IdentValue, Value>),
+    Map(hash_map::IntoIter<HashKey, Value>),
+    IdentMap(hash_map::IntoIter<IdentKey, Value>),
 }
 
 pub enum Iter<'a> {
-    Map(hash_map::Iter<'a, Value, Value>),
-    IdentMap(hash_map::Iter<'a, IdentValue, Value>),
+    Map(hash_map::Iter<'a, HashKey, Value>),
+    IdentMap(hash_map::Iter<'a, IdentKey, Value>),
 }
 
 pub enum IterMut<'a> {
-    Map(hash_map::IterMut<'a, Value, Value>),
-    IdentMap(hash_map::IterMut<'a, IdentValue, Value>),
+    Map(hash_map::IterMut<'a, HashKey, Value>),
+    IdentMap(hash_map::IterMut<'a, IdentKey, Value>),
 }
 
 impl IntoIter {
@@ -79,7 +140,7 @@ impl Iterator for IntoIter {
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             IntoIter::Map(map) => match map.next() {
-                Some((k, v)) => Some((k, v)),
+                Some((k, v)) => Some((k.0, v)),
                 None => None,
             },
             IntoIter::IdentMap(map) => match map.next() {
@@ -97,7 +158,7 @@ macro_rules! define_iterator {
             fn next(&mut self) -> Option<Self::Item> {
                 match self {
                     $ty2::Map(map) => match map.next() {
-                        Some((k, v)) => Some((*k, *v)),
+                        Some((k, v)) => Some((k.0, *v)),
                         None => None,
                     },
                     $ty2::IdentMap(map) => match map.next() {
@@ -138,7 +199,7 @@ impl IntoIterator for HashInfo {
 }
 
 impl HashInfo {
-    pub fn new(map: HashMap<Value, Value>) -> Self {
+    pub fn new(map: HashMap<HashKey, Value>) -> Self {
         HashInfo::Map(map)
     }
 
@@ -152,8 +213,8 @@ impl HashInfo {
 
     pub fn get(&self, v: &Value) -> Option<&Value> {
         match self {
-            HashInfo::Map(map) => map.get(v),
-            HashInfo::IdentMap(map) => map.get(&IdentValue(*v)),
+            HashInfo::Map(map) => map.get(&HashKey(*v)),
+            HashInfo::IdentMap(map) => map.get(&IdentKey(*v)),
         }
     }
 
@@ -173,28 +234,28 @@ impl HashInfo {
 
     pub fn insert(&mut self, k: Value, v: Value) {
         match self {
-            HashInfo::Map(map) => map.insert(k, v),
-            HashInfo::IdentMap(map) => map.insert(IdentValue(k), v),
+            HashInfo::Map(map) => map.insert(HashKey(k), v),
+            HashInfo::IdentMap(map) => map.insert(IdentKey(k), v),
         };
     }
 
     pub fn remove(&mut self, k: Value) -> Option<Value> {
         match self {
-            HashInfo::Map(map) => map.remove(&k),
-            HashInfo::IdentMap(map) => map.remove(&IdentValue(k)),
+            HashInfo::Map(map) => map.remove(&HashKey(k)),
+            HashInfo::IdentMap(map) => map.remove(&IdentKey(k)),
         }
     }
 
     pub fn contains_key(&self, k: Value) -> bool {
         match self {
-            HashInfo::Map(map) => map.contains_key(&k),
-            HashInfo::IdentMap(map) => map.contains_key(&IdentValue(k)),
+            HashInfo::Map(map) => map.contains_key(&HashKey(k)),
+            HashInfo::IdentMap(map) => map.contains_key(&IdentKey(k)),
         }
     }
 
     pub fn keys(&self) -> Vec<Value> {
         match self {
-            HashInfo::Map(map) => map.keys().cloned().collect(),
+            HashInfo::Map(map) => map.keys().map(|x| x.0).collect(),
             HashInfo::IdentMap(map) => map.keys().map(|x| x.0).collect(),
         }
     }
@@ -210,7 +271,7 @@ impl HashInfo {
 pub type HashRef = Ref<HashInfo>;
 
 impl HashRef {
-    pub fn from(map: HashMap<Value, Value>) -> Self {
+    pub fn from(map: HashMap<HashKey, Value>) -> Self {
         HashRef::new(HashInfo::new(map))
     }
 }
@@ -299,7 +360,7 @@ fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
         arg[1] = v;
         let b = vm.vm_run(iseq, Some(context), &arg)?;
         if vm.val_to_bool(b) {
-            res.insert(k, v);
+            res.insert(HashKey(k), v);
         };
     }
 
@@ -425,7 +486,7 @@ fn compare_by_identity(vm: &mut VM, args: &Args) -> VMResult {
     let inner = hash.inner_mut();
     match inner {
         HashInfo::Map(map) => {
-            let new_map = map.into_iter().map(|(k, v)| (IdentValue(*k), *v)).collect();
+            let new_map = map.into_iter().map(|(k, v)| (IdentKey(k.0), *v)).collect();
             *inner = HashInfo::IdentMap(new_map);
         }
         HashInfo::IdentMap(_) => {}
@@ -450,8 +511,7 @@ mod test {
     assert(h["ruby"], "string")
     assert(h[:ruby], "symbol")
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -465,8 +525,7 @@ mod test {
     assert(h[7.7], "7.7")
     assert(h[:ruby], "string")
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -494,8 +553,7 @@ mod test {
     h2.clear()
     assert(h2.empty?, true)
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
     }
 
     #[test]
@@ -509,7 +567,23 @@ mod test {
         assert({"a"=>100, "b"=>357, "c"=>300, "d"=>400}, h1.merge(h2, h3)) 
         assert({"a"=>100, "b"=>200}, h1)
     "#;
-        let expected = RValue::Nil;
-        eval_script(program, expected);
+        assert_script(program);
+    }
+
+    #[test]
+    fn hash_compare_by_identity() {
+        let program = r#"
+        a = "a"
+        h1 = {}
+        h1[a] = 100
+        assert 100, h1["a"]
+        assert 100, h1[a]
+        h2 = {}
+        h2.compare_by_identity
+        h2[a] = 100
+        assert nil, h2["a"]
+        assert 100, h2[a]
+    "#;
+        assert_script(program);
     }
 }
