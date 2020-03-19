@@ -302,20 +302,27 @@ fn array_sub(vm: &mut VM, args: &Args) -> VMResult {
 
 fn array_map(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
+    let iseq = vm.get_iseq(method)?;
     let mut res = vec![];
     let context = vm.context();
     let param_num = iseq.req_params;
     let mut arg = Args::new(param_num);
     arg.self_value = context.self_value;
-    for elem in &aref.elements {
-        if param_num == 0 {
-        } else if param_num == 1 {
+
+    if param_num == 0 {
+        for _elem in &aref.elements {
+            let val = vm.eval_block(method, &arg)?;
+            res.push(val);
+        }
+    } else if param_num == 1 {
+        for elem in &aref.elements {
             arg[0] = *elem;
-        } else {
+            let val = vm.eval_block(method, &arg)?;
+            res.push(val);
+        }
+    } else {
+        for elem in &aref.elements {
             match elem.as_array() {
                 Some(ary) => {
                     for i in 0..param_num {
@@ -324,23 +331,21 @@ fn array_map(vm: &mut VM, args: &Args) -> VMResult {
                 }
                 None => arg[0] = *elem,
             }
+            let val = vm.eval_block(method, &arg)?;
+            res.push(val);
         }
-        let val = vm.vm_run(iseq, Some(context), &arg)?;
-        res.push(val);
-    }
+    };
+
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
 
 fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let mut res = vec![];
     let context = vm.context();
-    let param_num = iseq.req_params;
+    let param_num = vm.get_iseq(method)?.req_params;
     let mut arg = Args::new(param_num);
     arg.self_value = context.self_value;
     for elem in &aref.elements {
@@ -358,7 +363,7 @@ fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
             }
         }
 
-        let ary = vm.vm_run(iseq, Some(context), &arg)?;
+        let ary = vm.eval_block(method, &arg)?;
         match ary.as_array() {
             Some(mut ary) => {
                 res.append(&mut ary.elements);
@@ -372,13 +377,10 @@ fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
 
 fn array_each(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let context = vm.context();
     //let mut arg = Args::new1(context.self_value, None, Value::nil());
-    let mut arg = Args::new(iseq.req_params);
+    let mut arg = Args::new(vm.get_iseq(method)?.req_params);
     arg.self_value = context.self_value;
     for i in &aref.elements {
         match i.as_array() {
@@ -399,7 +401,7 @@ fn array_each(vm: &mut VM, args: &Args) -> VMResult {
             }
         };
 
-        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.eval_block(method, &arg)?;
     }
     Ok(args.self_value)
 }

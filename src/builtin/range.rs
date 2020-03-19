@@ -99,17 +99,14 @@ fn range_last(vm: &mut VM, args: &Args) -> VMResult {
 
 fn range_map(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let mut res = vec![];
     let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        let val = vm.vm_run(iseq, Some(context), &arg)?;
+        let val = vm.eval_block(method, &arg)?;
         res.push(val);
     }
     let res = Value::array_from(&vm.globals, res);
@@ -118,32 +115,26 @@ fn range_map(vm: &mut VM, args: &Args) -> VMResult {
 
 fn range_each(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.eval_block(method, &arg)?;
     }
     Ok(args.self_value)
 }
 
 fn range_all(vm: &mut VM, args: &Args) -> VMResult {
     let range = args.self_value.as_range().unwrap();
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
-        let res = vm.vm_run(iseq, Some(context), &arg)?;
+        let res = vm.eval_block(method, &arg)?;
         if !vm.val_to_bool(res) {
             return Ok(Value::false_val());
         }

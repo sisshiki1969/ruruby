@@ -287,13 +287,12 @@ impl VM {
 
     pub fn run(&mut self, path: PathBuf, program: &String, self_value: Option<Value>) -> VMResult {
         let method = self.parse_program(path, program)?;
-        let iseq = self.get_iseq(method)?;
         let self_value = match self_value {
             Some(val) => val,
             None => self.globals.main_object,
         };
         let arg = Args::new0(self_value, None);
-        let val = self.vm_run(iseq, None, &arg)?;
+        let val = self.eval_send(method, &arg)?;
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -1871,6 +1870,13 @@ impl VM {
             }
         };
         Ok(val)
+    }
+
+    pub fn expect_block(&self, block: Option<MethodRef>) -> Result<MethodRef, RubyError> {
+        match block {
+            Some(method) => Ok(method),
+            None => return Err(self.error_argument("Currently, needs block.")),
+        }
     }
 }
 

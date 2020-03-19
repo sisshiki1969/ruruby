@@ -348,17 +348,13 @@ fn hash_empty(vm: &mut VM, args: &Args) -> VMResult {
 
 fn hash_select(vm: &mut VM, args: &Args) -> VMResult {
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let mut res = HashMap::new();
-    let context = vm.context();
     let mut arg = Args::new2(args.self_value, None, Value::nil(), Value::nil());
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
-        let b = vm.vm_run(iseq, Some(context), &arg)?;
+        let b = vm.eval_block(method, &arg)?;
         if vm.val_to_bool(b) {
             res.insert(HashKey(k), v);
         };
@@ -400,15 +396,12 @@ fn hash_values(vm: &mut VM, args: &Args) -> VMResult {
 fn each_value(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let context = vm.context();
     let mut arg = Args::new1(context.self_value, None, Value::nil());
     for (_, v) in hash.iter() {
         arg[0] = v;
-        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.eval_block(method, &arg)?;
     }
 
     Ok(args.self_value)
@@ -417,16 +410,13 @@ fn each_value(vm: &mut VM, args: &Args) -> VMResult {
 fn each_key(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let context = vm.context();
     let mut arg = Args::new1(context.self_value, None, Value::nil());
 
     for (k, _) in hash.iter() {
         arg[0] = k;
-        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.eval_block(method, &arg)?;
     }
 
     Ok(args.self_value)
@@ -435,17 +425,14 @@ fn each_key(vm: &mut VM, args: &Args) -> VMResult {
 fn each(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(args.self_value, vm);
-    let iseq = match args.block {
-        Some(method) => vm.get_iseq(method)?,
-        None => return Err(vm.error_argument("Currently, needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
     let context = vm.context();
     let mut arg = Args::new2(context.self_value, None, Value::nil(), Value::nil());
 
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
-        vm.vm_run(iseq, Some(context), &arg)?;
+        vm.eval_block(method, &arg)?;
     }
 
     Ok(args.self_value)
