@@ -19,6 +19,7 @@ impl Builtin {
         globals.add_builtin_method("to_s", builtin_tos);
         globals.add_builtin_method("Integer", builtin_integer);
         globals.add_builtin_method("__dir__", builtin_dir);
+        globals.add_builtin_method("__FILE__", builtin_file);
         globals.add_builtin_method("raise", builtin_raise);
         globals.add_builtin_method("rand", builtin_rand);
 
@@ -225,6 +226,12 @@ impl Builtin {
             vm.check_args_num(args.len(), 0, 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
+            Ok(Value::string(path.to_string_lossy().to_string()))
+        }
+
+        fn builtin_file(vm: &mut VM, args: &Args) -> VMResult {
+            vm.check_args_num(args.len(), 0, 0)?;
+            let path = vm.root_path.last().unwrap().clone();
             Ok(Value::string(path.to_string_lossy().to_string()))
         }
 

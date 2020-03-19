@@ -1,13 +1,14 @@
-class Array
-    def iich
-        len = self.size
-        for i in 0...len
-            puts self[i]
-            yield self[i]
-        end
+module Foo
+    def bow
+        p "bow"
     end
 end
-
-sum = 0
-[1,2,3,4,5].iich{|x| sum += x }
-puts sum
+class Bar
+  include Foo
+end
+class Baz < Bar
+  p ancestors
+  p included_modules
+  p superclass
+end
+Baz.new.bow

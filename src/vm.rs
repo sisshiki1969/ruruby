@@ -1297,14 +1297,14 @@ impl VM {
         }
     }
 
-    fn get_global_var(&self, id: IdentId) -> Value {
+    pub fn get_global_var(&self, id: IdentId) -> Value {
         match self.global_var.get(&id) {
             Some(val) => val.clone(),
             None => Value::nil(),
         }
     }
 
-    fn set_global_var(&mut self, id: IdentId, val: Value) {
+    pub fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.global_var.insert(id, val);
     }
 }
@@ -1795,6 +1795,7 @@ impl VM {
                         Err(_) => "<ByteArray>".to_string(),
                     },
                 },
+                RValue::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
                 _ => self.val_to_s(val),
             },
         }
@@ -1811,6 +1812,19 @@ impl VM {
 
 impl VM {
     pub fn eval_send(&mut self, methodref: MethodRef, args: &Args) -> Result<Value, RubyError> {
+        self.eval_method(methodref, args, false)
+    }
+
+    pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> Result<Value, RubyError> {
+        self.eval_method(methodref, args, true)
+    }
+
+    pub fn eval_method(
+        &mut self,
+        methodref: MethodRef,
+        args: &Args,
+        is_block: bool,
+    ) -> Result<Value, RubyError> {
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
@@ -1847,7 +1861,8 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                let val = self.vm_run(iseq, None, &args)?;
+                let outer = if is_block { Some(self.context()) } else { None };
+                let val = self.vm_run(iseq, outer, &args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
@@ -2130,9 +2145,9 @@ impl VM {
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_string(&self, string: &String) -> Result<fancy_regex::Regex, RubyError> {
+    pub fn regexp_from_string(&self, string: &String) -> Result<Regexp, RubyError> {
         match fancy_regex::Regex::new(&regex::escape(string)) {
-            Ok(re) => Ok(re),
+            Ok(re) => Ok(Regexp::new(re)),
             Err(err) => Err(self.error_regexp(err)),
         }
     }

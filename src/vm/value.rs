@@ -272,7 +272,19 @@ impl Value {
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.as_class().method_table.get(&id).cloned()
+        let cref = self.as_module().unwrap();
+        match cref.method_table.get(&id) {
+            Some(method) => Some(*method),
+            None => {
+                for v in &cref.include {
+                    match v.get_instance_method(id) {
+                        Some(method) => return Some(method),
+                        None => {}
+                    }
+                }
+                None
+            }
+        }
     }
 }
 

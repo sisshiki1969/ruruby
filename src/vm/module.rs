@@ -12,6 +12,8 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
     globals.add_builtin_instance_method(class, "const_get", const_get);
     globals.add_builtin_instance_method(class, "include", include);
+    globals.add_builtin_instance_method(class, "included_modules", included_modules);
+    globals.add_builtin_instance_method(class, "ancestors", ancestors);
 }
 
 fn constants(vm: &mut VM, args: &Args) -> VMResult {
@@ -166,8 +168,65 @@ fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::bool(class.is_singleton))
 }
 
-fn include(_vm: &mut VM, _args: &Args) -> VMResult {
+fn include(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let mut class = vm.val_as_module(args.self_value)?;
+    let module = args[0];
+    class.include.push(module);
     Ok(Value::nil())
+}
+
+fn included_modules(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut class = args.self_value;
+    let mut ary = vec![];
+    loop {
+        if class.is_nil() {
+            break;
+        }
+        class = match class.as_module() {
+            Some(cref) => {
+                for included in &cref.include {
+                    ary.push(*included);
+                }
+                cref.superclass
+            }
+            None => {
+                return Err(vm.error_internal(format!(
+                    "Illegal value in superclass chain. {}",
+                    vm.val_inspect(class)
+                )))
+            }
+        };
+    }
+    Ok(Value::array_from(&vm.globals, ary))
+}
+
+fn ancestors(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut superclass = args.self_value;
+    let mut ary = vec![];
+    loop {
+        if superclass.is_nil() {
+            break;
+        }
+        ary.push(superclass);
+        superclass = match superclass.as_module() {
+            Some(cref) => {
+                for included in &cref.include {
+                    ary.push(*included);
+                }
+                cref.superclass
+            }
+            None => {
+                return Err(vm.error_internal(format!(
+                    "Illegal value in superclass chain. {}",
+                    vm.val_inspect(superclass)
+                )))
+            }
+        };
+    }
+    Ok(Value::array_from(&vm.globals, ary))
 }
 
 #[cfg(test)]

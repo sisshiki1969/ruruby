@@ -1,5 +1,4 @@
 use crate::vm::*;
-use fancy_regex::Regex;
 use std::string::FromUtf8Error;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -62,10 +61,12 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "split", string_split);
     globals.add_builtin_instance_method(class, "sub", string_sub);
     globals.add_builtin_instance_method(class, "gsub", string_gsub);
+    globals.add_builtin_instance_method(class, "scan", string_scan);
     globals.add_builtin_instance_method(class, "=~", string_rmatch);
     globals.add_builtin_instance_method(class, "tr", string_tr);
     globals.add_builtin_instance_method(class, "size", string_size);
     globals.add_builtin_instance_method(class, "bytes", string_bytes);
+    globals.add_builtin_instance_method(class, "chars", string_chars);
     globals.add_builtin_instance_method(class, "sum", string_sum);
 
     Value::class(globals, class)
@@ -162,52 +163,15 @@ fn string_split(vm: &mut VM, args: &Args) -> VMResult {
     }
 }
 
-fn replace_one(re: &Regex, given: &String, replace: &String) -> Result<String, String> {
-    let res = match re.captures(given) {
-        Ok(None) => given.to_string(),
-        Ok(Some(captures)) => {
-            let mut res = given.to_string();
-            let c = captures.get(0).unwrap();
-            let mut rep = "".to_string();
-            let mut escape = false;
-            for ch in replace.chars() {
-                if escape {
-                    match ch {
-                        '0'..='9' => {
-                            let i = ch as usize - '0' as usize;
-                            match captures.get(i) {
-                                Some(m) => rep += m.as_str(),
-                                None => {}
-                            };
-                        }
-                        _ => rep.push(ch),
-                    };
-                    escape = false;
-                } else {
-                    if ch != '\\' {
-                        rep.push(ch);
-                    } else {
-                        escape = true;
-                    };
-                }
-            }
-            res.replace_range(c.start()..c.end(), &rep);
-            res
-        }
-        Err(err) => return Err(format!("{:?}", err)),
-    };
-    Ok(res)
-}
-
 fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     let given = expect_string!(vm, args.self_value);
     let replace = expect_string!(vm, args[1]);
     let res = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(s)?;
-        replace_one(&re, given, replace)
+        Regexp::replace_one(vm, &re, given, replace)
     } else if let Some(re) = args[0].as_regexp() {
-        replace_one(&re.regexp, given, replace)
+        Regexp::replace_one(vm, &re.regexp, given, replace)
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
@@ -220,59 +184,61 @@ fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {
-    fn replace_all(re: &Regex, given: &String, replace: &String) -> Result<String, String> {
-        let mut range = vec![];
-        let mut i = 0;
-        loop {
-            match re.captures_from_pos(given, i) {
-                Ok(None) => break,
-                Ok(Some(captures)) => {
-                    let c = captures.get(0).unwrap();
-                    i = c.end();
-                    range.push((c.start(), c.end()));
-                }
-                Err(err) => return Err(format!("{:?}", err)),
-            };
-        }
-        let mut res = given.to_string();
-        for (start, end) in range.iter().rev() {
-            res.replace_range(start..end, replace);
-        }
-        Ok(res)
-    }
-
     vm.check_args_num(args.len(), 2, 2)?;
     let given = expect_string!(vm, args.self_value);
     let replace = expect_string!(vm, args[1]);
     let res = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(s)?;
-        replace_all(&re, given, replace)
+        Regexp::replace_all(vm, &re, given, replace)
     } else if let Some(re) = args[0].as_regexp() {
-        replace_all(&re.regexp, given, replace)
+        Regexp::replace_all(vm, &re.regexp, given, replace)
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
     let res = match res {
         Ok(res) => res,
-        Err(err) => return Err(vm.error_argument(format!("capture failed. {}", err))),
+        Err(err) => return Err(vm.error_internal(format!("Capture failed. {}", err))),
     };
 
     Ok(Value::string(res))
 }
 
+fn string_scan(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let given = expect_string!(vm, args.self_value);
+    let vec = if let Some(s) = args[0].as_string() {
+        let re = vm.regexp_from_string(s)?;
+        Regexp::find_all(vm, &re, given)
+    } else if let Some(re) = args[0].as_regexp() {
+        Regexp::find_all(vm, &re.regexp, given)
+    } else {
+        return Err(vm.error_argument("1st arg must be RegExp or String."));
+    }?;
+    match args.block {
+        Some(block) => {
+            let self_value = vm.context().self_value;
+            for arg in vec {
+                let block_args = Args::new1(self_value, None, arg);
+                vm.eval_block(block, &block_args)?;
+            }
+            Ok(args.self_value)
+        }
+        None => Ok(Value::array_from(&vm.globals, vec)),
+    }
+}
+
 fn string_rmatch(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let given = args.self_value.as_string().unwrap();
-    let matched = if let Some(re) = args[0].as_regexp() {
-        re.regexp.find(given).unwrap()
+    if let Some(re) = args[0].as_regexp() {
+        let res = match Regexp::find_one(vm, &re.regexp, given).unwrap() {
+            Some(mat) => Value::fixnum(mat.start() as i64),
+            None => Value::nil(),
+        };
+        return Ok(res);
     } else {
         return Err(vm.error_argument("1st arg must be RegExp."));
     };
-    let res = match matched {
-        Some(mat) => Value::fixnum(mat.start() as i64),
-        None => Value::nil(),
-    };
-    Ok(res)
 }
 
 fn string_tr(vm: &mut VM, args: &Args) -> VMResult {
@@ -300,6 +266,19 @@ fn string_bytes(vm: &mut VM, args: &Args) -> VMResult {
     for b in bytes {
         ary.push(Value::fixnum(*b as i64));
     }
+    Ok(Value::array_from(&vm.globals, ary))
+}
+
+fn string_chars(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let string = match args.self_value.as_string() {
+        Some(string) => string,
+        None => return Err(vm.error_type("Receiver must be String.")),
+    };
+    let ary: Vec<Value> = string
+        .chars()
+        .map(|c| Value::string(c.to_string()))
+        .collect();
     Ok(Value::array_from(&vm.globals, ary))
 }
 
@@ -377,6 +356,19 @@ mod test {
     fn string_sum() {
         let program = r#"
         assert 394, "abcd".sum
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_scan() {
+        let program = r#"
+        assert ["fo", "ob", "ar"], "foobar".scan(/../)
+        assert ["o", "o"], "foobar".scan("o")
+        assert ["bar", "baz", "bar", "baz"], "foobarbazfoobarbaz".scan(/ba./)
+        assert [["f"], ["o"], ["o"], ["b"], ["a"], ["r"]], "foobar".scan(/(.)/)
+        assert [["ba", "r", ""], ["ba", "z", ""], ["ba", "r", ""], ["ba", "z", ""]], "foobarbazfoobarbaz".scan(/(ba)(.)()/)
+        "foobarbazfoobarbaz".scan(/ba./) {|x| puts x}
         "#;
         assert_script(program);
     }

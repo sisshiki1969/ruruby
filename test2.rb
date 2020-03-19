@@ -1,10 +1,7 @@
-a = "a"
-h1 = {}
-h1[a] = 100
-p h1["a"]
-p h1[a]
-h2 = {}
-h2.compare_by_identity
-h2[a] = 100
-p h2["a"]
-p h2[a]
+p "foobar".scan(/../)               # => ["fo", "ob", "ar"]
+p "foobar".scan("o")                # => ["o", "o"]
+p "foobarbazfoobarbaz".scan(/ba./)  # => ["bar", "baz", "bar", "baz"]
+
+p "foobar".scan(/(.)/) # => [["f"], ["o"], ["o"], ["b"], ["a"], ["r"]]
+
+p "foobarbazfoobarbaz".scan(/(ba)(.)()/) # => [["ba", "r"], ["ba", "z"], ["ba", "r"], ["ba", "z"]]

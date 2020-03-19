@@ -172,6 +172,7 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "eql?", eql);
     globals.add_builtin_instance_method(object, "to_i", toi);
     globals.add_builtin_instance_method(object, "instance_variable_set", instance_variable_set);
+    globals.add_builtin_instance_method(object, "instance_variable_get", instance_variable_get);
     globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
     globals.add_builtin_instance_method(object, "floor", floor);
     globals.add_builtin_instance_method(object, "freeze", freeze);
@@ -243,6 +244,24 @@ fn instance_variable_set(vm: &mut VM, args: &Args) -> VMResult {
     };
     let mut self_obj = args.self_value.as_object();
     self_obj.set_var(var_id, val);
+    Ok(val)
+}
+
+fn instance_variable_get(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let name = args[0];
+    let var_id = match name.as_symbol() {
+        Some(symbol) => symbol,
+        None => match name.as_string() {
+            Some(s) => vm.globals.get_ident_id(s),
+            None => return Err(vm.error_type("1st arg must be Symbol or String.")),
+        },
+    };
+    let self_obj = args.self_value.as_object();
+    let val = match self_obj.get_var(var_id) {
+        Some(val) => val,
+        None => Value::nil(),
+    };
     Ok(val)
 }
 

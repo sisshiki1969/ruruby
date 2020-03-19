@@ -7,6 +7,7 @@ pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub method_table: MethodTable,
     pub superclass: Value,
+    pub include: Vec<Value>,
     pub is_singleton: bool,
 }
 
@@ -16,6 +17,7 @@ impl ClassInfo {
             name: name.into(),
             method_table: HashMap::new(),
             superclass,
+            include: vec![],
             is_singleton: false,
         }
     }
