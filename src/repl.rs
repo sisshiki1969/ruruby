@@ -6,7 +6,7 @@ use ruruby::vm::*;
 use ruruby::*;
 
 pub fn repl_vm() {
-    println!("RValue: {}", std::mem::size_of::<RValue>());
+    println!("RV: {}", std::mem::size_of::<RV>());
     println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
     println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());

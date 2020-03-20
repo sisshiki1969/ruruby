@@ -142,8 +142,8 @@ fn array_new(vm: &mut VM, args: &Args) -> VMResult {
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
-            RValue::FixNum(num) if num >= 0 => vec![Value::nil(); num as usize],
-            RValue::Object(oref) => match oref.kind {
+            RV::FixNum(num) if num >= 0 => vec![Value::nil(); num as usize],
+            RV::Object(oref) => match oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
                 _ => return Err(vm.error_nomethod("Invalid arguments")),
             },
@@ -221,7 +221,7 @@ fn array_mul(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let aref = self_array!(args, vm);
     let v = match args[0].unpack() {
-        RValue::FixNum(num) => match num {
+        RV::FixNum(num) => match num {
             i if i < 0 => return Err(vm.error_argument("Negative argument.")),
             0 => vec![],
             1 => aref.elements.clone(),

@@ -21,7 +21,7 @@ pub fn init_file(globals: &mut Globals) -> Value {
 // Utils
 
 fn string_to_path(vm: &mut VM, string: Value) -> Result<PathBuf, RubyError> {
-    let file = expect_string!(vm, string);
+    expect_string!(file, vm, string);
     Ok(PathBuf::from(file))
 }
 

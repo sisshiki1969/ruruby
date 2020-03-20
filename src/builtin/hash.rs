@@ -37,7 +37,6 @@ impl std::hash::Hash for HashKey {
                     ObjKind::Method(lhs) => lhs.inner().hash(state),
                     _ => self.0.hash(state),
                 },
-                _ => self.0.hash(state),
             },
         }
     }

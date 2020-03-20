@@ -1,5 +1,6 @@
 //#![feature(test)]
 #![feature(box_patterns)]
+#![feature(cow_is_borrowed)]
 extern crate fancy_regex;
 pub mod builtin;
 pub mod error;

@@ -24,7 +24,7 @@ impl RegexpRef {
         RegexpRef::new(RegexpInfo::new(reg))
     }
 
-    pub fn from_string(reg_str: &String) -> Result<Self, Error> {
+    pub fn from_string(reg_str: &str) -> Result<Self, Error> {
         let regex = Regex::new(reg_str)?;
         Ok(RegexpRef::new(RegexpInfo::new(regex)))
     }
@@ -61,13 +61,15 @@ pub fn init_regexp(globals: &mut Globals) -> Value {
 
 fn regexp_new(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let val = vm.create_regexp(&expect_string!(vm, args[0]))?;
+    expect_string!(string, vm, args[0]);
+    let val = vm.create_regexp(string)?;
     Ok(val)
 }
 
 fn regexp_escape(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let res = regex::escape(&expect_string!(vm, args[0]));
+    expect_string!(string, vm, args[0]);
+    let res = regex::escape(string);
     let regexp = Value::string(&vm.globals, res);
     Ok(regexp)
 }
@@ -77,7 +79,7 @@ fn regexp_escape(vm: &mut VM, args: &Args) -> VMResult {
 // Utility methods
 
 impl Regexp {
-    fn get_captures(vm: &mut VM, captures: &Captures, given: &String) {
+    fn get_captures(vm: &mut VM, captures: &Captures, given: &str) {
         for i in 1..captures.len() {
             match captures.get(i) {
                 Some(m) => Regexp::set_special_global(vm, i, given, m.start(), m.end()),
@@ -86,7 +88,7 @@ impl Regexp {
         }
     }
 
-    fn set_special_global(vm: &mut VM, i: usize, given: &String, start: usize, end: usize) {
+    fn set_special_global(vm: &mut VM, i: usize, given: &str, start: usize, end: usize) {
         let id = vm.globals.get_ident_id(format!("${}", i));
         let val = Value::string(&vm.globals, given[start..end].to_string());
         vm.set_global_var(id, val);
@@ -101,8 +103,8 @@ impl Regexp {
     pub fn replace_one(
         vm: &mut VM,
         re: &Regexp,
-        given: &String,
-        replace: &String,
+        given: &str,
+        replace: &str,
     ) -> Result<String, String> {
         let res = match re.captures(given) {
             Ok(None) => given.to_string(),
@@ -145,8 +147,8 @@ impl Regexp {
     pub fn replace_all(
         vm: &mut VM,
         re: &Regexp,
-        given: &String,
-        replace: &String,
+        given: &str,
+        replace: &str,
     ) -> Result<String, String> {
         let mut range = vec![];
         let mut i = 0;
@@ -177,7 +179,7 @@ impl Regexp {
     pub fn find_one<'a>(
         vm: &mut VM,
         re: &Regexp,
-        given: &'a String,
+        given: &'a str,
     ) -> Result<Option<Match<'a>>, Error> {
         match re.captures(given) {
             Ok(None) => Ok(None),
@@ -189,7 +191,7 @@ impl Regexp {
         }
     }
 
-    pub fn find_all(vm: &mut VM, re: &Regexp, given: &String) -> Result<Vec<Value>, RubyError> {
+    pub fn find_all(vm: &mut VM, re: &Regexp, given: &str) -> Result<Vec<Value>, RubyError> {
         let mut ary = vec![];
         let mut idx = 0;
         let mut last_captures = None;

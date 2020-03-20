@@ -202,9 +202,9 @@ impl Builtin {
                 }
             } else {
                 match self_.unpack() {
-                    RValue::FixNum(num) => num,
-                    RValue::FloatNum(num) => num as i64,
-                    RValue::Object(obj) => match obj.kind {
+                    RV::FixNum(num) => num,
+                    RV::FloatNum(num) => num as i64,
+                    RV::Object(obj) => match obj.kind {
                         ObjKind::String(s) => match s.parse::<i64>() {
                             Some(num) => num,
                             None => {

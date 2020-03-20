@@ -12,28 +12,34 @@ const ZERO: u64 = (0b1000 << 60) | 0b10;
 
 #[macro_export]
 macro_rules! expect_string {
-    ($vm:ident, $val:expr) => {
-        match $val.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Str(s)) => s.clone(),
-                _ => return Err($vm.error_argument("Must be a String.")),
-            },
+    ($var:ident, $vm:ident, $val:expr) => {
+        let oref = match $val.is_object() {
+            Some(oref) => oref,
             None => return Err($vm.error_argument("Must be a String.")),
-        }
+        };
+        let $var: &str = match &oref.kind {
+            ObjKind::String(RString::Str(s)) => s,
+            ObjKind::String(RString::Bytes(b)) => match String::from_utf8_lossy(b) {
+                std::borrow::Cow::Borrowed(s) => s,
+                std::borrow::Cow::Owned(_) => return Err($vm.error_argument("Must be a String.")),
+            },
+            _ => return Err($vm.error_argument("Must be a String.")),
+        };
     };
 }
 
 #[macro_export]
 macro_rules! expect_bytes {
-    ($vm:ident, $val:expr) => {
-        match $val.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Str(s)) => s.as_bytes().to_vec(),
-                ObjKind::String(RString::Bytes(b)) => b.clone(),
-                _ => return Err($vm.error_argument("Must be a String.")),
-            },
+    ($var:ident, $vm:ident, $val:expr) => {
+        let oref = match $val.is_object() {
+            Some(oref) => oref,
             None => return Err($vm.error_argument("Must be a String.")),
-        }
+        };
+        let $var = match &oref.kind {
+            ObjKind::String(RString::Str(s)) => s.as_bytes(),
+            ObjKind::String(RString::Bytes(b)) => b,
+            _ => return Err($vm.error_argument("Must be a String.")),
+        };
     };
 }
 
@@ -65,7 +71,7 @@ macro_rules! as_bytes {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum RValue {
+pub enum RV {
     Uninitialized,
     Nil,
     Bool(bool),
@@ -75,17 +81,24 @@ pub enum RValue {
     Object(ObjectInfo),
 }
 
-impl RValue {
+#[derive(Debug, Clone, PartialEq)]
+pub enum RValue {
+    FixNum(i64),
+    FloatNum(f64),
+    Object(ObjectInfo),
+}
+
+impl RV {
     pub fn pack(self) -> Value {
         match self {
-            RValue::Uninitialized => Value::uninitialized(),
-            RValue::Nil => Value::nil(),
-            RValue::Bool(b) if b => Value::true_val(),
-            RValue::Bool(_) => Value::false_val(),
-            RValue::FixNum(num) => Value::fixnum(num),
-            RValue::FloatNum(num) => Value::flonum(num),
-            RValue::Symbol(id) => Value::symbol(id),
-            _ => Value(RValue::pack_as_boxed(self)),
+            RV::Uninitialized => Value::uninitialized(),
+            RV::Nil => Value::nil(),
+            RV::Bool(true) => Value::true_val(),
+            RV::Bool(false) => Value::false_val(),
+            RV::FixNum(num) => Value::fixnum(num),
+            RV::FloatNum(num) => Value::flonum(num),
+            RV::Symbol(id) => Value::symbol(id),
+            RV::Object(info) => Value(RV::pack_as_boxed(RValue::Object(info))),
         }
     }
 
@@ -94,7 +107,7 @@ impl RValue {
         if top & 0b1 == 0 {
             (num << 1) as u64 | 0b1
         } else {
-            RValue::pack_as_boxed(RValue::FixNum(num))
+            RV::pack_as_boxed(RValue::FixNum(num))
         }
     }
 
@@ -107,7 +120,7 @@ impl RValue {
         if exp == 4 || exp == 3 {
             (unum & MASK1 | MASK2).rotate_left(3)
         } else {
-            RValue::pack_as_boxed(RValue::FloatNum(num))
+            RV::pack_as_boxed(RValue::FloatNum(num))
         }
     }
 
@@ -146,7 +159,6 @@ impl std::hash::Hash for Value {
                     ObjKind::Method(lhs) => lhs.inner().hash(state),
                     _ => self.0.hash(state),
                 },
-                _ => self.0.hash(state),
             },
         }
     }
@@ -202,21 +214,25 @@ impl Default for Value {
 }
 
 impl Value {
-    pub fn unpack(self) -> RValue {
+    pub fn unpack(self) -> RV {
         if !self.is_packed_value() {
-            self.rvalue().clone()
+            match self.rvalue() {
+                RValue::FixNum(i) => RV::FixNum(*i),
+                RValue::FloatNum(f) => RV::FloatNum(*f),
+                RValue::Object(info) => RV::Object(info.clone()),
+            }
         } else if self.is_packed_fixnum() {
-            RValue::FixNum(self.as_packed_fixnum())
+            RV::FixNum(self.as_packed_fixnum())
         } else if self.is_packed_num() {
-            RValue::FloatNum(self.as_packed_flonum())
+            RV::FloatNum(self.as_packed_flonum())
         } else if self.is_packed_symbol() {
-            RValue::Symbol(self.as_packed_symbol())
+            RV::Symbol(self.as_packed_symbol())
         } else {
             match self.0 {
-                NIL_VALUE => RValue::Nil,
-                TRUE_VALUE => RValue::Bool(true),
-                FALSE_VALUE => RValue::Bool(false),
-                UNINITIALIZED => RValue::Uninitialized,
+                NIL_VALUE => RV::Nil,
+                TRUE_VALUE => RV::Bool(true),
+                FALSE_VALUE => RV::Bool(false),
+                UNINITIALIZED => RV::Uninitialized,
                 _ => unreachable!("Illegal packed value."),
             }
         }
@@ -578,11 +594,11 @@ impl Value {
     }
 
     pub fn fixnum(num: i64) -> Self {
-        Value(RValue::pack_fixnum(num))
+        Value(RV::pack_fixnum(num))
     }
 
     pub fn flonum(num: f64) -> Self {
-        Value(RValue::pack_flonum(num))
+        Value(RV::pack_flonum(num))
     }
 
     pub fn string(globals: &Globals, string: String) -> Self {
@@ -604,7 +620,7 @@ impl Value {
     }
 
     fn object(obj_info: ObjectInfo) -> Self {
-        Value(RValue::pack_as_boxed(RValue::Object(obj_info)))
+        Value(RV::pack_as_boxed(RValue::Object(obj_info)))
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
@@ -706,7 +722,7 @@ mod tests {
 
     #[test]
     fn pack_bool1() {
-        let expect = RValue::Bool(true);
+        let expect = RV::Bool(true);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -715,7 +731,7 @@ mod tests {
 
     #[test]
     fn pack_bool2() {
-        let expect = RValue::Bool(false);
+        let expect = RV::Bool(false);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -724,7 +740,7 @@ mod tests {
 
     #[test]
     fn pack_nil() {
-        let expect = RValue::Nil;
+        let expect = RV::Nil;
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -733,7 +749,7 @@ mod tests {
 
     #[test]
     fn pack_uninit() {
-        let expect = RValue::Uninitialized;
+        let expect = RV::Uninitialized;
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -742,7 +758,7 @@ mod tests {
 
     #[test]
     fn pack_integer1() {
-        let expect = RValue::FixNum(12054);
+        let expect = RV::FixNum(12054);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -759,7 +775,7 @@ mod tests {
             0x7fff_ffff_ffff_ffff as u64 as i64,
         ];
         for expect in expect_ary.iter() {
-            let got = match RValue::FixNum(*expect).pack().as_fixnum() {
+            let got = match RV::FixNum(*expect).pack().as_fixnum() {
                 Some(int) => int,
                 None => panic!("Expect:{:?} Got:Invalid RValue"),
             };
@@ -771,7 +787,7 @@ mod tests {
 
     #[test]
     fn pack_integer2() {
-        let expect = RValue::FixNum(-58993);
+        let expect = RV::FixNum(-58993);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -780,7 +796,7 @@ mod tests {
 
     #[test]
     fn pack_integer3() {
-        let expect = RValue::FixNum(0x8000_0000_0000_0000 as u64 as i64);
+        let expect = RV::FixNum(0x8000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -789,7 +805,7 @@ mod tests {
 
     #[test]
     fn pack_integer4() {
-        let expect = RValue::FixNum(0x4000_0000_0000_0000 as u64 as i64);
+        let expect = RV::FixNum(0x4000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -798,7 +814,7 @@ mod tests {
 
     #[test]
     fn pack_integer5() {
-        let expect = RValue::FixNum(0x7fff_ffff_ffff_ffff as u64 as i64);
+        let expect = RV::FixNum(0x7fff_ffff_ffff_ffff as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -807,7 +823,7 @@ mod tests {
 
     #[test]
     fn pack_float0() {
-        let expect = RValue::FloatNum(0.0);
+        let expect = RV::FloatNum(0.0);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -816,7 +832,7 @@ mod tests {
 
     #[test]
     fn pack_float1() {
-        let expect = RValue::FloatNum(100.0);
+        let expect = RV::FloatNum(100.0);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -825,7 +841,7 @@ mod tests {
 
     #[test]
     fn pack_float2() {
-        let expect = RValue::FloatNum(13859.628547);
+        let expect = RV::FloatNum(13859.628547);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -834,7 +850,7 @@ mod tests {
 
     #[test]
     fn pack_float3() {
-        let expect = RValue::FloatNum(-5282.2541156);
+        let expect = RV::FloatNum(-5282.2541156);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -844,9 +860,9 @@ mod tests {
     #[test]
     fn pack_range() {
         let globals = Globals::new();
-        let from = RValue::FixNum(7).pack();
-        let to = RValue::FixNum(36).pack();
-        let expect = RValue::Object(ObjectInfo::new_range(
+        let from = RV::FixNum(7).pack();
+        let to = RV::FixNum(36).pack();
+        let expect = RV::Object(ObjectInfo::new_range(
             &globals,
             RangeInfo::new(from, to, false),
         ));
@@ -859,7 +875,7 @@ mod tests {
     #[test]
     fn pack_class() {
         let globals = Globals::new();
-        let expect = RValue::Object(ObjectInfo::new_class(
+        let expect = RV::Object(ObjectInfo::new_class(
             &globals,
             ClassRef::from(IdentId::from(1), None),
         ));
@@ -874,7 +890,7 @@ mod tests {
         let globals = Globals::new();
         let class_ref = ClassRef::from(IdentId::from(1), None);
         let class = Value::class(&globals, class_ref);
-        let expect = RValue::Object(ObjectInfo::new_ordinary(class));
+        let expect = RV::Object(ObjectInfo::new_ordinary(class));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -883,7 +899,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        let expect = RValue::Symbol(IdentId::from(12345));
+        let expect = RV::Symbol(IdentId::from(12345));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

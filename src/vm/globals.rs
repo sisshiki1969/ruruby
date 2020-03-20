@@ -208,14 +208,14 @@ impl Globals {
 
     pub fn get_class_name(&self, val: Value) -> String {
         match val.unpack() {
-            RValue::Uninitialized => "[Uninitialized]".to_string(),
-            RValue::Nil => "NilClass".to_string(),
-            RValue::Bool(true) => "TrueClass".to_string(),
-            RValue::Bool(false) => "FalseClass".to_string(),
-            RValue::FixNum(_) => "Integer".to_string(),
-            RValue::FloatNum(_) => "Float".to_string(),
-            RValue::Symbol(_) => "Symbol".to_string(),
-            RValue::Object(oref) => match oref.kind {
+            RV::Uninitialized => "[Uninitialized]".to_string(),
+            RV::Nil => "NilClass".to_string(),
+            RV::Bool(true) => "TrueClass".to_string(),
+            RV::Bool(false) => "FalseClass".to_string(),
+            RV::FixNum(_) => "Integer".to_string(),
+            RV::FloatNum(_) => "Float".to_string(),
+            RV::Symbol(_) => "Symbol".to_string(),
+            RV::Object(oref) => match oref.kind {
                 ObjKind::String(_) => "String".to_string(),
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::Range(_) => "Range".to_string(),
@@ -295,7 +295,7 @@ impl Globals {
                 _ => format!("{:?}", oref.kind),
             },
             None => match val.unpack() {
-                RValue::Nil => "nil".to_string(),
+                RV::Nil => "nil".to_string(),
                 _ => format!("{:?}", val),
             },
         }

@@ -399,8 +399,8 @@ fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
 
 fn eval(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let program = expect_string!(vm, args[0]);
-    let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), &program)?;
+    expect_string!(program, vm, args[0]);
+    let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), program)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);
     let res = vm.eval_block(method, &args)?;

@@ -488,7 +488,7 @@ impl Parser {
     pub fn parse_program_eval(
         mut self,
         path: PathBuf,
-        program: &String,
+        program: &str,
         ext_lvar: LvarCollector,
     ) -> Result<ParseResult, RubyError> {
         self.lexer.init(path, program);
