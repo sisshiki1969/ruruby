@@ -1,4 +1,4 @@
-use crate::vm::*;
+use crate::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -2,7 +2,7 @@
 extern crate ruruby;
 extern crate test;
 use ruruby::test::*;
-use ruruby::vm::*;
+use ruruby::*;
 
 #[test]
 fn bool_lit1() {

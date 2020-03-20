@@ -8,7 +8,7 @@ use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
 mod repl;
 use repl::*;
-use ruruby::vm::*;
+use ruruby::*;
 
 fn main() {
     let app = App::new("ruruby")

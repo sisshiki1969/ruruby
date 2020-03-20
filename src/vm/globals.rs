@@ -1,4 +1,5 @@
-use crate::vm::*;
+use crate::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
@@ -92,8 +93,8 @@ impl Globals {
         let singleton_obj = Value::class(&globals, singleton_class);
         globals.builtins.object.as_object().set_class(singleton_obj);
 
-        module::init_module(&mut globals);
-        class::init_class(&mut globals);
+        init_module(&mut globals);
+        init_class(&mut globals);
         globals.builtins.integer = init_integer(&mut globals);
         globals.builtins.array = init_array(&mut globals);
         globals.builtins.procobj = init_proc(&mut globals);

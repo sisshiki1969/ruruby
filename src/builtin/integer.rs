@@ -1,4 +1,4 @@
-use crate::vm::*;
+use crate::*;
 
 pub fn init_integer(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Integer");

@@ -1,4 +1,4 @@
-use crate::vm::*;
+use crate::*;
 
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct RangeInfo {

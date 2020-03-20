@@ -12,3 +12,8 @@ pub mod test;
 pub mod token;
 pub mod util;
 pub mod vm;
+pub use crate::builtin::*;
+pub use crate::parser::{LvarCollector, LvarId, ParseResult};
+pub use crate::util::*;
+pub use crate::vm::*;
+pub use value::*;

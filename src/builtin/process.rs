@@ -1,4 +1,4 @@
-use crate::vm::*;
+use crate::*;
 
 pub fn init_process(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Process");

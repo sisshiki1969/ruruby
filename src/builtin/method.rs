@@ -1,5 +1,5 @@
 use crate::error::RubyError;
-use crate::vm::*;
+use crate::*;
 use std::collections::HashMap;
 
 pub type BuiltinFunc = fn(vm: &mut VM, args: &Args) -> VMResult;

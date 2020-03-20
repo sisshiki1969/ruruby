@@ -1,5 +1,5 @@
 use crate::error::RubyError;
-use crate::vm::*;
+use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct ArrayInfo {
