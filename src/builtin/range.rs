@@ -42,7 +42,7 @@ fn range_new(vm: &mut VM, args: &Args) -> VMResult {
     } else {
         vm.val_to_bool(args[2])
     };
-    Ok(Value::range(start, end, exclude_end))
+    Ok(Value::range(&vm.globals, start, end, exclude_end))
 }
 
 fn range_begin(_vm: &mut VM, args: &Args) -> VMResult {

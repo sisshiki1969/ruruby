@@ -1,6 +1,8 @@
 use crate::error::RubyError;
 use crate::vm::*;
 use fancy_regex::{Captures, Error, Match, Regex};
+//#[macro_use]
+use crate::*;
 
 #[derive(Debug)]
 pub struct RegexpInfo {
@@ -59,20 +61,14 @@ pub fn init_regexp(globals: &mut Globals) -> Value {
 
 fn regexp_new(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let val = match args[0].as_string() {
-        Some(string) => vm.create_regexp(string)?,
-        None => return Err(vm.error_argument("Must be String")),
-    };
+    let val = vm.create_regexp(&expect_string!(vm, args[0]))?;
     Ok(val)
 }
 
 fn regexp_escape(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let res = match args[0].as_string() {
-        Some(s) => regex::escape(s),
-        None => return Err(vm.error_argument("Must be String")),
-    };
-    let regexp = Value::string(res);
+    let res = regex::escape(&expect_string!(vm, args[0]));
+    let regexp = Value::string(&vm.globals, res);
     Ok(regexp)
 }
 
@@ -92,7 +88,7 @@ impl Regexp {
 
     fn set_special_global(vm: &mut VM, i: usize, given: &String, start: usize, end: usize) {
         let id = vm.globals.get_ident_id(format!("${}", i));
-        let val = Value::string(given[start..end].to_string());
+        let val = Value::string(&vm.globals, given[start..end].to_string());
         vm.set_global_var(id, val);
     }
 
@@ -205,7 +201,8 @@ impl Regexp {
                     idx = m.end();
                     match captures.len() {
                         1 => {
-                            let val = Value::string(given[m.start()..m.end()].to_string());
+                            let val =
+                                Value::string(&vm.globals, given[m.start()..m.end()].to_string());
                             ary.push(val);
                         }
                         len => {
@@ -213,7 +210,7 @@ impl Regexp {
                             for i in 1..len {
                                 let m = captures.get(i).unwrap();
                                 let s = given[m.start()..m.end()].to_string();
-                                vec.push(Value::string(s));
+                                vec.push(Value::string(&vm.globals, s));
                             }
                             let val = Value::array_from(&vm.globals, vec);
                             ary.push(val);

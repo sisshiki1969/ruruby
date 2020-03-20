@@ -1,5 +1,7 @@
 use crate::vm::*;
 use std::collections::HashMap;
+//#[macro_use]
+use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ObjectInfo {
@@ -13,7 +15,9 @@ pub enum ObjKind {
     Ordinary,
     Class(ClassRef),
     Module(ClassRef),
+    String(RString),
     Array(ArrayRef),
+    Range(RangeInfo),
     Splat(Value), // internal use only.
     Hash(HashRef),
     Proc(ProcRef),
@@ -69,6 +73,30 @@ impl ObjectInfo {
             class: globals.builtins.array,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Array(arrayref),
+        }
+    }
+
+    pub fn new_range(globals: &Globals, range: RangeInfo) -> Self {
+        ObjectInfo {
+            class: globals.builtins.range,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::Range(range),
+        }
+    }
+
+    pub fn new_string(globals: &Globals, s: String) -> Self {
+        ObjectInfo {
+            class: globals.builtins.string,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::String(RString::Str(s)),
+        }
+    }
+
+    pub fn new_bytes(globals: &Globals, b: Vec<u8>) -> Self {
+        ObjectInfo {
+            class: globals.builtins.string,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::String(RString::Bytes(b)),
         }
     }
 
@@ -199,7 +227,7 @@ fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, args: &Args) -> VMResult {
     let inspect = vm.val_inspect(args.self_value);
-    Ok(Value::string(inspect))
+    Ok(Value::string(&vm.globals, inspect))
 }
 
 fn eql(vm: &mut VM, args: &Args) -> VMResult {
@@ -237,7 +265,7 @@ fn instance_variable_set(vm: &mut VM, args: &Args) -> VMResult {
     let val = args[1];
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
-        None => match name.as_string() {
+        None => match as_string!(name) {
             Some(s) => vm.globals.get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
@@ -252,7 +280,7 @@ fn instance_variable_get(vm: &mut VM, args: &Args) -> VMResult {
     let name = args[0];
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
-        None => match name.as_string() {
+        None => match as_string!(name) {
             Some(s) => vm.globals.get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
@@ -371,11 +399,8 @@ fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
 
 fn eval(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let program = match args[0].as_string() {
-        Some(s) => s,
-        None => return Err(vm.error_argument("1st arg must be String.")),
-    };
-    let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), program)?;
+    let program = expect_string!(vm, args[0]);
+    let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), &program)?;
     let context = vm.context();
     let args = Args::new0(context.self_value, None);
     let res = vm.eval_block(method, &args)?;

@@ -2,6 +2,8 @@ use ansi_term::Colour::Red;
 use ruruby::error::*;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::vm::*;
+//#[macro_use]
+use ruruby::*;
 
 pub fn repl_vm() {
     println!("RValue: {}", std::mem::size_of::<RValue>());
@@ -45,7 +47,7 @@ pub fn repl_vm() {
                         lvar_collector = parse_result.lvar_collector;
                         let id = vm.globals.get_ident_id("inspect");
                         let res = vm.send0(result, id).unwrap();
-                        let res_str = res.as_string().unwrap();
+                        let res_str = as_string!(res).unwrap();
                         println!("=> {}", res_str);
                     }
                     Err(err) => {

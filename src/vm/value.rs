@@ -10,6 +10,60 @@ const MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
+#[macro_export]
+macro_rules! expect_string {
+    ($vm:ident, $val:expr) => {
+        match $val.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Str(s)) => s.clone(),
+                _ => return Err($vm.error_argument("Must be a String.")),
+            },
+            None => return Err($vm.error_argument("Must be a String.")),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! expect_bytes {
+    ($vm:ident, $val:expr) => {
+        match $val.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Str(s)) => s.as_bytes().to_vec(),
+                ObjKind::String(RString::Bytes(b)) => b.clone(),
+                _ => return Err($vm.error_argument("Must be a String.")),
+            },
+            None => return Err($vm.error_argument("Must be a String.")),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! as_string {
+    ($val:expr) => {
+        match $val.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Str(s)) => Some(s.clone()),
+                _ => None,
+            },
+            None => None,
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! as_bytes {
+    ($val:expr) => {
+        match $val.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Str(s)) => Some(s.as_bytes().to_vec()),
+                ObjKind::String(RString::Bytes(b)) => Some(b.clone()),
+                _ => None,
+            },
+            None => None,
+        }
+    };
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum RValue {
     Uninitialized,
@@ -17,9 +71,7 @@ pub enum RValue {
     Bool(bool),
     FixNum(i64),
     FloatNum(f64),
-    String(RString),
     Symbol(IdentId),
-    Range(RangeInfo),
     Object(ObjectInfo),
 }
 
@@ -81,10 +133,10 @@ impl std::hash::Hash for Value {
             Some(lhs) => match lhs {
                 RValue::FixNum(lhs) => lhs.hash(state),
                 RValue::FloatNum(lhs) => lhs.to_bits().hash(state),
-                RValue::String(lhs) => lhs.hash(state),
-                RValue::Range(lhs) => lhs.hash(state),
-                RValue::Object(lhs) => match lhs.kind {
+                RValue::Object(lhs) => match &lhs.kind {
+                    ObjKind::String(lhs) => lhs.hash(state),
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
+                    ObjKind::Range(lhs) => lhs.hash(state),
                     ObjKind::Hash(lhs) => {
                         for (key, val) in lhs.iter() {
                             key.hash(state);
@@ -124,13 +176,12 @@ impl PartialEq for Value {
             (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
             (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
             (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
-            (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
-            (RValue::Range(lhs), RValue::Range(rhs)) => {
-                lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
-            }
             (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
+                (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                    lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
+                }
                 (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
                     (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
                     (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
@@ -208,8 +259,6 @@ impl Value {
             }
             Some(rval) => match rval {
                 RValue::FixNum(_) => globals.builtins.integer,
-                RValue::String(_) => globals.builtins.string,
-                RValue::Range(_) => globals.builtins.range,
                 RValue::Object(oref) => oref.class(),
                 _ => globals.builtins.object,
             },
@@ -231,8 +280,6 @@ impl Value {
             }
             Some(rval) => match rval {
                 RValue::FixNum(_) => globals.builtins.integer,
-                RValue::String(_) => globals.builtins.string,
-                RValue::Range(_) => globals.builtins.range,
                 RValue::Object(oref) => oref.search_class(),
                 _ => globals.builtins.object,
             },
@@ -394,6 +441,16 @@ impl Value {
         }
     }
 
+    pub fn as_range(&self) -> Option<RangeInfo> {
+        match self.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Range(info) => Some(info.clone()),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_splat(&self) -> Option<Value> {
         match self.is_object() {
             Some(oref) => match oref.kind {
@@ -443,37 +500,34 @@ impl Value {
             None => None,
         }
     }
-
-    pub fn as_string(&self) -> Option<&String> {
-        match self.as_rvalue() {
-            Some(RValue::String(RString::Str(s))) => Some(s),
-            _ => None,
+    /*
+        pub fn as_string(&self) -> Option<String> {
+            match self.is_object() {
+                Some(oref) => match &oref.kind {
+                    ObjKind::String(RString::Str(s)) => Some(s.clone()),
+                    _ => None,
+                },
+                None => None,
+            }
         }
-    }
 
-    pub fn as_bytes(&self) -> Option<&[u8]> {
-        match self.as_rvalue() {
-            Some(rval) => match rval {
-                RValue::String(RString::Bytes(b)) => Some(b),
-                RValue::String(RString::Str(s)) => Some(s.as_bytes()),
+    pub fn as_bytes(&self) -> Option<Vec<u8>> {
+        match self.is_object() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Bytes(b)) => Some(b.clone()),
+                ObjKind::String(RString::Str(s)) => Some(s.as_bytes().to_vec()),
                 _ => None,
             },
-            _ => None,
+            None => None,
         }
     }
+        */
 
     pub fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
             Some(self.as_packed_symbol())
         } else {
             None
-        }
-    }
-
-    pub fn as_range(&self) -> Option<&RangeInfo> {
-        match self.as_rvalue() {
-            Some(RValue::Range(info)) => Some(info),
-            _ => None,
         }
     }
 
@@ -531,12 +585,12 @@ impl Value {
         Value(RValue::pack_flonum(num))
     }
 
-    pub fn string(string: String) -> Self {
-        Value(RValue::pack_as_boxed(RValue::String(RString::Str(string))))
+    pub fn string(globals: &Globals, string: String) -> Self {
+        Value::object(ObjectInfo::new_string(globals, string))
     }
 
-    pub fn bytes(bytes: Vec<u8>) -> Self {
-        Value(RValue::pack_as_boxed(RValue::String(RString::Bytes(bytes))))
+    pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {
+        Value::object(ObjectInfo::new_bytes(globals, bytes))
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -544,9 +598,9 @@ impl Value {
         Value((id as u64) << 32 | TAG_SYMBOL)
     }
 
-    pub fn range(start: Value, end: Value, exclude: bool) -> Self {
+    pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        Value(RValue::pack_as_boxed(RValue::Range(info)))
+        Value::object(ObjectInfo::new_range(globals, info))
     }
 
     fn object(obj_info: ObjectInfo) -> Self {
@@ -630,12 +684,14 @@ impl Value {
             (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
             (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
             (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
-            (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
-            (RValue::Range(lhs), RValue::Range(rhs)) => {
-                lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
-            }
             (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
+                (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                    lhs.start.equal(rhs.start)
+                        && lhs.end.equal(rhs.end)
+                        && lhs.exclude == rhs.exclude
+                }
                 (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
                 (_, _) => false,
             },
@@ -786,19 +842,14 @@ mod tests {
     }
 
     #[test]
-    fn pack_string() {
-        let expect = RValue::String(RString::Str("Ruby".to_string()));
-        let got = expect.clone().pack().unpack();
-        if expect != got {
-            panic!("Expect:{:?} Got:{:?}", expect, got)
-        }
-    }
-
-    #[test]
     fn pack_range() {
+        let globals = Globals::new();
         let from = RValue::FixNum(7).pack();
         let to = RValue::FixNum(36).pack();
-        let expect = RValue::Range(RangeInfo::new(from, to, false));
+        let expect = RValue::Object(ObjectInfo::new_range(
+            &globals,
+            RangeInfo::new(from, to, false),
+        ));
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

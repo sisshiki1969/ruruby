@@ -27,7 +27,10 @@ fn main() {
     };
     let mut vm = VM::new();
     let id = vm.globals.get_ident_id("ARGV");
-    let mut res: Vec<Value> = args.iter().map(|x| Value::string(x.to_string())).collect();
+    let mut res: Vec<Value> = args
+        .iter()
+        .map(|x| Value::string(&vm.globals, x.to_string()))
+        .collect();
     res.remove(0);
     let argv = Value::array_from(&vm.globals, res);
     vm.globals.builtins.object.set_var(id, argv);

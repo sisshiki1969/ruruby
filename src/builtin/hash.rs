@@ -24,10 +24,10 @@ impl std::hash::Hash for HashKey {
             Some(lhs) => match lhs {
                 RValue::FixNum(lhs) => lhs.hash(state),
                 RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
-                RValue::String(lhs) => lhs.hash(state),
-                RValue::Range(lhs) => lhs.hash(state),
-                RValue::Object(lhs) => match lhs.kind {
+                RValue::Object(lhs) => match &lhs.kind {
+                    ObjKind::String(lhs) => lhs.hash(state),
                     ObjKind::Array(lhs) => lhs.elements.hash(state),
+                    ObjKind::Range(lhs) => lhs.hash(state),
                     ObjKind::Hash(lhs) => {
                         for (key, val) in lhs.iter() {
                             key.hash(state);
@@ -52,10 +52,10 @@ impl PartialEq for HashKey {
             (Some(lhs), Some(rhs)) => match (lhs, rhs) {
                 (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
                 (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
-                (RValue::String(lhs), RValue::String(rhs)) => *lhs == *rhs,
-                (RValue::Range(lhs), RValue::Range(rhs)) => *lhs == *rhs,
                 (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
+                    (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
                     (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+                    (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
                     (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
                     (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
                     _ => lhs.kind == rhs.kind,

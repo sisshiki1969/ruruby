@@ -2,6 +2,8 @@ use super::value::*;
 use crate::loader::*;
 use crate::vm::*;
 use rand;
+//#[macro_use]
+use crate::*;
 
 pub struct Builtin {}
 
@@ -58,10 +60,10 @@ impl Builtin {
         /// Built-in function "print".
         fn builtin_print(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
-                match args[i].as_bytes() {
+                match as_bytes!(args[i]) {
                     Some(bytes) => {
                         use std::io::{self, Write};
-                        io::stdout().write(bytes).unwrap();
+                        io::stdout().write(&bytes).unwrap();
                     }
                     None => print!("{}", vm.val_to_s(args[i])),
                 }
@@ -86,7 +88,7 @@ impl Builtin {
 
         fn builtin_require(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let file_name = match args[0].as_string() {
+            let file_name = match as_string!(args[0]) {
                 Some(string) => string,
                 None => return Err(vm.error_argument("file name must be a string.")),
             };
@@ -101,7 +103,7 @@ impl Builtin {
             let context = vm.context();
             let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
 
-            let file_name = match args[0].as_string() {
+            let file_name = match as_string!(args[0]) {
                 Some(string) => PathBuf::from(string),
                 None => return Err(vm.error_argument("file name must be a string.")),
             };
@@ -181,7 +183,7 @@ impl Builtin {
         fn builtin_tos(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let s = vm.val_to_s(args.self_value);
-            Ok(Value::string(s))
+            Ok(Value::string(&vm.globals, s))
         }
 
         fn builtin_integer(vm: &mut VM, args: &Args) -> VMResult {
@@ -202,11 +204,19 @@ impl Builtin {
                 match self_.unpack() {
                     RValue::FixNum(num) => num,
                     RValue::FloatNum(num) => num as i64,
-                    RValue::String(s) => match s.parse::<i64>() {
-                        Some(num) => num,
-                        None => {
+                    RValue::Object(obj) => match obj.kind {
+                        ObjKind::String(s) => match s.parse::<i64>() {
+                            Some(num) => num,
+                            None => {
+                                return Err(vm.error_type(format!(
+                                    "Invalid value for Integer(): {}",
+                                    vm.val_inspect(self_)
+                                )))
+                            }
+                        },
+                        _ => {
                             return Err(vm.error_type(format!(
-                                "Invalid value for Integer(): {}",
+                                "Can not convert {} into Integer.",
                                 vm.val_inspect(self_)
                             )))
                         }
@@ -226,13 +236,19 @@ impl Builtin {
             vm.check_args_num(args.len(), 0, 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
-            Ok(Value::string(path.to_string_lossy().to_string()))
+            Ok(Value::string(
+                &vm.globals,
+                path.to_string_lossy().to_string(),
+            ))
         }
 
         fn builtin_file(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let path = vm.root_path.last().unwrap().clone();
-            Ok(Value::string(path.to_string_lossy().to_string()))
+            Ok(Value::string(
+                &vm.globals,
+                path.to_string_lossy().to_string(),
+            ))
         }
 
         fn builtin_raise(vm: &mut VM, args: &Args) -> VMResult {

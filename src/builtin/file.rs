@@ -3,6 +3,8 @@ use crate::vm::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::*;
+//#[macro_use]
+use crate::*;
 
 pub fn init_file(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("File");
@@ -19,10 +21,8 @@ pub fn init_file(globals: &mut Globals) -> Value {
 // Utils
 
 fn string_to_path(vm: &mut VM, string: Value) -> Result<PathBuf, RubyError> {
-    match string.as_string() {
-        Some(file) => Ok(PathBuf::from(file)),
-        None => Err(vm.error_type("Arg must be String.")),
-    }
+    let file = expect_string!(vm, string);
+    Ok(PathBuf::from(file))
 }
 
 // Class methods
@@ -39,7 +39,10 @@ fn join(vm: &mut VM, args: &Args) -> VMResult {
             path.push(p);
         }
     }
-    Ok(Value::string(path.to_string_lossy().to_string()))
+    Ok(Value::string(
+        &vm.globals,
+        path.to_string_lossy().to_string(),
+    ))
 }
 
 fn basename(vm: &mut VM, args: &Args) -> VMResult {
@@ -47,7 +50,7 @@ fn basename(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
     let basename = match filename.file_name() {
-        Some(ostr) => Value::string(ostr.to_string_lossy().into_owned()),
+        Some(ostr) => Value::string(&vm.globals, ostr.to_string_lossy().into_owned()),
         None => Value::nil(),
     };
     Ok(basename)
@@ -61,7 +64,7 @@ fn extname(vm: &mut VM, args: &Args) -> VMResult {
         Some(ostr) => format!(".{}", ostr.to_string_lossy().into_owned()),
         None => "".to_string(),
     };
-    Ok(Value::string(extname))
+    Ok(Value::string(&vm.globals, extname))
 }
 
 fn binread(vm: &mut VM, args: &Args) -> VMResult {
@@ -82,7 +85,7 @@ fn binread(vm: &mut VM, args: &Args) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
-    Ok(Value::bytes(contents))
+    Ok(Value::bytes(&vm.globals, contents))
 }
 
 fn read(vm: &mut VM, args: &Args) -> VMResult {
@@ -103,5 +106,5 @@ fn read(vm: &mut VM, args: &Args) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
-    Ok(Value::string(contents))
+    Ok(Value::string(&vm.globals, contents))
 }

@@ -7,47 +7,50 @@ use ruruby::vm::*;
 #[test]
 fn bool_lit1() {
     let program = "(3==3)==true";
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
 #[test]
 fn bool_lit2() {
     let program = "(3==9)==false";
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
 #[test]
 fn nil_lit1() {
     let program = "nil";
-    let expected = RValue::Nil;
+    let expected = Value::nil();
     eval_script(program, expected);
 }
 
 #[test]
 fn string_lit1() {
+    let globals = Globals::new();
     let program = r#""open "  "windows""#;
-    let expected = RValue::String(RString::Str("open windows".to_string()));
+    let expected = Value::string(&globals, "open windows".to_string());
     eval_script(program, expected);
 }
 
 #[test]
 fn string_lit2() {
+    let globals = Globals::new();
     let program = r#""open "
     "windows""#;
-    let expected = RValue::String(RString::Str("windows".to_string()));
+    let expected = Value::string(&globals, "windows".to_string());
     eval_script(program, expected);
 }
 
 #[test]
 fn interpolated_string_lit1() {
+    let globals = Globals::new();
     let program = r###"
     x = 20
     f = "fibonacci";
     "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
     "###;
-    let expected = RValue::String(RString::Str("fibonacci  fibo(20) = 6765".to_string()));
+    let expected = Value::string(&globals, "fibonacci  fibo(20) = 6765".to_string());
     eval_script(program, expected);
 }
 

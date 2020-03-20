@@ -5,55 +5,55 @@ extern crate test;
 use ruruby::lexer::Lexer;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::test::{assert_script, eval_script};
-use ruruby::vm::value::RValue;
+use ruruby::vm::value::Value;
 use ruruby::vm::*;
 use test::Bencher;
 
 #[test]
 fn expr1() {
     let program = "4*(4+7*3)-95";
-    let expected = RValue::FixNum(5);
+    let expected = Value::fixnum(5);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr2() {
     let program = "2.0 + 4.0";
-    let expected = RValue::FloatNum(6.0);
+    let expected = Value::flonum(6.0);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr3() {
     let program = "5.0 / 2";
-    let expected = RValue::FloatNum(2.5);
+    let expected = Value::flonum(2.5);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr4() {
     let program = "15<<30";
-    let expected = RValue::FixNum(16106127360);
+    let expected = Value::fixnum(16106127360);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr5() {
     let program = "23456>>3";
-    let expected = RValue::FixNum(2932);
+    let expected = Value::fixnum(2932);
     eval_script(program, expected);
 }
 
 #[test]
 fn expr6() {
     let program = "24+17 >> 3 == 5";
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 #[test]
 fn expr7() {
     let program = "864 == 3+24<<5";
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -75,7 +75,7 @@ fn expr9() {
         a=19
         a==17?23*45:14+7
         ";
-    let expected = RValue::FixNum(21);
+    let expected = Value::fixnum(21);
     eval_script(program, expected);
 }
 
@@ -106,14 +106,14 @@ fn expr10() {
 #[test]
 fn op1() {
     let program = "4==5";
-    let expected = RValue::Bool(false);
+    let expected = Value::bool(false);
     eval_script(program, expected);
 }
 
 #[test]
 fn op2() {
     let program = "4!=5";
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -155,7 +155,7 @@ fn op9() {
 #[test]
 fn op10() {
     let program = "4==4 && 4!=5 && 3<4 && 5>4 && 4<=4 && 4>=4";
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -164,7 +164,7 @@ fn int1() {
     let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
     let i2 = 0x4000_0000_0000_0005u64 as i64;
     let program = format!("{}+6=={}", i1, i2);
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -173,7 +173,7 @@ fn int2() {
     let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
     let i2 = 0x4000_0000_0000_0005u64 as i64;
     let program = format!("{}-6=={}", i2, i1);
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -182,7 +182,7 @@ fn int3() {
     let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
     let i2 = 0xc000_0000_0000_0005u64 as i64;
     let program = format!("{}+6=={}", i1, i2);
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -191,7 +191,7 @@ fn int4() {
     let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
     let i2 = 0xc000_0000_0000_0005u64 as i64;
     let program = format!("{}-6=={}", i2, i1);
-    let expected = RValue::Bool(true);
+    let expected = Value::bool(true);
     eval_script(program, expected);
 }
 
@@ -260,7 +260,7 @@ fn triple_equal() {
 #[test]
 fn if1() {
     let program = "if 5*4==16 +4 then 4;2*3+1 end";
-    let expected = RValue::FixNum(7);
+    let expected = Value::fixnum(7);
     eval_script(program, expected);
 }
 
@@ -271,7 +271,7 @@ fn if2() {
         4
         3*3
         -2 end";
-    let expected = RValue::FixNum(-2);
+    let expected = Value::fixnum(-2);
     eval_script(program, expected);
 }
 
@@ -280,7 +280,7 @@ fn if3() {
     let program = "if 5*9==16 +4
         7 elsif 4==4+9 then 8 elsif 3==1+2 then 10
         else 12 end";
-    let expected = RValue::FixNum(10);
+    let expected = Value::fixnum(10);
     eval_script(program, expected);
 }
 
@@ -293,49 +293,49 @@ fn if4() {
             4
             5
             end";
-    let expected = RValue::FixNum(5);
+    let expected = Value::fixnum(5);
     eval_script(program, expected);
 }
 
 #[test]
 fn if5() {
     let program = "a = 77 if 1+2 == 3";
-    let expected = RValue::FixNum(77);
+    let expected = Value::fixnum(77);
     eval_script(program, expected);
 }
 
 #[test]
 fn if6() {
     let program = "a = 77 if 1+3 == 3";
-    let expected = RValue::Nil;
+    let expected = Value::nil();
     eval_script(program, expected);
 }
 
 #[test]
 fn unless1() {
     let program = "a = 5; unless a > 3 then 10 else 50 end";
-    let expected = RValue::FixNum(50);
+    let expected = Value::fixnum(50);
     eval_script(program, expected);
 }
 
 #[test]
 fn unless2() {
     let program = "a = 5; unless a < 3 then 10 else 50 end";
-    let expected = RValue::FixNum(10);
+    let expected = Value::fixnum(10);
     eval_script(program, expected);
 }
 
 #[test]
 fn unless3() {
     let program = "a = 5; a = 7 unless a == 3; a";
-    let expected = RValue::FixNum(7);
+    let expected = Value::fixnum(7);
     eval_script(program, expected);
 }
 
 #[test]
 fn unless4() {
     let program = "a = 5; a = 7 unless a == 5; a";
-    let expected = RValue::FixNum(5);
+    let expected = Value::fixnum(5);
     eval_script(program, expected);
 }
 
@@ -347,7 +347,7 @@ fn for1() {
             y=y+x
             end
             y";
-    let expected = RValue::FixNum(45);
+    let expected = Value::fixnum(45);
     eval_script(program, expected);
 }
 
@@ -359,7 +359,7 @@ fn for2() {
             y=y+x
             end
             y";
-    let expected = RValue::FixNum(36);
+    let expected = Value::fixnum(36);
     eval_script(program, expected);
 }
 
@@ -372,7 +372,7 @@ fn for3() {
             y=y+x
         end
         y";
-    let expected = RValue::FixNum(10);
+    let expected = Value::fixnum(10);
     eval_script(program, expected);
 }
 
@@ -385,7 +385,7 @@ fn for4() {
             y=y+x
         end
         y";
-    let expected = RValue::FixNum(40);
+    let expected = Value::fixnum(40);
     eval_script(program, expected);
 }
 
@@ -471,7 +471,7 @@ fn local_var1() {
             ruby = 7
             mruby = (ruby - 4) * 5
             mruby - ruby";
-    let expected = RValue::FixNum(8);
+    let expected = Value::fixnum(8);
     eval_script(program, expected);
 }
 
@@ -572,7 +572,7 @@ fn const1() {
             Ruby = 777
             Ruby = Ruby * 2
             Ruby / 111";
-    let expected = RValue::FixNum(14);
+    let expected = Value::fixnum(14);
     eval_script(program, expected);
 }
 
@@ -686,7 +686,7 @@ fn class1() {
         end
 
         Vec.new.len(3,4)";
-    let expected = RValue::FixNum(25);
+    let expected = Value::fixnum(25);
     eval_script(program, expected);
 }
 

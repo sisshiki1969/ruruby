@@ -2,7 +2,7 @@
 extern crate ruruby;
 extern crate test;
 use ruruby::test::*;
-use ruruby::vm::value::RValue;
+use ruruby::vm::value::Value;
 use test::Bencher;
 
 #[test]
@@ -13,7 +13,7 @@ fn func1() {
             end
     
             func(1,2,3)";
-    let expected = RValue::FixNum(6);
+    let expected = Value::fixnum(6);
     eval_script(program, expected);
 }
 
@@ -30,7 +30,7 @@ fn func2() {
             end
     
             fact(5)";
-    let expected = RValue::FixNum(120);
+    let expected = Value::fixnum(120);
     eval_script(program, expected);
 }
 
@@ -46,7 +46,7 @@ fn func3(b: &mut Bencher) {
             end
 
             fibo(20)";
-    let expected = RValue::FixNum(6765);
+    let expected = Value::fixnum(6765);
     b.iter(|| eval_script(program, expected.clone()));
 }
 
@@ -60,7 +60,7 @@ fn func4() {
         end
     
         fact(5)";
-    let expected = RValue::FixNum(120);
+    let expected = Value::fixnum(120);
     eval_script(program, expected);
 }
 

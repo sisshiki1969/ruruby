@@ -11,7 +11,7 @@ pub mod value;
 mod vm_inst;
 
 pub use crate::builtin::*;
-use crate::error::{RubyError, RubyErrorKind, RuntimeErrKind};
+use crate::error::*;
 use crate::parser::*;
 pub use crate::parser::{LvarCollector, LvarId, ParseResult};
 pub use crate::util::*;
@@ -30,6 +30,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 pub use value::*;
 use vm_inst::*;
+
+//#[macro_use]
+use crate::*;
 
 pub type ValueTable = HashMap<IdentId, Value>;
 
@@ -105,7 +108,7 @@ impl VM {
         set_class!("Process", process::init_process(&mut globals));
         set_class!("Struct", structobj::init_struct(&mut globals));
         set_class!("StandardError", Value::class(&globals, globals.class_class));
-        set_class!("RuntimeError", error::init_error(&mut globals));
+        set_class!("RuntimeError", errorobj::init_error(&mut globals));
 
         let mut vm = VM {
             globals,
@@ -488,7 +491,7 @@ impl VM {
                 Inst::PUSH_STRING => {
                     let id = self.read_id(iseq, 1);
                     let string = self.globals.get_ident_name(id).to_string();
-                    self.stack_push(Value::string(string));
+                    self.stack_push(Value::string(&self.globals, string));
                     self.pc += 5;
                 }
                 Inst::PUSH_SYMBOL => {
@@ -639,8 +642,10 @@ impl VM {
                 Inst::CONCAT_STRING => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = match (lhs.as_string(), rhs.as_string()) {
-                        (Some(lhs), Some(rhs)) => Value::string(format!("{}{}", lhs, rhs)),
+                    let val = match (as_string!(lhs), as_string!(rhs)) {
+                        (Some(lhs), Some(rhs)) => {
+                            Value::string(&self.globals, format!("{}{}", lhs, rhs))
+                        }
                         (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
                     };
                     self.stack_push(val);
@@ -818,7 +823,7 @@ impl VM {
                     };
                     let exclude_val = self.stack_pop();
                     let exclude_end = self.val_to_bool(exclude_val);
-                    let range = Value::range(start, end, exclude_end);
+                    let range = Value::range(&self.globals, start, end, exclude_end);
                     self.stack_push(range);
                     self.pc += 1;
                 }
@@ -844,7 +849,7 @@ impl VM {
                 }
                 Inst::CREATE_REGEXP => {
                     let arg = self.stack_pop();
-                    let mut arg = match arg.as_string() {
+                    let mut arg = match as_string!(arg) {
                         Some(arg) => arg.clone(),
                         None => {
                             return Err(self.error_argument("Illegal argument for CREATE_REGEXP"))
@@ -1026,7 +1031,7 @@ impl VM {
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
-                    let res = Value::string(self.val_to_s(val));
+                    let res = Value::string(&self.globals, self.val_to_s(val));
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -1690,21 +1695,15 @@ impl VM {
                     f.to_string()
                 }
             }
-            RValue::String(s) => match s {
-                RString::Str(s) => format!("{}", s),
-                RString::Bytes(b) => match String::from_utf8(b) {
-                    Ok(s) => format!("{}", s),
-                    Err(_) => "<ByteArray>".to_string(),
-                },
-            },
             RValue::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
-            RValue::Range(rinfo) => {
-                let start = self.val_to_s(rinfo.start);
-                let end = self.val_to_s(rinfo.end);
-                let sym = if rinfo.exclude { "..." } else { ".." };
-                format!("({}{}{})", start, sym, end)
-            }
             RValue::Object(oref) => match oref.kind {
+                ObjKind::String(s) => match s {
+                    RString::Str(s) => format!("{}", s),
+                    RString::Bytes(b) => match String::from_utf8(b) {
+                        Ok(s) => format!("{}", s),
+                        Err(_) => "<ByteArray>".to_string(),
+                    },
+                },
                 ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
                     format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.search_class().as_class().name), oref}
@@ -1720,6 +1719,12 @@ impl VM {
                         format! {"[{}]", result}
                     }
                 },
+                ObjKind::Range(rinfo) => {
+                    let start = self.val_to_s(rinfo.start);
+                    let end = self.val_to_s(rinfo.end);
+                    let sym = if rinfo.exclude { "..." } else { ".." };
+                    format!("({}{}{})", start, sym, end)
+                }
                 ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
                 _ => format!("{:?}", oref.kind),
             },
@@ -1728,7 +1733,14 @@ impl VM {
 
     pub fn val_inspect(&self, val: Value) -> String {
         match val.is_object() {
-            Some(mut oref) => match oref.kind {
+            Some(mut oref) => match &oref.kind {
+                ObjKind::String(s) => match s {
+                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                    RString::Bytes(b) => match String::from_utf8(b.clone()) {
+                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                        Err(_) => "<ByteArray>".to_string(),
+                    },
+                },
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
@@ -1787,13 +1799,6 @@ impl VM {
             },
             None => match val.unpack() {
                 RValue::Nil => "nil".to_string(),
-                RValue::String(s) => match s {
-                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                    RString::Bytes(b) => match String::from_utf8(b) {
-                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                        Err(_) => "<ByteArray>".to_string(),
-                    },
-                },
                 RValue::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
                 _ => self.val_to_s(val),
             },
@@ -2030,25 +2035,25 @@ impl VM {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),
                     Some(rval) => match rval {
-                        RValue::Range(rref) => {
-                            let start = if rref.start.is_packed_fixnum() {
-                                rref.start.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range start not fixnum.")
-                            };
-                            let end = if rref.end.is_packed_fixnum() {
-                                rref.end.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range end not fixnum.")
-                            } + if rref.exclude { 0 } else { 1 };
-                            for i in start..end {
-                                args.push(Value::fixnum(i));
-                            }
-                        }
                         RValue::Object(obj) => match &obj.kind {
                             ObjKind::Array(aref) => {
                                 for elem in &aref.elements {
                                     args.push(*elem);
+                                }
+                            }
+                            ObjKind::Range(rref) => {
+                                let start = if rref.start.is_packed_fixnum() {
+                                    rref.start.as_packed_fixnum()
+                                } else {
+                                    unimplemented!("Range start not fixnum.")
+                                };
+                                let end = if rref.end.is_packed_fixnum() {
+                                    rref.end.as_packed_fixnum()
+                                } else {
+                                    unimplemented!("Range end not fixnum.")
+                                } + if rref.exclude { 0 } else { 1 };
+                                for i in start..end {
+                                    args.push(Value::fixnum(i));
                                 }
                             }
                             _ => args.push(inner),
@@ -2080,25 +2085,25 @@ impl VM {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),
                     Some(rval) => match rval {
-                        RValue::Range(rref) => {
-                            let start = if rref.start.is_packed_fixnum() {
-                                rref.start.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range start not fixnum.")
-                            };
-                            let end = if rref.end.is_packed_fixnum() {
-                                rref.end.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range end not fixnum.")
-                            } + if rref.exclude { 0 } else { 1 };
-                            for i in start..end {
-                                args.push(Value::fixnum(i));
-                            }
-                        }
                         RValue::Object(obj) => match &obj.kind {
                             ObjKind::Array(aref) => {
                                 for elem in &aref.elements {
                                     args.push(*elem);
+                                }
+                            }
+                            ObjKind::Range(rref) => {
+                                let start = if rref.start.is_packed_fixnum() {
+                                    rref.start.as_packed_fixnum()
+                                } else {
+                                    unimplemented!("Range start not fixnum.")
+                                };
+                                let end = if rref.end.is_packed_fixnum() {
+                                    rref.end.as_packed_fixnum()
+                                } else {
+                                    unimplemented!("Range end not fixnum.")
+                                } + if rref.exclude { 0 } else { 1 };
+                                for i in start..end {
+                                    args.push(Value::fixnum(i));
                                 }
                             }
                             _ => args.push(inner),

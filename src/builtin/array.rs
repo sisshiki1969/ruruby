@@ -630,5 +630,5 @@ fn array_pack(vm: &mut VM, args: &Args) -> VMResult {
         };
         v.push(i);
     }
-    Ok(Value::bytes(v))
+    Ok(Value::bytes(&vm.globals, v))
 }

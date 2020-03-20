@@ -214,11 +214,11 @@ impl Globals {
             RValue::Bool(false) => "FalseClass".to_string(),
             RValue::FixNum(_) => "Integer".to_string(),
             RValue::FloatNum(_) => "Float".to_string(),
-            RValue::String(_) => "String".to_string(),
             RValue::Symbol(_) => "Symbol".to_string(),
-            RValue::Range(_) => "Range".to_string(),
             RValue::Object(oref) => match oref.kind {
+                ObjKind::String(_) => "String".to_string(),
                 ObjKind::Array(_) => "Array".to_string(),
+                ObjKind::Range(_) => "Range".to_string(),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
                 ObjKind::Hash(_) => "Hash".to_string(),
                 ObjKind::Regexp(_) => "Regexp".to_string(),
@@ -235,7 +235,14 @@ impl Globals {
 
     pub fn val_inspect(&self, val: Value) -> String {
         match val.is_object() {
-            Some(mut oref) => match oref.kind {
+            Some(mut oref) => match &oref.kind {
+                ObjKind::String(s) => match s {
+                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                    RString::Bytes(b) => match String::from_utf8(b.clone()) {
+                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                        Err(_) => "<ByteArray>".to_string(),
+                    },
+                },
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
@@ -289,13 +296,6 @@ impl Globals {
             },
             None => match val.unpack() {
                 RValue::Nil => "nil".to_string(),
-                RValue::String(s) => match s {
-                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                    RString::Bytes(b) => match String::from_utf8(b) {
-                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                        Err(_) => "<ByteArray>".to_string(),
-                    },
-                },
                 _ => format!("{:?}", val),
             },
         }

@@ -1,5 +1,5 @@
 pub mod array;
-pub mod error;
+pub mod errorobj;
 pub mod file;
 pub mod hash;
 pub mod integer;
