@@ -1,4 +1,4 @@
-use crate::vm::*;
+use crate::*;
 
 const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
@@ -81,13 +81,6 @@ pub enum RV {
     Object(ObjectInfo),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum RValue {
-    FixNum(i64),
-    FloatNum(f64),
-    Object(ObjectInfo),
-}
-
 impl RV {
     pub fn pack(self) -> Value {
         match self {
@@ -98,7 +91,7 @@ impl RV {
             RV::FixNum(num) => Value::fixnum(num),
             RV::FloatNum(num) => Value::flonum(num),
             RV::Symbol(id) => Value::symbol(id),
-            RV::Object(info) => Value(RV::pack_as_boxed(RValue::Object(info))),
+            RV::Object(info) => Value(RV::pack_as_boxed(info)),
         }
     }
 
@@ -107,7 +100,7 @@ impl RV {
         if top & 0b1 == 0 {
             (num << 1) as u64 | 0b1
         } else {
-            RV::pack_as_boxed(RValue::FixNum(num))
+            RV::pack_as_boxed(ObjectInfo::new_fixnum(num))
         }
     }
 
@@ -120,11 +113,11 @@ impl RV {
         if exp == 4 || exp == 3 {
             (unum & MASK1 | MASK2).rotate_left(3)
         } else {
-            RV::pack_as_boxed(RValue::FloatNum(num))
+            RV::pack_as_boxed(ObjectInfo::new_flonum(num))
         }
     }
 
-    fn pack_as_boxed(val: RValue) -> u64 {
+    fn pack_as_boxed(val: ObjectInfo) -> u64 {
         Box::into_raw(Box::new(val)) as u64
     }
 }
@@ -143,22 +136,20 @@ impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self.as_rvalue() {
             None => self.0.hash(state),
-            Some(lhs) => match lhs {
-                RValue::FixNum(lhs) => lhs.hash(state),
-                RValue::FloatNum(lhs) => lhs.to_bits().hash(state),
-                RValue::Object(lhs) => match &lhs.kind {
-                    ObjKind::String(lhs) => lhs.hash(state),
-                    ObjKind::Array(lhs) => lhs.elements.hash(state),
-                    ObjKind::Range(lhs) => lhs.hash(state),
-                    ObjKind::Hash(lhs) => {
-                        for (key, val) in lhs.iter() {
-                            key.hash(state);
-                            val.hash(state);
-                        }
+            Some(lhs) => match &lhs.kind {
+                ObjKind::FixNum(lhs) => lhs.hash(state),
+                ObjKind::FloatNum(lhs) => lhs.to_bits().hash(state),
+                ObjKind::String(lhs) => lhs.hash(state),
+                ObjKind::Array(lhs) => lhs.elements.hash(state),
+                ObjKind::Range(lhs) => lhs.hash(state),
+                ObjKind::Hash(lhs) => {
+                    for (key, val) in lhs.iter() {
+                        key.hash(state);
+                        val.hash(state);
                     }
-                    ObjKind::Method(lhs) => lhs.inner().hash(state),
-                    _ => self.0.hash(state),
-                },
+                }
+                ObjKind::Method(lhs) => lhs.inner().hash(state),
+                _ => self.0.hash(state),
             },
         }
     }
@@ -183,25 +174,22 @@ impl PartialEq for Value {
             }
             return false;
         };
-        match (self.rvalue(), other.rvalue()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
-            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
-            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
-            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
-            (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
-                (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
-                }
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
-                    (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
-                    (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
-                    _ => false,
-                },
-                (_, _) => false,
+        match (&self.rvalue().kind, &other.rvalue().kind) {
+            (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs,
+            (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => *lhs == *rhs,
+            (ObjKind::FixNum(lhs), ObjKind::FloatNum(rhs)) => *lhs as f64 == *rhs,
+            (ObjKind::FloatNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
+            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
+            }
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+                (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
+                (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
+                _ => false,
             },
-            _ => false,
+            (_, _) => false,
         }
     }
 }
@@ -216,10 +204,11 @@ impl Default for Value {
 impl Value {
     pub fn unpack(self) -> RV {
         if !self.is_packed_value() {
-            match self.rvalue() {
-                RValue::FixNum(i) => RV::FixNum(*i),
-                RValue::FloatNum(f) => RV::FloatNum(*f),
-                RValue::Object(info) => RV::Object(info.clone()),
+            let info = self.rvalue();
+            match &info.kind {
+                ObjKind::FixNum(i) => RV::FixNum(*i),
+                ObjKind::FloatNum(f) => RV::FloatNum(*f),
+                _ => RV::Object(info.clone()),
             }
         } else if self.is_packed_fixnum() {
             RV::FixNum(self.as_packed_fixnum())
@@ -248,7 +237,7 @@ impl Value {
 
     /// Get RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_rvalue(&self) -> Option<&RValue> {
+    pub fn as_rvalue(&self) -> Option<&ObjectInfo> {
         if self.is_packed_value() {
             None
         } else {
@@ -256,8 +245,8 @@ impl Value {
         }
     }
 
-    pub fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.0 as *mut RValue) }
+    pub fn rvalue(&self) -> &ObjectInfo {
+        unsafe { &*(self.0 as *mut ObjectInfo) }
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
@@ -273,10 +262,10 @@ impl Value {
                     globals.builtins.object
                 }
             }
-            Some(rval) => match rval {
-                RValue::FixNum(_) => globals.builtins.integer,
-                RValue::Object(oref) => oref.class(),
-                _ => globals.builtins.object,
+            Some(info) => match &info.kind {
+                ObjKind::FixNum(_) => globals.builtins.integer,
+                ObjKind::FloatNum(_) => globals.builtins.object,
+                _ => info.class(),
             },
         }
     }
@@ -294,10 +283,10 @@ impl Value {
                     globals.builtins.object
                 }
             }
-            Some(rval) => match rval {
-                RValue::FixNum(_) => globals.builtins.integer,
-                RValue::Object(oref) => oref.search_class(),
-                _ => globals.builtins.object,
+            Some(info) => match &info.kind {
+                ObjKind::FixNum(_) => globals.builtins.integer,
+                ObjKind::FloatNum(_) => globals.builtins.object,
+                _ => info.search_class(),
             },
         }
     }
@@ -389,7 +378,10 @@ impl Value {
             Some(self.as_packed_fixnum())
         } else {
             match self.as_rvalue() {
-                Some(RValue::FixNum(i)) => Some(*i),
+                Some(info) => match &info.kind {
+                    ObjKind::FixNum(f) => Some(*f),
+                    _ => None,
+                },
                 _ => None,
             }
         }
@@ -408,7 +400,7 @@ impl Value {
 
     pub fn is_object(&self) -> Option<ObjectRef> {
         match self.as_rvalue() {
-            Some(RValue::Object(oref)) => Some(oref.as_ref()),
+            Some(info) => Some(info.as_ref()),
             _ => None,
         }
     }
@@ -620,7 +612,7 @@ impl Value {
     }
 
     fn object(obj_info: ObjectInfo) -> Self {
-        Value(RV::pack_as_boxed(RValue::Object(obj_info)))
+        Value(RV::pack_as_boxed(obj_info))
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
@@ -695,23 +687,18 @@ impl Value {
             }
             return false;
         };
-        match (self.rvalue(), other.rvalue()) {
-            (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
-            (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
-            (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => *lhs as f64 == *rhs,
-            (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs as f64,
-            (RValue::Object(lhs_o), RValue::Object(rhs_o)) => match (&lhs_o.kind, &rhs_o.kind) {
-                (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                    lhs.start.equal(rhs.start)
-                        && lhs.end.equal(rhs.end)
-                        && lhs.exclude == rhs.exclude
-                }
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
-                (_, _) => false,
-            },
-            _ => false,
+        match (&self.rvalue().kind, &other.rvalue().kind) {
+            (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs,
+            (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => *lhs == *rhs,
+            (ObjKind::FixNum(lhs), ObjKind::FloatNum(rhs)) => *lhs as f64 == *rhs,
+            (ObjKind::FloatNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
+            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
+            }
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
+            (_, _) => false,
         }
     }
 }

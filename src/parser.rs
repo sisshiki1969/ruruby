@@ -434,7 +434,7 @@ impl Parser {
     pub fn parse_program(
         mut self,
         path: PathBuf,
-        program: &String,
+        program: &str,
     ) -> Result<ParseResult, RubyError> {
         let (node, lvar) = self.parse_program_core(path, program, None)?;
 
@@ -450,7 +450,7 @@ impl Parser {
     pub fn parse_program_repl(
         mut self,
         path: PathBuf,
-        program: &String,
+        program: &str,
         lvar_collector: Option<LvarCollector>,
     ) -> Result<ParseResult, RubyError> {
         let (node, lvar) = match self.parse_program_core(path, program, lvar_collector) {
@@ -475,7 +475,7 @@ impl Parser {
     pub fn parse_program_core(
         &mut self,
         path: PathBuf,
-        program: &String,
+        program: &str,
         lvar: Option<LvarCollector>,
     ) -> Result<(Node, LvarCollector), RubyError> {
         self.lexer.init(path, program);
@@ -1556,9 +1556,9 @@ impl Parser {
         }
     }
 
-    fn parse_string_literal(&mut self, s: &String) -> Result<Node, RubyError> {
+    fn parse_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
-        let mut s = s.clone();
+        let mut s = s.to_string();
         while let TokenKind::StringLit(next_s) = self.peek_no_term()?.kind {
             self.get()?;
             s = format!("{}{}", s, next_s);
@@ -1566,9 +1566,9 @@ impl Parser {
         Ok(Node::new_string(s, loc))
     }
 
-    fn parse_interporated_string_literal(&mut self, s: &String) -> Result<Node, RubyError> {
+    fn parse_interporated_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
         let start_loc = self.prev_loc();
-        let mut nodes = vec![Node::new_string(s.clone(), start_loc)];
+        let mut nodes = vec![Node::new_string(s.to_string(), start_loc)];
         loop {
             match self.peek()?.kind {
                 TokenKind::CloseString(s) => {

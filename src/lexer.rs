@@ -96,7 +96,7 @@ impl Lexer {
         }
     }
 
-    pub fn get_string_from_reserved(&self, reserved: Reserved) -> &String {
+    pub fn get_string_from_reserved(&self, reserved: Reserved) -> &str {
         self.reserved_rev.get(&reserved).unwrap()
     }
 
@@ -118,7 +118,7 @@ impl Lexer {
         RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, 0, loc)
     }
 
-    fn error_parse(&self, msg: &String, pos: u32) -> RubyError {
+    fn error_parse(&self, msg: &str, pos: u32) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(format!("Parse error. '{}'", msg)),
@@ -961,7 +961,7 @@ mod test {
         };
     }
 
-    fn print_tokens(tokens: &Vec<Token>, ans: &Vec<Token>) {
+    fn print_tokens(tokens: &[Token], ans: &[Token]) {
         println!("Expected:");
         for t in ans {
             println!("{}", t);

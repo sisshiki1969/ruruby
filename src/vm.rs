@@ -19,6 +19,7 @@ pub use codegen::{Codegen, ISeq, ISeqPos};
 pub use context::*;
 pub use globals::*;
 pub use module::*;
+pub use value::*;
 
 #[cfg(feature = "perf")]
 use perf::*;
@@ -228,11 +229,7 @@ impl VM {
         self.read32(iseq, offset) as i32 as i64
     }
 
-    pub fn parse_program(
-        &mut self,
-        path: PathBuf,
-        program: &String,
-    ) -> Result<MethodRef, RubyError> {
+    pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
         let mut parser = Parser::new();
         std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let result = parser.parse_program(path, program)?;
@@ -283,7 +280,7 @@ impl VM {
         Ok(method)
     }
 
-    pub fn run(&mut self, path: PathBuf, program: &String, self_value: Option<Value>) -> VMResult {
+    pub fn run(&mut self, path: PathBuf, program: &str, self_value: Option<Value>) -> VMResult {
         let method = self.parse_program(path, program)?;
         let self_value = match self_value {
             Some(val) => val,
@@ -1061,7 +1058,7 @@ impl VM {
                             vm.stack_push(Value::nil());
                         }
                     }
-                    fn push_some(vm: &mut VM, elem: &Vec<Value>, len: usize) {
+                    fn push_some(vm: &mut VM, elem: &[Value], len: usize) {
                         let ary_len = elem.len();
                         if len <= ary_len {
                             for i in 0..len {
@@ -1385,15 +1382,15 @@ macro_rules! eval_op {
             }
         } else {
             match ($lhs.as_rvalue(), $rhs.as_rvalue()) {
-                (Some(lhs), Some(rhs)) => match (lhs, rhs) {
-                    (RValue::FixNum(lhs), RValue::FixNum(rhs)) => Value::fixnum(lhs.$op(rhs)),
-                    (RValue::FixNum(lhs), RValue::FloatNum(rhs)) => {
+                (Some(lhs), Some(rhs)) => match (&lhs.kind, &rhs.kind) {
+                    (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => Value::fixnum(lhs.$op(rhs)),
+                    (ObjKind::FixNum(lhs), ObjKind::FloatNum(rhs)) => {
                         Value::flonum((*lhs as f64).$op(rhs))
                     }
-                    (RValue::FloatNum(lhs), RValue::FixNum(rhs)) => {
+                    (ObjKind::FloatNum(lhs), ObjKind::FixNum(rhs)) => {
                         Value::flonum(lhs.$op(*rhs as f64))
                     }
-                    (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => Value::flonum(lhs.$op(rhs)),
+                    (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => Value::flonum(lhs.$op(rhs)),
                     _ => {
                         let cache = $self.read32($iseq, 1);
                         return $self.fallback_to_method_with_cache($lhs, $rhs, $id, cache);
@@ -2028,30 +2025,27 @@ impl VM {
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),
-                    Some(rval) => match rval {
-                        RValue::Object(obj) => match &obj.kind {
-                            ObjKind::Array(aref) => {
-                                for elem in &aref.elements {
-                                    args.push(*elem);
-                                }
+                    Some(obj) => match &obj.kind {
+                        ObjKind::Array(aref) => {
+                            for elem in &aref.elements {
+                                args.push(*elem);
                             }
-                            ObjKind::Range(rref) => {
-                                let start = if rref.start.is_packed_fixnum() {
-                                    rref.start.as_packed_fixnum()
-                                } else {
-                                    unimplemented!("Range start not fixnum.")
-                                };
-                                let end = if rref.end.is_packed_fixnum() {
-                                    rref.end.as_packed_fixnum()
-                                } else {
-                                    unimplemented!("Range end not fixnum.")
-                                } + if rref.exclude { 0 } else { 1 };
-                                for i in start..end {
-                                    args.push(Value::fixnum(i));
-                                }
+                        }
+                        ObjKind::Range(rref) => {
+                            let start = if rref.start.is_packed_fixnum() {
+                                rref.start.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range start not fixnum.")
+                            };
+                            let end = if rref.end.is_packed_fixnum() {
+                                rref.end.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range end not fixnum.")
+                            } + if rref.exclude { 0 } else { 1 };
+                            for i in start..end {
+                                args.push(Value::fixnum(i));
                             }
-                            _ => args.push(inner),
-                        },
+                        }
                         _ => args.push(inner),
                     },
                 },
@@ -2078,30 +2072,27 @@ impl VM {
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),
-                    Some(rval) => match rval {
-                        RValue::Object(obj) => match &obj.kind {
-                            ObjKind::Array(aref) => {
-                                for elem in &aref.elements {
-                                    args.push(*elem);
-                                }
+                    Some(obj) => match &obj.kind {
+                        ObjKind::Array(aref) => {
+                            for elem in &aref.elements {
+                                args.push(*elem);
                             }
-                            ObjKind::Range(rref) => {
-                                let start = if rref.start.is_packed_fixnum() {
-                                    rref.start.as_packed_fixnum()
-                                } else {
-                                    unimplemented!("Range start not fixnum.")
-                                };
-                                let end = if rref.end.is_packed_fixnum() {
-                                    rref.end.as_packed_fixnum()
-                                } else {
-                                    unimplemented!("Range end not fixnum.")
-                                } + if rref.exclude { 0 } else { 1 };
-                                for i in start..end {
-                                    args.push(Value::fixnum(i));
-                                }
+                        }
+                        ObjKind::Range(rref) => {
+                            let start = if rref.start.is_packed_fixnum() {
+                                rref.start.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range start not fixnum.")
+                            };
+                            let end = if rref.end.is_packed_fixnum() {
+                                rref.end.as_packed_fixnum()
+                            } else {
+                                unimplemented!("Range end not fixnum.")
+                            } + if rref.exclude { 0 } else { 1 };
+                            for i in start..end {
+                                args.push(Value::fixnum(i));
                             }
-                            _ => args.push(inner),
-                        },
+                        }
                         _ => args.push(inner),
                     },
                 },
@@ -2150,7 +2141,7 @@ impl VM {
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_string(&self, string: &String) -> Result<Regexp, RubyError> {
+    pub fn regexp_from_string(&self, string: &str) -> Result<Regexp, RubyError> {
         match fancy_regex::Regex::new(&regex::escape(string)) {
             Ok(re) => Ok(Regexp::new(re)),
             Err(err) => Err(self.error_regexp(err)),

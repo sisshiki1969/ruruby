@@ -21,22 +21,20 @@ impl std::hash::Hash for HashKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self.as_rvalue() {
             None => self.0.hash(state),
-            Some(lhs) => match lhs {
-                RValue::FixNum(lhs) => lhs.hash(state),
-                RValue::FloatNum(lhs) => (*lhs as u64).hash(state),
-                RValue::Object(lhs) => match &lhs.kind {
-                    ObjKind::String(lhs) => lhs.hash(state),
-                    ObjKind::Array(lhs) => lhs.elements.hash(state),
-                    ObjKind::Range(lhs) => lhs.hash(state),
-                    ObjKind::Hash(lhs) => {
-                        for (key, val) in lhs.iter() {
-                            key.hash(state);
-                            val.hash(state);
-                        }
+            Some(lhs) => match &lhs.kind {
+                ObjKind::FixNum(lhs) => lhs.hash(state),
+                ObjKind::FloatNum(lhs) => (*lhs as u64).hash(state),
+                ObjKind::String(lhs) => lhs.hash(state),
+                ObjKind::Array(lhs) => lhs.elements.hash(state),
+                ObjKind::Range(lhs) => lhs.hash(state),
+                ObjKind::Hash(lhs) => {
+                    for (key, val) in lhs.iter() {
+                        key.hash(state);
+                        val.hash(state);
                     }
-                    ObjKind::Method(lhs) => lhs.inner().hash(state),
-                    _ => self.0.hash(state),
-                },
+                }
+                ObjKind::Method(lhs) => lhs.inner().hash(state),
+                _ => self.0.hash(state),
             },
         }
     }
@@ -48,23 +46,21 @@ impl PartialEq for HashKey {
     fn eq(&self, other: &Self) -> bool {
         match (self.as_rvalue(), other.as_rvalue()) {
             (None, None) => self.0 == other.0,
-            (Some(lhs), Some(rhs)) => match (lhs, rhs) {
-                (RValue::FixNum(lhs), RValue::FixNum(rhs)) => *lhs == *rhs,
-                (RValue::FloatNum(lhs), RValue::FloatNum(rhs)) => *lhs == *rhs,
-                (RValue::Object(lhs), RValue::Object(rhs)) => match (&lhs.kind, &rhs.kind) {
-                    (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
-                    (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                    (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
-                    (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
-                    (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
-                    _ => lhs.kind == rhs.kind,
-                },
-                _ => unreachable!("Illegal eq operand for HashKey. {:?}, {:?}", *lhs, *rhs),
+            (Some(lhs), Some(rhs)) => match (&lhs.kind, &rhs.kind) {
+                (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs,
+                (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => *lhs == *rhs,
+                (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
+                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
+                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
+                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
+                _ => lhs.kind == rhs.kind,
             },
             _ => false,
         }
     }
 }
+
 impl Eq for HashKey {}
 
 #[derive(Debug, Clone, Copy)]

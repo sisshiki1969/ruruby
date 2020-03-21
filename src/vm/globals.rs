@@ -230,6 +230,8 @@ impl Globals {
                 ObjKind::Ordinary => self
                     .get_ident_name(oref.search_class().as_class().name)
                     .to_string(),
+                ObjKind::FixNum(_) => "Integer".to_string(),
+                ObjKind::FloatNum(_) => "Float".to_string(),
             },
         }
     }

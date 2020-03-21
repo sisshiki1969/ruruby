@@ -336,7 +336,7 @@ impl IdentifierTable {
         }
     }
 
-    pub fn get_name(&self, id: IdentId) -> &String {
+    pub fn get_name(&self, id: IdentId) -> &str {
         self.table_rev.get(&id.0.get()).unwrap()
     }
 

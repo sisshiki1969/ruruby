@@ -12,6 +12,8 @@ pub struct ObjectInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjKind {
     Ordinary,
+    FixNum(i64),
+    FloatNum(f64),
     Class(ClassRef),
     Module(ClassRef),
     String(RString),
@@ -40,6 +42,38 @@ impl ObjectInfo {
             class: Value::nil(), // dummy for boot strapping
             kind: ObjKind::Class(classref),
             var_table: Box::new(HashMap::new()),
+        }
+    }
+
+    pub fn new_fixnum(i: i64) -> Self {
+        ObjectInfo {
+            class: Value::nil(),
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::FixNum(i),
+        }
+    }
+
+    pub fn new_flonum(f: f64) -> Self {
+        ObjectInfo {
+            class: Value::nil(),
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::FloatNum(f),
+        }
+    }
+
+    pub fn new_string(globals: &Globals, s: String) -> Self {
+        ObjectInfo {
+            class: globals.builtins.string,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::String(RString::Str(s)),
+        }
+    }
+
+    pub fn new_bytes(globals: &Globals, b: Vec<u8>) -> Self {
+        ObjectInfo {
+            class: globals.builtins.string,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::String(RString::Bytes(b)),
         }
     }
 
@@ -80,22 +114,6 @@ impl ObjectInfo {
             class: globals.builtins.range,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Range(range),
-        }
-    }
-
-    pub fn new_string(globals: &Globals, s: String) -> Self {
-        ObjectInfo {
-            class: globals.builtins.string,
-            var_table: Box::new(HashMap::new()),
-            kind: ObjKind::String(RString::Str(s)),
-        }
-    }
-
-    pub fn new_bytes(globals: &Globals, b: Vec<u8>) -> Self {
-        ObjectInfo {
-            class: globals.builtins.string,
-            var_table: Box::new(HashMap::new()),
-            kind: ObjKind::String(RString::Bytes(b)),
         }
     }
 
@@ -237,10 +255,10 @@ fn eql(vm: &mut VM, args: &Args) -> VMResult {
 fn toi(vm: &mut VM, args: &Args) -> VMResult {
     //vm.check_args_num(args.len(), 1, 1)?;
     let self_ = args.self_value;
-    let num = match self_.as_rvalue() {
-        Some(rval) => match rval {
-            RValue::FixNum(val) => *val,
-            RValue::FloatNum(val) => f64::trunc(*val) as i64,
+    let num = match &self_.as_rvalue() {
+        Some(info) => match &info.kind {
+            ObjKind::FixNum(val) => *val,
+            ObjKind::FloatNum(val) => f64::trunc(*val) as i64,
             _ => return Err(vm.error_type("Must be a number.")),
         },
         None => {

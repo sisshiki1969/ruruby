@@ -140,7 +140,7 @@ impl Codegen {
         self.push64(iseq, num as u64);
     }
 
-    fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &String) {
+    fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
         iseq.push(Inst::PUSH_STRING);
         let id = globals.get_ident_id(s);
         self.push32(iseq, id.into());
@@ -446,7 +446,7 @@ impl Codegen {
         &mut self,
         globals: &mut Globals,
         iseq: &mut ISeq,
-        nodes: &Vec<Node>,
+        nodes: &[Node],
         use_value: bool,
     ) -> Result<(), RubyError> {
         match nodes.len() {
@@ -520,7 +520,7 @@ impl Codegen {
     pub fn gen_iseq(
         &mut self,
         globals: &mut Globals,
-        params: &Vec<Node>,
+        params: &[Node],
         node: &Node,
         lvar_collector: &LvarCollector,
         use_value: bool,
