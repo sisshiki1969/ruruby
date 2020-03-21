@@ -1,5 +1,4 @@
 pub use crate::vm::*;
-use core::ptr::NonNull;
 
 const LVAR_ARRAY_SIZE: usize = 8;
 
@@ -134,8 +133,7 @@ impl ContextRef {
     }
 
     pub fn from_local(info: &Context) -> Self {
-        let boxed = info as *const Context as *mut Context;
-        Ref(unsafe { NonNull::new_unchecked(boxed) })
+        Ref::from_ref(info)
     }
 
     pub fn adjust_lvar_size(&mut self) {

@@ -163,17 +163,13 @@ fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     expect_string!(given, vm, args.self_value);
     expect_string!(replace, vm, args[1]);
-    let res = if let Some(s) = as_string!(args[0]) {
+    let res = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(&s)?;
-        Regexp::replace_one(vm, &re, given, replace)
+        Regexp::replace_one(vm, &re, given, replace)?
     } else if let Some(re) = args[0].as_regexp() {
-        Regexp::replace_one(vm, &re.regexp, given, replace)
+        Regexp::replace_one(vm, &re.regexp, given, replace)?
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
-    };
-    let res = match res {
-        Ok(res) => res,
-        Err(err) => return Err(vm.error_argument(format!("capture failed. {}", err))),
     };
 
     Ok(Value::string(&vm.globals, res))
@@ -183,17 +179,13 @@ fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     expect_string!(given, vm, args.self_value);
     expect_string!(replace, vm, args[1]);
-    let res = if let Some(s) = as_string!(args[0]) {
+    let res = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(&s)?;
-        Regexp::replace_all(vm, &re, given, replace)
+        Regexp::replace_all(vm, &re, given, replace)?
     } else if let Some(re) = args[0].as_regexp() {
-        Regexp::replace_all(vm, &re.regexp, given, replace)
+        Regexp::replace_all(vm, &re.regexp, given, replace)?
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
-    };
-    let res = match res {
-        Ok(res) => res,
-        Err(err) => return Err(vm.error_internal(format!("Capture failed. {}", err))),
     };
 
     Ok(Value::string(&vm.globals, res))
@@ -202,14 +194,14 @@ fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {
 fn string_scan(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     expect_string!(given, vm, args.self_value);
-    let vec = if let Some(s) = as_string!(args[0]) {
+    let vec = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(&s)?;
-        Regexp::find_all(vm, &re, given)
+        Regexp::find_all(vm, &re, given)?
     } else if let Some(re) = args[0].as_regexp() {
-        Regexp::find_all(vm, &re.regexp, given)
+        Regexp::find_all(vm, &re.regexp, given)?
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
-    }?;
+    };
     match args.block {
         Some(block) => {
             let self_value = vm.context().self_value;

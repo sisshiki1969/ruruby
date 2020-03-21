@@ -13,7 +13,7 @@ const ZERO: u64 = (0b1000 << 60) | 0b10;
 #[macro_export]
 macro_rules! expect_string {
     ($var:ident, $vm:ident, $val:expr) => {
-        let oref = match $val.is_object() {
+        let oref = match $val.as_rvalue() {
             Some(oref) => oref,
             None => return Err($vm.error_argument("Must be a String.")),
         };
@@ -31,7 +31,7 @@ macro_rules! expect_string {
 #[macro_export]
 macro_rules! expect_bytes {
     ($var:ident, $vm:ident, $val:expr) => {
-        let oref = match $val.is_object() {
+        let oref = match $val.as_rvalue() {
             Some(oref) => oref,
             None => return Err($vm.error_argument("Must be a String.")),
         };
@@ -43,33 +43,6 @@ macro_rules! expect_bytes {
     };
 }
 
-#[macro_export]
-macro_rules! as_string {
-    ($val:expr) => {
-        match $val.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Str(s)) => Some(s.clone()),
-                _ => None,
-            },
-            None => None,
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! as_bytes {
-    ($val:expr) => {
-        match $val.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Str(s)) => Some(s.as_bytes().to_vec()),
-                ObjKind::String(RString::Bytes(b)) => Some(b.clone()),
-                _ => None,
-            },
-            None => None,
-        }
-    };
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum RV {
     Uninitialized,
@@ -78,7 +51,7 @@ pub enum RV {
     FixNum(i64),
     FloatNum(f64),
     Symbol(IdentId),
-    Object(ObjectInfo),
+    Object(ObjectRef),
 }
 
 impl RV {
@@ -91,34 +64,8 @@ impl RV {
             RV::FixNum(num) => Value::fixnum(num),
             RV::FloatNum(num) => Value::flonum(num),
             RV::Symbol(id) => Value::symbol(id),
-            RV::Object(info) => Value(RV::pack_as_boxed(info)),
+            RV::Object(info) => Value(info.id()),
         }
-    }
-
-    fn pack_fixnum(num: i64) -> u64 {
-        let top = (num as u64) >> 62 ^ (num as u64) >> 63;
-        if top & 0b1 == 0 {
-            (num << 1) as u64 | 0b1
-        } else {
-            RV::pack_as_boxed(ObjectInfo::new_fixnum(num))
-        }
-    }
-
-    fn pack_flonum(num: f64) -> u64 {
-        if num == 0.0 {
-            return ZERO;
-        }
-        let unum = f64::to_bits(num);
-        let exp = (unum >> 60) & 0b111;
-        if exp == 4 || exp == 3 {
-            (unum & MASK1 | MASK2).rotate_left(3)
-        } else {
-            RV::pack_as_boxed(ObjectInfo::new_flonum(num))
-        }
-    }
-
-    fn pack_as_boxed(val: ObjectInfo) -> u64 {
-        Box::into_raw(Box::new(val)) as u64
     }
 }
 
@@ -208,7 +155,7 @@ impl Value {
             match &info.kind {
                 ObjKind::FixNum(i) => RV::FixNum(*i),
                 ObjKind::FloatNum(f) => RV::FloatNum(*f),
-                _ => RV::Object(info.clone()),
+                _ => RV::Object(Ref::from_ref(info)),
             }
         } else if self.is_packed_fixnum() {
             RV::FixNum(self.as_packed_fixnum())
@@ -237,7 +184,7 @@ impl Value {
 
     /// Get RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_rvalue(&self) -> Option<&ObjectInfo> {
+    pub fn as_rvalue(&self) -> Option<&RValue> {
         if self.is_packed_value() {
             None
         } else {
@@ -245,8 +192,8 @@ impl Value {
         }
     }
 
-    pub fn rvalue(&self) -> &ObjectInfo {
-        unsafe { &*(self.0 as *mut ObjectInfo) }
+    pub fn rvalue(&self) -> &RValue {
+        unsafe { &*(self.0 as *mut RValue) }
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
@@ -394,6 +341,27 @@ impl Value {
         }
     }
 
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Str(s)) => Some(s.as_bytes()),
+                ObjKind::String(RString::Bytes(b)) => Some(b.as_slice()),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&String> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(RString::Str(s)) => Some(s),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_object(&self) -> ObjectRef {
         self.is_object().unwrap()
     }
@@ -449,10 +417,10 @@ impl Value {
         }
     }
 
-    pub fn as_range(&self) -> Option<RangeInfo> {
-        match self.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Range(info) => Some(info.clone()),
+    pub fn as_range(&self) -> Option<&RangeInfo> {
+        match self.as_rvalue() {
+            Some(rval) => match &rval.kind {
+                ObjKind::Range(info) => Some(info),
                 _ => None,
             },
             None => None,
@@ -508,28 +476,6 @@ impl Value {
             None => None,
         }
     }
-    /*
-        pub fn as_string(&self) -> Option<String> {
-            match self.is_object() {
-                Some(oref) => match &oref.kind {
-                    ObjKind::String(RString::Str(s)) => Some(s.clone()),
-                    _ => None,
-                },
-                None => None,
-            }
-        }
-
-    pub fn as_bytes(&self) -> Option<Vec<u8>> {
-        match self.is_object() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Bytes(b)) => Some(b.clone()),
-                ObjKind::String(RString::Str(s)) => Some(s.as_bytes().to_vec()),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-        */
 
     pub fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
@@ -586,19 +532,33 @@ impl Value {
     }
 
     pub fn fixnum(num: i64) -> Self {
-        Value(RV::pack_fixnum(num))
+        let top = (num as u64) >> 62 ^ (num as u64) >> 63;
+        if top & 0b1 == 0 {
+            Value((num << 1) as u64 | 0b1)
+        } else {
+            RValue::new_fixnum(num).pack()
+        }
     }
 
     pub fn flonum(num: f64) -> Self {
-        Value(RV::pack_flonum(num))
+        if num == 0.0 {
+            return Value(ZERO);
+        }
+        let unum = f64::to_bits(num);
+        let exp = (unum >> 60) & 0b111;
+        if exp == 4 || exp == 3 {
+            Value((unum & MASK1 | MASK2).rotate_left(3))
+        } else {
+            RValue::new_flonum(num).pack()
+        }
     }
 
     pub fn string(globals: &Globals, string: String) -> Self {
-        Value::object(ObjectInfo::new_string(globals, string))
+        Value::object(RValue::new_string(globals, string))
     }
 
     pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {
-        Value::object(ObjectInfo::new_bytes(globals, bytes))
+        Value::object(RValue::new_bytes(globals, bytes))
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -608,59 +568,59 @@ impl Value {
 
     pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        Value::object(ObjectInfo::new_range(globals, info))
+        Value::object(RValue::new_range(globals, info))
     }
 
-    fn object(obj_info: ObjectInfo) -> Self {
-        Value(RV::pack_as_boxed(obj_info))
+    fn object(obj_info: RValue) -> Self {
+        obj_info.pack()
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
-        Value::object(ObjectInfo::new_bootstrap(classref))
+        Value::object(RValue::new_bootstrap(classref))
     }
 
     pub fn ordinary_object(class: Value) -> Self {
-        Value::object(ObjectInfo::new_ordinary(class))
+        Value::object(RValue::new_ordinary(class))
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(ObjectInfo::new_class(globals, class_ref))
+        Value::object(RValue::new_class(globals, class_ref))
     }
 
     pub fn plain_class(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(ObjectInfo::new_class(globals, class_ref))
+        Value::object(RValue::new_class(globals, class_ref))
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(ObjectInfo::new_module(globals, class_ref))
+        Value::object(RValue::new_module(globals, class_ref))
     }
 
     pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
-        Value::object(ObjectInfo::new_array(globals, array_ref))
+        Value::object(RValue::new_array(globals, array_ref))
     }
 
     pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
-        Value::object(ObjectInfo::new_array(globals, ArrayRef::from(ary)))
+        Value::object(RValue::new_array(globals, ArrayRef::from(ary)))
     }
 
     pub fn splat(globals: &Globals, val: Value) -> Self {
-        Value::object(ObjectInfo::new_splat(globals, val))
+        Value::object(RValue::new_splat(globals, val))
     }
 
     pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
-        Value::object(ObjectInfo::new_hash(globals, hash_ref))
+        Value::object(RValue::new_hash(globals, hash_ref))
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
-        Value::object(ObjectInfo::new_regexp(globals, regexp_ref))
+        Value::object(RValue::new_regexp(globals, regexp_ref))
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        Value::object(ObjectInfo::new_proc(globals, ProcRef::from(context)))
+        Value::object(RValue::new_proc(globals, ProcRef::from(context)))
     }
 
     pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        Value::object(ObjectInfo::new_method(
+        Value::object(RValue::new_method(
             globals,
             MethodObjRef::from(name, receiver, method),
         ))
@@ -705,7 +665,7 @@ impl Value {
 
 #[allow(unused_imports)]
 mod tests {
-    use crate::vm::*;
+    use crate::*;
 
     #[test]
     fn pack_bool1() {
@@ -849,11 +809,8 @@ mod tests {
         let globals = Globals::new();
         let from = RV::FixNum(7).pack();
         let to = RV::FixNum(36).pack();
-        let expect = RV::Object(ObjectInfo::new_range(
-            &globals,
-            RangeInfo::new(from, to, false),
-        ));
-        let got = expect.clone().pack().unpack();
+        let expect = Value::range(&globals, from, to, true);
+        let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -862,11 +819,8 @@ mod tests {
     #[test]
     fn pack_class() {
         let globals = Globals::new();
-        let expect = RV::Object(ObjectInfo::new_class(
-            &globals,
-            ClassRef::from(IdentId::from(1), None),
-        ));
-        let got = expect.clone().pack().unpack();
+        let expect = Value::class(&globals, ClassRef::from(IdentId::from(1), None));
+        let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -877,8 +831,8 @@ mod tests {
         let globals = Globals::new();
         let class_ref = ClassRef::from(IdentId::from(1), None);
         let class = Value::class(&globals, class_ref);
-        let expect = RV::Object(ObjectInfo::new_ordinary(class));
-        let got = expect.clone().pack().unpack();
+        let expect = Value::ordinary_object(class);
+        let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }

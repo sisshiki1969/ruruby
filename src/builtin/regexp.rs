@@ -105,7 +105,7 @@ impl Regexp {
         re: &Regexp,
         given: &str,
         replace: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, RubyError> {
         let res = match re.captures(given) {
             Ok(None) => given.to_string(),
             Ok(Some(captures)) => {
@@ -138,7 +138,7 @@ impl Regexp {
                 res.replace_range(m.start()..m.end(), &rep);
                 res
             }
-            Err(err) => return Err(format!("{:?}", err)),
+            Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
         };
         Ok(res)
     }
@@ -149,7 +149,7 @@ impl Regexp {
         re: &Regexp,
         given: &str,
         replace: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, RubyError> {
         let mut range = vec![];
         let mut i = 0;
         let mut last_captures = None;
@@ -162,7 +162,7 @@ impl Regexp {
                     range.push((m.start(), m.end()));
                     last_captures = Some(captures);
                 }
-                Err(err) => return Err(format!("{:?}", err)),
+                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
             };
         }
         match last_captures {
@@ -180,14 +180,14 @@ impl Regexp {
         vm: &mut VM,
         re: &Regexp,
         given: &'a str,
-    ) -> Result<Option<Match<'a>>, Error> {
+    ) -> Result<Option<Match<'a>>, RubyError> {
         match re.captures(given) {
             Ok(None) => Ok(None),
             Ok(Some(captures)) => {
                 Regexp::get_captures(vm, &captures, given);
                 Ok(captures.get(0))
             }
-            Err(err) => Err(err),
+            Err(err) => Err(vm.error_internal(format!("Capture failed. {:?}", err))),
         }
     }
 

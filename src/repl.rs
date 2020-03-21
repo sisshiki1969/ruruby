@@ -7,7 +7,12 @@ use ruruby::*;
 
 pub fn repl_vm() {
     println!("RV: {}", std::mem::size_of::<RV>());
-    println!("ObjectInfo: {}", std::mem::size_of::<ObjectInfo>());
+    println!("Value: {}", std::mem::size_of::<Value>());
+    println!(
+        "HashMap: {}",
+        std::mem::size_of::<std::collections::HashMap<Value, Value>>()
+    );
+    println!("RValue: {}", std::mem::size_of::<RValue>());
     println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     let mut rl = rustyline::Editor::<()>::new();
@@ -47,7 +52,7 @@ pub fn repl_vm() {
                         lvar_collector = parse_result.lvar_collector;
                         let id = vm.globals.get_ident_id("inspect");
                         let res = vm.send0(result, id).unwrap();
-                        let res_str = as_string!(res).unwrap();
+                        let res_str = res.as_string().unwrap();
                         println!("=> {}", res_str);
                     }
                     Err(err) => {

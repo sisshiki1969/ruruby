@@ -2,7 +2,7 @@
 extern crate ruruby;
 extern crate test;
 use ruruby::test::*;
-use ruruby::vm::value::Value;
+use ruruby::*;
 use test::Bencher;
 
 #[test]

@@ -50,12 +50,16 @@ impl Loc {
 //------------------------------------------------------------
 
 #[derive(Debug)]
-pub struct Ref<T>(pub NonNull<T>);
+pub struct Ref<T>(NonNull<T>);
 
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
         Ref(unsafe { NonNull::new_unchecked(boxed) })
+    }
+
+    pub fn from_ref(info: &T) -> Self {
+        Ref(unsafe { NonNull::new_unchecked(info as *const T as *mut T) })
     }
 
     pub fn inner(&self) -> &T {

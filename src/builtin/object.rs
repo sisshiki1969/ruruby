@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ObjectInfo {
+pub struct RValue {
     class: Value,
     var_table: Box<ValueTable>,
     pub kind: ObjKind,
@@ -26,19 +26,17 @@ pub enum ObjKind {
     Method(MethodObjRef),
 }
 
-impl ObjectInfo {
+impl RValue {
     pub fn id(&self) -> u64 {
-        self as *const ObjectInfo as u64
+        self as *const RValue as u64
     }
 
     pub fn as_ref(&self) -> ObjectRef {
-        Ref(unsafe {
-            core::ptr::NonNull::new_unchecked(self as *const ObjectInfo as *mut ObjectInfo)
-        })
+        Ref::from_ref(self)
     }
 
     pub fn new_bootstrap(classref: ClassRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: Value::nil(), // dummy for boot strapping
             kind: ObjKind::Class(classref),
             var_table: Box::new(HashMap::new()),
@@ -46,7 +44,7 @@ impl ObjectInfo {
     }
 
     pub fn new_fixnum(i: i64) -> Self {
-        ObjectInfo {
+        RValue {
             class: Value::nil(),
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::FixNum(i),
@@ -54,7 +52,7 @@ impl ObjectInfo {
     }
 
     pub fn new_flonum(f: f64) -> Self {
-        ObjectInfo {
+        RValue {
             class: Value::nil(),
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::FloatNum(f),
@@ -62,7 +60,7 @@ impl ObjectInfo {
     }
 
     pub fn new_string(globals: &Globals, s: String) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.string,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::String(RString::Str(s)),
@@ -70,7 +68,7 @@ impl ObjectInfo {
     }
 
     pub fn new_bytes(globals: &Globals, b: Vec<u8>) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.string,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::String(RString::Bytes(b)),
@@ -78,7 +76,7 @@ impl ObjectInfo {
     }
 
     pub fn new_ordinary(class: Value) -> Self {
-        ObjectInfo {
+        RValue {
             class,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Ordinary,
@@ -86,7 +84,7 @@ impl ObjectInfo {
     }
 
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.class,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Class(classref),
@@ -94,7 +92,7 @@ impl ObjectInfo {
     }
 
     pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.module,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Module(classref),
@@ -102,7 +100,7 @@ impl ObjectInfo {
     }
 
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.array,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Array(arrayref),
@@ -110,7 +108,7 @@ impl ObjectInfo {
     }
 
     pub fn new_range(globals: &Globals, range: RangeInfo) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.range,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Range(range),
@@ -118,7 +116,7 @@ impl ObjectInfo {
     }
 
     pub fn new_splat(globals: &Globals, val: Value) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.array,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Splat(val),
@@ -126,7 +124,7 @@ impl ObjectInfo {
     }
 
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.hash,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Hash(hashref),
@@ -134,7 +132,7 @@ impl ObjectInfo {
     }
 
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.regexp,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Regexp(regexpref),
@@ -142,7 +140,7 @@ impl ObjectInfo {
     }
 
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.procobj,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Proc(procref),
@@ -150,7 +148,7 @@ impl ObjectInfo {
     }
 
     pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
-        ObjectInfo {
+        RValue {
             class: globals.builtins.method,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Method(methodref),
@@ -158,9 +156,13 @@ impl ObjectInfo {
     }
 }
 
-pub type ObjectRef = Ref<ObjectInfo>;
+pub type ObjectRef = Ref<RValue>;
 
-impl ObjectInfo {
+impl RValue {
+    pub fn pack(self) -> Value {
+        Value::from(Box::into_raw(Box::new(self)) as u64)
+    }
+
     /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.
     pub fn class(&self) -> Value {
         self.class
@@ -282,7 +284,7 @@ fn instance_variable_set(vm: &mut VM, args: &Args) -> VMResult {
     let val = args[1];
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
-        None => match as_string!(name) {
+        None => match name.as_string() {
             Some(s) => vm.globals.get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
@@ -297,7 +299,7 @@ fn instance_variable_get(vm: &mut VM, args: &Args) -> VMResult {
     let name = args[0];
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
-        None => match as_string!(name) {
+        None => match name.as_string() {
             Some(s) => vm.globals.get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },

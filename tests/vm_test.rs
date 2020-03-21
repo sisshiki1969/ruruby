@@ -5,8 +5,7 @@ extern crate test;
 use ruruby::lexer::Lexer;
 use ruruby::parser::{LvarCollector, Parser};
 use ruruby::test::{assert_script, eval_script};
-use ruruby::vm::value::Value;
-use ruruby::vm::*;
+use ruruby::*;
 use test::Bencher;
 
 #[test]

@@ -7,7 +7,6 @@ mod globals;
 mod module;
 #[cfg(feature = "perf")]
 mod perf;
-pub mod value;
 mod vm_inst;
 
 use crate::error::*;
@@ -634,7 +633,7 @@ impl VM {
                 Inst::CONCAT_STRING => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = match (as_string!(lhs), as_string!(rhs)) {
+                    let val = match (lhs.as_string(), rhs.as_string()) {
                         (Some(lhs), Some(rhs)) => {
                             Value::string(&self.globals, format!("{}{}", lhs, rhs))
                         }
@@ -841,7 +840,7 @@ impl VM {
                 }
                 Inst::CREATE_REGEXP => {
                     let arg = self.stack_pop();
-                    let mut arg = match as_string!(arg) {
+                    let mut arg = match arg.as_string() {
                         Some(arg) => arg.clone(),
                         None => {
                             return Err(self.error_argument("Illegal argument for CREATE_REGEXP"))
@@ -1676,13 +1675,10 @@ impl VM {
                 }
             }
             RV::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
-            RV::Object(oref) => match oref.kind {
+            RV::Object(oref) => match &oref.kind {
                 ObjKind::String(s) => match s {
                     RString::Str(s) => format!("{}", s),
-                    RString::Bytes(b) => match String::from_utf8(b) {
-                        Ok(s) => format!("{}", s),
-                        Err(_) => "<ByteArray>".to_string(),
-                    },
+                    RString::Bytes(b) => format!("{}", String::from_utf8_lossy(b)),
                 },
                 ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
