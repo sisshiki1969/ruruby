@@ -969,13 +969,7 @@ impl VM {
                             let super_val = if super_val.is_nil() {
                                 self.globals.builtins.object
                             } else {
-                                if super_val.is_class().is_none() {
-                                    let val = self.val_inspect(super_val);
-                                    return Err(self.error_type(format!(
-                                        "Superclass must be a class. (given:{:?})",
-                                        val
-                                    )));
-                                };
+                                self.val_as_class(super_val, "Superclass")?;
                                 super_val
                             };
                             let classref = ClassRef::from(id, super_val);
@@ -1196,12 +1190,14 @@ impl VM {
 }
 
 impl VM {
-    pub fn val_as_class(&self, val: Value) -> Result<ClassRef, RubyError> {
+    /// Returns `ClassRef` if `self` is a Class.
+    /// When `self` is not a Class, returns `TypeError`.
+    pub fn val_as_class(&self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
         match val.is_class() {
             Some(class_ref) => Ok(class_ref),
             None => {
                 let val = self.val_inspect(val);
-                Err(self.error_type(format!("Must be a class. (given:{:?})", val)))
+                Err(self.error_type(format!("{} must be a class. (given:{:?})", msg, val)))
             }
         }
     }
