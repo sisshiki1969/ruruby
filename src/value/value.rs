@@ -202,7 +202,7 @@ impl Value {
                 if self.is_packed_fixnum() {
                     globals.builtins.integer
                 } else if self.is_packed_num() {
-                    globals.builtins.object
+                    globals.builtins.float
                 } else if self.is_packed_symbol() {
                     globals.builtins.object
                 } else {
@@ -211,7 +211,7 @@ impl Value {
             }
             Some(info) => match &info.kind {
                 ObjKind::FixNum(_) => globals.builtins.integer,
-                ObjKind::FloatNum(_) => globals.builtins.object,
+                ObjKind::FloatNum(_) => globals.builtins.float,
                 _ => info.class(),
             },
         }
@@ -223,7 +223,7 @@ impl Value {
                 if self.is_packed_fixnum() {
                     globals.builtins.integer
                 } else if self.is_packed_num() {
-                    globals.builtins.object
+                    globals.builtins.float
                 } else if self.is_packed_symbol() {
                     globals.builtins.object
                 } else {
@@ -232,7 +232,7 @@ impl Value {
             }
             Some(info) => match &info.kind {
                 ObjKind::FixNum(_) => globals.builtins.integer,
-                ObjKind::FloatNum(_) => globals.builtins.object,
+                ObjKind::FloatNum(_) => globals.builtins.float,
                 _ => info.search_class(),
             },
         }

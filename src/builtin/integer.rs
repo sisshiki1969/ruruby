@@ -3,11 +3,12 @@ use crate::*;
 pub fn init_integer(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Integer");
     let class = ClassRef::from(id, globals.builtins.object);
-    globals.add_builtin_instance_method(class, "times", integer_times);
-    globals.add_builtin_instance_method(class, "step", integer_step);
-    globals.add_builtin_instance_method(class, "chr", integer_chr);
-    globals.add_builtin_instance_method(class, "to_f", integer_tof);
-    globals.add_builtin_instance_method(class, "even?", integer_even);
+    globals.add_builtin_instance_method(class, "times", times);
+    globals.add_builtin_instance_method(class, "step", step);
+    globals.add_builtin_instance_method(class, "chr", chr);
+    globals.add_builtin_instance_method(class, "to_f", tof);
+    globals.add_builtin_instance_method(class, "floor", floor);
+    globals.add_builtin_instance_method(class, "even?", even);
     Value::class(globals, class)
 }
 
@@ -15,7 +16,7 @@ pub fn init_integer(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn integer_times(vm: &mut VM, args: &Args) -> VMResult {
+fn times(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let num = args.self_value.as_fixnum().unwrap();
     if num < 1 {
@@ -36,7 +37,7 @@ fn integer_times(vm: &mut VM, args: &Args) -> VMResult {
     Ok(args.self_value)
 }
 
-fn integer_step(vm: &mut VM, args: &Args) -> VMResult {
+fn step(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
     let start = args.self_value.as_fixnum().unwrap();
     let limit = args[0].as_fixnum().unwrap();
@@ -71,17 +72,23 @@ fn integer_step(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 /// Built-in function "chr".
-fn integer_chr(vm: &mut VM, args: &Args) -> VMResult {
+fn chr(vm: &mut VM, args: &Args) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap() as u64 as u8;
     Ok(Value::bytes(&vm.globals, vec![num]))
 }
 
-fn integer_tof(_vm: &mut VM, args: &Args) -> VMResult {
+fn floor(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    args.self_value.as_fixnum().unwrap();
+    Ok(args.self_value)
+}
+
+fn tof(_vm: &mut VM, args: &Args) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap();
     Ok(Value::flonum(num as f64))
 }
 
-fn integer_even(_vm: &mut VM, args: &Args) -> VMResult {
+fn even(_vm: &mut VM, args: &Args) -> VMResult {
     let num = args.self_value.as_fixnum().unwrap();
     Ok(Value::bool(num % 2 == 0))
 }

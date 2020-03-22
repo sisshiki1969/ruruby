@@ -11,7 +11,6 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "instance_variable_set", instance_variable_set);
     globals.add_builtin_instance_method(object, "instance_variable_get", instance_variable_get);
     globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
-    globals.add_builtin_instance_method(object, "floor", floor);
     globals.add_builtin_instance_method(object, "freeze", freeze);
     globals.add_builtin_instance_method(object, "super", super_);
     globals.add_builtin_instance_method(object, "equal?", equal);
@@ -112,19 +111,6 @@ fn instance_variables(vm: &mut VM, args: &Args) -> VMResult {
         .map(|x| Value::symbol(*x))
         .collect();
     Ok(Value::array_from(&vm.globals, res))
-}
-
-fn floor(vm: &mut VM, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
-    let rec = args.self_value;
-    if rec.is_packed_fixnum() {
-        Ok(rec)
-    } else if rec.is_packed_num() {
-        let res = rec.as_packed_flonum().floor() as i64;
-        Ok(Value::fixnum(res))
-    } else {
-        Err(vm.error_type("Receiver must be Integer of Float."))
-    }
 }
 
 fn freeze(vm: &mut VM, args: &Args) -> VMResult {

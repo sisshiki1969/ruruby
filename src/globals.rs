@@ -26,6 +26,7 @@ pub type GlobalsRef = Ref<Globals>;
 #[derive(Debug, Clone)]
 pub struct BuiltinClass {
     pub integer: Value,
+    pub float: Value,
     pub array: Value,
     pub class: Value,
     pub module: Value,
@@ -43,6 +44,7 @@ impl BuiltinClass {
         let nil = Value::nil();
         BuiltinClass {
             integer: nil,
+            float: nil,
             array: nil,
             class,
             module,
@@ -100,6 +102,7 @@ impl Globals {
         init_module(&mut globals);
         init_class(&mut globals);
         globals.builtins.integer = init_integer(&mut globals);
+        globals.builtins.float = init_float(&mut globals);
         globals.builtins.array = init_array(&mut globals);
         globals.builtins.procobj = init_proc(&mut globals);
         globals.builtins.method = init_method(&mut globals);
