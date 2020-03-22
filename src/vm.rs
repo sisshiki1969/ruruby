@@ -3,8 +3,6 @@ mod builtin;
 mod class;
 mod codegen;
 mod context;
-mod globals;
-mod module;
 #[cfg(feature = "perf")]
 mod perf;
 mod vm_inst;
@@ -16,7 +14,6 @@ pub use class::*;
 use codegen::ContextKind;
 pub use codegen::{Codegen, ISeq, ISeqPos};
 pub use context::*;
-pub use globals::*;
 pub use module::*;
 pub use value::*;
 
@@ -36,13 +33,11 @@ pub type VMResult = Result<Value, RubyError>;
 #[derive(Debug, Clone)]
 pub struct VM {
     // Global info
-    pub globals: Globals,
+    pub globals: GlobalsRef,
     pub root_path: Vec<PathBuf>,
-    global_var: ValueTable,
     // VM state
-    context_stack: Vec<ContextRef>,
-    class_stack: Vec<Value>,
-    define_mode: Vec<DefineMode>,
+    exec_context: Vec<ContextRef>,
+    class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
     pc: usize,
     #[cfg(feature = "perf")]
@@ -106,12 +101,10 @@ impl VM {
         set_class!("RuntimeError", errorobj::init_error(&mut globals));
 
         let mut vm = VM {
-            globals,
+            globals: GlobalsRef::new(globals),
             root_path: vec![],
-            global_var: HashMap::new(),
-            class_stack: vec![],
-            define_mode: vec![DefineMode::default()],
-            context_stack: vec![],
+            class_context: vec![(Value::nil(), DefineMode::default())],
+            exec_context: vec![],
             exec_stack: vec![],
             pc: 0,
             #[cfg(feature = "perf")]
@@ -122,15 +115,15 @@ impl VM {
     }
 
     pub fn context(&self) -> ContextRef {
-        *self.context_stack.last().unwrap()
+        *self.exec_context.last().unwrap()
     }
 
     pub fn caller_context(&self) -> ContextRef {
-        let len = self.context_stack.len();
+        let len = self.exec_context.len();
         if len < 2 {
-            unreachable!("caller_context(): context_stack.len is {}", len)
+            unreachable!("caller_context(): exec_context.len is {}", len)
         };
-        self.context_stack[len - 2]
+        self.exec_context[len - 2]
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
@@ -147,41 +140,46 @@ impl VM {
 
     pub fn clear(&mut self) {
         self.exec_stack.clear();
-        self.class_stack.clear();
-        self.define_mode = vec![DefineMode::default()];
-        self.context_stack.clear();
+        self.class_context = vec![(Value::nil(), DefineMode::default())];
+        self.exec_context.clear();
     }
 
     pub fn class_push(&mut self, val: Value) {
-        self.class_stack.push(val);
-        self.define_mode.push(DefineMode::default());
+        self.class_context.push((val, DefineMode::default()));
     }
 
-    pub fn class_pop(&mut self) -> Value {
-        self.define_mode.pop().unwrap();
-        self.class_stack.pop().unwrap()
+    pub fn class_pop(&mut self) {
+        self.class_context.pop().unwrap();
     }
 
     pub fn classref(&self) -> ClassRef {
-        match self.class_stack.last() {
-            Some(class) => class.as_module().unwrap(),
-            None => self.globals.object_class,
+        let (class, _) = self.class_context.last().unwrap();
+        if class.is_nil() {
+            self.globals.object_class
+        } else {
+            class.as_module().unwrap()
         }
     }
 
     pub fn class(&self) -> Value {
-        match self.class_stack.last() {
-            Some(class) => *class,
-            None => self.globals.builtins.object,
+        let (class, _) = self.class_context.last().unwrap();
+        if class.is_nil() {
+            self.globals.builtins.object
+        } else {
+            *class
         }
     }
 
     pub fn define_mode(&self) -> &DefineMode {
-        self.define_mode.last().unwrap()
+        &self.class_context.last().unwrap().1
     }
 
     pub fn define_mode_mut(&mut self) -> &mut DefineMode {
-        self.define_mode.last_mut().unwrap()
+        &mut self.class_context.last_mut().unwrap().1
+    }
+
+    pub fn module_function(&mut self, flag: bool) {
+        self.class_context.last_mut().unwrap().1.module_function = flag;
     }
 
     pub fn set_pc(&mut self, pc: usize) {
@@ -411,11 +409,11 @@ macro_rules! try_err {
 impl VM {
     /// Main routine for VM execution.
     fn vm_run_context(&mut self, context: ContextRef) -> Result<Value, RubyError> {
-        if let Some(prev_context) = self.context_stack.last_mut() {
+        if let Some(prev_context) = self.exec_context.last_mut() {
             prev_context.pc = self.pc;
             prev_context.stack_len = self.exec_stack.len();
         };
-        self.context_stack.push(context);
+        self.exec_context.push(context);
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
@@ -434,8 +432,8 @@ impl VM {
             }
             match iseq[self.pc] {
                 Inst::END => {
-                    self.context_stack.pop().unwrap();
-                    if !self.context_stack.is_empty() {
+                    self.exec_context.pop().unwrap();
+                    if !self.exec_context.is_empty() {
                         self.pc = self.context().pc;
                     }
                     let val = self.stack_pop();
@@ -447,8 +445,8 @@ impl VM {
                     } else {
                         Ok(self.stack_pop())
                     };
-                    self.context_stack.pop().unwrap();
-                    if !self.context_stack.is_empty() {
+                    self.exec_context.pop().unwrap();
+                    if !self.exec_context.is_empty() {
                         self.pc = self.context().pc;
                     }
                     return res;
@@ -1225,7 +1223,7 @@ impl VM {
 
     fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
         let mut class_stack = None;
-        for context in self.context_stack.iter().rev() {
+        for context in self.exec_context.iter().rev() {
             match context.iseq_ref.class_defined {
                 Some(class_list) => {
                     class_stack = Some(class_list);
@@ -1289,14 +1287,14 @@ impl VM {
     }
 
     pub fn get_global_var(&self, id: IdentId) -> Value {
-        match self.global_var.get(&id) {
+        match self.globals.global_var.get(&id) {
             Some(val) => val.clone(),
             None => Value::nil(),
         }
     }
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
-        self.global_var.insert(id, val);
+        self.globals.global_var.insert(id, val);
     }
 }
 
@@ -1872,7 +1870,7 @@ impl VM {
 
 impl VM {
     pub fn define_method(&mut self, id: IdentId, method: MethodRef) {
-        if self.context_stack.len() == 1 {
+        if self.exec_context.len() == 1 {
             // A method defined in "top level" is registered as an object method.
             self.add_object_method(id, method);
         } else {
@@ -1887,7 +1885,7 @@ impl VM {
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        if self.context_stack.len() == 1 {
+        if self.exec_context.len() == 1 {
             // A method defined in "top level" is registered as an object method.
             self.add_object_method(id, method);
             Ok(())
@@ -1981,8 +1979,8 @@ impl VM {
 
 impl VM {
     fn unwind_context(&mut self, err: &mut RubyError) {
-        self.context_stack.pop().unwrap();
-        if let Some(context) = self.context_stack.last_mut() {
+        self.exec_context.pop().unwrap();
+        if let Some(context) = self.exec_context.last_mut() {
             self.pc = context.pc;
             err.info.push((self.source_info(), self.get_loc()));
         };
@@ -2097,7 +2095,7 @@ impl VM {
     /// Create new Proc object from `method`.
     pub fn create_proc(&mut self, method: MethodRef) -> Result<Value, RubyError> {
         let mut prev_ctx: Option<ContextRef> = None;
-        for context in self.context_stack.iter_mut().rev() {
+        for context in self.exec_context.iter_mut().rev() {
             if context.on_stack {
                 let mut heap_context = context.dup();
                 heap_context.on_stack = false;

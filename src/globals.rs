@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct Globals {
     // Global info
     pub ident_table: IdentifierTable,
+    pub global_var: ValueTable,
     method_table: GlobalMethodTable,
     inline_cache: InlineCache,
     method_cache: MethodCache,
@@ -19,6 +20,8 @@ pub struct Globals {
 
     case_dispatch: CaseDispatchMap,
 }
+
+pub type GlobalsRef = Ref<Globals>;
 
 #[derive(Debug, Clone)]
 pub struct BuiltinClass {
@@ -75,6 +78,7 @@ impl Globals {
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
             ident_table,
+            global_var: HashMap::new(),
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),

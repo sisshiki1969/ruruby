@@ -1,4 +1,4 @@
-use crate::vm::*;
+use crate::*;
 
 pub fn init_module(globals: &mut Globals) {
     let class = globals.module_class;
@@ -153,13 +153,13 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
 }
 
 fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
-    vm.globals
-        .get_ident_id(format!("@{}", vm.globals.get_ident_name(id)))
+    let s = vm.globals.get_ident_name(id).to_string();
+    vm.globals.get_ident_id(format!("@{}", s))
 }
 
 fn module_function(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    vm.define_mode_mut().module_function = true;
+    vm.module_function(true);
     Ok(Value::nil())
 }
 
