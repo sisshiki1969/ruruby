@@ -50,9 +50,13 @@ impl RubyError {
                 RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
                 RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
                 RuntimeErrKind::Regexp(n) => eprintln!("RegexpError ({})", n),
+                RuntimeErrKind::Fiber(n) => eprintln!("FiberError ({})", n),
             },
             RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
+            }
+            RubyErrorKind::FiberYield(_) => {
+                eprintln!("FiberError (Can't yield from root fiber.)");
             }
         }
     }
@@ -63,6 +67,7 @@ pub enum RubyErrorKind {
     ParseErr(ParseErrKind),
     RuntimeErr(RuntimeErrKind),
     MethodReturn(MethodRef),
+    FiberYield(Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -83,6 +88,7 @@ pub enum RuntimeErrKind {
     Index(String),
     Type(String),
     Regexp(String),
+    Fiber(String),
 }
 
 impl RubyError {
@@ -103,5 +109,9 @@ impl RubyError {
 
     pub fn new_method_return(method: MethodRef, source_info: SourceInfoRef, loc: Loc) -> Self {
         RubyError::new(RubyErrorKind::MethodReturn(method), source_info, 0, loc)
+    }
+
+    pub fn new_fiber_yield(val: Value, source_info: SourceInfoRef, loc: Loc) -> Self {
+        RubyError::new(RubyErrorKind::FiberYield(val), source_info, 0, loc)
     }
 }

@@ -129,7 +129,9 @@ impl ContextRef {
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
     ) -> Self {
-        ContextRef::new(Context::new(self_value, block, iseq_ref, outer))
+        let mut context = Context::new(self_value, block, iseq_ref, outer);
+        context.on_stack = false;
+        ContextRef::new(context)
     }
 
     pub fn from_local(info: &Context) -> Self {

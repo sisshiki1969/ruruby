@@ -36,6 +36,7 @@ pub struct BuiltinClass {
     pub hash: Value,
     pub regexp: Value,
     pub string: Value,
+    pub fiber: Value,
     pub object: Value,
 }
 
@@ -54,6 +55,7 @@ impl BuiltinClass {
             hash: nil,
             regexp: nil,
             string: nil,
+            fiber: nil,
             object,
         }
     }
@@ -110,6 +112,7 @@ impl Globals {
         globals.builtins.string = init_string(&mut globals);
         globals.builtins.hash = init_hash(&mut globals);
         globals.builtins.regexp = init_regexp(&mut globals);
+        globals.builtins.fiber = init_fiber(&mut globals);
         init_object(&mut globals);
         globals
     }
@@ -239,6 +242,7 @@ impl Globals {
                     .to_string(),
                 ObjKind::FixNum(_) => "Integer".to_string(),
                 ObjKind::FloatNum(_) => "Float".to_string(),
+                ObjKind::Fiber(_) => "Fiber".to_string(),
             },
         }
     }

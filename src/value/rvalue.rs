@@ -25,6 +25,7 @@ pub enum ObjKind {
     Proc(ProcRef),
     Regexp(RegexpRef),
     Method(MethodObjRef),
+    Fiber(FiberInfo),
 }
 
 impl RValue {
@@ -153,6 +154,14 @@ impl RValue {
             class: globals.builtins.method,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Method(methodref),
+        }
+    }
+
+    pub fn new_fiber(globals: &Globals, vm: VMRef, context: ContextRef) -> Self {
+        RValue {
+            class: globals.builtins.fiber,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::Fiber(FiberInfo::new(vm, context)),
         }
     }
 }

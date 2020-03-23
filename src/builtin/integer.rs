@@ -51,23 +51,20 @@ fn step(vm: &mut VM, args: &Args) -> VMResult {
         1
     };
 
-    match args.block {
-        None => return Err(vm.error_argument("Currently, needs block.")),
-        Some(method) => {
-            let context = vm.context();
-            let self_value = context.self_value;
-            let mut arg = Args::new1(self_value, None, Value::nil());
-            let mut i = start;
-            loop {
-                if step > 0 && i > limit || step < 0 && limit > i {
-                    break;
-                }
-                arg[0] = Value::fixnum(i);
-                vm.eval_block(method, &arg)?;
-                i += step;
-            }
+    let method = vm.expect_block(args.block)?;
+    let context = vm.context();
+    let self_value = context.self_value;
+    let mut arg = Args::new1(self_value, None, Value::nil());
+    let mut i = start;
+    loop {
+        if step > 0 && i > limit || step < 0 && limit > i {
+            break;
         }
+        arg[0] = Value::fixnum(i);
+        vm.eval_block(method, &arg)?;
+        i += step;
     }
+
     Ok(args.self_value)
 }
 

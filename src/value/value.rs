@@ -625,6 +625,10 @@ impl Value {
             MethodObjRef::from(name, receiver, method),
         ))
     }
+
+    pub fn fiber(globals: &Globals, vm: VMRef, context: ContextRef) -> Self {
+        Value::object(RValue::new_fiber(globals, vm, context))
+    }
 }
 
 impl Value {

@@ -1,7 +1,12 @@
-p "foobar".scan(/../)               # => ["fo", "ob", "ar"]
-p "foobar".scan("o")                # => ["o", "o"]
-p "foobarbazfoobarbaz".scan(/ba./)  # => ["bar", "baz", "bar", "baz"]
-
-p "foobar".scan(/(.)/) # => [["f"], ["o"], ["o"], ["b"], ["a"], ["r"]]
-
-p "foobarbazfoobarbaz".scan(/(ba)(.)()/) # => [["ba", "r"], ["ba", "z"], ["ba", "r"], ["ba", "z"]]
+f = Fiber.new do
+    n = 0
+    while true do
+      Fiber.yield n if n % 2 == 0
+      Fiber.yield true
+      n += 1
+    end
+  end
+  
+  5.times do
+   p f.resume
+  end

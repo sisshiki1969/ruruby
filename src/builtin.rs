@@ -1,6 +1,7 @@
 mod array;
 mod class;
 pub mod errorobj;
+mod fiber;
 pub mod file;
 mod float;
 mod hash;
@@ -17,6 +18,7 @@ mod string;
 pub mod structobj;
 pub use array::*;
 pub use class::*;
+pub use fiber::*;
 pub use float::*;
 pub use hash::*;
 pub use integer::*;

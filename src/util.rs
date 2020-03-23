@@ -76,6 +76,7 @@ impl<T> Ref<T> {
 }
 
 impl<T: Clone> Ref<T> {
+    /// Allocates a copy of `self<T>` on the heap, returning `Ref`.
     pub fn dup(&self) -> Self {
         Self::new(self.inner().clone())
     }

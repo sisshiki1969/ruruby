@@ -31,10 +31,8 @@ pub fn init_proc(globals: &mut Globals) -> Value {
 // Class methods
 
 fn proc_new(vm: &mut VM, args: &Args) -> VMResult {
-    let procobj = match args.block {
-        Some(block) => vm.create_proc(block)?,
-        None => return Err(vm.error_type("Needs block.")),
-    };
+    let method = vm.expect_block(args.block)?;
+    let procobj = vm.create_proc(method)?;
     Ok(procobj)
 }
 
