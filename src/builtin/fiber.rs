@@ -54,6 +54,10 @@ fn yield_(vm: &mut VM, args: &Args) -> VMResult {
     let inst = &context.iseq_ref.iseq[pc];
     context.pc = pc + Inst::inst_size(*inst);
     vm.stack_push(Value::nil());
+    #[cfg(feature = "trace")]
+    {
+        println!("++YIELD++");
+    }
     Err(vm.error_fiber_yield(val))
 }
 
@@ -64,12 +68,17 @@ fn resume(vm: &mut VM, args: &Args) -> VMResult {
     match args.self_value.unpack() {
         RV::Object(obj) => match &obj.kind {
             ObjKind::Fiber(fiber) => {
-                let context = fiber.context;
+                let mut context = fiber.context;
+                context.is_fiber = true;
                 let mut fiber_vm = fiber.vm;
                 if fiber_vm.fiberstate() == FiberState::Dead {
                     return Err(vm.error_fiber("Dead fiber called."));
                 }
                 fiber_vm.fiberstate_running();
+                #[cfg(feature = "trace")]
+                {
+                    println!("++RESUME++");
+                }
                 match fiber_vm.vm_run_context(context) {
                     Ok(val) => {
                         fiber_vm.fiberstate_dead();

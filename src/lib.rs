@@ -5,6 +5,7 @@ extern crate fancy_regex;
 pub mod builtin;
 pub mod error;
 pub mod globals;
+pub mod kernel;
 pub mod lexer;
 pub mod loader;
 pub mod node;

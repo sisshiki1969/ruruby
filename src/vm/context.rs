@@ -4,6 +4,7 @@ const LVAR_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone)]
 pub struct Context {
+    pub is_fiber: bool,
     pub self_value: Value,
     pub block: Option<MethodRef>,
     lvar_scope: [Value; LVAR_ARRAY_SIZE],
@@ -31,6 +32,7 @@ impl Context {
             Vec::new()
         };
         Context {
+            is_fiber: false,
             self_value,
             block,
             lvar_scope: [Value::uninitialized(); LVAR_ARRAY_SIZE],

@@ -67,7 +67,7 @@ impl Globals {
         let object_id = IdentId::OBJECT;
         let module_id = ident_table.get_ident_id("Module");
         let class_id = ident_table.get_ident_id("Class");
-        let object_class = ClassRef::from(object_id, None);
+        let mut object_class = ClassRef::from(object_id, None);
         let object = Value::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
         let module = Value::bootstrap_class(module_class);
@@ -114,15 +114,9 @@ impl Globals {
         globals.builtins.regexp = init_regexp(&mut globals);
         globals.builtins.fiber = init_fiber(&mut globals);
         init_object(&mut globals);
+        let kernel = kernel::Kernel::init_kernel(&mut globals);
+        object_class.include.push(kernel);
         globals
-    }
-
-    pub fn add_builtin_method(&mut self, name: impl Into<String>, func: BuiltinFunc) {
-        let name = name.into();
-        let id = self.get_ident_id(&name);
-        let info = MethodInfo::BuiltinFunc { name, func };
-        let methodref = self.add_method(info);
-        self.add_object_method(id, methodref);
     }
 
     pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {

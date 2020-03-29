@@ -1,5 +1,4 @@
 mod args;
-mod builtin;
 mod class;
 mod codegen;
 mod context;
@@ -112,7 +111,7 @@ impl VM {
         set_class!("StandardError", Value::class(&globals, globals.class_class));
         set_class!("RuntimeError", errorobj::init_error(&mut globals));
 
-        let mut vm = VM {
+        let vm = VM {
             globals: GlobalsRef::new(globals),
             root_path: vec![],
             fiber_state: FiberState::Created,
@@ -123,7 +122,7 @@ impl VM {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
-        builtin::Builtin::init_builtin(&mut vm.globals);
+
         vm
     }
 
@@ -169,6 +168,10 @@ impl VM {
 
     pub fn context_push(&mut self, ctx: ContextRef) {
         self.exec_context.push(ctx);
+    }
+
+    pub fn context_pop(&mut self) -> Option<ContextRef> {
+        self.exec_context.pop()
     }
 
     pub fn clear(&mut self) {
@@ -378,13 +381,25 @@ impl VM {
         Ok(val)
     }
 
-    /// Create new context from given args, and run vm on the context.
+    /// Create a new context from given args, and run vm on the context.
     pub fn vm_run(
         &mut self,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> Result<Value, RubyError> {
+        let context = self.create_context(iseq, outer, args)?;
+        let val = self.vm_run_context(ContextRef::from_local(&context))?;
+        Ok(val)
+    }
+
+    /// Create a new context from given args.
+    pub fn create_context(
+        &mut self,
+        iseq: ISeqRef,
+        outer: Option<ContextRef>,
+        args: &Args,
+    ) -> Result<Context, RubyError> {
         let kw = if iseq.keyword_params.is_empty() {
             args.kw_arg
         } else {
@@ -396,7 +411,10 @@ impl VM {
             iseq.max_params,
         )?;
         let mut context = Context::new(args.self_value, args.block, iseq, outer);
-
+        match self.exec_context.last() {
+            Some(ctx) => context.is_fiber = ctx.is_fiber,
+            None => {}
+        };
         context.set_arguments(&self.globals, args, kw);
         if let Some(id) = iseq.lvar.block_param() {
             *context.get_mut_lvar(id) = match args.block {
@@ -422,8 +440,8 @@ impl VM {
             }
             _ => {}
         };
-        let val = self.vm_run_context(ContextRef::from_local(&context))?;
-        Ok(val)
+
+        Ok(context)
     }
 }
 
@@ -432,17 +450,26 @@ macro_rules! try_err {
         match $eval {
             Ok(val) => $self.stack_push(val),
             Err(mut err) => {
-                if let RubyErrorKind::MethodReturn(m) = err.kind {
-                    if $self.context().iseq_ref.method == m {
-                        let result = $self.stack_pop();
-                        let prev_len = $self.context().stack_len;
-                        $self.exec_stack.truncate(prev_len);
-                        $self.unwind_context(&mut err);
-                        return Ok(result);
-                    };
-                };
-                $self.unwind_context(&mut err);
-                return Err(err);
+                //let is_fiber = $self.context().is_fiber;
+                let m = $self.context().iseq_ref.method;
+                if RubyErrorKind::MethodReturn(m) == err.kind {
+                    let result = $self.stack_pop();
+                    let prev_len = $self.context().stack_len;
+                    $self.exec_stack.truncate(prev_len);
+                    $self.unwind_context(&mut err);
+                    #[cfg(feature = "trace")]
+                    {
+                        println!("<--- Ok({})", $self.val_inspect(result));
+                    }
+                    return Ok(result);
+                } else {
+                    $self.unwind_context(&mut err);
+                    #[cfg(feature = "trace")]
+                    {
+                        println!("<--- Err({:?})", err.kind);
+                    }
+                    return Err(err);
+                }
             }
         };
     };
@@ -451,11 +478,19 @@ macro_rules! try_err {
 impl VM {
     /// Main routine for VM execution.
     pub fn vm_run_context(&mut self, context: ContextRef) -> Result<Value, RubyError> {
+        #[cfg(feature = "trace")]
+        {
+            if context.is_fiber {
+                println!("===> {:?}", context.iseq_ref.method);
+            } else {
+                println!("---> {:?}", context.iseq_ref.method);
+            }
+        }
         if let Some(prev_context) = self.exec_context.last_mut() {
             prev_context.pc = self.pc;
             prev_context.stack_len = self.exec_stack.len();
         };
-        self.exec_context.push(context);
+        self.context_push(context);
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
@@ -475,20 +510,38 @@ impl VM {
             }
             match iseq[self.pc] {
                 Inst::END => {
-                    self.exec_context.pop().unwrap();
+                    let _context = self.context_pop().unwrap();
                     if !self.exec_context.is_empty() {
                         self.pc = self.context().pc;
                     }
                     let val = self.stack_pop();
+                    #[cfg(feature = "trace")]
+                    {
+                        if _context.is_fiber {
+                            println!("<=== Ok({})", self.val_inspect(val));
+                        } else {
+                            println!("<--- Ok({})", self.val_inspect(val));
+                        }
+                    }
                     return Ok(val);
                 }
                 Inst::RETURN => {
                     let res = if let ISeqKind::Proc(method) = context.iseq_ref.kind {
-                        Err(self.error_method_return(method))
+                        let err = self.error_method_return(method);
+                        #[cfg(feature = "trace")]
+                        {
+                            println!("<--- Err({:?})", err.kind);
+                        }
+                        Err(err)
                     } else {
-                        Ok(self.stack_pop())
+                        let val = self.stack_pop();
+                        #[cfg(feature = "trace")]
+                        {
+                            println!("<--- Ok({})", self.val_inspect(val));
+                        }
+                        Ok(val)
                     };
-                    self.exec_context.pop().unwrap();
+                    self.context_pop().unwrap();
                     if !self.exec_context.is_empty() {
                         self.pc = self.context().pc;
                     }
@@ -1813,10 +1866,6 @@ impl VM {
         {
             inst = self.perf.get_prev_inst();
         }
-        #[cfg(feature = "trace")]
-        {
-            println!("---> {:?}", methodref);
-        }
         let val = match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 #[cfg(feature = "perf")]
@@ -1855,10 +1904,6 @@ impl VM {
                 val
             }
         };
-        #[cfg(feature = "trace")]
-        {
-            println!("<---");
-        }
         Ok(val)
     }
 
@@ -1983,7 +2028,7 @@ impl VM {
 
 impl VM {
     fn unwind_context(&mut self, err: &mut RubyError) {
-        self.exec_context.pop().unwrap();
+        self.context_pop().unwrap();
         if let Some(context) = self.exec_context.last_mut() {
             self.pc = context.pc;
             err.info.push((self.source_info(), self.get_loc()));
@@ -2096,7 +2141,8 @@ impl VM {
         args
     }
 
-    /// Create new Proc object from `method`.
+    /// Create new Proc object from `method`,
+    /// moving outer `Context`s on stack to heap.
     pub fn create_proc(&mut self, method: MethodRef) -> Result<Value, RubyError> {
         self.move_outer_to_heap();
         let context = self.create_block_context(method)?;

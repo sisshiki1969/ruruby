@@ -3,28 +3,32 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub struct Builtin {}
+pub struct Kernel {}
 
-impl Builtin {
-    pub fn init_builtin(globals: &mut Globals) {
-        globals.add_builtin_method("puts", builtin_puts);
-        globals.add_builtin_method("p", builtin_p);
-        globals.add_builtin_method("print", builtin_print);
-        globals.add_builtin_method("assert", builtin_assert);
-        globals.add_builtin_method("require", builtin_require);
-        globals.add_builtin_method("require_relative", builtin_require_relative);
-        globals.add_builtin_method("block_given?", builtin_block_given);
-        globals.add_builtin_method("method", builtin_method);
-        globals.add_builtin_method("is_a?", builtin_isa);
-        globals.add_builtin_method("to_s", builtin_tos);
-        globals.add_builtin_method("Integer", builtin_integer);
-        globals.add_builtin_method("__dir__", builtin_dir);
-        globals.add_builtin_method("__FILE__", builtin_file);
-        globals.add_builtin_method("raise", builtin_raise);
-        globals.add_builtin_method("rand", builtin_rand);
+impl Kernel {
+    pub fn init_kernel(globals: &mut Globals) -> Value {
+        let id = globals.get_ident_id("Kernel");
+        let kernel_class = ClassRef::from(id, None);
+        globals.add_builtin_instance_method(kernel_class, "puts", puts);
+        globals.add_builtin_instance_method(kernel_class, "p", p);
+        globals.add_builtin_instance_method(kernel_class, "print", print);
+        globals.add_builtin_instance_method(kernel_class, "assert", assert);
+        globals.add_builtin_instance_method(kernel_class, "require", require);
+        globals.add_builtin_instance_method(kernel_class, "require_relative", require_relative);
+        globals.add_builtin_instance_method(kernel_class, "block_given?", block_given);
+        globals.add_builtin_instance_method(kernel_class, "method", method);
+        globals.add_builtin_instance_method(kernel_class, "is_a?", isa);
+        globals.add_builtin_instance_method(kernel_class, "to_s", tos);
+        globals.add_builtin_instance_method(kernel_class, "Integer", integer);
+        globals.add_builtin_instance_method(kernel_class, "__dir__", dir);
+        globals.add_builtin_instance_method(kernel_class, "__FILE__", file_);
+        globals.add_builtin_instance_method(kernel_class, "raise", raise);
+        globals.add_builtin_instance_method(kernel_class, "rand", rand);
+        let kernel = Value::class(globals, kernel_class);
+        return kernel;
 
         /// Built-in function "puts".
-        fn builtin_puts(vm: &mut VM, args: &Args) -> VMResult {
+        fn puts(vm: &mut VM, args: &Args) -> VMResult {
             fn flatten(vm: &VM, val: Value) {
                 match val.as_array() {
                     None => println!("{}", vm.val_to_s(val)),
@@ -41,7 +45,7 @@ impl Builtin {
             Ok(Value::nil())
         }
 
-        fn builtin_p(vm: &mut VM, args: &Args) -> VMResult {
+        fn p(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
                 println!("{}", vm.val_inspect(args[i]));
             }
@@ -56,7 +60,7 @@ impl Builtin {
         }
 
         /// Built-in function "print".
-        fn builtin_print(vm: &mut VM, args: &Args) -> VMResult {
+        fn print(vm: &mut VM, args: &Args) -> VMResult {
             for i in 0..args.len() {
                 match args[i].as_bytes() {
                     Some(bytes) => {
@@ -70,7 +74,7 @@ impl Builtin {
         }
 
         /// Built-in function "assert".
-        fn builtin_assert(vm: &mut VM, args: &Args) -> VMResult {
+        fn assert(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 2, 2)?;
             if !vm.eval_eq(args[0], args[1])? {
                 panic!(
@@ -84,7 +88,7 @@ impl Builtin {
             }
         }
 
-        fn builtin_require(vm: &mut VM, args: &Args) -> VMResult {
+        fn require(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let file_name = match args[0].as_string() {
                 Some(string) => string,
@@ -92,11 +96,11 @@ impl Builtin {
             };
             let mut path = std::env::current_dir().unwrap();
             path.push(file_name);
-            require(vm, path)?;
+            require_main(vm, path)?;
             Ok(Value::bool(true))
         }
 
-        fn builtin_require_relative(vm: &mut VM, args: &Args) -> VMResult {
+        fn require_relative(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let context = vm.context();
             let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
@@ -115,11 +119,11 @@ impl Builtin {
                 }
             }
             path.set_extension("rb");
-            require(vm, path)?;
+            require_main(vm, path)?;
             Ok(Value::bool(true))
         }
 
-        fn require(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
+        fn require_main(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
             let file_name = path.to_string_lossy().to_string();
             let (absolute_path, program) = match load_file(file_name.clone()) {
                 Ok((path, program)) => (path, program),
@@ -148,11 +152,11 @@ impl Builtin {
         }
 
         /// Built-in function "block_given?".
-        fn builtin_block_given(vm: &mut VM, _args: &Args) -> VMResult {
+        fn block_given(vm: &mut VM, _args: &Args) -> VMResult {
             Ok(Value::bool(vm.context().block.is_some()))
         }
 
-        fn builtin_method(vm: &mut VM, args: &Args) -> VMResult {
+        fn method(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let name = match args[0].as_symbol() {
                 Some(id) => id,
@@ -164,7 +168,7 @@ impl Builtin {
             Ok(val)
         }
 
-        fn builtin_isa(vm: &mut VM, args: &Args) -> VMResult {
+        fn isa(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let mut recv_class = args.self_value.get_class_object(&vm.globals);
             loop {
@@ -178,13 +182,13 @@ impl Builtin {
             }
         }
 
-        fn builtin_tos(vm: &mut VM, args: &Args) -> VMResult {
+        fn tos(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let s = vm.val_to_s(args.self_value);
             Ok(Value::string(&vm.globals, s))
         }
 
-        fn builtin_integer(vm: &mut VM, args: &Args) -> VMResult {
+        fn integer(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let self_ = args[0];
             let val = if self_.is_packed_value() {
@@ -230,7 +234,7 @@ impl Builtin {
             Ok(Value::fixnum(val))
         }
 
-        fn builtin_dir(vm: &mut VM, args: &Args) -> VMResult {
+        fn dir(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
@@ -240,7 +244,7 @@ impl Builtin {
             ))
         }
 
-        fn builtin_file(vm: &mut VM, args: &Args) -> VMResult {
+        fn file_(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let path = vm.root_path.last().unwrap().clone();
             Ok(Value::string(
@@ -249,7 +253,7 @@ impl Builtin {
             ))
         }
 
-        fn builtin_raise(vm: &mut VM, args: &Args) -> VMResult {
+        fn raise(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 2)?;
             for i in 0..args.len() {
                 eprintln!("{}", vm.val_inspect(args[i]));
@@ -257,7 +261,7 @@ impl Builtin {
             Err(vm.error_unimplemented("error"))
         }
 
-        fn builtin_rand(_vm: &mut VM, _args: &Args) -> VMResult {
+        fn rand(_vm: &mut VM, _args: &Args) -> VMResult {
             let num = rand::random();
             Ok(Value::flonum(num))
         }
