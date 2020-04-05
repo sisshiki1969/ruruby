@@ -1,11 +1,11 @@
 f = Fiber.new do
-  n = 0
-  while true do
-    Fiber.yield n
-    n += 1
-  end
+  3.times {|x|
+    #puts "#{x} #{self}"
+    Fiber.yield x
+  }
 end
-  
-3.times do
+
+puts self
+5.times do
   p f.resume
 end

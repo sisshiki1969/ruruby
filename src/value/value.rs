@@ -626,8 +626,14 @@ impl Value {
         ))
     }
 
-    pub fn fiber(globals: &Globals, vm: VMRef, context: ContextRef) -> Self {
-        Value::object(RValue::new_fiber(globals, vm, context))
+    pub fn fiber(
+        globals: &Globals,
+        vm: VMRef,
+        context: ContextRef,
+        rec: std::sync::mpsc::Receiver<VMResult>,
+        tx: std::sync::mpsc::SyncSender<usize>,
+    ) -> Self {
+        Value::object(RValue::new_fiber(globals, vm, context, rec, tx))
     }
 }
 
