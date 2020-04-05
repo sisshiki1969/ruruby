@@ -82,6 +82,8 @@ impl<T: Clone> Ref<T> {
     }
 }
 
+unsafe impl<T> Send for Ref<T> {}
+
 impl<T> Copy for Ref<T> {}
 
 impl<T> Clone for Ref<T> {

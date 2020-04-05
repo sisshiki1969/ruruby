@@ -20,6 +20,7 @@ pub use value::*;
 use perf::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::mpsc::{Receiver, SyncSender};
 use vm_inst::*;
 
 //#[macro_use]
@@ -29,7 +30,7 @@ pub type ValueTable = HashMap<IdentId, Value>;
 
 pub type VMResult = Result<Value, RubyError>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VM {
     // Global info
     pub globals: GlobalsRef,
@@ -40,6 +41,7 @@ pub struct VM {
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
     pc: usize,
+    pub sender: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
     perf: Perf,
 }
@@ -119,11 +121,27 @@ impl VM {
             exec_context: vec![],
             exec_stack: vec![],
             pc: 0,
+            sender: None,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
 
         vm
+    }
+
+    pub fn dup(&self) -> Self {
+        VM {
+            globals: self.globals.clone(),
+            root_path: self.root_path.clone(),
+            fiber_state: self.fiber_state,
+            exec_context: vec![],
+            class_context: self.class_context.clone(),
+            exec_stack: vec![],
+            pc: 0,
+            sender: None,
+            #[cfg(feature = "perf")]
+            perf: Perf.clone(),
+        }
     }
 
     pub fn context(&self) -> ContextRef {
@@ -511,9 +529,6 @@ impl VM {
             match iseq[self.pc] {
                 Inst::END => {
                     let _context = self.context_pop().unwrap();
-                    if !self.exec_context.is_empty() {
-                        self.pc = self.context().pc;
-                    }
                     let val = self.stack_pop();
                     #[cfg(feature = "trace")]
                     {
@@ -521,6 +536,18 @@ impl VM {
                             println!("<=== Ok({})", self.val_inspect(val));
                         } else {
                             println!("<--- Ok({})", self.val_inspect(val));
+                        }
+                    }
+                    if !self.exec_context.is_empty() {
+                        self.pc = self.context().pc;
+                    } else {
+                        self.fiberstate_dead();
+                        match &self.sender {
+                            Some((tx, _)) => {
+                                eprintln!("FIBER TERMINATED");
+                                tx.send(Ok(Value::nil())).unwrap();
+                            }
+                            None => {}
                         }
                     }
                     return Ok(val);
@@ -1277,11 +1304,6 @@ impl VM {
     pub fn error_method_return(&self, method: MethodRef) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_method_return(method, self.source_info(), loc)
-    }
-
-    pub fn error_fiber_yield(&self, val: Value) -> RubyError {
-        let loc = self.get_loc();
-        RubyError::new_fiber_yield(val, self.source_info(), loc)
     }
 
     pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {

@@ -1,16 +1,17 @@
-s = "outer"
-k = Class.new{|c|
-      puts self == c
-
-      def initialize
-        p "in initialize"
-      end
-
-      puts s
-
-      def hoge
-        p "hoge"
-      end
+def enum2gen(enum)
+  Fiber.new do
+    3.times { |x|
+      Fiber.yield(x)
     }
-o = k.new              #=> "in initialize"
-o.hoge                 #=> "hoge hoge hoge"
+    #enum.each{|i|
+    #  puts i
+    #  Fiber.yield(i)
+    #}
+  end
+end
+
+g = enum2gen(1..100)
+
+5.times do
+  p g.resume
+end

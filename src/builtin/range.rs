@@ -119,6 +119,7 @@ fn range_each(vm: &mut VM, args: &Args) -> VMResult {
     let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    //eprintln!("range#each");
     for i in start..end {
         let arg = Args::new1(context.self_value, None, Value::fixnum(i));
         vm.eval_block(method, &arg)?;

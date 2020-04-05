@@ -6,6 +6,7 @@ extern crate rustyline;
 
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
+use std::thread;
 mod repl;
 use repl::*;
 use ruruby::*;
@@ -25,7 +26,7 @@ fn main() {
             return;
         }
     };
-    let mut vm = VM::new();
+    let mut vm = VMRef::new(VM::new());
     let id = vm.globals.get_ident_id("ARGV");
     let mut res: Vec<Value> = args
         .iter()
@@ -38,7 +39,7 @@ fn main() {
     return;
 }
 
-fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
+fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
     let file_name = file_name.into();
     let (absolute_path, program) = match load_file(file_name.clone()) {
         Ok((path, program)) => (path, program),
@@ -60,7 +61,11 @@ fn exec_file(vm: &mut VM, file_name: impl Into<String>) {
     #[cfg(feature = "verbose")]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
-    match vm.run(absolute_path, &program, None) {
+    let mut vm2 = vm.clone();
+    let res = thread::spawn(move || vm2.run(absolute_path, &program, None))
+        .join()
+        .unwrap();
+    match res {
         Ok(_) => {}
         Err(err) => {
             err.show_err();

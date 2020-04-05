@@ -25,7 +25,7 @@ pub enum ObjKind {
     Proc(ProcRef),
     Regexp(RegexpRef),
     Method(MethodObjRef),
-    Fiber(FiberInfo),
+    Fiber(FiberRef),
 }
 
 impl RValue {
@@ -157,11 +157,18 @@ impl RValue {
         }
     }
 
-    pub fn new_fiber(globals: &Globals, vm: VMRef, context: ContextRef) -> Self {
+    pub fn new_fiber(
+        globals: &Globals,
+        vm: VMRef,
+        context: ContextRef,
+        rec: std::sync::mpsc::Receiver<VMResult>,
+        tx: std::sync::mpsc::SyncSender<usize>,
+    ) -> Self {
+        let fiber = FiberInfo::new(vm, context, rec, tx);
         RValue {
             class: globals.builtins.fiber,
             var_table: Box::new(HashMap::new()),
-            kind: ObjKind::Fiber(FiberInfo::new(vm, context)),
+            kind: ObjKind::Fiber(FiberRef::new(fiber)),
         }
     }
 }
