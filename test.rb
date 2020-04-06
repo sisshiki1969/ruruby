@@ -1,12 +1,8 @@
 def enum2gen(enum)
   Fiber.new do
-    3.times { |x|
-      Fiber.yield(x)
+    enum.each{|i|
+      Fiber.yield(i)
     }
-    #enum.each{|i|
-    #  puts i
-    #  Fiber.yield(i)
-    #}
   end
 end
 

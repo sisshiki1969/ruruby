@@ -44,13 +44,11 @@ pub fn init_fiber(globals: &mut Globals) -> Value {
 fn new(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let method = vm.expect_block(args.block)?;
-    let context = vm.create_block_context(method)?;
+    let mut context = vm.create_block_context(method)?;
+    context.is_fiber = true;
     let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
     let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-    let mut new_vm = vm.dup();
-    new_vm.clear_();
-    new_vm.fiberstate_created();
-    new_vm.sender = Some((tx0, rx1));
+    let new_vm = vm.dup_fiber(tx0, rx1);
     let val = Value::fiber(&vm.globals, VMRef::new(new_vm), context, rx0, tx1);
     Ok(val)
 }
@@ -67,7 +65,7 @@ fn yield_(vm: &mut VM, args: &Args) -> VMResult {
             Value::array_from(&vm.globals, ary)
         }
     };
-    match &vm.sender {
+    match &vm.channel {
         Some((tx, rx)) => {
             //eprintln!("sending..");
             tx.send(Ok(val)).unwrap();
@@ -78,11 +76,6 @@ fn yield_(vm: &mut VM, args: &Args) -> VMResult {
             return Err(vm.error_fiber("Can not yield from main fiber."));
         }
     };
-    //let mut context = vm.context();
-    //let pc = vm.get_pc();
-    //let inst = &context.iseq_ref.iseq[pc];
-    //context.pc = pc + Inst::inst_size(*inst);
-    //vm.stack_push(Value::nil());
     #[cfg(feature = "trace")]
     {
         println!("++YIELD++");
@@ -134,4 +127,47 @@ fn resume(vm: &mut VM, args: &Args) -> VMResult {
         },
         _ => unreachable!(),
     };
+}
+
+#[cfg(test)]
+mod test {
+    use crate::test::*;
+    #[test]
+    fn fiber_test1() {
+        let program = r#"
+        def enum2gen(enum)
+            Fiber.new do
+                enum.each{|i|
+                    Fiber.yield(i)
+                }
+            end
+        end
+
+        g = enum2gen(1..100)
+
+        assert(1, g.resume)
+        assert(2, g.resume)
+        assert(3, g.resume)
+        assert(4, g.resume)
+        assert(5, g.resume)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn fiber_test2() {
+        let program = r#"
+        f = Fiber.new do
+            30.times {|x|
+                Fiber.yield x
+            }
+        end
+        assert(0, f.resume)
+        assert(1, f.resume)
+        assert(2, f.resume)
+        assert(3, f.resume)
+        assert(4, f.resume)
+        "#;
+        assert_script(program);
+    }
 }

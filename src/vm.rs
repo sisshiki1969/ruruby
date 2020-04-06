@@ -41,7 +41,7 @@ pub struct VM {
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
     pc: usize,
-    pub sender: Option<(SyncSender<VMResult>, Receiver<usize>)>,
+    pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
     perf: Perf,
 }
@@ -121,7 +121,7 @@ impl VM {
             exec_context: vec![],
             exec_stack: vec![],
             pc: 0,
-            sender: None,
+            channel: None,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
@@ -129,16 +129,16 @@ impl VM {
         vm
     }
 
-    pub fn dup(&self) -> Self {
+    pub fn dup_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
         VM {
             globals: self.globals.clone(),
             root_path: self.root_path.clone(),
-            fiber_state: self.fiber_state,
+            fiber_state: FiberState::Created,
             exec_context: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
             pc: 0,
-            sender: None,
+            channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
             perf: Perf.clone(),
         }
@@ -195,11 +195,6 @@ impl VM {
     pub fn clear(&mut self) {
         self.exec_stack.clear();
         self.class_context = vec![(Value::nil(), DefineMode::default())];
-        self.exec_context.clear();
-    }
-
-    pub fn clear_(&mut self) {
-        self.exec_stack.clear();
         self.exec_context.clear();
     }
 
@@ -429,10 +424,6 @@ impl VM {
             iseq.max_params,
         )?;
         let mut context = Context::new(args.self_value, args.block, iseq, outer);
-        match self.exec_context.last() {
-            Some(ctx) => context.is_fiber = ctx.is_fiber,
-            None => {}
-        };
         context.set_arguments(&self.globals, args, kw);
         if let Some(id) = iseq.lvar.block_param() {
             *context.get_mut_lvar(id) = match args.block {
@@ -468,9 +459,8 @@ macro_rules! try_err {
         match $eval {
             Ok(val) => $self.stack_push(val),
             Err(mut err) => {
-                //let is_fiber = $self.context().is_fiber;
                 let m = $self.context().iseq_ref.method;
-                if RubyErrorKind::MethodReturn(m) == err.kind {
+                let res = if RubyErrorKind::MethodReturn(m) == err.kind {
                     let result = $self.stack_pop();
                     let prev_len = $self.context().stack_len;
                     $self.exec_stack.truncate(prev_len);
@@ -479,15 +469,27 @@ macro_rules! try_err {
                     {
                         println!("<--- Ok({})", $self.val_inspect(result));
                     }
-                    return Ok(result);
+                    Ok(result)
                 } else {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
                         println!("<--- Err({:?})", err.kind);
                     }
-                    return Err(err);
-                }
+                    Err(err)
+                };
+                if $self.exec_context.is_empty() {
+                    $self.fiberstate_dead();
+                    match &$self.channel {
+                        Some((tx, rx)) => {
+                            //eprintln!("FIBER TERMINATED");
+                            tx.send(res.clone()).unwrap();
+                            rx.recv().unwrap();
+                        }
+                        None => {}
+                    }
+                };
+                return res;
             }
         };
     };
@@ -528,6 +530,18 @@ impl VM {
             }
             match iseq[self.pc] {
                 Inst::END => {
+                    if self.exec_context.len() == 1 {
+                        self.fiberstate_dead();
+                        match &self.channel {
+                            Some((tx, rx)) => {
+                                //eprintln!("FIBER TERMINATED");
+                                tx.send(Err(self.error_fiber("Dead fiber called.")))
+                                    .unwrap();
+                                rx.recv().unwrap();
+                            }
+                            None => {}
+                        }
+                    };
                     let _context = self.context_pop().unwrap();
                     let val = self.stack_pop();
                     #[cfg(feature = "trace")]
@@ -540,16 +554,7 @@ impl VM {
                     }
                     if !self.exec_context.is_empty() {
                         self.pc = self.context().pc;
-                    } else {
-                        self.fiberstate_dead();
-                        match &self.sender {
-                            Some((tx, _)) => {
-                                eprintln!("FIBER TERMINATED");
-                                tx.send(Ok(Value::nil())).unwrap();
-                            }
-                            None => {}
-                        }
-                    }
+                    };
                     return Ok(val);
                 }
                 Inst::RETURN => {
@@ -2147,6 +2152,7 @@ impl VM {
 
     /// Create a new execution context for a block.
     pub fn create_block_context(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
+        self.move_outer_to_heap();
         let iseq = self.get_iseq(method)?;
         let outer = self.context();
         Ok(ContextRef::from(outer.self_value, None, iseq, Some(outer)))
