@@ -1,13 +1,14 @@
-def enum2gen(enum)
-  Fiber.new do
-    enum.each{|i|
-      Fiber.yield(i)
+f = []
+1000.times {|x|
+  f[x] = Fiber.new do
+    1000.times {|n|
+      Fiber.yield(x * n)
     }
   end
-end
+}
 
-g = enum2gen(1..100)
-
-5.times do
-  p g.resume
-end
+1000.times {|x|
+  1000.times {
+    f[x].resume
+  }
+}

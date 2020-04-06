@@ -65,21 +65,10 @@ fn yield_(vm: &mut VM, args: &Args) -> VMResult {
             Value::array_from(&vm.globals, ary)
         }
     };
-    match &vm.channel {
-        Some((tx, rx)) => {
-            //eprintln!("sending..");
-            tx.send(Ok(val)).unwrap();
-            //eprintln!("sent.");
-            rx.recv().unwrap();
-        }
-        None => {
-            return Err(vm.error_fiber("Can not yield from main fiber."));
-        }
+    if vm.channel.is_none() {
+        return Err(vm.error_fiber("Can not yield from main fiber."));
     };
-    #[cfg(feature = "trace")]
-    {
-        println!("++YIELD++");
-    }
+    vm.fiber_send_to_parent(Ok(val));
     Ok(Value::nil())
 }
 
@@ -101,24 +90,20 @@ fn resume(vm: &mut VM, args: &Args) -> VMResult {
                         fiber_vm.fiberstate_running();
                         #[cfg(feature = "trace")]
                         {
-                            println!("++SPAWN++");
+                            println!("===> resume(spawn)");
                         }
                         let mut vm2 = fiber_vm;
                         thread::spawn(move || vm2.vm_run_context(context));
-                        //eprintln!("receiving..");
                         let res = fiber.rec.recv().unwrap()?;
-                        //eprintln!("received.");
                         return Ok(res);
                     }
                     FiberState::Running => {
                         #[cfg(feature = "trace")]
                         {
-                            println!("++RESUME++");
+                            println!("===> resume");
                         }
                         fiber.tx.send(1).unwrap();
-                        //eprintln!("receiving..");
                         let res = fiber.rec.recv().unwrap()?;
-                        //eprintln!("received.");
                         return Ok(res);
                     }
                 }

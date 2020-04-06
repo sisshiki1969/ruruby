@@ -467,28 +467,25 @@ macro_rules! try_err {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
-                        println!("<--- Ok({})", $self.val_inspect(result));
+                        println!(
+                            "<--- Ok({}) ctx:{}",
+                            $self.val_inspect(result),
+                            $self.exec_context.len()
+                        );
                     }
                     Ok(result)
                 } else {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
-                        println!("<--- Err({:?})", err.kind);
+                        println!("<--- Err({:?}) ctx:{}", err.kind, $self.exec_context.len());
                     }
                     Err(err)
                 };
-                if $self.exec_context.is_empty() {
-                    $self.fiberstate_dead();
-                    match &$self.channel {
-                        Some((tx, rx)) => {
-                            //eprintln!("FIBER TERMINATED");
-                            tx.send(res.clone()).unwrap();
-                            rx.recv().unwrap();
-                        }
-                        None => {}
-                    }
-                };
+                //if $self.exec_context.is_empty() {
+                $self.fiberstate_dead();
+                $self.fiber_send_to_parent(res.clone());
+                //};
                 return res;
             }
         };
@@ -532,15 +529,7 @@ impl VM {
                 Inst::END => {
                     if self.exec_context.len() == 1 {
                         self.fiberstate_dead();
-                        match &self.channel {
-                            Some((tx, rx)) => {
-                                //eprintln!("FIBER TERMINATED");
-                                tx.send(Err(self.error_fiber("Dead fiber called.")))
-                                    .unwrap();
-                                rx.recv().unwrap();
-                            }
-                            None => {}
-                        }
+                        self.fiber_send_to_parent(Err(self.error_fiber("Dead fiber called.")));
                     };
                     let _context = self.context_pop().unwrap();
                     let val = self.stack_pop();
@@ -2012,6 +2001,23 @@ impl VM {
             self.pc = context.pc;
             err.info.push((self.source_info(), self.get_loc()));
         };
+    }
+
+    pub fn fiber_send_to_parent(&self, val: VMResult) {
+        match &self.channel {
+            Some((tx, rx)) => {
+                #[cfg(feature = "trace")]
+                {
+                    match val.clone() {
+                        Ok(val) => println!("<=== yield Ok({})", self.val_inspect(val),),
+                        Err(err) => println!("<=== yield Err({:?})", err.kind),
+                    }
+                }
+                tx.send(val).unwrap();
+                rx.recv().unwrap();
+            }
+            None => {}
+        }
     }
 
     /// Get local variable table.

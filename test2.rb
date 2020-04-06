@@ -1,7 +1,7 @@
 f = Fiber.new do
   3.times {|x|
     Fiber.yield x
-    sef
+    sed
   }
 end
 
