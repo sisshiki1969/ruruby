@@ -1,8 +1,6 @@
 use crate::error::{ParseErrKind, RubyError};
-use crate::lexer::Lexer;
-use crate::node::*;
-use crate::token::*;
 use crate::util::*;
+use super::*;
 use std::path::PathBuf;
 use std::collections::HashMap;
 

@@ -2,8 +2,8 @@
 #![allow(unused_imports, dead_code)]
 extern crate ruruby;
 extern crate test;
-use ruruby::lexer::Lexer;
-use ruruby::parser::{LvarCollector, Parser};
+use ruruby::parse::Lexer;
+//use ruruby::parser::{LvarCollector, Parser};
 use ruruby::test::{assert_script, eval_script};
 use ruruby::*;
 use test::Bencher;

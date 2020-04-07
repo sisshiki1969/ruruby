@@ -1,4 +1,4 @@
-use crate::parser::LvarCollector;
+use super::parser::LvarCollector;
 use crate::util::{Annot, IdentId, Loc};
 
 #[derive(Debug, Clone, PartialEq)]

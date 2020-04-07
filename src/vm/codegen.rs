@@ -1,6 +1,6 @@
 use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
-use crate::node::{BinOp, Node, NodeKind, UnOp};
+use crate::parse::node::{BinOp, Node, NodeKind, UnOp};
 use crate::*;
 use std::collections::HashMap;
 
