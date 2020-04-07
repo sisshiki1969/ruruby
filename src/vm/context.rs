@@ -1,4 +1,4 @@
-pub use crate::vm::*;
+pub use crate::*;
 
 const LVAR_ARRAY_SIZE: usize = 8;
 

@@ -1,4 +1,4 @@
-mod value;
+pub mod value;
 pub use value::*;
 mod rvalue;
 pub use rvalue::*;

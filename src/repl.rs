@@ -1,7 +1,6 @@
 use ansi_term::Colour::Red;
 use ruruby::error::*;
 use ruruby::parser::{LvarCollector, Parser};
-use ruruby::vm::*;
 //#[macro_use]
 use ruruby::*;
 

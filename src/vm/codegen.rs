@@ -1,7 +1,7 @@
 use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::node::{BinOp, Node, NodeKind, UnOp};
-use crate::vm::*;
+use crate::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]

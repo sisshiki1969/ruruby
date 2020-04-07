@@ -1,5 +1,4 @@
-use super::method::MethodRef;
-use super::value::Value;
+use crate::*;
 use std::ops::Deref;
 use std::ops::{Index, IndexMut};
 
