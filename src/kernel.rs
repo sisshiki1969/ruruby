@@ -24,6 +24,7 @@ impl Kernel {
         globals.add_builtin_instance_method(kernel_class, "__FILE__", file_);
         globals.add_builtin_instance_method(kernel_class, "raise", raise);
         globals.add_builtin_instance_method(kernel_class, "rand", rand);
+        globals.add_builtin_instance_method(kernel_class, "loop", loop_);
         let kernel = Value::class(globals, kernel_class);
         return kernel;
 
@@ -264,6 +265,14 @@ impl Kernel {
         fn rand(_vm: &mut VM, _args: &Args) -> VMResult {
             let num = rand::random();
             Ok(Value::flonum(num))
+        }
+
+        fn loop_(vm: &mut VM, args: &Args) -> VMResult {
+            let method = vm.expect_block(args.block)?;
+            let arg = Args::new0(args.self_value, None);
+            loop {
+                vm.eval_block(method, &arg)?;
+            }
         }
     }
 }

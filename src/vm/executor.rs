@@ -1,6 +1,5 @@
 use super::codegen::ContextKind;
-use crate::error::*;
-//use crate::parser::*;
+use crate::*;
 
 #[cfg(feature = "perf")]
 use perf::*;
@@ -9,11 +8,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, SyncSender};
 use vm_inst::*;
 
-//#[macro_use]
-use crate::*;
-
 pub type ValueTable = HashMap<IdentId, Value>;
-
 pub type VMResult = Result<Value, RubyError>;
 
 #[derive(Debug)]
@@ -444,6 +439,7 @@ macro_rules! try_err {
     ($self:ident, $eval:expr) => {
         match $eval {
             Ok(val) => $self.stack_push(val),
+            Err(err) if err.kind == RubyErrorKind::BlockReturn => {}
             Err(mut err) => {
                 let m = $self.context().iseq_ref.method;
                 let res = if RubyErrorKind::MethodReturn(m) == err.kind {
@@ -453,25 +449,19 @@ macro_rules! try_err {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
-                        println!(
-                            "<--- Ok({}) ctx:{}",
-                            $self.val_inspect(result),
-                            $self.exec_context.len()
-                        );
+                        println!("<--- METHOD_RETURN Ok({})", $self.val_inspect(result),);
                     }
                     Ok(result)
                 } else {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
-                        println!("<--- Err({:?}) ctx:{}", err.kind, $self.exec_context.len());
+                        println!("<--- Err({:?})", err.kind);
                     }
                     Err(err)
                 };
-                //if $self.exec_context.is_empty() {
                 $self.fiberstate_dead();
                 $self.fiber_send_to_parent(res.clone());
-                //};
                 return res;
             }
         };
@@ -533,8 +523,8 @@ impl VM {
                     return Ok(val);
                 }
                 Inst::RETURN => {
-                    let res = if let ISeqKind::Proc(method) = context.iseq_ref.kind {
-                        let err = self.error_method_return(method);
+                    let res = if let ISeqKind::Proc(_) = context.iseq_ref.kind {
+                        let err = self.error_block_return();
                         #[cfg(feature = "trace")]
                         {
                             println!("<--- Err({:?})", err.kind);
@@ -547,6 +537,24 @@ impl VM {
                             println!("<--- Ok({})", self.val_inspect(val));
                         }
                         Ok(val)
+                    };
+
+                    self.context_pop().unwrap();
+                    if !self.exec_context.is_empty() {
+                        self.pc = self.context().pc;
+                    }
+                    return res;
+                }
+                Inst::MRETURN => {
+                    let res = if let ISeqKind::Proc(method) = context.iseq_ref.kind {
+                        let err = self.error_method_return(method);
+                        #[cfg(feature = "trace")]
+                        {
+                            println!("<--- Err({:?})", err.kind);
+                        }
+                        Err(err)
+                    } else {
+                        unreachable!()
                     };
                     self.context_pop().unwrap();
                     if !self.exec_context.is_empty() {
@@ -1284,6 +1292,11 @@ impl VM {
     pub fn error_method_return(&self, method: MethodRef) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_method_return(method, self.source_info(), loc)
+    }
+
+    pub fn error_block_return(&self) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_block_return(self.source_info(), loc)
     }
 
     pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {

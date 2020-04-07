@@ -436,6 +436,24 @@ fn until2() {
 }
 
 #[test]
+fn block_break() {
+    let program = "
+        assert(100, loop { break 100 })
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn block_next() {
+    let program = "
+        a = []
+        3.times{|x| if x == 1 then next end; a << x}
+        assert([0,2], a)
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn proc_next() {
     let program = "
         p = Proc.new { |x|

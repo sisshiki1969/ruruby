@@ -1490,7 +1490,31 @@ impl Parser {
                     Ok(Node::new_return(val, loc))
                 }
             }
-            TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
+            TokenKind::Reserved(Reserved::Break) => {
+                let tok = self.peek_no_term()?;
+                // TODO: This is not correct.
+                if tok.is_term()
+                    || tok.kind == TokenKind::Reserved(Reserved::Unless)
+                    || tok.kind == TokenKind::Reserved(Reserved::If)
+                    || tok.check_stmt_end()
+                {
+                    let val = Node::new_nil(loc);
+                    return Ok(Node::new_break(val, loc));
+                };
+                let val = self.parse_arg()?;
+                let ret_loc = val.loc();
+                if self.consume_punct_no_term(Punct::Comma)? {
+                    let mut vec = vec![val, self.parse_arg()?];
+                    while self.consume_punct_no_term(Punct::Comma)? {
+                        vec.push(self.parse_arg()?);
+                    }
+                    vec.reverse();
+                    let val = Node::new_array(vec, ret_loc);
+                    Ok(Node::new_break(val, loc))
+                } else {
+                    Ok(Node::new_break(val, loc))
+                }
+            }
             TokenKind::Reserved(Reserved::Next) => {
                 let tok = self.peek_no_term()?;
                 // TODO: This is not correct.

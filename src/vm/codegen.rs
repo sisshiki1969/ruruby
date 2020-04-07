@@ -80,7 +80,7 @@ impl Context {
         Context {
             lvar_info: HashMap::new(),
             iseq_sourcemap: vec![],
-            kind: ContextKind::Method,
+            kind: ContextKind::Eval,
         }
     }
 
@@ -229,6 +229,10 @@ impl Codegen {
 
     fn gen_return(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::RETURN);
+    }
+
+    fn gen_method_return(&mut self, iseq: &mut ISeq) {
+        iseq.push(Inst::MRETURN);
     }
 
     fn gen_opt_case(&mut self, iseq: &mut ISeq, map_id: u32) -> ISeqPos {
@@ -1552,43 +1556,60 @@ impl Codegen {
             }
             NodeKind::Return(val) => {
                 self.gen(globals, iseq, val, true)?;
-                self.gen_return(iseq);
+                if self.context_stack.last().unwrap().kind == ContextKind::Block {
+                    self.gen_method_return(iseq);
+                } else {
+                    self.gen_return(iseq);
+                }
             }
-            NodeKind::Break => {
-                self.gen_push_nil(iseq);
-                let src = self.gen_jmp(iseq);
-                match self.loop_stack.last_mut() {
-                    Some(x) => {
-                        x.escape.push(EscapeInfo::new(src, EscapeKind::Break));
+            NodeKind::Break(val) => {
+                let loc = node.loc();
+                if self.loop_stack.last().unwrap().state == LoopState::Top {
+                    //In the case of outer of loops
+                    match self.context_stack.last().unwrap().kind {
+                        ContextKind::Block => {
+                            self.gen(globals, iseq, val, true)?;
+                            self.gen_return(iseq);
+                        }
+                        ContextKind::Method => {
+                            return Err(self.error_syntax("Invalid break.", loc.merge(self.loc)));
+                        }
+                        ContextKind::Eval => {
+                            return Err(self.error_syntax(
+                                "Can't escape from eval with break.",
+                                loc.merge(self.loc),
+                            ));
+                        }
                     }
-                    None => {
-                        return Err(
-                            self.error_syntax("Can't escape from eval with break.", self.loc)
-                        );
-                    }
+                } else {
+                    //In the case of inner of loops
+                    self.gen(globals, iseq, val, true)?;
+                    let src = self.gen_jmp(iseq);
+                    let x = self.loop_stack.last_mut().unwrap();
+                    x.escape.push(EscapeInfo::new(src, EscapeKind::Break));
                 }
             }
             NodeKind::Next(val) => {
                 let loc = node.loc();
                 if self.loop_stack.last().unwrap().state == LoopState::Top {
-                    match self.context_stack.last() {
-                        Some(cxt) => match cxt.kind {
-                            ContextKind::Block => {
-                                self.gen(globals, iseq, val, true)?;
-                                self.gen_end(iseq);
-                            }
-                            ContextKind::Method | ContextKind::Eval => {
-                                return Err(self.error_syntax("Invalid next.", loc.merge(self.loc)));
-                            }
-                        },
-                        None => {
+                    //In the case of outer of loops
+                    match self.context_stack.last().unwrap().kind {
+                        ContextKind::Block => {
+                            self.gen(globals, iseq, val, true)?;
+                            self.gen_end(iseq);
+                        }
+                        ContextKind::Method => {
+                            return Err(self.error_syntax("Invalid next.", loc.merge(self.loc)));
+                        }
+                        ContextKind::Eval => {
                             return Err(self.error_syntax(
                                 "Can't escape from eval with next.",
                                 loc.merge(self.loc),
                             ));
                         }
-                    };
+                    }
                 } else {
+                    //In the case of inner of loops
                     self.gen(globals, iseq, val, use_value)?;
                     let src = self.gen_jmp(iseq);
                     let x = self.loop_stack.last_mut().unwrap();
