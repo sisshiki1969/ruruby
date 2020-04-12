@@ -86,6 +86,7 @@ impl VM {
         set_builtin_class!("Method", method);
         set_builtin_class!("Regexp", regexp);
         set_builtin_class!("Fiber", fiber);
+        set_builtin_class!("Enumerator", enumerator);
 
         set_class!("Math", init_math(&mut globals));
         set_class!("File", init_file(&mut globals));

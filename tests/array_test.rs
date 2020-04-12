@@ -81,6 +81,7 @@ fn array_map() {
     a = [1,2,3]
     assert(a.map {|| 3 }, [3,3,3])
     assert(a.map {|x| x*3 }, [3,6,9])
+    assert(a.map do |x| x*3 end, [3,6,9])
     assert(a, [1,2,3])";
     assert_script(program);
 }

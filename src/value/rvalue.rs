@@ -26,6 +26,7 @@ pub enum ObjKind {
     Regexp(RegexpRef),
     Method(MethodObjRef),
     Fiber(FiberRef),
+    Enumerator(EnumRef),
 }
 
 impl RValue {
@@ -169,6 +170,15 @@ impl RValue {
             class: globals.builtins.fiber,
             var_table: Box::new(HashMap::new()),
             kind: ObjKind::Fiber(FiberRef::new(fiber)),
+        }
+    }
+
+    pub fn new_enumerator(globals: &Globals, base: Value, method: IdentId, args: Args) -> Self {
+        let enum_info = EnumRef::from(base, method, args);
+        RValue {
+            class: globals.builtins.enumerator,
+            var_table: Box::new(HashMap::new()),
+            kind: ObjKind::Enumerator(enum_info),
         }
     }
 }

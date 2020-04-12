@@ -1,7 +1,8 @@
 class Enumerator_
-    def initialize(obj, method, *args)
+    def initialize(obj, method = :each, *args)
+        #p obj, method, args
         @obj = obj.send(method, *args)
-        @count = @obj.length
+        @size = @obj.size
         @f = Fiber.new { ||
             @obj.each { |elem|
                 Fiber.yield elem
@@ -10,14 +11,19 @@ class Enumerator_
     end
     def map(&block)
         res = []
-        @count.times {
+        @size.times {
             res << block.call(@f.resume)
         }
         res
     end
+    attr_reader :size
 end
 
 str = "Yet Another Ruby Hacker"
 enum = Enumerator_.new(str, :scan, /\w+/)
-#upcase = Proc.new {|x| x.upcase}
-p enum.map(&:upcase)
+upcase = Proc.new {|x| x.upcase}
+p enum.map(&upcase)
+
+ary = str.scan(/\w+/)
+enum = Enumerator_.new(ary)
+p enum.map(&upcase)

@@ -1,5 +1,6 @@
 mod array;
 mod class;
+mod enumerator;
 mod errorobj;
 mod fiber;
 mod file;
@@ -18,6 +19,7 @@ mod string;
 mod structobj;
 pub use array::*;
 pub use class::*;
+pub use enumerator::*;
 pub use errorobj::*;
 pub use fiber::*;
 pub use file::*;

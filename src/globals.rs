@@ -38,6 +38,7 @@ pub struct BuiltinClass {
     pub string: Value,
     pub fiber: Value,
     pub object: Value,
+    pub enumerator: Value,
 }
 
 impl BuiltinClass {
@@ -56,6 +57,7 @@ impl BuiltinClass {
             regexp: nil,
             string: nil,
             fiber: nil,
+            enumerator: nil,
             object,
         }
     }
@@ -113,6 +115,7 @@ impl Globals {
         globals.builtins.hash = init_hash(&mut globals);
         globals.builtins.regexp = init_regexp(&mut globals);
         globals.builtins.fiber = init_fiber(&mut globals);
+        globals.builtins.enumerator = init_enumerator(&mut globals);
         init_object(&mut globals);
         let kernel = kernel::Kernel::init_kernel(&mut globals);
         object_class.include.push(kernel);
@@ -237,6 +240,7 @@ impl Globals {
                 ObjKind::FixNum(_) => "Integer".to_string(),
                 ObjKind::FloatNum(_) => "Float".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),
+                ObjKind::Enumerator(_) => "Enumerator".to_string(),
             },
         }
     }

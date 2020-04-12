@@ -112,3 +112,28 @@ fn return1() {
         ";
     assert_script(program);
 }
+
+#[test]
+fn block_argument() {
+    let program = r#"
+        block = Proc.new {|x| x.upcase }
+        assert ["THESE", "ARE", "PENCILS"], ["These", "are", "pencils"].map(&block)
+    "#;
+    assert_script(program);
+}
+
+#[test]
+fn splat_argument() {
+    // https://docs.ruby-lang.org/ja/latest/doc/spec=2fcall.html#block_arg
+    let program = r#"
+        def foo(*param)
+            param
+        end
+
+        assert [1, 2, 3, 4], foo(1, *[2, 3, 4])
+        assert [1], foo(1, *[])
+        assert [1, 2, 3, 4, 5], foo(1, *[2, 3, 4], 5)
+        assert [1, 2, 3, 4, 5, 6], foo(1, *[2, 3, 4], 5, *[6])
+    "#;
+    assert_script(program);
+}

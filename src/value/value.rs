@@ -635,6 +635,10 @@ impl Value {
     ) -> Self {
         Value::object(RValue::new_fiber(globals, vm, context, rec, tx))
     }
+
+    pub fn enumerator(globals: &Globals, base: Value, method: IdentId, args: Args) -> Self {
+        Value::object(RValue::new_enumerator(globals, base, method, args))
+    }
 }
 
 impl Value {
