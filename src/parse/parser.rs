@@ -167,6 +167,13 @@ enum ContextKind {
     Block,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct ArgList {
+    args: Vec<Node>,
+    kw_args: Vec<(IdentId, Node)>,
+    block: Option<Box<Node>>,
+}
+
 impl Parser {
     pub fn new() -> Self {
         let lexer = Lexer::new();
@@ -706,13 +713,21 @@ impl Parser {
 
         let mut args = vec![first_arg];
         let mut kw_args = vec![];
+        let mut block = None;
         if self.consume_punct_no_term(Punct::Comma)? {
             let res = self.parse_argument_list(None)?;
-            let mut new_args = res.0;
-            kw_args = res.1;
+            let mut new_args = res.args;
+            kw_args = res.kw_args;
+            block = res.block;
             args.append(&mut new_args);
         }
-        let block = self.parse_block()?;
+        match self.parse_block()? {
+            Some(actual_block) => {
+                if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                block = Some(actual_block);
+            }
+            None => {}
+        };
         Ok(SendArgs{args, kw_args, block})
     }
 
@@ -1033,8 +1048,14 @@ impl Parser {
         let loc = node.loc();
         if self.consume_punct_no_term(Punct::LParen)? {
             // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-            let (args, kw_args) = self.parse_argument_list(Punct::RParen)?;
-            let block = self.parse_block()?;
+            let ArgList{args, kw_args, mut block} = self.parse_argument_list(Punct::RParen)?;
+            match self.parse_block()? {
+                Some(actual_block) => {
+                    if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                    block = Some(actual_block);
+                }
+                None => {}
+            };
             let send_args = SendArgs {args, kw_args, block};
 
             Ok(Node::new_send(
@@ -1102,14 +1123,22 @@ impl Parser {
                 };
                 let mut args = vec![];
                 let mut kw_args = vec![];
+                let mut block = None;
                 let mut completed = false;
                 if self.consume_punct_no_term(Punct::LParen)? {
                     let res = self.parse_argument_list(Punct::RParen)?;
-                    args = res.0;
-                    kw_args = res.1;
+                    args = res.args;
+                    kw_args = res.kw_args;
+                    block = res.block;
                     completed = true;
                 }
-                let block = self.parse_block()?;
+                match self.parse_block()? {
+                    Some(actual_block) => {
+                        if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                        block = Some(actual_block);
+                    }
+                    None => {}
+                };
                 if block.is_some() {
                     completed = true;
                 };
@@ -1143,33 +1172,38 @@ impl Parser {
     }
 
     /// Parse argument list.
-    /// arg, *arg, kw: arg <punct>
+    /// arg, *splat_arg, kw: kw_arg, &block <punct>
     /// punct: punctuator for terminating arg list. Set None for unparenthesized argument list.
     fn parse_argument_list(
         &mut self,
         punct: impl Into<Option<Punct>>,
-    ) -> Result<(Vec<Node>, Vec<(IdentId, Node)>), RubyError> {
+    ) -> Result<ArgList, RubyError> {
         let (flag, punct) = match punct.into() {
             Some(punct) => (true, punct),
             None => (false, Punct::Arrow /* dummy */),
         };
         let mut args = vec![];
-        let mut keyword_args = vec![];
+        let mut kw_args = vec![];
+        let mut block = None;
         loop {
             if flag && self.consume_punct(punct)? {
-                return Ok((args, keyword_args));
+                return Ok(ArgList {args, kw_args, block});
             }
             if self.consume_punct(Punct::Mul)? {
                 // splat argument
                 let loc = self.prev_loc();
                 let array = self.parse_arg()?;
                 args.push(Node::new_splat(array, loc));
+            } else if self.consume_punct(Punct::BitAnd)? {
+                // block argument
+                let arg = self.parse_arg()?;
+                block = Some(Box::new(arg));
             } else {
                 let node = self.parse_arg()?;
                 match node.kind {
                     NodeKind::Ident(id, ..) | NodeKind::LocalVar(id) => {
                         if self.consume_punct_no_term(Punct::Colon)? {
-                            keyword_args.push((id, self.parse_arg()?));
+                            kw_args.push((id, self.parse_arg()?));
                         } else {
                             args.push(node);
                         }
@@ -1181,12 +1215,15 @@ impl Parser {
             }
             if !self.consume_punct(Punct::Comma)? {
                 break;
+            } else {
+                let loc = self.prev_loc();
+                if block.is_some() { return Err(self.error_unexpected(loc, "unexpected ','.")) };
             }
         }
         if flag {
             self.expect_punct(punct)?
         };
-        Ok((args, keyword_args))
+        Ok(ArgList {args, kw_args, block})
     }
 
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {

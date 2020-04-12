@@ -223,7 +223,7 @@ impl Inst {
             | Inst::OPT_CASE
             | Inst::IVAR_ADDI => 9,
             Inst::DEF_CLASS => 10,
-            Inst::SEND | Inst::SEND_SELF => 21,
+            Inst::SEND | Inst::SEND_SELF => 17,
             _ => 1,
         }
     }

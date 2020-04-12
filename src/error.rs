@@ -67,9 +67,12 @@ impl RubyError {
 
     pub fn show_err(&self) {
         match &self.kind {
-            RubyErrorKind::ParseErr(e) => {
-                eprintln!("parse error: {:?}", e);
-            }
+            RubyErrorKind::ParseErr(e) => match e {
+                ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF"),
+                ParseErrKind::UnexpectedToken => eprintln!("Unexpected token"),
+                ParseErrKind::SyntaxError(n) => eprintln!("SyntaxError: {}", n),
+                ParseErrKind::LoadError(n) => eprintln!("LoadError: {}", n),
+            },
             RubyErrorKind::RuntimeErr(e) => match e {
                 RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
                 RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),

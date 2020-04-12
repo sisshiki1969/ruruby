@@ -229,6 +229,12 @@ impl VM {
         self.pc = ((self.pc as i64) + inst_offset + disp) as usize;
     }
 
+    fn read16(&self, iseq: &ISeq, offset: usize) -> u16 {
+        let pc = self.pc + offset;
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u16;
+        unsafe { *ptr }
+    }
+
     fn read32(&self, iseq: &ISeq, offset: usize) -> u32 {
         let pc = self.pc + offset;
         let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
@@ -1002,57 +1008,13 @@ impl VM {
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
-                    let method_id = self.read_id(iseq, 1);
-                    let args_num = self.read_usize(iseq, 5);
-                    let kw_args_num = self.read_usize(iseq, 9);
-                    let cache_slot = self.read32(iseq, 13);
-                    let block = self.read32(iseq, 17);
-                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
-
-                    let keyword = if kw_args_num != 0 {
-                        let val = self.stack_pop();
-                        Some(val)
-                    } else {
-                        None
-                    };
-                    let mut args = self.pop_args_to_ary(args_num);
-                    args.self_value = receiver;
-                    let block = if block != 0 {
-                        Some(MethodRef::from(block))
-                    } else {
-                        None
-                    };
-                    args.block = block;
-                    args.kw_arg = keyword;
-                    try_err!(self, self.eval_send(methodref, &args));
-                    self.pc += 21;
+                    try_err!(self, self.vm_send(iseq, receiver));
+                    self.pc += 17;
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
-                    let method_id = self.read_id(iseq, 1);
-                    let args_num = self.read_usize(iseq, 5);
-                    let kw_args_num = self.read_usize(iseq, 9);
-                    let cache_slot = self.read32(iseq, 13);
-                    let block = self.read32(iseq, 17);
-                    let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
-
-                    let keyword = if kw_args_num != 0 {
-                        let val = self.stack_pop();
-                        Some(val)
-                    } else {
-                        None
-                    };
-                    let mut args = self.pop_args_to_ary(args_num);
-                    args.self_value = receiver;
-                    let block = if block != 0 {
-                        Some(MethodRef::from(block))
-                    } else {
-                        None
-                    };
-                    args.block = block;
-                    args.kw_arg = keyword;
-                    try_err!(self, self.eval_send(methodref, &args));
-                    self.pc += 21;
+                    try_err!(self, self.vm_send(iseq, receiver));
+                    self.pc += 17;
                 }
                 Inst::DEF_CLASS => {
                     let is_module = self.read8(iseq, 1) == 1;
@@ -1808,6 +1770,42 @@ impl VM {
             Some(oref) => Ok(oref),
             None => Err(self.error_argument(error_msg)),
         }
+    }
+}
+
+impl VM {
+    fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
+        let method_id = self.read_id(iseq, 1);
+        let args_num = self.read16(iseq, 5);
+        let flag = self.read16(iseq, 7);
+        let cache_slot = self.read32(iseq, 9);
+        let block = self.read32(iseq, 13);
+        let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+
+        let keyword = if flag & 0b01 == 1 {
+            let val = self.stack_pop();
+            Some(val)
+        } else {
+            None
+        };
+        let mut args = self.pop_args_to_ary(args_num as usize);
+        args.self_value = receiver;
+        let block = if block != 0 {
+            Some(MethodRef::from(block))
+        } else if flag & 0b10 == 2 {
+            let val = self.stack_pop();
+            let method = match val.as_proc() {
+                Some(pref) => pref.context.iseq_ref.method,
+                None => return Err(self.error_argument("Block argument must be Proc.")),
+            };
+            Some(method)
+        } else {
+            None
+        };
+        args.block = block;
+        args.kw_arg = keyword;
+        let val = self.eval_send(methodref, &args)?;
+        Ok(val)
     }
 }
 

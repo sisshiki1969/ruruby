@@ -70,6 +70,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "bytes", string_bytes);
     globals.add_builtin_instance_method(class, "chars", string_chars);
     globals.add_builtin_instance_method(class, "sum", string_sum);
+    globals.add_builtin_instance_method(class, "upcase", string_upcase);
 
     Value::class(globals, class)
 }
@@ -272,6 +273,13 @@ fn string_sum(vm: &mut VM, args: &Args) -> VMResult {
         sum += *b as u64;
     }
     Ok(Value::fixnum((sum & ((1 << 16) - 1)) as i64))
+}
+
+fn string_upcase(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    expect_string!(string, vm, args.self_value);
+    let res = string.to_uppercase();
+    Ok(Value::string(&vm.globals, res))
 }
 
 #[cfg(test)]

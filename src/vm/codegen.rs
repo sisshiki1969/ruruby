@@ -348,14 +348,14 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        kw_args_num: usize,
+        flag: usize,
         block: Option<MethodRef>,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND);
         self.push32(iseq, method.into());
-        self.push32(iseq, args_num as u32);
-        self.push32(iseq, kw_args_num as u32);
+        self.push16(iseq, args_num as u32 as u16);
+        self.push16(iseq, flag as u32 as u16);
         self.push32(iseq, globals.add_inline_cache_entry() as u32);
         self.push32(
             iseq,
@@ -373,14 +373,14 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        kw_args_num: usize,
+        flag: usize,
         block: Option<MethodRef>,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND_SELF);
         self.push32(iseq, method.into());
-        self.push32(iseq, args_num as u32);
-        self.push32(iseq, kw_args_num as u32);
+        self.push16(iseq, args_num as u32 as u16);
+        self.push16(iseq, flag as u32 as u16);
         self.push32(iseq, globals.add_inline_cache_entry() as u32);
         self.push32(
             iseq,
@@ -483,6 +483,11 @@ impl Codegen {
         iseq[src.0 - 3] = (num >> 8) as u8;
         iseq[src.0 - 2] = (num >> 16) as u8;
         iseq[src.0 - 1] = (num >> 24) as u8;
+    }
+
+    fn push16(&mut self, iseq: &mut ISeq, num: u16) {
+        iseq.push(num as u8);
+        iseq.push((num >> 8) as u8);
     }
 
     fn push32(&mut self, iseq: &mut ISeq, num: u32) {
@@ -1438,14 +1443,15 @@ impl Codegen {
                 for arg in &send_args.args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                let kw_len = send_args.kw_args.len();
-                if kw_len != 0 {
+                let kw_flag = send_args.kw_args.len() != 0;
+                if kw_flag {
                     for (id, default) in &send_args.kw_args {
                         self.gen_symbol(iseq, *id);
                         self.gen(globals, iseq, default, true)?;
                     }
-                    self.gen_create_hash(iseq, kw_len);
+                    self.gen_create_hash(iseq, send_args.kw_args.len());
                 }
+                let mut block_flag = false;
                 let block_ref = match &send_args.block {
                     Some(block) => match &block.kind {
                         NodeKind::Proc { params, body, lvar } => {
@@ -1462,7 +1468,11 @@ impl Codegen {
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
                         }
-                        _ => panic!(),
+                        _ => {
+                            self.gen(globals, iseq, block, true)?;
+                            block_flag = true;
+                            None
+                        }
                     },
                     None => None,
                 };
@@ -1473,7 +1483,7 @@ impl Codegen {
                         iseq,
                         *method,
                         send_args.args.len(),
-                        if kw_len == 0 { 0 } else { 1 },
+                        create_flag(kw_flag, block_flag),
                         block_ref,
                     );
                 } else {
@@ -1484,13 +1494,23 @@ impl Codegen {
                         iseq,
                         *method,
                         send_args.args.len(),
-                        send_args.kw_args.len(),
+                        create_flag(kw_flag, block_flag),
                         block_ref,
                     );
                 };
                 if !use_value {
                     self.gen_pop(iseq)
                 };
+
+                /// Create flag for argument info.
+                /// 0b0011
+                ///     ||
+                ///     |+- 1: keyword args exists. 0: no keyword args,
+                ///     +-- 1: a block arg exists. 0: no block arg.
+                fn create_flag(kw_flag: bool, block_flag: bool) -> usize {
+                    (if kw_flag { 1usize } else { 0usize })
+                        + (if block_flag { 2usize } else { 0usize })
+                }
             }
             NodeKind::MethodDef(id, params, body, lvar) => {
                 let methodref = self.gen_iseq(
