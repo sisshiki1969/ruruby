@@ -106,7 +106,28 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
         }
     };
 
-    let receiver = eref.base;
+    let val = eref.base;
+    let ary = match val.as_array() {
+        Some(ary) => ary,
+        None => {
+            let inspect = vm.val_inspect(val);
+            return Err(vm.error_type(format!("Must be Array. {}", inspect)));
+        }
+    };
+    let res_ary: Vec<Value> = ary
+        .elements
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            Value::array(
+                &vm.globals,
+                ArrayRef::from(vec![v.clone(), Value::fixnum(i as i64)]),
+            )
+        })
+        .collect();
+    let receiver = Value::array(&vm.globals, ArrayRef::from(res_ary));
+    eprintln!("{}", vm.val_inspect(receiver));
+
     let rec_class = receiver.get_class_object_for_method(&vm.globals);
     //let each_id = vm.globals.get_ident_id("each");
     let each_method = vm.get_instance_method(rec_class, eref.method)?;
