@@ -217,7 +217,14 @@ fn array_sub(vm: &mut VM, args: &Args) -> VMResult {
 
 fn array_map(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
-    let method = vm.expect_block(args.block)?;
+    let method = match args.block {
+        Some(method) => method,
+        None => {
+            let id = vm.globals.get_ident_id("map");
+            let val = Value::enumerator(&vm.globals, args.self_value, id, Args::new(0));
+            return Ok(val);
+        }
+    };
     let iseq = vm.get_iseq(method)?;
     let mut res = vec![];
     let context = vm.context();

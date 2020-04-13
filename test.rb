@@ -1,2 +1,1 @@
-block = Proc.new {|x| x.upcase }
-p ["These", "are", "pencils"].map(&block)
+["The", "Ruby", "Hacker"].map.with_index do |elem, idx| p elem, idx end

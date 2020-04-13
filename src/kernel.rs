@@ -198,10 +198,8 @@ impl Kernel {
                 } else if self_.is_packed_num() {
                     self_.as_packed_flonum().trunc() as i64
                 } else {
-                    return Err(vm.error_type(format!(
-                        "Can not convert {} into Integer.",
-                        vm.val_inspect(self_)
-                    )));
+                    let inspect = vm.val_inspect(self_);
+                    return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
                 }
             } else {
                 match self_.unpack() {
@@ -211,24 +209,25 @@ impl Kernel {
                         ObjKind::String(s) => match s.parse::<i64>() {
                             Some(num) => num,
                             None => {
+                                let inspect = vm.val_inspect(self_);
                                 return Err(vm.error_type(format!(
                                     "Invalid value for Integer(): {}",
-                                    vm.val_inspect(self_)
-                                )))
+                                    inspect
+                                )));
                             }
                         },
                         _ => {
-                            return Err(vm.error_type(format!(
-                                "Can not convert {} into Integer.",
-                                vm.val_inspect(self_)
-                            )))
+                            let inspect = vm.val_inspect(self_);
+                            return Err(
+                                vm.error_type(format!("Can not convert {} into Integer.", inspect))
+                            );
                         }
                     },
                     _ => {
-                        return Err(vm.error_type(format!(
-                            "Can not convert {} into Integer.",
-                            vm.val_inspect(self_)
-                        )))
+                        let inspect = vm.val_inspect(self_);
+                        return Err(
+                            vm.error_type(format!("Can not convert {} into Integer.", inspect))
+                        );
                     }
                 }
             };

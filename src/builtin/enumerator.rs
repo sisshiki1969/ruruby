@@ -25,6 +25,8 @@ pub fn init_enumerator(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Enumerator");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "each", each);
+    globals.add_builtin_instance_method(class, "with_index", with_index);
+    globals.add_builtin_instance_method(class, "inspect", inspect);
     let class = Value::class(globals, class);
     globals.add_builtin_class_method(class, "new", enum_new);
     class
@@ -58,7 +60,58 @@ fn enum_new(vm: &mut VM, args: &Args) -> VMResult {
 
 // Instance methods
 
+fn inspect(vm: &mut VM, args: &Args) -> VMResult {
+    let eref = vm.expect_enumerator(args.self_value, "Expect Enumerator.")?;
+    let inspect = format!(
+        "#<Enumerator: {}:{}>",
+        vm.val_inspect(eref.base),
+        vm.globals.get_ident_name(eref.method)
+    );
+    Ok(Value::string(&vm.globals, inspect))
+}
+
 fn each(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    Ok(Value::nil())
+    let eref = vm.expect_enumerator(args.self_value, "Expect Enumerator.")?;
+    let block = match args.block {
+        Some(method) => method,
+        None => {
+            return Ok(args.self_value);
+        }
+    };
+
+    let receiver = eref.base;
+    let rec_class = receiver.get_class_object_for_method(&vm.globals);
+    let each_method = vm.get_instance_method(rec_class, eref.method)?;
+    let args = Args::new0(receiver, block);
+    let val = vm.eval_send(each_method, &args)?;
+
+    Ok(val)
+}
+
+fn with_index(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let eref = vm.expect_enumerator(args.self_value, "Expect Enumerator.")?;
+    let block = match args.block {
+        Some(method) => method,
+        None => {
+            let id = vm.globals.get_ident_id("with_index");
+            let e = Value::enumerator(
+                &vm.globals,
+                args.self_value,
+                id,
+                Args::new0(args.self_value, None),
+            );
+            return Ok(e);
+        }
+    };
+
+    let receiver = eref.base;
+    let rec_class = receiver.get_class_object_for_method(&vm.globals);
+    //let each_id = vm.globals.get_ident_id("each");
+    let each_method = vm.get_instance_method(rec_class, eref.method)?;
+    let args = Args::new0(receiver, block);
+    let val = vm.eval_send(each_method, &args)?;
+
+    Ok(val)
 }

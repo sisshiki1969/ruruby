@@ -33,6 +33,7 @@ pub fn init_fiber(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Fiber");
     let class = ClassRef::from(id, globals.builtins.object);
     let val = Value::class(globals, class);
+    globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "resume", resume);
     globals.add_builtin_class_method(val, "new", new);
     globals.add_builtin_class_method(val, "yield", yield_);
@@ -73,6 +74,16 @@ fn yield_(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 // Instance methods
+
+fn inspect(vm: &mut VM, args: &Args) -> VMResult {
+    let fref = vm.expect_fiber(args.self_value, "Expect Fiber.")?;
+    let inspect = format!(
+        "#<Fiber:0x{:<016x} ({:?})>",
+        fref.id(),
+        fref.vm.fiberstate(),
+    );
+    Ok(Value::string(&vm.globals, inspect))
+}
 
 fn resume(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;

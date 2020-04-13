@@ -1277,7 +1277,7 @@ impl VM {
 impl VM {
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
-    pub fn val_as_class(&self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
+    pub fn val_as_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
         match val.is_class() {
             Some(class_ref) => Ok(class_ref),
             None => {
@@ -1287,7 +1287,7 @@ impl VM {
         }
     }
 
-    pub fn val_as_module(&self, val: Value) -> Result<ClassRef, RubyError> {
+    pub fn val_as_module(&mut self, val: Value) -> Result<ClassRef, RubyError> {
         match val.as_module() {
             Some(class_ref) => Ok(class_ref),
             None => {
@@ -1680,7 +1680,7 @@ impl VM {
         }
     }
 
-    pub fn val_inspect(&self, val: Value) -> String {
+    pub fn val_inspect(&mut self, val: Value) -> String {
         match val.is_object() {
             Some(mut oref) => match &oref.kind {
                 ObjKind::String(s) => match s {
@@ -1735,16 +1735,22 @@ impl VM {
                 ObjKind::Ordinary => {
                     let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.search_class().as_class().name), oref.id()};
                     for (k, v) in oref.var_table() {
-                        s = format!(
-                            "{} {}={}",
-                            s,
-                            self.globals.get_ident_name(*k),
-                            self.val_inspect(*v)
-                        );
+                        let inspect = self.val_inspect(*v);
+                        let id = self.globals.get_ident_name(*k);
+                        s = format!("{} {}={}", s, id, inspect);
                     }
                     format!("{}>", s)
                 }
-                _ => self.val_to_s(val),
+                _ => {
+                    /*
+                    let id = self.globals.get_ident_id("inspect");
+                    self.send0(val, id)
+                        .unwrap()
+                        .as_string()
+                        .unwrap()
+                        .to_string()*/
+                    format!("{:?}", val)
+                }
             },
             None => match val.unpack() {
                 RV::Nil => "nil".to_string(),
@@ -1769,6 +1775,34 @@ impl VM {
     ) -> Result<ObjectRef, RubyError> {
         match val.is_object() {
             Some(oref) => Ok(oref),
+            None => Err(self.error_argument(error_msg)),
+        }
+    }
+
+    pub fn expect_fiber(
+        &self,
+        val: Value,
+        error_msg: impl Into<String>,
+    ) -> Result<FiberRef, RubyError> {
+        match val.is_object() {
+            Some(oref) => match oref.inner().kind {
+                ObjKind::Fiber(f) => Ok(f),
+                _ => Err(self.error_argument(error_msg)),
+            },
+            None => Err(self.error_argument(error_msg)),
+        }
+    }
+
+    pub fn expect_enumerator(
+        &self,
+        val: Value,
+        error_msg: impl Into<String>,
+    ) -> Result<EnumRef, RubyError> {
+        match val.is_object() {
+            Some(oref) => match oref.inner().kind {
+                ObjKind::Enumerator(e) => Ok(e),
+                _ => Err(self.error_argument(error_msg)),
+            },
             None => Err(self.error_argument(error_msg)),
         }
     }
@@ -1950,11 +1984,6 @@ impl VM {
             }
             None => {}
         };
-        /*eprintln!(
-            "SEARCH {} {}",
-            self.val_pp(class),
-            self.globals.get_ident_name(method)
-        );*/
         let original_class = class;
         let mut singleton_flag = original_class.as_class().is_singleton;
         loop {
@@ -1971,11 +2000,11 @@ impl VM {
                             singleton_flag = false;
                             class = original_class.as_object().class();
                         } else {
+                            let inspect = self.val_inspect(original_class);
                             let method_name = self.globals.get_ident_name(method);
                             return Err(self.error_nomethod(format!(
                                 "no method `{}' found for {}",
-                                method_name,
-                                self.val_inspect(original_class)
+                                method_name, inspect
                             )));
                         }
                     }

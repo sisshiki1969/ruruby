@@ -126,21 +126,23 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
         let class = match iseq.class_defined {
             Some(list) => list.class,
             None => {
+                let inspect = vm.val_inspect(args.self_value);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
-                    vm.val_inspect(args.self_value),
-                )))
+                    inspect,
+                )));
             }
         };
         let method = match class.superclass() {
             Some(class) => vm.get_instance_method(class, m)?,
             None => {
+                let inspect = vm.val_inspect(args.self_value);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
-                    vm.val_inspect(args.self_value),
-                )))
+                    inspect,
+                )));
             }
         };
         let param_num = iseq.param_ident.len();

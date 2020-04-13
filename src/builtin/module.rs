@@ -192,10 +192,10 @@ fn included_modules(vm: &mut VM, args: &Args) -> VMResult {
                 cref.superclass
             }
             None => {
-                return Err(vm.error_internal(format!(
-                    "Illegal value in superclass chain. {}",
-                    vm.val_inspect(class)
-                )))
+                let inspect = vm.val_inspect(class);
+                return Err(
+                    vm.error_internal(format!("Illegal value in superclass chain. {}", inspect))
+                );
             }
         };
     }
@@ -219,10 +219,10 @@ fn ancestors(vm: &mut VM, args: &Args) -> VMResult {
                 cref.superclass
             }
             None => {
-                return Err(vm.error_internal(format!(
-                    "Illegal value in superclass chain. {}",
-                    vm.val_inspect(superclass)
-                )))
+                let inspect = vm.val_inspect(superclass);
+                return Err(
+                    vm.error_internal(format!("Illegal value in superclass chain. {}", inspect))
+                );
             }
         };
     }
