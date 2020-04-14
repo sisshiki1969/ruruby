@@ -171,12 +171,12 @@ impl SourceInfo {
                 eprintln!("{}:{}", self.path.to_string_lossy(), line.0);
             };
             found = true;
-            eprintln!(
-                "{}",
-                self.code[(line.1 as usize)..(line.2 as usize)]
-                    .iter()
-                    .collect::<String>()
-            );
+            let start = line.1 as usize;
+            let mut end = line.2 as usize;
+            if self.code[end] == '\n' {
+                end -= 1
+            }
+            eprintln!("{}", self.code[start..=end].iter().collect::<String>());
             use std::cmp::*;
             let read = if loc.0 <= line.1 {
                 0

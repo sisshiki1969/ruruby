@@ -1,4 +1,4 @@
-pub use crate::vm::*;
+pub use crate::*;
 
 const LVAR_ARRAY_SIZE: usize = 8;
 
@@ -80,30 +80,41 @@ impl Context {
         let rest_len = if self.iseq_ref.rest_param { 1 } else { 0 };
         let post_len = self.iseq_ref.post_params;
         let post_pos = req_len + opt_len + rest_len;
-        if post_len == 0 {
-        } else if kw_len == 0 {
-            for i in 0..post_len {
-                self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
+        if post_len != 0 {
+            if kw_len == 0 {
+                // fill post_req params.
+                for i in 0..post_len {
+                    self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
+                }
+            } else {
+                // fill post_req params.
+                for i in 0..post_len - 1 {
+                    self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
+                }
+                // fill keyword params as a hash.
+                self.set_lvar(post_pos + post_len - 1, kw_arg.unwrap());
+                kw_len = 0;
             }
-        } else {
-            for i in 0..post_len - 1 {
-                self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
-            }
-            self.set_lvar(post_pos + post_len - 1, kw_arg.unwrap());
-            kw_len = 0;
         }
         let req_opt = std::cmp::min(opt_len + req_len, arg_len - post_len);
-        if req_opt == 0 {
-        } else if kw_len == 0 {
-            for i in 0..req_opt {
-                self.set_lvar(i, args[i]);
+        //eprintln!("rea_len:{}, arg_len:{}", req_len, arg_len);
+        if req_opt != 0 {
+            if kw_len == 0 {
+                for i in 0..req_opt {
+                    self.set_lvar(i, args[i]);
+                }
+            } else {
+                for i in 0..req_opt - 1 {
+                    self.set_lvar(i, args[i]);
+                }
+                self.set_lvar(req_opt - 1, kw_arg.unwrap());
+                kw_len = 0;
             }
-        } else {
-            for i in 0..req_opt - 1 {
-                self.set_lvar(i, args[i]);
+            if req_opt < req_len {
+                for i in req_opt..req_len {
+                    self.set_lvar(i, Value::nil());
+                }
             }
-            self.set_lvar(req_opt - 1, kw_arg.unwrap());
-            kw_len = 0;
         }
         if rest_len == 1 {
             let ary = if req_len + opt_len + post_len >= arg_len {

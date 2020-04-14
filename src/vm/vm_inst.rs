@@ -73,6 +73,7 @@ impl Inst {
     pub const END: u8 = 102;
     pub const RETURN: u8 = 103;
     pub const OPT_CASE: u8 = 104;
+    pub const MRETURN: u8 = 105;
 }
 
 #[allow(dead_code)]
@@ -152,6 +153,7 @@ impl Inst {
             Inst::END => "END",
             Inst::RETURN => "RETURN",
             Inst::OPT_CASE => "OPT_CASE",
+            Inst::MRETURN => "MRETURN",
 
             _ => "undefined",
         }
@@ -183,7 +185,8 @@ impl Inst {
             | Inst::TO_S
             | Inst::SPLAT
             | Inst::POP
-            | Inst::RETURN => 1,
+            | Inst::RETURN
+            | Inst::MRETURN => 1,
 
             Inst::PUSH_STRING
             | Inst::PUSH_SYMBOL
@@ -220,7 +223,7 @@ impl Inst {
             | Inst::OPT_CASE
             | Inst::IVAR_ADDI => 9,
             Inst::DEF_CLASS => 10,
-            Inst::SEND | Inst::SEND_SELF => 21,
+            Inst::SEND | Inst::SEND_SELF => 17,
             _ => 1,
         }
     }

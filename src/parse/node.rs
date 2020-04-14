@@ -1,4 +1,4 @@
-use crate::parser::LvarCollector;
+use super::parser::LvarCollector;
 use crate::util::{Annot, IdentId, Loc};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,7 +72,7 @@ pub enum NodeKind {
         body: Box<Node>,
         lvar: LvarCollector,
     },
-    Break,
+    Break(Box<Node>),
     Next(Box<Node>),
     Return(Box<Node>),
 
@@ -449,8 +449,8 @@ impl Node {
         )
     }
 
-    pub fn new_break(loc: Loc) -> Self {
-        Node::new(NodeKind::Break, loc)
+    pub fn new_break(val: Node, loc: Loc) -> Self {
+        Node::new(NodeKind::Break(Box::new(val)), loc)
     }
 
     pub fn new_next(val: Node, loc: Loc) -> Self {

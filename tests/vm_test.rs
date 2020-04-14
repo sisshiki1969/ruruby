@@ -2,8 +2,8 @@
 #![allow(unused_imports, dead_code)]
 extern crate ruruby;
 extern crate test;
-use ruruby::lexer::Lexer;
-use ruruby::parser::{LvarCollector, Parser};
+use ruruby::parse::Lexer;
+//use ruruby::parser::{LvarCollector, Parser};
 use ruruby::test::{assert_script, eval_script};
 use ruruby::*;
 use test::Bencher;
@@ -391,8 +391,15 @@ fn for4() {
 #[test]
 fn for5() {
     let program = "
-        assert(for a in 0..2 do end, 0..2)
-        assert(for a in 0..2 do if a == 1 then break end end, nil)
+        ans = for a in 0..2 do
+            end
+        assert(0..2, ans)
+        ans = for a in 0..2 do
+            if a == 1
+                break 4
+            end
+        end
+        assert(4, ans)
     ";
     assert_script(program);
 }
@@ -431,6 +438,24 @@ fn until1() {
 fn until2() {
     let program = "
         assert((a = 0; a+=1 until a == 5; a), 5)
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn block_break() {
+    let program = "
+        assert(100, loop { break 100 })
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn block_next() {
+    let program = "
+        a = []
+        3.times{|x| if x == 1 then next end; a << x}
+        assert([0,2], a)
     ";
     assert_script(program);
 }

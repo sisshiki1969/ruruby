@@ -1,6 +1,5 @@
+use super::*;
 use crate::error::{ParseErrKind, RubyError};
-use crate::node::BinOp;
-use crate::token::*;
 use crate::util::*;
 use std::collections::HashMap;
 
@@ -31,6 +30,7 @@ pub struct LexerResult {
     pub tokens: Vec<Token>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarKind {
     Identifier,
@@ -942,7 +942,7 @@ impl LexerResult {
 #[cfg(test)]
 #[allow(unused_imports, dead_code)]
 mod test {
-    use crate::lexer::*;
+    use crate::parse::lexer::*;
     fn assert_tokens(program: impl Into<String>, ans: Vec<Token>) {
         let mut lexer = Lexer::new();
         match lexer.tokenize(program.into()) {

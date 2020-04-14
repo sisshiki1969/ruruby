@@ -63,7 +63,7 @@ impl ArrayInfo {
             match val.as_array() {
                 Some(mut val) => {
                     let mut tail = elements.split_off(end);
-                    elements.split_off(index);
+                    elements.truncate(index);
                     elements.append(&mut val.elements.clone());
                     elements.append(&mut tail);
                 }

@@ -1,4 +1,4 @@
-use crate::node::BinOp;
+use crate::parse::node::BinOp;
 use crate::util::*;
 
 pub type Token = Annot<TokenKind>;

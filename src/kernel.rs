@@ -24,6 +24,7 @@ impl Kernel {
         globals.add_builtin_instance_method(kernel_class, "__FILE__", file_);
         globals.add_builtin_instance_method(kernel_class, "raise", raise);
         globals.add_builtin_instance_method(kernel_class, "rand", rand);
+        globals.add_builtin_instance_method(kernel_class, "loop", loop_);
         let kernel = Value::class(globals, kernel_class);
         return kernel;
 
@@ -162,8 +163,7 @@ impl Kernel {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
             };
-            let recv_class = args.self_value.get_class_object_for_method(&vm.globals);
-            let method = vm.get_instance_method(recv_class, name)?;
+            let method = vm.get_method(args.self_value, name)?;
             let val = Value::method(&vm.globals, name, args.self_value, method);
             Ok(val)
         }
@@ -197,10 +197,8 @@ impl Kernel {
                 } else if self_.is_packed_num() {
                     self_.as_packed_flonum().trunc() as i64
                 } else {
-                    return Err(vm.error_type(format!(
-                        "Can not convert {} into Integer.",
-                        vm.val_inspect(self_)
-                    )));
+                    let inspect = vm.val_inspect(self_);
+                    return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
                 }
             } else {
                 match self_.unpack() {
@@ -210,24 +208,25 @@ impl Kernel {
                         ObjKind::String(s) => match s.parse::<i64>() {
                             Some(num) => num,
                             None => {
+                                let inspect = vm.val_inspect(self_);
                                 return Err(vm.error_type(format!(
                                     "Invalid value for Integer(): {}",
-                                    vm.val_inspect(self_)
-                                )))
+                                    inspect
+                                )));
                             }
                         },
                         _ => {
-                            return Err(vm.error_type(format!(
-                                "Can not convert {} into Integer.",
-                                vm.val_inspect(self_)
-                            )))
+                            let inspect = vm.val_inspect(self_);
+                            return Err(
+                                vm.error_type(format!("Can not convert {} into Integer.", inspect))
+                            );
                         }
                     },
                     _ => {
-                        return Err(vm.error_type(format!(
-                            "Can not convert {} into Integer.",
-                            vm.val_inspect(self_)
-                        )))
+                        let inspect = vm.val_inspect(self_);
+                        return Err(
+                            vm.error_type(format!("Can not convert {} into Integer.", inspect))
+                        );
                     }
                 }
             };
@@ -264,6 +263,14 @@ impl Kernel {
         fn rand(_vm: &mut VM, _args: &Args) -> VMResult {
             let num = rand::random();
             Ok(Value::flonum(num))
+        }
+
+        fn loop_(vm: &mut VM, args: &Args) -> VMResult {
+            let method = vm.expect_block(args.block)?;
+            let arg = Args::new0(args.self_value, None);
+            loop {
+                vm.eval_block(method, &arg)?;
+            }
         }
     }
 }

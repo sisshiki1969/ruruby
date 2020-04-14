@@ -1,8 +1,6 @@
 use crate::error::{ParseErrKind, RubyError};
-use crate::lexer::Lexer;
-use crate::node::*;
-use crate::token::*;
 use crate::util::*;
+use super::*;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
@@ -167,6 +165,13 @@ enum ContextKind {
     Class,
     Method,
     Block,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ArgList {
+    args: Vec<Node>,
+    kw_args: Vec<(IdentId, Node)>,
+    block: Option<Box<Node>>,
 }
 
 impl Parser {
@@ -708,13 +713,21 @@ impl Parser {
 
         let mut args = vec![first_arg];
         let mut kw_args = vec![];
+        let mut block = None;
         if self.consume_punct_no_term(Punct::Comma)? {
             let res = self.parse_argument_list(None)?;
-            let mut new_args = res.0;
-            kw_args = res.1;
+            let mut new_args = res.args;
+            kw_args = res.kw_args;
+            block = res.block;
             args.append(&mut new_args);
         }
-        let block = self.parse_block()?;
+        match self.parse_block()? {
+            Some(actual_block) => {
+                if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                block = Some(actual_block);
+            }
+            None => {}
+        };
         Ok(SendArgs{args, kw_args, block})
     }
 
@@ -1035,8 +1048,14 @@ impl Parser {
         let loc = node.loc();
         if self.consume_punct_no_term(Punct::LParen)? {
             // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-            let (args, kw_args) = self.parse_argument_list(Punct::RParen)?;
-            let block = self.parse_block()?;
+            let ArgList{args, kw_args, mut block} = self.parse_argument_list(Punct::RParen)?;
+            match self.parse_block()? {
+                Some(actual_block) => {
+                    if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                    block = Some(actual_block);
+                }
+                None => {}
+            };
             let send_args = SendArgs {args, kw_args, block};
 
             Ok(Node::new_send(
@@ -1104,14 +1123,22 @@ impl Parser {
                 };
                 let mut args = vec![];
                 let mut kw_args = vec![];
+                let mut block = None;
                 let mut completed = false;
                 if self.consume_punct_no_term(Punct::LParen)? {
                     let res = self.parse_argument_list(Punct::RParen)?;
-                    args = res.0;
-                    kw_args = res.1;
+                    args = res.args;
+                    kw_args = res.kw_args;
+                    block = res.block;
                     completed = true;
                 }
-                let block = self.parse_block()?;
+                match self.parse_block()? {
+                    Some(actual_block) => {
+                        if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                        block = Some(actual_block);
+                    }
+                    None => {}
+                };
                 if block.is_some() {
                     completed = true;
                 };
@@ -1145,33 +1172,38 @@ impl Parser {
     }
 
     /// Parse argument list.
-    /// arg, *arg, kw: arg <punct>
+    /// arg, *splat_arg, kw: kw_arg, &block <punct>
     /// punct: punctuator for terminating arg list. Set None for unparenthesized argument list.
     fn parse_argument_list(
         &mut self,
         punct: impl Into<Option<Punct>>,
-    ) -> Result<(Vec<Node>, Vec<(IdentId, Node)>), RubyError> {
+    ) -> Result<ArgList, RubyError> {
         let (flag, punct) = match punct.into() {
             Some(punct) => (true, punct),
             None => (false, Punct::Arrow /* dummy */),
         };
         let mut args = vec![];
-        let mut keyword_args = vec![];
+        let mut kw_args = vec![];
+        let mut block = None;
         loop {
             if flag && self.consume_punct(punct)? {
-                return Ok((args, keyword_args));
+                return Ok(ArgList {args, kw_args, block});
             }
             if self.consume_punct(Punct::Mul)? {
                 // splat argument
                 let loc = self.prev_loc();
                 let array = self.parse_arg()?;
                 args.push(Node::new_splat(array, loc));
+            } else if self.consume_punct(Punct::BitAnd)? {
+                // block argument
+                let arg = self.parse_arg()?;
+                block = Some(Box::new(arg));
             } else {
                 let node = self.parse_arg()?;
                 match node.kind {
                     NodeKind::Ident(id, ..) | NodeKind::LocalVar(id) => {
                         if self.consume_punct_no_term(Punct::Colon)? {
-                            keyword_args.push((id, self.parse_arg()?));
+                            kw_args.push((id, self.parse_arg()?));
                         } else {
                             args.push(node);
                         }
@@ -1183,12 +1215,15 @@ impl Parser {
             }
             if !self.consume_punct(Punct::Comma)? {
                 break;
+            } else {
+                let loc = self.prev_loc();
+                if block.is_some() { return Err(self.error_unexpected(loc, "unexpected ','.")) };
             }
         }
         if flag {
             self.expect_punct(punct)?
         };
-        Ok((args, keyword_args))
+        Ok(ArgList {args, kw_args, block})
     }
 
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
@@ -1204,22 +1239,20 @@ impl Parser {
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();
         self.context_stack.push(Context::new_block());
-        let mut params = vec![];
-        if self.consume_punct(Punct::BitOr)? {
-            if !self.consume_punct(Punct::BitOr)? {
-                loop {
-                    let id = self.expect_ident()?;
-                    params.push(Node::new_param(id, self.prev_loc()));
-                    self.new_param(id, self.prev_loc())?;
-                    if !self.consume_punct(Punct::Comma)? {
-                        break;
-                    }
-                }
-                self.expect_punct(Punct::BitOr)?;
+
+        let params = if self.consume_punct(Punct::BitOr)? {
+            if self.consume_punct(Punct::BitOr)? {
+                vec![]
+            } else {
+                let params = self.parse_params(TokenKind::Punct(Punct::BitOr))?;
+                self.consume_punct(Punct::BitOr)?;
+                params
             }
         } else {
             self.consume_punct(Punct::LOr)?;
-        }
+            vec![]
+        };
+
         let body = self.parse_comp_stmt()?;
         if do_flag {
             self.expect_reserved(Reserved::End)?;
@@ -1492,7 +1525,31 @@ impl Parser {
                     Ok(Node::new_return(val, loc))
                 }
             }
-            TokenKind::Reserved(Reserved::Break) => Ok(Node::new_break(loc)),
+            TokenKind::Reserved(Reserved::Break) => {
+                let tok = self.peek_no_term()?;
+                // TODO: This is not correct.
+                if tok.is_term()
+                    || tok.kind == TokenKind::Reserved(Reserved::Unless)
+                    || tok.kind == TokenKind::Reserved(Reserved::If)
+                    || tok.check_stmt_end()
+                {
+                    let val = Node::new_nil(loc);
+                    return Ok(Node::new_break(val, loc));
+                };
+                let val = self.parse_arg()?;
+                let ret_loc = val.loc();
+                if self.consume_punct_no_term(Punct::Comma)? {
+                    let mut vec = vec![val, self.parse_arg()?];
+                    while self.consume_punct_no_term(Punct::Comma)? {
+                        vec.push(self.parse_arg()?);
+                    }
+                    vec.reverse();
+                    let val = Node::new_array(vec, ret_loc);
+                    Ok(Node::new_break(val, loc))
+                } else {
+                    Ok(Node::new_break(val, loc))
+                }
+            }
             TokenKind::Reserved(Reserved::Next) => {
                 let tok = self.peek_no_term()?;
                 // TODO: This is not correct.
@@ -1791,7 +1848,7 @@ impl Parser {
             }
         };
         self.context_stack.push(Context::new_method());
-        let args = self.parse_params()?;
+        let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         match is_singleton_method {
@@ -1800,22 +1857,9 @@ impl Parser {
         }
     }
 
-    // ( )
-    // ( ident [, ident]* )
-    fn parse_params(&mut self) -> Result<Vec<Node>, RubyError> {
-        if self.consume_term()? {
-            return Ok(vec![]);
-        };
-        let paren_flag = self.consume_punct(Punct::LParen)?;
-        let mut args = vec![];
-        if paren_flag && self.consume_punct(Punct::RParen)? {
-            if !self.consume_term()? {
-                let loc = self.loc();
-                return Err(self.error_unexpected(loc, "Expect terminator"));
-            }
-            return Ok(args);
-        }
-        #[allow(dead_code)]
+    /// Parse parameters.
+    /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
+    fn parse_params(&mut self, terminator:TokenKind) -> Result<Vec<Node>, RubyError> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
             Reqired,
@@ -1825,6 +1869,8 @@ impl Parser {
             KeyWord,
             KWRest,
         }
+
+        let mut args = vec![];
         let mut state = Kind::Reqired;
         loop {
             let mut loc = self.loc();
@@ -1868,7 +1914,8 @@ impl Parser {
                     self.new_param(id, loc)?;
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
-                    let default = if self.peek_no_term()?.kind == TokenKind::Punct(Punct::Comma) {
+                    let next = self.peek_no_term()?.kind;
+                    let default = if next == TokenKind::Punct(Punct::Comma) || next == terminator || next == TokenKind::LineTerm {
                         None
                     } else {
                         Some(self.parse_arg()?)
@@ -1909,7 +1956,28 @@ impl Parser {
             if !self.consume_punct_no_term(Punct::Comma)? {
                 break;
             }
+        };
+        Ok(args)
+    }
+
+    // ( )
+    // ( ident [, ident]* )
+    fn parse_def_params(&mut self) -> Result<Vec<Node>, RubyError> {
+        if self.consume_term()? {
+            return Ok(vec![]);
+        };
+        let paren_flag = self.consume_punct(Punct::LParen)?;
+
+        if paren_flag && self.consume_punct(Punct::RParen)? {
+            if !self.consume_term()? {
+                let loc = self.loc();
+                return Err(self.error_unexpected(loc, "Expect terminator"));
+            }
+            return Ok(vec![]);
         }
+
+        let args = self.parse_params(TokenKind::Punct(Punct::RParen))?;
+
         if paren_flag {
             self.expect_punct(Punct::RParen)?
         };

@@ -34,7 +34,7 @@ fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn inspect(vm: &mut VM, args: &Args) -> VMResult {
-    let inspect = vm.val_inspect(args.self_value);
+    let inspect = format!("{:?}", args.self_value);
     Ok(Value::string(&vm.globals, inspect))
 }
 
@@ -126,21 +126,23 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
         let class = match iseq.class_defined {
             Some(list) => list.class,
             None => {
+                let inspect = vm.val_inspect(args.self_value);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
-                    vm.val_inspect(args.self_value),
-                )))
+                    inspect,
+                )));
             }
         };
         let method = match class.superclass() {
             Some(class) => vm.get_instance_method(class, m)?,
             None => {
+                let inspect = vm.val_inspect(args.self_value);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
-                    vm.val_inspect(args.self_value),
-                )))
+                    inspect,
+                )));
             }
         };
         let param_num = iseq.param_ident.len();
@@ -167,8 +169,7 @@ fn send(vm: &mut VM, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(vm.error_argument("Must be a symbol.")),
     };
-    let rec_class = receiver.get_class_object_for_method(&vm.globals);
-    let method = vm.get_instance_method(rec_class, method_id)?;
+    let method = vm.get_method(receiver, method_id)?;
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {

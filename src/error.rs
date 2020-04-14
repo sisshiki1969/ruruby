@@ -7,6 +7,35 @@ pub struct RubyError {
     level: usize,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum RubyErrorKind {
+    ParseErr(ParseErrKind),
+    RuntimeErr(RuntimeErrKind),
+    MethodReturn(MethodRef),
+    BlockReturn,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParseErrKind {
+    UnexpectedEOF,
+    UnexpectedToken,
+    SyntaxError(String),
+    LoadError(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuntimeErrKind {
+    Unimplemented(String),
+    Internal(String),
+    Name(String),
+    NoMethod(String),
+    Argument(String),
+    Index(String),
+    Type(String),
+    Regexp(String),
+    Fiber(String),
+}
+
 impl RubyError {
     pub fn new(kind: RubyErrorKind, source_info: SourceInfoRef, level: usize, loc: Loc) -> Self {
         RubyError {
@@ -38,9 +67,12 @@ impl RubyError {
 
     pub fn show_err(&self) {
         match &self.kind {
-            RubyErrorKind::ParseErr(e) => {
-                eprintln!("parse error: {:?}", e);
-            }
+            RubyErrorKind::ParseErr(e) => match e {
+                ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF"),
+                ParseErrKind::UnexpectedToken => eprintln!("Unexpected token"),
+                ParseErrKind::SyntaxError(n) => eprintln!("SyntaxError: {}", n),
+                ParseErrKind::LoadError(n) => eprintln!("LoadError: {}", n),
+            },
             RubyErrorKind::RuntimeErr(e) => match e {
                 RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
                 RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),
@@ -55,36 +87,11 @@ impl RubyError {
             RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
             }
+            RubyErrorKind::BlockReturn => {
+                eprintln!("LocalJumpError");
+            }
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum RubyErrorKind {
-    ParseErr(ParseErrKind),
-    RuntimeErr(RuntimeErrKind),
-    MethodReturn(MethodRef),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParseErrKind {
-    UnexpectedEOF,
-    UnexpectedToken,
-    SyntaxError(String),
-    LoadError(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum RuntimeErrKind {
-    Unimplemented(String),
-    Internal(String),
-    Name(String),
-    NoMethod(String),
-    Argument(String),
-    Index(String),
-    Type(String),
-    Regexp(String),
-    Fiber(String),
 }
 
 impl RubyError {
@@ -105,5 +112,9 @@ impl RubyError {
 
     pub fn new_method_return(method: MethodRef, source_info: SourceInfoRef, loc: Loc) -> Self {
         RubyError::new(RubyErrorKind::MethodReturn(method), source_info, 0, loc)
+    }
+
+    pub fn new_block_return(source_info: SourceInfoRef, loc: Loc) -> Self {
+        RubyError::new(RubyErrorKind::BlockReturn, source_info, 0, loc)
     }
 }

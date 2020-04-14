@@ -477,6 +477,26 @@ impl Value {
         }
     }
 
+    pub fn as_fiber(&self) -> Option<FiberRef> {
+        match self.is_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Fiber(info) => Some(info),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_enumerator(&self) -> Option<EnumRef> {
+        match self.is_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Enumerator(eref) => Some(eref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
             Some(self.as_packed_symbol())
@@ -634,6 +654,10 @@ impl Value {
         tx: std::sync::mpsc::SyncSender<usize>,
     ) -> Self {
         Value::object(RValue::new_fiber(globals, vm, context, rec, tx))
+    }
+
+    pub fn enumerator(globals: &Globals, base: Value, method: IdentId, args: Args) -> Self {
+        Value::object(RValue::new_enumerator(globals, base, method, args))
     }
 }
 

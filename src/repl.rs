@@ -1,7 +1,6 @@
 use ansi_term::Colour::Red;
 use ruruby::error::*;
-use ruruby::parser::{LvarCollector, Parser};
-use ruruby::vm::*;
+//use ruruby::parser::{LvarCollector, Parser};
 //#[macro_use]
 use ruruby::*;
 
@@ -44,16 +43,12 @@ pub fn repl_vm() {
             Some(lvar_collector.clone()),
         ) {
             Ok(parse_result) => {
-                //println!("{:?}", node);
                 match vm.run_repl(&parse_result, context) {
                     Ok(result) => {
                         parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
-                        let id = vm.globals.get_ident_id("inspect");
-                        let res = vm.send0(result, id).unwrap();
-                        let res_str = res.as_string().unwrap();
-                        println!("=> {}", res_str);
+                        println!("=> {}", vm.val_inspect(result));
                     }
                     Err(err) => {
                         err.show_loc(0);
