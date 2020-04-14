@@ -163,8 +163,7 @@ impl Kernel {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
             };
-            let recv_class = args.self_value.get_class_object_for_method(&vm.globals);
-            let method = vm.get_instance_method(recv_class, name)?;
+            let method = vm.get_method(args.self_value, name)?;
             let val = Value::method(&vm.globals, name, args.self_value, method);
             Ok(val)
         }

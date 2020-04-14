@@ -169,8 +169,7 @@ fn send(vm: &mut VM, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(vm.error_argument("Must be a symbol.")),
     };
-    let rec_class = receiver.get_class_object_for_method(&vm.globals);
-    let method = vm.get_instance_method(rec_class, method_id)?;
+    let method = vm.get_method(receiver, method_id)?;
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {

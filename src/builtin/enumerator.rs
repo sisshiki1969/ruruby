@@ -81,8 +81,7 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
     };
 
     let receiver = eref.base;
-    let rec_class = receiver.get_class_object_for_method(&vm.globals);
-    let each_method = vm.get_instance_method(rec_class, eref.method)?;
+    let each_method = vm.get_method(receiver, eref.method)?;
     let args = Args::new0(receiver, block);
     let val = vm.eval_send(each_method, &args)?;
 
@@ -95,28 +94,18 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
     let block = match args.block {
         Some(method) => method,
         None => {
+            // return Enumerator
             let id = vm.globals.get_ident_id("with_index");
             let e = Value::enumerator(&vm.globals, args.self_value, id, args.clone());
             return Ok(e);
         }
     };
 
-    let val = match eref.base.as_enumerator() {
-        Some(_) => {
-            let enum_class = vm.globals.builtins.enumerator;
-            let method = vm.get_instance_method(enum_class, eref.method)?;
-            let mut args = eref.args.clone();
-            args.block = Some(MethodRef::from(0));
-            vm.eval_send(method, &args)?
-        }
-        None => {
-            let receiver = eref.base;
-            let rec_class = receiver.get_class_object_for_method(&vm.globals);
-            let each_method = vm.get_instance_method(rec_class, eref.method)?;
-            let args = Args::new0(receiver, MethodRef::from(0));
-            vm.eval_send(each_method, &args)?
-        }
-    };
+    let receiver = eref.base;
+    let method = vm.get_method(receiver, eref.method)?;
+    let mut args = eref.args.clone();
+    args.block = Some(MethodRef::from(0));
+    let val = vm.eval_send(method, &args)?;
 
     let ary = match val.as_array() {
         Some(ary) => ary,
@@ -149,34 +138,36 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
             .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
             .collect();
 
-        let iseq = vm.get_iseq(block)?;
         let mut res = vec![];
-        let context = vm.context();
-        let param_num = iseq.req_params;
-        let mut arg = Args::new(param_num);
-        arg.self_value = context.self_value;
+        let mut arg = Args::new(2);
+        arg.self_value = vm.context().self_value;
 
-        if param_num == 0 {
-            for _ in &res_ary {
-                let val = vm.eval_block(block, &arg)?;
-                res.push(val);
-            }
-        } else if param_num == 1 {
-            for (v, _) in &res_ary {
-                arg[0] = v.clone();
-                let val = vm.eval_block(block, &arg)?;
-                res.push(val);
-            }
-        } else {
-            for (v, i) in &res_ary {
-                arg[0] = v.clone();
-                arg[1] = i.clone();
-                let val = vm.eval_block(block, &arg)?;
-                res.push(val);
-            }
-        };
+        for (v, i) in &res_ary {
+            arg[0] = v.clone();
+            arg[1] = i.clone();
+            let val = vm.eval_block(block, &arg)?;
+            res.push(val);
+        }
 
         let res = Value::array_from(&vm.globals, res);
         Ok(res)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::test::*;
+
+    #[test]
+    fn enumerator_with_index() {
+        let program = r#"
+        ans = %w(This is a Ruby.).map.with_index {|x| x }
+        assert ["This", "is", "a", "Ruby."], ans
+        ans = %w(This is a Ruby.).map.with_index {|x,y| [x,y] }
+        assert [["This", 0], ["is", 1], ["a", 2], ["Ruby.", 3]], ans
+        ans = %w(This is a Ruby.).map.with_index {|x,y,z| [x,y,z] }
+        assert [["This", 0, nil], ["is", 1, nil], ["a", 2, nil], ["Ruby.", 3, nil]], ans
+        "#;
+        assert_script(program);
     }
 }

@@ -221,7 +221,7 @@ fn array_map(vm: &mut VM, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             let id = vm.globals.get_ident_id("map");
-            let val = Value::enumerator(&vm.globals, args.self_value, id, Args::new(0));
+            let val = Value::enumerator(&vm.globals, args.self_value, id, args.clone());
             return Ok(val);
         }
     };

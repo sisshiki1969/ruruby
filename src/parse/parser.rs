@@ -1239,22 +1239,20 @@ impl Parser {
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();
         self.context_stack.push(Context::new_block());
-        let mut params = vec![];
-        if self.consume_punct(Punct::BitOr)? {
-            if !self.consume_punct(Punct::BitOr)? {
-                loop {
-                    let id = self.expect_ident()?;
-                    params.push(Node::new_param(id, self.prev_loc()));
-                    self.new_param(id, self.prev_loc())?;
-                    if !self.consume_punct(Punct::Comma)? {
-                        break;
-                    }
-                }
-                self.expect_punct(Punct::BitOr)?;
+
+        let params = if self.consume_punct(Punct::BitOr)? {
+            if self.consume_punct(Punct::BitOr)? {
+                vec![]
+            } else {
+                let params = self.parse_params(TokenKind::Punct(Punct::BitOr))?;
+                self.consume_punct(Punct::BitOr)?;
+                params
             }
         } else {
             self.consume_punct(Punct::LOr)?;
-        }
+            vec![]
+        };
+
         let body = self.parse_comp_stmt()?;
         if do_flag {
             self.expect_reserved(Reserved::End)?;
@@ -1850,7 +1848,7 @@ impl Parser {
             }
         };
         self.context_stack.push(Context::new_method());
-        let args = self.parse_params()?;
+        let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         match is_singleton_method {
@@ -1859,22 +1857,9 @@ impl Parser {
         }
     }
 
-    // ( )
-    // ( ident [, ident]* )
-    fn parse_params(&mut self) -> Result<Vec<Node>, RubyError> {
-        if self.consume_term()? {
-            return Ok(vec![]);
-        };
-        let paren_flag = self.consume_punct(Punct::LParen)?;
-        let mut args = vec![];
-        if paren_flag && self.consume_punct(Punct::RParen)? {
-            if !self.consume_term()? {
-                let loc = self.loc();
-                return Err(self.error_unexpected(loc, "Expect terminator"));
-            }
-            return Ok(args);
-        }
-        #[allow(dead_code)]
+    /// Parse parameters.
+    /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
+    fn parse_params(&mut self, terminator:TokenKind) -> Result<Vec<Node>, RubyError> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
             Reqired,
@@ -1884,6 +1869,8 @@ impl Parser {
             KeyWord,
             KWRest,
         }
+
+        let mut args = vec![];
         let mut state = Kind::Reqired;
         loop {
             let mut loc = self.loc();
@@ -1927,7 +1914,8 @@ impl Parser {
                     self.new_param(id, loc)?;
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
-                    let default = if self.peek_no_term()?.kind == TokenKind::Punct(Punct::Comma) {
+                    let next = self.peek_no_term()?.kind;
+                    let default = if next == TokenKind::Punct(Punct::Comma) || next == terminator || next == TokenKind::LineTerm {
                         None
                     } else {
                         Some(self.parse_arg()?)
@@ -1968,7 +1956,28 @@ impl Parser {
             if !self.consume_punct_no_term(Punct::Comma)? {
                 break;
             }
+        };
+        Ok(args)
+    }
+
+    // ( )
+    // ( ident [, ident]* )
+    fn parse_def_params(&mut self) -> Result<Vec<Node>, RubyError> {
+        if self.consume_term()? {
+            return Ok(vec![]);
+        };
+        let paren_flag = self.consume_punct(Punct::LParen)?;
+
+        if paren_flag && self.consume_punct(Punct::RParen)? {
+            if !self.consume_term()? {
+                let loc = self.loc();
+                return Err(self.error_unexpected(loc, "Expect terminator"));
+            }
+            return Ok(vec![]);
         }
+
+        let args = self.parse_params(TokenKind::Punct(Punct::RParen))?;
+
         if paren_flag {
             self.expect_punct(Punct::RParen)?
         };

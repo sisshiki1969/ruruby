@@ -1761,8 +1761,7 @@ impl VM {
     }
 
     pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> Result<Value, RubyError> {
-        let rec_class = receiver.get_class_object_for_method(&self.globals);
-        let method = self.get_instance_method(rec_class, method_id)?;
+        let method = self.get_method(receiver, method_id)?;
         let args = Args::new0(receiver, None);
         let val = self.eval_send(method, &args)?;
         Ok(val)
@@ -1971,6 +1970,18 @@ impl VM {
         self.add_instance_method(self.globals.builtins.object, id, info);
     }
 
+    /// Get method(MethodRef) for receiver.
+    pub fn get_method(
+        &mut self,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
+        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let method = self.get_instance_method(rec_class, method_id)?;
+        Ok(method)
+    }
+
+    /// Get instance method(MethodRef) for the class object.
     pub fn get_instance_method(
         &mut self,
         mut class: Value,

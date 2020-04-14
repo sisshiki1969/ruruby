@@ -1,1 +1,3 @@
-["The", "Ruby", "Hacker"].map.with_index do |elem, idx| p elem, idx end
+def acc *rest, opt=100
+    p rest, opt
+end
