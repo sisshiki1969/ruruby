@@ -225,6 +225,12 @@ fn array_map(vm: &mut VM, args: &Args) -> VMResult {
             return Ok(val);
         }
     };
+
+    if method == MethodRef::from(0) {
+        let val = Value::array(&vm.globals, ArrayRef::from(aref.elements.clone()));
+        return Ok(val);
+    }
+
     let iseq = vm.get_iseq(method)?;
     let mut res = vec![];
     let context = vm.context();
@@ -299,7 +305,22 @@ fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
 
 fn array_each(vm: &mut VM, args: &Args) -> VMResult {
     let aref = self_array!(args, vm);
-    let method = vm.expect_block(args.block)?;
+    //let method = vm.expect_block(args.block)?;
+
+    let method = match args.block {
+        Some(method) => method,
+        None => {
+            let id = vm.globals.get_ident_id("each");
+            let val = Value::enumerator(&vm.globals, args.self_value, id, Args::new(0));
+            return Ok(val);
+        }
+    };
+
+    if method == MethodRef::from(0) {
+        let val = Value::array(&vm.globals, ArrayRef::from(aref.elements.clone()));
+        return Ok(val);
+    }
+
     let context = vm.context();
     //let mut arg = Args::new1(context.self_value, None, Value::nil());
     let mut arg = Args::new(vm.get_iseq(method)?.req_params);

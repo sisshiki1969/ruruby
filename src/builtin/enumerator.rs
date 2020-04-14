@@ -96,17 +96,28 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             let id = vm.globals.get_ident_id("with_index");
-            let e = Value::enumerator(
-                &vm.globals,
-                args.self_value,
-                id,
-                Args::new0(args.self_value, None),
-            );
+            let e = Value::enumerator(&vm.globals, args.self_value, id, args.clone());
             return Ok(e);
         }
     };
 
-    let val = eref.base;
+    let val = match eref.base.as_enumerator() {
+        Some(_) => {
+            let enum_class = vm.globals.builtins.enumerator;
+            let method = vm.get_instance_method(enum_class, eref.method)?;
+            let mut args = eref.args.clone();
+            args.block = Some(MethodRef::from(0));
+            vm.eval_send(method, &args)?
+        }
+        None => {
+            let receiver = eref.base;
+            let rec_class = receiver.get_class_object_for_method(&vm.globals);
+            let each_method = vm.get_instance_method(rec_class, eref.method)?;
+            let args = Args::new0(receiver, MethodRef::from(0));
+            vm.eval_send(each_method, &args)?
+        }
+    };
+
     let ary = match val.as_array() {
         Some(ary) => ary,
         None => {
@@ -114,25 +125,58 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
             return Err(vm.error_type(format!("Must be Array. {}", inspect)));
         }
     };
-    let res_ary: Vec<Value> = ary
-        .elements
-        .iter()
-        .enumerate()
-        .map(|(i, v)| {
-            Value::array(
-                &vm.globals,
-                ArrayRef::from(vec![v.clone(), Value::fixnum(i as i64)]),
-            )
-        })
-        .collect();
-    let receiver = Value::array(&vm.globals, ArrayRef::from(res_ary));
-    eprintln!("{}", vm.val_inspect(receiver));
 
-    let rec_class = receiver.get_class_object_for_method(&vm.globals);
-    //let each_id = vm.globals.get_ident_id("each");
-    let each_method = vm.get_instance_method(rec_class, eref.method)?;
-    let args = Args::new0(receiver, block);
-    let val = vm.eval_send(each_method, &args)?;
+    if block == MethodRef::from(0) {
+        let res_ary: Vec<Value> = ary
+            .elements
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                Value::array(
+                    &vm.globals,
+                    ArrayRef::from(vec![v.clone(), Value::fixnum(i as i64)]),
+                )
+            })
+            .collect();
+        let res = Value::array(&vm.globals, ArrayRef::from(res_ary));
+        eprintln!("{}", vm.val_inspect(res));
+        return Ok(res);
+    } else {
+        let res_ary: Vec<(Value, Value)> = ary
+            .elements
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
+            .collect();
 
-    Ok(val)
+        let iseq = vm.get_iseq(block)?;
+        let mut res = vec![];
+        let context = vm.context();
+        let param_num = iseq.req_params;
+        let mut arg = Args::new(param_num);
+        arg.self_value = context.self_value;
+
+        if param_num == 0 {
+            for _ in &res_ary {
+                let val = vm.eval_block(block, &arg)?;
+                res.push(val);
+            }
+        } else if param_num == 1 {
+            for (v, _) in &res_ary {
+                arg[0] = v.clone();
+                let val = vm.eval_block(block, &arg)?;
+                res.push(val);
+            }
+        } else {
+            for (v, i) in &res_ary {
+                arg[0] = v.clone();
+                arg[1] = i.clone();
+                let val = vm.eval_block(block, &arg)?;
+                res.push(val);
+            }
+        };
+
+        let res = Value::array_from(&vm.globals, res);
+        Ok(res)
+    }
 }
