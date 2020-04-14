@@ -391,8 +391,15 @@ fn for4() {
 #[test]
 fn for5() {
     let program = "
-        assert(for a in 0..2 do end, 0..2)
-        assert(for a in 0..2 do if a == 1 then break end end, nil)
+        ans = for a in 0..2 do
+            end
+        assert(0..2, ans)
+        ans = for a in 0..2 do
+            if a == 1
+                break 4
+            end
+        end
+        assert(4, ans)
     ";
     assert_script(program);
 }

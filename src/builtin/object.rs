@@ -34,7 +34,7 @@ fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn inspect(vm: &mut VM, args: &Args) -> VMResult {
-    let inspect = vm.val_inspect(args.self_value);
+    let inspect = format!("{:?}", args.self_value);
     Ok(Value::string(&vm.globals, inspect))
 }
 

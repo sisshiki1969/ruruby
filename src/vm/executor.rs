@@ -1690,6 +1690,7 @@ impl VM {
                         Err(_) => "<ByteArray>".to_string(),
                     },
                 },
+                ObjKind::Range(_) => self.val_to_s(val),
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
@@ -1742,14 +1743,14 @@ impl VM {
                     format!("{}>", s)
                 }
                 _ => {
-                    /*
+                    eprintln!("{:?}", val);
                     let id = self.globals.get_ident_id("inspect");
                     self.send0(val, id)
                         .unwrap()
                         .as_string()
                         .unwrap()
-                        .to_string()*/
-                    format!("{:?}", val)
+                        .to_string()
+                    //format!("{:?}", val)
                 }
             },
             None => match val.unpack() {
