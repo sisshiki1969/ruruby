@@ -57,6 +57,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "+", string_add);
     globals.add_builtin_instance_method(class, "*", string_mul);
+    globals.add_builtin_instance_method(class, "%", string_rem);
     globals.add_builtin_instance_method(class, "start_with?", string_start_with);
     globals.add_builtin_instance_method(class, "to_sym", string_to_sym);
     globals.add_builtin_instance_method(class, "intern", string_to_sym);
@@ -93,6 +94,67 @@ fn string_mul(vm: &mut VM, args: &Args) -> VMResult {
 
     let res = lhs.repeat(rhs);
     Ok(Value::string(&vm.globals, res))
+}
+
+fn expect_char(vm: &mut VM, chars: &mut std::str::Chars) -> Result<char, RubyError> {
+    let ch = match chars.next() {
+        Some(ch) => ch,
+        None => return Err(vm.error_argument("Invalid format character")),
+    };
+    Ok(ch)
+}
+
+fn string_rem(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let _arguments = match args[0].as_array() {
+        Some(ary) => ary.elements.clone(),
+        None => vec![args[0]],
+    };
+    let mut format_str = vec![];
+    let mut chars = args.self_value.as_string().unwrap().chars();
+    let mut ch = match chars.next() {
+        Some(ch) => ch,
+        None => {
+            let res = Value::string(&vm.globals, "".to_string());
+            return Ok(res);
+        }
+    };
+    loop {
+        if ch != '%' {
+            format_str.push(ch);
+            ch = match chars.next() {
+                Some(c) => c,
+                None => break,
+            };
+            continue;
+        }
+        match chars.next() {
+            Some(c) if c == '%' => {
+                format_str.push('%');
+                ch = match chars.next() {
+                    Some(ch) => ch,
+                    None => break,
+                };
+                continue;
+            }
+            Some(c) => ch = c,
+            None => return Err(vm.error_argument("Incomplete format specifier. use '%%' instead.")),
+        };
+        let mut zero_flag = false;
+        if ch == '0' {
+            zero_flag = true;
+            ch = expect_char(vm, &mut chars)?;
+        }
+        let mut width = 0;
+        while '0' <= ch && ch <= '9' {
+            width = width * 10 + ch as u32 - '0' as u32;
+            ch = expect_char(vm, &mut chars)?;
+        }
+        eprintln!("{:?} {}", zero_flag, width);
+    }
+
+    let res = Value::string(&vm.globals, format_str.into_iter().collect());
+    Ok(res)
 }
 
 fn string_start_with(vm: &mut VM, args: &Args) -> VMResult {

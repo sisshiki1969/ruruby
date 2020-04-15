@@ -1420,13 +1420,13 @@ impl VM {
         lhs: Value,
         rhs: Value,
     ) -> Result<Value, RubyError> {
-        match lhs.get_instance_method(method) {
-            Some(mref) => {
+        match self.get_method(lhs, method) {
+            Ok(mref) => {
                 let arg = Args::new1(lhs, None, rhs);
                 let val = self.eval_send(mref, &arg)?;
                 Ok(val)
             }
-            None => {
+            Err(_) => {
                 let name = self.globals.get_ident_name(method);
                 Err(self.error_undefined_op(name, rhs, lhs))
             }
@@ -1524,7 +1524,7 @@ impl VM {
             (RV::FixNum(lhs), RV::FloatNum(rhs)) => Value::flonum(rem_floorf64(lhs as f64, rhs)),
             (RV::FloatNum(lhs), RV::FixNum(rhs)) => Value::flonum(rem_floorf64(lhs, rhs as f64)),
             (RV::FloatNum(lhs), RV::FloatNum(rhs)) => Value::flonum(rem_floorf64(lhs, rhs)),
-            (_, _) => return Err(self.error_undefined_op("%", rhs, lhs)),
+            (_, _) => return self.fallback_to_method(IdentId::_REM, lhs, rhs),
         };
         Ok(val)
     }
