@@ -292,6 +292,10 @@ impl Value {
         self.0 & 0b1 == 1
     }
 
+    pub fn is_packed_flonum(&self) -> bool {
+        self.0 & 0b10 == 2
+    }
+
     pub fn is_packed_num(&self) -> bool {
         self.0 & 0b11 != 0
     }
@@ -337,6 +341,27 @@ impl Value {
     pub fn expect_fixnum(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.as_fixnum() {
             Some(i) => Ok(i),
+            None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
+        }
+    }
+
+    pub fn as_flonum(&self) -> Option<f64> {
+        if self.is_packed_flonum() {
+            Some(self.as_packed_flonum())
+        } else {
+            match self.as_rvalue() {
+                Some(info) => match &info.kind {
+                    ObjKind::FloatNum(f) => Some(*f),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+    }
+
+    pub fn expect_flonum(&self, vm: &VM, msg: impl Into<String>) -> Result<f64, RubyError> {
+        match self.as_flonum() {
+            Some(f) => Ok(f),
             None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
         }
     }

@@ -37,6 +37,8 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "dup", array_dup);
     globals.add_builtin_instance_method(class, "clone", array_dup);
     globals.add_builtin_instance_method(class, "pack", array_pack);
+    globals.add_builtin_instance_method(class, "join", array_join);
+    globals.add_builtin_instance_method(class, "drop", array_drop);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -574,4 +576,38 @@ fn array_pack(vm: &mut VM, args: &Args) -> VMResult {
         v.push(i);
     }
     Ok(Value::bytes(&vm.globals, v))
+}
+
+fn array_join(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 1)?;
+    let sep = if args.len() == 0 {
+        ""
+    } else {
+        match args[0].as_string() {
+            Some(s) => s,
+            None => return Err(vm.error_argument("Must be String.")),
+        }
+    };
+    let aref = self_array!(args, vm);
+    let mut res = "".to_string();
+    for elem in &aref.elements {
+        let s = match elem.as_string() {
+            Some(s) => s,
+            None => return Err(vm.error_argument("Must be Array of String.")),
+        };
+        if res.is_empty() {
+            res = s.to_owned();
+        } else {
+            res = res + sep + s;
+        }
+    }
+    Ok(Value::string(&vm.globals, res))
+}
+
+fn array_drop(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let aref = self_array!(args, vm);
+    let num = args[0].expect_fixnum(vm, "An argument must be Integer.")? as usize;
+    let ary = &aref.elements[num..aref.elements.len()];
+    Ok(Value::array_from(&vm.globals, ary.to_vec()))
 }

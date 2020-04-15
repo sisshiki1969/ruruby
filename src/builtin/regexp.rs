@@ -176,6 +176,46 @@ impl Regexp {
         Ok(res)
     }
 
+    /// Replaces all non-overlapping matches in `given` string with `replace`.
+    pub fn replace_all_block(
+        vm: &mut VM,
+        re: &Regexp,
+        given: &str,
+        block: MethodRef,
+    ) -> Result<String, RubyError> {
+        let mut range = vec![];
+        let mut i = 0;
+        let mut last_captures = None;
+        loop {
+            match re.captures_from_pos(given, i) {
+                Ok(None) => break,
+                Ok(Some(captures)) => {
+                    let m = captures.get(0).unwrap();
+                    i = m.end();
+                    range.push((m.start(), m.end(), m.as_str()));
+                    last_captures = Some(captures);
+                }
+                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+            };
+        }
+        match last_captures {
+            Some(c) => Regexp::get_captures(vm, &c, given),
+            None => {}
+        }
+        let mut res = given.to_string();
+        let self_value = vm.context().self_value;
+        for (start, end, matched_str) in range.iter().rev() {
+            let matched = Value::string(&vm.globals, matched_str.to_string());
+            let result = vm.eval_block(block, &Args::new1(self_value, None, matched))?;
+            let replace = match result.as_string() {
+                Some(s) => s,
+                None => return Err(vm.error_argument("Result of the block must be String.")),
+            };
+            res.replace_range(start..end, replace);
+        }
+        Ok(res)
+    }
+
     pub fn find_one<'a>(
         vm: &mut VM,
         re: &Regexp,

@@ -72,6 +72,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "chars", string_chars);
     globals.add_builtin_instance_method(class, "sum", string_sum);
     globals.add_builtin_instance_method(class, "upcase", string_upcase);
+    globals.add_builtin_instance_method(class, "chomp", string_chomp);
 
     Value::class(globals, class)
 }
@@ -104,12 +105,22 @@ fn expect_char(vm: &mut VM, chars: &mut std::str::Chars) -> Result<char, RubyErr
     Ok(ch)
 }
 
+macro_rules! next_char {
+    ($ch:ident, $chars:ident) => {
+        $ch = match $chars.next() {
+            Some(c) => c,
+            None => break,
+        };
+    };
+}
+
 fn string_rem(vm: &mut VM, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let _arguments = match args[0].as_array() {
+    let arguments = match args[0].as_array() {
         Some(ary) => ary.elements.clone(),
         None => vec![args[0]],
     };
+    let mut arg_no = 0;
     let mut format_str = vec![];
     let mut chars = args.self_value.as_string().unwrap().chars();
     let mut ch = match chars.next() {
@@ -122,35 +133,90 @@ fn string_rem(vm: &mut VM, args: &Args) -> VMResult {
     loop {
         if ch != '%' {
             format_str.push(ch);
-            ch = match chars.next() {
-                Some(c) => c,
-                None => break,
-            };
+            next_char!(ch, chars);
             continue;
         }
         match chars.next() {
             Some(c) if c == '%' => {
                 format_str.push('%');
-                ch = match chars.next() {
-                    Some(ch) => ch,
-                    None => break,
-                };
+                next_char!(ch, chars);
                 continue;
             }
             Some(c) => ch = c,
             None => return Err(vm.error_argument("Incomplete format specifier. use '%%' instead.")),
         };
         let mut zero_flag = false;
+        // Zero-fill
         if ch == '0' {
             zero_flag = true;
             ch = expect_char(vm, &mut chars)?;
         }
-        let mut width = 0;
+        // Width
+        let mut width = 0usize;
         while '0' <= ch && ch <= '9' {
-            width = width * 10 + ch as u32 - '0' as u32;
+            width = width * 10 + ch as usize - '0' as usize;
             ch = expect_char(vm, &mut chars)?;
         }
-        eprintln!("{:?} {}", zero_flag, width);
+        // Precision
+        let mut precision = 0usize;
+        if ch == '.' {
+            ch = expect_char(vm, &mut chars)?;
+            while '0' <= ch && ch <= '9' {
+                precision = precision * 10 + ch as usize - '0' as usize;
+                ch = expect_char(vm, &mut chars)?;
+            }
+        };
+        if arguments.len() <= arg_no {
+            return Err(vm.error_argument("Too few arguments"));
+        };
+        // Specifier
+        let val = arguments[arg_no];
+        arg_no += 1;
+        let format = match ch {
+            'd' => {
+                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                if zero_flag {
+                    format!("{:0w$.p$}", val, w = width, p = precision)
+                } else {
+                    format!("{:w$.p$}", val, w = width, p = precision)
+                }
+            }
+            'b' => {
+                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                if zero_flag {
+                    format!("{:0w$b}", val, w = width)
+                } else {
+                    format!("{:w$b}", val, w = width)
+                }
+            }
+            'x' => {
+                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                if zero_flag {
+                    format!("{:0w$x}", val, w = width)
+                } else {
+                    format!("{:w$x}", val, w = width)
+                }
+            }
+            'X' => {
+                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                if zero_flag {
+                    format!("{:0w$X}", val, w = width)
+                } else {
+                    format!("{:w$X}", val, w = width)
+                }
+            }
+            'f' => {
+                let val = val.expect_flonum(&vm, "Invalid value for placeholder of Float.")?;
+                if zero_flag {
+                    format!("{:0w$.p$}", val, w = width, p = precision)
+                } else {
+                    format!("{:w$.p$}", val, w = width, p = precision)
+                }
+            }
+            _ => return Err(vm.error_argument("Invalid format character.")),
+        };
+        format_str.append(&mut format.chars().collect());
+        next_char!(ch, chars);
     }
 
     let res = Value::string(&vm.globals, format_str.into_iter().collect());
@@ -239,19 +305,36 @@ fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2, 2)?;
-    expect_string!(given, vm, args.self_value);
-    expect_string!(replace, vm, args[1]);
-    let res = if let Some(s) = args[0].as_string() {
-        let re = vm.regexp_from_string(&s)?;
-        Regexp::replace_all(vm, &re, given, replace)?
-    } else if let Some(re) = args[0].as_regexp() {
-        Regexp::replace_all(vm, &re.regexp, given, replace)?
-    } else {
-        return Err(vm.error_argument("1st arg must be RegExp or String."));
-    };
-
-    Ok(Value::string(&vm.globals, res))
+    match args.block {
+        Some(block) => {
+            vm.check_args_num(args.len(), 1, 1)?;
+            expect_string!(given, vm, args.self_value);
+            //expect_string!(replace, vm, args[1]);
+            let res = if let Some(s) = args[0].as_string() {
+                let re = vm.regexp_from_string(&s)?;
+                Regexp::replace_all_block(vm, &re, given, block)?
+            } else if let Some(re) = args[0].as_regexp() {
+                Regexp::replace_all_block(vm, &re.regexp, given, block)?
+            } else {
+                return Err(vm.error_argument("1st arg must be RegExp or String."));
+            };
+            Ok(Value::string(&vm.globals, res))
+        }
+        None => {
+            vm.check_args_num(args.len(), 2, 2)?;
+            expect_string!(given, vm, args.self_value);
+            expect_string!(replace, vm, args[1]);
+            let res = if let Some(s) = args[0].as_string() {
+                let re = vm.regexp_from_string(&s)?;
+                Regexp::replace_all(vm, &re, given, replace)?
+            } else if let Some(re) = args[0].as_regexp() {
+                Regexp::replace_all(vm, &re.regexp, given, replace)?
+            } else {
+                return Err(vm.error_argument("1st arg must be RegExp or String."));
+            };
+            Ok(Value::string(&vm.globals, res))
+        }
+    }
 }
 
 fn string_scan(vm: &mut VM, args: &Args) -> VMResult {
@@ -344,6 +427,13 @@ fn string_upcase(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, res))
 }
 
+fn string_chomp(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    expect_string!(string, vm, args.self_value);
+    let res = string.trim_end_matches('\n').to_string();
+    Ok(Value::string(&vm.globals, res))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -361,6 +451,28 @@ mod test {
         let program = r#"
         assert "rubyrubyrubyruby", "ruby" * 4
         assert "", "ruby" * 0
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_format() {
+        let program = r#"
+        assert "-12-", "-%d-" % 12
+        assert "-  12-", "-%4d-" % 12
+        assert "-0012-", "-%04d-" % 12
+        assert "-c-", "-%x-" % 12
+        assert "-   c-", "-%4x-" % 12
+        assert "-000c-", "-%04x-" % 12
+        assert "-C-", "-%X-" % 12
+        assert "-   C-", "-%4X-" % 12
+        assert "-000C-", "-%04X-" % 12
+        assert "-1001-", "-%b-" % 9
+        assert "-  1001-", "-%6b-" % 9
+        assert "-001001-", "-%06b-" % 9
+        assert "12.50000", "%08.5f" % 12.5
+        assert "0012.500", "%08.3f" % 12.5
+        assert "1.34", "%.2f" % 1.345
         "#;
         assert_script(program);
     }
@@ -418,6 +530,22 @@ mod test {
         assert [["f"], ["o"], ["o"], ["b"], ["a"], ["r"]], "foobar".scan(/(.)/)
         assert [["ba", "r", ""], ["ba", "z", ""], ["ba", "r", ""], ["ba", "z", ""]], "foobarbazfoobarbaz".scan(/(ba)(.)()/)
         "foobarbazfoobarbaz".scan(/ba./) {|x| puts x}
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_upcase() {
+        let program = r#"
+        assert "RUBY IS GREAT.", "ruby is great.".upcase
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_chomp() {
+        let program = r#"
+        assert "Ruby", "Ruby\n\n\n".chomp
         "#;
         assert_script(program);
     }
