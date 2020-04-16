@@ -25,6 +25,7 @@ impl Kernel {
         globals.add_builtin_instance_method(kernel_class, "raise", raise);
         globals.add_builtin_instance_method(kernel_class, "rand", rand);
         globals.add_builtin_instance_method(kernel_class, "loop", loop_);
+        globals.add_builtin_instance_method(kernel_class, "exit", exit);
         let kernel = Value::class(globals, kernel_class);
         return kernel;
 
@@ -245,7 +246,8 @@ impl Kernel {
 
         fn file_(vm: &mut VM, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
-            let path = vm.root_path.last().unwrap().clone();
+            //let path = vm.root_path.last().unwrap().clone();
+            let path = vm.context().iseq_ref.source_info.path.clone();
             Ok(Value::string(
                 &vm.globals,
                 path.to_string_lossy().to_string(),
@@ -271,6 +273,16 @@ impl Kernel {
             loop {
                 vm.eval_block(method, &arg)?;
             }
+        }
+
+        fn exit(vm: &mut VM, args: &Args) -> VMResult {
+            vm.check_args_num(args.len(), 0, 1)?;
+            let code = if args.len() == 0 {
+                0
+            } else {
+                args[0].expect_fixnum(vm, "Expect Integer.")?
+            };
+            std::process::exit(code as i32);
         }
     }
 }

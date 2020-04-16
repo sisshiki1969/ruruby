@@ -64,6 +64,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "split", string_split);
     globals.add_builtin_instance_method(class, "sub", string_sub);
     globals.add_builtin_instance_method(class, "gsub", string_gsub);
+    globals.add_builtin_instance_method(class, "gsub!", string_gsub_);
     globals.add_builtin_instance_method(class, "scan", string_scan);
     globals.add_builtin_instance_method(class, "=~", string_rmatch);
     globals.add_builtin_instance_method(class, "tr", string_tr);
@@ -305,34 +306,47 @@ fn string_sub(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn string_gsub(vm: &mut VM, args: &Args) -> VMResult {
+    let (res, _) = gsub(vm, args)?;
+    Ok(Value::string(&vm.globals, res))
+}
+
+fn string_gsub_(vm: &mut VM, args: &Args) -> VMResult {
+    let (res, changed) = gsub(vm, args)?;
+    *args.self_value.rvalue_mut() = RValue::new_string(&vm.globals, res);
+    let res = if changed {
+        args.self_value
+    } else {
+        Value::nil()
+    };
+    Ok(res)
+}
+
+fn gsub(vm: &mut VM, args: &Args) -> Result<(String, bool), RubyError> {
     match args.block {
         Some(block) => {
             vm.check_args_num(args.len(), 1, 1)?;
             expect_string!(given, vm, args.self_value);
-            //expect_string!(replace, vm, args[1]);
-            let res = if let Some(s) = args[0].as_string() {
+            if let Some(s) = args[0].as_string() {
                 let re = vm.regexp_from_string(&s)?;
-                Regexp::replace_all_block(vm, &re, given, block)?
+                Ok(Regexp::replace_all_block(vm, &re, given, block)?)
             } else if let Some(re) = args[0].as_regexp() {
-                Regexp::replace_all_block(vm, &re.regexp, given, block)?
+                Ok(Regexp::replace_all_block(vm, &re.regexp, given, block)?)
             } else {
                 return Err(vm.error_argument("1st arg must be RegExp or String."));
-            };
-            Ok(Value::string(&vm.globals, res))
+            }
         }
         None => {
             vm.check_args_num(args.len(), 2, 2)?;
             expect_string!(given, vm, args.self_value);
             expect_string!(replace, vm, args[1]);
-            let res = if let Some(s) = args[0].as_string() {
+            if let Some(s) = args[0].as_string() {
                 let re = vm.regexp_from_string(&s)?;
-                Regexp::replace_all(vm, &re, given, replace)?
+                Ok(Regexp::replace_all(vm, &re, given, replace)?)
             } else if let Some(re) = args[0].as_regexp() {
-                Regexp::replace_all(vm, &re.regexp, given, replace)?
+                Ok(Regexp::replace_all(vm, &re.regexp, given, replace)?)
             } else {
                 return Err(vm.error_argument("1st arg must be RegExp or String."));
-            };
-            Ok(Value::string(&vm.globals, res))
+            }
         }
     }
 }
@@ -352,8 +366,21 @@ fn string_scan(vm: &mut VM, args: &Args) -> VMResult {
         Some(block) => {
             let self_value = vm.context().self_value;
             for arg in vec {
-                let block_args = Args::new1(self_value, None, arg);
-                vm.eval_block(block, &block_args)?;
+                match arg.as_array() {
+                    Some(ary) => {
+                        let len = ary.elements.len();
+                        let mut block_args = Args::new(len);
+                        block_args.self_value = self_value;
+                        for i in 0..len {
+                            block_args[i] = ary.elements[i]
+                        }
+                        vm.eval_block(block, &block_args)?;
+                    }
+                    None => {
+                        let block_args = Args::new1(self_value, None, arg);
+                        vm.eval_block(block, &block_args)?;
+                    }
+                }
             }
             Ok(args.self_value)
         }

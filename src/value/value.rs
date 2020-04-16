@@ -196,6 +196,10 @@ impl Value {
         unsafe { &*(self.0 as *mut RValue) }
     }
 
+    pub fn rvalue_mut(&self) -> &mut RValue {
+        unsafe { &mut *(self.0 as *mut RValue) }
+    }
+
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
         match self.as_rvalue() {
             None => {

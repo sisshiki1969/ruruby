@@ -585,20 +585,17 @@ fn array_join(vm: &mut VM, args: &Args) -> VMResult {
     } else {
         match args[0].as_string() {
             Some(s) => s,
-            None => return Err(vm.error_argument("Must be String.")),
+            None => return Err(vm.error_argument("Seperator must be String.")),
         }
     };
     let aref = self_array!(args, vm);
     let mut res = "".to_string();
     for elem in &aref.elements {
-        let s = match elem.as_string() {
-            Some(s) => s,
-            None => return Err(vm.error_argument("Must be Array of String.")),
-        };
+        let s = vm.val_to_s(*elem);
         if res.is_empty() {
             res = s.to_owned();
         } else {
-            res = res + sep + s;
+            res = res + sep + s.as_str();
         }
     }
     Ok(Value::string(&vm.globals, res))

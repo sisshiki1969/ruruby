@@ -2,17 +2,6 @@ use core::ptr::NonNull;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const INITIALIZE: u32 = 1;
-const OBJECT: u32 = 2;
-const NEW: u32 = 3;
-const NAME: u32 = 4;
-const _ADD: u32 = 5;
-const _SUB: u32 = 6;
-const _MUL: u32 = 7;
-const _POW: u32 = 8;
-const _SHL: u32 = 9;
-const _REM: u32 = 10;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
     pub kind: T,
@@ -279,23 +268,23 @@ impl std::ops::Deref for OptionalId {
     }
 }
 
-macro_rules! to {
-    ($constant:ident) => {
-        unsafe { std::num::NonZeroU32::new_unchecked($constant) }
+macro_rules! id {
+    ($constant:expr) => {
+        IdentId(unsafe { std::num::NonZeroU32::new_unchecked($constant) })
     };
 }
 
 impl IdentId {
-    pub const INITIALIZE: IdentId = IdentId(to!(INITIALIZE));
-    pub const OBJECT: IdentId = IdentId(to!(OBJECT));
-    pub const NEW: IdentId = IdentId(to!(NEW));
-    pub const NAME: IdentId = IdentId(to!(NAME));
-    pub const _ADD: IdentId = IdentId(to!(_ADD));
-    pub const _SUB: IdentId = IdentId(to!(_SUB));
-    pub const _MUL: IdentId = IdentId(to!(_MUL));
-    pub const _POW: IdentId = IdentId(to!(_POW));
-    pub const _SHL: IdentId = IdentId(to!(_SHL));
-    pub const _REM: IdentId = IdentId(to!(_REM));
+    pub const INITIALIZE: IdentId = id!(1);
+    pub const OBJECT: IdentId = id!(2);
+    pub const NEW: IdentId = id!(3);
+    pub const NAME: IdentId = id!(4);
+    pub const _ADD: IdentId = id!(5);
+    pub const _SUB: IdentId = id!(6);
+    pub const _MUL: IdentId = id!(7);
+    pub const _POW: IdentId = id!(8);
+    pub const _SHL: IdentId = id!(9);
+    pub const _REM: IdentId = id!(10);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -312,24 +301,24 @@ impl IdentifierTable {
             table_rev: HashMap::new(),
             ident_id: 20,
         };
-        table.set_ident_id("<null>", 0);
-        table.set_ident_id("initialize", INITIALIZE);
-        table.set_ident_id("Object", OBJECT);
-        table.set_ident_id("new", NEW);
-        table.set_ident_id("name", NAME);
-        table.set_ident_id("+", _ADD);
-        table.set_ident_id("-", _SUB);
-        table.set_ident_id("*", _MUL);
-        table.set_ident_id("**", _POW);
-        table.set_ident_id("<<", _SHL);
-        table.set_ident_id("%", _REM);
+        table.set_ident_id("<null>", IdentId::from(0));
+        table.set_ident_id("initialize", IdentId::INITIALIZE);
+        table.set_ident_id("Object", IdentId::OBJECT);
+        table.set_ident_id("new", IdentId::NEW);
+        table.set_ident_id("name", IdentId::NAME);
+        table.set_ident_id("+", IdentId::_ADD);
+        table.set_ident_id("-", IdentId::_SUB);
+        table.set_ident_id("*", IdentId::_MUL);
+        table.set_ident_id("**", IdentId::_POW);
+        table.set_ident_id("<<", IdentId::_SHL);
+        table.set_ident_id("%", IdentId::_REM);
         table
     }
 
-    fn set_ident_id(&mut self, name: impl Into<String>, id: u32) {
+    fn set_ident_id(&mut self, name: impl Into<String>, id: IdentId) {
         let name = name.into();
-        self.table.insert(name.clone(), id);
-        self.table_rev.insert(id, name);
+        self.table.insert(name.clone(), id.into());
+        self.table_rev.insert(id.into(), name);
     }
 
     pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {

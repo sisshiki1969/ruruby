@@ -966,11 +966,11 @@ impl VM {
                         }
                     };
                     match arg.pop().unwrap() {
-                        'i' => arg.insert_str(0, "(?i)"),
+                        'i' => arg.insert_str(0, "(?mi)"),
                         'm' => arg.insert_str(0, "(?m)"),
-                        'x' => arg.insert_str(0, "(?x)"),
-                        'o' => arg.insert_str(0, "(?o)"),
-                        _ => {}
+                        'x' => arg.insert_str(0, "(?mx)"),
+                        'o' => arg.insert_str(0, "(?mo)"),
+                        _ => arg.insert_str(0, "(?m)"),
                     };
                     let regexpref = match RegexpRef::from_string(&arg) {
                         Ok(regex) => regex,

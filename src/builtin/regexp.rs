@@ -149,7 +149,7 @@ impl Regexp {
         re: &Regexp,
         given: &str,
         replace: &str,
-    ) -> Result<String, RubyError> {
+    ) -> Result<(String, bool), RubyError> {
         let mut range = vec![];
         let mut i = 0;
         let mut last_captures = None;
@@ -173,7 +173,7 @@ impl Regexp {
         for (start, end) in range.iter().rev() {
             res.replace_range(start..end, replace);
         }
-        Ok(res)
+        Ok((res, range.len() != 0))
     }
 
     /// Replaces all non-overlapping matches in `given` string with `replace`.
@@ -182,7 +182,7 @@ impl Regexp {
         re: &Regexp,
         given: &str,
         block: MethodRef,
-    ) -> Result<String, RubyError> {
+    ) -> Result<(String, bool), RubyError> {
         let mut range = vec![];
         let mut i = 0;
         let mut last_captures = None;
@@ -213,7 +213,7 @@ impl Regexp {
             };
             res.replace_range(start..end, replace);
         }
-        Ok(res)
+        Ok((res, range.len() != 0))
     }
 
     pub fn find_one<'a>(
@@ -239,6 +239,7 @@ impl Regexp {
             match re.captures_from_pos(given, idx) {
                 Ok(None) => break,
                 Ok(Some(captures)) => {
+                    //eprintln!("{:?}", captures);
                     let m = captures.get(0).unwrap();
                     idx = m.end();
                     match captures.len() {
@@ -250,9 +251,13 @@ impl Regexp {
                         len => {
                             let mut vec = vec![];
                             for i in 1..len {
-                                let m = captures.get(i).unwrap();
-                                let s = given[m.start()..m.end()].to_string();
-                                vec.push(Value::string(&vm.globals, s));
+                                match captures.get(i) {
+                                    Some(m) => {
+                                        let s = given[m.start()..m.end()].to_string();
+                                        vec.push(Value::string(&vm.globals, s));
+                                    }
+                                    None => vec.push(Value::nil()),
+                                }
                             }
                             let val = Value::array_from(&vm.globals, vec);
                             ary.push(val);
