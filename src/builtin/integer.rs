@@ -38,7 +38,19 @@ fn times(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn step(vm: &mut VM, args: &Args) -> VMResult {
+    //let method = vm.expect_block(args.block)?;
+    let method = match args.block {
+        Some(method) => method,
+        None => {
+            let id = vm.globals.get_ident_id("step");
+            let val = Value::enumerator(&vm.globals, id, args.clone());
+            eprintln!("method 0");
+            return Ok(val);
+        }
+    };
+    eprintln!("method 1");
     vm.check_args_num(args.len(), 1, 2)?;
+
     let start = args.self_value.as_fixnum().unwrap();
     let limit = args[0].as_fixnum().unwrap();
     let step = if args.len() == 2 {
@@ -51,7 +63,20 @@ fn step(vm: &mut VM, args: &Args) -> VMResult {
         1
     };
 
-    let method = vm.expect_block(args.block)?;
+    if method == MethodRef::from(0) {
+        let mut ary = vec![];
+        let mut i = start;
+        loop {
+            if step > 0 && i > limit || step < 0 && limit > i {
+                break;
+            }
+            ary.push(Value::fixnum(i));
+            i += step;
+        }
+        let val = Value::array_from(&vm.globals, ary);
+        return Ok(val);
+    }
+
     let context = vm.context();
     let self_value = context.self_value;
     let mut arg = Args::new1(self_value, None, Value::nil());

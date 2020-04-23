@@ -27,6 +27,12 @@ impl From<u32> for MethodRef {
     }
 }
 
+impl MethodRef {
+    pub fn is_none(&self) -> bool {
+        self.0 == 0
+    }
+}
+
 #[derive(Clone)]
 pub enum MethodInfo {
     RubyFunc { iseq: ISeqRef },

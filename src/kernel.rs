@@ -54,10 +54,7 @@ impl Kernel {
             if args.len() == 1 {
                 Ok(args[0])
             } else {
-                Ok(Value::array_from(
-                    &vm.globals,
-                    args.get_slice(0, args.len()).to_vec(),
-                ))
+                Ok(Value::array_from(&vm.globals, args.to_vec()))
             }
         }
 

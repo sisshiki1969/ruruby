@@ -218,53 +218,26 @@ fn array_sub(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn array_map(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
     let aref = self_array!(args, vm);
     let method = match args.block {
         Some(method) => method,
         None => {
             let id = vm.globals.get_ident_id("map");
-            let val = Value::enumerator(&vm.globals, args.self_value, id, args.clone());
+            let val = Value::enumerator(&vm.globals, id, args.clone());
             return Ok(val);
         }
     };
 
-    if method == MethodRef::from(0) {
-        let val = Value::array(&vm.globals, ArrayRef::from(aref.elements.clone()));
-        return Ok(val);
-    }
-
-    let iseq = vm.get_iseq(method)?;
     let mut res = vec![];
     let context = vm.context();
-    let param_num = iseq.req_params;
-    let mut arg = Args::new(param_num);
-    arg.self_value = context.self_value;
+    let mut args = Args::new1(context.self_value, None, Value::nil());
 
-    if param_num == 0 {
-        for _elem in &aref.elements {
-            let val = vm.eval_block(method, &arg)?;
-            res.push(val);
-        }
-    } else if param_num == 1 {
-        for elem in &aref.elements {
-            arg[0] = *elem;
-            let val = vm.eval_block(method, &arg)?;
-            res.push(val);
-        }
-    } else {
-        for elem in &aref.elements {
-            match elem.as_array() {
-                Some(ary) => {
-                    for i in 0..param_num {
-                        arg[i] = ary.elements[i];
-                    }
-                }
-                None => arg[0] = *elem,
-            }
-            let val = vm.eval_block(method, &arg)?;
-            res.push(val);
-        }
-    };
+    for elem in &aref.elements {
+        args[0] = *elem;
+        let val = vm.eval_block(method, &args)?;
+        res.push(val);
+    }
 
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
@@ -306,6 +279,7 @@ fn array_flat_map(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 fn array_each(vm: &mut VM, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
     let aref = self_array!(args, vm);
     //let method = vm.expect_block(args.block)?;
 
@@ -313,15 +287,10 @@ fn array_each(vm: &mut VM, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             let id = vm.globals.get_ident_id("each");
-            let val = Value::enumerator(&vm.globals, args.self_value, id, Args::new(0));
+            let val = Value::enumerator(&vm.globals, id, args.clone());
             return Ok(val);
         }
     };
-
-    if method == MethodRef::from(0) {
-        let val = Value::array(&vm.globals, ArrayRef::from(aref.elements.clone()));
-        return Ok(val);
-    }
 
     let context = vm.context();
     //let mut arg = Args::new1(context.self_value, None, Value::nil());

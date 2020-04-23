@@ -1859,6 +1859,17 @@ impl VM {
         args: &Args,
         is_block: bool,
     ) -> Result<Value, RubyError> {
+        if methodref.is_none() {
+            let res = match args.len() {
+                0 => Value::nil(),
+                1 => args[0],
+                _ => {
+                    let ary = args.to_vec();
+                    Value::array_from(&self.globals, ary)
+                }
+            };
+            return Ok(res);
+        };
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;

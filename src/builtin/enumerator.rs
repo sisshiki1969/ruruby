@@ -2,22 +2,22 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct EnumInfo {
-    base: Value,
     method: IdentId,
     args: Args,
 }
 
 impl EnumInfo {
-    pub fn new(base: Value, method: IdentId, args: Args) -> Self {
-        EnumInfo { base, method, args }
+    pub fn new(method: IdentId, mut args: Args) -> Self {
+        args.block = Some(MethodRef::from(0));
+        EnumInfo { method, args }
     }
 }
 
 pub type EnumRef = Ref<EnumInfo>;
 
 impl EnumRef {
-    pub fn from(base: Value, method: IdentId, args: Args) -> Self {
-        EnumRef::new(EnumInfo::new(base, method, args))
+    pub fn from(method: IdentId, args: Args) -> Self {
+        EnumRef::new(EnumInfo::new(method, args))
     }
 }
 
@@ -46,15 +46,15 @@ fn enum_new(vm: &mut VM, args: &Args) -> VMResult {
             return Err(vm.error_argument("2nd arg must be Symbol."));
         };
         let method = args[1].as_packed_symbol();
-        let mut new_args = Args::new(args.len() - 2);
-        for i in 0..args.len() - 2 {
-            new_args[i] = args[i + 2];
+        let mut new_args = Args::new(args.len() - 1);
+        for i in 0..args.len() - 1 {
+            new_args[i] = args[i + 1];
         }
-        new_args.self_value = args.self_value;
+        new_args.self_value = obj;
         new_args.block = None;
         (method, new_args)
     };
-    let val = Value::enumerator(&vm.globals, obj, method, new_args);
+    let val = Value::enumerator(&vm.globals, method, new_args);
     Ok(val)
 }
 
@@ -64,7 +64,7 @@ fn inspect(vm: &mut VM, args: &Args) -> VMResult {
     let eref = vm.expect_enumerator(args.self_value, "Expect Enumerator.")?;
     let inspect = format!(
         "#<Enumerator: {}:{}>",
-        vm.val_inspect(eref.base),
+        vm.val_inspect(eref.args.self_value),
         vm.globals.get_ident_name(eref.method)
     );
     Ok(Value::string(&vm.globals, inspect))
@@ -80,10 +80,21 @@ fn each(vm: &mut VM, args: &Args) -> VMResult {
         }
     };
 
-    let receiver = eref.base;
+    let receiver = eref.args.self_value;
     let each_method = vm.get_method(receiver, eref.method)?;
-    let args = Args::new0(receiver, block);
-    let val = vm.eval_send(each_method, &args)?;
+    let val = vm.eval_send(each_method, &eref.args)?;
+
+    match val.as_array() {
+        Some(ary) => {
+            let context = vm.context();
+            let mut args = Args::new1(context.self_value, None, Value::nil());
+            for elem in &ary.elements {
+                args[0] = *elem;
+                let _ = vm.eval_block(block, &args)?;
+            }
+        }
+        None => return Err(vm.error_argument("Must be Array.")),
+    };
 
     Ok(val)
 }
@@ -96,16 +107,14 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
         None => {
             // return Enumerator
             let id = vm.globals.get_ident_id("with_index");
-            let e = Value::enumerator(&vm.globals, args.self_value, id, args.clone());
+            let e = Value::enumerator(&vm.globals, id, args.clone());
             return Ok(e);
         }
     };
 
-    let receiver = eref.base;
+    let receiver = eref.args.self_value;
     let method = vm.get_method(receiver, eref.method)?;
-    let mut args = eref.args.clone();
-    args.block = Some(MethodRef::from(0));
-    let val = vm.eval_send(method, &args)?;
+    let val = vm.eval_send(method, &eref.args)?;
 
     let ary = match val.as_array() {
         Some(ary) => ary,
@@ -115,43 +124,26 @@ fn with_index(vm: &mut VM, args: &Args) -> VMResult {
         }
     };
 
-    if block == MethodRef::from(0) {
-        let res_ary: Vec<Value> = ary
-            .elements
-            .iter()
-            .enumerate()
-            .map(|(i, v)| {
-                Value::array(
-                    &vm.globals,
-                    ArrayRef::from(vec![v.clone(), Value::fixnum(i as i64)]),
-                )
-            })
-            .collect();
-        let res = Value::array(&vm.globals, ArrayRef::from(res_ary));
-        eprintln!("{}", vm.val_inspect(res));
-        return Ok(res);
-    } else {
-        let res_ary: Vec<(Value, Value)> = ary
-            .elements
-            .iter()
-            .enumerate()
-            .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
-            .collect();
+    let res_ary: Vec<(Value, Value)> = ary
+        .elements
+        .iter()
+        .enumerate()
+        .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
+        .collect();
 
-        let mut res = vec![];
-        let mut arg = Args::new(2);
-        arg.self_value = vm.context().self_value;
+    let mut res = vec![];
+    let mut arg = Args::new(2);
+    arg.self_value = vm.context().self_value;
 
-        for (v, i) in &res_ary {
-            arg[0] = v.clone();
-            arg[1] = i.clone();
-            let val = vm.eval_block(block, &arg)?;
-            res.push(val);
-        }
-
-        let res = Value::array_from(&vm.globals, res);
-        Ok(res)
+    for (v, i) in &res_ary {
+        arg[0] = v.clone();
+        arg[1] = i.clone();
+        let val = vm.eval_block(block, &arg)?;
+        res.push(val);
     }
+
+    let res = Value::array_from(&vm.globals, res);
+    Ok(res)
 }
 
 #[cfg(test)]

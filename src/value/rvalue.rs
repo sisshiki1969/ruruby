@@ -173,8 +173,8 @@ impl RValue {
         }
     }
 
-    pub fn new_enumerator(globals: &Globals, base: Value, method: IdentId, args: Args) -> Self {
-        let enum_info = EnumRef::from(base, method, args);
+    pub fn new_enumerator(globals: &Globals, method: IdentId, args: Args) -> Self {
+        let enum_info = EnumRef::from(method, args);
         RValue {
             class: globals.builtins.enumerator,
             var_table: Box::new(HashMap::new()),
