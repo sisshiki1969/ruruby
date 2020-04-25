@@ -30,7 +30,7 @@ impl Kernel {
         return kernel;
 
         /// Built-in function "puts".
-        fn puts(vm: &mut VM, args: &Args) -> VMResult {
+        fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             fn flatten(vm: &VM, val: Value) {
                 match val.as_array() {
                     None => println!("{}", vm.val_to_s(val)),
@@ -47,7 +47,7 @@ impl Kernel {
             Ok(Value::nil())
         }
 
-        fn p(vm: &mut VM, args: &Args) -> VMResult {
+        fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             for i in 0..args.len() {
                 println!("{}", vm.val_inspect(args[i]));
             }
@@ -59,7 +59,7 @@ impl Kernel {
         }
 
         /// Built-in function "print".
-        fn print(vm: &mut VM, args: &Args) -> VMResult {
+        fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             for i in 0..args.len() {
                 match args[i].as_bytes() {
                     Some(bytes) => {
@@ -73,7 +73,7 @@ impl Kernel {
         }
 
         /// Built-in function "assert".
-        fn assert(vm: &mut VM, args: &Args) -> VMResult {
+        fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 2, 2)?;
             if !vm.eval_eq(args[0], args[1])? {
                 panic!(
@@ -87,7 +87,7 @@ impl Kernel {
             }
         }
 
-        fn require(vm: &mut VM, args: &Args) -> VMResult {
+        fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let file_name = match args[0].as_string() {
                 Some(string) => string,
@@ -99,7 +99,7 @@ impl Kernel {
             Ok(Value::bool(true))
         }
 
-        fn require_relative(vm: &mut VM, args: &Args) -> VMResult {
+        fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let context = vm.context();
             let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
@@ -151,24 +151,24 @@ impl Kernel {
         }
 
         /// Built-in function "block_given?".
-        fn block_given(vm: &mut VM, _args: &Args) -> VMResult {
+        fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
             Ok(Value::bool(vm.context().block.is_some()))
         }
 
-        fn method(vm: &mut VM, args: &Args) -> VMResult {
+        fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let name = match args[0].as_symbol() {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
             };
-            let method = vm.get_method(args.self_value, name)?;
-            let val = Value::method(&vm.globals, name, args.self_value, method);
+            let method = vm.get_method(self_val, name)?;
+            let val = Value::method(&vm.globals, name, self_val, method);
             Ok(val)
         }
 
-        fn isa(vm: &mut VM, args: &Args) -> VMResult {
+        fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
-            let mut recv_class = args.self_value.get_class_object(&vm.globals);
+            let mut recv_class = self_val.get_class_object(&vm.globals);
             loop {
                 if recv_class.id() == args[0].id() {
                     return Ok(Value::true_val());
@@ -180,13 +180,13 @@ impl Kernel {
             }
         }
 
-        fn tos(vm: &mut VM, args: &Args) -> VMResult {
+        fn tos(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
-            let s = vm.val_to_s(args.self_value);
+            let s = vm.val_to_s(self_val);
             Ok(Value::string(&vm.globals, s))
         }
 
-        fn integer(vm: &mut VM, args: &Args) -> VMResult {
+        fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1, 1)?;
             let self_ = args[0];
             let val = if self_.is_packed_value() {
@@ -231,7 +231,7 @@ impl Kernel {
             Ok(Value::fixnum(val))
         }
 
-        fn dir(vm: &mut VM, args: &Args) -> VMResult {
+        fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
@@ -241,7 +241,7 @@ impl Kernel {
             ))
         }
 
-        fn file_(vm: &mut VM, args: &Args) -> VMResult {
+        fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 0)?;
             //let path = vm.root_path.last().unwrap().clone();
             let path = vm.context().iseq_ref.source_info.path.clone();
@@ -251,7 +251,7 @@ impl Kernel {
             ))
         }
 
-        fn raise(vm: &mut VM, args: &Args) -> VMResult {
+        fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 2)?;
             for i in 0..args.len() {
                 eprintln!("{}", vm.val_inspect(args[i]));
@@ -259,20 +259,20 @@ impl Kernel {
             Err(vm.error_unimplemented("error"))
         }
 
-        fn rand(_vm: &mut VM, _args: &Args) -> VMResult {
+        fn rand(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
             let num = rand::random();
             Ok(Value::flonum(num))
         }
 
-        fn loop_(vm: &mut VM, args: &Args) -> VMResult {
+        fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             let method = vm.expect_block(args.block)?;
-            let arg = Args::new0(args.self_value, None);
+            let arg = Args::new0(None);
             loop {
                 vm.eval_block(method, &arg)?;
             }
         }
 
-        fn exit(vm: &mut VM, args: &Args) -> VMResult {
+        fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 0, 1)?;
             let code = if args.len() == 0 {
                 0

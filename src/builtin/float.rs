@@ -11,9 +11,9 @@ pub fn init_float(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn floor(vm: &mut VM, args: &Args) -> VMResult {
+fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    match args.self_value.unpack() {
+    match self_val.unpack() {
         RV::FloatNum(f) => {
             let i = f.floor() as i64;
             Ok(Value::fixnum(i))

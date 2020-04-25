@@ -19,33 +19,33 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "eval", eval);
 }
 
-fn class(vm: &mut VM, args: &Args) -> VMResult {
-    let class = args.self_value.get_class_object(&vm.globals);
+fn class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let class = self_val.get_class_object(&vm.globals);
     Ok(class)
 }
 
-fn object_id(_vm: &mut VM, args: &Args) -> VMResult {
-    let id = args.self_value.id();
+fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let id = self_val.id();
     Ok(Value::fixnum(id as i64))
 }
 
-fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
-    vm.get_singleton_class(args.self_value)
+fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.get_singleton_class(self_val)
 }
 
-fn inspect(vm: &mut VM, args: &Args) -> VMResult {
-    let inspect = format!("{:?}", args.self_value);
+fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let inspect = format!("{:?}", self_val);
     Ok(Value::string(&vm.globals, inspect))
 }
 
-fn eql(vm: &mut VM, args: &Args) -> VMResult {
+fn eql(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    Ok(Value::bool(args.self_value == args[0]))
+    Ok(Value::bool(self_val == args[0]))
 }
 
-fn toi(vm: &mut VM, args: &Args) -> VMResult {
+fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     //vm.check_args_num(args.len(), 1, 1)?;
-    let self_ = args.self_value;
+    let self_ = self_val;
     let num = match &self_.as_rvalue() {
         Some(info) => match &info.kind {
             ObjKind::FixNum(val) => *val,
@@ -67,7 +67,7 @@ fn toi(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::fixnum(num))
 }
 
-fn instance_variable_set(vm: &mut VM, args: &Args) -> VMResult {
+fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
     let name = args[0];
     let val = args[1];
@@ -78,12 +78,12 @@ fn instance_variable_set(vm: &mut VM, args: &Args) -> VMResult {
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
-    let mut self_obj = args.self_value.as_object();
+    let mut self_obj = self_val.as_object();
     self_obj.set_var(var_id, val);
     Ok(val)
 }
 
-fn instance_variable_get(vm: &mut VM, args: &Args) -> VMResult {
+fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let name = args[0];
     let var_id = match name.as_symbol() {
@@ -93,7 +93,7 @@ fn instance_variable_get(vm: &mut VM, args: &Args) -> VMResult {
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
-    let self_obj = args.self_value.as_object();
+    let self_obj = self_val.as_object();
     let val = match self_obj.get_var(var_id) {
         Some(val) => val,
         None => Value::nil(),
@@ -101,9 +101,9 @@ fn instance_variable_get(vm: &mut VM, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_variables(vm: &mut VM, args: &Args) -> VMResult {
+fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut receiver = args.self_value.as_object();
+    let mut receiver = self_val.as_object();
     let res = receiver
         .var_table()
         .keys()
@@ -113,12 +113,12 @@ fn instance_variables(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, res))
 }
 
-fn freeze(vm: &mut VM, args: &Args) -> VMResult {
+fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    Ok(args.self_value)
+    Ok(self_val)
 }
 
-fn super_(vm: &mut VM, args: &Args) -> VMResult {
+fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let context = vm.context();
     let iseq = context.iseq_ref;
@@ -126,7 +126,7 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
         let class = match iseq.class_defined {
             Some(list) => list.class,
             None => {
-                let inspect = vm.val_inspect(args.self_value);
+                let inspect = vm.val_inspect(self_val);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
@@ -137,7 +137,7 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
         let method = match class.superclass() {
             Some(class) => vm.get_instance_method(class, m)?,
             None => {
-                let inspect = vm.val_inspect(args.self_value);
+                let inspect = vm.val_inspect(self_val);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
                     vm.globals.get_ident_name(m),
@@ -146,25 +146,25 @@ fn super_(vm: &mut VM, args: &Args) -> VMResult {
             }
         };
         let param_num = iseq.param_ident.len();
-        let mut args = Args::new0(context.self_value, None);
+        let mut args = Args::new0(None);
         for i in 0..param_num {
             args.push(context.get_lvar(LvarId::from_usize(i)));
         }
-        let val = vm.eval_send(method, &args)?;
+        let val = vm.eval_send(method, context.self_value, &args)?;
         Ok(val)
     } else {
         return Err(vm.error_nomethod("super called outside of method"));
     }
 }
 
-fn equal(vm: &mut VM, args: &Args) -> VMResult {
+fn equal(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    Ok(Value::bool(args.self_value.id() == args[0].id()))
+    Ok(Value::bool(self_val.id() == args[0].id()))
 }
 
-fn send(vm: &mut VM, args: &Args) -> VMResult {
+fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 100)?;
-    let receiver = args.self_value;
+    let receiver = self_val;
     let method_id = match args[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(vm.error_argument("Must be a symbol.")),
@@ -175,13 +175,12 @@ fn send(vm: &mut VM, args: &Args) -> VMResult {
     for i in 0..args.len() - 1 {
         new_args[i] = args[i + 1];
     }
-    new_args.self_value = args.self_value;
     new_args.block = args.block;
-    let res = vm.eval_send(method, &new_args)?;
+    let res = vm.eval_send(method, self_val, &new_args)?;
     Ok(res)
 }
 
-fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
+fn object_yield(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let outer = vm.caller_context();
     let method = match vm.context().block {
         Some(block) => block,
@@ -189,16 +188,15 @@ fn object_yield(vm: &mut VM, args: &Args) -> VMResult {
     };
     let args = args.clone();
     let iseq = vm.get_iseq(method)?;
-    let res = vm.vm_run(iseq, Some(outer), &args)?;
+    let res = vm.vm_run(iseq, Some(outer), self_val, &args)?;
     Ok(res)
 }
 
-fn eval(vm: &mut VM, args: &Args) -> VMResult {
+fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     expect_string!(program, vm, args[0]);
     let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), program)?;
-    let context = vm.context();
-    let args = Args::new0(context.self_value, None);
+    let args = Args::new0(None);
     let res = vm.eval_block(method, &args)?;
     Ok(res)
 }

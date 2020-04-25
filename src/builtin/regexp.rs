@@ -59,14 +59,14 @@ pub fn init_regexp(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn regexp_new(vm: &mut VM, args: &Args) -> VMResult {
+fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     expect_string!(string, vm, args[0]);
     let val = vm.create_regexp(string)?;
     Ok(val)
 }
 
-fn regexp_escape(vm: &mut VM, args: &Args) -> VMResult {
+fn regexp_escape(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     expect_string!(string, vm, args[0]);
     let res = regex::escape(string);
@@ -203,10 +203,9 @@ impl Regexp {
             None => {}
         }
         let mut res = given.to_string();
-        let self_value = vm.context().self_value;
         for (start, end, matched_str) in range.iter().rev() {
             let matched = Value::string(&vm.globals, matched_str.to_string());
-            let result = vm.eval_block(block, &Args::new1(self_value, None, matched))?;
+            let result = vm.eval_block(block, &Args::new1(None, matched))?;
             let replace = match result.as_string() {
                 Some(s) => s,
                 None => return Err(vm.error_argument("Result of the block must be String.")),

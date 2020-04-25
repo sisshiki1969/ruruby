@@ -329,8 +329,8 @@ impl VM {
             Some(val) => val,
             None => self.globals.main_object,
         };
-        let arg = Args::new0(self_value, None);
-        let val = self.eval_send(method, &arg)?;
+        let arg = Args::new0(None);
+        let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -387,9 +387,10 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
+        self_val: Value,
         args: &Args,
     ) -> Result<Value, RubyError> {
-        let context = self.create_context(iseq, outer, args)?;
+        let context = self.create_context(iseq, outer, self_val, args)?;
         let val = self.vm_run_context(ContextRef::from_local(&context))?;
         Ok(val)
     }
@@ -399,6 +400,7 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
+        self_val: Value,
         args: &Args,
     ) -> Result<Context, RubyError> {
         let kw = if iseq.keyword_params.is_empty() {
@@ -411,7 +413,7 @@ impl VM {
             iseq.min_params,
             iseq.max_params,
         )?;
-        let mut context = Context::new(args.self_value, args.block, iseq, outer);
+        let mut context = Context::new(self_val, args.block, iseq, outer);
         context.set_arguments(&self.globals, args, kw);
         if let Some(id) = iseq.lvar.block_param() {
             *context.get_mut_lvar(id) = match args.block {
@@ -866,7 +868,6 @@ impl VM {
                         Some(oref) => {
                             match &oref.kind {
                                 ObjKind::Array(mut aref) => {
-                                    args.self_value = receiver;
                                     args.push(val);
                                     aref.set_elem(self, &args)?;
                                 }
@@ -881,15 +882,12 @@ impl VM {
                 }
                 Inst::GET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
-                    let mut args = self.pop_args_to_ary(arg_num);
+                    let args = self.pop_args_to_ary(arg_num);
                     let arg_num = args.len();
                     let receiver = self.stack_pop();
                     let val = match receiver.is_object() {
                         Some(oref) => match &oref.kind {
-                            ObjKind::Array(aref) => {
-                                args.self_value = receiver;
-                                aref.get_elem(self, &args)?
-                            }
+                            ObjKind::Array(aref) => aref.get_elem(self, &args)?,
                             ObjKind::Hash(href) => {
                                 self.check_args_num(arg_num, 1, 2)?;
                                 match href.get(&args[0]) {
@@ -898,8 +896,7 @@ impl VM {
                                 }
                             }
                             ObjKind::Method(mref) => {
-                                args.self_value = mref.receiver;
-                                self.eval_send(mref.method, &args)?
+                                self.eval_send(mref.method, mref.receiver, &args)?
                             }
                             _ => return Err(self.error_undefined_method("[]", receiver)),
                         },
@@ -1061,8 +1058,8 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.gen_class_defined(val);
-                    let arg = Args::new0(val, None);
-                    try_err!(self, self.eval_send(method, &arg));
+                    let arg = Args::new0(None);
+                    try_err!(self, self.eval_send(method, val, &arg));
                     self.pc += 10;
                     self.class_pop();
                 }
@@ -1422,8 +1419,8 @@ impl VM {
     ) -> Result<Value, RubyError> {
         match self.get_method(lhs, method) {
             Ok(mref) => {
-                let arg = Args::new1(lhs, None, rhs);
-                let val = self.eval_send(mref, &arg)?;
+                let arg = Args::new1(None, rhs);
+                let val = self.eval_send(mref, lhs, &arg)?;
                 Ok(val)
             }
             Err(_) => {
@@ -1441,8 +1438,8 @@ impl VM {
         cache: u32,
     ) -> Result<Value, RubyError> {
         let methodref = self.get_method_from_cache(cache, lhs, method)?;
-        let arg = Args::new1(lhs, None, rhs);
-        self.eval_send(methodref, &arg)
+        let arg = Args::new1(None, rhs);
+        self.eval_send(methodref, lhs, &arg)
     }
 }
 
@@ -1763,8 +1760,8 @@ impl VM {
 
     pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> Result<Value, RubyError> {
         let method = self.get_method(receiver, method_id)?;
-        let args = Args::new0(receiver, None);
-        let val = self.eval_send(method, &args)?;
+        let args = Args::new0(None);
+        let val = self.eval_send(method, receiver, &args)?;
         Ok(val)
     }
 
@@ -1824,7 +1821,6 @@ impl VM {
             None
         };
         let mut args = self.pop_args_to_ary(args_num as usize);
-        args.self_value = receiver;
         let block = if block != 0 {
             Some(MethodRef::from(block))
         } else if flag & 0b10 == 2 {
@@ -1839,23 +1835,30 @@ impl VM {
         };
         args.block = block;
         args.kw_arg = keyword;
-        let val = self.eval_send(methodref, &args)?;
+        let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
     }
 }
 
 impl VM {
-    pub fn eval_send(&mut self, methodref: MethodRef, args: &Args) -> Result<Value, RubyError> {
-        self.eval_method(methodref, args, false)
+    pub fn eval_send(
+        &mut self,
+        methodref: MethodRef,
+        self_val: Value,
+        args: &Args,
+    ) -> Result<Value, RubyError> {
+        self.eval_method(methodref, self_val, args, false)
     }
 
     pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> Result<Value, RubyError> {
-        self.eval_method(methodref, args, true)
+        let context = self.context();
+        self.eval_method(methodref, context.self_value, args, true)
     }
 
     pub fn eval_method(
         &mut self,
         methodref: MethodRef,
+        self_val: Value,
         args: &Args,
         is_block: bool,
     ) -> Result<Value, RubyError> {
@@ -1883,21 +1886,21 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                let val = func(self, args)?;
+                let val = func(self, self_val, args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
                 val
             }
-            MethodInfo::AttrReader { id } => match args.self_value.is_object() {
+            MethodInfo::AttrReader { id } => match self_val.is_object() {
                 Some(oref) => match oref.get_var(*id) {
                     Some(v) => v,
                     None => Value::nil(),
                 },
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
-            MethodInfo::AttrWriter { id } => match args.self_value.is_object() {
+            MethodInfo::AttrWriter { id } => match self_val.is_object() {
                 Some(mut oref) => {
                     oref.set_var(*id, args[0]);
                     args[0]
@@ -1907,7 +1910,7 @@ impl VM {
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
                 let outer = if is_block { Some(self.context()) } else { None };
-                let val = self.vm_run(iseq, outer, &args)?;
+                let val = self.vm_run(iseq, outer, self_val, &args)?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);

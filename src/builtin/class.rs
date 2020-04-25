@@ -12,7 +12,7 @@ pub fn init_class(globals: &mut Globals) {
 /// Create new class.
 /// If a block is given, eval it in the context of newly created class.
 /// args[0]: super class.
-fn class_new(vm: &mut VM, args: &Args) -> VMResult {
+fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 1)?;
     let superclass = if args.len() == 0 {
         vm.globals.builtins.object
@@ -26,8 +26,8 @@ fn class_new(vm: &mut VM, args: &Args) -> VMResult {
     match args.block {
         Some(method) => {
             vm.class_push(val);
-            let arg = Args::new1(val, None, val);
-            vm.eval_block(method, &arg)?;
+            let arg = Args::new1(None, val);
+            vm.eval_method(method, val, &arg, true)?;
             vm.class_pop();
         }
         None => {}
@@ -36,19 +36,17 @@ fn class_new(vm: &mut VM, args: &Args) -> VMResult {
 }
 
 /// Create new instance of `self`.
-fn new(vm: &mut VM, args: &Args) -> VMResult {
-    let new_instance = Value::ordinary_object(args.self_value);
+fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let new_instance = Value::ordinary_object(self_val);
     // Call initialize method if it exists.
-    if let Some(method) = args.self_value.get_instance_method(IdentId::INITIALIZE) {
-        let mut args = args.clone();
-        args.self_value = new_instance;
-        vm.eval_send(method, &args)?;
+    if let Some(method) = self_val.get_instance_method(IdentId::INITIALIZE) {
+        vm.eval_send(method, new_instance, args)?;
     };
     Ok(new_instance)
 }
 
 /// Get super class of `self`.
-fn superclass(vm: &mut VM, args: &Args) -> VMResult {
-    let class = vm.val_as_class(args.self_value, "Receiver")?;
+fn superclass(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let class = vm.val_as_class(self_val, "Receiver")?;
     Ok(class.superclass)
 }

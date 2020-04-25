@@ -33,7 +33,7 @@ pub fn init_range(globals: &mut Globals) -> Value {
     obj
 }
 
-fn range_new(vm: &mut VM, args: &Args) -> VMResult {
+fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 2, 3)?;
     let (start, end) = (args[0], args[1]);
@@ -45,18 +45,18 @@ fn range_new(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::range(&vm.globals, start, end, exclude_end))
 }
 
-fn range_begin(_vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_begin(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     Ok(range.start)
 }
 
-fn range_end(_vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     Ok(range.end)
 }
 
-fn range_first(vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     let start = range.start.as_fixnum().unwrap();
     let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
@@ -76,8 +76,8 @@ fn range_first(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn range_last(vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     let mut start = range.start.as_fixnum().unwrap();
     let end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
@@ -97,15 +97,14 @@ fn range_last(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn range_map(vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
     let mut res = vec![];
-    let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(context.self_value, None, Value::fixnum(i));
+        let arg = Args::new1(None, Value::fixnum(i));
         let val = vm.eval_block(method, &arg)?;
         res.push(val);
     }
@@ -113,28 +112,26 @@ fn range_map(vm: &mut VM, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn range_each(vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     //eprintln!("range#each");
     for i in start..end {
-        let arg = Args::new1(context.self_value, None, Value::fixnum(i));
+        let arg = Args::new1(None, Value::fixnum(i));
         vm.eval_block(method, &arg)?;
     }
-    Ok(args.self_value)
+    Ok(self_val)
 }
 
-fn range_all(vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let context = vm.context();
     let start = range.start.expect_fixnum(&vm, "Start")?;
     let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(context.self_value, None, Value::fixnum(i));
+        let arg = Args::new1(None, Value::fixnum(i));
         let res = vm.eval_block(method, &arg)?;
         if !vm.val_to_bool(res) {
             return Ok(Value::false_val());
@@ -143,8 +140,8 @@ fn range_all(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn range_toa(vm: &mut VM, args: &Args) -> VMResult {
-    let range = args.self_value.as_range().unwrap();
+fn range_toa(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let range = self_val.as_range().unwrap();
     let start = range.start.expect_fixnum(&vm, "Range.start")?;
     let end = range.end.expect_fixnum(&vm, "Range.end")?;
     let mut v = vec![];

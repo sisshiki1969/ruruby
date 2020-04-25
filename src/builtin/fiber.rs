@@ -42,7 +42,7 @@ pub fn init_fiber(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn new(vm: &mut VM, args: &Args) -> VMResult {
+fn new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let method = vm.expect_block(args.block)?;
     let mut context = vm.create_block_context(method)?;
@@ -54,7 +54,7 @@ fn new(vm: &mut VM, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn yield_(vm: &mut VM, args: &Args) -> VMResult {
+fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let val = match args.len() {
         0 => Value::nil(),
         1 => args[0],
@@ -75,8 +75,8 @@ fn yield_(vm: &mut VM, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, args: &Args) -> VMResult {
-    let fref = vm.expect_fiber(args.self_value, "Expect Fiber.")?;
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let fref = vm.expect_fiber(self_val, "Expect Fiber.")?;
     let inspect = format!(
         "#<Fiber:0x{:<016x} ({:?})>",
         fref.id(),
@@ -85,9 +85,9 @@ fn inspect(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, inspect))
 }
 
-fn resume(vm: &mut VM, args: &Args) -> VMResult {
+fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    match args.self_value.unpack() {
+    match self_val.unpack() {
         RV::Object(obj) => match &obj.kind {
             ObjKind::Fiber(fiber) => {
                 let mut context = fiber.context;

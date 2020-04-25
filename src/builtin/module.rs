@@ -16,9 +16,9 @@ pub fn init_module(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "ancestors", ancestors);
 }
 
-fn constants(vm: &mut VM, args: &Args) -> VMResult {
+fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
-    let mut class = args.self_value;
+    let mut class = self_val;
     loop {
         v.append(
             &mut class
@@ -50,18 +50,18 @@ fn constants(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn const_get(vm: &mut VM, args: &Args) -> VMResult {
+fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(vm.error_type("1st arg must be Symbol.")),
     };
-    let val = vm.get_super_const(args.self_value, name)?;
+    let val = vm.get_super_const(self_val, name)?;
     Ok(val)
 }
 
-fn instance_methods(vm: &mut VM, args: &Args) -> VMResult {
-    let mut class = vm.val_as_module(args.self_value)?;
+fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let mut class = vm.val_as_module(self_val)?;
     vm.check_args_num(args.len(), 0, 1)?;
     let inherited_too = args.len() == 0 || vm.val_to_bool(args[0]);
     match inherited_too {
@@ -96,12 +96,12 @@ fn instance_methods(vm: &mut VM, args: &Args) -> VMResult {
     }
 }
 
-fn attr_accessor(vm: &mut VM, args: &Args) -> VMResult {
+fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
-            define_reader(vm, args.self_value, id);
-            define_writer(vm, args.self_value, id);
+            define_reader(vm, self_val, id);
+            define_writer(vm, self_val, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -109,11 +109,11 @@ fn attr_accessor(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn attr_reader(vm: &mut VM, args: &Args) -> VMResult {
+fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
-            define_reader(vm, args.self_value, id);
+            define_reader(vm, self_val, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -121,11 +121,11 @@ fn attr_reader(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn attr_writer(vm: &mut VM, args: &Args) -> VMResult {
+fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
-            define_writer(vm, args.self_value, id);
+            define_writer(vm, self_val, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
         }
@@ -157,28 +157,28 @@ fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
     vm.globals.get_ident_id(format!("@{}", s))
 }
 
-fn module_function(vm: &mut VM, args: &Args) -> VMResult {
+fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     vm.module_function(true);
     Ok(Value::nil())
 }
 
-fn singleton_class(vm: &mut VM, args: &Args) -> VMResult {
-    let class = vm.val_as_module(args.self_value)?;
+fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let class = vm.val_as_module(self_val)?;
     Ok(Value::bool(class.is_singleton))
 }
 
-fn include(vm: &mut VM, args: &Args) -> VMResult {
+fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let mut class = vm.val_as_module(args.self_value)?;
+    let mut class = vm.val_as_module(self_val)?;
     let module = args[0];
     class.include.push(module);
     Ok(Value::nil())
 }
 
-fn included_modules(vm: &mut VM, args: &Args) -> VMResult {
+fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut class = args.self_value;
+    let mut class = self_val;
     let mut ary = vec![];
     loop {
         if class.is_nil() {
@@ -202,9 +202,9 @@ fn included_modules(vm: &mut VM, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
-fn ancestors(vm: &mut VM, args: &Args) -> VMResult {
+fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut superclass = args.self_value;
+    let mut superclass = self_val;
     let mut ary = vec![];
     loop {
         if superclass.is_nil() {

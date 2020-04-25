@@ -14,7 +14,7 @@ pub fn init_math(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn sqrt(vm: &mut VM, args: &Args) -> VMResult {
+fn sqrt(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -29,7 +29,7 @@ fn sqrt(vm: &mut VM, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn cos(vm: &mut VM, args: &Args) -> VMResult {
+fn cos(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -44,7 +44,7 @@ fn cos(vm: &mut VM, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn sin(vm: &mut VM, args: &Args) -> VMResult {
+fn sin(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
