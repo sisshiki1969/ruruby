@@ -58,6 +58,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "+", string_add);
     globals.add_builtin_instance_method(class, "*", string_mul);
     globals.add_builtin_instance_method(class, "%", string_rem);
+    globals.add_builtin_instance_method(class, "[]", string_index);
     globals.add_builtin_instance_method(class, "start_with?", string_start_with);
     globals.add_builtin_instance_method(class, "to_sym", string_to_sym);
     globals.add_builtin_instance_method(class, "intern", string_to_sym);
@@ -96,6 +97,58 @@ fn string_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let res = lhs.repeat(rhs);
     Ok(Value::string(&vm.globals, res))
+}
+
+fn string_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    fn conv_index(i: i64, len: usize) -> Option<usize> {
+        if i >= 0 {
+            if i < len as i64 {
+                Some(i as usize)
+            } else {
+                None
+            }
+        } else {
+            match len as i64 + i {
+                n if n < 0 => None,
+                n => Some(n as usize),
+            }
+        }
+    }
+    vm.check_args_num(args.len(), 1, 1)?;
+    expect_string!(lhs, vm, self_val);
+    match args[0].unpack() {
+        RV::FixNum(i) => {
+            let index = match conv_index(i, lhs.chars().count()) {
+                Some(i) => i,
+                None => return Ok(Value::nil()),
+            };
+            match lhs.chars().nth(index) {
+                Some(ch) => Ok(Value::string(&vm.globals, ch.to_string())),
+                None => Ok(Value::nil()),
+            }
+        }
+        RV::Object(oref) => match &oref.kind {
+            ObjKind::Range(info) => {
+                let len = lhs.chars().count();
+                let (start, end) = match (info.start.as_fixnum(), info.end.as_fixnum()) {
+                    (Some(start), Some(end)) => {
+                        match (conv_index(start, len), conv_index(end, len)) {
+                            (Some(start), Some(end)) if start > end => {
+                                return Ok(Value::string(&vm.globals, "".to_string()))
+                            }
+                            (Some(start), Some(end)) => (start, end),
+                            _ => return Ok(Value::nil()),
+                        }
+                    }
+                    _ => return Err(vm.error_argument("Index must be Integer.")),
+                };
+                let s: String = lhs.chars().skip(start).take(end - start + 1).collect();
+                Ok(Value::string(&vm.globals, s))
+            }
+            _ => return Err(vm.error_argument("Bad type for index.")),
+        },
+        _ => return Err(vm.error_argument("Bad type for index.")),
+    }
 }
 
 fn expect_char(vm: &mut VM, chars: &mut std::str::Chars) -> Result<char, RubyError> {
@@ -290,19 +343,31 @@ fn string_split(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn string_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2, 2)?;
+    vm.check_args_num(args.len(), 1, 2)?;
     expect_string!(given, vm, self_val);
-    expect_string!(replace, vm, args[1]);
-    let res = if let Some(s) = args[0].as_string() {
-        let re = vm.regexp_from_string(&s)?;
-        Regexp::replace_one(vm, &re, given, replace)?
-    } else if let Some(re) = args[0].as_regexp() {
-        Regexp::replace_one(vm, &re.regexp, given, replace)?
+    if args.len() == 2 {
+        expect_string!(replace, vm, args[1]);
+        let res = if let Some(s) = args[0].as_string() {
+            let re = vm.regexp_from_string(&s)?;
+            Regexp::replace_one(vm, &re, given, replace)?
+        } else if let Some(re) = args[0].as_regexp() {
+            Regexp::replace_one(vm, &re.regexp, given, replace)?
+        } else {
+            return Err(vm.error_argument("1st arg must be RegExp or String."));
+        };
+        Ok(Value::string(&vm.globals, res))
     } else {
-        return Err(vm.error_argument("1st arg must be RegExp or String."));
-    };
-
-    Ok(Value::string(&vm.globals, res))
+        let block = vm.expect_block(args.block)?;
+        let (res, _) = if let Some(s) = args[0].as_string() {
+            let re = vm.regexp_from_string(&s)?;
+            Regexp::replace_one_block(vm, &re, given, block)?
+        } else if let Some(re) = args[0].as_regexp() {
+            Regexp::replace_one_block(vm, &re.regexp, given, block)?
+        } else {
+            return Err(vm.error_argument("1st arg must be RegExp or String."));
+        };
+        Ok(Value::string(&vm.globals, res))
+    }
 }
 
 fn string_gsub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -359,8 +424,17 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
     match args.block {
+        Some(block) if block == MethodRef::from(0) => {
+            let mut v = vec![];
+            for arg in vec {
+                let block_args = Args::new1(None, arg);
+                v.push(vm.eval_block(block, &block_args)?);
+            }
+            Ok(Value::array_from(&vm.globals, v))
+        }
         Some(block) => {
             for arg in vec {
+                eprintln!("{}", vm.val_inspect(arg));
                 match arg.as_array() {
                     Some(ary) => {
                         let len = ary.elements.len();
@@ -477,6 +551,17 @@ mod test {
     }
 
     #[test]
+    fn string_index() {
+        let program = r#"
+        assert "rubyruby"[3], "y" 
+        assert "rubyruby"[0..2], "rub" 
+        assert "rubyruby"[0..-2], "rubyrub" 
+        assert "rubyruby"[2..-7], "" 
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn string_format() {
         let program = r#"
         assert "-12-", "-%d-" % 12
@@ -538,6 +623,18 @@ mod test {
     fn string_sum() {
         let program = r#"
         assert 394, "abcd".sum
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_sub() {
+        let program = r#"
+        assert "abc!!g", "abcdefg".sub(/def/, "!!")
+        #assert "a<<b>>cabc", "abcabc".sub(/b/, "<<\1>>")
+        #assert "X<<bb>>xbb", "xxbbxbb".sub(/x+(b+)/, "X<<\1>>")
+        assert "aBCabc", "abcabc".sub(/bc/) {|s| s.upcase }
+        assert "abcabc", "abcabc".sub(/bd/) {|s| s.upcase }
         "#;
         assert_script(program);
     }

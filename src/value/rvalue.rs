@@ -173,7 +173,13 @@ impl RValue {
         }
     }
 
-    pub fn new_enumerator(globals: &Globals, method: IdentId, receiver: Value, args: Args) -> Self {
+    pub fn new_enumerator(
+        globals: &Globals,
+        method: IdentId,
+        receiver: Value,
+        mut args: Args,
+    ) -> Self {
+        args.block = Some(MethodRef::from(0));
         let enum_info = EnumRef::from(method, receiver, args);
         RValue {
             class: globals.builtins.enumerator,

@@ -238,11 +238,7 @@ impl Node {
         Node::new(kind, loc)
     }
 
-    pub fn new_array_member(array: Node, index: Vec<Node>) -> Self {
-        // index must be 1 or 2
-        let start_loc = index[0].loc();
-        let end_loc = index[index.len() - 1].loc();
-        let loc = array.loc().merge(start_loc).merge(end_loc);
+    pub fn new_array_member(array: Node, index: Vec<Node>, loc: Loc) -> Self {
         let kind = NodeKind::ArrayMember {
             array: Box::new(array),
             index,

@@ -143,6 +143,35 @@ impl Regexp {
         Ok(res)
     }
 
+    pub fn replace_one_block(
+        vm: &mut VM,
+        re: &Regexp,
+        given: &str,
+        block: MethodRef,
+    ) -> Result<(String, bool), RubyError> {
+        let (start, end, matched_str) = match re.captures_from_pos(given, 0) {
+            Ok(None) => return Ok((given.to_string(), false)),
+            Ok(Some(captures)) => {
+                let m = captures.get(0).unwrap();
+                Regexp::get_captures(vm, &captures, given);
+                (m.start(), m.end(), m.as_str())
+            }
+            Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+        };
+
+        let mut res = given.to_string();
+        let matched = Value::string(&vm.globals, matched_str.to_string());
+        let result = vm.eval_block(block, &Args::new1(None, matched))?;
+        match result.as_string() {
+            Some(s) => res.replace_range(start..end, s),
+            None => {
+                let s = vm.val_to_s(result);
+                res.replace_range(start..end, &s);
+            }
+        };
+        Ok((res, true))
+    }
+
     /// Replaces all non-overlapping matches in `given` string with `replace`.
     pub fn replace_all(
         vm: &mut VM,

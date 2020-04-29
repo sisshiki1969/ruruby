@@ -389,7 +389,7 @@ impl VM {
         outer: Option<ContextRef>,
         self_val: Value,
         args: &Args,
-    ) -> Result<Value, RubyError> {
+    ) -> VMResult {
         let context = self.create_context(iseq, outer, self_val, args)?;
         let val = self.vm_run_context(ContextRef::from_local(&context))?;
         Ok(val)
@@ -479,7 +479,7 @@ macro_rules! try_err {
 
 impl VM {
     /// Main routine for VM execution.
-    pub fn vm_run_context(&mut self, context: ContextRef) -> Result<Value, RubyError> {
+    pub fn vm_run_context(&mut self, context: ContextRef) -> VMResult {
         #[cfg(feature = "trace")]
         {
             if context.is_fiber {
@@ -898,9 +898,18 @@ impl VM {
                             ObjKind::Method(mref) => {
                                 self.eval_send(mref.method, mref.receiver, &args)?
                             }
-                            _ => return Err(self.error_undefined_method("[]", receiver)),
+                            _ => {
+                                let id = self.globals.get_ident_id("[]");
+                                match self.get_method(receiver, id) {
+                                    Ok(mref) => self.eval_send(mref, receiver, &args)?,
+                                    Err(_) => {
+                                        return Err(self.error_undefined_method("[]", receiver))
+                                    }
+                                }
+                            }
                         },
                         None if receiver.is_packed_fixnum() => {
+                            eprintln!("FIXNUM");
                             let i = receiver.as_packed_fixnum();
                             self.check_args_num(arg_num, 1, 1)?;
                             let index = args[0].expect_fixnum(&self, "Index")?;
@@ -1028,7 +1037,7 @@ impl VM {
                                     if is_module { "module" } else { "class" },
                                 )));
                             };
-                            let classref = self.val_as_module(val.clone())?;
+                            let classref = self.expect_module(val.clone())?;
                             if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                                 return Err(self.error_type(format!(
                                     "superclass mismatch for class {}.",
@@ -1041,7 +1050,7 @@ impl VM {
                             let super_val = if super_val.is_nil() {
                                 self.globals.builtins.object
                             } else {
-                                self.val_as_class(super_val, "Superclass")?;
+                                self.expect_class(super_val, "Superclass")?;
                                 super_val
                             };
                             let classref = ClassRef::from(id, super_val);
@@ -1269,27 +1278,57 @@ impl VM {
             )))
         }
     }
+
+    pub fn check_args_min(&self, len: usize, min: usize) -> Result<(), RubyError> {
+        if min <= len {
+            Ok(())
+        } else {
+            Err(self.error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {}+)",
+                len, min
+            )))
+        }
+    }
 }
 
 impl VM {
+    pub fn expect_block(&self, block: Option<MethodRef>) -> Result<MethodRef, RubyError> {
+        match block {
+            Some(method) => Ok(method),
+            None => return Err(self.error_argument("Currently, needs block.")),
+        }
+    }
+
+    pub fn expect_array(&mut self, val: Value, error_message: &str) -> Result<ArrayRef, RubyError> {
+        match val.as_array() {
+            Some(ary) => Ok(ary),
+            None => {
+                let inspect = self.val_inspect(val);
+                Err(self.error_type(format!(
+                    "{} must be Array. (given:{})",
+                    error_message, inspect
+                )))
+            }
+        }
+    }
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
-    pub fn val_as_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
+    pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
         match val.is_class() {
             Some(class_ref) => Ok(class_ref),
             None => {
                 let val = self.val_inspect(val);
-                Err(self.error_type(format!("{} must be a class. (given:{:?})", msg, val)))
+                Err(self.error_type(format!("{} must be a class. (given:{})", msg, val)))
             }
         }
     }
 
-    pub fn val_as_module(&mut self, val: Value) -> Result<ClassRef, RubyError> {
+    pub fn expect_module(&mut self, val: Value) -> Result<ClassRef, RubyError> {
         match val.as_module() {
             Some(class_ref) => Ok(class_ref),
             None => {
                 let val = self.val_inspect(val);
-                Err(self.error_type(format!("Must be a module/class. (given:{:?})", val)))
+                Err(self.error_type(format!("Must be a module/class. (given:{})", val)))
             }
         }
     }
@@ -1351,7 +1390,7 @@ impl VM {
     }
 
     // Search class inheritance chain for the constant.
-    pub fn get_super_const(&self, mut class: Value, id: IdentId) -> Result<Value, RubyError> {
+    pub fn get_super_const(&self, mut class: Value, id: IdentId) -> VMResult {
         loop {
             match class.get_var(id) {
                 Some(val) => {
@@ -1411,12 +1450,7 @@ impl VM {
         }
     }
 
-    fn fallback_to_method(
-        &mut self,
-        method: IdentId,
-        lhs: Value,
-        rhs: Value,
-    ) -> Result<Value, RubyError> {
+    fn fallback_to_method(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
         match self.get_method(lhs, method) {
             Ok(mref) => {
                 let arg = Args::new1(None, rhs);
@@ -1436,7 +1470,7 @@ impl VM {
         rhs: Value,
         method: IdentId,
         cache: u32,
-    ) -> Result<Value, RubyError> {
+    ) -> VMResult {
         let methodref = self.get_method_from_cache(cache, lhs, method)?;
         let arg = Args::new1(None, rhs);
         self.eval_send(methodref, lhs, &arg)
@@ -1460,22 +1494,22 @@ macro_rules! eval_op {
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+    fn eval_add(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
         use std::ops::Add;
         eval_op!(self, iseq, rhs, lhs, add, IdentId::_ADD);
     }
 
-    fn eval_sub(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+    fn eval_sub(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
         use std::ops::Sub;
         eval_op!(self, iseq, rhs, lhs, sub, IdentId::_SUB);
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+    fn eval_mul(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
         use std::ops::Mul;
         eval_op!(self, iseq, rhs, lhs, mul, IdentId::_MUL);
     }
 
-    fn eval_addi(&mut self, lhs: Value, i: i32) -> Result<Value, RubyError> {
+    fn eval_addi(&mut self, lhs: Value, i: i32) -> VMResult {
         use std::ops::Add;
         let val = match lhs.unpack() {
             RV::FixNum(lhs) => Value::fixnum(lhs.add(i as i64)),
@@ -1485,7 +1519,7 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_subi(&mut self, lhs: Value, i: i32) -> Result<Value, RubyError> {
+    fn eval_subi(&mut self, lhs: Value, i: i32) -> VMResult {
         let val = match lhs.unpack() {
             RV::FixNum(lhs) => Value::fixnum(lhs - i as i64),
             RV::FloatNum(lhs) => Value::flonum(lhs - i as f64),
@@ -1526,7 +1560,7 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_exp(&mut self, rhs: Value, lhs: Value) -> Result<Value, RubyError> {
+    fn eval_exp(&mut self, rhs: Value, lhs: Value) -> VMResult {
         let val = match (lhs.unpack(), rhs.unpack()) {
             (RV::FixNum(lhs), RV::FixNum(rhs)) => {
                 if 0 <= rhs && rhs <= std::u32::MAX as i64 {
@@ -1545,7 +1579,7 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> Result<Value, RubyError> {
+    fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (RV::FixNum(lhs), RV::FixNum(rhs)) => {
                 let val = Value::fixnum(lhs << rhs);
@@ -1739,6 +1773,7 @@ impl VM {
                     }
                     format!("{}>", s)
                 }
+                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
                 _ => {
                     eprintln!("{:?}", val);
                     let id = self.globals.get_ident_id("inspect");
@@ -1758,7 +1793,7 @@ impl VM {
         }
     }
 
-    pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> Result<Value, RubyError> {
+    pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> VMResult {
         let method = self.get_method(receiver, method_id)?;
         let args = Args::new0(None);
         let val = self.eval_send(method, receiver, &args)?;
@@ -1841,16 +1876,11 @@ impl VM {
 }
 
 impl VM {
-    pub fn eval_send(
-        &mut self,
-        methodref: MethodRef,
-        self_val: Value,
-        args: &Args,
-    ) -> Result<Value, RubyError> {
+    pub fn eval_send(&mut self, methodref: MethodRef, self_val: Value, args: &Args) -> VMResult {
         self.eval_method(methodref, self_val, args, false)
     }
 
-    pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> Result<Value, RubyError> {
+    pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> VMResult {
         let context = self.context();
         self.eval_method(methodref, context.self_value, args, true)
     }
@@ -1861,7 +1891,7 @@ impl VM {
         self_val: Value,
         args: &Args,
         is_block: bool,
-    ) -> Result<Value, RubyError> {
+    ) -> VMResult {
         if methodref.is_none() {
             let res = match args.len() {
                 0 => Value::nil(),
@@ -1921,11 +1951,8 @@ impl VM {
         Ok(val)
     }
 
-    pub fn expect_block(&self, block: Option<MethodRef>) -> Result<MethodRef, RubyError> {
-        match block {
-            Some(method) => Ok(method),
-            None => return Err(self.error_argument("Currently, needs block.")),
-        }
+    pub fn eval_enumerator(&mut self, eref: EnumRef) -> VMResult {
+        eref.eval(self)
     }
 }
 
@@ -1973,12 +2000,12 @@ impl VM {
 
     pub fn add_instance_method(
         &mut self,
-        obj: Value,
+        class_obj: Value,
         id: IdentId,
         info: MethodRef,
     ) -> Option<MethodRef> {
         self.globals.class_version += 1;
-        obj.as_module().unwrap().method_table.insert(id, info)
+        class_obj.as_module().unwrap().method_table.insert(id, info)
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
@@ -2181,7 +2208,7 @@ impl VM {
 
     /// Create new Proc object from `method`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_proc(&mut self, method: MethodRef) -> Result<Value, RubyError> {
+    pub fn create_proc(&mut self, method: MethodRef) -> VMResult {
         self.move_outer_to_heap();
         let context = self.create_block_context(method)?;
         Ok(Value::procobj(&self.globals, context))
@@ -2224,7 +2251,7 @@ impl VM {
     /// Create new Regexp object from `string`.
     /// Regular expression meta characters are handled as is.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn create_regexp(&self, string: &str) -> Result<Value, RubyError> {
+    pub fn create_regexp(&self, string: &str) -> VMResult {
         let re = match RegexpRef::from_string(string) {
             Ok(re) => re,
             Err(err) => return Err(self.error_regexp(err)),

@@ -39,15 +39,9 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "pack", array_pack);
     globals.add_builtin_instance_method(class, "join", array_join);
     globals.add_builtin_instance_method(class, "drop", array_drop);
+    globals.add_builtin_instance_method(class, "zip", array_zip);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
-}
-
-macro_rules! self_array {
-    ($val:ident, $vm:ident) => {
-        $val.as_array()
-            .ok_or($vm.error_nomethod("Receiver must be an array."))?;
-    };
 }
 
 // Class methods
@@ -79,13 +73,13 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 // Instance methods
 
 fn array_set_elem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     let val = aref.set_elem(vm, args)?;
     Ok(val)
 }
 
 fn array_push(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     for arg in args.get_slice(0, args.len()) {
         aref.elements.push(*arg);
     }
@@ -94,14 +88,14 @@ fn array_push(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_pop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     let res = aref.elements.pop().unwrap_or_default();
     Ok(res)
 }
 
 fn array_shift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     let new = aref.elements.split_off(1);
     let res = aref.elements[0];
     aref.elements = new;
@@ -114,27 +108,27 @@ fn array_unshift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Ok(self_val);
     }
     let mut new = args.get_slice(0, args.len()).to_owned();
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     new.append(&mut aref.elements);
     aref.elements = new;
     Ok(self_val)
 }
 
 fn array_length(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let res = Value::fixnum(aref.elements.len() as i64);
     Ok(res)
 }
 
 fn array_empty(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let res = Value::bool(aref.elements.is_empty());
     Ok(res)
 }
 
 fn array_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let v = match args[0].unpack() {
         RV::FixNum(num) => match num {
             i if i < 0 => return Err(vm.error_argument("Negative argument.")),
@@ -160,42 +154,22 @@ fn array_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn array_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut lhs = self_val
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?
-        .elements
-        .clone();
-    let mut rhs = args[0]
-        .as_array()
-        .ok_or(vm.error_nomethod("An arg must be an array."))?
-        .elements
-        .clone();
+    let mut lhs = vm.expect_array(self_val, "Receiver")?.elements.clone();
+    let mut rhs = vm.expect_array(args[0], "Argument")?.elements.clone();
     lhs.append(&mut rhs);
     Ok(Value::array_from(&vm.globals, lhs))
 }
 
 fn array_concat(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut lhs = self_val
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?;
-    let mut rhs = args[0]
-        .as_array()
-        .ok_or(vm.error_nomethod("An arg must be an array."))?
-        .elements
-        .clone();
+    let mut lhs = vm.expect_array(self_val, "Receiver")?;
+    let mut rhs = vm.expect_array(args[0], "Argument")?.elements.clone();
     lhs.elements.append(&mut rhs);
     Ok(self_val)
 }
 
 fn array_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let lhs_v = &self_val
-        .as_array()
-        .ok_or(vm.error_nomethod("Receiver must be an array."))?
-        .elements;
-    let rhs_v = &args[0]
-        .as_array()
-        .ok_or(vm.error_nomethod("An arg must be an array."))?
-        .elements;
+    let lhs_v = &vm.expect_array(self_val, "Receiver")?.elements;
+    let rhs_v = &vm.expect_array(args[0], "Argument")?.elements;
     let mut v = vec![];
     for lhs in lhs_v {
         let mut flag = true;
@@ -214,7 +188,7 @@ fn array_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let method = match args.block {
         Some(method) => method,
         None => {
@@ -238,7 +212,7 @@ fn array_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn array_flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut res = vec![];
     let param_num = vm.get_iseq(method)?.req_params;
@@ -272,7 +246,7 @@ fn array_flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     //let method = vm.expect_block(args.block)?;
 
     let method = match args.block {
@@ -311,7 +285,7 @@ fn array_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let target = args[0];
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     for item in aref.elements.iter() {
         if vm.eval_eq(*item, target)? {
             return Ok(Value::true_val());
@@ -322,7 +296,7 @@ fn array_include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_reverse(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let mut res = aref.elements.clone();
     res.reverse();
     Ok(Value::array_from(&vm.globals, res))
@@ -330,7 +304,7 @@ fn array_reverse(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_reverse_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     aref.elements.reverse();
     Ok(self_val)
 }
@@ -345,7 +319,7 @@ fn array_rotate_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             None => return Err(vm.error_argument("Must be Integer.")),
         }
     };
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     if i == 0 {
         Ok(self_val)
     } else if i > 0 {
@@ -368,7 +342,7 @@ fn array_rotate_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_transpose(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         return Ok(Value::array_from(&vm.globals, vec![]));
     }
@@ -410,7 +384,7 @@ fn array_min(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         }
     }
 
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         return Ok(Value::nil());
     }
@@ -429,7 +403,7 @@ fn array_min(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn array_fill(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     for elem in &mut aref.elements {
         *elem = args[0];
     }
@@ -438,14 +412,14 @@ fn array_fill(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     aref.elements.clear();
     Ok(self_val)
 }
 
 fn array_uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     let mut set = std::collections::HashSet::new();
     match args.block {
         None => {
@@ -475,14 +449,14 @@ fn array_slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let start = start as usize;
     let len = len as usize;
-    let mut aref = self_array!(self_val, vm);
+    let mut aref = vm.expect_array(self_val, "Receiver")?;
     let new = aref.elements.drain(start..start + len).collect();
     Ok(Value::array_from(&vm.globals, new))
 }
 
 fn array_max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         return Ok(Value::nil());
     }
@@ -497,7 +471,7 @@ fn array_max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         Ok(Value::nil())
     } else {
@@ -507,7 +481,7 @@ fn array_first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         Ok(Value::nil())
     } else {
@@ -517,13 +491,13 @@ fn array_last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     Ok(Value::array_from(&vm.globals, aref.elements.clone()))
 }
 
 fn array_pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 1)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let mut v = vec![];
     for elem in &aref.elements {
         let i = match elem.as_fixnum() {
@@ -545,7 +519,7 @@ fn array_join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             None => return Err(vm.error_argument("Seperator must be String.")),
         }
     };
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let mut res = "".to_string();
     for elem in &aref.elements {
         let s = vm.val_to_s(*elem);
@@ -560,8 +534,46 @@ fn array_join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let aref = self_array!(self_val, vm);
+    let aref = vm.expect_array(self_val, "Receiver")?;
     let num = args[0].expect_fixnum(vm, "An argument must be Integer.")? as usize;
     let ary = &aref.elements[num..aref.elements.len()];
     Ok(Value::array_from(&vm.globals, ary.to_vec()))
+}
+
+fn array_zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    //vm.check_args_num(args.len(), 1, 1)?;
+    let self_ary = vm.expect_array(self_val, "Receiver")?;
+    let mut args_ary = vec![];
+    for a in args.iter() {
+        args_ary.push(vm.expect_array(*a, "Args")?.elements.clone());
+    }
+    let mut ary = vec![];
+    for (i, val) in self_ary.elements.iter().enumerate() {
+        let mut vec = vec![*val];
+        for args in &args_ary {
+            if i < args.len() {
+                vec.push(args[i]);
+            } else {
+                vec.push(Value::nil());
+            }
+        }
+        let zip = Value::array_from(&vm.globals, vec);
+        ary.push(zip);
+    }
+    Ok(Value::array_from(&vm.globals, ary))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test::*;
+
+    #[test]
+    fn array_zip() {
+        let program = r#"
+        assert [[1,4,7],[2,5,8],[3,6,9]], [1,2,3].zip([4,5,6],[7,8,9])
+        assert [[1,:a,:A],[2,:b,:B]], [1,2].zip([:a,:b,:c],[:A,:B,:C,:D])
+        assert [[1,:a,:A],[2,:b,:B],[3,:c,:C],[4,nil,:D],[5,nil,nil]], [1,2,3,4,5].zip([:a,:b,:c],[:A,:B,:C,:D])
+        "#;
+        assert_script(program);
+    }
 }

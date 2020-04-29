@@ -636,8 +636,12 @@ impl Value {
         Value::object(RValue::new_class(globals, class_ref))
     }
 
-    pub fn plain_class(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(RValue::new_class(globals, class_ref))
+    pub fn class_from(
+        globals: &Globals,
+        id: impl Into<Option<IdentId>>,
+        superclass: impl Into<Option<Value>>,
+    ) -> Self {
+        Value::object(RValue::new_class(globals, ClassRef::from(id, superclass)))
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
@@ -726,7 +730,7 @@ impl Value {
     }
 }
 
-#[allow(unused_imports)]
+#[cfg(test)]
 mod tests {
     use crate::*;
 
@@ -892,8 +896,7 @@ mod tests {
     #[test]
     fn pack_instance() {
         let globals = Globals::new();
-        let class_ref = ClassRef::from(IdentId::from(1), None);
-        let class = Value::class(&globals, class_ref);
+        let class = Value::class_from(&globals, IdentId::from(1), None);
         let expect = Value::ordinary_object(class);
         let got = expect.unpack().pack();
         if expect != got {

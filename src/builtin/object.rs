@@ -163,7 +163,7 @@ fn equal(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 100)?;
+    vm.check_args_min(args.len(), 1)?;
     let receiver = self_val;
     let method_id = match args[0].as_symbol() {
         Some(symbol) => symbol,
@@ -186,9 +186,8 @@ fn object_yield(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) => block,
         None => return Err(vm.error_argument("Yield needs block.")),
     };
-    let args = args.clone();
     let iseq = vm.get_iseq(method)?;
-    let res = vm.vm_run(iseq, Some(outer), self_val, &args)?;
+    let res = vm.vm_run(iseq, Some(outer), self_val, args)?;
     Ok(res)
 }
 

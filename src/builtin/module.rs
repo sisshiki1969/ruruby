@@ -61,7 +61,7 @@ fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut class = vm.val_as_module(self_val)?;
+    let mut class = vm.expect_module(self_val)?;
     vm.check_args_num(args.len(), 0, 1)?;
     let inherited_too = args.len() == 0 || vm.val_to_bool(args[0]);
     match inherited_too {
@@ -96,7 +96,7 @@ fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+pub fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in 0..args.len() {
         if args[i].is_packed_symbol() {
             let id = args[i].as_packed_symbol();
@@ -164,13 +164,13 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let class = vm.val_as_module(self_val)?;
+    let class = vm.expect_module(self_val)?;
     Ok(Value::bool(class.is_singleton))
 }
 
 fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let mut class = vm.val_as_module(self_val)?;
+    let mut class = vm.expect_module(self_val)?;
     let module = args[0];
     class.include.push(module);
     Ok(Value::nil())

@@ -1162,9 +1162,11 @@ impl Parser {
             } else if node.is_operation() {
                 return Ok(node);
             } else if self.consume_punct_no_term(Punct::LBracket)? {
+                let member_loc = self.prev_loc();
                 let mut args = self.parse_arg_list(Punct::RBracket)?;
+                let member_loc = member_loc.merge(self.prev_loc());
                 args.reverse();
-                Node::new_array_member(node, args)
+                Node::new_array_member(node, args, member_loc)
             } else {
                 return Ok(node);
             };

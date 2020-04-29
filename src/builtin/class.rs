@@ -4,6 +4,7 @@ pub fn init_class(globals: &mut Globals) {
     let class = globals.class_class;
     globals.add_builtin_instance_method(class, "new", new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
+    globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_class_method(globals.builtins.class, "new", class_new);
 }
 
@@ -19,9 +20,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         args[0]
     };
-    let id = vm.globals.get_ident_id("nil");
-    let classref = ClassRef::from(id, superclass);
-    let val = Value::class(&mut vm.globals, classref);
+    let val = Value::class_from(&mut vm.globals, None, superclass);
 
     match args.block {
         Some(method) => {
@@ -47,6 +46,15 @@ fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Get super class of `self`.
 fn superclass(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let class = vm.val_as_class(self_val, "Receiver")?;
+    let class = vm.expect_class(self_val, "Receiver")?;
     Ok(class.superclass)
+}
+
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let cref = vm.expect_class(self_val, "Receiver")?;
+    let s = match cref.name {
+        Some(id) => format! {"{}", vm.globals.get_ident_name(id)},
+        None => format! {"#<Class:0x{:x}>", cref.id()},
+    };
+    Ok(Value::string(&vm.globals, s))
 }
