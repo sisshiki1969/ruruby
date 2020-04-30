@@ -693,6 +693,7 @@ impl Codegen {
                     | Inst::NE
                     | Inst::GT
                     | Inst::GE
+                    | Inst::CMP
                     | Inst::NOT
                     | Inst::SHR
                     | Inst::SHL
@@ -1123,6 +1124,12 @@ impl Codegen {
                         self.gen(globals, iseq, lhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::GT);
+                    }
+                    BinOp::Cmp => {
+                        self.gen(globals, iseq, rhs, true)?;
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq, loc);
+                        iseq.push(Inst::CMP);
                     }
                     BinOp::LAnd => {
                         self.gen(globals, iseq, lhs, true)?;

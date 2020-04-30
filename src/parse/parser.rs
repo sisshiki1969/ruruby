@@ -908,6 +908,9 @@ impl Parser {
             } else if self.consume_punct_no_term(Punct::Lt)? {
                 let rhs = self.parse_arg_bitor()?;
                 lhs = Node::new_binop(BinOp::Lt, lhs, rhs);
+            } else if self.consume_punct_no_term(Punct::Cmp)? {
+                let rhs = self.parse_arg_bitor()?;
+                lhs = Node::new_binop(BinOp::Cmp, lhs, rhs);
             } else {
                 break;
             }

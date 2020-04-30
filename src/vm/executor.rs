@@ -739,6 +739,13 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 1;
                 }
+                Inst::CMP => {
+                    let lhs = self.stack_pop();
+                    let rhs = self.stack_pop();
+                    let val = self.eval_cmp(rhs, lhs)?;
+                    self.stack_push(val);
+                    self.pc += 1;
+                }
                 Inst::NOT => {
                     let lhs = self.stack_pop();
                     let val = Value::bool(!self.val_to_bool(lhs));
@@ -1296,7 +1303,14 @@ impl VM {
     pub fn expect_integer(&self, val: Value, msg: impl Into<String>) -> Result<i64, RubyError> {
         match val.as_fixnum() {
             Some(i) => Ok(i),
-            None => Err(self.error_argument(msg.into() + " must be an Integer.")),
+            None => Err(self.error_argument(msg.into() + " must be integer.")),
+        }
+    }
+
+    pub fn expect_flonum(&self, val: Value, msg: impl Into<String>) -> Result<f64, RubyError> {
+        match val.as_flonum() {
+            Some(f) => Ok(f),
+            None => Err(self.error_argument(msg.into() + " must be float.")),
         }
     }
 
@@ -1680,6 +1694,11 @@ impl VM {
 
     pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
         eval_cmp!(self, rhs, lhs, gt, IdentId::_GT)
+    }
+
+    pub fn eval_cmp(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        let id = self.globals.get_ident_id("<=>");
+        self.fallback_to_method(id, lhs, rhs)
     }
 }
 

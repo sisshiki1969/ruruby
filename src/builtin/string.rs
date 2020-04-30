@@ -253,7 +253,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'X' => {
-                let val = val.expect_integer(&vm, "Invalid value for placeholder of Integer.")?;
+                let val = vm.expect_integer(val, "Value for the placeholder")?;
                 if zero_flag {
                     format!("{:0w$X}", val, w = width)
                 } else {
@@ -261,7 +261,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'f' => {
-                let val = val.expect_flonum(&vm, "Invalid value for placeholder of Float.")?;
+                let val = vm.expect_flonum(val, "Value for the placeholder")?;
                 if zero_flag {
                     format!("{:0w$.p$}", val, w = width, p = precision)
                 } else {

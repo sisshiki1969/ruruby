@@ -6,6 +6,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     let class = ClassRef::from(array_id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "[]=", array_set_elem);
+    globals.add_builtin_instance_method(class, "<=>", array_cmp);
     globals.add_builtin_instance_method(class, "push", array_push);
     globals.add_builtin_instance_method(class, "<<", array_push);
     globals.add_builtin_instance_method(class, "pop", array_pop);
@@ -41,6 +42,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "drop", array_drop);
     globals.add_builtin_instance_method(class, "zip", array_zip);
     globals.add_builtin_instance_method(class, "grep", array_grep);
+    globals.add_builtin_instance_method(class, "sort", array_sort);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -79,9 +81,42 @@ fn array_set_elem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+fn array_cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let lhs = &vm.expect_array(self_val, "Receiver")?.elements;
+    let rhs = &(match args[0].as_array() {
+        Some(aref) => aref,
+        None => return Ok(Value::nil()),
+    }
+    .elements);
+    if lhs.len() >= rhs.len() {
+        for (i, rhs_v) in rhs.iter().enumerate() {
+            match vm.eval_cmp(*rhs_v, lhs[i])?.as_fixnum() {
+                Some(0) => {}
+                Some(ord) => return Ok(Value::fixnum(ord)),
+                None => return Ok(Value::nil()),
+            }
+        }
+        if lhs.len() == rhs.len() {
+            Ok(Value::fixnum(0))
+        } else {
+            Ok(Value::fixnum(1))
+        }
+    } else {
+        for (i, lhs_v) in lhs.iter().enumerate() {
+            match vm.eval_cmp(rhs[i], *lhs_v)?.as_fixnum() {
+                Some(0) => {}
+                Some(ord) => return Ok(Value::fixnum(ord)),
+                None => return Ok(Value::nil()),
+            }
+        }
+        Ok(Value::fixnum(-1))
+    }
+}
+
 fn array_push(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut aref = vm.expect_array(self_val, "Receiver")?;
-    for arg in args.get_slice(0, args.len()) {
+    for arg in args.iter() {
         aref.elements.push(*arg);
     }
     Ok(self_val)
@@ -606,6 +641,36 @@ fn array_grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
+fn array_sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    //use std::cmp::Ordering;
+    vm.check_args_num(args.len(), 0, 0)?;
+    let mut aref = vm.expect_array(self_val, "Receiver")?.dup();
+    match args.block {
+        None => {
+            if aref.elements.len() > 0 {
+                let val = aref.elements[0];
+                for i in 1..aref.elements.len() {
+                    match vm.eval_cmp(aref.elements[i], val)? {
+                        v if v == Value::nil() => {
+                            let lhs = vm.globals.get_class_name(val);
+                            let rhs = vm.globals.get_class_name(aref.elements[i]);
+                            return Err(vm.error_argument(format!(
+                                "Comparison of {} with {} failed.",
+                                lhs, rhs
+                            )));
+                        }
+                        _ => {}
+                    }
+                }
+            };
+            aref.elements
+                .sort_by(|a, b| vm.eval_cmp(*b, *a).unwrap().to_ordering())
+        }
+        Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
+    };
+    Ok(Value::array(&vm.globals, aref))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -672,9 +737,22 @@ mod tests {
     }
 
     #[test]
+    fn array_cmp() {
+        let program = "
+        assert(0, [1,2,3,4] <=> [1,2,3,4])
+        assert(1, [1,2,3,4] <=> [1,2,3])
+        assert(-1, [1,2,3,4] <=> [1,2,3,4,5])
+        assert(1, [1,2,3,4] <=> [-1,2,3,4,5,6])
+        assert(-1, [1,2,3,4] <=> [6,2])
+        assert(nil, [1,2,3,4] <=> 8)
+        ";
+        assert_script(program);
+    }
+
+    #[test]
     fn array_mul() {
         let program = r#"
-        assert [1, 2, 3, 1, 2, 3, 1, 2, 3], [1, 2, 3] * 3 
+        assert [1,2,3,1,2,3,1,2,3], [1,2,3] * 3 
         assert "1,2,3", [1,2,3] * ","
         "#;
         assert_script(program);

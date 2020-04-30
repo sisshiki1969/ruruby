@@ -369,13 +369,6 @@ impl Value {
         }
     }
 
-    pub fn expect_flonum(&self, vm: &VM, msg: impl Into<String>) -> Result<f64, RubyError> {
-        match self.as_flonum() {
-            Some(f) => Ok(f),
-            None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
-        }
-    }
-
     pub fn as_bytes(&self) -> Option<&[u8]> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -732,6 +725,16 @@ impl Value {
             }
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
             (_, _) => false,
+        }
+    }
+
+    pub fn to_ordering(&self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match self.as_fixnum() {
+            Some(1) => Ordering::Greater,
+            Some(0) => Ordering::Equal,
+            Some(-1) => Ordering::Less,
+            _ => panic!("Illegal ordering value."),
         }
     }
 }

@@ -27,6 +27,7 @@ impl Inst {
     pub const BIT_XOR: u8 = 25;
     pub const BIT_NOT: u8 = 26;
     pub const POW: u8 = 27;
+    pub const CMP: u8 = 28;
 
     pub const ADDI: u8 = 30;
     pub const SUBI: u8 = 31;
@@ -99,6 +100,7 @@ impl Inst {
             Inst::TEQ => "TEQ",
             Inst::GT => "GT",
             Inst::GE => "GE",
+            Inst::CMP => "CMP",
             Inst::NOT => "NOT",
             Inst::SHR => "SHR",
             Inst::SHL => "SHL",
@@ -173,6 +175,7 @@ impl Inst {
             | Inst::NE
             | Inst::GT
             | Inst::GE
+            | Inst::CMP
             | Inst::NOT
             | Inst::SHR
             | Inst::BIT_OR

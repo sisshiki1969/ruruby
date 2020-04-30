@@ -126,6 +126,7 @@ pub enum Punct {
     Ge,
     Lt,
     Le,
+    Cmp,
     LAnd,
     LOr,
     Match,

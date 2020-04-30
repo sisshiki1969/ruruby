@@ -168,10 +168,8 @@ impl Lexer {
             }
             TokenKind::OpenString(_) => {
                 self.quote_state.push(QuoteState::DoubleQuote);
-                //self.quote_state.push(QuoteState::Expr);
             }
             TokenKind::CloseString(_) => {
-                //assert_eq!(self.quote_state.pop().unwrap(), QuoteState::Expr);
                 self.quote_state.pop().unwrap();
             }
             _ => {}
@@ -359,7 +357,11 @@ impl Lexer {
                     }
                     '<' => {
                         if self.consume('=') {
-                            return Ok(self.new_punct(Punct::Le));
+                            if self.consume('>') {
+                                return Ok(self.new_punct(Punct::Cmp));
+                            } else {
+                                return Ok(self.new_punct(Punct::Le));
+                            }
                         } else if self.consume('<') {
                             if self.consume('=') {
                                 return Ok(self.new_punct(Punct::AssignOp(BinOp::Shl)));

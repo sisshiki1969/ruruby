@@ -9,6 +9,7 @@ pub fn init_integer(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, ">", gt);
     globals.add_builtin_instance_method(class, "<=", le);
     globals.add_builtin_instance_method(class, "<", lt);
+    globals.add_builtin_instance_method(class, "<=>", cmp);
 
     globals.add_builtin_instance_method(class, "times", times);
     globals.add_builtin_instance_method(class, "step", step);
@@ -74,6 +75,21 @@ fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     define_cmp!(vm, self_val, args, lt);
+}
+
+fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    //use std::cmp::Ordering;
+    vm.check_args_num(args.len(), 1, 1)?;
+    let lhs = vm.expect_integer(self_val, "Receiver")?;
+    let res = match args[0].unpack() {
+        RV::Integer(rhs) => lhs.partial_cmp(&rhs),
+        RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
+        _ => return Ok(Value::nil()),
+    };
+    match res {
+        Some(ord) => Ok(Value::fixnum(ord as i64)),
+        None => Ok(Value::nil()),
+    }
 }
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

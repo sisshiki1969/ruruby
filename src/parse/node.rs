@@ -142,6 +142,7 @@ pub enum BinOp {
     Ge,
     Lt,
     Le,
+    Cmp,
     LAnd,
     LOr,
     Match,
