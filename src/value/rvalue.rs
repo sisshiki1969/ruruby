@@ -13,8 +13,8 @@ pub struct RValue {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjKind {
     Ordinary,
-    FixNum(i64),
-    FloatNum(f64),
+    Integer(i64),
+    Float(f64),
     Class(ClassRef),
     Module(ClassRef),
     String(RString),
@@ -38,6 +38,30 @@ impl RValue {
         Ref::from_ref(self)
     }
 
+    pub fn dup(&self) -> Self {
+        RValue {
+            class: self.class,
+            var_table: self.var_table.clone(),
+            kind: match &self.kind {
+                ObjKind::Array(aref) => ObjKind::Array(aref.dup()),
+                ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
+                ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.dup()),
+                ObjKind::Fiber(_fref) => ObjKind::Ordinary,
+                ObjKind::Integer(num) => ObjKind::Integer(*num),
+                ObjKind::Float(num) => ObjKind::Float(*num),
+                ObjKind::Hash(href) => ObjKind::Hash(href.dup()),
+                ObjKind::Method(mref) => ObjKind::Method(mref.dup()),
+                ObjKind::Module(cref) => ObjKind::Module(cref.dup()),
+                ObjKind::Ordinary => ObjKind::Ordinary,
+                ObjKind::Proc(pref) => ObjKind::Proc(pref.dup()),
+                ObjKind::Range(info) => ObjKind::Range(info.clone()),
+                ObjKind::Regexp(rref) => ObjKind::Regexp(*rref),
+                ObjKind::Splat(v) => ObjKind::Splat(*v),
+                ObjKind::String(rstr) => ObjKind::String(rstr.clone()),
+            },
+        }
+    }
+
     pub fn new_bootstrap(classref: ClassRef) -> Self {
         RValue {
             class: Value::nil(), // dummy for boot strapping
@@ -50,7 +74,7 @@ impl RValue {
         RValue {
             class: Value::nil(),
             var_table: Box::new(HashMap::new()),
-            kind: ObjKind::FixNum(i),
+            kind: ObjKind::Integer(i),
         }
     }
 
@@ -58,7 +82,7 @@ impl RValue {
         RValue {
             class: Value::nil(),
             var_table: Box::new(HashMap::new()),
-            kind: ObjKind::FloatNum(f),
+            kind: ObjKind::Float(f),
         }
     }
 

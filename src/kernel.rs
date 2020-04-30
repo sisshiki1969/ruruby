@@ -200,8 +200,8 @@ impl Kernel {
                 }
             } else {
                 match self_.unpack() {
-                    RV::FixNum(num) => num,
-                    RV::FloatNum(num) => num as i64,
+                    RV::Integer(num) => num,
+                    RV::Float(num) => num as i64,
                     RV::Object(obj) => match &obj.kind {
                         ObjKind::String(s) => match s.parse::<i64>() {
                             Some(num) => num,
@@ -277,7 +277,7 @@ impl Kernel {
             let code = if args.len() == 0 {
                 0
             } else {
-                args[0].expect_fixnum(vm, "Expect Integer.")?
+                args[0].expect_integer(vm, "Expect Integer.")?
             };
             std::process::exit(code as i32);
         }

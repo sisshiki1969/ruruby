@@ -285,6 +285,10 @@ impl IdentId {
     pub const _POW: IdentId = id!(8);
     pub const _SHL: IdentId = id!(9);
     pub const _REM: IdentId = id!(10);
+    pub const _EQ: IdentId = id!(11);
+    pub const _NEQ: IdentId = id!(12);
+    pub const _GT: IdentId = id!(13);
+    pub const _GE: IdentId = id!(14);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -312,6 +316,10 @@ impl IdentifierTable {
         table.set_ident_id("**", IdentId::_POW);
         table.set_ident_id("<<", IdentId::_SHL);
         table.set_ident_id("%", IdentId::_REM);
+        table.set_ident_id("==", IdentId::_EQ);
+        table.set_ident_id("!=", IdentId::_NEQ);
+        table.set_ident_id(">", IdentId::_GT);
+        table.set_ident_id(">=", IdentId::_GE);
         table
     }
 

@@ -120,8 +120,8 @@ impl ClassList {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ISeqKind {
     Other,
-    Method(IdentId),
-    Proc(MethodRef),
+    Method(IdentId), // Method or Lambda
+    Proc(MethodRef), // Block or Proc
 }
 
 impl ISeqInfo {

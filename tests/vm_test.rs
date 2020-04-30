@@ -242,16 +242,19 @@ fn objects() {
 #[test]
 fn triple_equal() {
     let program = r#"
-        assert(true, 1 === 1)
-        assert(false, 1 === 2)
-        assert(false, "a" === 2)
-        assert(false, 2 === "a")
-        assert(false, "ruby" === "rust")
-        assert(true, "ruby" === "ruby")
-        assert(true, Integer === 100)
-        assert(false, Integer === "ruby")
-        assert(true, String === "ruby")
-        assert(false, String === 100)
+        assert true, 1 === 1
+        assert false, 1 === 2
+        assert false, "a" === 2
+        assert false, 2 === "a"
+        assert false, "ruby" === "rust"
+        assert true, "ruby" === "ruby"
+        assert false, Integer === Integer
+        assert true, Integer === 100
+        assert false, Integer === "ruby"
+        assert true, String === "ruby"
+        assert false, String === 100
+        assert true, /\A[A-Z]*\z/ === "HELLO"
+        assert false, /\A[a-z]*\z/ === "HELLO"
     "#;
     assert_script(program);
 }
@@ -643,15 +646,6 @@ fn range2() {
     assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
     assert(Range.new(5,10,true).last(4), [6,7,8,9])
     assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
-    assert_script(program);
-}
-
-#[test]
-fn regexp1() {
-    let program = r#"
-    assert("abc!!g", "abcdefg".gsub(/def/, "!!"))
-    assert("2.5".gsub(".", ","), "2,5")
-    "#;
     assert_script(program);
 }
 

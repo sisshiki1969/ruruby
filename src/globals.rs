@@ -220,8 +220,8 @@ impl Globals {
             RV::Nil => "NilClass".to_string(),
             RV::Bool(true) => "TrueClass".to_string(),
             RV::Bool(false) => "FalseClass".to_string(),
-            RV::FixNum(_) => "Integer".to_string(),
-            RV::FloatNum(_) => "Float".to_string(),
+            RV::Integer(_) => "Integer".to_string(),
+            RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
             RV::Object(oref) => match oref.kind {
                 ObjKind::String(_) => "String".to_string(),
@@ -237,8 +237,8 @@ impl Globals {
                 ObjKind::Ordinary => self
                     .get_ident_name(oref.search_class().as_class().name)
                     .to_string(),
-                ObjKind::FixNum(_) => "Integer".to_string(),
-                ObjKind::FloatNum(_) => "Float".to_string(),
+                ObjKind::Integer(_) => "Integer".to_string(),
+                ObjKind::Float(_) => "Float".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),
                 ObjKind::Enumerator(_) => "Enumerator".to_string(),
             },

@@ -62,7 +62,7 @@ fn range_first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         return Ok(range.start);
     };
-    let arg = args[0].expect_fixnum(&vm, "Argument")?;
+    let arg = args[0].expect_integer(&vm, "Argument")?;
     if arg < 0 {
         return Err(vm.error_argument("Negative array size"));
     };
@@ -83,7 +83,7 @@ fn range_last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         return Ok(range.end);
     };
-    let arg = args[0].expect_fixnum(&vm, "Argument")?;
+    let arg = args[0].expect_integer(&vm, "Argument")?;
     if arg < 0 {
         return Err(vm.error_argument("Negative array size"));
     };
@@ -101,8 +101,8 @@ fn range_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
     let mut res = vec![];
-    let start = range.start.expect_fixnum(&vm, "Start")?;
-    let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.expect_integer(&vm, "Start")?;
+    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(None, Value::fixnum(i));
         let val = vm.eval_block(method, &arg)?;
@@ -115,9 +115,8 @@ fn range_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn range_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let start = range.start.expect_fixnum(&vm, "Start")?;
-    let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
-    //eprintln!("range#each");
+    let start = range.start.expect_integer(&vm, "Start")?;
+    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(None, Value::fixnum(i));
         vm.eval_block(method, &arg)?;
@@ -128,8 +127,8 @@ fn range_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn range_all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let start = range.start.expect_fixnum(&vm, "Start")?;
-    let end = range.end.expect_fixnum(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.expect_integer(&vm, "Start")?;
+    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(None, Value::fixnum(i));
         let res = vm.eval_block(method, &arg)?;
@@ -142,8 +141,8 @@ fn range_all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn range_toa(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let start = range.start.expect_fixnum(&vm, "Range.start")?;
-    let end = range.end.expect_fixnum(&vm, "Range.end")?;
+    let start = range.start.expect_integer(&vm, "Range.start")?;
+    let end = range.end.expect_integer(&vm, "Range.end")?;
     let mut v = vec![];
     if range.exclude {
         for i in start..end {

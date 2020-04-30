@@ -40,6 +40,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "join", array_join);
     globals.add_builtin_instance_method(class, "drop", array_drop);
     globals.add_builtin_instance_method(class, "zip", array_zip);
+    globals.add_builtin_instance_method(class, "grep", array_grep);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -51,7 +52,7 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
-            RV::FixNum(num) if num >= 0 => vec![Value::nil(); num as usize],
+            RV::Integer(num) if num >= 0 => vec![Value::nil(); num as usize],
             RV::Object(oref) => match oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
                 _ => return Err(vm.error_nomethod("Invalid arguments")),
@@ -129,8 +130,8 @@ fn array_empty(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 fn array_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
-    let v = match args[0].unpack() {
-        RV::FixNum(num) => match num {
+    if let Some(num) = args[0].as_fixnum() {
+        let v = match num {
             i if i < 0 => return Err(vm.error_argument("Negative argument.")),
             0 => vec![],
             1 => aref.elements.clone(),
@@ -146,11 +147,27 @@ fn array_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
                 v
             }
-        },
-        _ => return Err(vm.error_nomethod(" ")),
-    };
-    let res = Value::array_from(&vm.globals, v);
-    Ok(res)
+        };
+        let res = Value::array_from(&vm.globals, v);
+        Ok(res)
+    } else if let Some(s) = args[0].as_string() {
+        match aref.elements.len() {
+            0 => return Ok(Value::string(&vm.globals, "".to_string())),
+            1 => {
+                let res = vm.val_to_s(aref.elements[0]);
+                return Ok(Value::string(&vm.globals, res));
+            }
+            _ => {
+                let mut res = vm.val_to_s(aref.elements[0]);
+                for i in 1..aref.elements.len() {
+                    res = format!("{}{}{}", res, s, vm.val_to_s(aref.elements[i]));
+                }
+                return Ok(Value::string(&vm.globals, res));
+            }
+        };
+    } else {
+        return Err(vm.error_undefined_op("*", args[0], self_val));
+    }
 }
 
 fn array_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -439,11 +456,11 @@ fn array_uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2, 2)?;
-    let start = args[0].expect_fixnum(vm, "Currently, first arg must be Integer.")?;
+    let start = args[0].expect_integer(vm, "Currently, first arg must be Integer.")?;
     if start < 0 {
         return Err(vm.error_argument("First arg must be positive value."));
     };
-    let len = args[1].expect_fixnum(vm, "Currently, second arg must be Integer")?;
+    let len = args[1].expect_integer(vm, "Currently, second arg must be Integer")?;
     if len < 0 {
         return Err(vm.error_argument("Second arg must be positive value."));
     };
@@ -535,13 +552,12 @@ fn array_join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn array_drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
-    let num = args[0].expect_fixnum(vm, "An argument must be Integer.")? as usize;
+    let num = args[0].expect_integer(vm, "An argument must be Integer.")? as usize;
     let ary = &aref.elements[num..aref.elements.len()];
     Ok(Value::array_from(&vm.globals, ary.to_vec()))
 }
 
 fn array_zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    //vm.check_args_num(args.len(), 1, 1)?;
     let self_ary = vm.expect_array(self_val, "Receiver")?;
     let mut args_ary = vec![];
     for a in args.iter() {
@@ -560,6 +576,33 @@ fn array_zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let zip = Value::array_from(&vm.globals, vec);
         ary.push(zip);
     }
+    match args.block {
+        Some(block) => {
+            let mut arg = Args::new1(None, Value::nil());
+            for val in ary {
+                arg[0] = val;
+                vm.eval_block(block, &arg)?;
+            }
+            Ok(Value::nil())
+        }
+        None => Ok(Value::array_from(&vm.globals, ary)),
+    }
+}
+
+fn array_grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let aref = vm.expect_array(self_val, "Receiver")?;
+    let ary = match args.block {
+        None => aref
+            .elements
+            .iter()
+            .filter_map(|x| match vm.eval_teq(*x, args[0]) {
+                Ok(true) => Some(*x),
+                _ => None,
+            })
+            .collect(),
+        Some(_block) => vec![],
+    };
     Ok(Value::array_from(&vm.globals, ary))
 }
 
@@ -568,11 +611,143 @@ mod tests {
     use crate::test::*;
 
     #[test]
+    fn array() {
+        let program = "
+    a=[1,2,3,4]
+    assert(3, a[2]);
+    a[1] = 14
+    assert(a, [1,14,3,4])
+    a.pop()
+    assert(a, [1,14,3])
+    a.push(7,8,9)
+    assert(a, [1,14,3,7,8,9])
+    a=[1,2,3,4]
+    b=Array.new(a)
+    assert(a,b)
+    b[2] = 100
+    assert(a, [1,2,3,4])
+    assert(b, [1,2,100,4])
+    ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array1() {
+        let program = "
+    assert([1,2,3]*0, [])
+    assert([1,2,3]*1, [1,2,3])
+    assert([nil]*5, [nil,nil,nil,nil,nil])
+    assert([1,2,3]+[3,4,5], [1,2,3,3,4,5])
+    assert([1,2,3]-[3,4,5], [1,2])
+    ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array2() {
+        let program = "
+    a = [1,2,3,4,5,6,7]
+    b = [3,9]
+    c = [3,3]
+    assert(a[2], 3)
+    assert(a[3,9], [4,5,6,7])
+    assert(a[*b], [4,5,6,7])
+    assert(a[3,3], [4,5,6])
+    assert(a[*c], [4,5,6])
+    assert(a[7], nil)
+    assert(a[7,3], [])
+    ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array3() {
+        let program = "
+    a = [1,2,3,4,5,6,7]
+    assert(a[2,3], [3,4,5])
+    a[2,3] = 100
+    assert(a, [1,2,100,6,7])
+    ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_mul() {
+        let program = r#"
+        assert [1, 2, 3, 1, 2, 3, 1, 2, 3], [1, 2, 3] * 3 
+        assert "1,2,3", [1,2,3] * ","
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_push() {
+        let program = r#"
+    a = [1,2,3]
+    a << 4
+    a << "Ruby"
+    assert([1,2,3,4,"Ruby"], a)
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_map() {
+        let program = "
+    a = [1,2,3]
+    assert(a.map {|| 3 }, [3,3,3])
+    assert(a.map {|x| x*3 }, [3,6,9])
+    assert(a.map do |x| x*3 end, [3,6,9])
+    assert(a, [1,2,3])";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_include() {
+        let program = r#"
+    a = ["ruby","rust","java"]
+    assert(true, a.include?("ruby"))
+    assert(true, a.include?("rust"))
+    assert(false, a.include?("c++"))
+    assert(false, a.include?(:ruby))
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_each() {
+        let program = "
+    a = [1,2,3]
+    b = 0
+    assert([1,2,3], a.each {|x| b+=x })
+    assert(6, b)
+    ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_reverse() {
+        let program = "
+    a = [1,2,3,4,5]
+    assert([5,4,3,2,1], a.reverse)
+    assert([1,2,3,4,5], a)
+    assert([5,4,3,2,1], a.reverse!)
+    assert([5,4,3,2,1], a)
+    ";
+        assert_script(program);
+    }
+
+    #[test]
     fn array_zip() {
         let program = r#"
         assert [[1,4,7],[2,5,8],[3,6,9]], [1,2,3].zip([4,5,6],[7,8,9])
         assert [[1,:a,:A],[2,:b,:B]], [1,2].zip([:a,:b,:c],[:A,:B,:C,:D])
         assert [[1,:a,:A],[2,:b,:B],[3,:c,:C],[4,nil,:D],[5,nil,nil]], [1,2,3,4,5].zip([:a,:b,:c],[:A,:B,:C,:D])
+        ans = []
+        [1,2,3].zip([4,5,6], [7,8,9]) {|ary|
+            ans.push(ary)
+        }
+        assert [[1,4,7],[2,5,8],[3,6,9]], ans
         "#;
         assert_script(program);
     }

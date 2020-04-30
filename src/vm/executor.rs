@@ -706,27 +706,21 @@ impl VM {
                 Inst::EQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = Value::bool(self.eval_eq(lhs, rhs)?);
+                    let val = Value::bool(self.eval_eq(rhs, lhs)?);
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::NE => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = Value::bool(!self.eval_eq(lhs, rhs)?);
+                    let val = Value::bool(!self.eval_eq(rhs, lhs)?);
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::TEQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let res = match lhs.is_class() {
-                        Some(_) if rhs.get_class_object(&self.globals).id() == lhs.id() => true,
-                        _ => match self.eval_eq(lhs, rhs) {
-                            Ok(res) => res,
-                            Err(_) => false,
-                        },
-                    };
+                    let res = self.eval_teq(rhs, lhs)?;
                     let val = Value::bool(res);
                     self.stack_push(val);
                     self.pc += 1;
@@ -909,10 +903,9 @@ impl VM {
                             }
                         },
                         None if receiver.is_packed_fixnum() => {
-                            eprintln!("FIXNUM");
                             let i = receiver.as_packed_fixnum();
                             self.check_args_num(arg_num, 1, 1)?;
-                            let index = args[0].expect_fixnum(&self, "Index")?;
+                            let index = args[0].expect_integer(&self, "Index")?;
                             let val = if index < 0 || 63 < index {
                                 0
                             } else {
@@ -976,7 +969,8 @@ impl VM {
                         'm' => arg.insert_str(0, "(?m)"),
                         'x' => arg.insert_str(0, "(?mx)"),
                         'o' => arg.insert_str(0, "(?mo)"),
-                        _ => arg.insert_str(0, "(?m)"),
+                        '-' => arg.insert_str(0, "(?m)"),
+                        _ => return Err(self.error_internal("Illegal internal regexp expression.")),
                     };
                     let regexpref = match RegexpRef::from_string(&arg) {
                         Ok(regex) => regex,
@@ -1299,6 +1293,13 @@ impl VM {
         }
     }
 
+    pub fn expect_integer(&self, val: Value, msg: impl Into<String>) -> Result<i64, RubyError> {
+        match val.as_fixnum() {
+            Some(i) => Ok(i),
+            None => Err(self.error_argument(msg.into() + " must be an Integer.")),
+        }
+    }
+
     pub fn expect_array(&mut self, val: Value, error_message: &str) -> Result<ArrayRef, RubyError> {
         match val.as_array() {
             Some(ary) => Ok(ary),
@@ -1478,15 +1479,15 @@ impl VM {
 }
 
 macro_rules! eval_op {
-    ($self:ident, $iseq:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+    ($vm:ident, $iseq:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         let val = match ($lhs.unpack(), $rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Value::fixnum(lhs.$op(rhs)),
-            (RV::FixNum(lhs), RV::FloatNum(rhs)) => Value::flonum((lhs as f64).$op(rhs)),
-            (RV::FloatNum(lhs), RV::FixNum(rhs)) => Value::flonum(lhs.$op(rhs as f64)),
-            (RV::FloatNum(lhs), RV::FloatNum(rhs)) => Value::flonum(lhs.$op(rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::fixnum(lhs.$op(rhs)),
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum((lhs as f64).$op(rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(lhs.$op(rhs as f64)),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(lhs.$op(rhs)),
             _ => {
-                let cache = $self.read32($iseq, 1);
-                return $self.fallback_to_method_with_cache($lhs, $rhs, $id, cache);
+                let cache = $vm.read32($iseq, 1);
+                return $vm.fallback_to_method_with_cache($lhs, $rhs, $id, cache);
             }
         };
         return Ok(val);
@@ -1512,8 +1513,8 @@ impl VM {
     fn eval_addi(&mut self, lhs: Value, i: i32) -> VMResult {
         use std::ops::Add;
         let val = match lhs.unpack() {
-            RV::FixNum(lhs) => Value::fixnum(lhs.add(i as i64)),
-            RV::FloatNum(lhs) => Value::flonum(lhs.add(i as f64)),
+            RV::Integer(lhs) => Value::fixnum(lhs.add(i as i64)),
+            RV::Float(lhs) => Value::flonum(lhs.add(i as f64)),
             _ => return self.fallback_to_method(IdentId::_ADD, lhs, Value::fixnum(i as i64)),
         };
         Ok(val)
@@ -1521,8 +1522,8 @@ impl VM {
 
     fn eval_subi(&mut self, lhs: Value, i: i32) -> VMResult {
         let val = match lhs.unpack() {
-            RV::FixNum(lhs) => Value::fixnum(lhs - i as i64),
-            RV::FloatNum(lhs) => Value::flonum(lhs - i as f64),
+            RV::Integer(lhs) => Value::fixnum(lhs - i as i64),
+            RV::Float(lhs) => Value::flonum(lhs - i as f64),
             _ => return self.fallback_to_method(IdentId::_SUB, lhs, Value::fixnum(i as i64)),
         };
         Ok(val)
@@ -1531,10 +1532,10 @@ impl VM {
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Div;
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Ok(RV::FixNum(lhs.div(rhs)).pack()),
-            (RV::FixNum(lhs), RV::FloatNum(rhs)) => Ok(RV::FloatNum((lhs as f64).div(rhs)).pack()),
-            (RV::FloatNum(lhs), RV::FixNum(rhs)) => Ok(RV::FloatNum(lhs.div(rhs as f64)).pack()),
-            (RV::FloatNum(lhs), RV::FloatNum(rhs)) => Ok(RV::FloatNum(lhs.div(rhs)).pack()),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(RV::Integer(lhs.div(rhs)).pack()),
+            (RV::Integer(lhs), RV::Float(rhs)) => Ok(RV::Float((lhs as f64).div(rhs)).pack()),
+            (RV::Float(lhs), RV::Integer(rhs)) => Ok(RV::Float(lhs.div(rhs as f64)).pack()),
+            (RV::Float(lhs), RV::Float(rhs)) => Ok(RV::Float(lhs.div(rhs)).pack()),
             (_, _) => return Err(self.error_undefined_op("/", rhs, lhs)),
         }
     }
@@ -1551,10 +1552,10 @@ impl VM {
         }
         use divrem::*;
         let val = match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Value::fixnum(lhs.rem_floor(rhs)),
-            (RV::FixNum(lhs), RV::FloatNum(rhs)) => Value::flonum(rem_floorf64(lhs as f64, rhs)),
-            (RV::FloatNum(lhs), RV::FixNum(rhs)) => Value::flonum(rem_floorf64(lhs, rhs as f64)),
-            (RV::FloatNum(lhs), RV::FloatNum(rhs)) => Value::flonum(rem_floorf64(lhs, rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::fixnum(lhs.rem_floor(rhs)),
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum(rem_floorf64(lhs as f64, rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(rem_floorf64(lhs, rhs as f64)),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(rem_floorf64(lhs, rhs)),
             (_, _) => return self.fallback_to_method(IdentId::_REM, lhs, rhs),
         };
         Ok(val)
@@ -1562,16 +1563,16 @@ impl VM {
 
     fn eval_exp(&mut self, rhs: Value, lhs: Value) -> VMResult {
         let val = match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => {
+            (RV::Integer(lhs), RV::Integer(rhs)) => {
                 if 0 <= rhs && rhs <= std::u32::MAX as i64 {
                     Value::fixnum(lhs.pow(rhs as u32))
                 } else {
                     Value::flonum((lhs as f64).powf(rhs as f64))
                 }
             }
-            (RV::FixNum(lhs), RV::FloatNum(rhs)) => Value::flonum((lhs as f64).powf(rhs)),
-            (RV::FloatNum(lhs), RV::FixNum(rhs)) => Value::flonum(lhs.powf(rhs as f64)),
-            (RV::FloatNum(lhs), RV::FloatNum(rhs)) => Value::flonum(lhs.powf(rhs)),
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum((lhs as f64).powf(rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(lhs.powf(rhs as f64)),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(lhs.powf(rhs)),
             _ => {
                 return self.fallback_to_method(IdentId::_POW, lhs, rhs);
             }
@@ -1581,7 +1582,7 @@ impl VM {
 
     fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => {
+            (RV::Integer(lhs), RV::Integer(rhs)) => {
                 let val = Value::fixnum(lhs << rhs);
                 Ok(val)
             }
@@ -1595,48 +1596,48 @@ impl VM {
 
     fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Ok(Value::fixnum(lhs >> rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs >> rhs)),
             (_, _) => return Err(self.error_undefined_op(">>", rhs, lhs)),
         }
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Ok(Value::fixnum(lhs & rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs & rhs)),
             (_, _) => return Err(self.error_undefined_op("&", rhs, lhs)),
         }
     }
 
     fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Ok(Value::fixnum(lhs | rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs | rhs)),
             (_, _) => return Err(self.error_undefined_op("|", rhs, lhs)),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Ok(Value::fixnum(lhs ^ rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs ^ rhs)),
             (_, _) => return Err(self.error_undefined_op("^", rhs, lhs)),
         }
     }
 
     fn eval_bitnot(&mut self, lhs: Value) -> VMResult {
         match lhs.unpack() {
-            RV::FixNum(lhs) => Ok(Value::fixnum(!lhs)),
+            RV::Integer(lhs) => Ok(Value::fixnum(!lhs)),
             _ => Err(self.error_nomethod("NoMethodError: '~'")),
         }
     }
 }
 
 macro_rules! eval_cmp {
-    ($self:ident, $rhs:expr, $lhs:expr, $op:ident) => {
+    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         match ($lhs.unpack(), $rhs.unpack()) {
-            (RV::FixNum(lhs), RV::FixNum(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
-            (RV::FloatNum(lhs), RV::FixNum(rhs)) => Ok(Value::bool(lhs.$op(&(rhs as f64)))),
-            (RV::FixNum(lhs), RV::FloatNum(rhs)) => Ok(Value::bool((lhs as f64).$op(&rhs))),
-            (RV::FloatNum(lhs), RV::FloatNum(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
-            (_, _) => Err($self.error_nomethod("NoMethodError: '>='")),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
+            (RV::Float(lhs), RV::Integer(rhs)) => Ok(Value::bool(lhs.$op(&(rhs as f64)))),
+            (RV::Integer(lhs), RV::Float(rhs)) => Ok(Value::bool((lhs as f64).$op(&rhs))),
+            (RV::Float(lhs), RV::Float(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
+            (_, _) => return $vm.fallback_to_method($id, $lhs, $rhs),
         }
     };
 }
@@ -1646,12 +1647,39 @@ impl VM {
         Ok(rhs.equal(lhs))
     }
 
+    pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        match lhs.is_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Class(_) => {
+                    let res = rhs.get_class_object(&self.globals).id() == lhs.id();
+                    Ok(res)
+                }
+                ObjKind::Regexp(re) => {
+                    expect_string!(given, self, rhs);
+                    let res = match Regexp::find_one(self, &re.regexp, given).unwrap() {
+                        Some(_) => true,
+                        None => false,
+                    };
+                    Ok(res)
+                }
+                _ => match self.eval_eq(lhs, rhs) {
+                    Ok(res) => Ok(res),
+                    Err(_) => Ok(false),
+                },
+            },
+            None => match self.eval_eq(lhs, rhs) {
+                Ok(res) => Ok(res),
+                Err(_) => Ok(false),
+            },
+        }
+    }
+
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, ge)
+        eval_cmp!(self, rhs, lhs, ge, IdentId::_GE)
     }
 
     pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, gt)
+        eval_cmp!(self, rhs, lhs, gt, IdentId::_GT)
     }
 }
 
@@ -1670,8 +1698,8 @@ impl VM {
                 true => "true".to_string(),
                 false => "false".to_string(),
             },
-            RV::FixNum(i) => i.to_string(),
-            RV::FloatNum(f) => {
+            RV::Integer(i) => i.to_string(),
+            RV::Float(f) => {
                 if f.fract() == 0.0 {
                     format!("{:.1}", f)
                 } else {
@@ -1715,7 +1743,7 @@ impl VM {
         match val.is_object() {
             Some(mut oref) => match &oref.kind {
                 ObjKind::String(s) => match s {
-                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
+                    RString::Str(s) => format!("\"{}\"", s.escape_debug()),
                     RString::Bytes(b) => match String::from_utf8(b.clone()) {
                         Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
                         Err(_) => "<ByteArray>".to_string(),

@@ -48,8 +48,8 @@ pub enum RV {
     Uninitialized,
     Nil,
     Bool(bool),
-    FixNum(i64),
-    FloatNum(f64),
+    Integer(i64),
+    Float(f64),
     Symbol(IdentId),
     Object(ObjectRef),
 }
@@ -61,8 +61,8 @@ impl RV {
             RV::Nil => Value::nil(),
             RV::Bool(true) => Value::true_val(),
             RV::Bool(false) => Value::false_val(),
-            RV::FixNum(num) => Value::fixnum(num),
-            RV::FloatNum(num) => Value::flonum(num),
+            RV::Integer(num) => Value::fixnum(num),
+            RV::Float(num) => Value::flonum(num),
             RV::Symbol(id) => Value::symbol(id),
             RV::Object(info) => Value(info.id()),
         }
@@ -84,8 +84,8 @@ impl std::hash::Hash for Value {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
-                ObjKind::FixNum(lhs) => lhs.hash(state),
-                ObjKind::FloatNum(lhs) => lhs.to_bits().hash(state),
+                ObjKind::Integer(lhs) => lhs.hash(state),
+                ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
                 ObjKind::Range(lhs) => lhs.hash(state),
@@ -122,10 +122,10 @@ impl PartialEq for Value {
             return false;
         };
         match (&self.rvalue().kind, &other.rvalue().kind) {
-            (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs,
-            (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => *lhs == *rhs,
-            (ObjKind::FixNum(lhs), ObjKind::FloatNum(rhs)) => *lhs as f64 == *rhs,
-            (ObjKind::FloatNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
+            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
@@ -153,14 +153,14 @@ impl Value {
         if !self.is_packed_value() {
             let info = self.rvalue();
             match &info.kind {
-                ObjKind::FixNum(i) => RV::FixNum(*i),
-                ObjKind::FloatNum(f) => RV::FloatNum(*f),
+                ObjKind::Integer(i) => RV::Integer(*i),
+                ObjKind::Float(f) => RV::Float(*f),
                 _ => RV::Object(Ref::from_ref(info)),
             }
         } else if self.is_packed_fixnum() {
-            RV::FixNum(self.as_packed_fixnum())
+            RV::Integer(self.as_packed_fixnum())
         } else if self.is_packed_num() {
-            RV::FloatNum(self.as_packed_flonum())
+            RV::Float(self.as_packed_flonum())
         } else if self.is_packed_symbol() {
             RV::Symbol(self.as_packed_symbol())
         } else {
@@ -180,6 +180,12 @@ impl Value {
 
     pub fn from(id: u64) -> Self {
         Value(id)
+    }
+    pub fn dup(&self) -> Self {
+        match self.as_rvalue() {
+            Some(rv) => rv.dup().pack(),
+            None => *self,
+        }
     }
 
     /// Get RValue from Value.
@@ -214,8 +220,8 @@ impl Value {
                 }
             }
             Some(info) => match &info.kind {
-                ObjKind::FixNum(_) => globals.builtins.integer,
-                ObjKind::FloatNum(_) => globals.builtins.float,
+                ObjKind::Integer(_) => globals.builtins.integer,
+                ObjKind::Float(_) => globals.builtins.float,
                 _ => info.class(),
             },
         }
@@ -235,8 +241,8 @@ impl Value {
                 }
             }
             Some(info) => match &info.kind {
-                ObjKind::FixNum(_) => globals.builtins.integer,
-                ObjKind::FloatNum(_) => globals.builtins.float,
+                ObjKind::Integer(_) => globals.builtins.integer,
+                ObjKind::Float(_) => globals.builtins.float,
                 _ => info.search_class(),
             },
         }
@@ -334,7 +340,7 @@ impl Value {
         } else {
             match self.as_rvalue() {
                 Some(info) => match &info.kind {
-                    ObjKind::FixNum(f) => Some(*f),
+                    ObjKind::Integer(f) => Some(*f),
                     _ => None,
                 },
                 _ => None,
@@ -342,7 +348,7 @@ impl Value {
         }
     }
 
-    pub fn expect_fixnum(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
+    pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.as_fixnum() {
             Some(i) => Ok(i),
             None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
@@ -355,7 +361,7 @@ impl Value {
         } else {
             match self.as_rvalue() {
                 Some(info) => match &info.kind {
-                    ObjKind::FloatNum(f) => Some(*f),
+                    ObjKind::Float(f) => Some(*f),
                     _ => None,
                 },
                 _ => None,
@@ -715,10 +721,10 @@ impl Value {
             return false;
         };
         match (&self.rvalue().kind, &other.rvalue().kind) {
-            (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs,
-            (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => *lhs == *rhs,
-            (ObjKind::FixNum(lhs), ObjKind::FloatNum(rhs)) => *lhs as f64 == *rhs,
-            (ObjKind::FloatNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
+            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
@@ -772,7 +778,7 @@ mod tests {
 
     #[test]
     fn pack_integer1() {
-        let expect = RV::FixNum(12054);
+        let expect = RV::Integer(12054);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -789,7 +795,7 @@ mod tests {
             0x7fff_ffff_ffff_ffff as u64 as i64,
         ];
         for expect in expect_ary.iter() {
-            let got = match RV::FixNum(*expect).pack().as_fixnum() {
+            let got = match RV::Integer(*expect).pack().as_fixnum() {
                 Some(int) => int,
                 None => panic!("Expect:{:?} Got:Invalid RValue"),
             };
@@ -801,7 +807,7 @@ mod tests {
 
     #[test]
     fn pack_integer2() {
-        let expect = RV::FixNum(-58993);
+        let expect = RV::Integer(-58993);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -810,7 +816,7 @@ mod tests {
 
     #[test]
     fn pack_integer3() {
-        let expect = RV::FixNum(0x8000_0000_0000_0000 as u64 as i64);
+        let expect = RV::Integer(0x8000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -819,7 +825,7 @@ mod tests {
 
     #[test]
     fn pack_integer4() {
-        let expect = RV::FixNum(0x4000_0000_0000_0000 as u64 as i64);
+        let expect = RV::Integer(0x4000_0000_0000_0000 as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -828,7 +834,7 @@ mod tests {
 
     #[test]
     fn pack_integer5() {
-        let expect = RV::FixNum(0x7fff_ffff_ffff_ffff as u64 as i64);
+        let expect = RV::Integer(0x7fff_ffff_ffff_ffff as u64 as i64);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -837,7 +843,7 @@ mod tests {
 
     #[test]
     fn pack_float0() {
-        let expect = RV::FloatNum(0.0);
+        let expect = RV::Float(0.0);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -846,7 +852,7 @@ mod tests {
 
     #[test]
     fn pack_float1() {
-        let expect = RV::FloatNum(100.0);
+        let expect = RV::Float(100.0);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -855,7 +861,7 @@ mod tests {
 
     #[test]
     fn pack_float2() {
-        let expect = RV::FloatNum(13859.628547);
+        let expect = RV::Float(13859.628547);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -864,7 +870,7 @@ mod tests {
 
     #[test]
     fn pack_float3() {
-        let expect = RV::FloatNum(-5282.2541156);
+        let expect = RV::Float(-5282.2541156);
         let got = expect.clone().pack().unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -874,8 +880,8 @@ mod tests {
     #[test]
     fn pack_range() {
         let globals = Globals::new();
-        let from = RV::FixNum(7).pack();
-        let to = RV::FixNum(36).pack();
+        let from = RV::Integer(7).pack();
+        let to = RV::Integer(36).pack();
         let expect = Value::range(&globals, from, to, true);
         let got = expect.unpack().pack();
         if expect != got {

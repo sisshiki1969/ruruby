@@ -3,7 +3,7 @@ use crate::*;
 pub fn init_struct(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Struct");
     let class = ClassRef::from(id, globals.builtins.object);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
+    //globals.add_builtin_instance_method(class, "inspect", inspect);
     let class = Value::class(globals, class);
     globals.add_builtin_class_method(class, "new", struct_new);
     class
@@ -29,6 +29,8 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let class = val.as_class();
     vm.globals
         .add_builtin_instance_method(class, "initialize", initialize);
+    vm.globals
+        .add_builtin_instance_method(class, "inspect", inspect);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
@@ -73,28 +75,45 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let id = members.elements[i].as_symbol().unwrap();
         let var = format!("@{}", vm.globals.get_ident_name(id));
         self_val.set_var(vm.globals.get_ident_id(var), *arg);
-        //eprintln!("{}:{}", var, vm.val_inspect(*arg));
     }
     Ok(Value::nil())
 }
 
-fn inspect(vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
-    /*
-    let arg_string = {
-        match eref.args.len() {
-            0 => "".to_string(),
-            1 => vm.val_inspect(eref.args[0]),
-            _ => {
-                let mut s = vm.val_inspect(eref.args[0]);
-                for i in 1..eref.args.len() {
-                    s = format!("{},{}", s, vm.val_inspect(eref.args[i]));
-                }
-                s
-            }
-        }
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let members = match self_val
+        .get_class_object(&vm.globals)
+        .get_var(vm.globals.get_ident_id("_members"))
+    {
+        Some(v) => match v.as_array() {
+            Some(aref) => aref,
+            None => return Err(vm.error_internal("Illegal _members value.")),
+        },
+        None => return Err(vm.error_internal("No _members.")),
     };
-    */
-    let inspect = format!("#<struct: >");
+    let attrs: Vec<IdentId> = members
+        .elements
+        .iter()
+        .map(|x| {
+            let id = x.as_symbol().unwrap();
+            let name = format!("@{}", vm.globals.get_ident_name(id));
+            vm.globals.get_ident_id(name)
+        })
+        .collect();
+    let mut attr_str = String::new();
+    for id in attrs {
+        let val = match self_val.get_var(id) {
+            Some(v) => vm.val_inspect(v),
+            None => "<>".to_string(),
+        };
+        let name = vm.globals.get_ident_name(id);
+
+        attr_str = format!("{} {}={}", attr_str, name, val);
+    }
+    let class_name = match self_val.get_class_object(&vm.globals).as_class().name {
+        Some(id) => vm.globals.get_ident_name(id),
+        None => "",
+    };
+    let inspect = format!("#<struct: {}{}>", class_name, attr_str);
     Ok(Value::string(&vm.globals, inspect))
 }
 

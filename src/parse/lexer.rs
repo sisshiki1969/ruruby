@@ -645,22 +645,26 @@ impl Lexer {
         }
     }
 
+    fn check_postfix(&mut self, s: &mut String) {
+        if self.consume('i') {
+            s.push('i');
+        } else if self.consume('m') {
+            s.push('m');
+        } else if self.consume('x') {
+            s.push('x');
+        } else if self.consume('o') {
+            s.push('o');
+        } else {
+            s.push('-');
+        };
+    }
+
     pub fn lex_regexp(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
                 '/' => {
-                    if self.consume('i') {
-                        s.push('i');
-                    } else if self.consume('m') {
-                        s.push('m');
-                    } else if self.consume('x') {
-                        s.push('x');
-                    } else if self.consume('o') {
-                        s.push('o');
-                    } else {
-                        s.push(' ');
-                    };
+                    self.check_postfix(&mut s);
                     return Ok(self.new_stringlit(s));
                 }
                 '\\' => {
@@ -670,7 +674,6 @@ impl Lexer {
                 '#' => {
                     if self.consume('{') {
                         self.quote_state.push(QuoteState::RegEx);
-                        //self.quote_state.push(QuoteState::Expr);
                         return Ok(self.new_open_reg(s));
                     } else {
                         s.push('#');
@@ -687,7 +690,10 @@ impl Lexer {
         let mut s = "".to_string();
         loop {
             match self.get()? {
-                '/' => return Ok(self.new_close_dq(s)),
+                '/' => {
+                    self.check_postfix(&mut s);
+                    return Ok(self.new_close_dq(s));
+                }
                 '\\' => {
                     s.push('\\');
                     s.push(self.get()?);

@@ -1,3 +1,4 @@
-def acc *rest, opt=100
-    p rest, opt
-end
+str = "<p><a href=\"http://example.com\">example.com</a></p>"
+/<a href="(.*?)">(.*?)<\/a>/ === str
+p($&)
+p($')

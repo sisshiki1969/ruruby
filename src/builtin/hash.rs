@@ -22,8 +22,8 @@ impl std::hash::Hash for HashKey {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
-                ObjKind::FixNum(lhs) => lhs.hash(state),
-                ObjKind::FloatNum(lhs) => (*lhs as u64).hash(state),
+                ObjKind::Integer(lhs) => lhs.hash(state),
+                ObjKind::Float(lhs) => (*lhs as u64).hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
                 ObjKind::Range(lhs) => lhs.hash(state),
@@ -47,8 +47,8 @@ impl PartialEq for HashKey {
         match (self.as_rvalue(), other.as_rvalue()) {
             (None, None) => self.0 == other.0,
             (Some(lhs), Some(rhs)) => match (&lhs.kind, &rhs.kind) {
-                (ObjKind::FixNum(lhs), ObjKind::FixNum(rhs)) => *lhs == *rhs,
-                (ObjKind::FloatNum(lhs), ObjKind::FloatNum(rhs)) => *lhs == *rhs,
+                (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
+                (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
                 (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,

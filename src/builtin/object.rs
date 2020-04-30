@@ -6,6 +6,8 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "object_id", object_id);
     globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
     globals.add_builtin_instance_method(object, "inspect", inspect);
+    globals.add_builtin_instance_method(object, "clone", dup);
+    globals.add_builtin_instance_method(object, "dup", dup);
     globals.add_builtin_instance_method(object, "eql?", eql);
     globals.add_builtin_instance_method(object, "to_i", toi);
     globals.add_builtin_instance_method(object, "instance_variable_set", instance_variable_set);
@@ -38,6 +40,12 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, inspect))
 }
 
+fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let val = self_val.dup();
+    Ok(val)
+}
+
 fn eql(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     Ok(Value::bool(self_val == args[0]))
@@ -48,8 +56,8 @@ fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let self_ = self_val;
     let num = match &self_.as_rvalue() {
         Some(info) => match &info.kind {
-            ObjKind::FixNum(val) => *val,
-            ObjKind::FloatNum(val) => f64::trunc(*val) as i64,
+            ObjKind::Integer(val) => *val,
+            ObjKind::Float(val) => f64::trunc(*val) as i64,
             _ => return Err(vm.error_type("Must be a number.")),
         },
         None => {

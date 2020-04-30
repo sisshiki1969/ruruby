@@ -702,6 +702,7 @@ impl Codegen {
                     | Inst::BIT_NOT
                     | Inst::CONCAT_STRING
                     | Inst::CREATE_RANGE
+                    | Inst::CREATE_REGEXP
                     | Inst::RETURN
                     | Inst::TO_S
                     | Inst::SPLAT

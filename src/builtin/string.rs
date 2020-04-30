@@ -75,6 +75,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "sum", string_sum);
     globals.add_builtin_instance_method(class, "upcase", string_upcase);
     globals.add_builtin_instance_method(class, "chomp", string_chomp);
+    globals.add_builtin_instance_method(class, "to_i", string_toi);
 
     Value::class(globals, class)
 }
@@ -90,7 +91,7 @@ fn string_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn string_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     expect_string!(lhs, vm, self_val);
-    let rhs = match args[0].expect_fixnum(vm, "Rhs must be FixNum.")? {
+    let rhs = match args[0].expect_integer(vm, "Rhs must be Integer.")? {
         i if i < 0 => return Err(vm.error_argument("Negative argument.")),
         i => i as usize,
     };
@@ -117,7 +118,7 @@ fn string_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
     expect_string!(lhs, vm, self_val);
     match args[0].unpack() {
-        RV::FixNum(i) => {
+        RV::Integer(i) => {
             let index = match conv_index(i, lhs.chars().count()) {
                 Some(i) => i,
                 None => return Ok(Value::nil()),
@@ -228,7 +229,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         arg_no += 1;
         let format = match ch {
             'd' => {
-                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                let val = val.expect_integer(&vm, "Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$.p$}", val, w = width, p = precision)
                 } else {
@@ -236,7 +237,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'b' => {
-                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                let val = val.expect_integer(&vm, "Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$b}", val, w = width)
                 } else {
@@ -244,7 +245,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'x' => {
-                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                let val = val.expect_integer(&vm, "Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$x}", val, w = width)
                 } else {
@@ -252,7 +253,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'X' => {
-                let val = val.expect_fixnum(&vm, "Invalid value for placeholder of Integer.")?;
+                let val = val.expect_integer(&vm, "Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$X}", val, w = width)
                 } else {
@@ -297,7 +298,7 @@ fn string_split(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     expect_string!(string, vm, self_val);
     expect_string!(sep, vm, args[0]);
     let lim = if args.len() > 1 {
-        args[1].expect_fixnum(vm, "Second arg must be Integer.")?
+        args[1].expect_integer(vm, "Second arg must be Integer.")?
     } else {
         0
     };
@@ -345,29 +346,15 @@ fn string_split(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn string_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 2)?;
     expect_string!(given, vm, self_val);
-    if args.len() == 2 {
+    let res = if args.len() == 2 {
         expect_string!(replace, vm, args[1]);
-        let res = if let Some(s) = args[0].as_string() {
-            let re = vm.regexp_from_string(&s)?;
-            Regexp::replace_one(vm, &re, given, replace)?
-        } else if let Some(re) = args[0].as_regexp() {
-            Regexp::replace_one(vm, &re.regexp, given, replace)?
-        } else {
-            return Err(vm.error_argument("1st arg must be RegExp or String."));
-        };
-        Ok(Value::string(&vm.globals, res))
+        Regexp::replace_one(vm, args[0], given, replace)?
     } else {
         let block = vm.expect_block(args.block)?;
-        let (res, _) = if let Some(s) = args[0].as_string() {
-            let re = vm.regexp_from_string(&s)?;
-            Regexp::replace_one_block(vm, &re, given, block)?
-        } else if let Some(re) = args[0].as_regexp() {
-            Regexp::replace_one_block(vm, &re.regexp, given, block)?
-        } else {
-            return Err(vm.error_argument("1st arg must be RegExp or String."));
-        };
-        Ok(Value::string(&vm.globals, res))
-    }
+        let (res, _) = Regexp::replace_one_block(vm, args[0], given, block)?;
+        res
+    };
+    Ok(Value::string(&vm.globals, res))
 }
 
 fn string_gsub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -387,27 +374,13 @@ fn gsub(vm: &mut VM, self_val: Value, args: &Args) -> Result<(String, bool), Rub
         Some(block) => {
             vm.check_args_num(args.len(), 1, 1)?;
             expect_string!(given, vm, self_val);
-            if let Some(s) = args[0].as_string() {
-                let re = vm.regexp_from_string(&s)?;
-                Ok(Regexp::replace_all_block(vm, &re, given, block)?)
-            } else if let Some(re) = args[0].as_regexp() {
-                Ok(Regexp::replace_all_block(vm, &re.regexp, given, block)?)
-            } else {
-                return Err(vm.error_argument("1st arg must be RegExp or String."));
-            }
+            Regexp::replace_all_block(vm, args[0], given, block)
         }
         None => {
             vm.check_args_num(args.len(), 2, 2)?;
             expect_string!(given, vm, self_val);
             expect_string!(replace, vm, args[1]);
-            if let Some(s) = args[0].as_string() {
-                let re = vm.regexp_from_string(&s)?;
-                Ok(Regexp::replace_all(vm, &re, given, replace)?)
-            } else if let Some(re) = args[0].as_regexp() {
-                Ok(Regexp::replace_all(vm, &re.regexp, given, replace)?)
-            } else {
-                return Err(vm.error_argument("1st arg must be RegExp or String."));
-            }
+            Regexp::replace_all(vm, args[0], given, replace)
         }
     }
 }
@@ -434,7 +407,6 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => {
             for arg in vec {
-                eprintln!("{}", vm.val_inspect(arg));
                 match arg.as_array() {
                     Some(ary) => {
                         let len = ary.elements.len();
@@ -527,6 +499,13 @@ fn string_chomp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     expect_string!(string, vm, self_val);
     let res = string.trim_end_matches('\n').to_string();
     Ok(Value::string(&vm.globals, res))
+}
+
+fn string_toi(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    expect_string!(string, vm, self_val);
+    let i: i64 = string.parse().unwrap();
+    Ok(Value::fixnum(i))
 }
 
 #[cfg(test)]
@@ -664,6 +643,14 @@ mod test {
     fn string_chomp() {
         let program = r#"
         assert "Ruby", "Ruby\n\n\n".chomp
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_toi() {
+        let program = r#"
+        assert 1578, "1578".to_i
         "#;
         assert_script(program);
     }
