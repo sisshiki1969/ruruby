@@ -1700,6 +1700,28 @@ impl VM {
         let id = self.globals.get_ident_id("<=>");
         self.fallback_to_method(id, lhs, rhs)
     }
+
+    pub fn sort_array(&mut self, mut aref: ArrayRef) -> Result<(), RubyError> {
+        if aref.elements.len() > 0 {
+            let val = aref.elements[0];
+            for i in 1..aref.elements.len() {
+                match self.eval_cmp(aref.elements[i], val)? {
+                    v if v == Value::nil() => {
+                        let lhs = self.globals.get_class_name(val);
+                        let rhs = self.globals.get_class_name(aref.elements[i]);
+                        return Err(self.error_argument(format!(
+                            "Comparison of {} with {} failed.",
+                            lhs, rhs
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+        };
+        aref.elements
+            .sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
+        Ok(())
+    }
 }
 
 // API's for handling values.

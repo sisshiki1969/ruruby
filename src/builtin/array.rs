@@ -644,27 +644,10 @@ fn array_grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn array_sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     vm.check_args_num(args.len(), 0, 0)?;
-    let mut aref = vm.expect_array(self_val, "Receiver")?.dup();
+    let aref = vm.expect_array(self_val, "Receiver")?.dup();
     match args.block {
         None => {
-            if aref.elements.len() > 0 {
-                let val = aref.elements[0];
-                for i in 1..aref.elements.len() {
-                    match vm.eval_cmp(aref.elements[i], val)? {
-                        v if v == Value::nil() => {
-                            let lhs = vm.globals.get_class_name(val);
-                            let rhs = vm.globals.get_class_name(aref.elements[i]);
-                            return Err(vm.error_argument(format!(
-                                "Comparison of {} with {} failed.",
-                                lhs, rhs
-                            )));
-                        }
-                        _ => {}
-                    }
-                }
-            };
-            aref.elements
-                .sort_by(|a, b| vm.eval_cmp(*b, *a).unwrap().to_ordering())
+            vm.sort_array(aref)?;
         }
         Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
     };

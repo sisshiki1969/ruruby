@@ -296,6 +296,7 @@ pub fn init_hash(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "merge", merge);
     globals.add_builtin_instance_method(class, "fetch", fetch);
     globals.add_builtin_instance_method(class, "compare_by_identity", compare_by_identity);
+    globals.add_builtin_instance_method(class, "sort", sort);
     Value::class(globals, class)
 }
 
@@ -471,6 +472,19 @@ fn compare_by_identity(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         HashInfo::IdentMap(_) => {}
     };
     Ok(self_val)
+}
+
+fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let hash = as_hash!(self_val, vm);
+    let mut vec = vec![];
+    for (k, v) in hash.iter() {
+        let ary = vec![k, v];
+        vec.push(Value::array_from(&vm.globals, ary));
+    }
+    let aref = ArrayRef::from(vec);
+    vm.sort_array(aref)?;
+    Ok(Value::array(&vm.globals, aref))
 }
 
 #[cfg(test)]

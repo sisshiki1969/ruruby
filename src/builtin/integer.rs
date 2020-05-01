@@ -236,6 +236,14 @@ mod tests {
             assert false, 4.send(:"<", 3.9)
             assert false, 4.send(:"<", 4.0)
             assert true, 4.send(:"<", 4.1)
+
+            assert(0, 3 <=> 3)
+            assert(1, 5 <=> 3)
+            assert(-1, 3 <=> 5)
+            assert(0, 3 <=> 3.0)
+            assert(1, 5 <=> 3.9)
+            assert(-1, 3 <=> 5.8)
+            assert(nil, 3 <=> "three")
         "#;
         assert_script(program);
     }
