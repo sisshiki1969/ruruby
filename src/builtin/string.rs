@@ -59,6 +59,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "*", string_mul);
     globals.add_builtin_instance_method(class, "%", string_rem);
     globals.add_builtin_instance_method(class, "[]", string_index);
+    globals.add_builtin_instance_method(class, "<=>", string_cmp);
     globals.add_builtin_instance_method(class, "start_with?", string_start_with);
     globals.add_builtin_instance_method(class, "to_sym", string_to_sym);
     globals.add_builtin_instance_method(class, "intern", string_to_sym);
@@ -149,6 +150,38 @@ fn string_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             _ => return Err(vm.error_argument("Bad type for index.")),
         },
         _ => return Err(vm.error_argument("Bad type for index.")),
+    }
+}
+
+use std::cmp::Ordering;
+fn string_cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1, 1)?;
+    let lhs = vm.expect_string(&self_val, "Receiver")?.as_bytes();
+    let rhs = match args[0].as_string() {
+        Some(s) => s,
+        None => return Ok(Value::nil()),
+    }
+    .as_bytes();
+    if lhs.len() >= rhs.len() {
+        for (i, rhs_v) in rhs.iter().enumerate() {
+            match lhs[i].cmp(rhs_v) {
+                Ordering::Equal => {}
+                ord => return Ok(Value::fixnum(ord as i64)),
+            }
+        }
+        if lhs.len() == rhs.len() {
+            Ok(Value::fixnum(0))
+        } else {
+            Ok(Value::fixnum(1))
+        }
+    } else {
+        for (i, lhs_v) in lhs.iter().enumerate() {
+            match lhs_v.cmp(&rhs[i]) {
+                Ordering::Equal => {}
+                ord => return Ok(Value::fixnum(ord as i64)),
+            }
+        }
+        Ok(Value::fixnum(-1))
     }
 }
 

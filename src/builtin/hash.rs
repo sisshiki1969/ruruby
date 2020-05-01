@@ -278,22 +278,23 @@ impl HashRef {
 pub fn init_hash(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Hash");
     let class = ClassRef::from(id, globals.builtins.object);
-    globals.add_builtin_instance_method(class, "clear", hash_clear);
-    globals.add_builtin_instance_method(class, "clone", hash_clone);
-    globals.add_builtin_instance_method(class, "dup", hash_clone);
-    globals.add_builtin_instance_method(class, "compact", hash_compact);
-    globals.add_builtin_instance_method(class, "delete", hash_delete);
-    globals.add_builtin_instance_method(class, "empty?", hash_empty);
-    globals.add_builtin_instance_method(class, "select", hash_select);
-    globals.add_builtin_instance_method(class, "has_key?", hash_has_key);
-    globals.add_builtin_instance_method(class, "key?", hash_has_key);
-    globals.add_builtin_instance_method(class, "include?", hash_has_key);
-    globals.add_builtin_instance_method(class, "member?", hash_has_key);
-    globals.add_builtin_instance_method(class, "has_value?", hash_has_value);
-    globals.add_builtin_instance_method(class, "keys", hash_keys);
-    globals.add_builtin_instance_method(class, "length", hash_length);
-    globals.add_builtin_instance_method(class, "size", hash_length);
-    globals.add_builtin_instance_method(class, "values", hash_values);
+    globals.add_builtin_instance_method(class, "inspect", inspect);
+    globals.add_builtin_instance_method(class, "clear", clear);
+    globals.add_builtin_instance_method(class, "clone", clone);
+    globals.add_builtin_instance_method(class, "dup", clone);
+    globals.add_builtin_instance_method(class, "compact", compact);
+    globals.add_builtin_instance_method(class, "delete", delete);
+    globals.add_builtin_instance_method(class, "empty?", empty);
+    globals.add_builtin_instance_method(class, "select", select);
+    globals.add_builtin_instance_method(class, "has_key?", has_key);
+    globals.add_builtin_instance_method(class, "key?", has_key);
+    globals.add_builtin_instance_method(class, "include?", has_key);
+    globals.add_builtin_instance_method(class, "member?", has_key);
+    globals.add_builtin_instance_method(class, "has_value?", has_value);
+    globals.add_builtin_instance_method(class, "keys", keys);
+    globals.add_builtin_instance_method(class, "length", length);
+    globals.add_builtin_instance_method(class, "size", length);
+    globals.add_builtin_instance_method(class, "values", values);
     globals.add_builtin_instance_method(class, "each_value", each_value);
     globals.add_builtin_instance_method(class, "each_key", each_key);
     globals.add_builtin_instance_method(class, "each", each);
@@ -301,29 +302,49 @@ pub fn init_hash(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "fetch", fetch);
     globals.add_builtin_instance_method(class, "compare_by_identity", compare_by_identity);
     globals.add_builtin_instance_method(class, "sort", sort);
+    globals.add_builtin_instance_method(class, "invert", invert);
     Value::class(globals, class)
 }
 
-macro_rules! as_hash {
-    ($arg:expr, $vm:ident) => {
-        $arg.as_hash()
-            .ok_or($vm.error_type("Receiver must be a hash."))?;
-    };
+pub fn hash_inspect(vm: &mut VM, hash: HashRef) -> String {
+    match hash.len() {
+        0 => "{}".to_string(),
+        _ => {
+            let mut result = "".to_string();
+            let mut first = true;
+            for (k, v) in hash.iter() {
+                result = if first {
+                    format!("{} => {}", vm.val_inspect(k), vm.val_inspect(v))
+                } else {
+                    format!("{}, {} => {}", result, vm.val_inspect(k), vm.val_inspect(v))
+                };
+                first = false;
+            }
+
+            format! {"{{{}}}", result}
+        }
+    }
 }
 
-fn hash_clear(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let mut hash = as_hash!(self_val, vm);
+fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
+    let s = hash_inspect(vm, hash);
+    Ok(Value::string(&vm.globals, s))
+}
+
+fn clear(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let mut hash = vm.expect_hash(self_val, "Receiver")?;
     hash.clear();
     Ok(self_val)
 }
 
-fn hash_clone(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm);
+fn clone(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     Ok(Value::hash(&vm.globals, hash.dup()))
 }
 
-fn hash_compact(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm).dup();
+fn compact(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?.dup();
     match hash.inner_mut() {
         HashInfo::Map(map) => map.retain(|_, &mut v| v != Value::nil()),
         HashInfo::IdentMap(map) => map.retain(|_, &mut v| v != Value::nil()),
@@ -331,9 +352,9 @@ fn hash_compact(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::hash(&vm.globals, hash))
 }
 
-fn hash_delete(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn delete(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let mut hash = as_hash!(self_val, vm);
+    let mut hash = vm.expect_hash(self_val, "Receiver")?;
     let res = match hash.remove(args[0]) {
         Some(v) => v,
         None => Value::nil(),
@@ -341,13 +362,13 @@ fn hash_delete(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn hash_empty(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm);
+fn empty(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     Ok(Value::bool(hash.len() == 0))
 }
 
-fn hash_select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm);
+fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut res = HashMap::new();
     let mut arg = Args::new2(Value::nil(), Value::nil());
@@ -363,39 +384,39 @@ fn hash_select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::hash(&vm.globals, HashRef::from(res)))
 }
 
-fn hash_has_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn has_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let res = hash.contains_key(args[0]);
     Ok(Value::bool(res))
 }
 
-fn hash_has_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn has_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1, 1)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let res = hash.iter().find(|(_, v)| *v == args[0]).is_some();
     Ok(Value::bool(res))
 }
 
-fn hash_length(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm);
+fn length(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let len = hash.len();
     Ok(Value::fixnum(len as i64))
 }
 
-fn hash_keys(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm);
+fn keys(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     Ok(Value::array_from(&vm.globals, hash.keys()))
 }
 
-fn hash_values(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let hash = as_hash!(self_val, vm);
+fn values(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     Ok(Value::array_from(&vm.globals, hash.values()))
 }
 
 fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut arg = Args::new1(Value::nil());
     for (_, v) in hash.iter() {
@@ -408,7 +429,7 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut arg = Args::new1(Value::nil());
 
@@ -422,7 +443,7 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut arg = Args::new2(Value::nil(), Value::nil());
 
@@ -436,9 +457,9 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut new = as_hash!(self_val, vm).dup();
+    let mut new = vm.expect_hash(self_val, "Receiver")?.dup();
     for arg in args.iter() {
-        let other = as_hash!(arg, vm);
+        let other = vm.expect_hash(*arg, "First arg")?;
         for (k, v) in other.iter() {
             new.insert(k, v);
         }
@@ -455,7 +476,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     } else {
         Value::nil()
     };
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let val = match hash.get(&key) {
         Some(val) => val.clone(),
         None => default,
@@ -466,7 +487,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn compare_by_identity(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let inner = hash.inner_mut();
     match inner {
         HashInfo::Map(map) => {
@@ -480,7 +501,7 @@ fn compare_by_identity(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
-    let hash = as_hash!(self_val, vm);
+    let hash = vm.expect_hash(self_val, "Receiver")?;
     let mut vec = vec![];
     for (k, v) in hash.iter() {
         let ary = vec![k, v];
@@ -489,6 +510,16 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = ArrayRef::from(vec);
     vm.sort_array(aref)?;
     Ok(Value::array(&vm.globals, aref))
+}
+
+fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let hash = vm.expect_hash(self_val, "Receiver")?;
+    let mut new_hash = HashMap::new();
+    for (k, v) in hash.iter() {
+        new_hash.insert(HashKey(v), k);
+    }
+    Ok(Value::hash_from(&vm.globals, new_hash))
 }
 
 #[cfg(test)]
@@ -581,6 +612,24 @@ mod test {
         assert nil, h2["a"]
         assert 100, h2[a]
     "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn hash_sort() {
+        let program = r#"
+        h = { 0 => 20, 1 => 30, 2 => 10  }
+        assert([[0, 20], [1, 30], [2, 10]], h.sort)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn hash_invert() {
+        let program = r#"
+        h = { "a" => 0, "b" => 100, "c" => 200, "e" => 300 }
+        assert({0=>"a", 100=>"b", 200=>"c", 300=>"e"}, h.invert)
+        "#;
         assert_script(program);
     }
 }

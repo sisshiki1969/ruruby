@@ -43,6 +43,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "zip", array_zip);
     globals.add_builtin_instance_method(class, "grep", array_grep);
     globals.add_builtin_instance_method(class, "sort", array_sort);
+    globals.add_builtin_instance_method(class, "uniq", array_uniq);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -652,6 +653,29 @@ fn array_sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
     };
     Ok(Value::array(&vm.globals, aref))
+}
+
+use std::collections::HashSet;
+fn array_uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0, 0)?;
+    let aref = vm.expect_array(self_val, "Receiver")?;
+    let mut h: HashSet<HashKey> = HashSet::new();
+    let mut v = vec![];
+    match args.block {
+        None => {
+            for elem in &aref.elements {
+                h.insert(HashKey(*elem));
+            }
+            for elem in &aref.elements {
+                if h.get(&HashKey(*elem)).is_some() {
+                    v.push(*elem);
+                    h.remove(&HashKey(*elem));
+                }
+            }
+        }
+        Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
+    };
+    Ok(Value::array_from(&vm.globals, v))
 }
 
 #[cfg(test)]

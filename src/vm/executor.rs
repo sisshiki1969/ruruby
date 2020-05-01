@@ -1300,32 +1300,60 @@ impl VM {
         }
     }
 
-    pub fn expect_integer(&self, val: Value, msg: impl Into<String>) -> Result<i64, RubyError> {
-        match val.as_fixnum() {
-            Some(i) => Ok(i),
-            None => Err(self.error_argument(msg.into() + " must be integer.")),
-        }
+    pub fn expect_integer(&mut self, val: Value, error_message: &str) -> Result<i64, RubyError> {
+        val.as_fixnum().ok_or({
+            let inspect = self.val_inspect(val);
+            self.error_type(format!(
+                "{} must be Integer. (given:{})",
+                error_message, inspect
+            ))
+        })
     }
 
-    pub fn expect_flonum(&self, val: Value, msg: impl Into<String>) -> Result<f64, RubyError> {
-        match val.as_flonum() {
-            Some(f) => Ok(f),
-            None => Err(self.error_argument(msg.into() + " must be float.")),
-        }
+    pub fn expect_flonum(&mut self, val: Value, error_message: &str) -> Result<f64, RubyError> {
+        val.as_flonum().ok_or({
+            let inspect = self.val_inspect(val);
+            self.error_type(format!(
+                "{} must be Float. (given:{})",
+                error_message, inspect
+            ))
+        })
+    }
+
+    pub fn expect_string<'a>(
+        &mut self,
+        val: &'a Value,
+        error_message: &str,
+    ) -> Result<&'a String, RubyError> {
+        val.as_string().ok_or({
+            let inspect = self.val_inspect(val.clone());
+            self.error_type(format!(
+                "{} must be Float. (given:{})",
+                error_message, inspect
+            ))
+        })
     }
 
     pub fn expect_array(&mut self, val: Value, error_message: &str) -> Result<ArrayRef, RubyError> {
-        match val.as_array() {
-            Some(ary) => Ok(ary),
-            None => {
-                let inspect = self.val_inspect(val);
-                Err(self.error_type(format!(
-                    "{} must be Array. (given:{})",
-                    error_message, inspect
-                )))
-            }
-        }
+        val.as_array().ok_or({
+            let inspect = self.val_inspect(val);
+            self.error_type(format!(
+                "{} must be Array. (given:{})",
+                error_message, inspect
+            ))
+        })
     }
+
+    pub fn expect_hash(&mut self, val: Value, error_message: &str) -> Result<HashRef, RubyError> {
+        val.as_hash().ok_or({
+            let inspect = self.val_inspect(val);
+            self.error_type(format!(
+                "{} must be Hash. (given:{})",
+                error_message, inspect
+            ))
+        })
+    }
+
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
@@ -1333,7 +1361,7 @@ impl VM {
             Some(class_ref) => Ok(class_ref),
             None => {
                 let val = self.val_inspect(val);
-                Err(self.error_type(format!("{} must be a class. (given:{})", msg, val)))
+                Err(self.error_type(format!("{} must be Class. (given:{})", msg, val)))
             }
         }
     }
@@ -1343,7 +1371,7 @@ impl VM {
             Some(class_ref) => Ok(class_ref),
             None => {
                 let val = self.val_inspect(val);
-                Err(self.error_type(format!("Must be a module/class. (given:{})", val)))
+                Err(self.error_type(format!("Must be Module or Class. (given:{})", val)))
             }
         }
     }
@@ -1781,8 +1809,23 @@ impl VM {
     }
 
     pub fn val_inspect(&mut self, val: Value) -> String {
-        match val.is_object() {
-            Some(mut oref) => match &oref.kind {
+        match val.unpack() {
+            RV::Uninitialized => "[Uninitialized]".to_string(),
+            RV::Nil => "nil".to_string(),
+            RV::Bool(b) => match b {
+                true => "true".to_string(),
+                false => "false".to_string(),
+            },
+            RV::Integer(i) => i.to_string(),
+            RV::Float(f) => {
+                if f.fract() == 0.0 {
+                    format!("{:.1}", f)
+                } else {
+                    f.to_string()
+                }
+            }
+            RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
+            RV::Object(mut oref) => match &oref.kind {
                 ObjKind::String(s) => match s {
                     RString::Str(s) => format!("\"{}\"", s.escape_debug()),
                     RString::Bytes(b) => match String::from_utf8(b.clone()) {
@@ -1810,28 +1853,6 @@ impl VM {
                         format! {"[{}]", result}
                     }
                 },
-                ObjKind::Hash(href) => match href.len() {
-                    0 => "{}".to_string(),
-                    _ => {
-                        let mut result = "".to_string();
-                        let mut first = true;
-                        for (k, v) in href.iter() {
-                            result = if first {
-                                format!("{} => {}", self.val_inspect(k), self.val_inspect(v))
-                            } else {
-                                format!(
-                                    "{}, {} => {}",
-                                    result,
-                                    self.val_inspect(k),
-                                    self.val_inspect(v)
-                                )
-                            };
-                            first = false;
-                        }
-
-                        format! {"{{{}}}", result}
-                    }
-                },
                 ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
                 ObjKind::Ordinary => {
                     let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.search_class().as_class().name), oref.id()};
@@ -1843,21 +1864,15 @@ impl VM {
                     format!("{}>", s)
                 }
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
+                ObjKind::Hash(href) => hash_inspect(self, *href),
                 _ => {
-                    eprintln!("{:?}", val);
                     let id = self.globals.get_ident_id("inspect");
                     self.send0(val, id)
                         .unwrap()
                         .as_string()
                         .unwrap()
                         .to_string()
-                    //format!("{:?}", val)
                 }
-            },
-            None => match val.unpack() {
-                RV::Nil => "nil".to_string(),
-                RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
-                _ => self.val_to_s(val),
             },
         }
     }

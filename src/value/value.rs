@@ -663,6 +663,10 @@ impl Value {
         Value::object(RValue::new_hash(globals, hash_ref))
     }
 
+    pub fn hash_from(globals: &Globals, hash: std::collections::HashMap<HashKey, Value>) -> Self {
+        Value::object(RValue::new_hash(globals, HashRef::from(hash)))
+    }
+
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
         Value::object(RValue::new_regexp(globals, regexp_ref))
     }
