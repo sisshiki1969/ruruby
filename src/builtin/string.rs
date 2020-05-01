@@ -400,7 +400,7 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) if block == MethodRef::from(0) => {
             let mut v = vec![];
             for arg in vec {
-                let block_args = Args::new1(None, arg);
+                let block_args = Args::new1(arg);
                 v.push(vm.eval_block(block, &block_args)?);
             }
             Ok(Value::array_from(&vm.globals, v))
@@ -417,7 +417,7 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                         vm.eval_block(block, &block_args)?;
                     }
                     None => {
-                        let block_args = Args::new1(None, arg);
+                        let block_args = Args::new1(arg);
                         vm.eval_block(block, &block_args)?;
                     }
                 }

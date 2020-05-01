@@ -266,7 +266,7 @@ impl Kernel {
 
         fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             let method = vm.expect_block(args.block)?;
-            let arg = Args::new0(None);
+            let arg = Args::new0();
             loop {
                 vm.eval_block(method, &arg)?;
             }

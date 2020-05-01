@@ -104,7 +104,7 @@ fn range_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(None, Value::fixnum(i));
+        let arg = Args::new1(Value::fixnum(i));
         let val = vm.eval_block(method, &arg)?;
         res.push(val);
     }
@@ -118,7 +118,7 @@ fn range_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(None, Value::fixnum(i));
+        let arg = Args::new1(Value::fixnum(i));
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
@@ -130,7 +130,7 @@ fn range_all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(None, Value::fixnum(i));
+        let arg = Args::new1(Value::fixnum(i));
         let res = vm.eval_block(method, &arg)?;
         if !vm.val_to_bool(res) {
             return Ok(Value::false_val());

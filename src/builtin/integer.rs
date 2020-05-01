@@ -106,7 +106,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if num < 1 {
         return Ok(self_val);
     };
-    let mut arg = Args::new1(None, Value::nil());
+    let mut arg = Args::new1(Value::nil());
     for i in 0..num {
         arg[0] = Value::fixnum(i);
         vm.eval_block(method, &arg)?;
@@ -150,7 +150,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Ok(val);
     }
 
-    let mut arg = Args::new1(None, Value::nil());
+    let mut arg = Args::new1(Value::nil());
     let mut i = start;
     loop {
         if step > 0 && i > limit || step < 0 && limit > i {

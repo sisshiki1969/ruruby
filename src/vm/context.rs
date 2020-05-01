@@ -171,9 +171,7 @@ impl Context {
             let ary = if req_len + opt_len + post_len >= arg_len {
                 vec![]
             } else {
-                let mut v = args
-                    .get_slice(req_len + opt_len, arg_len - post_len - kw_len)
-                    .to_vec();
+                let mut v = args[req_len + opt_len..arg_len - post_len - kw_len].to_vec();
                 if kw_len == 1 {
                     v.push(kw_arg.unwrap());
                 }

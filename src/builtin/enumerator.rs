@@ -51,7 +51,7 @@ fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_min(args.len(), 1)?;
     let (receiver, method, new_args) = if args.len() == 1 {
         let method = vm.globals.get_ident_id("each");
-        let new_args = Args::new0(None);
+        let new_args = Args::new0();
         (self_val, method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
@@ -108,7 +108,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let val = vm.eval_enumerator(eref)?;
 
     let ary = vm.expect_array(val, "Base object")?;
-    let mut args = Args::new1(None, Value::nil());
+    let mut args = Args::new1(Value::nil());
     for elem in &ary.elements {
         args[0] = *elem;
         let _ = vm.eval_block(block, &args)?;
@@ -131,7 +131,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let val = vm.eval_enumerator(eref)?;
 
     let ary = vm.expect_array(val, "Base object")?;
-    let mut args = Args::new1(None, Value::nil());
+    let mut args = Args::new1(Value::nil());
     let mut res = vec![];
     for elem in &ary.elements {
         args[0] = *elem;

@@ -143,7 +143,7 @@ fn array_unshift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         return Ok(self_val);
     }
-    let mut new = args.get_slice(0, args.len()).to_owned();
+    let mut new = args[0..args.len()].to_owned();
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     new.append(&mut aref.elements);
     aref.elements = new;
@@ -251,7 +251,7 @@ fn array_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let mut res = vec![];
-    let mut args = Args::new1(None, Value::nil());
+    let mut args = Args::new1(Value::nil());
 
     for elem in &aref.elements {
         args[0] = *elem;
@@ -480,7 +480,7 @@ fn array_uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => {
             aref.elements.retain(|x| {
-                let block_args = Args::new1(None, *x);
+                let block_args = Args::new1(*x);
                 let res = vm.eval_block(block, &block_args).unwrap();
                 set.insert(res)
             });
@@ -613,7 +613,7 @@ fn array_zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     match args.block {
         Some(block) => {
-            let mut arg = Args::new1(None, Value::nil());
+            let mut arg = Args::new1(Value::nil());
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;

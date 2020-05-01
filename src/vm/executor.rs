@@ -329,7 +329,7 @@ impl VM {
             Some(val) => val,
             None => self.globals.main_object,
         };
-        let arg = Args::new0(None);
+        let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
         {
@@ -1068,7 +1068,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.gen_class_defined(val);
-                    let arg = Args::new0(None);
+                    let arg = Args::new0();
                     try_err!(self, self.eval_send(method, val, &arg));
                     self.pc += 10;
                     self.class_pop();
@@ -1468,7 +1468,7 @@ impl VM {
     fn fallback_to_method(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
         match self.get_method(lhs, method) {
             Ok(mref) => {
-                let arg = Args::new1(None, rhs);
+                let arg = Args::new1(rhs);
                 let val = self.eval_send(mref, lhs, &arg)?;
                 Ok(val)
             }
@@ -1487,7 +1487,7 @@ impl VM {
         cache: u32,
     ) -> VMResult {
         let methodref = self.get_method_from_cache(cache, lhs, method)?;
-        let arg = Args::new1(None, rhs);
+        let arg = Args::new1(rhs);
         self.eval_send(methodref, lhs, &arg)
     }
 }
@@ -1842,7 +1842,7 @@ impl VM {
 
     pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> VMResult {
         let method = self.get_method(receiver, method_id)?;
-        let args = Args::new0(None);
+        let args = Args::new0();
         let val = self.eval_send(method, receiver, &args)?;
         Ok(val)
     }
