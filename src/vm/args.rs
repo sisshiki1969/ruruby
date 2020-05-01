@@ -2,7 +2,7 @@ use crate::*;
 use std::ops::Deref;
 use std::ops::{Index, IndexMut, Range};
 
-const VEC_ARRAY_SIZE: usize = 8;
+const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone)]
 pub struct Args {
@@ -99,17 +99,17 @@ impl Deref for Args {
 enum ArgsArray {
     Array {
         len: usize,
-        ary: [Value; VEC_ARRAY_SIZE],
+        ary: [Value; ARG_ARRAY_SIZE],
     },
     Vec(Vec<Value>),
 }
 
 impl ArgsArray {
     fn new(len: usize) -> Self {
-        if len <= VEC_ARRAY_SIZE {
+        if len <= ARG_ARRAY_SIZE {
             ArgsArray::Array {
                 len,
-                ary: [Value::uninitialized(); VEC_ARRAY_SIZE],
+                ary: [Value::uninitialized(); ARG_ARRAY_SIZE],
             }
         } else {
             ArgsArray::Vec(vec![Value::uninitialized(); len])
@@ -117,8 +117,8 @@ impl ArgsArray {
     }
 
     fn push(&mut self, val: Value) {
-        if self.len() == VEC_ARRAY_SIZE {
-            let mut ary = self[0..VEC_ARRAY_SIZE].to_vec();
+        if self.len() == ARG_ARRAY_SIZE {
+            let mut ary = self[0..ARG_ARRAY_SIZE].to_vec();
             ary.push(val);
             std::mem::replace(self, ArgsArray::Vec(ary));
         } else {
@@ -138,25 +138,25 @@ impl ArgsArray {
     fn new0() -> Self {
         ArgsArray::Array {
             len: 0,
-            ary: [Value::uninitialized(); VEC_ARRAY_SIZE],
+            ary: [Value::uninitialized(); ARG_ARRAY_SIZE],
         }
     }
 
     fn new1(arg: Value) -> Self {
-        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
+        let mut ary = [Value::uninitialized(); ARG_ARRAY_SIZE];
         ary[0] = arg;
         ArgsArray::Array { len: 1, ary }
     }
 
     fn new2(arg0: Value, arg1: Value) -> Self {
-        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
+        let mut ary = [Value::uninitialized(); ARG_ARRAY_SIZE];
         ary[0] = arg0;
         ary[1] = arg1;
         ArgsArray::Array { len: 2, ary }
     }
 
     fn new3(arg0: Value, arg1: Value, arg2: Value) -> Self {
-        let mut ary = [Value::uninitialized(); VEC_ARRAY_SIZE];
+        let mut ary = [Value::uninitialized(); ARG_ARRAY_SIZE];
         ary[0] = arg0;
         ary[1] = arg1;
         ary[2] = arg2;

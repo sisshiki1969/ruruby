@@ -156,7 +156,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let param_num = iseq.param_ident.len();
         let mut args = Args::new0();
         for i in 0..param_num {
-            args.push(context.get_lvar(LvarId::from_usize(i)));
+            args.push(context[i]);
         }
         let val = vm.eval_send(method, context.self_value, &args)?;
         Ok(val)
