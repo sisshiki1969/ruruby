@@ -329,7 +329,7 @@ impl VM {
             Some(val) => val,
             None => self.globals.main_object,
         };
-        let arg = Args::new0(None);
+        let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
         {
@@ -416,7 +416,7 @@ impl VM {
         let mut context = Context::new(self_val, args.block, iseq, outer);
         context.set_arguments(&self.globals, args, kw);
         if let Some(id) = iseq.lvar.block_param() {
-            *context.get_mut_lvar(id) = match args.block {
+            context[id] = match args.block {
                 Some(block) => {
                     let proc_context = self.create_block_context(block)?;
                     Value::procobj(&self.globals, proc_context)
@@ -431,7 +431,7 @@ impl VM {
                     let id = k.as_symbol().unwrap();
                     match iseq.keyword_params.get(&id) {
                         Some(lvar) => {
-                            *context.get_mut_lvar(*lvar) = v;
+                            context[*lvar] = v;
                         }
                         None => return Err(self.error_argument("Undefined keyword.")),
                     };
@@ -769,14 +769,14 @@ impl VM {
                     let outer = self.read32(iseq, 5);
                     let val = self.stack_pop();
                     let mut cref = self.get_outer_context(outer);
-                    *cref.get_mut_lvar(id) = val;
+                    cref[id] = val;
                     self.pc += 9;
                 }
                 Inst::GET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
                     let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);
-                    let val = cref.get_lvar(id);
+                    let val = cref[id];
                     self.stack_push(val);
                     self.pc += 9;
                 }
@@ -784,7 +784,7 @@ impl VM {
                     let id = self.read_lvar_id(iseq, 1);
                     let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);
-                    let val = cref.get_lvar(id).is_uninitialized();
+                    let val = cref[id].is_uninitialized();
                     self.stack_push(Value::bool(val));
                     self.pc += 9;
                 }
@@ -1068,7 +1068,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.gen_class_defined(val);
-                    let arg = Args::new0(None);
+                    let arg = Args::new0();
                     try_err!(self, self.eval_send(method, val, &arg));
                     self.pc += 10;
                     self.class_pop();
@@ -1468,7 +1468,7 @@ impl VM {
     fn fallback_to_method(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
         match self.get_method(lhs, method) {
             Ok(mref) => {
-                let arg = Args::new1(None, rhs);
+                let arg = Args::new1(rhs);
                 let val = self.eval_send(mref, lhs, &arg)?;
                 Ok(val)
             }
@@ -1487,7 +1487,7 @@ impl VM {
         cache: u32,
     ) -> VMResult {
         let methodref = self.get_method_from_cache(cache, lhs, method)?;
-        let arg = Args::new1(None, rhs);
+        let arg = Args::new1(rhs);
         self.eval_send(methodref, lhs, &arg)
     }
 }
@@ -1864,7 +1864,7 @@ impl VM {
 
     pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> VMResult {
         let method = self.get_method(receiver, method_id)?;
-        let args = Args::new0(None);
+        let args = Args::new0();
         let val = self.eval_send(method, receiver, &args)?;
         Ok(val)
     }

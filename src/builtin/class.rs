@@ -25,7 +25,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     match args.block {
         Some(method) => {
             vm.class_push(val);
-            let arg = Args::new1(None, val);
+            let arg = Args::new1(val);
             vm.eval_method(method, val, &arg, true)?;
             vm.class_pop();
         }

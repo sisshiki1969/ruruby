@@ -18,6 +18,52 @@ pub struct Context {
 
 pub type ContextRef = Ref<Context>;
 
+impl std::ops::Index<LvarId> for Context {
+    type Output = Value;
+
+    fn index(&self, index: LvarId) -> &Self::Output {
+        let i = index.as_usize();
+        if i < LVAR_ARRAY_SIZE {
+            &self.lvar_scope[i]
+        } else {
+            &self.ext_lvar[i - LVAR_ARRAY_SIZE]
+        }
+    }
+}
+
+impl std::ops::Index<usize> for Context {
+    type Output = Value;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        if index < LVAR_ARRAY_SIZE {
+            &self.lvar_scope[index]
+        } else {
+            &self.ext_lvar[index - LVAR_ARRAY_SIZE]
+        }
+    }
+}
+
+impl std::ops::IndexMut<LvarId> for Context {
+    fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
+        let i = index.as_usize();
+        if i < LVAR_ARRAY_SIZE {
+            &mut self.lvar_scope[i]
+        } else {
+            &mut self.ext_lvar[i - LVAR_ARRAY_SIZE]
+        }
+    }
+}
+
+impl std::ops::IndexMut<usize> for Context {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        if index < LVAR_ARRAY_SIZE {
+            &mut self.lvar_scope[index]
+        } else {
+            &mut self.ext_lvar[index - LVAR_ARRAY_SIZE]
+        }
+    }
+}
+
 impl Context {
     pub fn new(
         self_value: Value,
@@ -44,16 +90,15 @@ impl Context {
             stack_len: 0,
         }
     }
-
-    pub fn get_lvar(&self, id: LvarId) -> Value {
-        let id = id.as_usize();
-        if id < LVAR_ARRAY_SIZE {
-            self.lvar_scope[id]
-        } else {
-            self.ext_lvar[id - LVAR_ARRAY_SIZE]
+    /*
+        pub fn get_lvar(&self, id: LvarId) -> Value {
+            let id = id.as_usize();
+            if id < LVAR_ARRAY_SIZE {
+                self.lvar_scope[id]
+            } else {
+                self.ext_lvar[id - LVAR_ARRAY_SIZE]
+            }
         }
-    }
-
     pub fn set_lvar(&mut self, id: usize, val: Value) {
         if id < LVAR_ARRAY_SIZE {
             self.lvar_scope[id] = val;
@@ -61,16 +106,15 @@ impl Context {
             self.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
         }
     }
-
-    pub fn get_mut_lvar(&mut self, id: LvarId) -> &mut Value {
-        let id = id.as_usize();
-        if id < LVAR_ARRAY_SIZE {
-            &mut self.lvar_scope[id]
-        } else {
-            &mut self.ext_lvar[id - LVAR_ARRAY_SIZE]
+        pub fn get_mut_lvar(&mut self, id: LvarId) -> &mut Value {
+            let id = id.as_usize();
+            if id < LVAR_ARRAY_SIZE {
+                &mut self.lvar_scope[id]
+            } else {
+                &mut self.ext_lvar[id - LVAR_ARRAY_SIZE]
+            }
         }
-    }
-
+    */
     pub fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
         let mut kw_len = if kw_arg.is_some() { 1 } else { 0 };
         let req_len = self.iseq_ref.req_params;
@@ -89,11 +133,11 @@ impl Context {
                         if post_len != 0 {
                             // fill post_req params.
                             for i in 0..post_len - kw_len {
-                                self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
+                                self[post_pos + i] = args[arg_len - post_len + i];
                             }
                             if kw_len == 1 {
                                 // fill keyword params as a hash.
-                                self.set_lvar(post_pos + post_len - 1, kw_arg.unwrap());
+                                self[post_pos + post_len - 1] = kw_arg.unwrap();
                                 kw_len = 0;
                             }
                         }
@@ -101,17 +145,17 @@ impl Context {
                         if req_opt != 0 {
                             // fill req and opt params.
                             for i in 0..req_opt - kw_len {
-                                self.set_lvar(i, args[i]);
+                                self[i] = args[i];
                             }
                             if kw_len == 1 {
                                 // fill keyword params as a hash.
-                                self.set_lvar(req_opt - 1, kw_arg.unwrap());
+                                self[req_opt - 1] = kw_arg.unwrap();
                                 kw_len = 0;
                             }
                             if req_opt < req_len {
                                 // fill rest req params with nil.
                                 for i in req_opt..req_len {
-                                    self.set_lvar(i, Value::nil());
+                                    self[i] = Value::nil();
                                 }
                             }
                         }
@@ -127,7 +171,7 @@ impl Context {
                                 v
                             };
                             let val = Value::array_from(globals, ary);
-                            self.set_lvar(req_len + opt_len, val);
+                            self[req_len + opt_len] = val;
                         }
                         return;
                     }
@@ -141,11 +185,11 @@ impl Context {
         if post_len != 0 {
             // fill post_req params.
             for i in 0..post_len - kw_len {
-                self.set_lvar(post_pos + i, args[arg_len - post_len + i]);
+                self[post_pos + i] = args[arg_len - post_len + i];
             }
             if kw_len == 1 {
                 // fill keyword params as a hash.
-                self.set_lvar(post_pos + post_len - 1, kw_arg.unwrap());
+                self[post_pos + post_len - 1] = kw_arg.unwrap();
                 kw_len = 0;
             }
         }
@@ -153,17 +197,17 @@ impl Context {
         if req_opt != 0 {
             // fill req and opt params.
             for i in 0..req_opt - kw_len {
-                self.set_lvar(i, args[i]);
+                self[i] = args[i];
             }
             if kw_len == 1 {
                 // fill keyword params as a hash.
-                self.set_lvar(req_opt - 1, kw_arg.unwrap());
+                self[req_opt - 1] = kw_arg.unwrap();
                 kw_len = 0;
             }
             if req_opt < req_len {
                 // fill rest req params with nil.
                 for i in req_opt..req_len {
-                    self.set_lvar(i, Value::nil());
+                    self[i] = Value::nil();
                 }
             }
         }
@@ -171,16 +215,14 @@ impl Context {
             let ary = if req_len + opt_len + post_len >= arg_len {
                 vec![]
             } else {
-                let mut v = args
-                    .get_slice(req_len + opt_len, arg_len - post_len - kw_len)
-                    .to_vec();
+                let mut v = args[req_len + opt_len..arg_len - post_len - kw_len].to_vec();
                 if kw_len == 1 {
                     v.push(kw_arg.unwrap());
                 }
                 v
             };
             let val = Value::array_from(globals, ary);
-            self.set_lvar(req_len + opt_len, val);
+            self[req_len + opt_len] = val;
         }
     }
 }

@@ -1,5 +1,7 @@
 use crate::*;
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::ops::Deref;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashInfo {
@@ -10,14 +12,14 @@ pub enum HashInfo {
 #[derive(Debug, Clone, Copy)]
 pub struct HashKey(pub Value);
 
-impl std::ops::Deref for HashKey {
+impl Deref for HashKey {
     type Target = Value;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::hash::Hash for HashKey {
+impl Hash for HashKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self.as_rvalue() {
             None => self.0.hash(state),
@@ -66,14 +68,14 @@ impl Eq for HashKey {}
 #[derive(Debug, Clone, Copy)]
 pub struct IdentKey(pub Value);
 
-impl std::ops::Deref for IdentKey {
+impl Deref for IdentKey {
     type Target = Value;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl std::hash::Hash for IdentKey {
+impl Hash for IdentKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (*self.0).hash(state);
     }
@@ -95,16 +97,6 @@ pub enum IntoIter {
     IdentMap(hash_map::IntoIter<IdentKey, Value>),
 }
 
-pub enum Iter<'a> {
-    Map(hash_map::Iter<'a, HashKey, Value>),
-    IdentMap(hash_map::Iter<'a, IdentKey, Value>),
-}
-
-pub enum IterMut<'a> {
-    Map(hash_map::IterMut<'a, HashKey, Value>),
-    IdentMap(hash_map::IterMut<'a, IdentKey, Value>),
-}
-
 impl IntoIter {
     fn new(hash: HashInfo) -> IntoIter {
         match hash {
@@ -113,22 +105,6 @@ impl IntoIter {
         }
     }
 }
-
-macro_rules! define_iter_new {
-    ($ty1: ident, $ty2: ty, $method: ident) => {
-        impl<'a> $ty1<'a> {
-            fn new(hash: $ty2) -> $ty1 {
-                match hash {
-                    HashInfo::Map(map) => $ty1::Map(map.$method()),
-                    HashInfo::IdentMap(map) => $ty1::IdentMap(map.$method()),
-                }
-            }
-        }
-    };
-}
-
-define_iter_new!(Iter, &HashInfo, iter);
-define_iter_new!(IterMut, &mut HashInfo, iter_mut);
 
 impl Iterator for IntoIter {
     type Item = (Value, Value);
@@ -145,6 +121,34 @@ impl Iterator for IntoIter {
         }
     }
 }
+
+macro_rules! define_iter {
+    ($trait:ident) => {
+        pub enum $trait<'a> {
+            Map(hash_map::$trait<'a, HashKey, Value>),
+            IdentMap(hash_map::$trait<'a, IdentKey, Value>),
+        }
+    };
+}
+
+define_iter!(Iter);
+define_iter!(IterMut);
+
+macro_rules! define_iter_new {
+    ($ty1: ident, $ty2: ty, $method: ident) => {
+        impl<'a> $ty1<'a> {
+            fn new(hash: $ty2) -> $ty1 {
+                match hash {
+                    HashInfo::Map(map) => $ty1::Map(map.$method()),
+                    HashInfo::IdentMap(map) => $ty1::IdentMap(map.$method()),
+                }
+            }
+        }
+    };
+}
+
+define_iter_new!(Iter, &HashInfo, iter);
+define_iter_new!(IterMut, &mut HashInfo, iter_mut);
 
 macro_rules! define_iterator {
     ($ty2:ident) => {
@@ -346,7 +350,7 @@ fn hash_select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = as_hash!(self_val, vm);
     let method = vm.expect_block(args.block)?;
     let mut res = HashMap::new();
-    let mut arg = Args::new2(None, Value::nil(), Value::nil());
+    let mut arg = Args::new2(Value::nil(), Value::nil());
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
@@ -393,7 +397,7 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(self_val, vm);
     let method = vm.expect_block(args.block)?;
-    let mut arg = Args::new1(None, Value::nil());
+    let mut arg = Args::new1(Value::nil());
     for (_, v) in hash.iter() {
         arg[0] = v;
         vm.eval_block(method, &arg)?;
@@ -406,7 +410,7 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(self_val, vm);
     let method = vm.expect_block(args.block)?;
-    let mut arg = Args::new1(None, Value::nil());
+    let mut arg = Args::new1(Value::nil());
 
     for (k, _) in hash.iter() {
         arg[0] = k;
@@ -420,7 +424,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0, 0)?;
     let hash = as_hash!(self_val, vm);
     let method = vm.expect_block(args.block)?;
-    let mut arg = Args::new2(None, Value::nil(), Value::nil());
+    let mut arg = Args::new2(Value::nil(), Value::nil());
 
     for (k, v) in hash.iter() {
         arg[0] = k;
