@@ -1098,7 +1098,8 @@ impl VM {
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
-                    let res = Value::string(&self.globals, self.val_to_s(val));
+                    let s = self.val_to_s(val);
+                    let res = Value::string(&self.globals, s);
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -1759,7 +1760,7 @@ impl VM {
         !val.is_nil() && !val.is_false_val() && !val.is_uninitialized()
     }
 
-    pub fn val_to_s(&self, val: Value) -> String {
+    pub fn val_to_s(&mut self, val: Value) -> String {
         match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "".to_string(),
@@ -1787,11 +1788,11 @@ impl VM {
                 }
                 ObjKind::Array(aref) => match aref.elements.len() {
                     0 => "[]".to_string(),
-                    1 => format!("[{}]", self.val_to_s(aref.elements[0])),
+                    1 => format!("[{}]", self.val_inspect(aref.elements[0])),
                     len => {
-                        let mut result = self.val_to_s(aref.elements[0]);
+                        let mut result = self.val_inspect(aref.elements[0]);
                         for i in 1..len {
-                            result = format!("{}, {}", result, self.val_to_s(aref.elements[i]));
+                            result = format!("{}, {}", result, self.val_inspect(aref.elements[i]));
                         }
                         format! {"[{}]", result}
                     }
