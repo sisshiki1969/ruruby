@@ -2,7 +2,7 @@ use super::codegen::ContextKind;
 use crate::*;
 
 #[cfg(feature = "perf")]
-use perf::*;
+use super::perf::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -122,7 +122,7 @@ impl VM {
             pc: 0,
             channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
-            perf: Perf.clone(),
+            perf: self.perf.clone(),
         }
     }
 
@@ -280,7 +280,7 @@ impl VM {
 
         #[cfg(feature = "perf")]
         {
-            self.perf.set_prev_inst(Perf::CODEGEN);
+            self.perf.set_prev_inst(Perf::INVALID);
         }
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
@@ -307,7 +307,7 @@ impl VM {
 
         #[cfg(feature = "perf")]
         {
-            self.perf.set_prev_inst(Perf::CODEGEN);
+            self.perf.set_prev_inst(Perf::INVALID);
         }
         let mut codegen = Codegen::new(result.source_info);
         codegen.context_push(ext_lvar);
@@ -890,9 +890,9 @@ impl VM {
                         Some(oref) => match &oref.kind {
                             ObjKind::Array(aref) => aref.get_elem(self, &args)?,
                             ObjKind::Hash(href) => {
-                                self.check_args_num(arg_num, 1, 2)?;
+                                self.check_args_num(arg_num, 1, 1)?;
                                 match href.get(&args[0]) {
-                                    Some(val) => val.clone(),
+                                    Some(val) => *val,
                                     None => Value::nil(),
                                 }
                             }
@@ -1629,6 +1629,17 @@ impl VM {
                 let val = Value::fixnum(lhs << rhs);
                 Ok(val)
             }
+            (RV::Object(lhs_o), _) => match lhs_o.kind {
+                ObjKind::Array(mut aref) => {
+                    aref.elements.push(rhs);
+                    Ok(lhs)
+                }
+                _ => {
+                    let cache = self.read32(iseq, 1);
+                    let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
+                    Ok(val)
+                }
+            },
             _ => {
                 let cache = self.read32(iseq, 1);
                 let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
@@ -2176,20 +2187,20 @@ impl VM {
         };
     }
 
-    pub fn fiber_send_to_parent(&self, val: VMResult) {
-        match &self.channel {
+    pub fn fiber_send_to_parent(&mut self, val: VMResult) {
+        match &mut self.channel {
             Some((tx, rx)) => {
-                #[cfg(feature = "trace")]
-                {
-                    match val.clone() {
-                        Ok(val) => println!("<=== yield Ok({})", self.val_inspect(val),),
-                        Err(err) => println!("<=== yield Err({:?})", err.kind),
-                    }
-                }
-                tx.send(val).unwrap();
+                tx.send(val.clone()).unwrap();
                 rx.recv().unwrap();
             }
-            None => {}
+            None => return,
+        };
+        #[cfg(feature = "trace")]
+        {
+            match val {
+                Ok(val) => println!("<=== yield Ok({})", self.val_inspect(val),),
+                Err(err) => println!("<=== yield Err({:?})", err.kind),
+            }
         }
     }
 

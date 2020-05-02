@@ -103,8 +103,9 @@ fn range_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut res = vec![];
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let mut arg = Args::new1(Value::nil());
     for i in start..end {
-        let arg = Args::new1(Value::fixnum(i));
+        arg[0] = Value::fixnum(i);
         let val = vm.eval_block(method, &arg)?;
         res.push(val);
     }

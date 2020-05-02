@@ -5,6 +5,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     let array_id = globals.get_ident_id("Array");
     let class = ClassRef::from(array_id, globals.builtins.object);
     let obj = Value::class(globals, class);
+    globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "[]=", array_set_elem);
     globals.add_builtin_instance_method(class, "<=>", array_cmp);
     globals.add_builtin_instance_method(class, "push", array_push);
@@ -75,6 +76,22 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 // Instance methods
+
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let aref = vm.expect_array(self_val, "Receiver")?;
+    let s = match aref.elements.len() {
+        0 => "[]".to_string(),
+        1 => format!("[{}]", vm.val_inspect(aref.elements[0])),
+        len => {
+            let mut result = vm.val_inspect(aref.elements[0]);
+            for i in 1..len {
+                result = format!("{}, {}", result, vm.val_inspect(aref.elements[i]));
+            }
+            format! {"[{}]", result}
+        }
+    };
+    Ok(Value::string(&vm.globals, s))
+}
 
 fn array_set_elem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut aref = vm.expect_array(self_val, "Receiver")?;
@@ -476,14 +493,15 @@ fn array_uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut set = std::collections::HashSet::new();
     match args.block {
         None => {
-            aref.elements.retain(|x| set.insert(*x));
+            aref.elements.retain(|x| set.insert(HashKey(*x)));
             Ok(self_val)
         }
         Some(block) => {
+            let mut block_args = Args::new1(Value::nil());
             aref.elements.retain(|x| {
-                let block_args = Args::new1(*x);
+                block_args[0] = *x;
                 let res = vm.eval_block(block, &block_args).unwrap();
-                set.insert(res)
+                set.insert(HashKey(res))
             });
             Ok(self_val)
         }
@@ -664,13 +682,9 @@ fn array_uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args.block {
         None => {
             for elem in &aref.elements {
-                h.insert(HashKey(*elem));
-            }
-            for elem in &aref.elements {
-                if h.get(&HashKey(*elem)).is_some() {
+                if h.insert(HashKey(*elem)) {
                     v.push(*elem);
-                    h.remove(&HashKey(*elem));
-                }
+                };
             }
         }
         Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
@@ -833,6 +847,18 @@ mod tests {
             ans.push(ary)
         }
         assert [[1,4,7],[2,5,8],[3,6,9]], ans
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn uniq() {
+        let program = r#"
+        a = [1,2,3,4,3,2,1,0,3.0]
+        assert [1,2,3,4,0,3.0], a.uniq
+        assert [1,2,3,4,3,2,1,0,3.0], a
+
+        assert [1,2,3,3.0], a.uniq! {|x| x % 3 }
         "#;
         assert_script(program);
     }
