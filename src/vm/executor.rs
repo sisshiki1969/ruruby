@@ -1698,8 +1698,16 @@ impl VM {
                     Ok(res)
                 }
                 ObjKind::Regexp(re) => {
-                    expect_string!(given, self, rhs);
-                    let res = match Regexp::find_one(self, &re.regexp, given).unwrap() {
+                    //expect_string!(given, self, rhs);
+                    let given = match rhs.unpack() {
+                        RV::Symbol(sym) => self.globals.get_ident_name(sym).to_owned(),
+                        RV::Object(_) => match rhs.as_string() {
+                            Some(s) => s.to_owned(),
+                            None => return Ok(false),
+                        },
+                        _ => return Ok(false),
+                    };
+                    let res = match Regexp::find_one(self, &re.regexp, &given).unwrap() {
                         Some(_) => true,
                         None => false,
                     };

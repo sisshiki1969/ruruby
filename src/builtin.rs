@@ -1,5 +1,5 @@
 mod array;
-mod class;
+pub mod class;
 mod enumerator;
 mod errorobj;
 mod fiber;
@@ -18,7 +18,7 @@ mod regexp;
 mod string;
 mod structobj;
 pub use array::*;
-pub use class::*;
+//pub use class;
 pub use enumerator::*;
 pub use errorobj::*;
 pub use fiber::*;
