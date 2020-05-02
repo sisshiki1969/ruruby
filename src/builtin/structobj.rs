@@ -3,7 +3,6 @@ use crate::*;
 pub fn init_struct(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Struct");
     let class = ClassRef::from(id, globals.builtins.object);
-    //globals.add_builtin_instance_method(class, "inspect", inspect);
     let class = Value::class(globals, class);
     globals.add_builtin_class_method(class, "new", struct_new);
     class
@@ -31,6 +30,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         .add_builtin_instance_method(class, "initialize", initialize);
     vm.globals
         .add_builtin_instance_method(class, "inspect", inspect);
+    vm.globals.add_builtin_class_method(val, "[]", class::new);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];

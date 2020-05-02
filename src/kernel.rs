@@ -31,7 +31,7 @@ impl Kernel {
 
         /// Built-in function "puts".
         fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            fn flatten(vm: &VM, val: Value) {
+            fn flatten(vm: &mut VM, val: Value) {
                 match val.as_array() {
                     None => println!("{}", vm.val_to_s(val)),
                     Some(aref) => {

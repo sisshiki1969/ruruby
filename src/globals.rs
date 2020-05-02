@@ -104,7 +104,7 @@ impl Globals {
         globals.builtins.object.as_object().set_class(singleton_obj);
 
         init_module(&mut globals);
-        init_class(&mut globals);
+        class::init_class(&mut globals);
         globals.builtins.integer = init_integer(&mut globals);
         globals.builtins.float = init_float(&mut globals);
         globals.builtins.array = init_array(&mut globals);
