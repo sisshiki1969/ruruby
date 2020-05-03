@@ -6,45 +6,50 @@ pub fn init_array(globals: &mut Globals) -> Value {
     let class = ClassRef::from(array_id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "[]=", array_set_elem);
-    globals.add_builtin_instance_method(class, "<=>", array_cmp);
-    globals.add_builtin_instance_method(class, "push", array_push);
-    globals.add_builtin_instance_method(class, "<<", array_push);
-    globals.add_builtin_instance_method(class, "pop", array_pop);
-    globals.add_builtin_instance_method(class, "shift", array_shift);
-    globals.add_builtin_instance_method(class, "unshift", array_unshift);
-    globals.add_builtin_instance_method(class, "length", array_length);
-    globals.add_builtin_instance_method(class, "size", array_length);
-    globals.add_builtin_instance_method(class, "empty?", array_empty);
-    globals.add_builtin_instance_method(class, "*", array_mul);
-    globals.add_builtin_instance_method(class, "+", array_add);
-    globals.add_builtin_instance_method(class, "concat", array_concat);
-    globals.add_builtin_instance_method(class, "-", array_sub);
-    globals.add_builtin_instance_method(class, "map", array_map);
-    globals.add_builtin_instance_method(class, "flat_map", array_flat_map);
-    globals.add_builtin_instance_method(class, "each", array_each);
-    globals.add_builtin_instance_method(class, "include?", array_include);
-    globals.add_builtin_instance_method(class, "reverse", array_reverse);
-    globals.add_builtin_instance_method(class, "reverse!", array_reverse_);
-    globals.add_builtin_instance_method(class, "rotate!", array_rotate_);
-    globals.add_builtin_instance_method(class, "transpose", array_transpose);
-    globals.add_builtin_instance_method(class, "min", array_min);
-    globals.add_builtin_instance_method(class, "fill", array_fill);
-    globals.add_builtin_instance_method(class, "clear", array_clear);
-    globals.add_builtin_instance_method(class, "uniq!", array_uniq_);
-    globals.add_builtin_instance_method(class, "slice!", array_slice_);
-    globals.add_builtin_instance_method(class, "max", array_max);
-    globals.add_builtin_instance_method(class, "first", array_first);
-    globals.add_builtin_instance_method(class, "last", array_last);
-    globals.add_builtin_instance_method(class, "dup", array_dup);
-    globals.add_builtin_instance_method(class, "clone", array_dup);
-    globals.add_builtin_instance_method(class, "pack", array_pack);
-    globals.add_builtin_instance_method(class, "join", array_join);
-    globals.add_builtin_instance_method(class, "drop", array_drop);
-    globals.add_builtin_instance_method(class, "zip", array_zip);
-    globals.add_builtin_instance_method(class, "grep", array_grep);
-    globals.add_builtin_instance_method(class, "sort", array_sort);
-    globals.add_builtin_instance_method(class, "uniq", array_uniq);
+    globals.add_builtin_instance_method(class, "to_s", inspect);
+    globals.add_builtin_instance_method(class, "length", length);
+    globals.add_builtin_instance_method(class, "size", length);
+    globals.add_builtin_instance_method(class, "empty?", empty);
+    globals.add_builtin_instance_method(class, "[]=", set_elem);
+    globals.add_builtin_instance_method(class, "push", push);
+    globals.add_builtin_instance_method(class, "<<", push);
+    globals.add_builtin_instance_method(class, "pop", pop);
+    globals.add_builtin_instance_method(class, "*", mul);
+    globals.add_builtin_instance_method(class, "+", add);
+    globals.add_builtin_instance_method(class, "-", sub);
+    globals.add_builtin_instance_method(class, "<=>", cmp);
+
+    globals.add_builtin_instance_method(class, "shift", shift);
+    globals.add_builtin_instance_method(class, "unshift", unshift);
+
+    globals.add_builtin_instance_method(class, "concat", concat);
+    globals.add_builtin_instance_method(class, "map", map);
+    globals.add_builtin_instance_method(class, "flat_map", flat_map);
+    globals.add_builtin_instance_method(class, "each", each);
+
+    globals.add_builtin_instance_method(class, "include?", include);
+    globals.add_builtin_instance_method(class, "reverse", reverse);
+    globals.add_builtin_instance_method(class, "reverse!", reverse_);
+    globals.add_builtin_instance_method(class, "rotate!", rotate_);
+
+    globals.add_builtin_instance_method(class, "transpose", transpose);
+    globals.add_builtin_instance_method(class, "min", min);
+    globals.add_builtin_instance_method(class, "fill", fill);
+    globals.add_builtin_instance_method(class, "clear", clear);
+    globals.add_builtin_instance_method(class, "uniq!", uniq_);
+    globals.add_builtin_instance_method(class, "uniq", uniq);
+    globals.add_builtin_instance_method(class, "slice!", slice_);
+    globals.add_builtin_instance_method(class, "max", max);
+    globals.add_builtin_instance_method(class, "first", first);
+    globals.add_builtin_instance_method(class, "last", last);
+    globals.add_builtin_instance_method(class, "dup", dup);
+    globals.add_builtin_instance_method(class, "clone", dup);
+    globals.add_builtin_instance_method(class, "pack", pack);
+    globals.add_builtin_instance_method(class, "join", join);
+    globals.add_builtin_instance_method(class, "drop", drop);
+    globals.add_builtin_instance_method(class, "zip", zip);
+    globals.add_builtin_instance_method(class, "grep", grep);
+    globals.add_builtin_instance_method(class, "sort", sort);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -52,7 +57,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
 // Class methods
 
 fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 2)?;
+    vm.check_args_range(args.len(), 0, 2)?;
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
@@ -79,28 +84,18 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = vm.expect_array(self_val, "Receiver")?;
-    let s = match aref.elements.len() {
-        0 => "[]".to_string(),
-        1 => format!("[{}]", vm.val_inspect(aref.elements[0])),
-        len => {
-            let mut result = vm.val_inspect(aref.elements[0]);
-            for i in 1..len {
-                result = format!("{}, {}", result, vm.val_inspect(aref.elements[i]));
-            }
-            format! {"[{}]", result}
-        }
-    };
+    let s = aref.to_s(vm);
     Ok(Value::string(&vm.globals, s))
 }
 
-fn array_set_elem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn set_elem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     let val = aref.set_elem(vm, args)?;
     Ok(val)
 }
 
-fn array_cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
     let lhs = &vm.expect_array(self_val, "Receiver")?.elements;
     let rhs = &(match args[0].as_array() {
         Some(aref) => aref,
@@ -132,7 +127,7 @@ fn array_cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_push(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn push(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     for arg in args.iter() {
         aref.elements.push(*arg);
@@ -140,15 +135,15 @@ fn array_push(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn array_pop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn pop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     let res = aref.elements.pop().unwrap_or_default();
     Ok(res)
 }
 
-fn array_shift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn shift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     let new = aref.elements.split_off(1);
     let res = aref.elements[0];
@@ -156,8 +151,7 @@ fn array_shift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn array_unshift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    //vm.check_args_num(args.len(), 0, 0)?;
+fn unshift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         return Ok(self_val);
     }
@@ -168,20 +162,21 @@ fn array_unshift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn array_length(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn length(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let res = Value::fixnum(aref.elements.len() as i64);
     Ok(res)
 }
 
-fn array_empty(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn empty(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = vm.expect_array(self_val, "Receiver")?;
     let res = Value::bool(aref.elements.is_empty());
     Ok(res)
 }
 
-fn array_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     if let Some(num) = args[0].as_fixnum() {
         let v = match num {
@@ -223,21 +218,21 @@ fn array_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut lhs = vm.expect_array(self_val, "Receiver")?.elements.clone();
     let mut rhs = vm.expect_array(args[0], "Argument")?.elements.clone();
     lhs.append(&mut rhs);
     Ok(Value::array_from(&vm.globals, lhs))
 }
 
-fn array_concat(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn concat(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut lhs = vm.expect_array(self_val, "Receiver")?;
     let mut rhs = vm.expect_array(args[0], "Argument")?.elements.clone();
     lhs.elements.append(&mut rhs);
     Ok(self_val)
 }
 
-fn array_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs_v = &vm.expect_array(self_val, "Receiver")?.elements;
     let rhs_v = &vm.expect_array(args[0], "Argument")?.elements;
     let mut v = vec![];
@@ -256,8 +251,8 @@ fn array_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn array_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let method = match args.block {
         Some(method) => method,
@@ -281,7 +276,7 @@ fn array_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn array_flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = vm.expect_array(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut res = vec![];
@@ -314,8 +309,8 @@ fn array_flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn array_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     //let method = vm.expect_block(args.block)?;
 
@@ -353,7 +348,7 @@ fn array_each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn array_include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let target = args[0];
     let aref = vm.expect_array(self_val, "Receiver")?;
     for item in aref.elements.iter() {
@@ -364,23 +359,23 @@ fn array_include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
-fn array_reverse(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn reverse(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let mut res = aref.elements.clone();
     res.reverse();
     Ok(Value::array_from(&vm.globals, res))
 }
 
-fn array_reverse_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn reverse_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     aref.elements.reverse();
     Ok(self_val)
 }
 
-fn array_rotate_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 1)?;
+fn rotate_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
     let i = if args.len() == 0 {
         1
     } else {
@@ -410,8 +405,8 @@ fn array_rotate_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_transpose(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn transpose(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         return Ok(Value::array_from(&vm.globals, vec![]));
@@ -443,7 +438,7 @@ fn array_transpose(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn array_min(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn min(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     fn to_float(vm: &VM, val: Value) -> Result<f64, RubyError> {
         if val.is_packed_fixnum() {
             Ok(val.as_packed_fixnum() as f64)
@@ -471,8 +466,23 @@ fn array_min(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     return Ok(min_obj);
 }
 
-fn array_fill(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+fn max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let aref = vm.expect_array(self_val, "Receiver")?;
+    if aref.elements.len() == 0 {
+        return Ok(Value::nil());
+    }
+    let mut max = aref.elements[0];
+    for elem in &aref.elements {
+        if vm.eval_gt(max, *elem)? == Value::true_val() {
+            max = *elem;
+        };
+    }
+    Ok(max)
+}
+
+fn fill(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     for elem in &mut aref.elements {
         *elem = args[0];
@@ -480,15 +490,15 @@ fn array_fill(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn array_clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     aref.elements.clear();
     Ok(self_val)
 }
 
-fn array_uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let mut aref = vm.expect_array(self_val, "Receiver")?;
     let mut set = std::collections::HashSet::new();
     match args.block {
@@ -508,8 +518,8 @@ fn array_uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2, 2)?;
+fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 2)?;
     let start = args[0].expect_integer(vm, "Currently, first arg must be Integer.")?;
     if start < 0 {
         return Err(vm.error_argument("First arg must be positive value."));
@@ -525,23 +535,8 @@ fn array_slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, new))
 }
 
-fn array_max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
-    let aref = vm.expect_array(self_val, "Receiver")?;
-    if aref.elements.len() == 0 {
-        return Ok(Value::nil());
-    }
-    let mut max = aref.elements[0];
-    for elem in &aref.elements {
-        if vm.eval_gt(max, *elem)? == Value::true_val() {
-            max = *elem;
-        };
-    }
-    Ok(max)
-}
-
-fn array_first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         Ok(Value::nil())
@@ -550,8 +545,8 @@ fn array_first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     if aref.elements.len() == 0 {
         Ok(Value::nil())
@@ -560,14 +555,14 @@ fn array_last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     Ok(Value::array_from(&vm.globals, aref.elements.clone()))
 }
 
-fn array_pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 1)?;
+fn pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let mut v = vec![];
     for elem in &aref.elements {
@@ -580,8 +575,8 @@ fn array_pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bytes(&vm.globals, v))
 }
 
-fn array_join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 1)?;
+fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
     let sep = if args.len() == 0 {
         ""
     } else {
@@ -603,15 +598,15 @@ fn array_join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, res))
 }
 
-fn array_drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+fn drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let num = args[0].expect_integer(vm, "An argument must be Integer.")? as usize;
     let ary = &aref.elements[num..aref.elements.len()];
     Ok(Value::array_from(&vm.globals, ary.to_vec()))
 }
 
-fn array_zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_ary = vm.expect_array(self_val, "Receiver")?;
     let mut args_ary = vec![];
     for a in args.iter() {
@@ -643,8 +638,8 @@ fn array_zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn array_grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let ary = match args.block {
         None => aref
@@ -660,9 +655,9 @@ fn array_grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
-fn array_sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?.dup();
     match args.block {
         None => {
@@ -674,8 +669,8 @@ fn array_sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 use std::collections::HashSet;
-fn array_uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let aref = vm.expect_array(self_val, "Receiver")?;
     let mut h: HashSet<HashKey> = HashSet::new();
     let mut v = vec![];
@@ -699,20 +694,24 @@ mod tests {
     #[test]
     fn array() {
         let program = "
-    a=[1,2,3,4]
-    assert(3, a[2]);
-    a[1] = 14
-    assert(a, [1,14,3,4])
-    a.pop()
-    assert(a, [1,14,3])
-    a.push(7,8,9)
-    assert(a, [1,14,3,7,8,9])
-    a=[1,2,3,4]
-    b=Array.new(a)
-    assert(a,b)
-    b[2] = 100
-    assert(a, [1,2,3,4])
-    assert(b, [1,2,100,4])
+        a=[1,2,3,4]
+        assert 3, a[2];
+        a[1]=14
+        assert [1,14,3,4], a
+        a.pop()
+        assert [1,14,3], a
+        a.push(7,8,9)
+        assert [1,14,3,7,8,9], a
+        a=[1,2,3,4]
+        b=Array.new(a)
+        assert a, b
+        b[2]=100
+        assert [1,2,3,4], a
+        assert [1,2,100,4], b
+        assert 4, a.length
+        assert 4, b.length
+        assert true, [].empty?
+        assert false, a.empty?
     ";
         assert_script(program);
     }
@@ -720,11 +719,11 @@ mod tests {
     #[test]
     fn array1() {
         let program = "
-    assert([1,2,3]*0, [])
-    assert([1,2,3]*1, [1,2,3])
-    assert([nil]*5, [nil,nil,nil,nil,nil])
-    assert([1,2,3]+[3,4,5], [1,2,3,3,4,5])
-    assert([1,2,3]-[3,4,5], [1,2])
+        assert [], [1,2,3]*0 
+        assert [1,2,3]*1, [1,2,3]
+        assert [nil,nil,nil,nil,nil], [nil]*5 
+        assert [1,2,3,3,4,5], [1,2,3]+[3,4,5] 
+        assert [1,2], [1,2,3]-[3,4,5] 
     ";
         assert_script(program);
     }
@@ -732,16 +731,16 @@ mod tests {
     #[test]
     fn array2() {
         let program = "
-    a = [1,2,3,4,5,6,7]
-    b = [3,9]
-    c = [3,3]
-    assert(a[2], 3)
-    assert(a[3,9], [4,5,6,7])
-    assert(a[*b], [4,5,6,7])
-    assert(a[3,3], [4,5,6])
-    assert(a[*c], [4,5,6])
-    assert(a[7], nil)
-    assert(a[7,3], [])
+        a = [1,2,3,4,5,6,7]
+        b = [3,9]
+        c = [3,3]
+        assert 3, a[2]
+        assert [4,5,6,7], a[3,9]
+        assert [4,5,6,7], a[*b] 
+        assert [4,5,6], a[3,3]
+        assert [4,5,6], a[*c] 
+        assert nil, a[7]
+        assert [], a[7,3]
     ";
         assert_script(program);
     }
@@ -749,11 +748,11 @@ mod tests {
     #[test]
     fn array3() {
         let program = "
-    a = [1,2,3,4,5,6,7]
-    assert(a[2,3], [3,4,5])
-    a[2,3] = 100
-    assert(a, [1,2,100,6,7])
-    ";
+        a = [1,2,3,4,5,6,7]
+        assert [3,4,5], a[2,3]
+        a[2,3] = 100
+        assert [1,2,100,6,7], a
+        ";
         assert_script(program);
     }
 
@@ -782,45 +781,63 @@ mod tests {
     #[test]
     fn array_push() {
         let program = r#"
-    a = [1,2,3]
-    a << 4
-    a << "Ruby"
-    assert([1,2,3,4,"Ruby"], a)
-    "#;
+        a = [1,2,3]
+        a << 4
+        a << "Ruby"
+        assert([1,2,3,4,"Ruby"], a)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_min_max() {
+        let program = r#"
+        assert nil, [].min
+        #assert [], [].min(1)
+        assert 2, [2, 5, 3].min
+        #assert [2, 3], [2, 5, 3].min(2)
+        assert nil, [].max
+        #assert [], [].max(1)
+        assert 5, [2, 5, 3].max
+        #assert [5, 3], [2, 5, 3].max(2)
+        "#;
         assert_script(program);
     }
 
     #[test]
     fn array_map() {
         let program = "
-    a = [1,2,3]
-    assert(a.map {|| 3 }, [3,3,3])
-    assert(a.map {|x| x*3 }, [3,6,9])
-    assert(a.map do |x| x*3 end, [3,6,9])
-    assert(a, [1,2,3])";
-        assert_script(program);
-    }
-
-    #[test]
-    fn array_include() {
-        let program = r#"
-    a = ["ruby","rust","java"]
-    assert(true, a.include?("ruby"))
-    assert(true, a.include?("rust"))
-    assert(false, a.include?("c++"))
-    assert(false, a.include?(:ruby))
-    "#;
+        a = [1,2,3]
+        assert(a.map {|| 3 }, [3,3,3])
+        assert(a.map {|x| x*3 }, [3,6,9])
+        assert(a.map do |x| x*3 end, [3,6,9])
+        assert(a, [1,2,3])
+        b = [1, [2, 3], 4, [5, 6, 7]]
+        assert [2, 2, 3, 2, 3, 8, 5, 6, 7, 5, 6, 7], b.flat_map{|x| x * 2}
+        ";
         assert_script(program);
     }
 
     #[test]
     fn array_each() {
         let program = "
-    a = [1,2,3]
-    b = 0
-    assert([1,2,3], a.each {|x| b+=x })
-    assert(6, b)
+        a = [1,2,3]
+        b = 0
+        assert([1,2,3], a.each {|x| b+=x })
+        assert(6, b)
     ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_include() {
+        let program = r#"
+        a = ["ruby","rust","java"]
+        assert(true, a.include?("ruby"))
+        assert(true, a.include?("rust"))
+        assert(false, a.include?("c++"))
+        assert(false, a.include?(:ruby))
+    "#;
         assert_script(program);
     }
 
@@ -833,6 +850,18 @@ mod tests {
     assert([5,4,3,2,1], a.reverse!)
     assert([5,4,3,2,1], a)
     ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_rotate() {
+        let program = r#"
+        a = ["a","b","c","d"]
+        assert ["b","c","d","a"], a.rotate!
+        assert ["b","c","d","a"], a
+        assert ["d","a","b","c"], a.rotate!(2)
+        assert ["a","b","c","d"], a.rotate!(-3) 
+    "#;
         assert_script(program);
     }
 

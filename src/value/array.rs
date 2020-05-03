@@ -12,7 +12,7 @@ impl ArrayInfo {
 
     pub fn get_elem(&self, vm: &mut VM, args: &Args) -> VMResult {
         let arg_num = args.len();
-        vm.check_args_num(arg_num, 1, 2)?;
+        vm.check_args_range(arg_num, 1, 2)?;
         let index = args[0].expect_integer(&vm, "Index")?;
         let index = vm.get_array_index(index, self.elements.len())?;
         let val = if arg_num == 1 {
@@ -38,7 +38,7 @@ impl ArrayInfo {
     }
 
     pub fn set_elem(&mut self, vm: &mut VM, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 2, 3)?;
+        vm.check_args_range(args.len(), 2, 3)?;
         let val = if args.len() == 3 { args[2] } else { args[1] };
         let index = args[0].expect_integer(&vm, "Index")?;
         let elements = &mut self.elements;
@@ -74,6 +74,20 @@ impl ArrayInfo {
             };
         };
         Ok(val)
+    }
+
+    pub fn to_s(&self, vm: &mut VM) -> String {
+        match self.elements.len() {
+            0 => "[]".to_string(),
+            1 => format!("[{}]", vm.val_inspect(self.elements[0])),
+            len => {
+                let mut result = vm.val_inspect(self.elements[0]);
+                for i in 1..len {
+                    result = format!("{}, {}", result, vm.val_inspect(self.elements[i]));
+                }
+                format! {"[{}]", result}
+            }
+        }
     }
 }
 

@@ -28,7 +28,7 @@ fn string_to_path(vm: &mut VM, string: Value) -> Result<PathBuf, RubyError> {
 // Class methods
 
 fn join(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2, 2)?;
+    vm.check_args_num(args.len(), 2)?;
     let mut path = string_to_path(vm, args[0])?;
     let arg = string_to_path(vm, args[1])?;
 
@@ -47,7 +47,7 @@ fn join(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_num(len, 1, 1)?;
+    vm.check_args_range(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
     let basename = match filename.file_name() {
         Some(ostr) => Value::string(&vm.globals, ostr.to_string_lossy().into_owned()),
@@ -58,7 +58,7 @@ fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn extname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_num(len, 1, 1)?;
+    vm.check_args_range(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
     let extname = match filename.extension() {
         Some(ostr) => format!(".{}", ostr.to_string_lossy().into_owned()),
@@ -69,7 +69,7 @@ fn extname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_num(len, 1, 1)?;
+    vm.check_args_range(len, 1, 1)?;
     let filename = match string_to_path(vm, args[0])?.canonicalize() {
         Ok(file) => file,
         Err(_) => {
@@ -91,7 +91,7 @@ fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_num(len, 1, 1)?;
+    vm.check_args_range(len, 1, 1)?;
     let filename = match string_to_path(vm, args[0])?.canonicalize() {
         Ok(file) => file,
         Err(_) => {

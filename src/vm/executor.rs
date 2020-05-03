@@ -53,6 +53,7 @@ impl DefineMode {
 
 impl VM {
     pub fn new() -> Self {
+        use builtin::*;
         let mut globals = Globals::new();
 
         macro_rules! set_builtin_class {
@@ -88,12 +89,12 @@ impl VM {
         set_builtin_class!("Fiber", fiber);
         set_builtin_class!("Enumerator", enumerator);
 
-        set_class!("Math", init_math(&mut globals));
-        set_class!("File", init_file(&mut globals));
-        set_class!("Process", init_process(&mut globals));
-        set_class!("Struct", init_struct(&mut globals));
+        set_class!("Math", math::init_math(&mut globals));
+        set_class!("File", file::init_file(&mut globals));
+        set_class!("Process", process::init_process(&mut globals));
+        set_class!("Struct", structobj::init_struct(&mut globals));
         set_class!("StandardError", Value::class(&globals, globals.class_class));
-        set_class!("RuntimeError", init_error(&mut globals));
+        set_class!("RuntimeError", errorobj::init_error(&mut globals));
 
         let vm = VM {
             globals: GlobalsRef::new(globals),
@@ -408,7 +409,7 @@ impl VM {
         } else {
             None
         };
-        self.check_args_num(
+        self.check_args_range(
             args.len() + if kw.is_some() { 1 } else { 0 },
             iseq.min_params,
             iseq.max_params,
@@ -890,7 +891,7 @@ impl VM {
                         Some(oref) => match &oref.kind {
                             ObjKind::Array(aref) => aref.get_elem(self, &args)?,
                             ObjKind::Hash(href) => {
-                                self.check_args_num(arg_num, 1, 1)?;
+                                self.check_args_range(arg_num, 1, 1)?;
                                 match href.get(&args[0]) {
                                     Some(val) => *val,
                                     None => Value::nil(),
@@ -911,7 +912,7 @@ impl VM {
                         },
                         None if receiver.is_packed_fixnum() => {
                             let i = receiver.as_packed_fixnum();
-                            self.check_args_num(arg_num, 1, 1)?;
+                            self.check_args_range(arg_num, 1, 1)?;
                             let index = args[0].expect_integer(&self, "Index")?;
                             let val = if index < 0 || 63 < index {
                                 0
@@ -1270,7 +1271,18 @@ impl VM {
         RubyError::new_block_return(self.source_info(), loc)
     }
 
-    pub fn check_args_num(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
+    pub fn check_args_num(&self, len: usize, num: usize) -> Result<(), RubyError> {
+        if len == num {
+            Ok(())
+        } else {
+            Err(self.error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {})",
+                len, num
+            )))
+        }
+    }
+
+    pub fn check_args_range(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
         if min <= len && len <= max {
             Ok(())
         } else {
@@ -1302,7 +1314,7 @@ impl VM {
     }
 
     pub fn expect_integer(&mut self, val: Value, error_message: &str) -> Result<i64, RubyError> {
-        val.as_fixnum().ok_or({
+        val.as_fixnum().ok_or_else(|| {
             let inspect = self.val_inspect(val);
             self.error_type(format!(
                 "{} must be Integer. (given:{})",
@@ -1312,7 +1324,7 @@ impl VM {
     }
 
     pub fn expect_flonum(&mut self, val: Value, error_message: &str) -> Result<f64, RubyError> {
-        val.as_flonum().ok_or({
+        val.as_flonum().ok_or_else(|| {
             let inspect = self.val_inspect(val);
             self.error_type(format!(
                 "{} must be Float. (given:{})",
@@ -1326,7 +1338,7 @@ impl VM {
         val: &'a Value,
         error_message: &str,
     ) -> Result<&'a String, RubyError> {
-        val.as_string().ok_or({
+        val.as_string().ok_or_else(|| {
             let inspect = self.val_inspect(val.clone());
             self.error_type(format!(
                 "{} must be Float. (given:{})",
@@ -1336,7 +1348,7 @@ impl VM {
     }
 
     pub fn expect_array(&mut self, val: Value, error_message: &str) -> Result<ArrayRef, RubyError> {
-        val.as_array().ok_or({
+        val.as_array().ok_or_else(|| {
             let inspect = self.val_inspect(val);
             self.error_type(format!(
                 "{} must be Array. (given:{})",
@@ -1346,7 +1358,7 @@ impl VM {
     }
 
     pub fn expect_hash(&mut self, val: Value, error_message: &str) -> Result<HashRef, RubyError> {
-        val.as_hash().ok_or({
+        val.as_hash().ok_or_else(|| {
             let inspect = self.val_inspect(val);
             self.error_type(format!(
                 "{} must be Hash. (given:{})",
@@ -1624,28 +1636,25 @@ impl VM {
     }
 
     fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => {
-                let val = Value::fixnum(lhs << rhs);
-                Ok(val)
+        match lhs.unpack() {
+            RV::Integer(lhs) => {
+                match rhs.as_fixnum() {
+                    Some(rhs) => return Ok(Value::fixnum(lhs << rhs)),
+                    _ => {}
+                };
             }
-            (RV::Object(lhs_o), _) => match lhs_o.kind {
+            RV::Object(lhs_o) => match lhs_o.kind {
                 ObjKind::Array(mut aref) => {
                     aref.elements.push(rhs);
-                    Ok(lhs)
+                    return Ok(lhs);
                 }
-                _ => {
-                    let cache = self.read32(iseq, 1);
-                    let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
-                    Ok(val)
-                }
+                _ => {}
             },
-            _ => {
-                let cache = self.read32(iseq, 1);
-                let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
-                Ok(val)
-            }
-        }
+            _ => {}
+        };
+        let cache = self.read32(iseq, 1);
+        let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
+        Ok(val)
     }
 
     fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -1745,8 +1754,26 @@ impl VM {
     }
 
     pub fn eval_cmp(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        let id = self.globals.get_ident_id("<=>");
-        self.fallback_to_method(id, lhs, rhs)
+        let res = match lhs.unpack() {
+            RV::Integer(lhs) => match rhs.unpack() {
+                RV::Integer(rhs) => lhs.partial_cmp(&rhs),
+                RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
+                _ => return Ok(Value::nil()),
+            },
+            RV::Float(lhs) => match rhs.unpack() {
+                RV::Integer(rhs) => lhs.partial_cmp(&(rhs as f64)),
+                RV::Float(rhs) => lhs.partial_cmp(&rhs),
+                _ => return Ok(Value::nil()),
+            },
+            _ => {
+                let id = self.globals.get_ident_id("<=>");
+                return self.fallback_to_method(id, lhs, rhs);
+            }
+        };
+        match res {
+            Some(ord) => Ok(Value::fixnum(ord as i64)),
+            None => Ok(Value::nil()),
+        }
     }
 
     pub fn sort_array(&mut self, mut aref: ArrayRef) -> Result<(), RubyError> {
@@ -1797,32 +1824,18 @@ impl VM {
             }
             RV::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
             RV::Object(oref) => match &oref.kind {
-                ObjKind::String(s) => match s {
-                    RString::Str(s) => format!("{}", s),
-                    RString::Bytes(b) => format!("{}", String::from_utf8_lossy(b)),
+                ObjKind::String(s) => s.to_s(),
+                ObjKind::Class(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
-                ObjKind::Class(cref) => self.globals.get_ident_name(cref.name).to_string(),
                 ObjKind::Ordinary => {
                     format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.search_class().as_class().name), oref}
                 }
-                ObjKind::Array(aref) => match aref.elements.len() {
-                    0 => "[]".to_string(),
-                    1 => format!("[{}]", self.val_inspect(aref.elements[0])),
-                    len => {
-                        let mut result = self.val_inspect(aref.elements[0]);
-                        for i in 1..len {
-                            result = format!("{}, {}", result, self.val_inspect(aref.elements[i]));
-                        }
-                        format! {"[{}]", result}
-                    }
-                },
-                ObjKind::Range(rinfo) => {
-                    let start = self.val_to_s(rinfo.start);
-                    let end = self.val_to_s(rinfo.end);
-                    let sym = if rinfo.exclude { "..." } else { ".." };
-                    format!("({}{}{})", start, sym, end)
-                }
+                ObjKind::Array(aref) => aref.to_s(self),
+                ObjKind::Range(rinfo) => rinfo.to_s(self),
                 ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
+                ObjKind::Hash(href) => href.to_s(self),
                 _ => format!("{:?}", oref.kind),
             },
         }
@@ -1846,14 +1859,8 @@ impl VM {
             }
             RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
             RV::Object(mut oref) => match &oref.kind {
-                ObjKind::String(s) => match s {
-                    RString::Str(s) => format!("\"{}\"", s.escape_debug()),
-                    RString::Bytes(b) => match String::from_utf8(b.clone()) {
-                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                        Err(_) => "<ByteArray>".to_string(),
-                    },
-                },
-                ObjKind::Range(_) => self.val_to_s(val),
+                ObjKind::String(s) => s.inspect(),
+                ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
@@ -1862,17 +1869,7 @@ impl VM {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
-                ObjKind::Array(aref) => match aref.elements.len() {
-                    0 => "[]".to_string(),
-                    1 => format!("[{}]", self.val_inspect(aref.elements[0])),
-                    len => {
-                        let mut result = self.val_inspect(aref.elements[0]);
-                        for i in 1..len {
-                            result = format!("{}, {}", result, self.val_inspect(aref.elements[i]));
-                        }
-                        format! {"[{}]", result}
-                    }
-                },
+                ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
                 ObjKind::Ordinary => {
                     let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.search_class().as_class().name), oref.id()};
@@ -1884,7 +1881,7 @@ impl VM {
                     format!("{}>", s)
                 }
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
-                ObjKind::Hash(href) => hash_inspect(self, *href),
+                ObjKind::Hash(href) => href.to_s(self),
                 _ => {
                     let id = self.globals.get_ident_id("inspect");
                     self.send0(val, id)
@@ -1921,7 +1918,7 @@ impl VM {
         error_msg: impl Into<String>,
     ) -> Result<FiberRef, RubyError> {
         match val.is_object() {
-            Some(oref) => match oref.inner().kind {
+            Some(oref) => match oref.kind {
                 ObjKind::Fiber(f) => Ok(f),
                 _ => Err(self.error_argument(error_msg)),
             },
@@ -1935,7 +1932,7 @@ impl VM {
         error_msg: impl Into<String>,
     ) -> Result<EnumRef, RubyError> {
         match val.is_object() {
-            Some(oref) => match oref.inner().kind {
+            Some(oref) => match oref.kind {
                 ObjKind::Enumerator(e) => Ok(e),
                 _ => Err(self.error_argument(error_msg)),
             },

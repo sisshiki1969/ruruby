@@ -96,7 +96,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
@@ -117,7 +117,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
@@ -141,7 +141,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,

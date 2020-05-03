@@ -13,7 +13,7 @@ pub fn init_process(globals: &mut Globals) -> Value {
 // Class methods
 
 fn clock_gettime(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let duration = vm.globals.instant.elapsed();
     Ok(Value::flonum(duration.as_secs_f64()))
 }

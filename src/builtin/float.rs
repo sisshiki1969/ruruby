@@ -14,7 +14,7 @@ pub fn init_float(globals: &mut Globals) -> Value {
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
-    vm.check_args_num(args.len(), 1, 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = vm.expect_flonum(self_val, "Receiver")?;
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&(rhs as f64)),
@@ -28,7 +28,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     match self_val.unpack() {
         RV::Float(f) => {
             let i = f.floor() as i64;

@@ -65,6 +65,7 @@ impl BuiltinClass {
 
 impl Globals {
     pub fn new() -> Self {
+        use builtin::*;
         let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
         let module_id = ident_table.get_ident_id("Module");
@@ -103,20 +104,20 @@ impl Globals {
         let singleton_obj = Value::class(&globals, singleton_class);
         globals.builtins.object.as_object().set_class(singleton_obj);
 
-        init_module(&mut globals);
+        module::init_module(&mut globals);
         class::init_class(&mut globals);
-        globals.builtins.integer = init_integer(&mut globals);
-        globals.builtins.float = init_float(&mut globals);
-        globals.builtins.array = init_array(&mut globals);
-        globals.builtins.procobj = init_proc(&mut globals);
-        globals.builtins.method = init_method(&mut globals);
-        globals.builtins.range = init_range(&mut globals);
-        globals.builtins.string = init_string(&mut globals);
-        globals.builtins.hash = init_hash(&mut globals);
-        globals.builtins.regexp = init_regexp(&mut globals);
-        globals.builtins.fiber = init_fiber(&mut globals);
-        globals.builtins.enumerator = init_enumerator(&mut globals);
-        init_object(&mut globals);
+        globals.builtins.integer = integer::init_integer(&mut globals);
+        globals.builtins.float = float::init_float(&mut globals);
+        globals.builtins.array = array::init_array(&mut globals);
+        globals.builtins.procobj = procobj::init_proc(&mut globals);
+        globals.builtins.method = method::init_method(&mut globals);
+        globals.builtins.range = range::init_range(&mut globals);
+        globals.builtins.string = string::init_string(&mut globals);
+        globals.builtins.hash = hash::init_hash(&mut globals);
+        globals.builtins.regexp = regexp::init_regexp(&mut globals);
+        globals.builtins.fiber = fiber::init_fiber(&mut globals);
+        globals.builtins.enumerator = enumerator::init_enumerator(&mut globals);
+        object::init_object(&mut globals);
         let kernel = kernel::Kernel::init_kernel(&mut globals);
         object_class.include.push(kernel);
         globals

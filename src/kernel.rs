@@ -74,7 +74,7 @@ impl Kernel {
 
         /// Built-in function "assert".
         fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 2, 2)?;
+            vm.check_args_num(args.len(), 2)?;
             if !vm.eval_eq(args[0], args[1])? {
                 panic!(
                     "Assertion error: Expected: {} Actual: {}",
@@ -88,7 +88,7 @@ impl Kernel {
         }
 
         fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 1, 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let file_name = match args[0].as_string() {
                 Some(string) => string,
                 None => return Err(vm.error_argument("file name must be a string.")),
@@ -100,7 +100,7 @@ impl Kernel {
         }
 
         fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 1, 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let context = vm.context();
             let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
 
@@ -109,7 +109,6 @@ impl Kernel {
                 None => return Err(vm.error_argument("file name must be a string.")),
             };
             path.pop();
-            //path.push(file_name);
             for p in file_name.iter() {
                 if p == ".." {
                     path.pop();
@@ -156,7 +155,7 @@ impl Kernel {
         }
 
         fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 1, 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let name = match args[0].as_symbol() {
                 Some(id) => id,
                 None => return Err(vm.error_type("An argument must be a Symbol.")),
@@ -167,7 +166,7 @@ impl Kernel {
         }
 
         fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 1, 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let mut recv_class = self_val.get_class_object(&vm.globals);
             loop {
                 if recv_class.id() == args[0].id() {
@@ -181,13 +180,13 @@ impl Kernel {
         }
 
         fn tos(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 0, 0)?;
+            vm.check_args_num(args.len(), 0)?;
             let s = vm.val_to_s(self_val);
             Ok(Value::string(&vm.globals, s))
         }
 
         fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 1, 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let self_ = args[0];
             let val = if self_.is_packed_value() {
                 if self_.is_packed_fixnum() {
@@ -232,7 +231,7 @@ impl Kernel {
         }
 
         fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 0, 0)?;
+            vm.check_args_num(args.len(), 0)?;
             let mut path = vm.root_path.last().unwrap().clone();
             path.pop();
             Ok(Value::string(
@@ -242,8 +241,7 @@ impl Kernel {
         }
 
         fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 0, 0)?;
-            //let path = vm.root_path.last().unwrap().clone();
+            vm.check_args_num(args.len(), 0)?;
             let path = vm.context().iseq_ref.source_info.path.clone();
             Ok(Value::string(
                 &vm.globals,
@@ -252,7 +250,7 @@ impl Kernel {
         }
 
         fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 0, 2)?;
+            vm.check_args_range(args.len(), 0, 2)?;
             for i in 0..args.len() {
                 eprintln!("{}", vm.val_inspect(args[i]));
             }
@@ -273,7 +271,7 @@ impl Kernel {
         }
 
         fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 0, 1)?;
+            vm.check_args_range(args.len(), 0, 1)?;
             let code = if args.len() == 0 {
                 0
             } else {

@@ -14,6 +14,7 @@ pub fn init_object(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "instance_variable_get", instance_variable_get);
     globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
     globals.add_builtin_instance_method(object, "freeze", freeze);
+    globals.add_builtin_instance_method(object, "ensure", freeze);
     globals.add_builtin_instance_method(object, "super", super_);
     globals.add_builtin_instance_method(object, "equal?", equal);
     globals.add_builtin_instance_method(object, "send", send);
@@ -41,13 +42,13 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let val = self_val.dup();
     Ok(val)
 }
 
 fn eql(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+    vm.check_args_num(args.len(), 1)?;
     Ok(Value::bool(self_val == args[0]))
 }
 
@@ -76,7 +77,7 @@ fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2, 2)?;
+    vm.check_args_num(args.len(), 2)?;
     let name = args[0];
     let val = args[1];
     let var_id = match name.as_symbol() {
@@ -92,7 +93,7 @@ fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 }
 
 fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let name = args[0];
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
@@ -110,7 +111,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 }
 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let mut receiver = self_val.as_object();
     let res = receiver
         .var_table()
@@ -122,12 +123,12 @@ fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     Ok(self_val)
 }
 
 fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let context = vm.context();
     let iseq = context.iseq_ref;
     if let ISeqKind::Method(m) = iseq.kind {
@@ -166,7 +167,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn equal(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
+    vm.check_args_num(args.len(), 1)?;
     Ok(Value::bool(self_val.id() == args[0].id()))
 }
 
@@ -200,9 +201,20 @@ fn object_yield(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1, 1)?;
-    expect_string!(program, vm, args[0]);
-    let method = vm.parse_program_eval(std::path::PathBuf::from("eval"), program)?;
+    vm.check_args_range(args.len(), 1, 4)?;
+    let program = vm.expect_string(&args[0], "1st arg")?;
+    if args.len() > 1 {
+        if !args[1].is_nil() {
+            return Err(vm.error_argument("Currently, 2nd arg must be Nil."));
+        }
+    }
+    let env_name = if args.len() > 2 {
+        vm.expect_string(&args[2], "3rd arg must be String.")?
+    } else {
+        "(eval)"
+    };
+
+    let method = vm.parse_program_eval(std::path::PathBuf::from(env_name), program)?;
     let args = Args::new0();
     let res = vm.eval_block(method, &args)?;
     Ok(res)

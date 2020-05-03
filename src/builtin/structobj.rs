@@ -30,8 +30,10 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         .add_builtin_instance_method(class, "initialize", initialize);
     vm.globals
         .add_builtin_instance_method(class, "inspect", inspect);
-    vm.globals.add_builtin_class_method(val, "[]", class::new);
-    vm.globals.add_builtin_class_method(val, "new", class::new);
+    vm.globals
+        .add_builtin_class_method(val, "[]", builtin::class::new);
+    vm.globals
+        .add_builtin_class_method(val, "new", builtin::class::new);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
@@ -48,7 +50,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vm.globals.get_ident_id("_members"),
         Value::array_from(&vm.globals, vec),
     );
-    attr_accessor(vm, val, &attr_args)?;
+    builtin::module::attr_accessor(vm, val, &attr_args)?;
 
     match args.block {
         Some(method) => {

@@ -369,11 +369,21 @@ impl Value {
         }
     }
 
+    pub fn as_rstring(&self) -> Option<&RString> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::String(rstr) => Some(rstr),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_bytes(&self) -> Option<&[u8]> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::String(RString::Str(s)) => Some(s.as_bytes()),
-                ObjKind::String(RString::Bytes(b)) => Some(b.as_slice()),
+                ObjKind::String(RString::Bytes(b)) => Some(b),
                 _ => None,
             },
             None => None,

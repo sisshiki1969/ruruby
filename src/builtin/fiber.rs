@@ -43,7 +43,7 @@ pub fn init_fiber(globals: &mut Globals) -> Value {
 // Class methods
 
 fn new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let method = vm.expect_block(args.block)?;
     let mut context = vm.create_block_context(method)?;
     context.is_fiber = true;
@@ -86,7 +86,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0, 0)?;
+    vm.check_args_num(args.len(), 0)?;
     match self_val.unpack() {
         RV::Object(obj) => match &obj.kind {
             ObjKind::Fiber(fiber) => {
