@@ -7,6 +7,7 @@ pub mod file;
 pub mod float;
 pub mod hash;
 pub mod integer;
+pub mod kernel;
 pub mod math;
 pub mod method;
 pub mod module;

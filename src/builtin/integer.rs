@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_integer(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Integer");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "==", eq);

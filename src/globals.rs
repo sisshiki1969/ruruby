@@ -104,10 +104,10 @@ impl Globals {
         let singleton_obj = Value::class(&globals, singleton_class);
         globals.builtins.object.as_object().set_class(singleton_obj);
 
-        module::init_module(&mut globals);
-        class::init_class(&mut globals);
-        globals.builtins.integer = integer::init_integer(&mut globals);
-        globals.builtins.float = float::init_float(&mut globals);
+        module::init(&mut globals);
+        class::init(&mut globals);
+        globals.builtins.integer = integer::init(&mut globals);
+        globals.builtins.float = float::init(&mut globals);
         globals.builtins.array = array::init_array(&mut globals);
         globals.builtins.procobj = procobj::init_proc(&mut globals);
         globals.builtins.method = method::init_method(&mut globals);
@@ -117,8 +117,8 @@ impl Globals {
         globals.builtins.regexp = regexp::init_regexp(&mut globals);
         globals.builtins.fiber = fiber::init_fiber(&mut globals);
         globals.builtins.enumerator = enumerator::init_enumerator(&mut globals);
-        object::init_object(&mut globals);
-        let kernel = kernel::Kernel::init_kernel(&mut globals);
+        object::init(&mut globals);
+        let kernel = kernel::init(&mut globals);
         object_class.include.push(kernel);
         globals
     }
@@ -160,8 +160,8 @@ impl Globals {
     }
 
     pub fn get_singleton_class(&self, obj: Value) -> Result<Value, ()> {
-        match obj.is_object() {
-            Some(mut oref) => {
+        match obj.unpack() {
+            RV::Object(mut oref) => {
                 let class = oref.class();
                 if class.as_class().is_singleton {
                     Ok(class)
@@ -188,15 +188,12 @@ impl Globals {
         }
     }
 
-    pub fn add_builtin_class_method(
-        &mut self,
-        obj: Value,
-        name: impl Into<String>,
-        func: BuiltinFunc,
-    ) {
-        let name = name.into();
-        let id = self.get_ident_id(&name);
-        let info = MethodInfo::BuiltinFunc { name, func };
+    pub fn add_builtin_class_method(&mut self, obj: Value, name: &str, func: BuiltinFunc) {
+        let id = self.get_ident_id(name);
+        let info = MethodInfo::BuiltinFunc {
+            name: name.to_string(),
+            func,
+        };
         let func_ref = self.add_method(info);
         let singleton = self.get_singleton_class(obj).unwrap();
         singleton.as_class().method_table.insert(id, func_ref);
@@ -205,12 +202,14 @@ impl Globals {
     pub fn add_builtin_instance_method(
         &mut self,
         mut classref: ClassRef,
-        name: impl Into<String>,
+        name: &str,
         func: BuiltinFunc,
     ) {
-        let name = name.into();
-        let id = self.get_ident_id(&name);
-        let info = MethodInfo::BuiltinFunc { name, func };
+        let id = self.get_ident_id(name);
+        let info = MethodInfo::BuiltinFunc {
+            name: name.to_string(),
+            func,
+        };
         let methodref = self.add_method(info);
         classref.method_table.insert(id, methodref);
     }

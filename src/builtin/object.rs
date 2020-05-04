@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_object(globals: &mut Globals) {
+pub fn init(globals: &mut Globals) {
     let object = globals.object_class;
     globals.add_builtin_instance_method(object, "class", class);
     globals.add_builtin_instance_method(object, "object_id", object_id);

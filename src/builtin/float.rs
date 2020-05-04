@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_float(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Float");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "<=>", cmp);

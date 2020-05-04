@@ -1321,79 +1321,85 @@ impl VM {
         }
     }
 
-    pub fn expect_integer(&mut self, val: Value, error_message: &str) -> Result<i64, RubyError> {
+    pub fn expect_integer(&mut self, val: Value, msg: &str) -> Result<i64, RubyError> {
         val.as_fixnum().ok_or_else(|| {
             let inspect = self.val_inspect(val);
-            self.error_type(format!(
-                "{} must be Integer. (given:{})",
-                error_message, inspect
-            ))
+            self.error_type(format!("{} must be Integer. (given:{})", msg, inspect))
         })
     }
 
-    pub fn expect_flonum(&mut self, val: Value, error_message: &str) -> Result<f64, RubyError> {
+    pub fn expect_flonum(&mut self, val: Value, msg: &str) -> Result<f64, RubyError> {
         val.as_flonum().ok_or_else(|| {
             let inspect = self.val_inspect(val);
-            self.error_type(format!(
-                "{} must be Float. (given:{})",
-                error_message, inspect
-            ))
+            self.error_type(format!("{} must be Float. (given:{})", msg, inspect))
         })
     }
 
     pub fn expect_string<'a>(
         &mut self,
         val: &'a Value,
-        error_message: &str,
+        msg: &str,
     ) -> Result<&'a String, RubyError> {
         val.as_string().ok_or_else(|| {
             let inspect = self.val_inspect(val.clone());
-            self.error_type(format!(
-                "{} must be Float. (given:{})",
-                error_message, inspect
-            ))
+            self.error_type(format!("{} must be Float. (given:{})", msg, inspect))
         })
     }
 
-    pub fn expect_array(&mut self, val: Value, error_message: &str) -> Result<ArrayRef, RubyError> {
+    pub fn expect_array(&mut self, val: Value, msg: &str) -> Result<ArrayRef, RubyError> {
         val.as_array().ok_or_else(|| {
             let inspect = self.val_inspect(val);
-            self.error_type(format!(
-                "{} must be Array. (given:{})",
-                error_message, inspect
-            ))
+            self.error_type(format!("{} must be Array. (given:{})", msg, inspect))
         })
     }
 
-    pub fn expect_hash(&mut self, val: Value, error_message: &str) -> Result<HashRef, RubyError> {
+    pub fn expect_hash(&mut self, val: Value, msg: &str) -> Result<HashRef, RubyError> {
         val.as_hash().ok_or_else(|| {
             let inspect = self.val_inspect(val);
-            self.error_type(format!(
-                "{} must be Hash. (given:{})",
-                error_message, inspect
-            ))
+            self.error_type(format!("{} must be Hash. (given:{})", msg, inspect))
         })
     }
 
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
-        match val.is_class() {
-            Some(class_ref) => Ok(class_ref),
-            None => {
-                let val = self.val_inspect(val);
-                Err(self.error_type(format!("{} must be Class. (given:{})", msg, val)))
-            }
-        }
+        val.is_class().ok_or_else(|| {
+            let val = self.val_inspect(val);
+            self.error_type(format!("{} must be Class. (given:{})", msg, val))
+        })
     }
 
     pub fn expect_module(&mut self, val: Value) -> Result<ClassRef, RubyError> {
-        match val.as_module() {
-            Some(class_ref) => Ok(class_ref),
-            None => {
-                let val = self.val_inspect(val);
-                Err(self.error_type(format!("Must be Module or Class. (given:{})", val)))
-            }
+        val.as_module().ok_or_else(|| {
+            let val = self.val_inspect(val);
+            self.error_type(format!("Must be Module or Class. (given:{})", val))
+        })
+    }
+
+    pub fn expect_object(&self, val: Value, error_msg: &str) -> Result<ObjectRef, RubyError> {
+        match val.is_object() {
+            Some(oref) => Ok(oref),
+            None => Err(self.error_argument(error_msg)),
+        }
+    }
+
+    pub fn expect_fiber(&self, val: Value, error_msg: &str) -> Result<FiberRef, RubyError> {
+        match val.is_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Fiber(f) => Ok(f),
+                _ => Err(self.error_argument(error_msg)),
+            },
+            None => Err(self.error_argument(error_msg)),
+        }
+    }
+
+    pub fn expect_enumerator(&self, val: Value, error_msg: &str) -> Result<EnumRef, RubyError> {
+        match val.is_object() {
+            Some(oref) => match oref.kind {
+                ObjKind::Enumerator(e) => Ok(e),
+                _ => Err(self.error_argument(error_msg)),
+            },
+            None => Err(self.error_argument(error_msg)),
         }
     }
 }
@@ -1897,45 +1903,6 @@ impl VM {
         let args = Args::new0();
         let val = self.eval_send(method, receiver, &args)?;
         Ok(val)
-    }
-
-    pub fn expect_object(
-        &self,
-        val: Value,
-        error_msg: impl Into<String>,
-    ) -> Result<ObjectRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => Ok(oref),
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
-
-    pub fn expect_fiber(
-        &self,
-        val: Value,
-        error_msg: impl Into<String>,
-    ) -> Result<FiberRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Fiber(f) => Ok(f),
-                _ => Err(self.error_argument(error_msg)),
-            },
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
-
-    pub fn expect_enumerator(
-        &self,
-        val: Value,
-        error_msg: impl Into<String>,
-    ) -> Result<EnumRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Enumerator(e) => Ok(e),
-                _ => Err(self.error_argument(error_msg)),
-            },
-            None => Err(self.error_argument(error_msg)),
-        }
     }
 }
 
