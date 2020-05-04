@@ -792,6 +792,14 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = self.read_id(iseq, 1);
                     let val = self.stack_pop();
+                    match val.as_module() {
+                        Some(mut cref) => {
+                            if cref.name == None {
+                                cref.name = Some(id);
+                            }
+                        }
+                        None => {}
+                    }
                     self.class().set_var(id, val);
                     self.pc += 5;
                 }
@@ -1445,19 +1453,19 @@ impl VM {
         }
     }
 
-    // Search class inheritance chain for the constant.
+    /// Search class inheritance chain for the constant.
     pub fn get_super_const(&self, mut class: Value, id: IdentId) -> VMResult {
         loop {
             match class.get_var(id) {
                 Some(val) => {
-                    return Ok(val.clone());
+                    return Ok(val);
                 }
                 None => match class.superclass() {
                     Some(superclass) => {
                         class = superclass;
                     }
                     None => {
-                        let name = self.globals.get_ident_name(id).clone();
+                        let name = self.globals.get_ident_name(id);
                         return Err(self.error_name(format!("Uninitialized constant {}.", name)));
                     }
                 },

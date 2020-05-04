@@ -956,24 +956,3 @@ fn singleton() {
         ";
     assert_script(program);
 }
-
-#[test]
-fn is_a() {
-    let program = "
-        module M
-        end
-        class C
-        end
-        class S < C
-        end
-
-        obj = S.new
-        assert true, obj.is_a?(S)
-        assert true, obj.is_a?(C)
-        assert true, obj.is_a?(Object)
-        assert false, obj.is_a?(Integer)
-        assert false, obj.is_a?(Array)
-        assert false, obj.is_a?(M)
-        ";
-    assert_script(program);
-}

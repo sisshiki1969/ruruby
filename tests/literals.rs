@@ -75,6 +75,6 @@ fn array_lit1() {
 fn percent_notation() {
     let program = r#"
     assert(%w(We are the champions), ["We", "are", "the", "champions"])
-"#;
+    "#;
     assert_script(program);
 }
