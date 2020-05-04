@@ -13,7 +13,6 @@ pub mod value;
 pub mod vm;
 pub use crate::builtin::enumerator::*;
 pub use crate::builtin::fiber::*;
-pub use crate::builtin::method::*;
 pub use crate::builtin::procobj::*;
 pub use crate::builtin::range::*;
 pub use crate::builtin::regexp::*;

@@ -1,4 +1,3 @@
-//use crate::vm::vm_inst::Inst;
 use crate::*;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
