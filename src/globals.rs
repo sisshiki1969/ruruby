@@ -235,81 +235,11 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => self
-                    .get_ident_name(oref.search_class().as_class().name)
-                    .to_string(),
+                ObjKind::Ordinary => oref.class_name(self).to_string(),
                 ObjKind::Integer(_) => "Integer".to_string(),
                 ObjKind::Float(_) => "Float".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),
                 ObjKind::Enumerator(_) => "Enumerator".to_string(),
-            },
-        }
-    }
-
-    pub fn val_inspect(&self, val: Value) -> String {
-        match val.is_object() {
-            Some(mut oref) => match &oref.kind {
-                ObjKind::String(s) => match s {
-                    RString::Str(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                    RString::Bytes(b) => match String::from_utf8(b.clone()) {
-                        Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                        Err(_) => "<ByteArray>".to_string(),
-                    },
-                },
-                ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.get_ident_name(id)},
-                    None => format! {"#<Class:0x{:x}>", cref.id()},
-                },
-                ObjKind::Module(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.get_ident_name(id)},
-                    None => format! {"#<Module:0x{:x}>", cref.id()},
-                },
-                ObjKind::Array(aref) => match aref.elements.len() {
-                    0 => "[]".to_string(),
-                    1 => format!("[{}]", self.val_inspect(aref.elements[0])),
-                    len => {
-                        let mut result = self.val_inspect(aref.elements[0]);
-                        for i in 1..len {
-                            result = format!("{}, {}", result, self.val_inspect(aref.elements[i]));
-                        }
-                        format! {"[{}]", result}
-                    }
-                },
-                ObjKind::Hash(href) => match href.len() {
-                    0 => "{}".to_string(),
-                    _ => {
-                        let mut result = "".to_string();
-                        let mut first = true;
-                        for (k, v) in href.iter() {
-                            result = if first {
-                                format!("{} => {}", self.val_inspect(k), self.val_inspect(v))
-                            } else {
-                                format!(
-                                    "{}, {} => {}",
-                                    result,
-                                    self.val_inspect(k),
-                                    self.val_inspect(v)
-                                )
-                            };
-                            first = false;
-                        }
-
-                        format! {"{{{}}}", result}
-                    }
-                },
-                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
-                ObjKind::Ordinary => {
-                    let mut s = format! {"#<{}:0x{:x}", self.get_ident_name(oref.search_class().as_class().name), oref.id()};
-                    for (k, v) in oref.var_table() {
-                        s = format!("{} {}={}", s, self.get_ident_name(*k), self.val_inspect(*v));
-                    }
-                    format!("{}>", s)
-                }
-                _ => format!("{:?}", oref.kind),
-            },
-            None => match val.unpack() {
-                RV::Nil => "nil".to_string(),
-                _ => format!("{:?}", val),
             },
         }
     }
@@ -376,7 +306,7 @@ impl Globals {
 //-------------------------------------------------------------------------------------------------------------
 //
 //  Global method cache
-//  This supports method cache.
+//  This module supports global method cache.
 //
 //-------------------------------------------------------------------------------------------------------------
 
@@ -407,7 +337,7 @@ impl MethodCache {
 //-------------------------------------------------------------------------------------------------------------
 //
 //  Inline method cache
-//  This supports method cache embedded in the instruction sequence directly.
+//  This module supports inline method cache which is embedded in the instruction sequence directly.
 //
 //-------------------------------------------------------------------------------------------------------------
 
@@ -446,7 +376,7 @@ impl InlineCache {
 //-------------------------------------------------------------------------------------------------------------
 //
 //  Case dispatch map
-//  This supports optimization for case syntax when all of the when-conditions were fixnum literals.
+//  This module supports optimization for case syntax when all of the when-conditions were integer literals.
 //
 //-------------------------------------------------------------------------------------------------------------
 

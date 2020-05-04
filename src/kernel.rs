@@ -18,7 +18,6 @@ impl Kernel {
         globals.add_builtin_instance_method(kernel_class, "block_given?", block_given);
         globals.add_builtin_instance_method(kernel_class, "method", method);
         globals.add_builtin_instance_method(kernel_class, "is_a?", isa);
-        globals.add_builtin_instance_method(kernel_class, "to_s", tos);
         globals.add_builtin_instance_method(kernel_class, "Integer", integer);
         globals.add_builtin_instance_method(kernel_class, "__dir__", dir);
         globals.add_builtin_instance_method(kernel_class, "__FILE__", file_);
@@ -41,15 +40,15 @@ impl Kernel {
                     }
                 }
             }
-            for i in 0..args.len() {
-                flatten(vm, args[i]);
+            for arg in args.iter() {
+                flatten(vm, *arg);
             }
             Ok(Value::nil())
         }
 
         fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            for i in 0..args.len() {
-                println!("{}", vm.val_inspect(args[i]));
+            for arg in args.iter() {
+                println!("{}", vm.val_inspect(*arg));
             }
             if args.len() == 1 {
                 Ok(args[0])
@@ -60,13 +59,13 @@ impl Kernel {
 
         /// Built-in function "print".
         fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-            for i in 0..args.len() {
-                match args[i].as_bytes() {
+            for arg in args.iter() {
+                match arg.as_bytes() {
                     Some(bytes) => {
                         use std::io::{self, Write};
                         io::stdout().write(bytes).unwrap();
                     }
-                    None => print!("{}", vm.val_to_s(args[i])),
+                    None => print!("{}", vm.val_to_s(*arg)),
                 }
             }
             Ok(Value::nil())
@@ -179,12 +178,6 @@ impl Kernel {
             }
         }
 
-        fn tos(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-            vm.check_args_num(args.len(), 0)?;
-            let s = vm.val_to_s(self_val);
-            Ok(Value::string(&vm.globals, s))
-        }
-
         fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_num(args.len(), 1)?;
             let self_ = args[0];
@@ -251,8 +244,8 @@ impl Kernel {
 
         fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             vm.check_args_range(args.len(), 0, 2)?;
-            for i in 0..args.len() {
-                eprintln!("{}", vm.val_inspect(args[i]));
+            for arg in args.iter() {
+                eprintln!("{}", vm.val_inspect(*arg));
             }
             Err(vm.error_unimplemented("error"))
         }

@@ -230,7 +230,7 @@ impl Token {
 impl Token {
     /// Examine the token, and return true if it is a line terminator.
     pub fn is_line_term(&self) -> bool {
-        self.kind == TokenKind::LineTerm
+        self.kind == TokenKind::LineTerm || self.kind == TokenKind::Punct(Punct::Semi)
     }
 
     /// Examine the token, and return true if it is EOF.

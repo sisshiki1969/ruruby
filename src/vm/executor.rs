@@ -974,7 +974,7 @@ impl VM {
                     };
                     match arg.pop().unwrap() {
                         'i' => arg.insert_str(0, "(?mi)"),
-                        'm' => arg.insert_str(0, "(?m)"),
+                        'm' => arg.insert_str(0, "(?ms)"),
                         'x' => arg.insert_str(0, "(?mx)"),
                         'o' => arg.insert_str(0, "(?mo)"),
                         '-' => arg.insert_str(0, "(?m)"),
@@ -1792,9 +1792,9 @@ impl VM {
                     _ => {}
                 }
             }
-        };
-        aref.elements
-            .sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
+            aref.elements
+                .sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
+        }
         Ok(())
     }
 }
@@ -1829,9 +1829,7 @@ impl VM {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
-                ObjKind::Ordinary => {
-                    format! {"#<{}:{:?}>", self.globals.get_ident_name(oref.search_class().as_class().name), oref}
-                }
+                ObjKind::Ordinary => oref.to_s(&self.globals),
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Range(rinfo) => rinfo.to_s(self),
                 ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
@@ -1858,7 +1856,7 @@ impl VM {
                 }
             }
             RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
-            RV::Object(mut oref) => match &oref.kind {
+            RV::Object(oref) => match &oref.kind {
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {
@@ -1871,15 +1869,7 @@ impl VM {
                 },
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
-                ObjKind::Ordinary => {
-                    let mut s = format! {"#<{}:0x{:x}", self.globals.get_ident_name(oref.search_class().as_class().name), oref.id()};
-                    for (k, v) in oref.var_table() {
-                        let inspect = self.val_inspect(*v);
-                        let id = self.globals.get_ident_name(*k);
-                        s = format!("{} {}={}", s, id, inspect);
-                    }
-                    format!("{}>", s)
-                }
+                ObjKind::Ordinary => oref.inspect(self),
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => {

@@ -97,9 +97,9 @@ fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 pub fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for i in 0..args.len() {
-        if args[i].is_packed_symbol() {
-            let id = args[i].as_packed_symbol();
+    for arg in args.iter() {
+        if arg.is_packed_symbol() {
+            let id = arg.as_packed_symbol();
             define_reader(vm, self_val, id);
             define_writer(vm, self_val, id);
         } else {
@@ -110,9 +110,9 @@ pub fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for i in 0..args.len() {
-        if args[i].is_packed_symbol() {
-            let id = args[i].as_packed_symbol();
+    for arg in args.iter() {
+        if arg.is_packed_symbol() {
+            let id = arg.as_packed_symbol();
             define_reader(vm, self_val, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
@@ -122,9 +122,9 @@ fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for i in 0..args.len() {
-        if args[i].is_packed_symbol() {
-            let id = args[i].as_packed_symbol();
+    for arg in args.iter() {
+        if arg.is_packed_symbol() {
+            let id = arg.as_packed_symbol();
             define_writer(vm, self_val, id);
         } else {
             return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));

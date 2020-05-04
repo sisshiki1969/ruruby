@@ -230,12 +230,22 @@ impl Regexp {
             let mut range = vec![];
             let mut i = 0;
             loop {
+                if i >= given.len() {
+                    break;
+                }
                 match re.captures_from_pos(given, i) {
                     Ok(None) => break,
                     Ok(Some(captures)) => {
                         let m = captures.get(0).unwrap();
-                        i = m.end();
+                        // the length of matched string can be 0.
+                        // this is neccesary to avoid infinite loop.
+                        i = if m.end() == m.start() {
+                            m.end() + 1
+                        } else {
+                            m.end()
+                        };
                         range.push((m.start(), m.end()));
+                        //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
                         Regexp::get_captures(vm, &captures, given);
                     }
                     Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),

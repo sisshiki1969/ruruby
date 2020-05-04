@@ -4,8 +4,9 @@ pub fn init_object(globals: &mut Globals) {
     let object = globals.object_class;
     globals.add_builtin_instance_method(object, "class", class);
     globals.add_builtin_instance_method(object, "object_id", object_id);
-    globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
+    globals.add_builtin_instance_method(object, "to_s", to_s);
     globals.add_builtin_instance_method(object, "inspect", inspect);
+    globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
     globals.add_builtin_instance_method(object, "clone", dup);
     globals.add_builtin_instance_method(object, "dup", dup);
     globals.add_builtin_instance_method(object, "eql?", eql);
@@ -32,13 +33,34 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::fixnum(id as i64))
 }
 
-fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    vm.get_singleton_class(self_val)
+fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    match self_val.is_object() {
+        Some(oref) => {
+            let s = oref.to_s(&vm.globals);
+            Ok(Value::string(&vm.globals, s))
+        }
+        None => {
+            let s = vm.val_to_s(self_val);
+            Ok(Value::string(&vm.globals, s))
+        }
+    }
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let inspect = format!("{:?}", self_val);
-    Ok(Value::string(&vm.globals, inspect))
+    match self_val.is_object() {
+        Some(oref) => {
+            let s = oref.inspect(vm);
+            Ok(Value::string(&vm.globals, s))
+        }
+        None => {
+            let s = vm.val_inspect(self_val);
+            Ok(Value::string(&vm.globals, s))
+        }
+    }
+}
+
+fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.get_singleton_class(self_val)
 }
 
 fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -112,7 +134,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut receiver = self_val.as_object();
+    let receiver = self_val.as_object();
     let res = receiver
         .var_table()
         .keys()

@@ -58,13 +58,7 @@ fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let val = match args.len() {
         0 => Value::nil(),
         1 => args[0],
-        _ => {
-            let mut ary = vec![];
-            for i in 0..args.len() {
-                ary.push(args[i]);
-            }
-            Value::array_from(&vm.globals, ary)
-        }
+        _ => Value::array_from(&vm.globals, args.to_vec()),
     };
     if vm.channel.is_none() {
         return Err(vm.error_fiber("Can not yield from main fiber."));
