@@ -736,6 +736,7 @@ impl Parser {
         match tok.kind {
             TokenKind::Ident(_, _, _)
             | TokenKind::InstanceVar(_)
+            | TokenKind::GlobalVar(_)
             | TokenKind::Const(_, _, _)
             | TokenKind::NumLit(_)
             | TokenKind::FloatLit(_)
@@ -2055,13 +2056,18 @@ impl Parser {
             }
             self.parse_comp_stmt()?;
         }
+        let ensure = if self.consume_reserved(Reserved::Ensure)? {
+            self.parse_comp_stmt()?
+        } else {
+            Node::new_nop(body.loc())
+        };
         self.expect_reserved(Reserved::End)?;
         let loc = body.loc();
         Ok(Node::new_begin(
             body,
             vec![],
             Node::new_nop(loc),
-            Node::new_nop(loc),
+            ensure,
             loc,
         ))
     }

@@ -63,6 +63,7 @@ impl Lexer {
             "defined?" => Reserved::Defined,
             "do" => Reserved::Do,
             "else" => Reserved::Else,
+            "ensure"=> Reserved::Ensure,
             "elsif" => Reserved::Elsif,
             "end" => Reserved::End,
             "for" => Reserved::For,

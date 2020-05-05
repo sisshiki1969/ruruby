@@ -15,7 +15,6 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "instance_variable_get", instance_variable_get);
     globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
     globals.add_builtin_instance_method(object, "freeze", freeze);
-    globals.add_builtin_instance_method(object, "ensure", freeze);
     globals.add_builtin_instance_method(object, "super", super_);
     globals.add_builtin_instance_method(object, "equal?", equal);
     globals.add_builtin_instance_method(object, "send", send);

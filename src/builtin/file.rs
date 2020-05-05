@@ -13,13 +13,14 @@ pub fn init_file(globals: &mut Globals) -> Value {
     globals.add_builtin_class_method(obj, "extname", extname);
     globals.add_builtin_class_method(obj, "binread", binread);
     globals.add_builtin_class_method(obj, "read", read);
+    globals.add_builtin_class_method(obj, "write", write);
     obj
 }
 
 // Utils
 
 fn string_to_path(vm: &mut VM, string: Value) -> Result<PathBuf, RubyError> {
-    expect_string!(file, vm, string);
+    let file = vm.expect_string(&string, "Must be string.")?;
     Ok(PathBuf::from(file))
 }
 
@@ -87,6 +88,7 @@ fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::bytes(&vm.globals, contents))
 }
 
+/// IO.read(path)
 fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_range(len, 1, 1)?;
@@ -107,4 +109,22 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
     Ok(Value::string(&vm.globals, contents))
+}
+
+/// IO.write(path, string)
+fn write(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    let len = args.len();
+    vm.check_args_num(len, 2)?;
+    let filename = vm.expect_string(&args[0], "1st arg")?;
+    let contents = vm.expect_string(&args[1], "2nd arg")?;
+    match std::fs::write(&filename, contents) {
+        Ok(()) => {}
+        Err(err) => {
+            return Err(vm.error_internal(format!(
+                "Can not create or write file. {:?}\n{:?}",
+                &filename, err
+            )))
+        }
+    };
+    Ok(Value::fixnum(contents.len() as i64))
 }

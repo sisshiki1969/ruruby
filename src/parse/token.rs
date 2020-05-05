@@ -69,6 +69,7 @@ pub enum Reserved {
     Else,
     Elsif,
     End,
+    Ensure,
     For,
     False,
     If,
@@ -265,7 +266,8 @@ impl Token {
                 | Reserved::Elsif
                 | Reserved::End
                 | Reserved::When
-                | Reserved::Rescue => true,
+                | Reserved::Rescue
+                | Reserved::Ensure => true,
                 _ => false,
             },
             TokenKind::Punct(punct) => match punct {

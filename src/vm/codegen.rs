@@ -99,8 +99,12 @@ pub type ISeq = Vec<u8>;
 pub struct ISeqPos(usize);
 
 impl ISeqPos {
-    pub fn from_usize(pos: usize) -> Self {
+    pub fn from(pos: usize) -> Self {
         ISeqPos(pos)
+    }
+
+    pub fn to_usize(&self) -> usize {
+        self.0
     }
 
     fn disp(&self, dist: ISeqPos) -> i32 {
@@ -121,11 +125,74 @@ impl Codegen {
     }
 
     pub fn current(iseq: &ISeq) -> ISeqPos {
-        ISeqPos::from_usize(iseq.len())
+        ISeqPos::from(iseq.len())
+    }
+
+    pub fn context(&self) -> &Context {
+        self.context_stack.last().unwrap()
+    }
+
+    pub fn context_mut(&mut self) -> &mut Context {
+        self.context_stack.last_mut().unwrap()
     }
 }
 
-// Codegen
+// Utility methods for Codegen
+impl Codegen {
+    fn push16(&self, iseq: &mut ISeq, num: u16) {
+        iseq.push(num as u8);
+        iseq.push((num >> 8) as u8);
+    }
+
+    fn push32(iseq: &mut ISeq, num: u32) {
+        iseq.push(num as u8);
+        iseq.push((num >> 8) as u8);
+        iseq.push((num >> 16) as u8);
+        iseq.push((num >> 24) as u8);
+    }
+
+    fn push64(&self, iseq: &mut ISeq, num: u64) {
+        iseq.push(num as u8);
+        iseq.push((num >> 8) as u8);
+        iseq.push((num >> 16) as u8);
+        iseq.push((num >> 24) as u8);
+        iseq.push((num >> 32) as u8);
+        iseq.push((num >> 40) as u8);
+        iseq.push((num >> 48) as u8);
+        iseq.push((num >> 56) as u8);
+    }
+
+    fn write_disp_from_cur(&mut self, iseq: &mut ISeq, src: ISeqPos) {
+        let dest = Codegen::current(iseq);
+        self.write_disp(iseq, src, dest);
+    }
+
+    fn write_disp(&mut self, iseq: &mut ISeq, src: ISeqPos, dest: ISeqPos) {
+        let num = src.disp(dest) as u32;
+        iseq[src.0 - 4] = (num >> 0) as u8;
+        iseq[src.0 - 3] = (num >> 8) as u8;
+        iseq[src.0 - 2] = (num >> 16) as u8;
+        iseq[src.0 - 1] = (num >> 24) as u8;
+    }
+
+    fn save_loc(&mut self, iseq: &mut ISeq, loc: Loc) {
+        self.context_stack
+            .last_mut()
+            .unwrap()
+            .iseq_sourcemap
+            .push((ISeqPos(iseq.len()), loc));
+    }
+
+    fn save_cur_loc(&mut self, iseq: &mut ISeq) {
+        self.save_loc(iseq, self.loc)
+    }
+
+    pub fn context_push(&mut self, lvar: LvarCollector) {
+        self.context_stack
+            .push(Context::from(lvar.clone_table(), ContextKind::Method));
+    }
+}
+
 impl Codegen {
     fn gen_push_nil(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::PUSH_NIL);
@@ -143,42 +210,42 @@ impl Codegen {
     fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
         iseq.push(Inst::PUSH_STRING);
         let id = globals.get_ident_id(s);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_symbol(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::PUSH_SYMBOL);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_add(&mut self, iseq: &mut ISeq, globals: &mut Globals) {
         iseq.push(Inst::ADD);
-        self.push32(iseq, globals.add_inline_cache_entry() as u32);
+        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
     }
 
     fn gen_addi(&mut self, iseq: &mut ISeq, i: i32) {
         iseq.push(Inst::ADDI);
-        self.push32(iseq, i as u32);
+        Codegen::push32(iseq, i as u32);
     }
 
     fn gen_sub(&mut self, iseq: &mut ISeq, globals: &mut Globals) {
         iseq.push(Inst::SUB);
-        self.push32(iseq, globals.add_inline_cache_entry() as u32);
+        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
     }
 
     fn gen_subi(&mut self, iseq: &mut ISeq, i: i32) {
         iseq.push(Inst::SUBI);
-        self.push32(iseq, i as u32);
+        Codegen::push32(iseq, i as u32);
     }
 
     fn gen_create_array(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::CREATE_ARRAY);
-        self.push32(iseq, len as u32);
+        Codegen::push32(iseq, len as u32);
     }
 
     fn gen_create_hash(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::CREATE_HASH);
-        self.push32(iseq, len as u32);
+        Codegen::push32(iseq, len as u32);
     }
 
     fn gen_create_regexp(&mut self, iseq: &mut ISeq) {
@@ -187,12 +254,12 @@ impl Codegen {
 
     fn gen_get_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
         iseq.push(Inst::GET_INDEX);
-        self.push32(iseq, num_args as u32);
+        Codegen::push32(iseq, num_args as u32);
     }
 
     fn gen_set_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
         iseq.push(Inst::SET_INDEX);
-        self.push32(iseq, num_args as u32);
+        Codegen::push32(iseq, num_args as u32);
     }
 
     fn gen_splat(&mut self, iseq: &mut ISeq) {
@@ -201,44 +268,38 @@ impl Codegen {
 
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_IF_FALSE);
-        iseq.push(0);
-        iseq.push(0);
-        iseq.push(0);
-        iseq.push(0);
+        Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
 
     fn gen_jmp_back(&mut self, iseq: &mut ISeq, pos: ISeqPos) {
         let disp = Codegen::current(iseq).disp(pos) - 5;
         iseq.push(Inst::JMP);
-        self.push32(iseq, disp as u32);
+        Codegen::push32(iseq, disp as u32);
     }
 
-    fn gen_jmp(&mut self, iseq: &mut ISeq) -> ISeqPos {
+    fn gen_jmp(&self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP);
-        iseq.push(0);
-        iseq.push(0);
-        iseq.push(0);
-        iseq.push(0);
+        Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
 
-    fn gen_end(&mut self, iseq: &mut ISeq) {
+    fn gen_end(&self, iseq: &mut ISeq) {
         iseq.push(Inst::END);
     }
 
-    fn gen_return(&mut self, iseq: &mut ISeq) {
+    fn gen_return(&self, iseq: &mut ISeq) {
         iseq.push(Inst::RETURN);
     }
 
-    fn gen_method_return(&mut self, iseq: &mut ISeq) {
+    fn gen_method_return(&self, iseq: &mut ISeq) {
         iseq.push(Inst::MRETURN);
     }
 
-    fn gen_opt_case(&mut self, iseq: &mut ISeq, map_id: u32) -> ISeqPos {
+    fn gen_opt_case(&self, iseq: &mut ISeq, map_id: u32) -> ISeqPos {
         iseq.push(Inst::OPT_CASE);
-        self.push32(iseq, map_id);
-        self.push32(iseq, 0);
+        Codegen::push32(iseq, map_id);
+        Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
 
@@ -251,8 +312,8 @@ impl Codegen {
                 id
             )),
         };
-        self.push32(iseq, lvar_id.as_u32());
-        self.push32(iseq, outer);
+        Codegen::push32(iseq, lvar_id.as_u32());
+        Codegen::push32(iseq, outer);
     }
 
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
@@ -261,8 +322,8 @@ impl Codegen {
             Some((outer, id)) => (outer, id),
             None => return Err(self.error_name("undefined local variable.")),
         };
-        self.push32(iseq, lvar_id.as_u32());
-        self.push32(iseq, outer);
+        Codegen::push32(iseq, lvar_id.as_u32());
+        Codegen::push32(iseq, outer);
         Ok(())
     }
 
@@ -272,8 +333,8 @@ impl Codegen {
             Some((outer, id)) => (outer, id),
             None => return Err(self.error_name("undefined local variable.")),
         };
-        self.push32(iseq, lvar_id.as_u32());
-        self.push32(iseq, outer);
+        Codegen::push32(iseq, lvar_id.as_u32());
+        Codegen::push32(iseq, outer);
         Ok(())
     }
 
@@ -292,18 +353,18 @@ impl Codegen {
 
     fn gen_get_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::GET_INSTANCE_VAR);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_set_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_INSTANCE_VAR);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_ivar_addi(&mut self, iseq: &mut ISeq, id: IdentId, val: u32, use_value: bool) {
         iseq.push(Inst::IVAR_ADDI);
-        self.push32(iseq, id.into());
-        self.push32(iseq, val);
+        Codegen::push32(iseq, id.into());
+        Codegen::push32(iseq, val);
         if use_value {
             self.gen_get_instance_var(iseq, id);
         }
@@ -311,35 +372,35 @@ impl Codegen {
 
     fn gen_get_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::GET_GLOBAL_VAR);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_set_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_GLOBAL_VAR);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_set_const(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::SET_CONST);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST_TOP);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_SCOPE);
-        self.push32(iseq, id.into());
+        Codegen::push32(iseq, id.into());
     }
 
     fn gen_send(
@@ -353,11 +414,11 @@ impl Codegen {
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND);
-        self.push32(iseq, method.into());
+        Codegen::push32(iseq, method.into());
         self.push16(iseq, args_num as u32 as u16);
         self.push16(iseq, flag as u32 as u16);
-        self.push32(iseq, globals.add_inline_cache_entry() as u32);
-        self.push32(
+        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
+        Codegen::push32(
             iseq,
             match block {
                 Some(block) => block,
@@ -378,11 +439,11 @@ impl Codegen {
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND_SELF);
-        self.push32(iseq, method.into());
+        Codegen::push32(iseq, method.into());
         self.push16(iseq, args_num as u32 as u16);
         self.push16(iseq, flag as u32 as u16);
-        self.push32(iseq, globals.add_inline_cache_entry() as u32);
-        self.push32(
+        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
+        Codegen::push32(
             iseq,
             match block {
                 Some(block) => block,
@@ -434,12 +495,12 @@ impl Codegen {
 
     fn gen_dup(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::DUP);
-        self.push32(iseq, len as u32);
+        Codegen::push32(iseq, len as u32);
     }
 
     fn gen_take(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::TAKE);
-        self.push32(iseq, len as u32);
+        Codegen::push32(iseq, len as u32);
     }
 
     fn gen_concat(&mut self, iseq: &mut ISeq) {
@@ -470,59 +531,6 @@ impl Codegen {
             }
         }
         Ok(())
-    }
-
-    fn write_disp_from_cur(&mut self, iseq: &mut ISeq, src: ISeqPos) {
-        let dest = Codegen::current(iseq);
-        self.write_disp(iseq, src, dest);
-    }
-
-    fn write_disp(&mut self, iseq: &mut ISeq, src: ISeqPos, dest: ISeqPos) {
-        let num = src.disp(dest) as u32;
-        iseq[src.0 - 4] = (num >> 0) as u8;
-        iseq[src.0 - 3] = (num >> 8) as u8;
-        iseq[src.0 - 2] = (num >> 16) as u8;
-        iseq[src.0 - 1] = (num >> 24) as u8;
-    }
-
-    fn push16(&mut self, iseq: &mut ISeq, num: u16) {
-        iseq.push(num as u8);
-        iseq.push((num >> 8) as u8);
-    }
-
-    fn push32(&mut self, iseq: &mut ISeq, num: u32) {
-        iseq.push(num as u8);
-        iseq.push((num >> 8) as u8);
-        iseq.push((num >> 16) as u8);
-        iseq.push((num >> 24) as u8);
-    }
-
-    fn push64(&mut self, iseq: &mut ISeq, num: u64) {
-        iseq.push(num as u8);
-        iseq.push((num >> 8) as u8);
-        iseq.push((num >> 16) as u8);
-        iseq.push((num >> 24) as u8);
-        iseq.push((num >> 32) as u8);
-        iseq.push((num >> 40) as u8);
-        iseq.push((num >> 48) as u8);
-        iseq.push((num >> 56) as u8);
-    }
-
-    fn save_loc(&mut self, iseq: &mut ISeq, loc: Loc) {
-        self.context_stack
-            .last_mut()
-            .unwrap()
-            .iseq_sourcemap
-            .push((ISeqPos(iseq.len()), loc));
-    }
-
-    fn save_cur_loc(&mut self, iseq: &mut ISeq) {
-        self.save_loc(iseq, self.loc)
-    }
-
-    pub fn context_push(&mut self, lvar: LvarCollector) {
-        self.context_stack
-            .push(Context::from(lvar.clone_table(), ContextKind::Method));
     }
 
     /// Generate ISeq.
@@ -665,160 +673,15 @@ impl Codegen {
             eprintln!("-----------------------------------------");
             eprintln!("{:?}", methodref);
             for (k, v) in iseq.lvar.table() {
-                eprint!("local var: {:?}:{}", v.as_u32(), globals.get_ident_name(*k));
+                eprint!("local var({}): {} ", v.as_u32(), globals.get_ident_name(*k));
             }
             eprintln!("");
             eprintln!("block: {:?}", iseq.lvar.block());
             let iseq = &iseq.iseq;
             let mut pc = 0;
-            while iseq[pc] != Inst::END {
-                eprintln!("  {:>05} {}", pc, inst_info(globals, &iseq, pc));
+            while pc < iseq.len() {
+                eprintln!("  {:05x} {}", pc, Inst::inst_info(globals, &iseq, pc));
                 pc += Inst::inst_size(iseq[pc]);
-            }
-            eprintln!("  {:>05} {}", pc, inst_info(globals, &iseq, pc));
-
-            fn inst_info(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
-                match iseq[pc] {
-                    Inst::END
-                    | Inst::PUSH_NIL
-                    | Inst::PUSH_TRUE
-                    | Inst::PUSH_FALSE
-                    | Inst::PUSH_SELF
-                    | Inst::ADD
-                    | Inst::SUB
-                    | Inst::MUL
-                    | Inst::DIV
-                    | Inst::REM
-                    | Inst::EQ
-                    | Inst::NE
-                    | Inst::GT
-                    | Inst::GE
-                    | Inst::CMP
-                    | Inst::NOT
-                    | Inst::SHR
-                    | Inst::SHL
-                    | Inst::BIT_OR
-                    | Inst::BIT_AND
-                    | Inst::BIT_XOR
-                    | Inst::BIT_NOT
-                    | Inst::CONCAT_STRING
-                    | Inst::CREATE_RANGE
-                    | Inst::CREATE_REGEXP
-                    | Inst::RETURN
-                    | Inst::TO_S
-                    | Inst::SPLAT
-                    | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
-                    Inst::PUSH_STRING => format!("PUSH_STRING {}", read32(iseq, pc + 1) as i32),
-                    Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL {}", read32(iseq, pc + 1) as i32),
-                    Inst::ADDI => format!("ADDI {}", read32(iseq, pc + 1) as i32),
-                    Inst::SUBI => format!("SUBI {}", read32(iseq, pc + 1) as i32),
-                    Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", read64(iseq, pc + 1) as i64),
-                    Inst::PUSH_FLONUM => {
-                        format!("PUSH_FLONUM {}", f64::from_bits(read64(iseq, pc + 1)))
-                    }
-
-                    Inst::JMP => format!("JMP {:>05}", pc as i32 + 5 + read32(iseq, pc + 1) as i32),
-                    Inst::JMP_IF_FALSE => format!(
-                        "JMP_IF_FALSE {:>05}",
-                        pc as i32 + 5 + read32(iseq, pc + 1) as i32
-                    ),
-                    Inst::OPT_CASE => {
-                        let val = Value::from(read64(iseq, pc + 1));
-                        let info = val.as_hash().unwrap();
-                        let map = match info.inner_mut() {
-                            HashInfo::Map(map) => map,
-                            _ => panic!(),
-                        };
-                        format!(
-                            "OPT_CASE {:>05} {:?}",
-                            pc as i32 + 13 + read32(iseq, pc + 9) as i32,
-                            map,
-                        )
-                    }
-                    Inst::SET_LOCAL => {
-                        let frame = read32(iseq, pc + 5);
-                        format!("SET_LOCAL outer:{} LvarId:{}", frame, read32(iseq, pc + 1))
-                    }
-                    Inst::GET_LOCAL => {
-                        let frame = read32(iseq, pc + 5);
-                        format!("GET_LOCAL outer:{} LvarId:{}", frame, read32(iseq, pc + 1))
-                    }
-                    Inst::CHECK_LOCAL => {
-                        let frame = read32(iseq, pc + 5);
-                        format!(
-                            "CHECK_LOCAL outer:{} LvarId:{}",
-                            frame,
-                            read32(iseq, pc + 1)
-                        )
-                    }
-                    Inst::GET_CONST => format!("GET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
-                    Inst::GET_CONST_TOP => {
-                        format!("GET_CONST_TOP '{}'", ident_name(globals, iseq, pc + 1))
-                    }
-                    Inst::SET_CONST => format!("SET_CONST '{}'", ident_name(globals, iseq, pc + 1)),
-                    Inst::GET_SCOPE => format!("GET_SCOPE '{}'", ident_name(globals, iseq, pc + 1)),
-                    Inst::GET_INSTANCE_VAR => {
-                        format!("GET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
-                    }
-                    Inst::SET_INSTANCE_VAR => {
-                        format!("SET_INST_VAR '@{}'", ident_name(globals, iseq, pc + 1))
-                    }
-                    Inst::GET_INDEX => format!("GET_INDEX {} items", read32(iseq, pc + 1)),
-                    Inst::SET_INDEX => format!("SET_INDEX {} items", read32(iseq, pc + 1)),
-                    Inst::SEND => format!(
-                        "SEND '{}' {} items",
-                        ident_name(globals, iseq, pc + 1),
-                        read32(iseq, pc + 5)
-                    ),
-                    Inst::SEND_SELF => format!(
-                        "SEND_SELF '{}' {} items",
-                        ident_name(globals, iseq, pc + 1),
-                        read32(iseq, pc + 5)
-                    ),
-
-                    Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", read32(iseq, pc + 1)),
-                    Inst::CREATE_PROC => format!("CREATE_PROC method:{}", read32(iseq, pc + 1)),
-                    Inst::CREATE_HASH => format!("CREATE_HASH {} items", read32(iseq, pc + 1)),
-                    Inst::DUP => format!("DUP {}", read32(iseq, pc + 1)),
-                    Inst::TAKE => format!("TAKE {}", read32(iseq, pc + 1)),
-                    Inst::DEF_CLASS => format!(
-                        "DEF_CLASS {} '{}' method:{}",
-                        if read8(iseq, pc + 1) == 1 {
-                            "module"
-                        } else {
-                            "class"
-                        },
-                        ident_name(globals, iseq, pc + 2),
-                        read32(iseq, pc)
-                    ),
-                    Inst::DEF_METHOD => {
-                        format!("DEF_METHOD '{}'", ident_name(globals, iseq, pc + 1))
-                    }
-                    Inst::DEF_SMETHOD => {
-                        format!("DEF_SMETHOD '{}'", ident_name(globals, iseq, pc + 1))
-                    }
-                    _ => format!("undefined"),
-                }
-            }
-
-            fn read64(iseq: &ISeq, pc: usize) -> u64 {
-                let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
-                unsafe { *ptr }
-            }
-
-            fn read32(iseq: &ISeq, pc: usize) -> u32 {
-                let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
-                unsafe { *ptr }
-            }
-
-            fn read8(iseq: &ISeq, pc: usize) -> u8 {
-                iseq[pc]
-            }
-
-            fn ident_name(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
-                globals
-                    .get_ident_name(IdentId::from(read32(iseq, pc)))
-                    .to_owned()
             }
         }
         Ok(methodref)
@@ -1025,7 +888,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::MUL);
-                        self.push32(iseq, globals.add_inline_cache_entry() as u32);
+                        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::Div => {
                         self.gen(globals, iseq, lhs, true)?;
@@ -1056,7 +919,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::SHL);
-                        self.push32(iseq, globals.add_inline_cache_entry() as u32);
+                        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::BitOr => {
                         self.gen(globals, iseq, lhs, true)?;
@@ -1283,9 +1146,11 @@ impl Codegen {
                 body,
                 rescue: _,
                 else_: _,
-                ensure: _,
+                ensure,
             } => {
                 self.gen(globals, iseq, body, use_value)?;
+                // Ensure clauses must not return value.
+                self.gen(globals, iseq, ensure, false)?;
             }
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];
@@ -1531,8 +1396,8 @@ impl Codegen {
                     Some(*id),
                 )?;
                 iseq.push(Inst::DEF_METHOD);
-                self.push32(iseq, (*id).into());
-                self.push32(iseq, methodref.into());
+                Codegen::push32(iseq, (*id).into());
+                Codegen::push32(iseq, methodref.into());
                 if use_value {
                     self.gen_symbol(iseq, *id);
                 };
@@ -1549,8 +1414,8 @@ impl Codegen {
                 )?;
                 self.gen(globals, iseq, singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
-                self.push32(iseq, (*id).into());
-                self.push32(iseq, methodref.into());
+                Codegen::push32(iseq, (*id).into());
+                Codegen::push32(iseq, methodref.into());
                 if use_value {
                     self.gen_symbol(iseq, *id);
                 };
@@ -1576,15 +1441,17 @@ impl Codegen {
                 self.save_loc(iseq, loc);
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if *is_module { 1 } else { 0 });
-                self.push32(iseq, (*id).into());
-                self.push32(iseq, methodref.into());
+                Codegen::push32(iseq, (*id).into());
+                Codegen::push32(iseq, methodref.into());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
             }
             NodeKind::Return(val) => {
                 self.gen(globals, iseq, val, true)?;
-                if self.context_stack.last().unwrap().kind == ContextKind::Block {
+                // Call ensure clauses.
+                // Note ensure routine return no value.
+                if self.context().kind == ContextKind::Block {
                     self.gen_method_return(iseq);
                 } else {
                     self.gen_return(iseq);
@@ -1594,7 +1461,7 @@ impl Codegen {
                 let loc = node.loc();
                 if self.loop_stack.last().unwrap().state == LoopState::Top {
                     //In the case of outer of loops
-                    match self.context_stack.last().unwrap().kind {
+                    match self.context().kind {
                         ContextKind::Block => {
                             self.gen(globals, iseq, val, true)?;
                             self.gen_return(iseq);
@@ -1650,7 +1517,7 @@ impl Codegen {
                     self.gen_iseq(globals, params, body, lvar, true, ContextKind::Block, None)?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
-                self.push32(iseq, methodref.into());
+                Codegen::push32(iseq, methodref.into());
                 if !use_value {
                     self.gen_pop(iseq)
                 };

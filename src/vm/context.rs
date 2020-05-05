@@ -1,6 +1,6 @@
 pub use crate::*;
 
-const LVAR_ARRAY_SIZE: usize = 8;
+const LVAR_ARRAY_SIZE: usize = 16;
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -90,31 +90,7 @@ impl Context {
             stack_len: 0,
         }
     }
-    /*
-        pub fn get_lvar(&self, id: LvarId) -> Value {
-            let id = id.as_usize();
-            if id < LVAR_ARRAY_SIZE {
-                self.lvar_scope[id]
-            } else {
-                self.ext_lvar[id - LVAR_ARRAY_SIZE]
-            }
-        }
-    pub fn set_lvar(&mut self, id: usize, val: Value) {
-        if id < LVAR_ARRAY_SIZE {
-            self.lvar_scope[id] = val;
-        } else {
-            self.ext_lvar[id - LVAR_ARRAY_SIZE] = val;
-        }
-    }
-        pub fn get_mut_lvar(&mut self, id: LvarId) -> &mut Value {
-            let id = id.as_usize();
-            if id < LVAR_ARRAY_SIZE {
-                &mut self.lvar_scope[id]
-            } else {
-                &mut self.ext_lvar[id - LVAR_ARRAY_SIZE]
-            }
-        }
-    */
+
     pub fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
         let mut kw_len = if kw_arg.is_some() { 1 } else { 0 };
         let req_len = self.iseq_ref.req_params;

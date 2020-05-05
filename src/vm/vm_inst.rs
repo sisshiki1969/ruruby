@@ -1,3 +1,5 @@
+use crate::*;
+
 pub struct Inst;
 impl Inst {
     pub const PUSH_FIXNUM: u8 = 1;
@@ -191,31 +193,33 @@ impl Inst {
             | Inst::RETURN
             | Inst::MRETURN => 1,
 
-            Inst::PUSH_STRING
-            | Inst::PUSH_SYMBOL
-            | Inst::GET_CONST
-            | Inst::SET_CONST
-            | Inst::GET_CONST_TOP
-            | Inst::GET_SCOPE
-            | Inst::GET_INSTANCE_VAR
-            | Inst::SET_INSTANCE_VAR
-            | Inst::GET_GLOBAL_VAR
-            | Inst::SET_GLOBAL_VAR
+                                        // operand
+            Inst::PUSH_STRING           // IdentId: u32
+            | Inst::PUSH_SYMBOL         // IdentId: u32
+            | Inst::GET_CONST           // IdentId: u32
+            | Inst::SET_CONST           // IdentId: u32
+            | Inst::GET_CONST_TOP       // IdentId: u32
+            | Inst::GET_SCOPE           // IdentId: u32
+            | Inst::GET_INSTANCE_VAR    // IdentId: u32
+            | Inst::SET_INSTANCE_VAR    // IdentId: u32
+            | Inst::GET_GLOBAL_VAR      // IdentId: u32
+            | Inst::SET_GLOBAL_VAR      // IdentId: u32
             | Inst::GET_INDEX
             | Inst::SET_INDEX
-            | Inst::CREATE_ARRAY
+            | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CREATE_PROC
-            | Inst::JMP
-            | Inst::JMP_IF_FALSE
-            | Inst::DUP
-            | Inst::TAKE
-            | Inst::ADD
-            | Inst::SUB
-            | Inst::MUL
-            | Inst::ADDI
-            | Inst::SUBI
-            | Inst::SHL
-            | Inst::CREATE_HASH => 5,
+            | Inst::JMP                 // disp: u32
+            | Inst::JMP_IF_FALSE        // disp: u32
+            | Inst::DUP                 // number of items: u32
+            | Inst::TAKE                // number of items: u32
+            | Inst::ADD                 // inline cache: u32
+            | Inst::SUB                 // inline cache: u32
+            | Inst::MUL                 // inline cache: u32
+            | Inst::ADDI                // inline cache: u32
+            | Inst::SUBI                // inline cache: u32
+            | Inst::SHL                 // inline cache: u32
+            | Inst::CREATE_HASH         // number of items: u32
+            => 5,
 
             Inst::PUSH_FIXNUM
             | Inst::PUSH_FLONUM
@@ -229,5 +233,158 @@ impl Inst {
             Inst::SEND | Inst::SEND_SELF => 17,
             _ => 1,
         }
+    }
+
+    pub fn inst_info(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
+        match iseq[pc] {
+            Inst::END
+            | Inst::PUSH_NIL
+            | Inst::PUSH_TRUE
+            | Inst::PUSH_FALSE
+            | Inst::PUSH_SELF
+            | Inst::ADD
+            | Inst::SUB
+            | Inst::MUL
+            | Inst::DIV
+            | Inst::REM
+            | Inst::EQ
+            | Inst::NE
+            | Inst::GT
+            | Inst::GE
+            | Inst::CMP
+            | Inst::NOT
+            | Inst::SHR
+            | Inst::SHL
+            | Inst::BIT_OR
+            | Inst::BIT_AND
+            | Inst::BIT_XOR
+            | Inst::BIT_NOT
+            | Inst::CONCAT_STRING
+            | Inst::CREATE_RANGE
+            | Inst::CREATE_REGEXP
+            | Inst::RETURN
+            | Inst::TO_S
+            | Inst::SPLAT
+            | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
+            Inst::PUSH_STRING => format!("PUSH_STRING {}", Inst::read32(iseq, pc + 1) as i32),
+            Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL {}", Inst::read32(iseq, pc + 1) as i32),
+            Inst::ADDI => format!("ADDI {}", Inst::read32(iseq, pc + 1) as i32),
+            Inst::SUBI => format!("SUBI {}", Inst::read32(iseq, pc + 1) as i32),
+            Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", Inst::read64(iseq, pc + 1) as i64),
+            Inst::PUSH_FLONUM => {
+                format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
+            }
+
+            Inst::JMP => format!(
+                "JMP {:>05x}",
+                pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
+            ),
+            Inst::JMP_IF_FALSE => format!(
+                "JMP_IF_FALSE {:>05x}",
+                pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
+            ),
+            Inst::OPT_CASE => {
+                //let val = Value::from(Inst::read64(iseq, pc + 1));
+                //let info = val.as_hash().unwrap();
+                /*let map = match info.inner_mut() {
+                    HashInfo::Map(map) => map,
+                    _ => panic!(),
+                };*/
+                format!(
+                    "OPT_CASE {:>05}",
+                    pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
+                )
+            }
+            Inst::SET_LOCAL => {
+                let frame = Inst::read32(iseq, pc + 5);
+                format!(
+                    "SET_LOCAL outer:{} LvarId:{}",
+                    frame,
+                    Inst::read32(iseq, pc + 1)
+                )
+            }
+            Inst::GET_LOCAL => {
+                let frame = Inst::read32(iseq, pc + 5);
+                format!(
+                    "GET_LOCAL outer:{} LvarId:{}",
+                    frame,
+                    Inst::read32(iseq, pc + 1)
+                )
+            }
+            Inst::CHECK_LOCAL => {
+                let frame = Inst::read32(iseq, pc + 5);
+                format!(
+                    "CHECK_LOCAL outer:{} LvarId:{}",
+                    frame,
+                    Inst::read32(iseq, pc + 1)
+                )
+            }
+            Inst::GET_CONST => format!("GET_CONST '{}'", Inst::ident_name(globals, iseq, pc + 1)),
+            Inst::GET_CONST_TOP => format!(
+                "GET_CONST_TOP '{}'",
+                Inst::ident_name(globals, iseq, pc + 1)
+            ),
+            Inst::SET_CONST => format!("SET_CONST '{}'", Inst::ident_name(globals, iseq, pc + 1)),
+            Inst::GET_SCOPE => format!("GET_SCOPE '{}'", Inst::ident_name(globals, iseq, pc + 1)),
+            Inst::GET_INSTANCE_VAR => {
+                format!("GET_INST_VAR '{}'", Inst::ident_name(globals, iseq, pc + 1))
+            }
+            Inst::SET_INSTANCE_VAR => {
+                format!("SET_INST_VAR '{}'", Inst::ident_name(globals, iseq, pc + 1))
+            }
+            Inst::GET_INDEX => format!("GET_INDEX {} items", Inst::read32(iseq, pc + 1)),
+            Inst::SET_INDEX => format!("SET_INDEX {} items", Inst::read32(iseq, pc + 1)),
+            Inst::SEND => format!(
+                "SEND '{}' {} items",
+                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::read32(iseq, pc + 5)
+            ),
+            Inst::SEND_SELF => format!(
+                "SEND_SELF '{}' {} items",
+                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::read32(iseq, pc + 5)
+            ),
+
+            Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", Inst::read32(iseq, pc + 1)),
+            Inst::CREATE_PROC => format!("CREATE_PROC method:{}", Inst::read32(iseq, pc + 1)),
+            Inst::CREATE_HASH => format!("CREATE_HASH {} items", Inst::read32(iseq, pc + 1)),
+            Inst::DUP => format!("DUP {}", Inst::read32(iseq, pc + 1)),
+            Inst::TAKE => format!("TAKE {}", Inst::read32(iseq, pc + 1)),
+            Inst::DEF_CLASS => format!(
+                "DEF_CLASS {} '{}' method:{}",
+                if Inst::read8(iseq, pc + 1) == 1 {
+                    "module"
+                } else {
+                    "class"
+                },
+                Inst::ident_name(globals, iseq, pc + 2),
+                Inst::read32(iseq, pc)
+            ),
+            Inst::DEF_METHOD => format!("DEF_METHOD '{}'", Inst::ident_name(globals, iseq, pc + 1)),
+            Inst::DEF_SMETHOD => {
+                format!("DEF_SMETHOD '{}'", Inst::ident_name(globals, iseq, pc + 1))
+            }
+            _ => format!("undefined"),
+        }
+    }
+
+    fn read64(iseq: &ISeq, pc: usize) -> u64 {
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
+        unsafe { *ptr }
+    }
+
+    fn read32(iseq: &ISeq, pc: usize) -> u32 {
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
+        unsafe { *ptr }
+    }
+
+    fn read8(iseq: &ISeq, pc: usize) -> u8 {
+        iseq[pc]
+    }
+
+    fn ident_name(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
+        globals
+            .get_ident_name(IdentId::from(Inst::read32(iseq, pc)))
+            .to_owned()
     }
 }

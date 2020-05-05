@@ -513,7 +513,11 @@ impl VM {
             }
             match iseq[self.pc] {
                 Inst::END => {
+                    // reached the end of the method or block.
+                    // - the end of the method or block.
+                    // - `next` in block AND outer of loops.
                     if self.exec_context.len() == 1 {
+                        // if in the final context, the fiber becomes DEAD.
                         self.fiberstate_dead();
                         self.fiber_send_to_parent(Err(self.error_fiber("Dead fiber called.")));
                     };
@@ -533,7 +537,11 @@ impl VM {
                     return Ok(val);
                 }
                 Inst::RETURN => {
+                    // 'Inst::RETURN' is executed.
+                    // - `return` in method.
+                    // - `break` outer of loops.
                     let res = if let ISeqKind::Proc(_) = context.iseq_ref.kind {
+                        // if in block context, exit with Err(BLOCK_RETURN).
                         let err = self.error_block_return();
                         #[cfg(feature = "trace")]
                         {
@@ -541,6 +549,7 @@ impl VM {
                         }
                         Err(err)
                     } else {
+                        // if in method context, exit with Ok(rerurn_value).
                         let val = self.stack_pop();
                         #[cfg(feature = "trace")]
                         {
@@ -556,7 +565,10 @@ impl VM {
                     return res;
                 }
                 Inst::MRETURN => {
+                    // 'METHOD_RETURN' is executed.
+                    // - `return` in block
                     let res = if let ISeqKind::Proc(method) = context.iseq_ref.kind {
+                        // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
                         {
@@ -1409,8 +1421,8 @@ impl VM {
         let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
         sourcemap
             .iter()
-            .find(|x| x.0 == ISeqPos::from_usize(self.pc))
-            .unwrap_or(&(ISeqPos::from_usize(0), Loc(0, 0)))
+            .find(|x| x.0 == ISeqPos::from(self.pc))
+            .unwrap_or(&(ISeqPos::from(0), Loc(0, 0)))
             .1
     }
 
