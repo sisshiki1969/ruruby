@@ -1,7 +1,7 @@
-y = 0
-10000.times do |x|
-    1000.times do |x|
-        y += 1
+x = 0
+10000.times do |y|
+    1000.times do |z|
+        x += y + z
     end
 end
-puts y
+puts x

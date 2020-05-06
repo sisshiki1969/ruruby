@@ -1,6 +1,6 @@
 pub use crate::*;
 
-const LVAR_ARRAY_SIZE: usize = 16;
+const LVAR_ARRAY_SIZE: usize = 32;
 
 #[derive(Debug, Clone)]
 pub struct Context {

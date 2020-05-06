@@ -112,6 +112,15 @@ impl LvarCollector {
         self.table.get(val)
     }
 
+    pub fn get_name(&self, id:LvarId) -> Option<IdentId> {
+        for (k,v) in self.table.iter() {
+            if *v == id {
+                return Some(*k);
+            }
+        }
+        None
+    }
+
     pub fn block_param(&self) -> Option<LvarId> {
         self.block
     }

@@ -64,6 +64,13 @@ impl Args {
     pub fn len(&self) -> usize {
         self.elems.len()
     }
+
+    pub fn into_vec(self) -> Vec<Value> {
+        match self.elems {
+            ArgsArray::Array { ary, len } => ary[0..len].to_vec(),
+            ArgsArray::Vec(v) => v,
+        }
+    }
 }
 
 impl Index<usize> for Args {
@@ -117,17 +124,17 @@ impl ArgsArray {
     }
 
     fn push(&mut self, val: Value) {
-        if self.len() == ARG_ARRAY_SIZE {
-            let mut ary = self[0..ARG_ARRAY_SIZE].to_vec();
-            ary.push(val);
-            std::mem::replace(self, ArgsArray::Vec(ary));
-        } else {
-            match self {
-                ArgsArray::Vec(ref mut v) => v.push(val),
-                ArgsArray::Array {
-                    ref mut len,
-                    ref mut ary,
-                } => {
+        match self {
+            ArgsArray::Vec(ref mut v) => v.push(val),
+            ArgsArray::Array {
+                ref mut len,
+                ref mut ary,
+            } => {
+                if *len == ARG_ARRAY_SIZE {
+                    let mut ary = ary.to_vec();
+                    ary.push(val);
+                    std::mem::replace(self, ArgsArray::Vec(ary));
+                } else {
                     ary[*len] = val;
                     *len += 1;
                 }

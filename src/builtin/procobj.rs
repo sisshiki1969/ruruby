@@ -43,11 +43,13 @@ fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(pref) => pref,
         None => return Err(vm.error_unimplemented("Expected Proc object.")),
     };
-    let res = vm.vm_run(
+    let context = Context::from_args(
+        vm,
+        self_val,
         pref.context.iseq_ref,
-        pref.context.outer,
-        pref.context.self_value,
         args,
+        pref.context.outer,
     )?;
+    let res = vm.run_context(ContextRef::from_local(&context))?;
     Ok(res)
 }

@@ -370,7 +370,7 @@ impl VM {
         context.adjust_lvar_size();
         context.pc = 0;
 
-        let val = self.vm_run_context(context)?;
+        let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
         {
             self.perf.get_perf(Perf::INVALID);
@@ -383,19 +383,6 @@ impl VM {
         {
             self.perf.print_perf();
         }
-        Ok(val)
-    }
-
-    /// Create a new context from given args, and run vm on the context.
-    pub fn vm_run(
-        &mut self,
-        iseq: ISeqRef,
-        outer: Option<ContextRef>,
-        self_val: Value,
-        args: &Args,
-    ) -> VMResult {
-        let context = Context::from_args(self, self_val, iseq, args, outer)?;
-        let val = self.vm_run_context(ContextRef::from_local(&context))?;
         Ok(val)
     }
 }
@@ -435,7 +422,7 @@ macro_rules! try_err {
 
 impl VM {
     /// Main routine for VM execution.
-    pub fn vm_run_context(&mut self, context: ContextRef) -> VMResult {
+    pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         #[cfg(feature = "trace")]
         {
             if context.is_fiber {
@@ -793,13 +780,13 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
-                Inst::SET_INSTANCE_VAR => {
+                Inst::SET_IVAR => {
                     let var_id = self.read_id(iseq, 1);
                     let new_val = self.stack_pop();
                     self_oref.set_var(var_id, new_val);
                     self.pc += 5;
                 }
-                Inst::GET_INSTANCE_VAR => {
+                Inst::GET_IVAR => {
                     let var_id = self.read_id(iseq, 1);
                     let val = match self_oref.get_var(var_id) {
                         Some(val) => val.clone(),
@@ -824,13 +811,13 @@ impl VM {
 
                     self.pc += 9;
                 }
-                Inst::SET_GLOBAL_VAR => {
+                Inst::SET_GVAR => {
                     let var_id = self.read_id(iseq, 1);
                     let new_val = self.stack_pop();
                     self.set_global_var(var_id, new_val);
                     self.pc += 5;
                 }
-                Inst::GET_GLOBAL_VAR => {
+                Inst::GET_GVAR => {
                     let var_id = self.read_id(iseq, 1);
                     let val = self.get_global_var(var_id);
                     self.stack_push(val);
@@ -921,7 +908,7 @@ impl VM {
                 }
                 Inst::CREATE_ARRAY => {
                     let arg_num = self.read_usize(iseq, 1);
-                    let elems = self.pop_args(arg_num);
+                    let elems = self.pop_args_to_ary(arg_num).into_vec();
                     let array = Value::array_from(&self.globals, elems);
                     self.stack_push(array);
                     self.pc += 5;
@@ -941,30 +928,7 @@ impl VM {
                 }
                 Inst::CREATE_REGEXP => {
                     let arg = self.stack_pop();
-                    let mut arg = match arg.as_string() {
-                        Some(arg) => arg.clone(),
-                        None => {
-                            return Err(self.error_argument("Illegal argument for CREATE_REGEXP"))
-                        }
-                    };
-                    match arg.pop().unwrap() {
-                        'i' => arg.insert_str(0, "(?mi)"),
-                        'm' => arg.insert_str(0, "(?ms)"),
-                        'x' => arg.insert_str(0, "(?mx)"),
-                        'o' => arg.insert_str(0, "(?mo)"),
-                        '-' => arg.insert_str(0, "(?m)"),
-                        _ => return Err(self.error_internal("Illegal internal regexp expression.")),
-                    };
-                    let regexpref = match RegexpRef::from_string(&arg) {
-                        Ok(regex) => regex,
-                        Err(err) => {
-                            return Err(self.error_argument(format!(
-                                "Illegal regular expression: {:?}\n/{}/",
-                                err, arg
-                            )))
-                        }
-                    };
-                    let regexp = Value::regexp(&self.globals, regexpref);
+                    let regexp = self.create_regexp(arg)?;
                     self.stack_push(regexp);
                     self.pc += 1;
                 }
@@ -1099,36 +1063,32 @@ impl VM {
                 Inst::TAKE => {
                     let len = self.read_usize(iseq, 1);
                     let val = self.stack_pop();
-                    match val.is_object() {
-                        Some(obj) => match obj.kind {
-                            ObjKind::Array(info) => push_some(self, &info.elements, len),
-                            _ => push_one(self, val, len),
-                        },
-                        None => push_one(self, val, len),
+                    match val.as_array() {
+                        Some(info) => {
+                            let elem = &info.elements;
+                            let ary_len = elem.len();
+                            if len <= ary_len {
+                                for i in 0..len {
+                                    self.stack_push(elem[i]);
+                                }
+                            } else {
+                                for i in 0..ary_len {
+                                    self.stack_push(elem[i]);
+                                }
+                                for _ in ary_len..len {
+                                    self.stack_push(Value::nil());
+                                }
+                            }
+                        }
+                        None => {
+                            self.stack_push(val);
+                            for _ in 0..len - 1 {
+                                self.stack_push(Value::nil());
+                            }
+                        }
                     }
-                    self.pc += 5;
 
-                    fn push_one(vm: &mut VM, val: Value, len: usize) {
-                        vm.stack_push(val);
-                        for _ in 0..len - 1 {
-                            vm.stack_push(Value::nil());
-                        }
-                    }
-                    fn push_some(vm: &mut VM, elem: &[Value], len: usize) {
-                        let ary_len = elem.len();
-                        if len <= ary_len {
-                            for i in 0..len {
-                                vm.stack_push(elem[i]);
-                            }
-                        } else {
-                            for i in 0..ary_len {
-                                vm.stack_push(elem[i]);
-                            }
-                            for _ in ary_len..len {
-                                vm.stack_push(Value::nil());
-                            }
-                        }
-                    }
+                    self.pc += 5;
                 }
                 _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
             }
@@ -1152,17 +1112,12 @@ impl VM {
         rhs: Value,
         lhs: Value,
     ) -> RubyError {
-        let loc = self.get_loc();
-        RubyError::new_runtime_err(
-            RuntimeErrKind::NoMethod(format!(
-                "undefined method `{}' {} for {}",
-                method_name.into(),
-                self.globals.get_class_name(rhs),
-                self.globals.get_class_name(lhs)
-            )),
-            self.source_info(),
-            loc,
-        )
+        self.error_nomethod(format!(
+            "undefined method `{}' {} for {}",
+            method_name.into(),
+            self.globals.get_class_name(rhs),
+            self.globals.get_class_name(lhs)
+        ))
     }
 
     pub fn error_undefined_method(
@@ -1170,16 +1125,11 @@ impl VM {
         method_name: impl Into<String>,
         receiver: Value,
     ) -> RubyError {
-        let loc = self.get_loc();
-        RubyError::new_runtime_err(
-            RuntimeErrKind::NoMethod(format!(
-                "undefined method `{}' for {}",
-                method_name.into(),
-                self.globals.get_class_name(receiver)
-            )),
-            self.source_info(),
-            loc,
-        )
+        self.error_nomethod(format!(
+            "undefined method `{}' for {}",
+            method_name.into(),
+            self.globals.get_class_name(receiver)
+        ))
     }
 
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
@@ -1573,10 +1523,10 @@ impl VM {
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Div;
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(RV::Integer(lhs.div(rhs)).pack()),
-            (RV::Integer(lhs), RV::Float(rhs)) => Ok(RV::Float((lhs as f64).div(rhs)).pack()),
-            (RV::Float(lhs), RV::Integer(rhs)) => Ok(RV::Float(lhs.div(rhs as f64)).pack()),
-            (RV::Float(lhs), RV::Float(rhs)) => Ok(RV::Float(lhs.div(rhs)).pack()),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs.div(rhs))),
+            (RV::Integer(lhs), RV::Float(rhs)) => Ok(Value::flonum((lhs as f64).div(rhs))),
+            (RV::Float(lhs), RV::Integer(rhs)) => Ok(Value::flonum(lhs.div(rhs as f64))),
+            (RV::Float(lhs), RV::Float(rhs)) => Ok(Value::flonum(lhs.div(rhs))),
             (_, _) => return Err(self.error_undefined_op("/", rhs, lhs)),
         }
     }
@@ -1704,30 +1654,21 @@ impl VM {
                     Ok(res)
                 }
                 ObjKind::Regexp(re) => {
-                    //expect_string!(given, self, rhs);
                     let given = match rhs.unpack() {
-                        RV::Symbol(sym) => self.globals.get_ident_name(sym).to_owned(),
+                        RV::Symbol(sym) => self.globals.get_ident_name(sym),
                         RV::Object(_) => match rhs.as_string() {
-                            Some(s) => s.to_owned(),
+                            Some(s) => s,
                             None => return Ok(false),
                         },
                         _ => return Ok(false),
-                    };
-                    let res = match Regexp::find_one(self, &re.regexp, &given).unwrap() {
-                        Some(_) => true,
-                        None => false,
-                    };
+                    }
+                    .to_owned();
+                    let res = Regexp::find_one(self, &re.regexp, &given)?.is_some();
                     Ok(res)
                 }
-                _ => match self.eval_eq(lhs, rhs) {
-                    Ok(res) => Ok(res),
-                    Err(_) => Ok(false),
-                },
+                _ => Ok(self.eval_eq(lhs, rhs).unwrap_or(false)),
             },
-            None => match self.eval_eq(lhs, rhs) {
-                Ok(res) => Ok(res),
-                Err(_) => Ok(false),
-            },
+            None => Ok(self.eval_eq(lhs, rhs).unwrap_or(false)),
         }
     }
 
@@ -1782,6 +1723,24 @@ impl VM {
                 .sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
         }
         Ok(())
+    }
+}
+
+impl VM {
+    fn create_regexp(&mut self, arg: Value) -> VMResult {
+        let mut arg = match arg.as_string() {
+            Some(arg) => arg.clone(),
+            None => return Err(self.error_argument("Illegal argument for CREATE_REGEXP")),
+        };
+        match arg.pop().unwrap() {
+            'i' => arg.insert_str(0, "(?mi)"),
+            'm' => arg.insert_str(0, "(?ms)"),
+            'x' => arg.insert_str(0, "(?mx)"),
+            'o' => arg.insert_str(0, "(?mo)"),
+            '-' => arg.insert_str(0, "(?m)"),
+            _ => return Err(self.error_internal("Illegal internal regexp expression.")),
+        };
+        self.create_regexp_from_string(&arg)
     }
 }
 
@@ -1898,10 +1857,12 @@ impl VM {
             Some(MethodRef::from(block))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
-            let method = match val.as_proc() {
-                Some(pref) => pref.context.iseq_ref.method,
-                None => return Err(self.error_argument("Block argument must be Proc.")),
-            };
+            let method = val
+                .as_proc()
+                .ok_or_else(|| self.error_argument("Block argument must be Proc."))?
+                .context
+                .iseq_ref
+                .method;
             Some(method)
         } else {
             None
@@ -1934,10 +1895,9 @@ impl VM {
             if let ISeqKind::Method(_) = context.kind {
                 break;
             }
-            context = match context.outer {
-                Some(c) => c,
-                None => return Err(self.error_unimplemented("No block given.")),
-            };
+            context = context
+                .outer
+                .ok_or_else(|| self.error_unimplemented("No block given."))?;
         }
         let method = context
             .block
@@ -1958,7 +1918,6 @@ impl VM {
         self_val: Value,
         outer: Option<ContextRef>,
         args: &Args,
-        //is_block: bool,
     ) -> VMResult {
         if methodref.is_none() {
             let res = match args.len() {
@@ -2007,8 +1966,8 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                //let outer = if is_block { Some(self.context()) } else { None };
-                let val = self.vm_run(iseq, outer, self_val, &args)?;
+                let context = Context::from_args(self, self_val, iseq, args, outer)?;
+                let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
                 {
                     self.perf.get_perf_no_count(inst);
@@ -2135,10 +2094,9 @@ impl VM {
     }
 
     pub fn get_singleton_class(&mut self, obj: Value) -> VMResult {
-        match self.globals.get_singleton_class(obj) {
-            Ok(val) => Ok(val),
-            Err(()) => Err(self.error_type("Can not define singleton.")),
-        }
+        self.globals
+            .get_singleton_class(obj)
+            .map_err(|_| self.error_type("Can not define singleton."))
     }
 }
 
@@ -2188,43 +2146,6 @@ impl VM {
         } else {
             Ok(index as usize)
         }
-    }
-
-    fn pop_args(&mut self, arg_num: usize) -> Vec<Value> {
-        let mut args = vec![];
-        for _ in 0..arg_num {
-            let val = self.stack_pop();
-            match val.as_splat() {
-                Some(inner) => match inner.as_rvalue() {
-                    None => args.push(inner),
-                    Some(obj) => match &obj.kind {
-                        ObjKind::Array(aref) => {
-                            for elem in &aref.elements {
-                                args.push(*elem);
-                            }
-                        }
-                        ObjKind::Range(rref) => {
-                            let start = if rref.start.is_packed_fixnum() {
-                                rref.start.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range start not fixnum.")
-                            };
-                            let end = if rref.end.is_packed_fixnum() {
-                                rref.end.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range end not fixnum.")
-                            } + if rref.exclude { 0 } else { 1 };
-                            for i in start..end {
-                                args.push(Value::fixnum(i));
-                            }
-                        }
-                        _ => args.push(inner),
-                    },
-                },
-                None => args.push(val),
-            };
-        }
-        args
     }
 
     fn pop_key_value_pair(&mut self, arg_num: usize) -> HashMap<HashKey, Value> {
@@ -2286,21 +2207,19 @@ impl VM {
     fn move_outer_to_heap(&mut self) {
         let mut prev_ctx: Option<ContextRef> = None;
         for context in self.exec_context.iter_mut().rev() {
-            if context.on_stack {
-                let mut heap_context = context.dup();
-                heap_context.on_stack = false;
-                *context = heap_context;
-                match prev_ctx {
-                    Some(mut ctx) => ctx.outer = Some(heap_context),
-                    None => {}
-                };
-                if heap_context.outer.is_none() {
-                    break;
-                }
-                prev_ctx = Some(heap_context);
-            } else {
+            if !context.on_stack {
+                break;
+            };
+            let mut heap_context = context.dup();
+            heap_context.on_stack = false;
+            *context = heap_context;
+            if let Some(mut ctx) = prev_ctx {
+                ctx.outer = Some(heap_context);
+            };
+            if heap_context.outer.is_none() {
                 break;
             }
+            prev_ctx = Some(heap_context);
         }
     }
 
@@ -2319,11 +2238,8 @@ impl VM {
     /// Create new Regexp object from `string`.
     /// Regular expression meta characters are handled as is.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn create_regexp(&self, string: &str) -> VMResult {
-        let re = match RegexpRef::from_string(string) {
-            Ok(re) => re,
-            Err(err) => return Err(self.error_regexp(err)),
-        };
+    pub fn create_regexp_from_string(&self, string: &str) -> VMResult {
+        let re = RegexpRef::from_string(string).map_err(|err| self.error_regexp(err))?;
         let regexp = Value::regexp(&self.globals, re);
         Ok(regexp)
     }

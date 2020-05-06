@@ -49,7 +49,7 @@ impl MethodInfo {
 
     pub fn as_iseq(&self, vm: &VM) -> Result<ISeqRef, RubyError> {
         if let MethodInfo::RubyFunc { iseq } = self {
-            Ok(iseq.clone())
+            Ok(*iseq)
         } else {
             Err(vm.error_unimplemented("Methodref is illegal."))
         }

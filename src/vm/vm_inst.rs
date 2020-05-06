@@ -42,10 +42,10 @@ impl Inst {
     pub const GET_CONST_TOP: u8 = 44;
     pub const GET_SCOPE: u8 = 45;
 
-    pub const GET_INSTANCE_VAR: u8 = 46;
-    pub const SET_INSTANCE_VAR: u8 = 47;
-    pub const GET_GLOBAL_VAR: u8 = 48;
-    pub const SET_GLOBAL_VAR: u8 = 49;
+    pub const GET_IVAR: u8 = 46;
+    pub const SET_IVAR: u8 = 47;
+    pub const GET_GVAR: u8 = 48;
+    pub const SET_GVAR: u8 = 49;
     pub const GET_INDEX: u8 = 50;
     pub const SET_INDEX: u8 = 51;
 
@@ -124,10 +124,10 @@ impl Inst {
             Inst::GET_CONST_TOP => "GET_CONSTTOP",
             Inst::GET_SCOPE => "GET_SCOPE",
 
-            Inst::GET_INSTANCE_VAR => "GET_INST_VAR",
-            Inst::SET_INSTANCE_VAR => "SET_INST_VAR",
-            Inst::GET_GLOBAL_VAR => "GET_GLBL_VAR",
-            Inst::SET_GLOBAL_VAR => "SET_GLBL_VAR",
+            Inst::GET_IVAR => "GET_IVAR",
+            Inst::SET_IVAR => "SET_IVAR",
+            Inst::GET_GVAR => "GET_GVAR",
+            Inst::SET_GVAR => "SET_GVAR",
             Inst::GET_INDEX => "GET_INDEX",
             Inst::SET_INDEX => "SET_INDEX",
 
@@ -201,10 +201,10 @@ impl Inst {
             | Inst::SET_CONST           // IdentId: u32
             | Inst::GET_CONST_TOP       // IdentId: u32
             | Inst::GET_SCOPE           // IdentId: u32
-            | Inst::GET_INSTANCE_VAR    // IdentId: u32
-            | Inst::SET_INSTANCE_VAR    // IdentId: u32
-            | Inst::GET_GLOBAL_VAR      // IdentId: u32
-            | Inst::SET_GLOBAL_VAR      // IdentId: u32
+            | Inst::GET_IVAR            // IdentId: u32
+            | Inst::SET_IVAR            // IdentId: u32
+            | Inst::GET_GVAR            // IdentId: u32
+            | Inst::SET_GVAR            // IdentId: u32
             | Inst::GET_INDEX
             | Inst::SET_INDEX
             | Inst::CREATE_ARRAY        // number of items: u32
@@ -237,7 +237,8 @@ impl Inst {
         }
     }
 
-    pub fn inst_info(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
+    pub fn inst_info(globals: &mut Globals, iseq_ref: ISeqRef, pc: usize) -> String {
+        let iseq = &iseq_ref.iseq;
         match iseq[pc] {
             Inst::END
             | Inst::PUSH_NIL
@@ -300,27 +301,24 @@ impl Inst {
             }
             Inst::SET_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
-                format!(
-                    "SET_LOCAL outer:{} LvarId:{}",
-                    frame,
-                    Inst::read32(iseq, pc + 1)
-                )
+                let id = Inst::read32(iseq, pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let name = globals.get_ident_name(ident_id);
+                format!("SET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::GET_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
-                format!(
-                    "GET_LOCAL outer:{} LvarId:{}",
-                    frame,
-                    Inst::read32(iseq, pc + 1)
-                )
+                let id = Inst::read32(iseq, pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let name = globals.get_ident_name(ident_id);
+                format!("GET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::CHECK_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
-                format!(
-                    "CHECK_LOCAL outer:{} LvarId:{}",
-                    frame,
-                    Inst::read32(iseq, pc + 1)
-                )
+                let id = Inst::read32(iseq, pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let name = globals.get_ident_name(ident_id);
+                format!("CHECK_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::GET_CONST => format!("GET_CONST '{}'", Inst::ident_name(globals, iseq, pc + 1)),
             Inst::GET_CONST_TOP => format!(
@@ -329,12 +327,8 @@ impl Inst {
             ),
             Inst::SET_CONST => format!("SET_CONST '{}'", Inst::ident_name(globals, iseq, pc + 1)),
             Inst::GET_SCOPE => format!("GET_SCOPE '{}'", Inst::ident_name(globals, iseq, pc + 1)),
-            Inst::GET_INSTANCE_VAR => {
-                format!("GET_INST_VAR '{}'", Inst::ident_name(globals, iseq, pc + 1))
-            }
-            Inst::SET_INSTANCE_VAR => {
-                format!("SET_INST_VAR '{}'", Inst::ident_name(globals, iseq, pc + 1))
-            }
+            Inst::GET_IVAR => format!("GET_IVAR '{}'", Inst::ident_name(globals, iseq, pc + 1)),
+            Inst::SET_IVAR => format!("SET_IVAR '{}'", Inst::ident_name(globals, iseq, pc + 1)),
             Inst::GET_INDEX => format!("GET_INDEX {} items", Inst::read32(iseq, pc + 1)),
             Inst::SET_INDEX => format!("SET_INDEX {} items", Inst::read32(iseq, pc + 1)),
             Inst::SEND => format!(
@@ -385,9 +379,7 @@ impl Inst {
         iseq[pc]
     }
 
-    fn ident_name(globals: &mut Globals, iseq: &ISeq, pc: usize) -> String {
-        globals
-            .get_ident_name(IdentId::from(Inst::read32(iseq, pc)))
-            .to_owned()
+    fn ident_name<'a>(globals: &'a Globals, iseq: &ISeq, pc: usize) -> &'a str {
+        globals.get_ident_name(IdentId::from(Inst::read32(iseq, pc)))
     }
 }
