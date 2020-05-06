@@ -81,7 +81,8 @@ impl Lexer {
             "until" => Reserved::Until,
             "unless" => Reserved::Unless,
             "when" => Reserved::When,
-            "while" => Reserved::While
+            "while" => Reserved::While,
+            "yield" => Reserved::Yield
         };
         Lexer {
             len: 0,

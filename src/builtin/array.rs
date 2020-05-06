@@ -64,14 +64,14 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             RV::Integer(num) if num >= 0 => vec![Value::nil(); num as usize],
             RV::Object(oref) => match oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
-                _ => return Err(vm.error_nomethod("Invalid arguments")),
+                _ => return Err(vm.error_argument("Invalid arguments")),
             },
-            _ => return Err(vm.error_nomethod("Invalid arguments")),
+            _ => return Err(vm.error_argument("Invalid arguments")),
         },
         2 => {
             let arg_num = args[0]
                 .as_fixnum()
-                .ok_or(vm.error_nomethod("Invalid arguments"))?;
+                .ok_or(vm.error_argument("Invalid arguments"))?;
             vec![args[1]; arg_num as usize]
         }
         _ => unreachable!(),
@@ -280,7 +280,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = vm.expect_array(self_val, "Receiver")?;
     let method = vm.expect_block(args.block)?;
     let mut res = vec![];
-    let param_num = vm.get_iseq(method)?.req_params;
+    let param_num = vm.get_iseq(method)?.params.req_params;
     let mut arg = Args::new(param_num);
     for elem in &aref.elements {
         if param_num == 0 {
@@ -323,7 +323,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let mut arg = Args::new(vm.get_iseq(method)?.req_params);
+    let mut arg = Args::new(vm.get_iseq(method)?.params.req_params);
     for i in &aref.elements {
         match i.as_array() {
             Some(aref) if arg.len() != 1 => {
@@ -415,7 +415,7 @@ fn transpose(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for elem in &aref.elements {
         let ary = elem
             .as_array()
-            .ok_or(vm.error_nomethod("Each element of receiver must be an array."))?
+            .ok_or(vm.error_argument("Each element of receiver must be an array."))?
             .elements
             .clone();
         vec.push(ary);

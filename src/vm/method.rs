@@ -78,6 +78,22 @@ pub type ISeqRef = Ref<ISeqInfo>;
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
     pub method: MethodRef,
+    pub params: ISeqParams,
+    pub iseq: ISeq,
+    pub lvar: LvarCollector,
+    pub lvars: usize,
+    /// The Class where this method was described.
+    /// This field is set to None when IseqInfo was created by Codegen.
+    /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
+    /// Set to Some() in class definition context, or None in the top level.
+    pub class_defined: Option<ClassListRef>,
+    pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+    pub source_info: SourceInfoRef,
+    pub kind: ISeqKind,
+}
+
+#[derive(Debug, Clone)]
+pub struct ISeqParams {
     pub req_params: usize,
     pub opt_params: usize,
     pub rest_param: bool,
@@ -87,17 +103,6 @@ pub struct ISeqInfo {
     pub max_params: usize,
     pub param_ident: Vec<IdentId>,
     pub keyword_params: HashMap<IdentId, LvarId>,
-    pub iseq: ISeq,
-    pub lvar: LvarCollector,
-    pub lvars: usize,
-    /// The Class where this method was described.
-    /// This field is set to None when IseqInfo was created by Codegen.
-    /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
-    /// set to Some() in class definition context, or None in the top level.
-    pub class_defined: Option<ClassListRef>,
-    pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
-    pub source_info: SourceInfoRef,
-    pub kind: ISeqKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -119,8 +124,8 @@ impl ClassList {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ISeqKind {
     Other,
-    Method(IdentId), // Method or Lambda
-    Proc(MethodRef), // Block or Proc
+    Method(IdentId),  // Method or Lambda
+    Block(MethodRef), // Block or Proc
 }
 
 impl ISeqInfo {
@@ -144,15 +149,17 @@ impl ISeqInfo {
         let lvars = lvar.len();
         ISeqInfo {
             method,
-            req_params,
-            opt_params,
-            rest_param,
-            post_params,
-            block_param,
-            min_params,
-            max_params,
-            param_ident,
-            keyword_params,
+            params: ISeqParams {
+                req_params,
+                opt_params,
+                rest_param,
+                post_params,
+                block_param,
+                min_params,
+                max_params,
+                param_ident,
+                keyword_params,
+            },
             iseq,
             lvar,
             lvars,

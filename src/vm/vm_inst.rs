@@ -77,6 +77,7 @@ impl Inst {
     pub const RETURN: u8 = 103;
     pub const OPT_CASE: u8 = 104;
     pub const MRETURN: u8 = 105;
+    pub const YIELD: u8 = 106;
 }
 
 #[allow(dead_code)]
@@ -158,6 +159,7 @@ impl Inst {
             Inst::RETURN => "RETURN",
             Inst::OPT_CASE => "OPT_CASE",
             Inst::MRETURN => "MRETURN",
+            Inst::YIELD => "YIELD",
 
             _ => "undefined",
         }
@@ -192,7 +194,6 @@ impl Inst {
             | Inst::POP
             | Inst::RETURN
             | Inst::MRETURN => 1,
-
                                         // operand
             Inst::PUSH_STRING           // IdentId: u32
             | Inst::PUSH_SYMBOL         // IdentId: u32
@@ -219,6 +220,7 @@ impl Inst {
             | Inst::SUBI                // inline cache: u32
             | Inst::SHL                 // inline cache: u32
             | Inst::CREATE_HASH         // number of items: u32
+            | Inst::YIELD               // number of items: u32
             => 5,
 
             Inst::PUSH_FIXNUM
@@ -265,7 +267,8 @@ impl Inst {
             | Inst::RETURN
             | Inst::TO_S
             | Inst::SPLAT
-            | Inst::POP => format!("{}", Inst::inst_name(iseq[pc])),
+            | Inst::POP
+            | Inst::YIELD => format!("{}", Inst::inst_name(iseq[pc])),
             Inst::PUSH_STRING => format!("PUSH_STRING {}", Inst::read32(iseq, pc + 1) as i32),
             Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL {}", Inst::read32(iseq, pc + 1) as i32),
             Inst::ADDI => format!("ADDI {}", Inst::read32(iseq, pc + 1) as i32),

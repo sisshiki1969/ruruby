@@ -86,6 +86,7 @@ pub enum Reserved {
     Unless,
     When,
     While,
+    Yield,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

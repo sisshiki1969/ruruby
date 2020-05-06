@@ -1085,6 +1085,26 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Node, RubyError> {
+        if self.consume_reserved(Reserved::Yield)?  {
+            let loc = self.prev_loc();
+            let tok = self.peek_no_term()?;
+            // TODO: This is not correct.
+            if tok.is_term()
+                || tok.kind == TokenKind::Reserved(Reserved::Unless)
+                || tok.kind == TokenKind::Reserved(Reserved::If)
+                || tok.check_stmt_end()
+            {
+                return Ok(Node::new_yield(SendArgs::default(), loc));
+            };
+            let args = if self.consume_punct(Punct::LParen)? {
+                let args = self.parse_arglist()?;
+                self.expect_punct(Punct::RParen)?;
+                args
+            } else {
+                self.parse_arglist()?
+            };
+            return Ok(Node::new_yield(args, loc))
+        }
         // <一次式メソッド呼び出し>
         let mut node = self.parse_primary()?;
         let loc = node.loc();
@@ -1819,6 +1839,10 @@ impl Parser {
                 is_singleton_method = Some(Node::new_self(tok.loc()));
                 self.expect_punct(Punct::Dot)?;
                 self.expect_ident()?
+            }
+            TokenKind::Reserved(r) => {
+                let string = self.lexer.get_string_from_reserved(r).to_owned();
+                self.get_ident_id(string)
             }
             TokenKind::Ident(name, has_suffix, _) => {
                 if has_suffix {

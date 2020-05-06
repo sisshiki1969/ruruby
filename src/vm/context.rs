@@ -93,14 +93,15 @@ impl Context {
 
     pub fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
         let mut kw_len = if kw_arg.is_some() { 1 } else { 0 };
-        let req_len = self.iseq_ref.req_params;
-        let opt_len = self.iseq_ref.opt_params;
-        let rest_len = if self.iseq_ref.rest_param { 1 } else { 0 };
-        let post_len = self.iseq_ref.post_params;
+        let params = &self.iseq_ref.params;
+        let req_len = params.req_params;
+        let opt_len = params.opt_params;
+        let rest_len = if params.rest_param { 1 } else { 0 };
+        let post_len = params.post_params;
         let post_pos = req_len + opt_len + rest_len;
 
         match self.iseq_ref.kind {
-            ISeqKind::Proc(_) if args.len() == 1 && req_len + post_len > 1 => {
+            ISeqKind::Block(_) if args.len() == 1 && req_len + post_len > 1 => {
                 match args[0].as_array() {
                     Some(ary) => {
                         let arg_len = ary.elements.len() + kw_len;

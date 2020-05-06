@@ -65,7 +65,19 @@ enum EscapeKind {
 pub struct Context {
     lvar_info: HashMap<IdentId, LvarId>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+    exceptions: Vec<Exceptions>,
     kind: ContextKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Exceptions {
+    entry: Vec<ISeqPos>,
+}
+
+impl Exceptions {
+    fn new() -> Self {
+        Exceptions { entry: vec![] }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -80,6 +92,7 @@ impl Context {
         Context {
             lvar_info: HashMap::new(),
             iseq_sourcemap: vec![],
+            exceptions: vec![],
             kind: ContextKind::Eval,
         }
     }
@@ -88,6 +101,7 @@ impl Context {
         Context {
             lvar_info,
             iseq_sourcemap: vec![],
+            exceptions: vec![],
             kind,
         }
     }
@@ -278,7 +292,7 @@ impl Codegen {
         Codegen::push32(iseq, disp as u32);
     }
 
-    fn gen_jmp(&self, iseq: &mut ISeq) -> ISeqPos {
+    fn gen_jmp(iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP);
         Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
@@ -294,6 +308,12 @@ impl Codegen {
 
     fn gen_method_return(&self, iseq: &mut ISeq) {
         iseq.push(Inst::MRETURN);
+    }
+
+    fn gen_yield(&mut self, iseq: &mut ISeq, args_num: usize) {
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::YIELD);
+        Codegen::push32(iseq, args_num as u32);
     }
 
     fn gen_opt_case(&self, iseq: &mut ISeq, map_id: u32) -> ISeqPos {
@@ -645,7 +665,7 @@ impl Codegen {
                 iseq_sourcemap,
                 self.source_info,
                 match kind {
-                    ContextKind::Block => ISeqKind::Proc(*self.method_stack.last().unwrap()),
+                    ContextKind::Block => ISeqKind::Block(*self.method_stack.last().unwrap()),
                     ContextKind::Eval => ISeqKind::Other,
                     ContextKind::Method => {
                         if name.is_some() {
@@ -998,7 +1018,7 @@ impl Codegen {
                         self.gen(globals, iseq, lhs, true)?;
                         let src1 = self.gen_jmp_if_false(iseq);
                         self.gen(globals, iseq, rhs, true)?;
-                        let src2 = self.gen_jmp(iseq);
+                        let src2 = Codegen::gen_jmp(iseq);
                         self.write_disp_from_cur(iseq, src1);
                         iseq.push(Inst::PUSH_FALSE);
                         self.write_disp_from_cur(iseq, src2);
@@ -1007,7 +1027,7 @@ impl Codegen {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen_dup(iseq, 1);
                         let src1 = self.gen_jmp_if_false(iseq);
-                        let src2 = self.gen_jmp(iseq);
+                        let src2 = Codegen::gen_jmp(iseq);
                         self.write_disp_from_cur(iseq, src1);
                         self.gen_pop(iseq);
                         self.gen(globals, iseq, rhs, true)?;
@@ -1060,7 +1080,7 @@ impl Codegen {
                 self.gen(globals, iseq, &cond, true)?;
                 let src1 = self.gen_jmp_if_false(iseq);
                 self.gen(globals, iseq, &then_, use_value)?;
-                let src2 = self.gen_jmp(iseq);
+                let src2 = Codegen::gen_jmp(iseq);
                 self.write_disp_from_cur(iseq, src1);
                 self.gen(globals, iseq, &else_, use_value)?;
                 self.write_disp_from_cur(iseq, src2);
@@ -1099,7 +1119,7 @@ impl Codegen {
                 if use_value {
                     self.gen(globals, iseq, iter, true)?;
                 }
-                let src = self.gen_jmp(iseq);
+                let src = Codegen::gen_jmp(iseq);
                 for p in self.loop_stack.pop().unwrap().escape {
                     match p.kind {
                         EscapeKind::Break => {
@@ -1127,7 +1147,7 @@ impl Codegen {
                 if use_value {
                     self.gen_push_nil(iseq);
                 }
-                let src = self.gen_jmp(iseq);
+                let src = Codegen::gen_jmp(iseq);
                 for p in self.loop_stack.pop().unwrap().escape {
                     match p.kind {
                         EscapeKind::Break => {
@@ -1148,7 +1168,12 @@ impl Codegen {
                 else_: _,
                 ensure,
             } => {
+                self.context_mut().exceptions.push(Exceptions::new());
                 self.gen(globals, iseq, body, use_value)?;
+                let exceptions = self.context_mut().exceptions.pop().unwrap();
+                for src in exceptions.entry {
+                    self.write_disp_from_cur(iseq, src);
+                }
                 // Ensure clauses must not return value.
                 self.gen(globals, iseq, ensure, false)?;
             }
@@ -1185,7 +1210,7 @@ impl Codegen {
                             map.insert(k, disp);
                         }
                         self.gen(globals, iseq, &branch.body, use_value)?;
-                        end.push(self.gen_jmp(iseq));
+                        end.push(Codegen::gen_jmp(iseq));
                     }
                     self.write_disp_from_cur(iseq, start);
                 } else {
@@ -1206,13 +1231,13 @@ impl Codegen {
                             iseq.push(Inst::NOT);
                             jmp_dest.push(self.gen_jmp_if_false(iseq));
                         }
-                        next = Some(self.gen_jmp(iseq));
+                        next = Some(Codegen::gen_jmp(iseq));
                         for dest in jmp_dest {
                             self.write_disp_from_cur(iseq, dest);
                         }
                         self.gen_pop(iseq);
                         self.gen(globals, iseq, &branch.body, use_value)?;
-                        end.push(self.gen_jmp(iseq));
+                        end.push(Codegen::gen_jmp(iseq));
                     }
                     match next {
                         Some(next) => {
@@ -1385,6 +1410,25 @@ impl Codegen {
                         + (if block_flag { 2usize } else { 0usize })
                 }
             }
+            NodeKind::Yield(send_args) => {
+                //let loc = self.loc;
+                for arg in &send_args.args {
+                    self.gen(globals, iseq, arg, true)?;
+                }
+                /*
+                let kw_flag = send_args.kw_args.len() != 0;
+                if kw_flag {
+                    for (id, default) in &send_args.kw_args {
+                        self.gen_symbol(iseq, *id);
+                        self.gen(globals, iseq, default, true)?;
+                    }
+                    self.gen_create_hash(iseq, send_args.kw_args.len());
+                }*/
+                self.gen_yield(iseq, send_args.args.len());
+                if !use_value {
+                    self.gen_pop(iseq);
+                };
+            }
             NodeKind::MethodDef(id, params, body, lvar) => {
                 let methodref = self.gen_iseq(
                     globals,
@@ -1451,10 +1495,18 @@ impl Codegen {
                 self.gen(globals, iseq, val, true)?;
                 // Call ensure clauses.
                 // Note ensure routine return no value.
-                if self.context().kind == ContextKind::Block {
-                    self.gen_method_return(iseq);
-                } else {
-                    self.gen_return(iseq);
+                match self.context_mut().exceptions.last_mut() {
+                    Some(ex) => {
+                        let src = Codegen::gen_jmp(iseq);
+                        ex.entry.push(src);
+                    }
+                    None => {
+                        if self.context().kind == ContextKind::Block {
+                            self.gen_method_return(iseq);
+                        } else {
+                            self.gen_return(iseq);
+                        }
+                    }
                 }
             }
             NodeKind::Break(val) => {
@@ -1479,7 +1531,7 @@ impl Codegen {
                 } else {
                     //In the case of inner of loops
                     self.gen(globals, iseq, val, true)?;
-                    let src = self.gen_jmp(iseq);
+                    let src = Codegen::gen_jmp(iseq);
                     let x = self.loop_stack.last_mut().unwrap();
                     x.escape.push(EscapeInfo::new(src, EscapeKind::Break));
                 }
@@ -1506,7 +1558,7 @@ impl Codegen {
                 } else {
                     //In the case of inner of loops
                     self.gen(globals, iseq, val, use_value)?;
-                    let src = self.gen_jmp(iseq);
+                    let src = Codegen::gen_jmp(iseq);
                     let x = self.loop_stack.last_mut().unwrap();
                     x.escape.push(EscapeInfo::new(src, EscapeKind::Next));
                 }

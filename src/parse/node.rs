@@ -75,6 +75,7 @@ pub enum NodeKind {
     Break(Box<Node>),
     Next(Box<Node>),
     Return(Box<Node>),
+    Yield(SendArgs),
 
     Param(IdentId),
     PostParam(IdentId),
@@ -105,6 +106,16 @@ pub struct SendArgs {
     pub args: NodeVec,
     pub kw_args: Vec<(IdentId, Node)>,
     pub block: Option<Box<Node>>,
+}
+
+impl SendArgs {
+    pub fn default() -> Self {
+        SendArgs {
+            args: vec![],
+            kw_args: vec![],
+            block: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -451,13 +462,16 @@ impl Node {
     }
 
     pub fn new_next(val: Node, loc: Loc) -> Self {
-        let loc = loc.merge(val.loc());
         Node::new(NodeKind::Next(Box::new(val)), loc)
     }
 
     pub fn new_return(val: Node, loc: Loc) -> Self {
-        let loc = loc.merge(val.loc());
         Node::new(NodeKind::Return(Box::new(val)), loc)
+    }
+
+    pub fn new_yield(mut args: SendArgs, loc: Loc) -> Self {
+        args.args.reverse();
+        Node::new(NodeKind::Yield(args), loc)
     }
 
     pub fn new_proc(params: NodeVec, body: Node, lvar: LvarCollector, loc: Loc) -> Self {

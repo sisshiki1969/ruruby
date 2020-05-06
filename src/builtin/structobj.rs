@@ -56,7 +56,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => {
             vm.class_push(val);
             let arg = Args::new1(val);
-            vm.eval_method(method, val, &arg, true)?;
+            vm.eval_method(method, val, Some(vm.context()), &arg)?;
             vm.class_pop();
         }
         None => {}

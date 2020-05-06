@@ -21,6 +21,7 @@ pub struct VM {
     exec_context: Vec<ContextRef>,
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
+    exception: bool,
     pc: usize,
     pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
@@ -103,6 +104,7 @@ impl VM {
             class_context: vec![(Value::nil(), DefineMode::default())],
             exec_context: vec![],
             exec_stack: vec![],
+            exception: false,
             pc: 0,
             channel: None,
             #[cfg(feature = "perf")]
@@ -120,6 +122,7 @@ impl VM {
             exec_context: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
+            exception: false,
             pc: 0,
             channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
@@ -404,15 +407,15 @@ impl VM {
         self_val: Value,
         args: &Args,
     ) -> Result<Context, RubyError> {
-        let kw = if iseq.keyword_params.is_empty() {
+        let kw = if iseq.params.keyword_params.is_empty() {
             args.kw_arg
         } else {
             None
         };
         self.check_args_range(
             args.len() + if kw.is_some() { 1 } else { 0 },
-            iseq.min_params,
-            iseq.max_params,
+            iseq.params.min_params,
+            iseq.params.max_params,
         )?;
         let mut context = Context::new(self_val, args.block, iseq, outer);
         context.set_arguments(&self.globals, args, kw);
@@ -430,7 +433,7 @@ impl VM {
                 let keyword = kw_arg.as_hash().unwrap();
                 for (k, v) in keyword.iter() {
                     let id = k.as_symbol().unwrap();
-                    match iseq.keyword_params.get(&id) {
+                    match iseq.params.keyword_params.get(&id) {
                         Some(lvar) => {
                             context[*lvar] = v;
                         }
@@ -540,7 +543,7 @@ impl VM {
                     // 'Inst::RETURN' is executed.
                     // - `return` in method.
                     // - `break` outer of loops.
-                    let res = if let ISeqKind::Proc(_) = context.iseq_ref.kind {
+                    let res = if let ISeqKind::Block(_) = context.iseq_ref.kind {
                         // if in block context, exit with Err(BLOCK_RETURN).
                         let err = self.error_block_return();
                         #[cfg(feature = "trace")]
@@ -567,7 +570,7 @@ impl VM {
                 Inst::MRETURN => {
                     // 'METHOD_RETURN' is executed.
                     // - `return` in block
-                    let res = if let ISeqKind::Proc(method) = context.iseq_ref.kind {
+                    let res = if let ISeqKind::Block(method) = context.iseq_ref.kind {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
@@ -1045,6 +1048,10 @@ impl VM {
                     try_err!(self, self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
+                Inst::YIELD => {
+                    try_err!(self, self.eval_yield(iseq));
+                    self.pc += 5;
+                }
                 Inst::DEF_CLASS => {
                     let is_module = self.read8(iseq, 1) == 1;
                     let id = self.read_id(iseq, 2);
@@ -1186,6 +1193,7 @@ impl VM {
             loc,
         )
     }
+
     pub fn error_undefined_op(
         &self,
         method_name: impl Into<String>,
@@ -1516,7 +1524,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_object_for_method(&self.globals);
         if rec_class.is_nil() {
-            return Err(self.error_unimplemented("receiver's class in nil."));
+            return Err(self.error_unimplemented("receiver's class is nil."));
         };
         match self
             .globals
@@ -1954,21 +1962,51 @@ impl VM {
 }
 
 impl VM {
+    /// Evaluate method with given `self_val`, `args` and no outer context.
     pub fn eval_send(&mut self, methodref: MethodRef, self_val: Value, args: &Args) -> VMResult {
-        self.eval_method(methodref, self_val, args, false)
+        self.eval_method(methodref, self_val, None, args)
     }
 
+    /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> VMResult {
         let context = self.context();
-        self.eval_method(methodref, context.self_value, args, true)
+        self.eval_method(methodref, context.self_value, Some(context), args)
     }
 
+    /// Evaluate method with self_val of current context, caller context as outer context, and given `args`.
+    fn eval_yield(&mut self, iseq: &ISeq) -> VMResult {
+        let args_num = self.read32(iseq, 1) as usize;
+        let args = self.pop_args_to_ary(args_num);
+        let mut context = self.context();
+        loop {
+            if let ISeqKind::Method(_) = context.iseq_ref.kind {
+                break;
+            }
+            context = match context.outer {
+                Some(c) => c,
+                None => return Err(self.error_unimplemented("No block given.")),
+            };
+        }
+        let method = context
+            .block
+            .ok_or_else(|| self.error_unimplemented("No block given."))?;
+        let res = self.eval_method(
+            method,
+            self.context().self_value,
+            Some(self.caller_context()),
+            &args,
+        )?;
+        Ok(res)
+    }
+
+    /// Evaluate method with given `self_val`, `outer` context, and `args`.
     pub fn eval_method(
         &mut self,
         methodref: MethodRef,
         self_val: Value,
+        outer: Option<ContextRef>,
         args: &Args,
-        is_block: bool,
+        //is_block: bool,
     ) -> VMResult {
         if methodref.is_none() {
             let res = match args.len() {
@@ -2017,7 +2055,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                let outer = if is_block { Some(self.context()) } else { None };
+                //let outer = if is_block { Some(self.context()) } else { None };
                 let val = self.vm_run(iseq, outer, self_val, &args)?;
                 #[cfg(feature = "perf")]
                 {

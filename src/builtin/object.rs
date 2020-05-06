@@ -18,7 +18,6 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "super", super_);
     globals.add_builtin_instance_method(object, "equal?", equal);
     globals.add_builtin_instance_method(object, "send", send);
-    globals.add_builtin_instance_method(object, "yield", object_yield);
     globals.add_builtin_instance_method(object, "eval", eval);
 }
 
@@ -175,7 +174,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 )));
             }
         };
-        let param_num = iseq.param_ident.len();
+        let param_num = iseq.params.param_ident.len();
         let mut args = Args::new0();
         for i in 0..param_num {
             args.push(context[i]);
@@ -207,17 +206,6 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     new_args.block = args.block;
     let res = vm.eval_send(method, self_val, &new_args)?;
-    Ok(res)
-}
-
-fn object_yield(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let outer = vm.caller_context();
-    let method = match vm.context().block {
-        Some(block) => block,
-        None => return Err(vm.error_argument("Yield needs block.")),
-    };
-    let iseq = vm.get_iseq(method)?;
-    let res = vm.vm_run(iseq, Some(outer), self_val, args)?;
     Ok(res)
 }
 
@@ -336,16 +324,16 @@ mod test {
         let program = r#"
         class Array
             def iich
+                p self
                 len = self.size
                 for i in 0...len
-                    puts self[i]
-                    yield self[i]
+                    yield(self[i])
                 end
             end
         end
 
         sum = 0
-        [1,2,3,4,5].iich{|x| sum += x }
+        [1,2,3,4,5].iich{|x| puts x, sum; sum = sum + x }
         assert(15 ,sum)
         "#;
         assert_script(program);

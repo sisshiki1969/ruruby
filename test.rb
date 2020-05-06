@@ -1,17 +1,12 @@
-def foo
-    begin
-        puts "begin 2"
-        begin
-            puts "begin 1"
-            return 100
-            puts "never"
-        ensure
-            puts "ensure 1"
+class Array
+    def iich
+        for i in 0...self.size
+            puts "i:#{i}, ary:#{self[i].inspect} size:#{self.size}"
+            yield self[i]
         end
-    ensure
-        puts "ensure 2"
     end
 end
 
-puts foo    # => 100
-
+sum = 0
+[3,4,5,6,7,8].iich{|x| puts sum; sum += x }
+puts sum
