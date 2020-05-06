@@ -394,57 +394,9 @@ impl VM {
         self_val: Value,
         args: &Args,
     ) -> VMResult {
-        let context = self.create_context(iseq, outer, self_val, args)?;
+        let context = Context::from_args(self, self_val, iseq, args, outer)?;
         let val = self.vm_run_context(ContextRef::from_local(&context))?;
         Ok(val)
-    }
-
-    /// Create a new context from given args.
-    pub fn create_context(
-        &mut self,
-        iseq: ISeqRef,
-        outer: Option<ContextRef>,
-        self_val: Value,
-        args: &Args,
-    ) -> Result<Context, RubyError> {
-        let kw = if iseq.params.keyword_params.is_empty() {
-            args.kw_arg
-        } else {
-            None
-        };
-        self.check_args_range(
-            args.len() + if kw.is_some() { 1 } else { 0 },
-            iseq.params.min_params,
-            iseq.params.max_params,
-        )?;
-        let mut context = Context::new(self_val, args.block, iseq, outer);
-        context.set_arguments(&self.globals, args, kw);
-        if let Some(id) = iseq.lvar.block_param() {
-            context[id] = match args.block {
-                Some(block) => {
-                    let proc_context = self.create_block_context(block)?;
-                    Value::procobj(&self.globals, proc_context)
-                }
-                None => Value::nil(),
-            }
-        }
-        match args.kw_arg {
-            Some(kw_arg) if kw.is_none() => {
-                let keyword = kw_arg.as_hash().unwrap();
-                for (k, v) in keyword.iter() {
-                    let id = k.as_symbol().unwrap();
-                    match iseq.params.keyword_params.get(&id) {
-                        Some(lvar) => {
-                            context[*lvar] = v;
-                        }
-                        None => return Err(self.error_argument("Undefined keyword.")),
-                    };
-                }
-            }
-            _ => {}
-        };
-
-        Ok(context)
     }
 }
 
@@ -543,7 +495,7 @@ impl VM {
                     // 'Inst::RETURN' is executed.
                     // - `return` in method.
                     // - `break` outer of loops.
-                    let res = if let ISeqKind::Block(_) = context.iseq_ref.kind {
+                    let res = if let ISeqKind::Block(_) = context.kind {
                         // if in block context, exit with Err(BLOCK_RETURN).
                         let err = self.error_block_return();
                         #[cfg(feature = "trace")]
@@ -570,7 +522,7 @@ impl VM {
                 Inst::MRETURN => {
                     // 'METHOD_RETURN' is executed.
                     // - `return` in block
-                    let res = if let ISeqKind::Block(method) = context.iseq_ref.kind {
+                    let res = if let ISeqKind::Block(method) = context.kind {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
@@ -1979,7 +1931,7 @@ impl VM {
         let args = self.pop_args_to_ary(args_num);
         let mut context = self.context();
         loop {
-            if let ISeqKind::Method(_) = context.iseq_ref.kind {
+            if let ISeqKind::Method(_) = context.kind {
                 break;
             }
             context = match context.outer {

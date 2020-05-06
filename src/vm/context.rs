@@ -14,6 +14,7 @@ pub struct Context {
     pub outer: Option<ContextRef>,
     pub on_stack: bool,
     pub stack_len: usize,
+    pub kind: ISeqKind,
 }
 
 pub type ContextRef = Ref<Context>;
@@ -88,10 +89,57 @@ impl Context {
             outer,
             on_stack: true,
             stack_len: 0,
+            kind: iseq_ref.kind.clone(),
         }
     }
 
-    pub fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
+    pub fn from_args(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+    ) -> Result<Self, RubyError> {
+        let mut context = Context::new(self_value, args.block, iseq, outer);
+        let kw = if iseq.params.keyword_params.is_empty() {
+            args.kw_arg
+        } else {
+            None
+        };
+        vm.check_args_range(
+            args.len() + if kw.is_some() { 1 } else { 0 },
+            iseq.params.min_params,
+            iseq.params.max_params,
+        )?;
+        context.set_arguments(&vm.globals, args, kw);
+        match args.kw_arg {
+            Some(kw_arg) if kw.is_none() => {
+                let keyword = kw_arg.as_hash().unwrap();
+                for (k, v) in keyword.iter() {
+                    let id = k.as_symbol().unwrap();
+                    match iseq.params.keyword_params.get(&id) {
+                        Some(lvar) => {
+                            context[*lvar] = v;
+                        }
+                        None => return Err(vm.error_argument("Undefined keyword.")),
+                    };
+                }
+            }
+            _ => {}
+        };
+        if let Some(id) = iseq.lvar.block_param() {
+            context[id] = match args.block {
+                Some(block) => {
+                    let proc_context = vm.create_block_context(block)?;
+                    Value::procobj(&vm.globals, proc_context)
+                }
+                None => Value::nil(),
+            }
+        }
+        Ok(context)
+    }
+
+    fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
         let mut kw_len = if kw_arg.is_some() { 1 } else { 0 };
         let params = &self.iseq_ref.params;
         let req_len = params.req_params;
@@ -100,7 +148,7 @@ impl Context {
         let post_len = params.post_params;
         let post_pos = req_len + opt_len + rest_len;
 
-        match self.iseq_ref.kind {
+        match self.kind {
             ISeqKind::Block(_) if args.len() == 1 && req_len + post_len > 1 => {
                 match args[0].as_array() {
                     Some(ary) => {

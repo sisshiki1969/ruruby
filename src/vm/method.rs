@@ -54,12 +54,12 @@ impl MethodInfo {
             Err(vm.error_unimplemented("Methodref is illegal."))
         }
     }
-
+    /*
     pub fn set_iseq_kind(&mut self, kind: ISeqKind) {
         if let MethodInfo::RubyFunc { iseq } = self {
             iseq.kind = kind;
         }
-    }
+    }*/
 }
 
 impl std::fmt::Debug for MethodInfo {
