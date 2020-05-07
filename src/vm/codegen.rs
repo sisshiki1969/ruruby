@@ -578,9 +578,6 @@ impl Codegen {
         let mut rest_param = false;
         let mut post_params = 0;
         let mut block_param = false;
-        let mut min = 0;
-        let mut max = 0;
-        let mut unlimited_flag = false;
         let mut param_ident = vec![];
         let mut keyword_params = HashMap::new();
         let mut iseq = ISeq::new();
@@ -592,19 +589,14 @@ impl Codegen {
                 NodeKind::Param(id) => {
                     param_ident.push(*id);
                     req_params += 1;
-                    min += 1;
-                    max += 1;
                 }
                 NodeKind::PostParam(id) => {
                     param_ident.push(*id);
                     post_params += 1;
-                    min += 1;
-                    max += 1;
                 }
                 NodeKind::OptionalParam(id, default) => {
                     param_ident.push(*id);
                     opt_params += 1;
-                    max += 1;
                     self.gen_check_local(&mut iseq, *id)?;
                     let src1 = self.gen_jmp_if_false(&mut iseq);
                     self.gen(globals, &mut iseq, default, true)?;
@@ -614,7 +606,6 @@ impl Codegen {
                 NodeKind::RestParam(id) => {
                     param_ident.push(*id);
                     rest_param = true;
-                    unlimited_flag = true;
                 }
                 NodeKind::KeywordParam(id, default) => {
                     param_ident.push(*id);
@@ -652,12 +643,6 @@ impl Codegen {
                 rest_param,
                 post_params,
                 block_param,
-                if is_block { 0 } else { min },
-                if is_block || unlimited_flag {
-                    std::usize::MAX
-                } else {
-                    max
-                },
                 param_ident,
                 keyword_params,
                 iseq,

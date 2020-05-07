@@ -99,8 +99,6 @@ pub struct ISeqParams {
     pub rest_param: bool,
     pub post_params: usize,
     pub block_param: bool,
-    pub min_params: usize,
-    pub max_params: usize,
     pub param_ident: Vec<IdentId>,
     pub keyword_params: HashMap<IdentId, LvarId>,
 }
@@ -136,8 +134,6 @@ impl ISeqInfo {
         rest_param: bool,
         post_params: usize,
         block_param: bool,
-        min_params: usize,
-        max_params: usize,
         param_ident: Vec<IdentId>,
         keyword_params: HashMap<IdentId, LvarId>,
         iseq: ISeq,
@@ -155,8 +151,6 @@ impl ISeqInfo {
                 rest_param,
                 post_params,
                 block_param,
-                min_params,
-                max_params,
                 param_ident,
                 keyword_params,
             },
@@ -178,8 +172,6 @@ impl ISeqInfo {
             false,
             0,
             false,
-            0,
-            0,
             vec![],
             std::collections::HashMap::new(),
             vec![],
@@ -188,6 +180,13 @@ impl ISeqInfo {
             SourceInfoRef::empty(),
             ISeqKind::Method(IdentId::from(0)),
         )
+    }
+
+    pub fn is_block(&self) -> bool {
+        match self.kind {
+            ISeqKind::Block(_) => true,
+            _ => false,
+        }
     }
 }
 
