@@ -1262,10 +1262,11 @@ impl VM {
         val: &'a Value,
         msg: &str,
     ) -> Result<&'a String, RubyError> {
-        val.as_string().ok_or_else(|| {
+        let rstring = val.as_rstring().ok_or_else(|| {
             let inspect = self.val_inspect(val.clone());
-            self.error_type(format!("{} must be Float. (given:{})", msg, inspect))
-        })
+            self.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        })?;
+        rstring.as_string(self)
     }
 
     pub fn expect_array(&mut self, val: Value, msg: &str) -> Result<ArrayRef, RubyError> {

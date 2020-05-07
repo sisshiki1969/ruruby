@@ -188,13 +188,23 @@ impl Value {
         }
     }
 
-    /// Get RValue from Value.
+    /// Get reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
     pub fn as_rvalue(&self) -> Option<&RValue> {
         if self.is_packed_value() {
             None
         } else {
             Some(self.rvalue())
+        }
+    }
+
+    /// Get mutable reference of RValue from Value.
+    /// This method works only if `self` is not a packed value.
+    pub fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
+        if self.is_packed_value() {
+            None
+        } else {
+            Some(self.rvalue_mut())
         }
     }
 
@@ -373,6 +383,16 @@ impl Value {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::String(rstr) => Some(rstr),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_mut_rstring(&mut self) -> Option<&mut RString> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::String(ref mut rstr) => Some(rstr),
                 _ => None,
             },
             None => None,

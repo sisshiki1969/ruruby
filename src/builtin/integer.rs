@@ -166,8 +166,11 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Built-in function "chr".
 fn chr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let num = self_val.as_fixnum().unwrap() as u64 as u8;
-    Ok(Value::bytes(&vm.globals, vec![num]))
+    let num = self_val.as_fixnum().unwrap();
+    if 0 > num || num > 255 {
+        return Err(vm.error_unimplemented("Currently, receiver must be 0..255."));
+    };
+    Ok(Value::bytes(&vm.globals, vec![num as u8]))
 }
 
 fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

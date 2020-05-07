@@ -1,5 +1,5 @@
 use crate::vm::*;
-use std::string::FromUtf8Error;
+//use std::string::FromUtf8Error;
 //#[macro_use]
 use crate::*;
 
@@ -20,16 +20,29 @@ impl RString {
         RString::Bytes(bytes)
     }
 
-    pub fn convert_to_str(&mut self) -> Result<(), FromUtf8Error> {
+    pub fn as_string(&self, vm: &VM) -> Result<&String, RubyError> {
         match self {
-            RString::Str(_) => Ok(()),
+            RString::Str(s) => Ok(s),
             RString::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
                 Ok(s) => {
-                    std::mem::replace(self, RString::Str(s));
-                    Ok(())
+                    let mut_rstring = self as *const RString as *mut RString;
+                    // Change RString::Bytes => RString::Str in place.
+                    std::mem::replace(unsafe { &mut *mut_rstring }, RString::Str(s));
+                    let s = match self {
+                        RString::Str(s) => s,
+                        RString::Bytes(_) => unreachable!(),
+                    };
+                    Ok(s)
                 }
-                Err(err) => Err(err),
+                Err(_) => Err(vm.error_argument("Invalid as UTF-8 string.")),
             },
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        match self {
+            RString::Str(s) => s.as_bytes(),
+            RString::Bytes(b) => b,
         }
     }
 
@@ -43,13 +56,6 @@ impl RString {
         }
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        match self {
-            RString::Str(s) => s.as_bytes(),
-            RString::Bytes(b) => b,
-        }
-    }
-
     pub fn to_s(&self) -> String {
         match self {
             RString::Str(s) => format!("{}", s),
@@ -60,9 +66,15 @@ impl RString {
     pub fn inspect(&self) -> String {
         match self {
             RString::Str(s) => format!("\"{}\"", s.escape_debug()),
-            RString::Bytes(b) => match String::from_utf8(b.clone()) {
+            RString::Bytes(bytes) => match std::str::from_utf8(bytes) {
                 Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                Err(_) => "<ByteArray>".to_string(),
+                Err(_) => {
+                    let mut s = String::new();
+                    for b in bytes {
+                        s = format!("{}\\x{:02X}", s, b);
+                    }
+                    format!("\"{}\"", s)
+                }
             },
         }
     }
@@ -139,46 +151,58 @@ pub fn init_string(globals: &mut Globals) -> Value {
 
 fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    match self_val.as_rvalue() {
-        Some(oref) => match &oref.kind {
-            ObjKind::String(rstr) => return Ok(Value::string(&vm.globals, rstr.to_s())),
-            _ => {}
-        },
-        None => {}
-    };
-    return Err(vm.error_argument("Receiver must be String."));
+    let self_ = self_val.as_rstring().unwrap();
+    Ok(Value::string(&vm.globals, self_.to_s()))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    match self_val.as_rvalue() {
-        Some(oref) => match &oref.kind {
-            ObjKind::String(rstr) => return Ok(Value::string(&vm.globals, rstr.inspect())),
-            _ => {}
-        },
-        None => {}
-    };
-    return Err(vm.error_argument("Receiver must be String."));
+    let self_ = self_val.as_rstring().unwrap();
+    Ok(Value::string(&vm.globals, self_.inspect()))
 }
 
 fn string_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    expect_string!(lhs, vm, self_val);
-    expect_string!(rhs, vm, args[0]);
-    let res = format!("{}{}", lhs, rhs);
-    Ok(Value::string(&vm.globals, res))
+    let lhs = self_val.as_rstring().unwrap();
+    let rhs = args[0]
+        .as_rstring()
+        .ok_or_else(|| vm.error_argument("1st arg must be String."))?;
+    match (lhs, rhs) {
+        (RString::Str(lhs), RString::Str(rhs)) => {
+            let res = format!("{}{}", lhs, rhs);
+            Ok(Value::string(&vm.globals, res))
+        }
+        (RString::Str(lhs), RString::Bytes(rhs)) => {
+            let mut lhs = lhs.as_bytes().to_vec();
+            lhs.append(&mut rhs.to_vec());
+            Ok(Value::bytes(&vm.globals, lhs))
+        }
+        (RString::Bytes(lhs), RString::Str(rhs)) => {
+            let mut lhs = lhs.to_vec();
+            lhs.append(&mut rhs.as_bytes().to_vec());
+            Ok(Value::bytes(&vm.globals, lhs))
+        }
+        (RString::Bytes(lhs), RString::Bytes(rhs)) => {
+            let mut lhs = lhs.to_vec();
+            lhs.append(&mut rhs.to_vec());
+            Ok(Value::bytes(&vm.globals, lhs))
+        }
+    }
 }
 
 fn string_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    expect_string!(lhs, vm, self_val);
-    let rhs = match args[0].expect_integer(vm, "Rhs must be Integer.")? {
+    let lhs = self_val.as_rstring().unwrap();
+    let rhs = match args[0].expect_integer(vm, "1st arg must be Integer.")? {
         i if i < 0 => return Err(vm.error_argument("Negative argument.")),
         i => i as usize,
     };
 
-    let res = lhs.repeat(rhs);
-    Ok(Value::string(&vm.globals, res))
+    let res = match lhs {
+        RString::Str(s) => Value::string(&vm.globals, s.repeat(rhs)),
+        RString::Bytes(b) => Value::bytes(&vm.globals, b.repeat(rhs)),
+    };
+    Ok(res)
 }
 
 fn string_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -579,22 +603,25 @@ fn string_sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_upcase(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_string!(string, vm, self_val);
-    let res = string.to_uppercase();
+    let self_ = vm.expect_string(&self_val, "Receiver")?;
+    let res = self_.to_uppercase();
     Ok(Value::string(&vm.globals, res))
 }
 
 fn string_chomp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_string!(string, vm, self_val);
-    let res = string.trim_end_matches('\n').to_string();
+    let self_ = vm.expect_string(&self_val, "Receiver")?;
+    let res = self_.trim_end_matches('\n').to_string();
     Ok(Value::string(&vm.globals, res))
 }
 
 fn string_toi(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_string!(string, vm, self_val);
-    let i: i64 = string.parse().unwrap();
+    let self_ = match vm.expect_string(&self_val, "Receiver") {
+        Ok(s) => s,
+        Err(_) => return Ok(Value::fixnum(0)),
+    };
+    let i: i64 = self_.parse().unwrap();
     Ok(Value::fixnum(i))
 }
 
@@ -725,6 +752,9 @@ mod test {
     fn string_upcase() {
         let program = r#"
         assert "RUBY IS GREAT.", "ruby is great.".upcase
+        a = ""
+        [114, 117, 98, 121, 32, 105, 115, 32, 103, 114, 101, 97, 116, 46].map{ |elem| a += elem.chr }
+        assert "RUBY IS GREAT.", a.upcase
         "#;
         assert_script(program);
     }
@@ -733,6 +763,9 @@ mod test {
     fn string_chomp() {
         let program = r#"
         assert "Ruby", "Ruby\n\n\n".chomp
+        a = ""
+        [82, 117, 98, 121, 10, 10, 10].map{ |elem| a += elem.chr }
+        assert "Ruby", a.chomp
         "#;
         assert_script(program);
     }
@@ -741,6 +774,9 @@ mod test {
     fn string_toi() {
         let program = r#"
         assert 1578, "1578".to_i
+        a = ""
+        [49, 53, 55, 56].map{ |elem| a += elem.chr }
+        assert 1578, a.to_i
         "#;
         assert_script(program);
     }
