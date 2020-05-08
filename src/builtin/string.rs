@@ -20,13 +20,16 @@ impl RString {
         RString::Bytes(bytes)
     }
 
+    /// Try to take reference of String from RString.
+    /// If byte sequence is invalid as UTF-8, return Err.
+    /// When valid, convert the byte sequence to UTF-8 string.
     pub fn as_string(&self, vm: &VM) -> Result<&String, RubyError> {
         match self {
             RString::Str(s) => Ok(s),
             RString::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
                 Ok(s) => {
                     let mut_rstring = self as *const RString as *mut RString;
-                    // Change RString::Bytes => RString::Str in place.
+                    // Convert RString::Bytes => RString::Str in place.
                     std::mem::replace(unsafe { &mut *mut_rstring }, RString::Str(s));
                     let s = match self {
                         RString::Str(s) => s,
@@ -39,6 +42,7 @@ impl RString {
         }
     }
 
+    /// Take reference of [u8] from RString.
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             RString::Str(s) => s.as_bytes(),
@@ -46,6 +50,7 @@ impl RString {
         }
     }
 
+    /// Parse string as i64 or f64.
     pub fn parse<F: FromStr>(&self) -> Option<F> {
         match self {
             RString::Str(s) => FromStr::from_str(s).ok(),
@@ -583,7 +588,7 @@ fn string_bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_chars(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_string!(string, vm, self_val);
+    let string = vm.expect_string(&self_val, "Receiver")?;
     let ary: Vec<Value> = string
         .chars()
         .map(|c| Value::string(&vm.globals, c.to_string()))
@@ -593,7 +598,7 @@ fn string_chars(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_bytes!(bytes, vm, self_val);
+    let bytes = self_val.as_bytes().unwrap();
     let mut sum = 0;
     for b in bytes {
         sum += *b as u64;
@@ -719,6 +724,9 @@ mod test {
     fn string_sum() {
         let program = r#"
         assert 394, "abcd".sum
+        a = ""
+        [114, 117, 98].map{ |elem| a += elem.chr}
+        assert 329, a.sum
         "#;
         assert_script(program);
     }

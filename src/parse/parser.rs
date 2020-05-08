@@ -209,7 +209,11 @@ impl Parser {
     pub fn get_context_depth(&self) -> usize {
         self.context_stack.len()
     }
-
+/*
+    fn context(&self) -> &Context {
+        self.context_stack.last().unwrap()
+    }
+*/
     fn context_mut(&mut self) -> &mut Context {
         self.context_stack.last_mut().unwrap()
     }
@@ -819,8 +823,12 @@ impl Parser {
         if let NodeKind::Ident(id) = lhs.kind {
             self.add_local_var_if_new(id);
         } else if let NodeKind::Const { toplevel: _, id: _ } = lhs.kind {
-            if self.context_mut().kind == ContextKind::Method {
-                return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment."));
+            for c in self.context_stack.iter().rev() {
+                match c.kind {
+                    ContextKind::Class => return Ok(()),
+                    ContextKind::Method => return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment.")),
+                    ContextKind::Block => {}
+                }
             }
         };
         Ok(())

@@ -745,6 +745,10 @@ impl VM {
                 }
                 Inst::SET_CONST => {
                     let id = self.read_id(iseq, 1);
+                    let mut parent = match self.stack_pop() {
+                        v if v == Value::nil() => self.class(),
+                        v => v,
+                    };
                     let val = self.stack_pop();
                     match val.as_module() {
                         Some(mut cref) => {
@@ -754,7 +758,7 @@ impl VM {
                         }
                         None => {}
                     }
-                    self.class().set_var(id, val);
+                    parent.set_var(id, val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {

@@ -625,6 +625,18 @@ fn const2() {
 }
 
 #[test]
+fn const3() {
+    let program = "
+        a = Class.new
+        a::B = Class.new
+        a::B::C = Class.new
+        a::B::C::D = 777
+        assert(777, a::B::C::D)
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn range1() {
     let program = "
     assert(Range.new(5,10), 5..10)

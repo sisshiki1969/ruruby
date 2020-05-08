@@ -417,8 +417,8 @@ impl Codegen {
         Codegen::push32(iseq, id.into());
     }
 
-    fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_cur_loc(iseq);
+    fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId, loc: Loc) {
+        self.save_loc(iseq, loc);
         iseq.push(Inst::GET_SCOPE);
         Codegen::push32(iseq, id.into());
     }
@@ -482,10 +482,15 @@ impl Codegen {
         match &lhs.kind {
             NodeKind::Ident(id) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, *id),
             NodeKind::Const { id, toplevel: _ } => {
+                self.gen_push_nil(iseq);
                 self.gen_set_const(iseq, *id);
             }
             NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
             NodeKind::GlobalVar(id) => self.gen_set_global_var(iseq, *id),
+            NodeKind::Scope(parent, id) => {
+                self.gen(globals, iseq, parent, true)?;
+                self.gen_set_const(iseq, *id);
+            }
             NodeKind::Send {
                 receiver, method, ..
             } => {
@@ -848,7 +853,7 @@ impl Codegen {
             }
             NodeKind::Scope(parent, id) => {
                 self.gen(globals, iseq, parent, true)?;
-                self.gen_get_scope(iseq, *id);
+                self.gen_get_scope(iseq, *id, node.loc);
                 if !use_value {
                     self.gen_pop(iseq)
                 };

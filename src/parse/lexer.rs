@@ -531,6 +531,7 @@ impl Lexer {
         }
         if self.consume('e') || self.consume('E') {
             s.push('e');
+            self.consume('+');
             if self.consume('-') {
                 s.push('-');
             }
