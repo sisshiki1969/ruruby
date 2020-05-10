@@ -52,11 +52,11 @@ for y in 0...size
 
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.
-    if (bit_num == 8)
+    if bit_num == 8
       print byte_acc.chr
       byte_acc = 0
       bit_num = 0
-    elsif (x == size - 1)
+    elsif x == size - 1
       byte_acc = byte_acc << (8 - bit_num)
       print byte_acc.chr
       byte_acc = 0

@@ -1,4 +1,4 @@
-# AO rebder benchmark 
+# AO rebder benchmark
 # Original program (C) Syoyo Fujita in Javascript (and other languages)
 #      http://lucille.atso-net.jp/blog/?p=642
 #      http://lucille.atso-net.jp/blog/?p=711
@@ -7,7 +7,7 @@
 
 IMAGE_WIDTH = 128
 IMAGE_HEIGHT = 128
-NSUBSAMPLES = 2
+NSUB_SAMPLES = 2
 NAO_SAMPLES = 8
 
 class Vec
@@ -18,7 +18,7 @@ class Vec
   end
 
   attr_accessor :x, :y, :z
-  
+
   def vadd(b)
     Vec.new(@x + b.x, @y + b.y, @z + b.z)
   end
@@ -26,11 +26,13 @@ class Vec
   def vsub(b)
     Vec.new(@x - b.x, @y - b.y, @z - b.z)
   end
-  
+
   def vcross(b)
-    Vec.new(@y * b.z - @z * b.y,
-            @z * b.x - @x * b.z,
-            @x * b.y - @y * b.x)
+    Vec.new(
+      @y * b.z - @z * b.y,
+      @z * b.x - @x * b.z,
+      @x * b.y - @y * b.x
+    )
   end
 
   def vdot(b)
@@ -44,7 +46,7 @@ class Vec
   def vnormalize
     len = vlength
     v = Vec.new(@x, @y, @z)
-    if len > 1.0e-17 then
+    if len > 1.0e-17
       v.x = v.x / len
       v.y = v.y / len
       v.z = v.z / len
@@ -59,7 +61,7 @@ class Sphere
     @center = center
     @radius = radius
   end
-  
+
   attr_accessor :center, :radius
 
   def intersect(ray, isect)
@@ -67,15 +69,17 @@ class Sphere
     b = rs.vdot(ray.dir)
     c = rs.vdot(rs) - (@radius * @radius)
     d = b * b - c
-    if d > 0.0 then
+    if d > 0.0
       t = - b - Math.sqrt(d)
 
-      if t > 0.0 && t < isect.t then
+      if t > 0.0 && t < isect.t
         isect.t = t
         isect.hit = true
-        isect.pl = Vec.new(ray.org.x + ray.dir.x * t, 
-                          ray.org.y + ray.dir.y * t, 
-                          ray.org.z + ray.dir.z * t)
+        isect.pl = Vec.new(
+          ray.org.x + ray.dir.x * t,
+          ray.org.y + ray.dir.y * t,
+          ray.org.z + ray.dir.z * t
+        )
         n = isect.pl.vsub(@center)
         isect.n = n.vnormalize
       else
@@ -96,22 +100,24 @@ class Plane
     d = -@p.vdot(@n)
     v = ray.dir.vdot(@n)
     v0 = v
-    if v < 0.0 then
+    if v < 0.0
       v0 = -v
     end
-    if v0 < 1.0e-17 then
+    if v0 < 1.0e-17
       return
     end
 
     t = -(ray.org.vdot(@n) + d) / v
 
-    if t > 0.0 && t < isect.t then
+    if t > 0.0 && t < isect.t
       isect.hit = true
       isect.t = t
       isect.n = @n
-      isect.pl = Vec.new(ray.org.x + t * ray.dir.x,
-                        ray.org.y + t * ray.dir.y,
-                        ray.org.z + t * ray.dir.z)
+      isect.pl = Vec.new(
+        ray.org.x + t * ray.dir.x,
+        ray.org.y + t * ray.dir.y,
+        ray.org.z + t * ray.dir.z
+      )
     end
     nil
   end
@@ -139,24 +145,24 @@ end
 
 def clamp(f)
   i = f * 255.5
-  if i > 255.0 then
+  if i > 255.0
     i = 255.0
   end
-  if i < 0.0 then
+  if i < 0.0
     i = 0.0
   end
   i.to_i
 end
 
-def otherBasis(basis, n)
+def other_basis(basis, n)
   basis[2] = Vec.new(n.x, n.y, n.z)
   basis[1] = Vec.new(0.0, 0.0, 0.0)
-  
-  if n.x < 0.6 && n.x > -0.6 then
+
+  if n.x < 0.6 && n.x > -0.6
     basis[1].x = 1.0
-  elsif n.y < 0.6 && n.y > -0.6 then
+  elsif n.y < 0.6 && n.y > -0.6
     basis[1].y = 1.0
-  elsif n.z < 0.6 && n.z > -0.6 then
+  elsif n.z < 0.6 && n.z > -0.6
     basis[1].z = 1.0
   else
     basis[1].x = 1.0
@@ -180,18 +186,20 @@ class Scene
 
   def ambient_occlusion(isect)
     basis = Array.new
-    otherBasis(basis, isect.n)
-    
+    other_basis(basis, isect.n)
+
     ntheta    = NAO_SAMPLES
     nphi      = NAO_SAMPLES
     eps       = 0.0001
     occlusion = 0.0
 
-    p0 = Vec.new(isect.pl.x + eps * isect.n.x, 
-                isect.pl.y + eps * isect.n.y, 
-                isect.pl.z + eps * isect.n.z)
-    nphi.times do |j|
-      ntheta.times do |i|
+    p0 = Vec.new(
+      isect.pl.x + eps * isect.n.x,
+      isect.pl.y + eps * isect.n.y,
+      isect.pl.z + eps * isect.n.z
+    )
+    nphi.times do |_|
+      ntheta.times do |_|
         r = rand
         phi = 2.0 * 3.14159265 * rand
         x = Math.cos(phi) * Math.sqrt(1.0 - r)
@@ -201,23 +209,23 @@ class Scene
         rx = x * basis[0].x + y * basis[1].x + z * basis[2].x
         ry = x * basis[0].y + y * basis[1].y + z * basis[2].y
         rz = x * basis[0].z + y * basis[1].z + z * basis[2].z
-        
+
         raydir = Vec.new(rx, ry, rz)
         ray = Ray.new(p0, raydir)
-        
+
         occisect = Isect.new
         @spheres[0].intersect(ray, occisect)
         @spheres[1].intersect(ray, occisect)
         @spheres[2].intersect(ray, occisect)
         @plane.intersect(ray, occisect)
-        if occisect.hit then
+        if occisect.hit
           occlusion = occlusion + 1.0
         else
           0.0
         end
       end
     end
-    
+
     occlusion = (ntheta.to_f * nphi.to_f - occlusion) / (ntheta.to_f * nphi.to_f)
 
     Vec.new(occlusion, occlusion, occlusion)
@@ -229,7 +237,7 @@ class Scene
     h.times do |y|
       w.times do |x|
         rad = Vec.new(0.0, 0.0, 0.0)
-        
+
         # Subsmpling
         nsubsamples.times do |v|
           nsubsamples.times do |u|
@@ -246,15 +254,15 @@ class Scene
             py = -(yf + (vf / nsf) - (hf / 2.0)) / (hf / 2.0)
 
             eye = Vec.new(px, py, -1.0).vnormalize
-            
+
             ray = Ray.new(Vec.new(0.0, 0.0, 0.0), eye)
-            
+
             isect = Isect.new
             @spheres[0].intersect(ray, isect)
             @spheres[1].intersect(ray, isect)
             @spheres[2].intersect(ray, isect)
             @plane.intersect(ray, isect)
-            if isect.hit then
+            if isect.hit
               col = ambient_occlusion(isect)
               rad.x = rad.x + col.x
               rad.y = rad.y + col.y
@@ -262,7 +270,7 @@ class Scene
             end
           end
         end
-        
+
         r = rad.x / (nsf * nsf)
         g = rad.y / (nsf * nsf)
         b = rad.z / (nsf * nsf)
@@ -272,7 +280,7 @@ class Scene
       end
       nil
     end
-    
+
     nil
   end
 end
@@ -281,5 +289,5 @@ end
   print("P6\n")
   print("#{ IMAGE_WIDTH } #{ IMAGE_HEIGHT }\n")
   print("255\n")
-  Scene.new.render(IMAGE_WIDTH, IMAGE_HEIGHT, NSUBSAMPLES)
+  Scene.new.render(IMAGE_WIDTH, IMAGE_HEIGHT, NSUB_SAMPLES)
 # end
