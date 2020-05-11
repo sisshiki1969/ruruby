@@ -9,11 +9,11 @@ class Complexe
   def initialize(r,i)
     @r=r; @i=i;
   end
-  def *(c)
-    Complexe.new(@r*c.r - @i*c.i, @r*c.i + @i*c.r)
+  def *(other)
+    Complexe.new(@r*other.r - @i*other.i, @r*other.i + @i*other.r)
   end
-  def +(c)
-    Complexe.new(@r + c.r, @i + c.i)
+  def +(other)
+    Complexe.new(@r + other.r, @i + other.i)
   end
   def abs2; @r*@r + @i*@i; end
 end
@@ -22,8 +22,8 @@ size = 200 # ARGV[0].to_i
 
 puts("P4\n#{size} #{size}")
 
-iTER = 49                           # Iterations - 1 for easy for..in looping
-lIMIT_SQUARED = 4.0                 # Presquared limit
+ITER = 49                           # Iterations - 1 for easy for..in looping
+LIMIT_SQUARED = 4.0                 # Presquared limit
 
 byte_acc = 0
 bit_num = 0
@@ -38,16 +38,16 @@ for y in 0..count_size
     escape = false
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
-    for dummy in 0..iTER
+    for dummy in 0..ITER
       z = z * z + c
-      if z.abs2 > lIMIT_SQUARED
+      if z.abs2 > LIMIT_SQUARED
         escape = true
         break
       end
     end
 
     byte_acc = (byte_acc << 1) | (escape ? 0 : 1)
-    bit_num = bit_num + 1
+    bit_num += 1
 
     # Code is very similar for these cases, but using separate blocks
     # ensures we skip the shifting when it's unnecessary, which is most cases.

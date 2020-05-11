@@ -10,11 +10,11 @@ class Complex_
     @r=r
     @i=i
   end
-  def *(c)
-    Complex_.new(@r*c.r - @i*c.i, @r*c.i + @i*c.r)
+  def *(other)
+    Complex_.new(@r*other.r - @i*other.i, @r*other.i + @i*other.r)
   end
-  def +(c)
-    Complex_.new(@r + c.r, @i + c.i)
+  def +(other)
+    Complex_.new(@r + other.r, @i + other.i)
   end
   def abs2
     @r*@r + @i*@i

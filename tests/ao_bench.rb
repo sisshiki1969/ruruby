@@ -55,7 +55,6 @@ class Vec
   end
 end
 
-
 class Sphere
   def initialize(center, radius)
     @center = center
@@ -219,7 +218,7 @@ class Scene
         @spheres[2].intersect(ray, occisect)
         @plane.intersect(ray, occisect)
         if occisect.hit
-          occlusion = occlusion + 1.0
+          occlusion += 1.0
         else
           0.0
         end
@@ -241,8 +240,7 @@ class Scene
         # Subsmpling
         nsubsamples.times do |v|
           nsubsamples.times do |u|
-
-            cnt = cnt + 1
+            cnt += 1
             wf = w.to_f
             hf = h.to_f
             xf = x.to_f
@@ -286,8 +284,8 @@ class Scene
 end
 
 # File.open("ao.ppm", "w") do |fp|
-  print("P6\n")
-  print("#{ IMAGE_WIDTH } #{ IMAGE_HEIGHT }\n")
-  print("255\n")
-  Scene.new.render(IMAGE_WIDTH, IMAGE_HEIGHT, NSUB_SAMPLES)
+print("P6\n")
+print("#{ IMAGE_WIDTH } #{ IMAGE_HEIGHT }\n")
+print("255\n")
+Scene.new.render(IMAGE_WIDTH, IMAGE_HEIGHT, NSUB_SAMPLES)
 # end
