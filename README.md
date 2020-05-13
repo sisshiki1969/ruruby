@@ -68,6 +68,32 @@ An alternative Ruby implementation by Rust.
   - [x] Open class (Ad-hoc class definition)
   - [x] Module
 
+## Performance
+
+Currently, ruruby's performance in speed is not satisfactory.
+Here is a preliminary report:
+
+| benchmark           | ruruby  | CRuby(2.8.0) |
+| ------------------- | :-----: | :----------: |
+| so_mandelbrot.rb\*  | 2.88 s  |    1.89 s    |
+| app_mandelbrot.rb\* | 6.83 s  |    2.35 s    |
+| app_aobench.rb\*    | 27.96 s |    9.01 s    |
+| app_fib.rb\*        | 1.51 s  |    0.32 s    |
+| optcarrot\*\*       | 19.68 s |    4.05 s    |
+
+Execution time in seconds are shown.
+The lower, the better.
+\*available on https://github.com/ruby/ruby/blob/master/benchmark/
+\*\*Optcarrot is NES emulator, and a semi-official benchmark program for Ruby, which is available on https://github.com/mame/optcarrot
+
+Optcarrot benchmark result
+| benchmark | ruruby | CRuby(2.8.0) |
+|-------------|:--------:|:-------------:|
+| optcarrot | 9.62 fps | 48.8 fps |
+
+Frames per seconds are shown.
+The higher, the better.
+
 ## How to run ruruby
 
 To build ruruby, You'll need installation of Rust.
