@@ -4,15 +4,19 @@ An alternative Ruby implementation by Rust.
 
 ## Feature
 
-- Purely implemented with Rust. No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
+- Purely implemented with Rust.
+- No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
 - Hand-written original parser.
 - Virtual machine execution.
 
-## Related article
+## Related article (sorry, currently only in Japanese)
 
 [Qiita: Rust でつくる（つくれるかもしれない）Ruby](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)
 
 ## Implementation status
+
+Attention: Still in alpha, so the implementation and builtin libraries are immature.
+Please note that the 'implementation status' listed in README are currently functional but still incomplete.
 
 - Literals
   - [x] Bool
@@ -81,23 +85,24 @@ Here is a preliminary report:
 | app_fib.rb\*        | 1.51 s  |    0.32 s    |
 | optcarrot\*\*       | 19.68 s |    4.05 s    |
 
-Execution time in seconds are shown.
-The lower, the better.
-\*available on https://github.com/ruby/ruby/blob/master/benchmark/
-\*\*Optcarrot is NES emulator, and a semi-official benchmark program for Ruby, which is available on https://github.com/mame/optcarrot
+Run on WSL2 on Windows10 with Intel Corei7-7700 @ 3.60GHz.  
+Execution time in seconds are shown.  
+The lower, the better.  
+\*available on https://github.com/ruby/ruby/blob/master/benchmark/  
+\*\*Optcarrot is NES emulator, and a semi-official benchmark program for Ruby, on https://github.com/mame/optcarrot
 
-Optcarrot benchmark result
+Optcarrot benchmark results
 | benchmark | ruruby | CRuby(2.8.0) |
-|-------------|:--------:|:-------------:|
+|-----------|:------:|:------------:|
 | optcarrot | 9.62 fps | 48.8 fps |
 
-Frames per seconds are shown.
+Frames per seconds are shown.  
 The higher, the better.
 
 ## How to run ruruby
 
 To build ruruby, You'll need installation of Rust.
-Be aware that only nightly version of Rust works for ruruby.
+Please be aware that **only nightly version of Rust works** for ruruby.
 
 To run ruby program file on ruruby,
 
