@@ -15,8 +15,9 @@ An alternative Ruby implementation by Rust.
 
 ## Implementation status
 
-Attention: Still in alpha, so the implementation and builtin libraries are immature.
-Please note that the 'implementation status' listed in README are currently functional but still incomplete.
+Attention:
+Still in alpha, so the implementation and builtin libraries are immature.  
+Please note that some of features listed below are functional but still currently incomplete.
 
 - Literals
   - [x] Bool
@@ -29,7 +30,7 @@ Please note that the 'implementation status' listed in README are currently func
   - [x] Lambda literal
   - [x] Block literal
   - [x] Regular expression
-- Objects
+- Builtin Class
   - [x] Integer
   - [x] Float
   - [x] Symbol
@@ -74,7 +75,7 @@ Please note that the 'implementation status' listed in README are currently func
 
 ## Performance
 
-Currently, ruruby's performance in speed is not satisfactory.
+Currently, performance of ruruby in speed is not satisfactory.
 Here is a preliminary report:
 
 | benchmark           | ruruby  | CRuby(2.8.0) |
@@ -85,7 +86,7 @@ Here is a preliminary report:
 | app_fib.rb\*        | 1.51 s  |    0.32 s    |
 | optcarrot\*\*       | 19.68 s |    4.05 s    |
 
-Run on WSL2 on Windows10 with Intel Corei7-7700 @ 3.60GHz.  
+(Run on WSL2 on Windows10 with Intel Corei7-7700 @ 3.60GHz.)  
 Execution time in seconds are shown.  
 The lower, the better.  
 \*available on https://github.com/ruby/ruby/blob/master/benchmark/  
