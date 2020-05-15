@@ -100,6 +100,37 @@ Optcarrot benchmark results
 Frames per seconds are shown.  
 The higher, the better.
 
+## Memory consumption
+
+### benchmark: app_aobench.rb
+
+(producing and consuming huge number of objects)
+
+| engine        | max resident set size |
+| ------------- | :-------------------: |
+| CRuby(GC on)  |         15 MB         |
+| CRuby(GC off) |        1649 MB        |
+| ruruby        |        3864 MB        |
+
+### benchmark: fibo.rb
+
+(producing almost no objects, huge number of method calls)
+
+| engine        | max resident set size |
+| ------------- | :-------------------: |
+| CRuby(GC on)  |        13.7 MB        |
+| CRuby(GC off) |        13.9 MB        |
+| ruruby        |        2.1 MB         |
+
+### benchmark: optcarrot (benchmark mode)
+
+(a lot of arithmetic and array operations)
+| engine |max resident set size|
+|-----------------|:---------:|
+| CRuby(GC on) | 82.5 MB |
+| CRuby(GC off) | 85.5 MB|
+| ruruby | 355.6 MB |
+
 ## How to run ruruby
 
 To build ruruby, You'll need installation of Rust.
