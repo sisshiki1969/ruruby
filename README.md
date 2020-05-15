@@ -102,9 +102,11 @@ The higher, the better.
 
 ## Memory consumption
 
-### benchmark: app_aobench.rb
+To investigate memory consumption, maximum resident set size was measured using gnu-time.
 
-(producing and consuming huge number of objects)
+### app_aobench.rb
+
+(this bencchmark program produce and consume huge number of objects)
 
 | engine        | max resident set size |
 | ------------- | :-------------------: |
@@ -112,7 +114,7 @@ The higher, the better.
 | CRuby(GC off) |        1649 MB        |
 | ruruby        |        3864 MB        |
 
-### benchmark: fibo.rb
+### fibo.rb
 
 (producing almost no objects, huge number of method calls)
 
@@ -122,7 +124,7 @@ The higher, the better.
 | CRuby(GC off) |        13.9 MB        |
 | ruruby        |        2.1 MB         |
 
-### benchmark: optcarrot (benchmark mode)
+### optcarrot (benchmark mode)
 
 (a lot of arithmetic and array operations)
 | engine |max resident set size|
