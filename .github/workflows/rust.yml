@@ -8,8 +8,6 @@ jobs:
 
     container:
       image: xd009642/tarpaulin
-      volumes:
-        - $GITHUB_WORKSPACE:/volume
       options: --security-opt seccomp=unconfined
 
     steps:
@@ -25,7 +23,3 @@ jobs:
         run: cargo tarpaulin -v --out Xml
       - name: Codecov
         uses: codecov/codecov-action@v1.0.7
-        with:
-          file: ./coverage.xml
-          name: codecov-umbrella
-          fail_ci_if_error: true
