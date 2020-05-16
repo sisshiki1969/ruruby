@@ -6,6 +6,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: xd009642/tarpaulin
+      volumes:
+        - $GITHUB_WORKSPACE:/volume
+      options: --security-opt seccomp=unconfined
+
     steps:
       - uses: actions/checkout@master
       - name: Install latest nightly
@@ -16,7 +22,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo tarpaulin -v --out Xml
       - name: Codecov
         uses: codecov/codecov-action@v1.0.7
         with:
