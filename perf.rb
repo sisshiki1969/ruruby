@@ -3,12 +3,33 @@
 
 require 'open3'
 
-@md1 = "# ruruby benchmark results\n\n|benchmark|ruby|ruruby|rate|\n|:-----------:|:--------:|:---------:|:-------:|\n"
+`ruby -v`.match(/ruby (\d*).(\d*).(\d*)/) { @ruby_version = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}.#{Regexp.last_match(3)}" }
+`cat /proc/cpuinfo`.match(/model name\s*:\s(.*)/) { @cpu_info = Regexp.last_match(1) }
+`cat /etc/os-release`.match(/PRETTY_NAME=\"(.*)\"/) { @os_info = Regexp.last_match(1) }
+
+@md0 = "# ruruby benchmark results\n
+## environment\n
+Ruby version: #{@ruby_version}  \nCPU: #{@cpu_info}  \nOS: #{@os_info}  \n\n"
+
+puts "Ruby version: #{@ruby_version}"
+puts "OS: #{@os_info}"
+puts "CPU: #{@cpu_info}"
+
+@md1 = "## execution time\n
+|benchmark|ruby|ruruby|rate|
+|:-----------:|:--------:|:---------:|:-------:|
+"
+@md2 = "## memory consumption\n
+|benchmark|ruby|ruruby|rate|
+|:-----------:|:--------:|:---------:|:-------:|
+"
+
+puts "Ruby version: #{@ruby_version}"
 
 `set -x`
 `cargo build --release`
 
-def print_cmp(kind, ruby, ruruby)
+def unit_conv(ruruby, ruby)
   ch = ''
   if ruruby > 1_000_000
     ruruby = ruruby.to_f / 1_000_000
@@ -19,6 +40,12 @@ def print_cmp(kind, ruby, ruruby)
     ruby = ruby.to_f / 1000
     ch = ' K'
   end
+  [ruruby, ruby, ch]
+end
+
+def print_cmp(kind, ruby, ruruby)
+  ruruby, ruby, ch = unit_conv(ruruby, ruby)
+
   if ruby.is_a?(Float)
     res_ruby = "%6.2f#{ch}" % ruby
     res_ruruby = format("%6.2f#{ch}", ruruby)
@@ -30,14 +57,14 @@ def print_cmp(kind, ruby, ruruby)
 end
 
 def get_results(e)
-  e.match(/real\s*(\d*).(\d*)/)
-  real = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
-  e.match(/user\s*(\d*).(\d*)/)
+  e.match(/(\d*):(\d*).(\d*)elapsed/)
+  real = "#{Regexp.last_match(2)}.#{Regexp.last_match(3)}".to_f + Regexp.last_match(1).to_i * 60
+  e.match(/(\d*).(\d*)user/)
   user = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
-  e.match(/sys\s*(\d*).(\d*)/)
+  e.match(/(\d*).(\d*)system/)
   sys = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
 
-  e.match(/(\d*)\s*maximum resident set size/)
+  e.match(/(\d*)maxresident/)
   rss = Regexp.last_match(1).to_i
 
   [real, user, sys, rss]
@@ -45,10 +72,10 @@ end
 
 def perf(app_name)
   puts "benchmark: #{app_name}"
-  o, e, s = Open3.capture3("/usr/bin/time -lp ruby tests/#{app_name} > /dev/null")
+  o, e, s = Open3.capture3("/usr/bin/time ruby tests/#{app_name} > /dev/null")
   real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(e)
 
-  o, e, s = Open3.capture3("/usr/bin/time -lp ./target/release/ruruby tests/#{app_name} > mandel.ppm")
+  o, e, s = Open3.capture3("/usr/bin/time ./target/release/ruruby tests/#{app_name} > mandel.ppm")
   real_ruruby, user_ruruby, sys_ruruby, rss_ruruby = get_results(e)
 
   # `convert mandel.ppm mandel.jpg`
@@ -57,8 +84,12 @@ def perf(app_name)
   print_cmp('user', user_ruby, user_ruruby)
   print_cmp('sys', sys_ruby, sys_ruruby)
   print_cmp('rss', rss_ruby, rss_ruruby)
-  mul = real_ruruby.to_f / real_ruby.to_f
-  @md1 += "| #{app_name} | #{real_ruby} s | #{real_ruruby} s | x#{'%.2f' % mul} |\n"
+
+  real_mul = real_ruruby.to_f / real_ruby.to_f
+  @md1 += "| #{app_name} | #{real_ruby} s | #{real_ruruby} s | x #{'%.2f' % real_mul} |\n"
+  rss_mul = rss_ruruby.to_f / rss_ruby.to_f
+  rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby, rss_ruby)
+  @md2 += "| #{app_name} | #{'%.2f' % rss_ruby} #{ch} | #{'%.2f' % rss_ruruby} #{ch} | x #{'%.2f' % rss_mul} |\n"
 end
 
 ['so_mandelbrot.rb',
@@ -67,6 +98,9 @@ end
  'block.rb',
  'ao_bench.rb'].each { |x| perf x }
 
+@md1 += "Ruby version: #{@ruby_version}  \n"
+@md1 += "CPU: #{@cpu_info}  \n"
+
 File.open('perf.md', mode = 'w') do |f|
-  f.write(@md1) # ファイルに書き込む
+  f.write(@md0 + @md1 + @md2)
 end
