@@ -3,9 +3,39 @@
 
 require 'open3'
 
+if RUBY_PLATFORM =~ /linux/
+  @platform = :linux
+elsif RUBY_PLATFORM =~ /(darwin|mac os)/
+  @platform = :macos
+else
+  raise 'unknown platform'
+end
+
 `ruby -v`.match(/ruby (\d*).(\d*).(\d*)/) { @ruby_version = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}.#{Regexp.last_match(3)}" }
-`cat /proc/cpuinfo`.match(/model name\s*:\s(.*)/) { @cpu_info = Regexp.last_match(1) }
-`cat /etc/os-release`.match(/PRETTY_NAME=\"(.*)\"/) { @os_info = Regexp.last_match(1) }
+
+if @platform == :macos
+  `sysctl machdep.cpu.brand_string`.match(/brand_string:\s*(.*)/)
+else
+  `cat /proc/cpuinfo`.match(/model name\s*:\s(.*)/)
+end
+@cpu_info = Regexp.last_match(1)
+
+if @platform == :macos
+  sw = `sw_vers`
+  sw.match(/ProductName:\s*(.*)/)
+  @os_info = Regexp.last_match(1)
+  sw.match(/ProductVersion:\s*(.*)/)
+  @os_info += ' ' + Regexp.last_match(1)
+else
+  `cat /etc/os-release`.match(/PRETTY_NAME=\"(.*)\"/)
+  @os_info = Regexp.last_match(1)
+end
+
+@time_command = if @platform == :macos
+                  'gtime'
+                else
+                  '/usr/bin/time'
+                end
 
 @md0 = "# ruruby benchmark results\n
 ## environment\n
@@ -19,7 +49,7 @@ puts "CPU: #{@cpu_info}"
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
 "
-@md2 = "## memory consumption\n
+@md2 = "\n## memory consumption\n
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
 "
@@ -72,10 +102,10 @@ end
 
 def perf(app_name)
   puts "benchmark: #{app_name}"
-  o, e, s = Open3.capture3("/usr/bin/time ruby tests/#{app_name} > /dev/null")
+  o, e, s = Open3.capture3("#{@time_command} ruby tests/#{app_name} > /dev/null")
   real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(e)
 
-  o, e, s = Open3.capture3("/usr/bin/time ./target/release/ruruby tests/#{app_name} > mandel.ppm")
+  o, e, s = Open3.capture3("#{@time_command} ./target/release/ruruby tests/#{app_name} > mandel.ppm")
   real_ruruby, user_ruruby, sys_ruruby, rss_ruruby = get_results(e)
 
   # `convert mandel.ppm mandel.jpg`
@@ -97,9 +127,6 @@ end
  'fibo.rb',
  'block.rb',
  'ao_bench.rb'].each { |x| perf x }
-
-@md1 += "Ruby version: #{@ruby_version}  \n"
-@md1 += "CPU: #{@cpu_info}  \n"
 
 File.open('perf.md', mode = 'w') do |f|
   f.write(@md0 + @md1 + @md2)

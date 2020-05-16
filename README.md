@@ -106,7 +106,7 @@ To investigate memory consumption, maximum resident set size was measured using 
 
 ### app_aobench.rb
 
-(this bencchmark program produce and consume huge number of objects)
+(this benchmark program produce and consume huge number of objects)
 
 | engine        | max resident set size |
 | ------------- | :-------------------: |
