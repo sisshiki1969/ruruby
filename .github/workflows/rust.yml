@@ -4,17 +4,22 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@master
-    - name: Install latest nightly
-      uses: actions-rs/toolchain@v1
-      with:
+      - uses: actions/checkout@master
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
           toolchain: nightly
           override: true
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Codecov
+        uses: codecov/codecov-action@v1.0.7
+        with:
+          file: ./coverage.xml
+          name: codecov-umbrella
+          fail_ci_if_error: true
