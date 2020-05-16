@@ -13,6 +13,7 @@ pub fn repl_vm() {
     );
     println!("RValue: {}", std::mem::size_of::<RValue>());
     println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
+    println!("RString: {}", std::mem::size_of::<RString>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();

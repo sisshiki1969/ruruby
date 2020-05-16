@@ -122,8 +122,6 @@ impl PartialEq for Value {
             return false;
         };
         match (&self.rvalue().kind, &other.rvalue().kind) {
-            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
-            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
@@ -181,6 +179,7 @@ impl Value {
     pub fn from(id: u64) -> Self {
         Value(id)
     }
+
     pub fn dup(&self) -> Self {
         match self.as_rvalue() {
             Some(rv) => rv.dup().pack(),
@@ -238,23 +237,11 @@ impl Value {
     }
 
     pub fn get_class_object(&self, globals: &Globals) -> Value {
-        match self.as_rvalue() {
-            None => {
-                if self.is_packed_fixnum() {
-                    globals.builtins.integer
-                } else if self.is_packed_num() {
-                    globals.builtins.float
-                } else if self.is_packed_symbol() {
-                    globals.builtins.object
-                } else {
-                    globals.builtins.object
-                }
-            }
-            Some(info) => match &info.kind {
-                ObjKind::Integer(_) => globals.builtins.integer,
-                ObjKind::Float(_) => globals.builtins.float,
-                _ => info.search_class(),
-            },
+        match self.unpack() {
+            RV::Integer(_) => globals.builtins.integer,
+            RV::Float(_) => globals.builtins.float,
+            RV::Object(info) => info.search_class(),
+            _ => globals.builtins.object,
         }
     }
 
