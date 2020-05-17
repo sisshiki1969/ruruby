@@ -1,4 +1,4 @@
-# ruruby ![ruruby](https://github.com/sisshiki1969/ruruby/workflows/Rust/badge.svg)
+# ruruby ![ruruby](https://github.com/sisshiki1969/ruruby/workflows/Rust/badge.svg)![codecov](https://codecov.io/gh/sisshiki1969/ruruby/branch/master/graph/badge.svg)
 
 An alternative Ruby implementation by Rust.
 
