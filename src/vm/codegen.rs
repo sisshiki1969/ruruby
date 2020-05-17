@@ -905,6 +905,7 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::DIV);
+                        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::Exp => {
                         self.gen(globals, iseq, lhs, true)?;

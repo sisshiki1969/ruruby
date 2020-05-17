@@ -89,8 +89,8 @@ Here is a preliminary report:
 (Run on WSL2 on Windows10 with Intel Corei7-7700 @ 3.60GHz.)  
 Execution time in seconds are shown.  
 The lower, the better.  
-\*available on https://github.com/ruby/ruby/blob/master/benchmark/  
-\*\*Optcarrot is NES emulator, and a semi-official benchmark program for Ruby, on https://github.com/mame/optcarrot
+\*available on <https://github.com/ruby/ruby/blob/master/benchmark/>  
+\*\*Optcarrot is NES emulator, and a semi-official benchmark program for Ruby, on <https://github.com/mame/optcarrot>
 
 Optcarrot benchmark results
 | benchmark | ruruby | CRuby(2.8.0) |

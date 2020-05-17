@@ -172,7 +172,6 @@ impl Inst {
             | Inst::PUSH_TRUE
             | Inst::PUSH_FALSE
             | Inst::PUSH_SELF
-            | Inst::DIV
             | Inst::REM
             | Inst::POW
             | Inst::EQ
@@ -216,6 +215,7 @@ impl Inst {
             | Inst::ADD                 // inline cache: u32
             | Inst::SUB                 // inline cache: u32
             | Inst::MUL                 // inline cache: u32
+            | Inst::DIV                 // inline cache: u32
             | Inst::ADDI                // inline cache: u32
             | Inst::SUBI                // inline cache: u32
             | Inst::SHL                 // inline cache: u32

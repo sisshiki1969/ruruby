@@ -128,6 +128,6 @@ end
  'block.rb',
  'ao_bench.rb'].each { |x| perf x }
 
-File.open('perf.md', mode = 'w') do |f|
+File.open('bench.md', mode = 'w') do |f|
   f.write(@md0 + @md1 + @md2)
 end

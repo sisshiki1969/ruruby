@@ -606,9 +606,9 @@ impl VM {
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_div(lhs, rhs)?;
+                    let val = self.eval_div(lhs, rhs, iseq)?;
                     self.stack_push(val);
-                    self.pc += 1;
+                    self.pc += 5;
                 }
                 Inst::REM => {
                     let lhs = self.stack_pop();
@@ -1474,6 +1474,22 @@ impl VM {
     }
 }
 
+macro_rules! eval_op_i {
+    ($vm:ident, $iseq:ident, $lhs:expr, $i:ident, $op:ident, $id:expr) => {
+        if $lhs.is_packed_fixnum() {
+            return Ok(Value::fixnum($lhs.as_packed_fixnum().$op($i as i64)));
+        } else if $lhs.is_packed_num() {
+            return Ok(Value::flonum($lhs.as_packed_flonum().$op($i as f64)));
+        }
+        let val = match $lhs.unpack() {
+            RV::Integer(lhs) => Value::fixnum(lhs.$op($i as i64)),
+            RV::Float(lhs) => Value::flonum(lhs.$op($i as f64)),
+            _ => return $vm.fallback_to_method($id, $lhs, Value::fixnum($i as i64)),
+        };
+        return Ok(val);
+    };
+}
+
 macro_rules! eval_op {
     ($vm:ident, $iseq:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         let val = match ($lhs.unpack(), $rhs.unpack()) {
@@ -1508,32 +1524,17 @@ impl VM {
 
     fn eval_addi(&mut self, lhs: Value, i: i32) -> VMResult {
         use std::ops::Add;
-        let val = match lhs.unpack() {
-            RV::Integer(lhs) => Value::fixnum(lhs.add(i as i64)),
-            RV::Float(lhs) => Value::flonum(lhs.add(i as f64)),
-            _ => return self.fallback_to_method(IdentId::_ADD, lhs, Value::fixnum(i as i64)),
-        };
-        Ok(val)
+        eval_op_i!(self, iseq, lhs, i, add, IdentId::_ADD);
     }
 
     fn eval_subi(&mut self, lhs: Value, i: i32) -> VMResult {
-        let val = match lhs.unpack() {
-            RV::Integer(lhs) => Value::fixnum(lhs - i as i64),
-            RV::Float(lhs) => Value::flonum(lhs - i as f64),
-            _ => return self.fallback_to_method(IdentId::_SUB, lhs, Value::fixnum(i as i64)),
-        };
-        Ok(val)
+        use std::ops::Sub;
+        eval_op_i!(self, iseq, lhs, i, sub, IdentId::_SUB);
     }
 
-    fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn eval_div(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
         use std::ops::Div;
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs.div(rhs))),
-            (RV::Integer(lhs), RV::Float(rhs)) => Ok(Value::flonum((lhs as f64).div(rhs))),
-            (RV::Float(lhs), RV::Integer(rhs)) => Ok(Value::flonum(lhs.div(rhs as f64))),
-            (RV::Float(lhs), RV::Float(rhs)) => Ok(Value::flonum(lhs.div(rhs))),
-            (_, _) => return Err(self.error_undefined_op("/", rhs, lhs)),
-        }
+        eval_op!(self, iseq, rhs, lhs, div, IdentId::_DIV);
     }
 
     fn eval_rem(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -1577,6 +1578,11 @@ impl VM {
     }
 
     fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(
+                lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
+            ));
+        }
         match lhs.unpack() {
             RV::Integer(lhs) => {
                 match rhs.as_fixnum() {
@@ -1599,6 +1605,11 @@ impl VM {
     }
 
     fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(
+                lhs.as_packed_fixnum() >> rhs.as_packed_fixnum(),
+            ));
+        }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs >> rhs)),
             (_, _) => return Err(self.error_undefined_op(">>", rhs, lhs)),
@@ -1606,6 +1617,11 @@ impl VM {
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(
+                lhs.as_packed_fixnum() & rhs.as_packed_fixnum(),
+            ));
+        }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs & rhs)),
             (_, _) => return Err(self.error_undefined_op("&", rhs, lhs)),
@@ -1613,6 +1629,11 @@ impl VM {
     }
 
     fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(
+                lhs.as_packed_fixnum() | rhs.as_packed_fixnum(),
+            ));
+        }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs | rhs)),
             (_, _) => return Err(self.error_undefined_op("|", rhs, lhs)),
@@ -1620,6 +1641,11 @@ impl VM {
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(
+                lhs.as_packed_fixnum() ^ rhs.as_packed_fixnum(),
+            ));
+        }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs ^ rhs)),
             (_, _) => return Err(self.error_undefined_op("^", rhs, lhs)),

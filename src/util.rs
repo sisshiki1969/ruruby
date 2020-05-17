@@ -289,6 +289,7 @@ impl IdentId {
     pub const _NEQ: IdentId = id!(12);
     pub const _GT: IdentId = id!(13);
     pub const _GE: IdentId = id!(14);
+    pub const _DIV: IdentId = id!(15);
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -320,6 +321,7 @@ impl IdentifierTable {
         table.set_ident_id("!=", IdentId::_NEQ);
         table.set_ident_id(">", IdentId::_GT);
         table.set_ident_id(">=", IdentId::_GE);
+        table.set_ident_id("/", IdentId::_DIV);
         table
     }
 
