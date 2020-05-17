@@ -7,4 +7,5 @@
 .github
 .devcontainer
 .*
+cobertura.xml
 
