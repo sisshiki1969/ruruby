@@ -150,6 +150,8 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "upcase", string_upcase);
     globals.add_builtin_instance_method(class, "chomp", string_chomp);
     globals.add_builtin_instance_method(class, "to_i", string_toi);
+    globals.add_builtin_instance_method(class, "<", lt);
+    globals.add_builtin_instance_method(class, ">", gt);
 
     Value::class(globals, class)
 }
@@ -630,9 +632,40 @@ fn string_toi(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::fixnum(i))
 }
 
+fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let lhs = self_val.as_rstring().unwrap();
+    match lhs.cmp(args[0]) {
+        Some(ord) => Ok(Value::bool(ord == Ordering::Less)),
+        None => Ok(Value::bool(false)),
+    }
+}
+
+fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let lhs = self_val.as_rstring().unwrap();
+    match lhs.cmp(args[0]) {
+        Some(ord) => Ok(Value::bool(ord == Ordering::Greater)),
+        None => Ok(Value::bool(false)),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
+
+    #[test]
+    fn string_test() {
+        let program = r#"
+        assert true, "a" < "b"
+        assert false, "b" < "b"
+        assert false, "c" < "b"
+        assert false, "a" > "b"
+        assert false, "b" > "b"
+        assert true, "c" > "b"
+        "#;
+        assert_script(program);
+    }
 
     #[test]
     fn string_add() {

@@ -254,57 +254,78 @@ mod test {
     #[test]
     fn hash1() {
         let program = r#"
-    h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7", "ruby" => "string", :ruby => "symbol"}
-    assert(h[true], "true")
-    assert(h[false], "false")
-    assert(h[nil], "nil")
-    assert(h[100], "100")
-    assert(h[7.7], "7.7")
-    assert(h["ruby"], "string")
-    assert(h[:ruby], "symbol")
-    "#;
+            h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7", "ruby" => "string", :ruby => "symbol"}
+            assert(h[true], "true")
+            assert(h[false], "false")
+            assert(h[nil], "nil")
+            assert(h[100], "100")
+            assert(h[7.7], "7.7")
+            assert(h["ruby"], "string")
+            assert(h[:ruby], "symbol")
+            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby])
+            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol"])
+        "#;
         assert_script(program);
     }
 
     #[test]
     fn hash2() {
         let program = r#"
-    h = {true: "true", false: "false", nil: "nil", 100 => "100", 7.7 => "7.7", ruby: "string"}
-    assert(h[:true], "true")
-    assert(h[:false], "false")
-    assert(h[:nil], "nil")
-    assert(h[100], "100")
-    assert(h[7.7], "7.7")
-    assert(h[:ruby], "string")
-    "#;
+            h = {true: "true", false: "false", nil: "nil", 100 => "100", 7.7 => "7.7", ruby: "string"}
+            assert(h[:true], "true")
+            assert(h[:false], "false")
+            assert(h[:nil], "nil")
+            assert(h[100], "100")
+            assert(h[7.7], "7.7")
+            assert(h[:ruby], "string")
+            a = []
+            h.each_key{|k| a << k}
+            assert([], a - [:true, :false, :nil, 100, 7.7, :ruby])
+            a = []
+            h.each_value{|v| a << v}
+            assert([], a - ["true", "false", "nil", "100", "7.7", "string"])
+            a = []
+            h.each{|k, v| a << [k, v];}
+            assert([], a - [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
+        "#;
         assert_script(program);
     }
 
     #[test]
     fn hash3() {
         let program = r#"
-    h1 = {a: "symbol", c:nil, d:nil}
-    assert(h1.has_key?(:a), true)
-    assert(h1.has_key?(:b), false)
-    assert(h1.has_value?("symbol"), true)
-    assert(h1.has_value?(500), false)
-    assert(h1.length, 3)
-    assert(h1.size, 3)
-    #assert(h1.keys, [:a, :d, :c])
-    #assert(h1.values, ["symbol", nil, nil])
-    h2 = h1.clone()
-    h2[:b] = 100
-    assert(h2[:b], 100)
-    assert(h1[:b], nil)
-    h3 = h2.compact
-    assert(h3.delete(:a), "symbol")
-    assert(h3.empty?, false)
-    assert(h3.delete(:b), 100)
-    assert(h3.delete(:c), nil)
-    assert(h3.empty?, true)
-    h2.clear()
-    assert(h2.empty?, true)
-    "#;
+            h1 = {a: "symbol", c:nil, d:nil}
+            assert(h1.has_key?(:a), true)
+            assert(h1.has_key?(:b), false)
+            assert(h1.has_value?("symbol"), true)
+            assert(h1.has_value?(500), false)
+            assert(h1.length, 3)
+            assert(h1.size, 3)
+            #assert(h1.keys, [:a, :d, :c])
+            #assert(h1.values, ["symbol", nil, nil])
+            h2 = h1.clone()
+            h2[:b] = 100
+            assert(h2[:b], 100)
+            assert(h1[:b], nil)
+            h3 = h2.compact
+            assert(h3.delete(:a), "symbol")
+            assert(h3.empty?, false)
+            assert(h3.delete(:b), 100)
+            assert(h3.delete(:c), nil)
+            assert(h3.empty?, true)
+            h2.clear()
+            assert(h2.empty?, true)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn hash_select() {
+        let program = r#"
+            h = { "a" => 100, "b" => 200, "c" => 300 }
+            assert({"b" => 200, "c" => 300}, h.select {|k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
+            assert({"a" => 100}, h.select {|k,v| v < 200})  #=> {"a" => 100}
+        "#;
         assert_script(program);
     }
 
