@@ -143,12 +143,37 @@ fn pop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn shift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_range(args.len(), 0, 1)?;
+    let mut array_flag = false;
+    let num = if args.len() == 0 {
+        0
+    } else {
+        let i = args[0].expect_integer(vm, "1st arg")?;
+        if i < 0 {
+            return Err(vm.error_argument("Negative array size."));
+        }
+        array_flag = true;
+        i as usize
+    };
+
     let mut aref = vm.expect_array(self_val, "Receiver")?;
-    let new = aref.elements.split_off(1);
-    let res = aref.elements[0];
-    aref.elements = new;
-    Ok(res)
+    if array_flag {
+        if aref.elements.len() < num {
+            return Ok(Value::array_from(&vm.globals, vec![]));
+        }
+        let new = aref.elements.split_off(num);
+        let res = aref.elements[0..num].to_vec();
+        aref.elements = new;
+        Ok(Value::array_from(&vm.globals, res))
+    } else {
+        if aref.elements.len() == 0 {
+            return Ok(Value::nil());
+        }
+        let new = aref.elements.split_off(1);
+        let res = aref.elements[0];
+        aref.elements = new;
+        Ok(res)
+    }
 }
 
 fn unshift(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -712,6 +737,11 @@ mod tests {
         assert 4, b.length
         assert true, [].empty?
         assert false, a.empty?
+        a = [1,2,3]
+        b = [4,5]
+        assert [1,2,3,4,5], a.concat(b)
+        assert [1,2,3,4,5], a
+        assert [4,5], b
     ";
         assert_script(program);
     }
@@ -757,6 +787,30 @@ mod tests {
     }
 
     #[test]
+    fn array_shift() {
+        // TODO: 'a.unshift [0]' is parsed as 'a.unshift[0]'. This is wrong.
+        let program = "
+        a = [0, 1, 2, 3, 4]
+        assert 0, a.shift
+        assert [1, 2, 3, 4], a
+        assert [1], a.shift(1)
+        assert [2,3], a.shift(2)
+        assert [4], a
+        assert nil, [].shift
+        assert [],  [].shift(1)
+
+        a = [1,2,3]
+        a.unshift 0
+        assert [0, 1, 2, 3], a
+        a.unshift([0])
+        assert [[0], 0, 1, 2, 3], a
+        a.unshift 1, 2
+        assert [1, 2, [0], 0, 1, 2, 3], a
+        ";
+        assert_script(program);
+    }
+
+    #[test]
     fn array_cmp() {
         let program = "
         assert(0, [1,2,3,4] <=> [1,2,3,4])
@@ -774,6 +828,7 @@ mod tests {
         let program = r#"
         assert [1,2,3,1,2,3,1,2,3], [1,2,3] * 3 
         assert "1,2,3", [1,2,3] * ","
+        assert "Ruby", ["Ruby"] * ","
         "#;
         assert_script(program);
     }
@@ -794,12 +849,12 @@ mod tests {
         let program = r#"
         assert nil, [].min
         #assert [], [].min(1)
-        assert 2, [2, 5, 3].min
+        assert 2, [2, 5, 3.7].min
         #assert [2, 3], [2, 5, 3].min(2)
         assert nil, [].max
         #assert [], [].max(1)
         assert 5, [2, 5, 3].max
-        #assert [5, 3], [2, 5, 3].max(2)
+        #assert [5, 3], [2.1, 5, 3].max(2)
         "#;
         assert_script(program);
     }
@@ -866,6 +921,18 @@ mod tests {
     }
 
     #[test]
+    fn array_transpose() {
+        let program = r#"
+        assert [[1, 3, 5], [2, 4, 6]], [[1,2],[3,4],[5,6]].transpose
+        assert [], [].transpose
+
+        assert_error { [1,2,3].transpose }
+        assert_error { [[1,2],[3,4,5],[6,7]].transpose }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn array_zip() {
         let program = r#"
         assert [[1,4,7],[2,5,8],[3,6,9]], [1,2,3].zip([4,5,6],[7,8,9])
@@ -876,6 +943,36 @@ mod tests {
             ans.push(ary)
         }
         assert [[1,4,7],[2,5,8],[3,6,9]], ans
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn fill() {
+        let program = r#"
+        a = [1,2,3,4]
+        assert ["Ruby","Ruby","Ruby","Ruby"], a.fill("Ruby")
+        assert ["Ruby","Ruby","Ruby","Ruby"], a
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_methods() {
+        let program = r#"
+        a = [1,2,3,4]
+        assert [], a.clear
+        assert [], a
+        assert 1, [1,2,3,4].first
+        assert 4, [1,2,3,4].last
+        assert nil, [].first
+        assert nil, [].last
+        a = ["a","b","c"]
+        assert ["b","c"], a.slice!(1, 2)
+        assert ["a"], a
+        a = ["a","b","c"]
+        assert [], a.slice!(1, 0)
+        assert ["a","b","c"], a
         "#;
         assert_script(program);
     }

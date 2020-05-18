@@ -250,7 +250,16 @@ fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 #[allow(unused_imports, dead_code)]
 mod test {
     use crate::test::*;
-
+    /*
+        #[test]
+        fn hash_inspect() {
+            let program = r#"
+                s = {:key=>"value", awesome: "Ruby"}.inspect
+                assert("{:key=>\"value\", :awesome=>\"Ruby\"}", s)
+            "#;
+            assert_script(program);
+        }
+    */
     #[test]
     fn hash1() {
         let program = r#"
