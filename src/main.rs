@@ -59,6 +59,7 @@ fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
 
     let root_path = absolute_path.clone();
     #[cfg(feature = "verbose")]
+    #[cfg_attr(tarpaulin, skip)]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     let mut vm2 = vm.clone();

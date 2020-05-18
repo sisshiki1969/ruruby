@@ -8,3 +8,4 @@
 .devcontainer
 .*
 cobertura.xml
+!.rubocop*

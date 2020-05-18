@@ -2,6 +2,7 @@ use super::codegen::ContextKind;
 use crate::*;
 
 #[cfg(feature = "perf")]
+#[cfg_attr(tarpaulin, skip)]
 use super::perf::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -25,6 +26,7 @@ pub struct VM {
     pc: usize,
     pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
+    #[cfg_attr(tarpaulin, skip)]
     perf: Perf,
 }
 
@@ -108,6 +110,7 @@ impl VM {
             pc: 0,
             channel: None,
             #[cfg(feature = "perf")]
+            #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
         };
 
@@ -126,6 +129,7 @@ impl VM {
             pc: 0,
             channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
+            #[cfg_attr(tarpaulin, skip)]
             perf: self.perf.clone(),
         }
     }
@@ -283,6 +287,7 @@ impl VM {
         self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -310,6 +315,7 @@ impl VM {
         self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -336,6 +342,7 @@ impl VM {
         let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -344,6 +351,7 @@ impl VM {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.print_perf();
         }
@@ -352,6 +360,7 @@ impl VM {
 
     pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
@@ -372,6 +381,7 @@ impl VM {
 
         let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -380,6 +390,7 @@ impl VM {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             self.perf.print_perf();
         }
@@ -441,6 +452,7 @@ impl VM {
         let mut self_oref = context.self_value.as_object();
         loop {
             #[cfg(feature = "perf")]
+            #[cfg_attr(tarpaulin, skip)]
             {
                 self.perf.get_perf(iseq[self.pc]);
             }
@@ -1965,17 +1977,20 @@ impl VM {
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
+        #[cfg_attr(tarpaulin, skip)]
         {
             inst = self.perf.get_prev_inst();
         }
         let val = match info {
             MethodInfo::BuiltinFunc { func, .. } => {
                 #[cfg(feature = "perf")]
+                #[cfg_attr(tarpaulin, skip)]
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
                 let val = func(self, self_val, args)?;
                 #[cfg(feature = "perf")]
+                #[cfg_attr(tarpaulin, skip)]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2000,6 +2015,7 @@ impl VM {
                 let context = Context::from_args(self, self_val, iseq, args, outer)?;
                 let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
+                #[cfg_attr(tarpaulin, skip)]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
