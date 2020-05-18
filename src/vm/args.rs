@@ -219,3 +219,44 @@ impl Deref for ArgsArray {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    #[test]
+    fn args() {
+        let mut args = Args::new(0);
+        for i in 0..20 {
+            args.push(Value::fixnum(i as i64));
+        }
+        for i in 0..20 {
+            assert_eq!(i as i64, args[i].as_fixnum().unwrap());
+        }
+        args[3] = Value::false_val();
+        args[17] = Value::true_val();
+        assert_eq!(Value::false_val(), args[3]);
+        assert_eq!(Value::true_val(), args[17]);
+    }
+
+    #[test]
+    fn args1() {
+        let args = Args::new1(Value::fixnum(0));
+        assert_eq!(0, args[0].as_fixnum().unwrap());
+    }
+
+    #[test]
+    fn args2() {
+        let args = Args::new2(Value::fixnum(0), Value::fixnum(1));
+        assert_eq!(0, args[0].as_fixnum().unwrap());
+        assert_eq!(1, args[1].as_fixnum().unwrap());
+    }
+
+    #[test]
+    fn args3() {
+        let args = Args::new3(None, Value::fixnum(0), Value::fixnum(1), Value::fixnum(2));
+        assert_eq!(0, args[0].as_fixnum().unwrap());
+        assert_eq!(1, args[1].as_fixnum().unwrap());
+        assert_eq!(2, args[2].as_fixnum().unwrap());
+    }
+}

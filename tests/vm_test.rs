@@ -89,6 +89,7 @@ fn expr10() {
         assert(-8.286600000000064, 654.6234%-34.89)
         assert(8.286600000000064, -654.6234%34.89)
         assert(-26.603399999999937, -654.6234%-34.89)
+        assert(256, 4**4)
 
         assert(-101, ~100)
         assert(44, ~-45)
@@ -255,6 +256,8 @@ fn triple_equal() {
         assert false, String === 100
         assert true, /\A[A-Z]*\z/ === "HELLO"
         assert false, /\A[a-z]*\z/ === "HELLO"
+        assert 4, "aabcdxafv" =~ /dx.f/
+        assert 3, "sdrgbgbgbff" =~ /(gb)*f/
     "#;
     assert_script(program);
 }
@@ -441,6 +444,45 @@ fn until1() {
 fn until2() {
     let program = "
         assert((a = 0; a+=1 until a == 5; a), 5)
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn case0() {
+    let program = "
+        i = 11
+        case i
+        when 0 then
+            r = 0
+        when 1 then
+            r = 1
+        when 5 then
+            r = 5
+        when 11 then
+            r = 11
+        end
+        assert 11, r
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn case1() {
+    let program = "
+        i = 11
+        j = 3
+        case i
+        when i - 11 then
+            r = 0
+        when 1 then
+            r = 1
+        when 5 then
+            r = 5
+        when j * j + 2 then
+            r = 11
+        end
+        assert 11, r
     ";
     assert_script(program);
 }
