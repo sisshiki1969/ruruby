@@ -10,6 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(kernel_class, "p", p);
     globals.add_builtin_instance_method(kernel_class, "print", print);
     globals.add_builtin_instance_method(kernel_class, "assert", assert);
+    globals.add_builtin_instance_method(kernel_class, "assert_error", assert_error);
     globals.add_builtin_instance_method(kernel_class, "require", require);
     globals.add_builtin_instance_method(kernel_class, "require_relative", require_relative);
     globals.add_builtin_instance_method(kernel_class, "block_given?", block_given);
@@ -81,6 +82,18 @@ pub fn init(globals: &mut Globals) -> Value {
             println!("Assert OK: {:?}", vm.val_inspect(args[0]));
             Ok(Value::nil())
         }
+    }
+
+    fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+        vm.check_args_num(args.len(), 0)?;
+        let method = match args.block {
+            Some(block) => block,
+            None => panic!("assert_error(): Block not given."),
+        };
+        match vm.eval_block(method, &Args::new0()) {
+            Ok(_) => panic!("Assertion error: No error occured"),
+            Err(_) => return Ok(Value::nil()),
+        };
     }
 
     fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {

@@ -186,15 +186,24 @@ fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
     let key = args[0];
-    let default = if args.len() == 2 {
-        args[1]
-    } else {
-        Value::nil()
-    };
+
     let hash = vm.expect_hash(self_val, "Receiver")?;
     let val = match hash.get(&key) {
-        Some(val) => val.clone(),
-        None => default,
+        Some(val) => *val,
+        None => {
+            match args.block {
+                // TODO: If arg[1] exists, Should warn "block supersedes default value argument".
+                Some(block) => vm.eval_block(block, &Args::new1(key))?,
+                None => {
+                    if args.len() == 2 {
+                        args[1]
+                    } else {
+                        // TODO: Should be KeyError.
+                        return Err(vm.error_argument("Key not found."));
+                    }
+                }
+            }
+        }
     };
 
     Ok(val)
@@ -345,6 +354,26 @@ mod test {
         h = { "a" => 0, "b" => 100, "c" => 200, "e" => 300 }
         assert({0=>"a", 100=>"b", 200=>"c", 300=>"e"}, h.invert)
         "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn hash_fetch() {
+        let program = r##"
+            h = {one: nil}
+            assert(nil, h[:one])                    #=> nil これではキーが存在するのか判別できない。
+            assert(nil, h[:two])                    #=> nil これではキーが存在するのか判別できない。
+            assert(nil, h.fetch(:one))
+            assert_error { h.fetch(:two) }          # エラー key not found (KeyError)
+            assert("error", h.fetch(:two,"error"))
+            assert("two not exist", h.fetch(:two) {|key|"#{key} not exist"})
+            res = h.fetch(:two, "error"){|key|
+                "#{key} not exist"                  #  warning: block supersedes default value argument
+            }        
+            assert("two not exist", res)
+            #h.default = "default"
+            assert_error { h.fetch(:two) }          # エラー key not found (KeyError)
+        "##;
         assert_script(program);
     }
 }
