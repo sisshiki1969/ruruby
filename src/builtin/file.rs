@@ -128,3 +128,21 @@ fn write(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     Ok(Value::fixnum(contents.len() as i64))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test::*;
+
+    #[test]
+    fn file() {
+        let program = r#"
+            File.write("file.txt","foo")
+            assert("foo", File.read("file.txt"))
+            File.write("file.txt","bar")
+            assert("bar", File.read("file.txt"))
+            assert("file.txt", File.basename("/usr/file.txt"))
+            assert(".txt", File.extname("file.txt"))
+        "#;
+        assert_script(program);
+    }
+}
