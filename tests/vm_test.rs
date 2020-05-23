@@ -196,6 +196,16 @@ fn int4() {
 }
 
 #[test]
+fn regexp_literal() {
+    let program = r#"
+        j = "Ruby"
+        assert 1, "aaRubyvv" =~ /a#{j}v/
+        assert :"CRuby(MRI)", :"C#{j}(MRI)"
+        "#;
+    assert_script(program);
+}
+
+#[test]
 fn int_index() {
     let program = "
         i = 0b0100_1101
