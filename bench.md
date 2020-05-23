@@ -10,18 +10,18 @@ OS: Mac OS X 10.15.4
 
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
-| so_mandelbrot.rb | 1.39 s | 3.18 s | x 2.29 |
-| app_mandelbrot.rb | 1.99 s | 8.06 s | x 4.05 |
-| fibo.rb | 0.51 s | 2.58 s | x 5.06 |
-| block.rb | 0.44 s | 0.9 s | x 2.05 |
-| ao_bench.rb | 7.86 s | 33.5 s | x 4.26 |
+| so_mandelbrot.rb | 1.37 s | 3.26 s | x 2.38 |
+| app_mandelbrot.rb | 1.97 s | 8.21 s | x 4.17 |
+| fibo.rb | 0.51 s | 2.65 s | x 5.20 |
+| block.rb | 0.43 s | 0.93 s | x 2.16 |
+| ao_bench.rb | 7.64 s | 33.94 s | x 4.44 |
 
 ## memory consumption
 
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
-| so_mandelbrot.rb | 11.68  K | 8.25  K | x 0.71 |
-| app_mandelbrot.rb | 0.01  M | 1.71  M | x 146.08 |
-| fibo.rb | 11.38  K | 2.06  K | x 0.18 |
-| block.rb | 11.35  K | 2.00  K | x 0.18 |
-| ao_bench.rb | 0.01  M | 4.39  M | x 357.88 |
+| so_mandelbrot.rb | 11.82  K | 8.22  K | x 0.70 |
+| app_mandelbrot.rb | 0.01  M | 1.71  M | x 158.17 |
+| fibo.rb | 11.36  K | 2.08  K | x 0.18 |
+| block.rb | 10.93  K | 2.03  K | x 0.19 |
+| ao_bench.rb | 0.01  M | 4.39  M | x 400.56 |
