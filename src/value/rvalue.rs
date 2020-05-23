@@ -5,8 +5,8 @@ use crate::*;
 /// Heap-allocated objects.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RValue {
-    class: Value,
-    var_table: Box<ValueTable>,
+    pub class: Value,
+    pub var_table: Box<ValueTable>,
     pub kind: ObjKind,
 }
 
@@ -238,7 +238,8 @@ impl RValue {
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
-        Value::from(Box::into_raw(Box::new(self)) as u64)
+        //Value::from(Box::into_raw(Box::new(self)) as u64)
+        Value::from(unsafe { ALLOC.with(|m| m.borrow_mut().alloc(self)) as u64 })
     }
 
     /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.
