@@ -5,8 +5,8 @@ use crate::*;
 /// Heap-allocated objects.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RValue {
-    pub class: Value,
-    pub var_table: Box<ValueTable>,
+    class: Value,
+    var_table: Box<ValueTable>,
     pub kind: ObjKind,
 }
 
