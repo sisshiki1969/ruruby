@@ -228,7 +228,7 @@ fn string_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     }
     vm.check_args_num(args.len(), 1)?;
-    expect_string!(lhs, vm, self_val);
+    let lhs = vm.expect_string(&self_val, "Receiver")?;
     match args[0].unpack() {
         RV::Integer(i) => {
             let index = match conv_index(i, lhs.chars().count()) {
@@ -401,23 +401,23 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_start_with(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    expect_string!(string, vm, self_val);
-    expect_string!(arg, vm, args[0]);
+    let string = vm.expect_string(&self_val, "Receiver")?;
+    let arg = vm.expect_string(&args[0], "1st arg")?;
     let res = string.starts_with(arg);
     Ok(Value::bool(res))
 }
 
 fn string_to_sym(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_string!(string, vm, self_val);
+    let string = vm.expect_string(&self_val, "Receiver")?;
     let id = vm.globals.get_ident_id(string);
     Ok(Value::symbol(id))
 }
 
 fn string_split(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
-    expect_string!(string, vm, self_val);
-    expect_string!(sep, vm, args[0]);
+    let string = vm.expect_string(&self_val, "Receiver")?;
+    let sep = vm.expect_string(&args[0], "1st arg")?;
     let lim = if args.len() > 1 {
         args[1].expect_integer(vm, "Second arg must be Integer.")?
     } else {
@@ -466,9 +466,9 @@ fn string_split(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
-    expect_string!(given, vm, self_val);
+    let given = vm.expect_string(&self_val, "Receiver")?;
     let res = if args.len() == 2 {
-        expect_string!(replace, vm, args[1]);
+        let replace = vm.expect_string(&args[1], "2nd arg")?;
         Regexp::replace_one(vm, args[0], given, replace)?
     } else {
         let block = vm.expect_block(args.block)?;
@@ -494,13 +494,13 @@ fn gsub(vm: &mut VM, self_val: Value, args: &Args) -> Result<(String, bool), Rub
     match args.block {
         Some(block) => {
             vm.check_args_num(args.len(), 1)?;
-            expect_string!(given, vm, self_val);
+            let given = vm.expect_string(&self_val, "Receiver")?;
             Regexp::replace_all_block(vm, args[0], given, block)
         }
         None => {
             vm.check_args_num(args.len(), 2)?;
-            expect_string!(given, vm, self_val);
-            expect_string!(replace, vm, args[1]);
+            let given = vm.expect_string(&self_val, "Receiver")?;
+            let replace = vm.expect_string(&args[1], "2nd arg")?;
             Regexp::replace_all(vm, args[0], given, replace)
         }
     }
@@ -508,7 +508,7 @@ fn gsub(vm: &mut VM, self_val: Value, args: &Args) -> Result<(String, bool), Rub
 
 fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    expect_string!(given, vm, self_val);
+    let given = vm.expect_string(&self_val, "Receiver")?;
     let vec = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(&s)?;
         Regexp::find_all(vm, &re, given)?
@@ -551,7 +551,7 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_rmatch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    expect_string!(given, vm, self_val);
+    let given = vm.expect_string(&self_val, "Receiver")?;
     if let Some(re) = args[0].as_regexp() {
         let res = match Regexp::find_one(vm, &re.regexp, given).unwrap() {
             Some(mat) => Value::fixnum(mat.start() as i64),
@@ -565,22 +565,22 @@ fn string_rmatch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_tr(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2)?;
-    expect_string!(rec, vm, self_val);
-    expect_string!(from, vm, args[0]);
-    expect_string!(to, vm, args[1]);
+    let rec = vm.expect_string(&self_val, "Receiver")?;
+    let from = vm.expect_string(&args[0], "1st arg")?;
+    let to = vm.expect_string(&args[1], "2nd arg")?;
     let res = rec.replace(from, to);
     Ok(Value::string(&vm.globals, res))
 }
 
 fn string_size(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_string!(rec, vm, self_val);
+    let rec = vm.expect_string(&self_val, "Receiver")?;
     Ok(Value::fixnum(rec.chars().count() as i64))
 }
 
 fn string_bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    expect_bytes!(bytes, vm, self_val);
+    let bytes = vm.expect_bytes(&self_val, "Receiver")?;
     let mut ary = vec![];
     for b in bytes {
         ary.push(Value::fixnum(*b as i64));

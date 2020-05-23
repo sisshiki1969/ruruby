@@ -218,7 +218,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     let env_name = if args.len() > 2 {
-        vm.expect_string(&args[2], "3rd arg must be String.")?
+        vm.expect_string(&args[2], "3rd arg")?
     } else {
         "(eval)"
     };

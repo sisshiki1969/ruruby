@@ -1285,6 +1285,14 @@ impl VM {
         rstring.as_string(self)
     }
 
+    pub fn expect_bytes<'a>(&mut self, val: &'a Value, msg: &str) -> Result<&'a [u8], RubyError> {
+        let rstring = val.as_rstring().ok_or_else(|| {
+            let inspect = self.val_inspect(val.clone());
+            self.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        })?;
+        Ok(rstring.as_bytes())
+    }
+
     pub fn expect_array(&mut self, val: Value, msg: &str) -> Result<ArrayRef, RubyError> {
         val.as_array().ok_or_else(|| {
             let inspect = self.val_inspect(val);

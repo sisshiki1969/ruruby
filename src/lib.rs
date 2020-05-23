@@ -1,7 +1,7 @@
 //#![feature(test)]
 #![feature(box_patterns)]
-#![feature(cow_is_borrowed)]
 extern crate fancy_regex;
+extern crate lazy_static;
 pub mod builtin;
 pub mod error;
 pub mod globals;

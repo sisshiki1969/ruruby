@@ -10,39 +10,6 @@ const MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
-#[macro_export]
-macro_rules! expect_string {
-    ($var:ident, $vm:ident, $val:expr) => {
-        let oref = match $val.as_rvalue() {
-            Some(oref) => oref,
-            None => return Err($vm.error_argument("Must be a String.")),
-        };
-        let $var: &str = match &oref.kind {
-            ObjKind::String(RString::Str(s)) => s,
-            ObjKind::String(RString::Bytes(b)) => match String::from_utf8_lossy(b) {
-                std::borrow::Cow::Borrowed(s) => s,
-                std::borrow::Cow::Owned(_) => return Err($vm.error_argument("Must be a String.")),
-            },
-            _ => return Err($vm.error_argument("Must be a String.")),
-        };
-    };
-}
-
-#[macro_export]
-macro_rules! expect_bytes {
-    ($var:ident, $vm:ident, $val:expr) => {
-        let oref = match $val.as_rvalue() {
-            Some(oref) => oref,
-            None => return Err($vm.error_argument("Must be a String.")),
-        };
-        let $var = match &oref.kind {
-            ObjKind::String(RString::Str(s)) => s.as_bytes(),
-            ObjKind::String(RString::Bytes(b)) => b,
-            _ => return Err($vm.error_argument("Must be a String.")),
-        };
-    };
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum RV {
     Uninitialized,

@@ -20,7 +20,7 @@ pub fn init_file(globals: &mut Globals) -> Value {
 // Utils
 
 fn string_to_path(vm: &mut VM, string: Value) -> Result<PathBuf, RubyError> {
-    let file = vm.expect_string(&string, "Must be string.")?;
+    let file = vm.expect_string(&string, "")?;
     Ok(PathBuf::from(file))
 }
 
