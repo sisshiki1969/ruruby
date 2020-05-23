@@ -2,26 +2,26 @@
 
 ## environment
 
-Ruby version: 2.7.1  
-CPU: Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz  
+Ruby version: 2.8.0  
+CPU: Intel(R) Core(TM) i7-7700 CPU @ 3.60GHz  
 OS: Ubuntu 18.04.4 LTS  
 
 ## execution time
 
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
-| so_mandelbrot.rb | 1.76 s | 2.73 s | x 1.55 |
-| app_mandelbrot.rb | 2.26 s | 6.85 s | x 3.03 |
-| fibo.rb | 0.48 s | 2.36 s | x 4.92 |
-| block.rb | 0.38 s | 1.04 s | x 2.74 |
-| ao_bench.rb | 9.41 s | 27.34 s | x 2.91 |
+| so_mandelbrot.rb | 1.8 s | 3.05 s | x 1.69 |
+| app_mandelbrot.rb | 2.31 s | 7.85 s | x 3.40 |
+| fibo.rb | 0.49 s | 2.77 s | x 5.65 |
+| block.rb | 0.41 s | 1.07 s | x 2.61 |
+| ao_bench.rb | 9.29 s | 30.47 s | x 3.28 |
 
 ## memory consumption
 
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
-| so_mandelbrot.rb | 14.18  K | 11.65  K | x 0.82 |
-| app_mandelbrot.rb | 0.01  M | 1.76  M | x 124.67 |
-| fibo.rb | 13.97  K | 4.56  K | x 0.33 |
-| block.rb | 14.05  K | 4.56  K | x 0.32 |
-| ao_bench.rb | 0.01  M | 4.50  M | x 307.59 |
+| so_mandelbrot.rb | 13.88  K | 11.61  K | x 0.84 |
+| app_mandelbrot.rb | 0.01  M | 1.76  M | x 125.89 |
+| fibo.rb | 13.67  K | 4.58  K | x 0.34 |
+| block.rb | 13.74  K | 4.49  K | x 0.33 |
+| ao_bench.rb | 0.01  M | 4.50  M | x 311.27 |
