@@ -1,4 +1,5 @@
 use crate::*;
+use std::cell::RefCell;
 
 const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
@@ -9,6 +10,43 @@ const MASK1: u64 = !(0b0110u64 << 60);
 const MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
+
+thread_local! (
+    pub static ALLOC: RefCell<Allocator> = {
+        let alloc = Allocator::new();
+        RefCell::new(alloc)
+    }
+);
+
+pub struct Allocator {
+    buf: Vec<RValue>,
+    used: usize,
+}
+
+impl Allocator {
+    pub fn new() -> Self {
+        let len = 4096;
+        let mut buf = Vec::<RValue>::with_capacity(len);
+        unsafe {
+            buf.set_len(len);
+        }
+        Allocator { buf, used: 0 }
+    }
+
+    pub fn alloc(&mut self, data: RValue) -> *mut RValue {
+        eprintln!("ALLOC:{}", self.used);
+
+        let ptr = unsafe { self.buf.as_ptr().add(self.used) as *mut RValue };
+        self.buf[self.used] = data;
+        eprintln!("ALLOCED:{}", self.used);
+
+        self.used += 1;
+        if self.used > 4095 {
+            panic!("Overflow!");
+        }
+        ptr
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RV {
