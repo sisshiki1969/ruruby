@@ -22,10 +22,8 @@ pub struct Allocator {
     used: usize,
     /// Allocation size in byte for a single arena.
     alloc_size: usize,
-    /// Allocated arenas.
-    arena: Vec<*mut RValue>,
-    /// Bitmap for marking.
-    mark_map: [u64; 64],
+    /// Info for allocated arenas.
+    arena: Vec<(*mut RValue, [u64; 64])>,
     /// Flag for new arena allocation.
     alloc_flag: bool,
 }
@@ -36,18 +34,16 @@ impl Allocator {
         let mem_size = 56;
         let alloc_size = LEN * mem_size + ALIGN - 1;
         let arena = Allocator::arena(alloc_size, ALIGN - 1);
-        eprintln!("buf: {:?}", arena);
-        eprintln!("alloc_size: {:x}", alloc_size);
         Allocator {
             buf: arena,
             used: 0,
             alloc_size,
-            arena: vec![arena],
-            mark_map: [0; 64],
+            arena: vec![(arena, [0; 64])],
             alloc_flag: false,
         }
     }
 
+    /// Allocate arena with `alloc_size` and `align`.
     fn arena(alloc_size: usize, align: usize) -> *mut RValue {
         let mut vec = Vec::<u8>::with_capacity(alloc_size);
         unsafe {
@@ -71,7 +67,12 @@ impl Allocator {
     pub fn mark(&mut self, ptr: &RValue) -> bool {
         let ptr = ptr as *const RValue as usize;
         let arena = ptr & !(ALIGN - 1);
-        assert!(self.arena.contains(&(arena as *mut RValue)));
+        let arena_info = self
+            .arena
+            .iter_mut()
+            .find(|(ptr, _)| *ptr == arena as *mut RValue)
+            .unwrap_or_else(|| panic!());
+        //contains(&(arena as *mut RValue));
         assert!(ptr >= arena);
         let offset = ptr - arena;
         assert_eq!(0, offset % 56);
@@ -79,13 +80,30 @@ impl Allocator {
         assert!(index < LEN);
         let bit_mask = 1 << (index % 64);
         let word = index / 64;
-        let is_marked = (self.mark_map[word] & bit_mask) != 0;
-        self.mark_map[word] |= bit_mask;
+        let bitmap = &mut arena_info.1[word];
+        let is_marked = (*bitmap & bit_mask) != 0;
+        *bitmap |= bit_mask;
         is_marked
     }
 
     pub fn clear_mark(&mut self) {
-        self.mark_map.iter_mut().for_each(|v| *v = 0);
+        self.arena
+            .iter_mut()
+            .for_each(|(_, bitmap)| bitmap.iter_mut().for_each(|v| *v = 0));
+    }
+
+    pub fn print_mark(&self) {
+        self.arena.iter().for_each(|(_, bitmap)| {
+            let mut i = 0;
+            bitmap.iter().for_each(|m| {
+                eprint!("{:016x} ", m.reverse_bits());
+                if i % 8 == 7 {
+                    eprintln!("");
+                }
+                i += 1;
+            });
+            eprintln!("");
+        });
     }
 
     /// Allocate object.
@@ -101,7 +119,7 @@ impl Allocator {
             let arena = Allocator::arena(self.alloc_size, ALIGN - 1);
             self.used = 0;
             self.buf = arena;
-            self.arena.push(arena);
+            self.arena.push((arena, [0; 64]));
             self.alloc_flag = true;
         }
         ptr

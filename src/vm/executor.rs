@@ -405,6 +405,22 @@ impl VM {
         }
         Ok(val)
     }
+
+    pub fn gc(&self) {
+        ALLOC.with(|m| {
+            if m.borrow().is_allocated() {
+                m.borrow_mut().clear_mark();
+                self.mark(&mut m.borrow_mut());
+                m.borrow_mut().clear_allocated();
+            }
+        });
+    }
+
+    pub fn print_bitmap(&self) {
+        ALLOC.with(|m| {
+            m.borrow().print_mark();
+        });
+    }
 }
 
 macro_rules! try_err {
@@ -443,13 +459,7 @@ macro_rules! try_err {
 impl VM {
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
-        ALLOC.with(|m| {
-            if m.borrow().is_allocated() {
-                m.borrow_mut().clear_mark();
-                self.mark(&mut m.borrow_mut());
-                m.borrow_mut().clear_allocated();
-            }
-        });
+        self.gc();
         #[cfg(feature = "trace")]
         {
             if context.is_fiber {

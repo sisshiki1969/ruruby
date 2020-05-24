@@ -40,6 +40,18 @@ pub enum MethodInfo {
     BuiltinFunc { name: String, func: BuiltinFunc },
 }
 
+impl GC for MethodInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        match self {
+            MethodInfo::RubyFunc { iseq } => match iseq.class_defined {
+                Some(list) => list.mark(alloc),
+                None => return,
+            },
+            _ => return,
+        };
+    }
+}
+
 impl MethodInfo {
     pub fn default() -> Self {
         MethodInfo::AttrReader {
@@ -116,6 +128,16 @@ pub type ClassListRef = Ref<ClassList>;
 impl ClassList {
     pub fn new(outer: Option<ClassListRef>, class: Value) -> Self {
         ClassList { outer, class }
+    }
+}
+
+impl GC for ClassList {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.class.mark(alloc);
+        match self.outer {
+            Some(list) => list.mark(alloc),
+            None => return,
+        }
     }
 }
 
@@ -230,6 +252,12 @@ impl GlobalMethodTable {
 
     pub fn get_mut_method(&mut self, method: MethodRef) -> &mut MethodInfo {
         &mut self.table[method.0 as usize]
+    }
+}
+
+impl GC for GlobalMethodTable {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.table.iter().for_each(|m| m.mark(alloc));
     }
 }
 
