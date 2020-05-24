@@ -63,6 +63,41 @@ impl BuiltinClass {
     }
 }
 
+impl GC for BuiltinClass {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.integer.mark(alloc);
+        self.float.mark(alloc);
+        self.array.mark(alloc);
+        self.class.mark(alloc);
+        self.module.mark(alloc);
+        self.procobj.mark(alloc);
+        self.method.mark(alloc);
+        self.range.mark(alloc);
+        self.hash.mark(alloc);
+        self.regexp.mark(alloc);
+        self.string.mark(alloc);
+        self.fiber.mark(alloc);
+        self.enumerator.mark(alloc);
+        self.object.mark(alloc);
+    }
+}
+
+impl GC for Globals {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.global_var.iter().for_each(|(_, v)| v.mark(alloc));
+        self.inline_cache.table.iter().for_each(|e| match e {
+            Some(e) => e.class.mark(alloc),
+            None => {}
+        });
+        self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
+        self.main_object.mark(alloc);
+        self.builtins.mark(alloc);
+        for t in &self.case_dispatch.table {
+            t.keys().for_each(|k| k.mark(alloc));
+        }
+    }
+}
+
 impl Globals {
     pub fn new() -> Self {
         use builtin::*;

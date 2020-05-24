@@ -74,6 +74,18 @@ impl IndexMut<usize> for Context {
     }
 }
 
+impl GC for Context {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.self_value.mark(alloc);
+        self.lvar_ary.iter().for_each(|v| v.mark(alloc));
+        self.lvar_vec.iter().for_each(|v| v.mark(alloc));
+        match self.outer {
+            Some(c) => c.mark(alloc),
+            None => {}
+        }
+    }
+}
+
 impl Context {
     pub fn new(
         self_value: Value,

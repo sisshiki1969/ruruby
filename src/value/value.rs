@@ -1,5 +1,4 @@
 use crate::*;
-use std::cell::RefCell;
 
 const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
@@ -10,53 +9,6 @@ const MASK1: u64 = !(0b0110u64 << 60);
 const MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
-
-thread_local! (
-    pub static ALLOC: RefCell<Allocator> = {
-        let alloc = Allocator::new();
-        RefCell::new(alloc)
-    }
-);
-
-pub struct Allocator {
-    buf: *mut RValue,
-    used: usize,
-}
-
-impl Allocator {
-    pub fn new() -> Self {
-        Allocator {
-            buf: Allocator::new_arena(),
-            used: 0,
-        }
-    }
-
-    pub fn new_arena() -> *mut RValue {
-        let len = 4096;
-        let mut vec = Vec::<RValue>::with_capacity(len);
-        unsafe {
-            vec.set_len(len);
-        }
-        Box::into_raw(vec.into_boxed_slice()) as *mut RValue
-    }
-
-    pub unsafe fn alloc(&mut self, data: RValue) -> *mut RValue {
-        let ptr = self.buf.add(self.used);
-        std::ptr::write(ptr, data);
-
-        self.used += 1;
-        if self.used > 4095 {
-            self.used = 0;
-            self.buf = Allocator::new_arena();
-        }
-        ptr
-    }
-
-    pub unsafe fn free(raw: *mut RValue) {
-        let s = std::slice::from_raw_parts_mut(raw, 4096);
-        let _ = Box::from_raw(s);
-    }
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RV {
@@ -158,6 +110,17 @@ impl Eq for Value {}
 impl Default for Value {
     fn default() -> Self {
         Value::nil()
+    }
+}
+
+impl GC for Value {
+    fn mark(&self, alloc: &mut Allocator) {
+        match self.as_rvalue() {
+            Some(rvalue) => {
+                rvalue.mark(alloc);
+            }
+            None => {}
+        }
     }
 }
 

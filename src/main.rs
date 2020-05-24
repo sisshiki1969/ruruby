@@ -6,7 +6,7 @@ extern crate rustyline;
 
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
-use std::thread;
+//use std::thread;
 mod repl;
 use repl::*;
 use ruruby::*;
@@ -63,9 +63,7 @@ fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     let mut vm2 = vm.clone();
-    let res = thread::spawn(move || vm2.run(absolute_path, &program, None))
-        .join()
-        .unwrap();
+    let res = vm2.run(absolute_path, &program, None);
     match res {
         Ok(_) => {}
         Err(err) => {
