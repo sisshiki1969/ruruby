@@ -18,6 +18,13 @@ impl EnumInfo {
     }
 }
 
+impl GC for EnumInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.receiver.mark(alloc);
+        self.args.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
 pub type EnumRef = Ref<EnumInfo>;
 
 impl EnumRef {

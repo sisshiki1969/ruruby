@@ -44,21 +44,14 @@ impl GC for RValue {
             ObjKind::Array(aref) => {
                 aref.elements.iter().for_each(|v| v.mark(alloc));
             }
-            ObjKind::Hash(href) => {
-                for k in &href.keys() {
-                    k.mark(alloc);
-                }
-                for v in &href.values() {
-                    v.mark(alloc);
-                }
-            }
+            ObjKind::Hash(href) => href.mark(alloc),
             ObjKind::Range(RangeInfo { start, end, .. }) => {
                 start.mark(alloc);
                 end.mark(alloc);
             }
-            ObjKind::Splat(v) => {
-                v.mark(alloc);
-            }
+            ObjKind::Splat(v) => v.mark(alloc),
+            ObjKind::Proc(pref) => pref.context.mark(alloc),
+            ObjKind::Enumerator(eref) => eref.mark(alloc),
             _ => {}
         }
     }

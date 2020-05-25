@@ -200,6 +200,17 @@ impl IntoIterator for HashInfo {
     }
 }
 
+impl GC for HashInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        for k in &self.keys() {
+            k.mark(alloc);
+        }
+        for v in &self.values() {
+            v.mark(alloc);
+        }
+    }
+}
+
 impl HashInfo {
     pub fn new(map: HashMap<HashKey, Value>) -> Self {
         HashInfo::Map(map)

@@ -54,8 +54,8 @@ impl DefineMode {
 
 // API's
 
-impl VM {
-    pub fn mark(&self, alloc: &mut Allocator) {
+impl GC for VM {
+    fn mark(&self, alloc: &mut Allocator) {
         self.globals.mark(alloc);
         self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
@@ -408,10 +408,9 @@ impl VM {
 
     pub fn gc(&self) {
         ALLOC.with(|m| {
-            if m.borrow().is_allocated() {
-                m.borrow_mut().clear_mark();
-                self.mark(&mut m.borrow_mut());
-                m.borrow_mut().clear_allocated();
+            let mut alloc = m.borrow_mut();
+            if alloc.is_allocated() {
+                alloc.gc(self);
             }
         });
     }
