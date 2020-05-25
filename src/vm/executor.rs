@@ -55,6 +55,15 @@ impl DefineMode {
 // API's
 
 impl VM {
+    pub fn mark(&self, alloc: &mut Allocator) {
+        self.globals.mark(alloc);
+        self.exec_context.iter().for_each(|c| c.mark(alloc));
+        self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
+        self.exec_stack.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
+impl VM {
     pub fn new() -> Self {
         use builtin::*;
         let mut globals = Globals::new();
@@ -396,6 +405,22 @@ impl VM {
         }
         Ok(val)
     }
+
+    pub fn gc(&self) {
+        ALLOC.with(|m| {
+            if m.borrow().is_allocated() {
+                m.borrow_mut().clear_mark();
+                self.mark(&mut m.borrow_mut());
+                m.borrow_mut().clear_allocated();
+            }
+        });
+    }
+
+    pub fn print_bitmap(&self) {
+        ALLOC.with(|m| {
+            m.borrow().print_mark();
+        });
+    }
 }
 
 macro_rules! try_err {
@@ -434,6 +459,7 @@ macro_rules! try_err {
 impl VM {
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
+        self.gc();
         #[cfg(feature = "trace")]
         {
             if context.is_fiber {
@@ -814,6 +840,7 @@ impl VM {
                 Inst::IVAR_ADDI => {
                     let var_id = self.read_id(iseq, 1);
                     let i = self.read32(iseq, 5) as i32;
+                    /*
                     match self_oref.get_mut_var(var_id) {
                         Some(val) => {
                             let new_val = self.eval_addi(*val, i)?;
@@ -823,7 +850,12 @@ impl VM {
                             let new_val = self.eval_addi(Value::nil(), i)?;
                             self_oref.set_var(var_id, new_val);
                         }
-                    };
+                    };*/
+                    let v = self_oref
+                        .var_table_mut()
+                        .entry(var_id)
+                        .or_insert(Value::nil());
+                    *v = self.eval_addi(*v, i)?;
 
                     self.pc += 9;
                 }

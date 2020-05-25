@@ -29,6 +29,41 @@ pub enum ObjKind {
     Enumerator(EnumRef),
 }
 
+impl GC for RValue {
+    fn mark(&self, alloc: &mut Allocator) {
+        if alloc.mark(self) {
+            return;
+        };
+        self.class.mark(alloc);
+        self.var_table.values().for_each(|v| v.mark(alloc));
+        match self.kind {
+            ObjKind::Class(cref) | ObjKind::Module(cref) => {
+                cref.superclass.mark(alloc);
+                cref.include.iter().for_each(|v| v.mark(alloc));
+            }
+            ObjKind::Array(aref) => {
+                aref.elements.iter().for_each(|v| v.mark(alloc));
+            }
+            ObjKind::Hash(href) => {
+                for k in &href.keys() {
+                    k.mark(alloc);
+                }
+                for v in &href.values() {
+                    v.mark(alloc);
+                }
+            }
+            ObjKind::Range(RangeInfo { start, end, .. }) => {
+                start.mark(alloc);
+                end.mark(alloc);
+            }
+            ObjKind::Splat(v) => {
+                v.mark(alloc);
+            }
+            _ => {}
+        }
+    }
+}
+
 impl RValue {
     pub fn id(&self) -> u64 {
         self as *const RValue as u64
@@ -239,7 +274,11 @@ impl RValue {
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
         //Value::from(Box::into_raw(Box::new(self)) as u64)
+<<<<<<< HEAD
         Value::from(ALLOC.with(|m| m.borrow_mut().alloc(self) as u64))
+=======
+        Value::from(ALLOC.with(|m| m.borrow_mut().alloc(self)) as u64)
+>>>>>>> 60f6048038a062c1b7b7dc05ca68e613c6dd0807
     }
 
     /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.

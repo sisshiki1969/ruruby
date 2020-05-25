@@ -151,6 +151,17 @@ impl Default for Value {
     }
 }
 
+impl GC for Value {
+    fn mark(&self, alloc: &mut Allocator) {
+        match self.as_rvalue() {
+            Some(rvalue) => {
+                rvalue.mark(alloc);
+            }
+            None => {}
+        }
+    }
+}
+
 impl Value {
     pub fn unpack(self) -> RV {
         if !self.is_packed_value() {

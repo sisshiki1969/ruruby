@@ -2,6 +2,7 @@
 #![feature(box_patterns)]
 extern crate fancy_regex;
 extern crate lazy_static;
+pub mod alloc;
 pub mod builtin;
 pub mod error;
 pub mod globals;
@@ -11,6 +12,7 @@ pub mod test;
 pub mod util;
 pub mod value;
 pub mod vm;
+pub use crate::alloc::*;
 pub use crate::builtin::enumerator::*;
 pub use crate::builtin::fiber::*;
 pub use crate::builtin::procobj::*;

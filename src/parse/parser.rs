@@ -2060,7 +2060,7 @@ impl Parser {
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
-#[cfg_attr(tarpaulin, skip)]
+        #[cfg_attr(tarpaulin, skip)]
         eprintln!(
             "Parsed {} name:{}",
             if is_module { "module" } else { "class" },
