@@ -321,7 +321,7 @@ mod test {
     }
 
     #[test]
-    fn integer_etc() {
+    fn integer() {
         let program = r#"
         assert 4, Integer(4)
         assert 9, Integer(9.88)
@@ -330,12 +330,19 @@ mod test {
         assert_error { Integer("13.55") }
         assert_error { Integer([1,3,6]) }
         assert_error { Integer(:"2") }
+        "#;
+        assert_script(program);
+    }
 
+    #[test]
+    fn kernel_etc() {
+        let program = r#"
         assert_error { assert 2, 3 }
         assert_error { assert_error { true } }
         assert_error { raise }
         require_relative "../../tests/kernel_test.rb"
         assert_error { require_relative "kernel_test.rb" }
+        assert_error { assert rand. rand }
         "#;
         assert_script(program);
     }
