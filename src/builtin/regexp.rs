@@ -383,13 +383,14 @@ mod test {
     #[test]
     fn regexp1() {
         let program = r#"
-    assert "abc!!g", "abcdefg".gsub(/def/, "!!")
-    assert "2.5".gsub(".", ","), "2,5"
-    assert true, /(aa).*(bb)/ === "andaadefbbje"
-    assert "aadefbb", $&
-    assert "aa", $1
-    assert "bb", $2
-    assert "x-xBBGZbbBBBVZc", "xbbgz-xbbbvzbbc".gsub(/(b+.z)(..)/) { $2 + $1.upcase }
+        assert "abc!!g", "abcdefg".gsub(/def/, "!!")
+        assert "2.5".gsub(".", ","), "2,5"
+        assert true, /(aa).*(bb)/ === "andaadefbbje"
+        assert "aadefbb", $&
+        assert "aa", $1
+        assert "bb", $2
+        assert 4, "The cat sat in the hat" =~ /[csh](..) [csh]\1 in/
+        assert "x-xBBGZbbBBBVZc", "xbbgz-xbbbvzbbc".gsub(/(b+.z)(..)/) { $2 + $1.upcase }
     "#;
         assert_script(program);
     }
