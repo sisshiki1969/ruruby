@@ -389,6 +389,7 @@ mod test {
     assert "aadefbb", $&
     assert "aa", $1
     assert "bb", $2
+    assert "x-xBBGZbbBBBVZc", "xbbgz-xbbbvzbbc".gsub(/(b+.z)(..)/) { $2 + $1.upcase }
     "#;
         assert_script(program);
     }
