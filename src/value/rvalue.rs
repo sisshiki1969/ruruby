@@ -274,11 +274,7 @@ impl RValue {
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
         //Value::from(Box::into_raw(Box::new(self)) as u64)
-<<<<<<< HEAD
-        Value::from(ALLOC.with(|m| m.borrow_mut().alloc(self) as u64))
-=======
         Value::from(ALLOC.with(|m| m.borrow_mut().alloc(self)) as u64)
->>>>>>> 60f6048038a062c1b7b7dc05ca68e613c6dd0807
     }
 
     /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.
