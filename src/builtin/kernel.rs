@@ -73,11 +73,12 @@ pub fn init(globals: &mut Globals) -> Value {
     fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 2)?;
         if !vm.eval_eq(args[0], args[1])? {
-            panic!(
+            let res = format!(
                 "Assertion error: Expected: {} Actual: {}",
                 vm.val_inspect(args[0]),
                 vm.val_inspect(args[1]),
             );
+            Err(vm.error_argument(res))
         } else {
             println!("Assert OK: {:?}", vm.val_inspect(args[0]));
             Ok(Value::nil())
@@ -88,15 +89,21 @@ pub fn init(globals: &mut Globals) -> Value {
         vm.check_args_num(args.len(), 0)?;
         let method = match args.block {
             Some(block) => block,
-            None => panic!("assert_error(): Block not given."),
+            None => return Err(vm.error_argument("assert_error(): Block not given.")),
         };
         match vm.eval_block(method, &Args::new0()) {
-            Ok(val) => panic!(format!(
-                "Assertion error: No error occured. returned {}",
-                vm.val_inspect(val)
-            )),
-            Err(_) => return Ok(Value::nil()),
-        };
+            Ok(val) => {
+                let res = format!(
+                    "Assertion error: No error occured. returned {}",
+                    vm.val_inspect(val)
+                );
+                Err(vm.error_argument(res))
+            }
+            Err(err) => {
+                println!("Assert_error OK: {:?}", err.kind);
+                Ok(Value::nil())
+            }
+        }
     }
 
     fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -322,9 +329,13 @@ mod test {
         assert 10, Integer("10")
         assert_error { Integer("13.55") }
         assert_error { Integer([1,3,6]) }
+        assert_error { Integer(:"2") }
 
+        assert_error { assert 2, 3 }
+        assert_error { assert_error { true } }
         assert_error { raise }
         require_relative "../../tests/kernel_test.rb"
+        assert_error { require_relative "kernel_test.rb" }
         "#;
         assert_script(program);
     }
