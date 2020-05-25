@@ -131,3 +131,37 @@ impl Allocator {
         let _ = Box::from_raw(s);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn gc_test() {
+        let mut vm = VM::new();
+        let program = r#"
+            class Vec
+                def initialize
+                    @x = 100
+                    @y = 200
+                end
+            end
+
+            1000_000.times {
+                Vec.new
+            }
+        "#;
+        let res = vm.run(PathBuf::from("test"), &program, None);
+        vm.gc();
+        vm.print_bitmap();
+        match res {
+            Ok(_) => {}
+            Err(err) => {
+                err.show_err();
+                err.show_loc(0);
+                panic!("Got error: {:?}", err);
+            }
+        };
+    }
+}
