@@ -84,7 +84,7 @@ impl GC for BuiltinClass {
 
 impl GC for Globals {
     fn mark(&self, alloc: &mut Allocator) {
-        self.global_var.iter().for_each(|(_, v)| v.mark(alloc));
+        self.global_var.values().for_each(|v| v.mark(alloc));
         self.method_table.mark(alloc);
         self.inline_cache.table.iter().for_each(|e| match e {
             Some(e) => e.class.mark(alloc),

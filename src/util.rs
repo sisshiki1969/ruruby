@@ -52,6 +52,14 @@ impl<T> Ref<T> {
         Ref(unsafe { NonNull::new_unchecked(info as *const T as *mut T) })
     }
 
+    pub fn from_ptr(info: *mut T) -> Self {
+        Ref(unsafe { NonNull::new_unchecked(info) })
+    }
+
+    pub fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
+    }
+
     pub fn inner(&self) -> &T {
         unsafe { &*self.0.as_ptr() }
     }

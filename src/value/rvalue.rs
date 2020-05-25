@@ -37,10 +37,7 @@ impl GC for RValue {
         self.class.mark(alloc);
         self.var_table.values().for_each(|v| v.mark(alloc));
         match self.kind {
-            ObjKind::Class(cref) | ObjKind::Module(cref) => {
-                cref.superclass.mark(alloc);
-                cref.include.iter().for_each(|v| v.mark(alloc));
-            }
+            ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
             ObjKind::Array(aref) => {
                 aref.elements.iter().for_each(|v| v.mark(alloc));
             }

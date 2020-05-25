@@ -42,7 +42,7 @@ pub fn init_range(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "all?", all);
     globals.add_builtin_instance_method(class, "begin", begin);
-    globals.add_builtin_instance_method(class, "first", firat);
+    globals.add_builtin_instance_method(class, "first", first);
     globals.add_builtin_instance_method(class, "end", end);
     globals.add_builtin_instance_method(class, "last", last);
     globals.add_builtin_instance_method(class, "to_a", to_a);
@@ -84,7 +84,7 @@ fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(range.end)
 }
 
-fn firat(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let start = range.start.as_fixnum().unwrap();
     let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };

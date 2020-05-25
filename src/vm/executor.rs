@@ -415,6 +415,13 @@ impl VM {
         });
     }
 
+    pub fn force_gc(&self) {
+        ALLOC.with(|m| {
+            let mut alloc = m.borrow_mut();
+            alloc.gc(self);
+        });
+    }
+
     pub fn print_bitmap(&self) {
         ALLOC.with(|m| {
             m.borrow().print_mark();
@@ -458,7 +465,6 @@ macro_rules! try_err {
 impl VM {
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
-        self.gc();
         #[cfg(feature = "trace")]
         {
             if context.is_fiber {
@@ -472,6 +478,7 @@ impl VM {
             prev_context.stack_len = self.exec_stack.len();
         };
         self.context_push(context);
+        self.gc();
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();

@@ -17,15 +17,15 @@ pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
 }
 
+type FreeListRef = Ref<FreeList>;
+
 struct FreeList {
-    next: Option<NonNull<FreeList>>,
+    next: Option<FreeListRef>,
 }
 
 impl FreeList {
-    fn new(next: *mut FreeList) -> Self {
-        FreeList {
-            next: Some(unsafe { NonNull::new_unchecked(next) }),
-        }
+    fn new(next: FreeListRef) -> Self {
+        FreeList { next: Some(next) }
     }
 
     fn new_null() -> Self {
@@ -46,6 +46,8 @@ pub struct Allocator {
     alloc_flag: bool,
     /// Counter of marked objects,
     mark_counter: usize,
+    /// List of free objects.
+    free: Option<FreeListRef>,
 }
 
 impl Allocator {
@@ -53,7 +55,7 @@ impl Allocator {
         assert_eq!(56, std::mem::size_of::<RValue>());
         let mem_size = GCBOX_SIZE;
         let alloc_size = PAGE_LEN * mem_size + ALIGN - 1;
-        let arena = Allocator::alloc_page(alloc_size, ALIGN - 1);
+        let arena = Allocator::alloc_page(alloc_size);
         Allocator {
             //buf: arena,
             used: 0,
@@ -61,6 +63,7 @@ impl Allocator {
             pages: vec![(arena, [0; 64])],
             alloc_flag: false,
             mark_counter: 0,
+            free: None,
         }
     }
 
@@ -86,22 +89,24 @@ impl Allocator {
     }
 
     /// Allocate page with `alloc_size` and `align`.
-    fn alloc_page(alloc_size: usize, align: usize) -> *mut RValue {
+    fn alloc_page(alloc_size: usize) -> *mut RValue {
         let mut vec = Vec::<u8>::with_capacity(alloc_size);
         unsafe {
             vec.set_len(alloc_size);
         }
-        let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + align) & !align;
-        assert_eq!(0, ptr as *const u8 as usize & align);
+        let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
+            & !(ALIGN - 1);
+        assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
         ptr as *mut RValue
     }
 
     pub fn gc<T: GC>(&mut self, root: &T) {
         self.clear_mark();
         root.mark(self);
+        eprintln!("marked: {}", self.get_counter());
         self.sweep();
         self.clear_allocated();
-        eprintln!("marked: {}", self.get_counter());
+        //self.print_mark();
     }
 
     /// If object is already marked, return true.
@@ -113,7 +118,7 @@ impl Allocator {
             .pages
             .iter_mut()
             .find(|(p, _)| *p == page_ptr as *mut RValue)
-            .unwrap_or_else(|| panic!());
+            .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
         let offset = ptr - page_ptr;
         assert_eq!(0, offset % GCBOX_SIZE);
         let index = offset / GCBOX_SIZE;
@@ -138,10 +143,15 @@ impl Allocator {
                 for bit in 0..64 {
                     if map & 1 == 0 {
                         unsafe {
-                            //let p = page_ptr.add(i * 64 + bit) as *mut FreeList;
-                            //std::ptr::write(p, FreeList::new_null());
-                            let p = page_ptr.add(i * 64 + bit);
-                            std::ptr::write(p, RValue::new_fixnum(0));
+                            let p = page_ptr.add(i * 64 + bit) as *mut FreeList;
+                            let free = match self.free {
+                                None => FreeList::new_null(),
+                                Some(f) => FreeList::new(f),
+                            };
+                            std::ptr::write(p, free);
+                            self.free = Some(FreeListRef::from_ptr(p));
+                            //let p = page_ptr.add(i * 64 + bit);
+                            //std::ptr::write(p, RValue::new_flonum(0.5));
                         }
                         c += 1
                     }
@@ -150,6 +160,18 @@ impl Allocator {
             }
         }
         eprintln!("sweep: {}", c);
+        c = 0;
+        let mut free = self.free;
+        loop {
+            match free {
+                Some(f) => {
+                    free = f.next;
+                    c += 1;
+                }
+                None => break,
+            };
+        }
+        eprintln!("free list: {}", c);
     }
 
     pub fn print_mark(&self) {
@@ -168,20 +190,28 @@ impl Allocator {
 
     /// Allocate object.
     pub fn alloc(&mut self, data: RValue) -> *mut RValue {
+        if self.free.is_some() {
+            let ret = self.free.unwrap();
+            self.free = ret.next;
+            eprintln!("free_alloc");
+            return ret.as_ptr() as *mut RValue;
+        }
         let ptr = unsafe {
             let page = self.pages.last().unwrap().0;
             let ptr = page.add(self.used);
             std::ptr::write(ptr, data);
             ptr
         };
+        eprintln!("wm_alloc: {:?}", self.used);
         self.used += 1;
-        //eprintln!("alloc: {:?}", self.used);
-        if self.used >= PAGE_LEN {
-            let arena = Allocator::alloc_page(self.alloc_size, ALIGN - 1);
-            self.used = 0;
-            //self.buf = arena;
-            self.pages.push((arena, [0; 64]));
+        if self.used >= 2000 {
             self.alloc_flag = true;
+        }
+        if self.used >= PAGE_LEN {
+            eprintln!("alloc new page");
+            let page_ptr = Allocator::alloc_page(self.alloc_size);
+            self.used = 0;
+            self.pages.push((page_ptr, [0; 64]));
         }
         ptr
     }
@@ -214,8 +244,8 @@ mod tests {
             }
         "#;
         let res = vm.run(PathBuf::from("test"), &program, None);
-        vm.gc();
-        vm.print_bitmap();
+        //vm.gc();
+        //vm.print_bitmap();
         match res {
             Ok(_) => {}
             Err(err) => {

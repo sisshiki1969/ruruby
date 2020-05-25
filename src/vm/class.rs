@@ -22,6 +22,13 @@ impl ClassInfo {
     }
 }
 
+impl GC for ClassInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.superclass.mark(alloc);
+        self.include.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
 pub type ClassRef = Ref<ClassInfo>;
 
 impl ClassRef {
