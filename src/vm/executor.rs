@@ -406,7 +406,7 @@ impl VM {
         Ok(val)
     }
 
-    pub fn gc(&self) {
+    pub fn gc(&mut self) {
         ALLOC.with(|m| {
             let mut alloc = m.borrow_mut();
             if alloc.is_allocated() {
@@ -415,7 +415,7 @@ impl VM {
         });
     }
 
-    pub fn force_gc(&self) {
+    pub fn force_gc(&mut self) {
         ALLOC.with(|m| {
             let mut alloc = m.borrow_mut();
             alloc.gc(self);
@@ -478,11 +478,11 @@ impl VM {
             prev_context.stack_len = self.exec_stack.len();
         };
         self.context_push(context);
-        self.gc();
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
         loop {
+            self.gc();
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             {

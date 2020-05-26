@@ -397,7 +397,10 @@ impl Value {
     }
 
     pub fn as_class(&self) -> ClassRef {
-        self.is_class().unwrap()
+        match self.is_class() {
+            Some(class) => class,
+            None => panic!(format!("Class is not class. {:?}", *self)),
+        }
     }
 
     pub fn is_class(&self) -> Option<ClassRef> {
