@@ -11,6 +11,10 @@ pub fn repl_vm() {
         "HashMap: {}",
         std::mem::size_of::<std::collections::HashMap<Value, Value>>()
     );
+    println!(
+        "Option<Box<HashMap>>: {}",
+        std::mem::size_of::<Option<Box<std::collections::HashMap<Value, Value>>>>()
+    );
     println!("RValue: {}", std::mem::size_of::<RValue>());
     println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
     println!("RString: {}", std::mem::size_of::<RString>());

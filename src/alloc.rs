@@ -179,10 +179,12 @@ impl Allocator {
                     if map & 1 == 0 {
                         unsafe {
                             let ptr = page_ptr.add(i * 64 + bit);
+                            let next_ptr =
+                                &(*ptr).next as *const Option<GCBoxRef> as *mut Option<GCBoxRef>;
                             //let v = Value::from(ptr as u64);
                             //eprintln!("{}", vm.val_inspect(v));
 
-                            std::ptr::write(ptr, GCBox::new(None));
+                            std::ptr::write(next_ptr, self.free);
                             self.free = Some(GCBoxRef::from_ptr(ptr));
                         }
                         c += 1

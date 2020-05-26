@@ -482,7 +482,7 @@ impl VM {
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
         loop {
-            self.gc();
+            //self.gc();
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             {
