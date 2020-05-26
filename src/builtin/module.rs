@@ -20,22 +20,23 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
     loop {
-        v.append(
-            &mut class
-                .as_object()
-                .var_table()
-                .keys()
-                .filter(|x| {
-                    vm.globals
-                        .get_ident_name(**x)
-                        .chars()
-                        .nth(0)
-                        .unwrap()
-                        .is_ascii_uppercase()
-                })
-                .map(|k| Value::symbol(*k))
-                .collect(),
-        );
+        match &mut class.as_object().var_table() {
+            Some(table) => v.append(
+                &mut table
+                    .keys()
+                    .filter(|x| {
+                        vm.globals
+                            .get_ident_name(**x)
+                            .chars()
+                            .nth(0)
+                            .unwrap()
+                            .is_ascii_uppercase()
+                    })
+                    .map(|k| Value::symbol(*k))
+                    .collect::<Vec<Value>>(),
+            ),
+            None => {}
+        };
         match class.superclass() {
             Some(superclass) => {
                 if superclass == vm.globals.builtins.object {

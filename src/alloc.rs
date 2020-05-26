@@ -229,7 +229,7 @@ impl Allocator {
         if self.free.is_some() {
             let ret = self.free.unwrap();
             self.free = ret.next;
-            eprintln!("free_alloc");
+            //eprintln!("free_alloc");
             return ret.inner_ptr();
         }
         let ptr = unsafe {
@@ -242,7 +242,7 @@ impl Allocator {
         self.used += 1;
 
         if self.used >= PAGE_LEN {
-            eprintln!("alloc new page");
+            //eprintln!("alloc new page");
             let page_ptr = Allocator::alloc_page(self.alloc_size);
             self.used = 0;
             self.pages.push((page_ptr, [0; 64]));

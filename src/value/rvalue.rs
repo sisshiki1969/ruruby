@@ -6,7 +6,7 @@ use crate::*;
 #[derive(Debug, Clone, PartialEq)]
 pub struct RValue {
     class: Value,
-    var_table: Box<ValueTable>,
+    var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
 }
 
@@ -35,7 +35,10 @@ impl GC for RValue {
             return;
         };
         self.class.mark(alloc);
-        self.var_table.values().for_each(|v| v.mark(alloc));
+        match &self.var_table {
+            Some(table) => table.values().for_each(|v| v.mark(alloc)),
+            None => {}
+        }
         match self.kind {
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
             ObjKind::Array(aref) => {
@@ -97,11 +100,17 @@ impl RValue {
 
     pub fn inspect(&self, vm: &mut VM) -> String {
         let mut s = format! {"#<{}:0x{:x}", self.class_name(&vm.globals), self.id()};
-        for (k, v) in self.var_table() {
-            let inspect = vm.val_to_s(*v);
-            let id = vm.globals.get_ident_name(*k);
-            s = format!("{} {}={}", s, id, inspect);
+        match self.var_table() {
+            Some(table) => {
+                for (k, v) in table {
+                    let inspect = vm.val_to_s(*v);
+                    let id = vm.globals.get_ident_name(*k);
+                    s = format!("{} {}={}", s, id, inspect);
+                }
+            }
+            None => {}
         }
+
         format!("{}>", s)
     }
 
@@ -109,14 +118,14 @@ impl RValue {
         RValue {
             class: Value::nil(), // dummy for boot strapping
             kind: ObjKind::Class(classref),
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
         }
     }
 
     pub fn new_fixnum(i: i64) -> Self {
         RValue {
             class: Value::nil(),
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Integer(i),
         }
     }
@@ -124,7 +133,7 @@ impl RValue {
     pub fn new_flonum(f: f64) -> Self {
         RValue {
             class: Value::nil(),
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Float(f),
         }
     }
@@ -132,7 +141,7 @@ impl RValue {
     pub fn new_string(globals: &Globals, s: String) -> Self {
         RValue {
             class: globals.builtins.string,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::String(RString::Str(s)),
         }
     }
@@ -140,7 +149,7 @@ impl RValue {
     pub fn new_bytes(globals: &Globals, b: Vec<u8>) -> Self {
         RValue {
             class: globals.builtins.string,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::String(RString::Bytes(b)),
         }
     }
@@ -148,7 +157,7 @@ impl RValue {
     pub fn new_ordinary(class: Value) -> Self {
         RValue {
             class,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Ordinary,
         }
     }
@@ -156,7 +165,7 @@ impl RValue {
     pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
         RValue {
             class: globals.builtins.class,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Class(classref),
         }
     }
@@ -164,7 +173,7 @@ impl RValue {
     pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
         RValue {
             class: globals.builtins.module,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Module(classref),
         }
     }
@@ -172,7 +181,7 @@ impl RValue {
     pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
         RValue {
             class: globals.builtins.array,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Array(arrayref),
         }
     }
@@ -180,7 +189,7 @@ impl RValue {
     pub fn new_range(globals: &Globals, range: RangeInfo) -> Self {
         RValue {
             class: globals.builtins.range,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Range(range),
         }
     }
@@ -188,7 +197,7 @@ impl RValue {
     pub fn new_splat(globals: &Globals, val: Value) -> Self {
         RValue {
             class: globals.builtins.array,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Splat(val),
         }
     }
@@ -196,7 +205,7 @@ impl RValue {
     pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
         RValue {
             class: globals.builtins.hash,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Hash(hashref),
         }
     }
@@ -204,7 +213,7 @@ impl RValue {
     pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
         RValue {
             class: globals.builtins.regexp,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Regexp(regexpref),
         }
     }
@@ -212,7 +221,7 @@ impl RValue {
     pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
         RValue {
             class: globals.builtins.procobj,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Proc(procref),
         }
     }
@@ -220,7 +229,7 @@ impl RValue {
     pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
         RValue {
             class: globals.builtins.method,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Method(methodref),
         }
     }
@@ -235,7 +244,7 @@ impl RValue {
         let fiber = FiberInfo::new(vm, context, rec, tx);
         RValue {
             class: globals.builtins.fiber,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Fiber(FiberRef::new(fiber)),
         }
     }
@@ -250,7 +259,7 @@ impl RValue {
         let enum_info = EnumRef::from(method, receiver, args);
         RValue {
             class: globals.builtins.enumerator,
-            var_table: Box::new(HashMap::new()),
+            var_table: None,
             kind: ObjKind::Enumerator(enum_info),
         }
     }
@@ -290,23 +299,43 @@ impl RValue {
     }
 
     pub fn get_var(&self, id: IdentId) -> Option<Value> {
-        self.var_table.get(&id).cloned()
+        match &self.var_table {
+            Some(table) => table.get(&id).cloned(),
+            None => None,
+        }
     }
 
     pub fn get_mut_var(&mut self, id: IdentId) -> Option<&mut Value> {
-        self.var_table.get_mut(&id)
+        match &mut self.var_table {
+            Some(table) => table.get_mut(&id),
+            None => None,
+        }
     }
 
     pub fn set_var(&mut self, id: IdentId, val: Value) {
-        self.var_table.insert(id, val);
+        match &mut self.var_table {
+            Some(table) => table.insert(id, val),
+            None => {
+                let mut table = HashMap::new();
+                let v = table.insert(id, val);
+                std::mem::replace(&mut self.var_table, Some(Box::new(table)));
+                v
+            }
+        };
     }
 
-    pub fn var_table(&self) -> &ValueTable {
-        &self.var_table
+    pub fn var_table(&self) -> Option<&ValueTable> {
+        match &self.var_table {
+            Some(table) => Some(table),
+            None => None,
+        }
     }
 
     pub fn var_table_mut(&mut self) -> &mut ValueTable {
-        &mut self.var_table
+        if self.var_table.is_none() {
+            std::mem::replace(&mut self.var_table, Some(Box::new(HashMap::new())));
+        }
+        self.var_table.as_deref_mut().unwrap()
     }
 
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {

@@ -133,12 +133,14 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let receiver = self_val.as_object();
-    let res = receiver
-        .var_table()
-        .keys()
-        .filter(|x| vm.globals.get_ident_name(**x).chars().nth(0) == Some('@'))
-        .map(|x| Value::symbol(*x))
-        .collect();
+    let res = match receiver.var_table() {
+        Some(table) => table
+            .keys()
+            .filter(|x| vm.globals.get_ident_name(**x).chars().nth(0) == Some('@'))
+            .map(|x| Value::symbol(*x))
+            .collect(),
+        None => vec![],
+    };
     Ok(Value::array_from(&vm.globals, res))
 }
 
