@@ -202,10 +202,8 @@ impl IntoIterator for HashInfo {
 
 impl GC for HashInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        for k in &self.keys() {
+        for (k, v) in self.iter() {
             k.mark(alloc);
-        }
-        for v in &self.values() {
             v.mark(alloc);
         }
     }
