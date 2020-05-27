@@ -406,11 +406,29 @@ impl VM {
         Ok(val)
     }
 
+    fn dump_values(&mut self) {
+        for (i, context) in self.exec_context.clone().iter().enumerate() {
+            eprintln!("context: {}", i);
+            let value = self.val_inspect(context.self_value);
+            eprintln!("self: {}", value);
+            for (k, v) in context.iseq_ref.lvar.table() {
+                let name = self.globals.get_ident_name(*k).to_string();
+                let value = self.val_inspect(context[*v]);
+                eprintln!("lvar({}): {} {}", v.as_u32(), name, value);
+            }
+        }
+        for v in self.exec_stack.clone() {
+            let value = self.val_inspect(v);
+            eprintln!("stack: {}", value);
+        }
+    }
+
     pub fn gc(&mut self) {
         ALLOC.with(|m| {
             let mut alloc = m.borrow_mut();
             if alloc.is_allocated() {
                 alloc.gc(self);
+                //self.dump_values();
             }
         });
     }
@@ -482,12 +500,12 @@ impl VM {
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
         loop {
-            //self.gc();
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             {
                 self.perf.get_perf(iseq[self.pc]);
             }
+            self.gc();
             #[cfg(feature = "trace")]
             {
                 println!(
