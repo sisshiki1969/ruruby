@@ -129,21 +129,42 @@ impl Allocator {
         eprintln!("--GC completed")
     }
 
+    /// Allocate object.
+    pub fn alloc(&mut self, data: RValue) -> *mut RValue {
+        match self.free {
+            Some(mut free) => {
+                self.free = free.next;
+                free.next = None;
+                free.inner = data;
+                self.allocated += 1;
+                return free.inner_ptr();
+            }
+            None => {}
+        }
+        let ptr = unsafe {
+            let ptr = self.pages.last().unwrap().0.add(self.used);
+            *ptr = GCBox::new_rvalue(data);
+            (*ptr).inner_ptr()
+        };
+        //eprintln!("wm_alloc: {:?}", self.used);
+        self.used += 1;
+        self.allocated += 1;
+
+        self.alloc_flag = self.allocated % 1024 == 0;
+
+        if self.used >= PAGE_LEN {
+            let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
+            self.used = 0;
+            self.pages.push((page_ptr, [0; 64]));
+        }
+        ptr
+    }
+
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
     pub fn mark(&mut self, ptr: &RValue) -> bool {
         let ptr = (ptr as *const RValue as usize - OFFSET) as *const GCBox as *mut GCBox;
         self.mark_ptr(ptr)
-    }
-
-    #[allow(dead_code)]
-    fn check_ptr(&self, ptr: *mut GCBox) {
-        let ptr = ptr as *const GCBox as usize;
-        let page_ptr = ptr & !(ALIGN - 1);
-        self.pages
-            .iter()
-            .find(|(p, _)| *p == page_ptr as *mut GCBox)
-            .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
     }
 
     fn mark_ptr(&mut self, ptr: *mut GCBox) -> bool {
@@ -194,7 +215,8 @@ impl Allocator {
                     let ptr = unsafe {
                         let ptr = page_ptr.add(i * 64 + bit);
                         (*ptr).next = self.free;
-                        (*ptr).inner = RValue::new_flonum(2.5);
+                        let dummy = RValue::new_flonum(2.5);
+                        std::mem::replace(&mut (*ptr).inner, dummy);
                         ptr
                     };
                     self.free = Some(GCBoxRef::from_ptr(ptr));
@@ -212,7 +234,8 @@ impl Allocator {
                         let ptr = unsafe {
                             let ptr = page_ptr.add(i * 64 + bit);
                             (*ptr).next = self.free;
-                            (*ptr).inner = RValue::new_flonum(2.5);
+                            let dummy = RValue::new_flonum(2.5);
+                            std::mem::replace(&mut (*ptr).inner, dummy);
                             ptr
                         };
                         self.free = Some(GCBoxRef::from_ptr(ptr));
@@ -225,6 +248,17 @@ impl Allocator {
         #[cfg(features = "verbose")]
         eprintln!("sweep: {}", c);
         //eprintln!("free list: {}", self.check_free_list());
+    }
+
+    // For debug
+    #[allow(dead_code)]
+    fn check_ptr(&self, ptr: *mut GCBox) {
+        let ptr = ptr as *const GCBox as usize;
+        let page_ptr = ptr & !(ALIGN - 1);
+        self.pages
+            .iter()
+            .find(|(p, _)| *p == page_ptr as *mut GCBox)
+            .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
     }
 
     #[allow(dead_code)]
@@ -256,39 +290,6 @@ impl Allocator {
             });
             eprintln!("");
         });
-    }
-
-    /// Allocate object.
-    pub fn alloc(&mut self, data: RValue) -> *mut RValue {
-        match self.free {
-            Some(mut free) => {
-                self.free = free.next;
-                free.next = None;
-                free.inner = data;
-                self.allocated += 1;
-                return free.inner_ptr();
-            }
-            None => {}
-        }
-        let ptr = unsafe {
-            let ptr = self.pages.last().unwrap().0.add(self.used);
-            *ptr = GCBox::new_rvalue(data);
-            (*ptr).inner_ptr()
-        };
-        //eprintln!("wm_alloc: {:?}", self.used);
-        self.used += 1;
-        self.allocated += 1;
-
-        if self.allocated % 1024 == 0 {
-            self.alloc_flag = true
-        }
-
-        if self.used >= PAGE_LEN {
-            let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
-            self.used = 0;
-            self.pages.push((page_ptr, [0; 64]));
-        }
-        ptr
     }
 
     #[allow(dead_code)]
