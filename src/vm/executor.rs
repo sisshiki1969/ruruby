@@ -406,6 +406,7 @@ impl VM {
         Ok(val)
     }
 
+    #[allow(dead_code)]
     fn dump_values(&mut self) {
         for (i, context) in self.exec_context.clone().iter().enumerate() {
             eprintln!("context: {}", i);
@@ -499,13 +500,13 @@ impl VM {
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
+        self.gc();
         loop {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             {
                 self.perf.get_perf(iseq[self.pc]);
             }
-            self.gc();
             #[cfg(feature = "trace")]
             {
                 println!(

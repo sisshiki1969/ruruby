@@ -12,6 +12,7 @@ const OFFSET: usize = 0;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
 const PAGE_LEN: usize = 64 * 64;
 const ALIGN: usize = 0x4_0000; // 256kb
+const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + ALIGN - 1;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
@@ -45,12 +46,10 @@ impl GCBox {
 type GCBoxRef = Ref<GCBox>;
 
 pub struct Allocator {
-    /// Pointer to current page.
-    //buf: *mut RValue,
     /// Allocated number of objects in current page.
     used: usize,
-    /// Allocation size in byte for a single arena.
-    alloc_size: usize,
+    /// Total allocated objects.
+    allocated: usize,
     /// Info for allocated pages.
     pages: Vec<(*mut GCBox, [u64; 64])>,
     /// Flag for new page allocation.
@@ -70,12 +69,11 @@ impl Allocator {
             OFFSET,
             gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
         );
-        let alloc_size = PAGE_LEN * GCBOX_SIZE + ALIGN - 1;
-        let page_ptr = Allocator::alloc_page(alloc_size);
+        let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
         Allocator {
             //buf: arena,
             used: 0,
-            alloc_size,
+            allocated: 0,
             pages: vec![(page_ptr, [0; 64])],
             alloc_flag: false,
             mark_counter: 0,
@@ -85,10 +83,6 @@ impl Allocator {
 
     pub fn is_allocated(&self) -> bool {
         self.alloc_flag
-    }
-
-    pub fn clear_allocated(&mut self) {
-        self.alloc_flag = false;
     }
 
     /// Clear all mark bitmaps.
@@ -112,19 +106,26 @@ impl Allocator {
         }
         let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
             & !(ALIGN - 1);
-        assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
+        //assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
+        #[cfg(features = "verbose")]
         eprintln!("page allocated: {:?}", ptr as *mut GCBox);
         ptr as *mut GCBox
     }
 
     pub fn gc(&mut self, root: &mut VM) {
-        eprintln!("--GC start");
+        #[cfg(features = "verbose")]
+        {
+            eprintln!("--GC start");
+            eprintln!("allocated: {}", self.allocated);
+        }
         self.clear_mark();
         root.mark(self);
+        #[cfg(features = "verbose")]
         eprintln!("marked: {}", self.get_counter());
         self.sweep(root);
-        self.clear_allocated();
-        self.print_mark();
+        self.alloc_flag = false;
+        //self.print_mark();
+        #[cfg(features = "verbose")]
         eprintln!("--GC completed")
     }
 
@@ -135,6 +136,7 @@ impl Allocator {
         self.mark_ptr(ptr)
     }
 
+    #[allow(dead_code)]
     fn check_ptr(&self, ptr: *mut GCBox) {
         let ptr = ptr as *const GCBox as usize;
         let page_ptr = ptr & !(ALIGN - 1);
@@ -153,9 +155,9 @@ impl Allocator {
             .find(|(p, _)| *p == page_ptr as *mut GCBox)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
         let offset = ptr - page_ptr;
-        assert_eq!(0, offset % GCBOX_SIZE);
+        //assert_eq!(0, offset % GCBOX_SIZE);
         let index = offset / GCBOX_SIZE;
-        assert!(index < PAGE_LEN);
+        //assert!(index < PAGE_LEN);
         let bit_mask = 1 << (index % 64);
         let word = index / 64;
         let bitmap = &mut page_info.1[word];
@@ -181,6 +183,7 @@ impl Allocator {
             };
         }
 
+        #[allow(unused_variables)]
         let mut c = 0;
 
         let (page_ptr, bitmap) = self.pages.last().unwrap();
@@ -208,13 +211,8 @@ impl Allocator {
                     if map & 1 == 0 {
                         let ptr = unsafe {
                             let ptr = page_ptr.add(i * 64 + bit);
-                            //let next_ptr =
-                            //    &(*ptr).next as *const Option<GCBoxRef> as *mut Option<GCBoxRef>;
-                            //let v = Value::from(ptr as u64);
-                            //eprintln!("{}", vm.val_inspect(v));
                             (*ptr).next = self.free;
                             (*ptr).inner = RValue::new_flonum(2.5);
-                            //std::ptr::write(next_ptr, self.free);
                             ptr
                         };
                         self.free = Some(GCBoxRef::from_ptr(ptr));
@@ -224,10 +222,12 @@ impl Allocator {
                 }
             }
         }
+        #[cfg(features = "verbose")]
         eprintln!("sweep: {}", c);
-        eprintln!("free list: {}", self.check_free_list());
+        //eprintln!("free list: {}", self.check_free_list());
     }
 
+    #[allow(dead_code)]
     fn check_free_list(&self) -> usize {
         let mut c = 0;
         let mut free = self.free;
@@ -261,17 +261,11 @@ impl Allocator {
     /// Allocate object.
     pub fn alloc(&mut self, data: RValue) -> *mut RValue {
         match self.free {
-            Some(free) => {
+            Some(mut free) => {
                 self.free = free.next;
-                eprintln!(
-                    "free_alloc: GCBox:{:?} RValue:{:?}",
-                    free.as_ptr(),
-                    free.inner_ptr()
-                );
-                self.check_free_list();
-                if self.mark_ptr(free.as_ptr()) {
-                    panic!("Allocated free cell is marked.")
-                };
+                free.next = None;
+                free.inner = data;
+                self.allocated += 1;
                 return free.inner_ptr();
             }
             None => {}
@@ -283,20 +277,23 @@ impl Allocator {
         };
         //eprintln!("wm_alloc: {:?}", self.used);
         self.used += 1;
+        self.allocated += 1;
+
+        if self.allocated % 1024 == 0 {
+            self.alloc_flag = true
+        }
 
         if self.used >= PAGE_LEN {
-            //eprintln!("alloc new page");
-            let page_ptr = Allocator::alloc_page(self.alloc_size);
+            let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
             self.pages.push((page_ptr, [0; 64]));
-            self.alloc_flag = true;
         }
         ptr
     }
 
     #[allow(dead_code)]
     unsafe fn free(&mut self, raw: *mut RValue) {
-        let s = std::slice::from_raw_parts_mut(raw as *mut u8, self.alloc_size);
+        let s = std::slice::from_raw_parts_mut(raw as *mut u8, ALLOC_SIZE);
         let _ = Box::from_raw(s);
     }
 }

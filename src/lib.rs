@@ -1,6 +1,7 @@
 //#![feature(test)]
 #![feature(box_patterns)]
 extern crate fancy_regex;
+//#[macro_use]
 extern crate lazy_static;
 pub mod alloc;
 pub mod builtin;
