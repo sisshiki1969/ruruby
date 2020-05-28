@@ -51,7 +51,7 @@ pub struct Allocator {
     /// Total allocated objects.
     allocated: usize,
     /// Info for allocated pages.
-    pages: Vec<(*mut GCBox, [u64; 64])>,
+    pages: Vec<(GCBoxRef, [u64; 64])>,
     /// Flag for new page allocation.
     alloc_flag: bool,
     /// Counter of marked objects,
@@ -74,7 +74,7 @@ impl Allocator {
             //buf: arena,
             used: 0,
             allocated: 0,
-            pages: vec![(page_ptr, [0; 64])],
+            pages: vec![(GCBoxRef::from_ptr(page_ptr), [0; 64])],
             alloc_flag: false,
             mark_counter: 0,
             free: None,
@@ -142,7 +142,7 @@ impl Allocator {
             None => {}
         }
         let ptr = unsafe {
-            let ptr = self.pages.last().unwrap().0.add(self.used);
+            let ptr = self.pages.last().unwrap().0.as_ptr().add(self.used);
             *ptr = GCBox::new_rvalue(data);
             (*ptr).inner_ptr()
         };
@@ -155,7 +155,7 @@ impl Allocator {
         if self.used >= PAGE_LEN {
             let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
-            self.pages.push((page_ptr, [0; 64]));
+            self.pages.push((GCBoxRef::from_ptr(page_ptr), [0; 64]));
         }
         ptr
     }
@@ -173,7 +173,7 @@ impl Allocator {
         let page_info = self
             .pages
             .iter_mut()
-            .find(|(p, _)| *p == page_ptr as *mut GCBox)
+            .find(|(p, _)| p.as_ptr() == page_ptr as *mut GCBox)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
         let offset = ptr - page_ptr;
         //assert_eq!(0, offset % GCBOX_SIZE);
@@ -213,7 +213,7 @@ impl Allocator {
             for bit in 0..64 {
                 if map & 1 == 0 {
                     let ptr = unsafe {
-                        let ptr = page_ptr.add(i * 64 + bit);
+                        let ptr = page_ptr.as_ptr().add(i * 64 + bit);
                         (*ptr).next = self.free;
                         let dummy = RValue::new_flonum(2.5);
                         std::mem::replace(&mut (*ptr).inner, dummy);
@@ -232,7 +232,7 @@ impl Allocator {
                 for bit in 0..64 {
                     if map & 1 == 0 {
                         let ptr = unsafe {
-                            let ptr = page_ptr.add(i * 64 + bit);
+                            let ptr = page_ptr.as_ptr().add(i * 64 + bit);
                             (*ptr).next = self.free;
                             let dummy = RValue::new_flonum(2.5);
                             std::mem::replace(&mut (*ptr).inner, dummy);
@@ -257,7 +257,7 @@ impl Allocator {
         let page_ptr = ptr & !(ALIGN - 1);
         self.pages
             .iter()
-            .find(|(p, _)| *p == page_ptr as *mut GCBox)
+            .find(|(p, _)| p.as_ptr() == page_ptr as *mut GCBox)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
     }
 
