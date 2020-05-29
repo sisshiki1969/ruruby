@@ -425,26 +425,19 @@ impl VM {
     }
 
     pub fn gc(&mut self) {
-        ALLOC.with(|m| {
-            let mut alloc = m.borrow_mut();
-            if alloc.is_allocated() {
-                alloc.gc(self);
-                //self.dump_values();
-            }
-        });
+        let mut alloc = ALLOC.lock().unwrap();
+        if alloc.is_allocated() {
+            alloc.gc(self);
+            //self.dump_values();
+        }
     }
 
     pub fn force_gc(&mut self) {
-        ALLOC.with(|m| {
-            let mut alloc = m.borrow_mut();
-            alloc.gc(self);
-        });
+        ALLOC.lock().unwrap().gc(self);
     }
 
     pub fn print_bitmap(&self) {
-        ALLOC.with(|m| {
-            m.borrow().print_mark();
-        });
+        ALLOC.lock().unwrap().print_mark();
     }
 }
 

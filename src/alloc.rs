@@ -1,12 +1,13 @@
 use crate::*;
-use std::cell::RefCell;
+//use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
-thread_local! (
-    pub static ALLOC: RefCell<Allocator> = {
+lazy_static! {
+    pub static ref ALLOC: Arc<Mutex<Allocator>> = {
         let alloc = Allocator::new();
-        RefCell::new(alloc)
-    }
-);
+        Arc::new(Mutex::new(alloc))
+    };
+}
 
 const OFFSET: usize = 0;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
