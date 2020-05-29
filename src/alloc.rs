@@ -31,13 +31,6 @@ impl GCBox {
         }
     }
 
-    fn new_rvalue(data: RValue) -> Self {
-        GCBox {
-            inner: data,
-            next: None,
-        }
-    }
-
     fn inner_ptr(&self) -> *mut RValue {
         &self.inner as *const RValue as *mut RValue
     }
@@ -132,32 +125,34 @@ impl Allocator {
     /// Allocate object.
     pub fn alloc(&mut self, data: RValue) -> *mut RValue {
         match self.free {
-            Some(mut free) => {
-                self.free = free.next;
-                free.next = None;
-                free.inner = data;
+            Some(mut gcbox) => {
+                // Allocate from the free list.
+                self.free = gcbox.next;
+                gcbox.next = None;
+                gcbox.inner = data;
                 self.allocated += 1;
-                return free.inner_ptr();
+                return gcbox.inner_ptr();
             }
             None => {}
         }
-        let ptr = unsafe {
-            let ptr = self.pages.last().unwrap().0.as_ptr().add(self.used);
-            *ptr = GCBox::new_rvalue(data);
-            (*ptr).inner_ptr()
-        };
-        //eprintln!("wm_alloc: {:?}", self.used);
-        self.used += 1;
-        self.allocated += 1;
 
-        self.alloc_flag = self.allocated % 1024 == 0;
-
-        if self.used >= PAGE_LEN {
+        if self.used == PAGE_LEN - 1 {
+            // Allocate new page.
             let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
             self.pages.push((GCBoxRef::from_ptr(page_ptr), [0; 64]));
         }
-        ptr
+        //eprintln!("wm_alloc: {:?}", self.used);
+        // Bump allocation.
+        self.used += 1;
+        self.allocated += 1;
+        self.alloc_flag = self.allocated % 1024 == 0;
+
+        let ptr = unsafe { self.pages.last().unwrap().0.as_ptr().add(self.used) };
+        let mut gcbox = GCBoxRef::from_ptr(ptr);
+        gcbox.next = None;
+        gcbox.inner = data;
+        gcbox.inner_ptr()
     }
 
     /// If object is already marked, return true.
