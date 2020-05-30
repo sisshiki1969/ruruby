@@ -1870,6 +1870,7 @@ impl VM {
             }
             RV::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
             RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner()),
                 ObjKind::String(s) => s.to_s(),
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", self.globals.get_ident_name(id)},
@@ -1903,6 +1904,7 @@ impl VM {
             }
             RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
             RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner()),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {

@@ -12,6 +12,7 @@ pub struct RValue {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjKind {
+    Invalid,
     Ordinary,
     Integer(i64),
     Float(f64),
@@ -40,6 +41,7 @@ impl GC for RValue {
             None => {}
         }
         match self.kind {
+            ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
             ObjKind::Array(aref) => {
                 aref.elements.iter().for_each(|v| v.mark(alloc));
@@ -71,6 +73,7 @@ impl RValue {
             class: self.class,
             var_table: self.var_table.clone(),
             kind: match &self.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
                 ObjKind::Array(aref) => ObjKind::Array(aref.dup()),
                 ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
                 ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.dup()),
@@ -112,6 +115,14 @@ impl RValue {
         }
 
         format!("{}>", s)
+    }
+
+    pub fn new_invalid() -> Self {
+        RValue {
+            class: Value::nil(),
+            kind: ObjKind::Invalid,
+            var_table: None,
+        }
     }
 
     pub fn new_bootstrap(classref: ClassRef) -> Self {

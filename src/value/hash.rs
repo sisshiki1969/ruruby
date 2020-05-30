@@ -24,6 +24,7 @@ impl Hash for HashKey {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::Integer(lhs) => lhs.hash(state),
                 ObjKind::Float(lhs) => (*lhs as u64).hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
@@ -59,6 +60,8 @@ impl PartialEq for HashKey {
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
                 (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
                 (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
+                (ObjKind::Invalid, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
+                (_, ObjKind::Invalid) => panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs),
                 _ => lhs.kind == rhs.kind,
             },
             _ => false,

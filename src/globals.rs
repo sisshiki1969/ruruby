@@ -211,6 +211,9 @@ impl Globals {
                                 ClassRef::from(None, self.get_singleton_class(superclass)?)
                             }
                         }
+                        ObjKind::Invalid => {
+                            panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner())
+                        }
                         _ => ClassRef::from(None, None),
                     };
                     singleton_class.is_singleton = true;
@@ -260,6 +263,7 @@ impl Globals {
             RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
             RV::Object(oref) => match oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner()),
                 ObjKind::String(_) => "String".to_string(),
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::Range(_) => "Range".to_string(),

@@ -51,6 +51,7 @@ impl std::hash::Hash for Value {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::Integer(lhs) => lhs.hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
@@ -101,6 +102,12 @@ impl PartialEq for Value {
                 (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
                 _ => false,
             },
+            (ObjKind::Invalid, _) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
+            }
+            (_, ObjKind::Invalid) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
+            }
             (_, _) => false,
         }
     }
@@ -207,6 +214,7 @@ impl Value {
                 }
             }
             Some(info) => match &info.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", info),
                 ObjKind::Integer(_) => globals.builtins.integer,
                 ObjKind::Float(_) => globals.builtins.float,
                 _ => info.class(),
@@ -726,6 +734,12 @@ impl Value {
                 lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
             }
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
+            (ObjKind::Invalid, _) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
+            }
+            (_, ObjKind::Invalid) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
+            }
             (_, _) => false,
         }
     }

@@ -1,11 +1,11 @@
 use crate::*;
 //use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 lazy_static! {
-    pub static ref ALLOC: Arc<Mutex<Allocator>> = {
+    pub static ref ALLOC: Mutex<Allocator> = {
         let alloc = Allocator::new();
-        Arc::new(Mutex::new(alloc))
+        Mutex::new(alloc)
     };
 }
 
@@ -25,10 +25,10 @@ struct GCBox {
 }
 
 impl GCBox {
-    fn new(next: Option<GCBoxRef>) -> Self {
+    fn new() -> Self {
         GCBox {
-            inner: RValue::new_ordinary(Value::nil()),
-            next,
+            inner: RValue::new_invalid(),
+            next: None,
         }
     }
 
@@ -58,7 +58,7 @@ impl Allocator {
     pub fn new() -> Self {
         assert_eq!(56, std::mem::size_of::<RValue>());
         assert_eq!(64, GCBOX_SIZE);
-        let gc_box = GCBox::new(None);
+        let gc_box = GCBox::new();
         assert_eq!(
             OFFSET,
             gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
@@ -68,7 +68,7 @@ impl Allocator {
             //buf: arena,
             used: 0,
             allocated: 0,
-            pages: vec![(GCBoxRef::from_ptr(page_ptr), [0; 64])],
+            pages: vec![(page_ptr, [0; 64])],
             alloc_flag: false,
             mark_counter: 0,
             free: None,
@@ -93,17 +93,16 @@ impl Allocator {
     }
 
     /// Allocate page with `alloc_size` and `align`.
-    fn alloc_page(alloc_size: usize) -> *mut GCBox {
+    fn alloc_page(alloc_size: usize) -> GCBoxRef {
         let mut vec = Vec::<u8>::with_capacity(alloc_size);
-        unsafe {
-            vec.set_len(alloc_size);
-        }
+        unsafe { vec.set_len(alloc_size) };
         let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
             & !(ALIGN - 1);
+        let ptr = ptr as *mut GCBox;
         //assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
         //#[cfg(features = "verbose")]
-        eprintln!("page allocated: {:?}", ptr as *mut GCBox);
-        ptr as *mut GCBox
+        eprintln!("page allocated: {:?}", ptr);
+        GCBoxRef::from_ptr(ptr)
     }
 
     pub fn gc(&mut self, root: &mut VM) {
@@ -125,13 +124,17 @@ impl Allocator {
 
     /// Allocate object.
     pub fn alloc(&mut self, data: RValue) -> *mut RValue {
+        self.allocated += 1;
+        self.alloc_flag = self.allocated % 1024 == 0;
+        if self.alloc_flag {
+            eprintln!("prepare GC...")
+        }
         match self.free {
             Some(mut gcbox) => {
                 // Allocate from the free list.
                 self.free = gcbox.next;
                 gcbox.next = None;
                 gcbox.inner = data;
-                self.allocated += 1;
                 return gcbox.inner_ptr();
             }
             None => {}
@@ -141,16 +144,11 @@ impl Allocator {
             // Allocate new page.
             let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
-            self.pages.push((GCBoxRef::from_ptr(page_ptr), [0; 64]));
+            self.pages.push((page_ptr, [0; 64]));
         }
         //eprintln!("wm_alloc: {:?}", self.used);
         // Bump allocation.
         self.used += 1;
-        self.allocated += 1;
-        self.alloc_flag = self.allocated % 1024 == 0;
-        if self.alloc_flag {
-            eprintln!("prepare GC...")
-        }
 
         let ptr = unsafe { self.pages.last().unwrap().0.as_ptr().add(self.used) };
         let mut gcbox = GCBoxRef::from_ptr(ptr);
@@ -211,15 +209,12 @@ impl Allocator {
             let mut map = *map;
             for bit in 0..64 {
                 if map & 1 == 0 {
-                    let ptr = unsafe {
-                        let ptr = page_ptr.as_ptr().add(i * 64 + bit);
-                        (*ptr).next = self.free;
-                        let dummy = RValue::new_flonum(2.5);
-                        std::mem::replace(&mut (*ptr).inner, dummy);
-                        ptr
-                    };
-                    self.free = Some(GCBoxRef::from_ptr(ptr));
-                    c += 1
+                    let mut ptr =
+                        GCBoxRef::from_ptr(unsafe { page_ptr.as_ptr().add(i * 64 + bit) });
+                    ptr.next = self.free;
+                    ptr.inner = RValue::new_invalid();
+                    self.free = Some(ptr);
+                    c += 1;
                 }
                 map >>= 1;
             }
@@ -230,15 +225,12 @@ impl Allocator {
                 let mut map = *map;
                 for bit in 0..64 {
                     if map & 1 == 0 {
-                        let ptr = unsafe {
-                            let ptr = page_ptr.as_ptr().add(i * 64 + bit);
-                            (*ptr).next = self.free;
-                            let dummy = RValue::new_flonum(2.5);
-                            std::mem::replace(&mut (*ptr).inner, dummy);
-                            ptr
-                        };
-                        self.free = Some(GCBoxRef::from_ptr(ptr));
-                        c += 1
+                        let mut ptr =
+                            GCBoxRef::from_ptr(unsafe { page_ptr.as_ptr().add(i * 64 + bit) });
+                        ptr.next = self.free;
+                        ptr.inner = RValue::new_invalid();
+                        self.free = Some(ptr);
+                        c += 1;
                     }
                     map >>= 1;
                 }
