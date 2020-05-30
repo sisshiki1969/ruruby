@@ -12,7 +12,7 @@ lazy_static! {
 const OFFSET: usize = 0;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
 const PAGE_LEN: usize = 64 * 64;
-const ALIGN: usize = 0x4_0000; // 256kb
+const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + ALIGN - 1;
 
 pub trait GC {
@@ -101,25 +101,25 @@ impl Allocator {
         let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
             & !(ALIGN - 1);
         //assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
-        #[cfg(features = "verbose")]
+        //#[cfg(features = "verbose")]
         eprintln!("page allocated: {:?}", ptr as *mut GCBox);
         ptr as *mut GCBox
     }
 
     pub fn gc(&mut self, root: &mut VM) {
-        #[cfg(features = "verbose")]
+        //#[cfg(features = "verbose")]
         {
-            eprintln!("--GC start");
+            eprintln!("--GC start thread:{:?}", std::thread::current().id());
             eprintln!("allocated: {}", self.allocated);
         }
         self.clear_mark();
         root.mark(self);
-        #[cfg(features = "verbose")]
+        //#[cfg(features = "verbose")]
         eprintln!("marked: {}", self.get_counter());
         self.sweep(root);
         self.alloc_flag = false;
         //self.print_mark();
-        #[cfg(features = "verbose")]
+        //#[cfg(features = "verbose")]
         eprintln!("--GC completed")
     }
 
@@ -148,6 +148,9 @@ impl Allocator {
         self.used += 1;
         self.allocated += 1;
         self.alloc_flag = self.allocated % 1024 == 0;
+        if self.alloc_flag {
+            eprintln!("prepare GC...")
+        }
 
         let ptr = unsafe { self.pages.last().unwrap().0.as_ptr().add(self.used) };
         let mut gcbox = GCBoxRef::from_ptr(ptr);
@@ -241,7 +244,7 @@ impl Allocator {
                 }
             }
         }
-        #[cfg(features = "verbose")]
+        //#[cfg(features = "verbose")]
         eprintln!("sweep: {}", c);
         //eprintln!("free list: {}", self.check_free_list());
     }
