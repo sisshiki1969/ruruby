@@ -25,13 +25,6 @@ struct GCBox {
 }
 
 impl GCBox {
-    fn new() -> Self {
-        GCBox {
-            inner: RValue::new_invalid(),
-            next: None,
-        }
-    }
-
     fn inner_ptr(&self) -> *mut RValue {
         &self.inner as *const RValue as *mut RValue
     }
@@ -56,16 +49,21 @@ pub struct Allocator {
 
 impl Allocator {
     pub fn new() -> Self {
-        assert_eq!(56, std::mem::size_of::<RValue>());
-        assert_eq!(64, GCBOX_SIZE);
-        let gc_box = GCBox::new();
-        assert_eq!(
-            OFFSET,
-            gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
-        );
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(56, std::mem::size_of::<RValue>());
+            assert_eq!(64, GCBOX_SIZE);
+            let gc_box = GCBox {
+                inner: RValue::new_invalid(),
+                next: None,
+            };
+            assert_eq!(
+                OFFSET,
+                gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
+            );
+        }
         let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
         Allocator {
-            //buf: arena,
             used: 0,
             allocated: 0,
             pages: vec![(page_ptr, [0; 64])],
@@ -100,25 +98,26 @@ impl Allocator {
             & !(ALIGN - 1);
         let ptr = ptr as *mut GCBox;
         //assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
-        //#[cfg(features = "verbose")]
+        #[cfg(debug_assertions)]
         eprintln!("page allocated: {:?}", ptr);
         GCBoxRef::from_ptr(ptr)
     }
 
     pub fn gc(&mut self, root: &mut VM) {
-        //#[cfg(features = "verbose")]
+        #[cfg(debug_assertions)]
         {
             eprintln!("--GC start thread:{:?}", std::thread::current().id());
             eprintln!("allocated: {}", self.allocated);
         }
         self.clear_mark();
         root.mark(self);
-        //#[cfg(features = "verbose")]
+        #[cfg(debug_assertions)]
         eprintln!("marked: {}", self.get_counter());
         self.sweep(root);
         self.alloc_flag = false;
-        //self.print_mark();
-        //#[cfg(features = "verbose")]
+        #[cfg(debug_assertions)]
+        self.print_mark();
+        #[cfg(debug_assertions)]
         eprintln!("--GC completed")
     }
 
@@ -126,6 +125,7 @@ impl Allocator {
     pub fn alloc(&mut self, data: RValue) -> *mut RValue {
         self.allocated += 1;
         self.alloc_flag = self.allocated % 1024 == 0;
+        #[cfg(debug_assertions)]
         if self.alloc_flag {
             eprintln!("prepare GC...")
         }
@@ -140,23 +140,26 @@ impl Allocator {
             None => {}
         }
 
-        if self.used == PAGE_LEN - 1 {
+        let mut gcbox = if self.used == PAGE_LEN - 1 {
             // Allocate new page.
             let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
             self.pages.push((page_ptr, [0; 64]));
-        }
+            page_ptr
+        } else {
+            // Bump allocation.
+            let ptr = unsafe { self.pages.last().unwrap().0.as_ptr().add(self.used) };
+            GCBoxRef::from_ptr(ptr)
+        };
         //eprintln!("wm_alloc: {:?}", self.used);
-        // Bump allocation.
-        self.used += 1;
 
-        let ptr = unsafe { self.pages.last().unwrap().0.as_ptr().add(self.used) };
-        let mut gcbox = GCBoxRef::from_ptr(ptr);
+        self.used += 1;
         gcbox.next = None;
         gcbox.inner = data;
         gcbox.inner_ptr()
     }
 
+    /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
     pub fn mark(&mut self, ptr: &RValue) -> bool {
@@ -164,6 +167,9 @@ impl Allocator {
         self.mark_ptr(ptr)
     }
 
+    /// Mark object.
+    /// If object is already marked, return true.
+    /// If not yet, mark it and return false.
     fn mark_ptr(&mut self, ptr: *mut GCBox) -> bool {
         let ptr = ptr as *const GCBox as usize;
         let page_ptr = ptr & !(ALIGN - 1);
@@ -173,12 +179,14 @@ impl Allocator {
             .find(|(p, _)| p.as_ptr() == page_ptr as *mut GCBox)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
         let offset = ptr - page_ptr;
-        //assert_eq!(0, offset % GCBOX_SIZE);
         let index = offset / GCBOX_SIZE;
-        //assert!(index < PAGE_LEN);
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(0, offset % GCBOX_SIZE);
+            assert!(index < PAGE_LEN);
+        }
         let bit_mask = 1 << (index % 64);
-        let word = index / 64;
-        let bitmap = &mut page_info.1[word];
+        let bitmap = &mut page_info.1[index / 64];
         let is_marked = (*bitmap & bit_mask) != 0;
         *bitmap |= bit_mask;
         if !is_marked {
@@ -236,7 +244,7 @@ impl Allocator {
                 }
             }
         }
-        //#[cfg(features = "verbose")]
+        #[cfg(debug_assertions)]
         eprintln!("sweep: {}", c);
         //eprintln!("free list: {}", self.check_free_list());
     }

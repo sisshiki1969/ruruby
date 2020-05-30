@@ -493,7 +493,9 @@ impl VM {
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
-        self.gc();
+        if !context.is_fiber {
+            self.gc();
+        }
         loop {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
@@ -858,17 +860,6 @@ impl VM {
                 Inst::IVAR_ADDI => {
                     let var_id = self.read_id(iseq, 1);
                     let i = self.read32(iseq, 5) as i32;
-                    /*
-                    match self_oref.get_mut_var(var_id) {
-                        Some(val) => {
-                            let new_val = self.eval_addi(*val, i)?;
-                            *val = new_val;
-                        }
-                        None => {
-                            let new_val = self.eval_addi(Value::nil(), i)?;
-                            self_oref.set_var(var_id, new_val);
-                        }
-                    };*/
                     let v = self_oref
                         .var_table_mut()
                         .entry(var_id)
