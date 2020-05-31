@@ -56,7 +56,7 @@ impl DefineMode {
 
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        self.globals.mark(alloc);
+        //self.globals.mark(alloc);
         self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
@@ -65,51 +65,10 @@ impl GC for VM {
 
 impl VM {
     pub fn new() -> Self {
-        use builtin::*;
-        let mut globals = Globals::new();
-
-        macro_rules! set_builtin_class {
-            ($name:expr, $class_object:ident) => {
-                let id = globals.get_ident_id($name);
-                globals
-                    .builtins
-                    .object
-                    .set_var(id, globals.builtins.$class_object);
-            };
-        }
-
-        macro_rules! set_class {
-            ($name:expr, $class_object:expr) => {
-                let id = globals.get_ident_id($name);
-                let object = $class_object;
-                globals.builtins.object.set_var(id, object);
-            };
-        }
-
-        set_builtin_class!("Object", object);
-        set_builtin_class!("Module", module);
-        set_builtin_class!("Class", class);
-        set_builtin_class!("Integer", integer);
-        set_builtin_class!("Float", float);
-        set_builtin_class!("Array", array);
-        set_builtin_class!("Proc", procobj);
-        set_builtin_class!("Range", range);
-        set_builtin_class!("String", string);
-        set_builtin_class!("Hash", hash);
-        set_builtin_class!("Method", method);
-        set_builtin_class!("Regexp", regexp);
-        set_builtin_class!("Fiber", fiber);
-        set_builtin_class!("Enumerator", enumerator);
-
-        set_class!("Math", math::init_math(&mut globals));
-        set_class!("File", file::init_file(&mut globals));
-        set_class!("Process", process::init_process(&mut globals));
-        set_class!("Struct", structobj::init_struct(&mut globals));
-        set_class!("StandardError", Value::class(&globals, globals.class_class));
-        set_class!("RuntimeError", errorobj::init_error(&mut globals));
+        let globals = GlobalsRef::new(Globals::new());
 
         let vm = VM {
-            globals: GlobalsRef::new(globals),
+            globals,
             root_path: vec![],
             fiber_state: FiberState::Created,
             class_context: vec![(Value::nil(), DefineMode::default())],
@@ -122,12 +81,13 @@ impl VM {
             #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
         };
+        //globals.fibers.push(VMRef::from_ref(&vm));
 
         vm
     }
 
-    pub fn dup_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
-        VM {
+    pub fn dup_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+        let vm = VM {
             globals: self.globals,
             root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
@@ -140,7 +100,9 @@ impl VM {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             perf: self.perf.clone(),
-        }
+        };
+        //self.globals.fibers.push(VMRef::from_ref(&vm));
+        vm
     }
 
     pub fn context(&self) -> ContextRef {
@@ -407,7 +369,11 @@ impl VM {
     }
 
     #[allow(dead_code)]
-    fn dump_values(&mut self) {
+    pub fn dump_values(&mut self) {
+        //let alloc = ALLOC.lock().unwrap();
+        //if !alloc.is_allocated() {
+        //    return;
+        //}
         for (i, context) in self.exec_context.clone().iter().enumerate() {
             eprintln!("context: {}", i);
             let value = self.val_inspect(context.self_value);
@@ -422,22 +388,6 @@ impl VM {
             let value = self.val_inspect(v);
             eprintln!("stack: {}", value);
         }
-    }
-
-    pub fn gc(&mut self) {
-        let mut alloc = ALLOC.lock().unwrap();
-        if alloc.is_allocated() {
-            alloc.gc(self);
-            //self.dump_values();
-        }
-    }
-
-    pub fn force_gc(&mut self) {
-        ALLOC.lock().unwrap().gc(self);
-    }
-
-    pub fn print_bitmap(&self) {
-        ALLOC.lock().unwrap().print_mark();
     }
 }
 
@@ -493,11 +443,7 @@ impl VM {
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
-        //if !context.is_fiber {
-        if self.channel.is_none() {
-            //self.gc();
-        }
-        //}
+        self.globals.gc();
         loop {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
@@ -1897,7 +1843,7 @@ impl VM {
             }
             RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
             RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner()),
+                ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {

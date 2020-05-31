@@ -98,6 +98,7 @@ impl GC for Globals {
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
+        //eprintln!("fibers {}", self.fibers.len());
         for vm in &self.fibers {
             vm.mark(alloc);
         }
@@ -162,7 +163,59 @@ impl Globals {
         object::init(&mut globals);
         let kernel = kernel::init(&mut globals);
         object_class.include.push(kernel);
+
+        macro_rules! set_builtin_class {
+            ($name:expr, $class_object:ident) => {
+                let id = globals.get_ident_id($name);
+                globals
+                    .builtins
+                    .object
+                    .set_var(id, globals.builtins.$class_object);
+            };
+        }
+
+        macro_rules! set_class {
+            ($name:expr, $class_object:expr) => {
+                let id = globals.get_ident_id($name);
+                let object = $class_object;
+                globals.builtins.object.set_var(id, object);
+            };
+        }
+
+        set_builtin_class!("Object", object);
+        set_builtin_class!("Module", module);
+        set_builtin_class!("Class", class);
+        set_builtin_class!("Integer", integer);
+        set_builtin_class!("Float", float);
+        set_builtin_class!("Array", array);
+        set_builtin_class!("Proc", procobj);
+        set_builtin_class!("Range", range);
+        set_builtin_class!("String", string);
+        set_builtin_class!("Hash", hash);
+        set_builtin_class!("Method", method);
+        set_builtin_class!("Regexp", regexp);
+        set_builtin_class!("Fiber", fiber);
+        set_builtin_class!("Enumerator", enumerator);
+
+        set_class!("Math", math::init_math(&mut globals));
+        set_class!("File", file::init_file(&mut globals));
+        set_class!("Process", process::init_process(&mut globals));
+        set_class!("Struct", structobj::init_struct(&mut globals));
+        set_class!("StandardError", Value::class(&globals, globals.class_class));
+        set_class!("RuntimeError", errorobj::init_error(&mut globals));
+
         globals
+    }
+
+    pub fn gc(&self) {
+        let mut alloc = ALLOC.lock().unwrap();
+        if alloc.is_allocated() {
+            alloc.gc(self);
+        }
+    }
+
+    pub fn print_bitmap(&self) {
+        ALLOC.lock().unwrap().print_mark();
     }
 
     pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {

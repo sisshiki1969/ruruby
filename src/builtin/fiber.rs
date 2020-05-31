@@ -30,7 +30,7 @@ impl FiberInfo {
 
 impl GC for FiberInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        eprintln!("marking fiber.");
+        //eprintln!("marking fiber.");
         self.vm.mark(alloc);
         self.context.mark(alloc);
     }
@@ -56,8 +56,9 @@ fn new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     context.is_fiber = true;
     let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
     let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-    let new_vm = vm.dup_fiber(tx0, rx1);
-    let val = Value::fiber(&vm.globals, VMRef::new(new_vm), context, rx0, tx1);
+    let new_vm = VMRef::new(vm.dup_fiber(tx0, rx1));
+    vm.globals.fibers.push(new_vm);
+    let val = Value::fiber(&vm.globals, new_vm, context, rx0, tx1);
     Ok(val)
 }
 
@@ -103,7 +104,6 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 println!("===> resume(spawn)");
             }
             let mut vm2 = fiber_vm;
-            vm.globals.fibers.push(vm2);
             thread::spawn(move || vm2.run_context(context));
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);

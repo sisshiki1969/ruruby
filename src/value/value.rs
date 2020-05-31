@@ -136,6 +136,7 @@ impl Value {
         if !self.is_packed_value() {
             let info = self.rvalue();
             match &info.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", info),
                 ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
                 _ => RV::Object(Ref::from_ref(info)),
@@ -334,7 +335,10 @@ impl Value {
     pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.as_fixnum() {
             Some(i) => Ok(i),
-            None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
+            None => {
+                let val = vm.globals.get_class_name(*self);
+                Err(vm.error_argument(format!("{} must be an Integer. {}", msg.into(), val)))
+            }
         }
     }
 

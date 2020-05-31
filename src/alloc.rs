@@ -111,7 +111,7 @@ impl Allocator {
         GCBoxRef::from_ptr(ptr)
     }
 
-    pub fn gc(&mut self, root: &mut VM) {
+    pub fn gc(&mut self, root: &Globals) {
         #[cfg(debug_assertions)]
         {
             eprintln!("--GC start thread:{:?}", std::thread::current().id());
@@ -123,11 +123,14 @@ impl Allocator {
         {
             eprintln!("marked: {}", self.get_counter());
         }
-        self.sweep(root);
+        self.sweep();
         self.alloc_flag = false;
         #[cfg(debug_assertions)]
         {
             self.print_mark();
+            for vm in &root.fibers {
+                vm.clone().dump_values();
+            }
             eprintln!("--GC completed")
         }
     }
@@ -139,7 +142,7 @@ impl Allocator {
         #[cfg(debug_assertions)]
         {
             if self.alloc_flag {
-                eprintln!("prepare GC... {:?}", std::thread::current().id());
+                //eprintln!("prepare GC... {:?}", std::thread::current().id());
             }
         }
         match self.free {
@@ -153,7 +156,7 @@ impl Allocator {
             None => {}
         }
 
-        let mut gcbox = if self.used == PAGE_LEN - 1 {
+        let mut gcbox = if self.used == PAGE_LEN {
             // Allocate new page.
             let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
@@ -193,7 +196,9 @@ impl Allocator {
             .pages
             .iter_mut()
             .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox)
-            .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
+            .unwrap_or_else(|| {
+                panic!("The ptr is not in heap pages. {:?}", page_ptr as *mut GCBox)
+            });
         let offset = ptr - page_ptr;
         let index = offset / GCBOX_SIZE;
         #[cfg(debug_assertions)]
@@ -211,7 +216,7 @@ impl Allocator {
         is_marked
     }
 
-    pub fn sweep(&mut self, _vm: &mut VM) {
+    pub fn sweep(&mut self) {
         let mut free = self.free;
         loop {
             match free {
@@ -227,7 +232,6 @@ impl Allocator {
 
         #[allow(unused_variables)]
         let mut c = 0;
-
         let pinfo = self.pages.last().unwrap();
         for (i, map) in pinfo.bitmap.iter().take(self.used / 64).enumerate() {
             let mut map = *map;
@@ -275,8 +279,10 @@ impl Allocator {
             }
         }
         #[cfg(debug_assertions)]
-        eprintln!("sweep: {}", c);
-        //eprintln!("free list: {}", self.check_free_list());
+        {
+            eprintln!("sweep: {}", c);
+            eprintln!("free list: {}", self.check_free_list());
+        }
     }
 
     // For debug
@@ -335,7 +341,8 @@ mod tests {
 
     #[test]
     fn gc_test() {
-        let mut vm = VM::new();
+        let mut vm = VMRef::new(VM::new());
+        vm.clone().globals.fibers.push(vm);
         let program = r#"
             class Vec
                 def initialize
