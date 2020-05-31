@@ -38,13 +38,18 @@ pub struct Allocator {
     /// Total allocated objects.
     allocated: usize,
     /// Info for allocated pages.
-    pages: Vec<(GCBoxRef, [u64; 64])>,
+    pages: Vec<PageInfo>,
     /// Flag for new page allocation.
     alloc_flag: bool,
     /// Counter of marked objects,
     mark_counter: usize,
     /// List of free objects.
     free: Option<GCBoxRef>,
+}
+
+struct PageInfo {
+    ptr: GCBoxRef,
+    bitmap: [u64; 64],
 }
 
 impl Allocator {
@@ -62,11 +67,14 @@ impl Allocator {
                 gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
             );
         }
-        let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
+        let ptr = Allocator::alloc_page(ALLOC_SIZE);
         Allocator {
             used: 0,
             allocated: 0,
-            pages: vec![(page_ptr, [0; 64])],
+            pages: vec![PageInfo {
+                ptr,
+                bitmap: [0; 64],
+            }],
             alloc_flag: false,
             mark_counter: 0,
             free: None,
@@ -81,7 +89,7 @@ impl Allocator {
     pub fn clear_mark(&mut self) {
         self.pages
             .iter_mut()
-            .for_each(|(_, bitmap)| bitmap.iter_mut().for_each(|v| *v = 0));
+            .for_each(|pinfo| pinfo.bitmap.iter_mut().for_each(|v| *v = 0));
         self.mark_counter = 0;
     }
 
@@ -112,13 +120,16 @@ impl Allocator {
         self.clear_mark();
         root.mark(self);
         #[cfg(debug_assertions)]
-        eprintln!("marked: {}", self.get_counter());
+        {
+            eprintln!("marked: {}", self.get_counter());
+        }
         self.sweep(root);
         self.alloc_flag = false;
         #[cfg(debug_assertions)]
-        self.print_mark();
-        #[cfg(debug_assertions)]
-        eprintln!("--GC completed")
+        {
+            self.print_mark();
+            eprintln!("--GC completed")
+        }
     }
 
     /// Allocate object.
@@ -126,8 +137,10 @@ impl Allocator {
         self.allocated += 1;
         self.alloc_flag = self.allocated % 1024 == 0;
         #[cfg(debug_assertions)]
-        if self.alloc_flag {
-            eprintln!("prepare GC...")
+        {
+            if self.alloc_flag {
+                eprintln!("prepare GC... {:?}", std::thread::current().id());
+            }
         }
         match self.free {
             Some(mut gcbox) => {
@@ -144,11 +157,14 @@ impl Allocator {
             // Allocate new page.
             let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
             self.used = 0;
-            self.pages.push((page_ptr, [0; 64]));
+            self.pages.push(PageInfo {
+                ptr: page_ptr,
+                bitmap: [0; 64],
+            });
             page_ptr
         } else {
             // Bump allocation.
-            let ptr = unsafe { self.pages.last().unwrap().0.as_ptr().add(self.used) };
+            let ptr = unsafe { self.pages.last().unwrap().ptr.as_ptr().add(self.used) };
             GCBoxRef::from_ptr(ptr)
         };
         //eprintln!("wm_alloc: {:?}", self.used);
@@ -176,7 +192,7 @@ impl Allocator {
         let page_info = self
             .pages
             .iter_mut()
-            .find(|(p, _)| p.as_ptr() == page_ptr as *mut GCBox)
+            .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
         let offset = ptr - page_ptr;
         let index = offset / GCBOX_SIZE;
@@ -186,7 +202,7 @@ impl Allocator {
             assert!(index < PAGE_LEN);
         }
         let bit_mask = 1 << (index % 64);
-        let bitmap = &mut page_info.1[index / 64];
+        let bitmap = &mut page_info.bitmap[index / 64];
         let is_marked = (*bitmap & bit_mask) != 0;
         *bitmap |= bit_mask;
         if !is_marked {
@@ -212,13 +228,13 @@ impl Allocator {
         #[allow(unused_variables)]
         let mut c = 0;
 
-        let (page_ptr, bitmap) = self.pages.last().unwrap();
-        for (i, map) in bitmap.iter().take(self.used / 64).enumerate() {
+        let pinfo = self.pages.last().unwrap();
+        for (i, map) in pinfo.bitmap.iter().take(self.used / 64).enumerate() {
             let mut map = *map;
             for bit in 0..64 {
                 if map & 1 == 0 {
                     let mut ptr =
-                        GCBoxRef::from_ptr(unsafe { page_ptr.as_ptr().add(i * 64 + bit) });
+                        GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
                     ptr.next = self.free;
                     ptr.inner = RValue::new_invalid();
                     self.free = Some(ptr);
@@ -228,13 +244,27 @@ impl Allocator {
             }
         }
 
-        for (page_ptr, bitmap) in self.pages[0..self.pages.len() - 1].iter() {
-            for (i, map) in bitmap.iter().enumerate() {
+        let i = self.used / 64;
+        let bit = self.used % 64;
+        let mut map = pinfo.bitmap[i];
+        for bit in 0..bit {
+            if map & 1 == 0 {
+                let mut ptr = GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
+                ptr.next = self.free;
+                ptr.inner = RValue::new_invalid();
+                self.free = Some(ptr);
+                c += 1;
+            }
+            map >>= 1;
+        }
+
+        for pinfo in self.pages[0..self.pages.len() - 1].iter() {
+            for (i, map) in pinfo.bitmap.iter().enumerate() {
                 let mut map = *map;
                 for bit in 0..64 {
                     if map & 1 == 0 {
                         let mut ptr =
-                            GCBoxRef::from_ptr(unsafe { page_ptr.as_ptr().add(i * 64 + bit) });
+                            GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
                         ptr.next = self.free;
                         ptr.inner = RValue::new_invalid();
                         self.free = Some(ptr);
@@ -256,7 +286,7 @@ impl Allocator {
         let page_ptr = ptr & !(ALIGN - 1);
         self.pages
             .iter()
-            .find(|(p, _)| p.as_ptr() == page_ptr as *mut GCBox)
+            .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
     }
 
@@ -278,9 +308,9 @@ impl Allocator {
     }
 
     pub fn print_mark(&self) {
-        self.pages.iter().for_each(|(_, bitmap)| {
+        self.pages.iter().for_each(|pinfo| {
             let mut i = 0;
-            bitmap.iter().for_each(|m| {
+            pinfo.bitmap.iter().for_each(|m| {
                 eprint!("{:016x} ", m.reverse_bits());
                 if i % 8 == 7 {
                     eprintln!("");
@@ -292,8 +322,8 @@ impl Allocator {
     }
 
     #[allow(dead_code)]
-    unsafe fn free(&mut self, raw: *mut RValue) {
-        let s = std::slice::from_raw_parts_mut(raw as *mut u8, ALLOC_SIZE);
+    unsafe fn free(&mut self, gcbox: GCBoxRef) {
+        let s = std::slice::from_raw_parts_mut(gcbox.as_ptr() as *mut u8, ALLOC_SIZE);
         let _ = Box::from_raw(s);
     }
 }

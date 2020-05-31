@@ -30,7 +30,7 @@ impl RString {
                 Ok(s) => {
                     let mut_rstring = self as *const RString as *mut RString;
                     // Convert RString::Bytes => RString::Str in place.
-                    std::mem::replace(unsafe { &mut *mut_rstring }, RString::Str(s));
+                    unsafe { *mut_rstring = RString::Str(s) };
                     let s = match self {
                         RString::Str(s) => s,
                         RString::Bytes(_) => unreachable!(),

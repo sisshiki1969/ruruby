@@ -280,6 +280,12 @@ impl MethodObjInfo {
     }
 }
 
+impl GC for MethodObjInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.receiver.mark(alloc);
+    }
+}
+
 pub type MethodObjRef = Ref<MethodObjInfo>;
 
 impl MethodObjRef {

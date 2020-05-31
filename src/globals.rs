@@ -9,6 +9,10 @@ pub struct Globals {
     method_table: GlobalMethodTable,
     inline_cache: InlineCache,
     method_cache: MethodCache,
+    case_dispatch: CaseDispatchMap,
+
+    pub fibers: Vec<VMRef>,
+
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
@@ -17,8 +21,6 @@ pub struct Globals {
     pub class_class: ClassRef,
     pub module_class: ClassRef,
     pub object_class: ClassRef,
-
-    case_dispatch: CaseDispatchMap,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -96,6 +98,9 @@ impl GC for Globals {
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
+        for vm in &self.fibers {
+            vm.mark(alloc);
+        }
     }
 }
 
@@ -125,6 +130,7 @@ impl Globals {
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
+            fibers: vec![],
             instant: std::time::Instant::now(),
             class_version: 0,
             main_object,

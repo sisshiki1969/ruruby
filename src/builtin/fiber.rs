@@ -28,6 +28,14 @@ impl FiberInfo {
     }
 }
 
+impl GC for FiberInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        eprintln!("marking fiber.");
+        self.vm.mark(alloc);
+        self.context.mark(alloc);
+    }
+}
+
 pub fn init_fiber(globals: &mut Globals) -> Value {
     let id = globals.get_ident_id("Fiber");
     let class = ClassRef::from(id, globals.builtins.object);
@@ -80,42 +88,36 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    match self_val.unpack() {
-        RV::Object(obj) => match &obj.kind {
-            ObjKind::Fiber(fiber) => {
-                let mut context = fiber.context;
-                context.is_fiber = true;
-                let mut fiber_vm = fiber.vm;
-                match fiber_vm.fiberstate() {
-                    FiberState::Dead => {
-                        return Err(vm.error_fiber("Dead fiber called."));
-                    }
-                    FiberState::Created => {
-                        fiber_vm.fiberstate_running();
-                        #[cfg(feature = "trace")]
-                        {
-                            println!("===> resume(spawn)");
-                        }
-                        let mut vm2 = fiber_vm;
-                        thread::spawn(move || vm2.run_context(context));
-                        let res = fiber.rec.recv().unwrap()?;
-                        return Ok(res);
-                    }
-                    FiberState::Running => {
-                        #[cfg(feature = "trace")]
-                        {
-                            println!("===> resume");
-                        }
-                        fiber.tx.send(1).unwrap();
-                        let res = fiber.rec.recv().unwrap()?;
-                        return Ok(res);
-                    }
-                }
+    let fiber = vm.expect_fiber(self_val, "")?;
+    let mut context = fiber.context;
+    context.is_fiber = true;
+    let mut fiber_vm = fiber.vm;
+    match fiber_vm.fiberstate() {
+        FiberState::Dead => {
+            return Err(vm.error_fiber("Dead fiber called."));
+        }
+        FiberState::Created => {
+            fiber_vm.fiberstate_running();
+            #[cfg(feature = "trace")]
+            {
+                println!("===> resume(spawn)");
             }
-            _ => unreachable!(),
-        },
-        _ => unreachable!(),
-    };
+            let mut vm2 = fiber_vm;
+            vm.globals.fibers.push(vm2);
+            thread::spawn(move || vm2.run_context(context));
+            let res = fiber.rec.recv().unwrap()?;
+            return Ok(res);
+        }
+        FiberState::Running => {
+            #[cfg(feature = "trace")]
+            {
+                println!("===> resume");
+            }
+            fiber.tx.send(1).unwrap();
+            let res = fiber.rec.recv().unwrap()?;
+            return Ok(res);
+        }
+    }
 }
 
 #[cfg(test)]

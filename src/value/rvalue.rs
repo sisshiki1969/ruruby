@@ -53,7 +53,9 @@ impl GC for RValue {
             }
             ObjKind::Splat(v) => v.mark(alloc),
             ObjKind::Proc(pref) => pref.context.mark(alloc),
+            ObjKind::Method(mref) => mref.mark(alloc),
             ObjKind::Enumerator(eref) => eref.mark(alloc),
+            ObjKind::Fiber(fref) => fref.mark(alloc),
             _ => {}
         }
     }
@@ -328,7 +330,7 @@ impl RValue {
             None => {
                 let mut table = HashMap::new();
                 let v = table.insert(id, val);
-                std::mem::replace(&mut self.var_table, Some(Box::new(table)));
+                self.var_table = Some(Box::new(table));
                 v
             }
         };
@@ -343,7 +345,7 @@ impl RValue {
 
     pub fn var_table_mut(&mut self) -> &mut ValueTable {
         if self.var_table.is_none() {
-            std::mem::replace(&mut self.var_table, Some(Box::new(HashMap::new())));
+            self.var_table = Some(Box::new(HashMap::new()));
         }
         self.var_table.as_deref_mut().unwrap()
     }

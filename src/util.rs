@@ -45,15 +45,16 @@ pub struct Ref<T>(NonNull<T>);
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
-        Ref(unsafe { NonNull::new_unchecked(boxed) })
+        Ref(NonNull::new(boxed).unwrap_or_else(|| panic!("Ref::new(): the pointer is NULL.")))
     }
 
     pub fn from_ref(info: &T) -> Self {
-        Ref(unsafe { NonNull::new_unchecked(info as *const T as *mut T) })
+        Ref(NonNull::new(info as *const T as *mut T)
+            .unwrap_or_else(|| panic!("Ref::from_ref(): the pointer is NULL.")))
     }
 
     pub fn from_ptr(info: *mut T) -> Self {
-        Ref(unsafe { NonNull::new_unchecked(info) })
+        Ref(NonNull::new(info).unwrap_or_else(|| panic!("Ref::from_ptr(): the pointer is NULL.")))
     }
 
     pub fn as_ptr(&self) -> *mut T {

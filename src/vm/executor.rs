@@ -128,7 +128,7 @@ impl VM {
 
     pub fn dup_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
         VM {
-            globals: self.globals.clone(),
+            globals: self.globals,
             root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
             exec_context: vec![],
@@ -493,9 +493,11 @@ impl VM {
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
-        if !context.is_fiber {
-            self.gc();
+        //if !context.is_fiber {
+        if self.channel.is_none() {
+            //self.gc();
         }
+        //}
         loop {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
