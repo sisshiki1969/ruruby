@@ -208,10 +208,7 @@ impl Globals {
     }
 
     pub fn gc(&self) {
-        let mut alloc = ALLOC.lock().unwrap();
-        if alloc.is_allocated() {
-            alloc.gc(self);
-        }
+        ALLOC.lock().unwrap().gc(self);
     }
 
     pub fn print_bitmap(&self) {

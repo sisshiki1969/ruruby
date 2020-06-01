@@ -425,6 +425,16 @@ macro_rules! try_err {
 }
 
 impl VM {
+    fn gc(&mut self) {
+        let flag = ALLOC_THREAD.with(|m| m.borrow().is_allocated());
+        if !flag {
+            return;
+        };
+        #[cfg(feature = "perf")]
+        self.perf.get_perf(Perf::GC);
+        self.globals.gc();
+    }
+
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         #[cfg(feature = "trace")]
@@ -443,7 +453,8 @@ impl VM {
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
         let mut self_oref = context.self_value.as_object();
-        self.globals.gc();
+        self.gc();
+
         loop {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
@@ -939,6 +950,9 @@ impl VM {
                 }
                 Inst::JMP => {
                     let disp = self.read_disp(iseq, 1);
+                    if 0 < disp {
+                        self.gc();
+                    }
                     self.jump_pc(5, disp);
                 }
                 Inst::JMP_IF_FALSE => {
@@ -947,6 +961,9 @@ impl VM {
                         self.jump_pc(5, 0);
                     } else {
                         let disp = self.read_disp(iseq, 1);
+                        if 0 < disp {
+                            self.gc();
+                        }
                         self.jump_pc(5, disp);
                     }
                 }

@@ -48,6 +48,10 @@ impl<T> Ref<T> {
         Ref(NonNull::new(boxed).unwrap_or_else(|| panic!("Ref::new(): the pointer is NULL.")))
     }
 
+    pub fn free(self) {
+        unsafe { Box::from_raw(self.as_ptr()) };
+    }
+
     pub fn from_ref(info: &T) -> Self {
         Ref(NonNull::new(info as *const T as *mut T)
             .unwrap_or_else(|| panic!("Ref::from_ref(): the pointer is NULL.")))

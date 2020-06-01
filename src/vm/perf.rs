@@ -24,6 +24,7 @@ pub struct Perf {
 }
 
 impl Perf {
+    pub const GC: u8 = 252;
     pub const CODEGEN: u8 = 253;
     pub const EXTERN: u8 = 254;
     pub const INVALID: u8 = 255;
@@ -38,6 +39,7 @@ impl Perf {
         }
     }
 
+    /// Record duration for current instruction.
     pub fn get_perf(&mut self, next_inst: u8) {
         let prev = self.prev_inst;
         if prev != Perf::INVALID {
@@ -93,6 +95,8 @@ impl Perf {
                     "CODEGEN"
                 } else if i as u8 == Perf::EXTERN {
                     "EXTERN"
+                } else if i as u8 == Perf::GC {
+                    "GC"
                 } else {
                     Inst::inst_name(i as u8)
                 },

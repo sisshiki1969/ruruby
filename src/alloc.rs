@@ -1,5 +1,5 @@
 use crate::*;
-//use std::cell::RefCell;
+use std::cell::RefCell;
 use std::sync::Mutex;
 
 lazy_static! {
@@ -9,11 +9,21 @@ lazy_static! {
     };
 }
 
+thread_local! {
+    pub static ALLOC_THREAD: RefCell<AllocThread> = {
+        RefCell::new(AllocThread {
+            allocated:0,
+            alloc_flag:false
+        })
+    };
+}
+
 const OFFSET: usize = 0;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
 const PAGE_LEN: usize = 64 * 64;
 const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + ALIGN - 1;
+const GC_THRESHOLD: usize = 1024;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
@@ -39,12 +49,21 @@ pub struct Allocator {
     allocated: usize,
     /// Info for allocated pages.
     pages: Vec<PageInfo>,
-    /// Flag for new page allocation.
-    alloc_flag: bool,
     /// Counter of marked objects,
     mark_counter: usize,
     /// List of free objects.
     free: Option<GCBoxRef>,
+}
+
+pub struct AllocThread {
+    allocated: usize,
+    alloc_flag: bool,
+}
+
+impl AllocThread {
+    pub fn is_allocated(&self) -> bool {
+        self.alloc_flag
+    }
 }
 
 struct PageInfo {
@@ -75,14 +94,9 @@ impl Allocator {
                 ptr,
                 bitmap: [0; 64],
             }],
-            alloc_flag: false,
             mark_counter: 0,
             free: None,
         }
-    }
-
-    pub fn is_allocated(&self) -> bool {
-        self.alloc_flag
     }
 
     /// Clear all mark bitmaps.
@@ -105,9 +119,11 @@ impl Allocator {
         let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
             & !(ALIGN - 1);
         let ptr = ptr as *mut GCBox;
-        //assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
         #[cfg(debug_assertions)]
-        eprintln!("page allocated: {:?}", ptr);
+        {
+            assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
+            eprintln!("page allocated: {:?}", ptr);
+        }
         GCBoxRef::from_ptr(ptr)
     }
 
@@ -116,6 +132,7 @@ impl Allocator {
         {
             eprintln!("--GC start thread:{:?}", std::thread::current().id());
             eprintln!("allocated: {}", self.allocated);
+            eprintln!("used in current page: {}", self.used);
         }
         self.clear_mark();
         root.mark(self);
@@ -124,7 +141,9 @@ impl Allocator {
             eprintln!("marked: {}", self.get_counter());
         }
         self.sweep();
-        self.alloc_flag = false;
+        ALLOC_THREAD.with(|m| {
+            m.borrow_mut().alloc_flag = false;
+        });
         #[cfg(debug_assertions)]
         {
             self.print_mark();
@@ -138,13 +157,18 @@ impl Allocator {
     /// Allocate object.
     pub fn alloc(&mut self, data: RValue) -> *mut RValue {
         self.allocated += 1;
-        self.alloc_flag = self.allocated % 1024 == 0;
-        #[cfg(debug_assertions)]
-        {
-            if self.alloc_flag {
-                //eprintln!("prepare GC... {:?}", std::thread::current().id());
+        ALLOC_THREAD.with(|m| {
+            let mut m = m.borrow_mut();
+            m.allocated += 1;
+            m.alloc_flag = m.allocated % GC_THRESHOLD == 0;
+            #[cfg(debug_assertions)]
+            {
+                if m.alloc_flag {
+                    eprintln!("prepare GC... {:?}", std::thread::current().id());
+                }
             }
-        }
+        });
+
         match self.free {
             Some(mut gcbox) => {
                 // Allocate from the free list.
