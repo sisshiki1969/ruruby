@@ -264,6 +264,7 @@ impl Allocator {
                     let mut ptr =
                         GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
                     ptr.next = self.free;
+                    ptr.inner.free();
                     ptr.inner = RValue::new_invalid();
                     self.free = Some(ptr);
                     c += 1;
@@ -279,6 +280,7 @@ impl Allocator {
             if map & 1 == 0 {
                 let mut ptr = GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
                 ptr.next = self.free;
+                ptr.inner.free();
                 ptr.inner = RValue::new_invalid();
                 self.free = Some(ptr);
                 c += 1;
@@ -294,6 +296,7 @@ impl Allocator {
                         let mut ptr =
                             GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
                         ptr.next = self.free;
+                        ptr.inner.free();
                         ptr.inner = RValue::new_invalid();
                         self.free = Some(ptr);
                         c += 1;

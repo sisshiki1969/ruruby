@@ -60,6 +60,22 @@ impl GC for RValue {
         }
     }
 }
+impl RValue {
+    pub fn free(&mut self) {
+        let _ = std::mem::replace(&mut self.var_table, None);
+        match self.kind {
+            ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", self),
+            ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
+            ObjKind::Array(aref) => aref.free(),
+            ObjKind::Hash(href) => href.free(),
+            ObjKind::Proc(pref) => pref.free(),
+            ObjKind::Method(mref) => mref.free(),
+            ObjKind::Enumerator(eref) => eref.free(),
+            ObjKind::Fiber(fref) => fref.free(),
+            _ => {}
+        }
+    }
+}
 
 impl RValue {
     pub fn id(&self) -> u64 {

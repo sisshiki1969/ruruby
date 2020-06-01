@@ -30,7 +30,6 @@ impl FiberInfo {
 
 impl GC for FiberInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        //eprintln!("marking fiber.");
         self.vm.mark(alloc);
         self.context.mark(alloc);
     }

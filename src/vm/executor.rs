@@ -81,8 +81,6 @@ impl VM {
             #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
         };
-        //globals.fibers.push(VMRef::from_ref(&vm));
-
         vm
     }
 
@@ -99,9 +97,8 @@ impl VM {
             channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
-            perf: self.perf.clone(),
+            perf: Perf::new(),
         };
-        //self.globals.fibers.push(VMRef::from_ref(&vm));
         vm
     }
 
