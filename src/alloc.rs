@@ -148,7 +148,7 @@ impl Allocator {
         {
             self.print_mark();
             for vm in &root.fibers {
-                vm.clone().dump_values();
+                vm.dump_values();
             }
             eprintln!("--GC completed")
         }
@@ -162,10 +162,11 @@ impl Allocator {
             m.allocated += 1;
             m.alloc_flag = m.allocated % GC_THRESHOLD == 0;
             #[cfg(debug_assertions)]
-            {
-                if m.alloc_flag {
-                    eprintln!("prepare GC... {:?}", std::thread::current().id());
-                }
+            { /*
+                     if m.alloc_flag {
+                         eprintln!("prepare GC... {:?}", std::thread::current().id());
+                     }
+                 */
             }
         });
 
@@ -257,18 +258,20 @@ impl Allocator {
         #[allow(unused_variables)]
         let mut c = 0;
         let pinfo = self.pages.last().unwrap();
-        for (i, map) in pinfo.bitmap.iter().take(self.used / 64).enumerate() {
+        let mut ptr = pinfo.ptr.as_ptr();
+        for map in pinfo.bitmap.iter().take(self.used / 64) {
             let mut map = *map;
-            for bit in 0..64 {
+            for _ in 0..64 {
                 if map & 1 == 0 {
-                    let mut ptr =
-                        GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
-                    ptr.next = self.free;
-                    ptr.inner.free();
-                    ptr.inner = RValue::new_invalid();
-                    self.free = Some(ptr);
+                    unsafe {
+                        (*ptr).next = self.free;
+                        (*ptr).inner.free();
+                        (*ptr).inner = RValue::new_invalid();
+                    }
+                    self.free = Some(GCBoxRef::from_ptr(ptr));
                     c += 1;
                 }
+                ptr = unsafe { ptr.add(1) };
                 map >>= 1;
             }
         }
@@ -276,31 +279,35 @@ impl Allocator {
         let i = self.used / 64;
         let bit = self.used % 64;
         let mut map = pinfo.bitmap[i];
-        for bit in 0..bit {
+        for _ in 0..bit {
             if map & 1 == 0 {
-                let mut ptr = GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
-                ptr.next = self.free;
-                ptr.inner.free();
-                ptr.inner = RValue::new_invalid();
-                self.free = Some(ptr);
+                unsafe {
+                    (*ptr).next = self.free;
+                    (*ptr).inner.free();
+                    (*ptr).inner = RValue::new_invalid();
+                }
+                self.free = Some(GCBoxRef::from_ptr(ptr));
                 c += 1;
             }
+            ptr = unsafe { ptr.add(1) };
             map >>= 1;
         }
 
         for pinfo in self.pages[0..self.pages.len() - 1].iter() {
-            for (i, map) in pinfo.bitmap.iter().enumerate() {
+            let mut ptr = pinfo.ptr.as_ptr();
+            for map in pinfo.bitmap.iter() {
                 let mut map = *map;
-                for bit in 0..64 {
+                for _ in 0..64 {
                     if map & 1 == 0 {
-                        let mut ptr =
-                            GCBoxRef::from_ptr(unsafe { pinfo.ptr.as_ptr().add(i * 64 + bit) });
-                        ptr.next = self.free;
-                        ptr.inner.free();
-                        ptr.inner = RValue::new_invalid();
-                        self.free = Some(ptr);
+                        unsafe {
+                            (*ptr).next = self.free;
+                            (*ptr).inner.free();
+                            (*ptr).inner = RValue::new_invalid();
+                        }
+                        self.free = Some(GCBoxRef::from_ptr(ptr));
                         c += 1;
                     }
+                    ptr = unsafe { ptr.add(1) };
                     map >>= 1;
                 }
             }
@@ -340,6 +347,7 @@ impl Allocator {
         c
     }
 
+    #[allow(dead_code)]
     pub fn print_mark(&self) {
         self.pages.iter().for_each(|pinfo| {
             let mut i = 0;
@@ -352,12 +360,6 @@ impl Allocator {
             });
             eprintln!("");
         });
-    }
-
-    #[allow(dead_code)]
-    unsafe fn free(&mut self, gcbox: GCBoxRef) {
-        let s = std::slice::from_raw_parts_mut(gcbox.as_ptr() as *mut u8, ALLOC_SIZE);
-        let _ = Box::from_raw(s);
     }
 }
 

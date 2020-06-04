@@ -103,6 +103,7 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 println!("===> resume(spawn)");
             }
             let mut vm2 = fiber_vm;
+            eprintln!("---------FIBER INITIATED");
             thread::spawn(move || vm2.run_context(context));
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);

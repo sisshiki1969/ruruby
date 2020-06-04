@@ -89,6 +89,20 @@ impl ArrayInfo {
             }
         }
     }
+
+    pub fn debug(&self, vm: &VM) -> String {
+        match self.elements.len() {
+            0 => "[]".to_string(),
+            1 => format!("[{}]", vm.val_debug(self.elements[0])),
+            len => {
+                let mut result = vm.val_debug(self.elements[0]);
+                for i in 1..len {
+                    result = format!("{}, {}", result, vm.val_debug(self.elements[i]));
+                }
+                format! {"[{}]", result}
+            }
+        }
+    }
 }
 
 pub type ArrayRef = Ref<ArrayInfo>;

@@ -366,23 +366,19 @@ impl VM {
     }
 
     #[allow(dead_code)]
-    pub fn dump_values(&mut self) {
-        //let alloc = ALLOC.lock().unwrap();
-        //if !alloc.is_allocated() {
-        //    return;
-        //}
-        for (i, context) in self.exec_context.clone().iter().enumerate() {
+    pub fn dump_values(&self) {
+        for (i, context) in self.exec_context.iter().enumerate() {
             eprintln!("context: {}", i);
-            let value = self.val_inspect(context.self_value);
+            let value = self.val_debug(context.self_value);
             eprintln!("self: {}", value);
             for (k, v) in context.iseq_ref.lvar.table() {
                 let name = self.globals.get_ident_name(*k).to_string();
-                let value = self.val_inspect(context[*v]);
+                let value = self.val_debug(context[*v]);
                 eprintln!("lvar({}): {} {}", v.as_u32(), name, value);
             }
         }
-        for v in self.exec_stack.clone() {
-            let value = self.val_inspect(v);
+        for v in &self.exec_stack {
+            let value = self.val_debug(*v);
             eprintln!("stack: {}", value);
         }
     }
@@ -406,6 +402,7 @@ macro_rules! try_err {
                     }
                     Ok(result)
                 } else {
+                    $self.dump_values();
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
@@ -1839,6 +1836,49 @@ impl VM {
         }
     }
 
+    pub fn val_debug(&self, val: Value) -> String {
+        match val.unpack() {
+            RV::Uninitialized => "[Uninitialized]".to_string(),
+            RV::Nil => "nil".to_string(),
+            RV::Bool(b) => match b {
+                true => "true".to_string(),
+                false => "false".to_string(),
+            },
+            RV::Integer(i) => i.to_string(),
+            RV::Float(f) => {
+                if f.fract() == 0.0 {
+                    format!("{:.1}", f)
+                } else {
+                    f.to_string()
+                }
+            }
+            RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
+            RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => "[Invalid]".to_string(),
+                ObjKind::Ordinary => oref.debug(self),
+                ObjKind::Class(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    None => format! {"#<Class:0x{:x}>", cref.id()},
+                },
+                ObjKind::Module(cref) => match cref.name {
+                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    None => format! {"#<Module:0x{:x}>", cref.id()},
+                },
+                ObjKind::String(s) => s.inspect(),
+                ObjKind::Array(aref) => aref.debug(self),
+                ObjKind::Range(rinfo) => rinfo.debug(self),
+                ObjKind::Splat(v) => self.val_debug(*v),
+                ObjKind::Hash(href) => href.debug(self),
+                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
+                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
+                ObjKind::Method(_) => "Method".to_string(),
+                ObjKind::Fiber(_) => "Fiber".to_string(),
+                ObjKind::Enumerator(_) => "Enumerator".to_string(),
+                _ => "Not supported".to_string(),
+            },
+        }
+    }
+
     pub fn val_inspect(&mut self, val: Value) -> String {
         match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
@@ -2169,10 +2209,10 @@ impl VM {
         };
     }
 
-    pub fn fiber_send_to_parent(&mut self, val: VMResult) {
-        match &mut self.channel {
+    pub fn fiber_send_to_parent(&self, val: VMResult) {
+        match &self.channel {
             Some((tx, rx)) => {
-                tx.send(val.clone()).unwrap();
+                tx.send(val.to_owned()).unwrap();
                 rx.recv().unwrap();
             }
             None => return,
@@ -2180,7 +2220,7 @@ impl VM {
         #[cfg(feature = "trace")]
         {
             match val {
-                Ok(val) => println!("<=== yield Ok({})", self.val_inspect(val),),
+                Ok(val) => println!("<=== yield Ok({})", self.val_debug(val),),
                 Err(err) => println!("<=== yield Err({:?})", err.kind),
             }
         }
