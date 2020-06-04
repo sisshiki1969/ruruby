@@ -53,6 +53,8 @@ impl Inst {
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
+    pub const OPT_SEND: u8 = 62;
+    pub const OPT_SEND_SELF: u8 = 63;
 
     pub const CREATE_RANGE: u8 = 70;
     pub const CREATE_ARRAY: u8 = 71;
@@ -133,6 +135,8 @@ impl Inst {
 
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SELF",
+            Inst::OPT_SEND => "OPT_SEND",
+            Inst::OPT_SEND_SELF => "OPT_SEND_SELF",
 
             Inst::CHECK_LOCAL => "CHECK_LOCAL",
 
@@ -232,6 +236,7 @@ impl Inst {
             | Inst::OPT_CASE
             | Inst::IVAR_ADDI => 9,
             Inst::DEF_CLASS => 10,
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF => 11,
             Inst::SEND | Inst::SEND_SELF => 17,
             _ => 1,
         }
@@ -341,7 +346,16 @@ impl Inst {
                 Inst::ident_name(globals, iseq, pc + 1),
                 Inst::read32(iseq, pc + 5)
             ),
-
+            Inst::OPT_SEND => format!(
+                "OPT_SEND '{}' {} items",
+                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::read32(iseq, pc + 5)
+            ),
+            Inst::OPT_SEND_SELF => format!(
+                "OPT_SEND_SELF '{}' {} items",
+                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::read32(iseq, pc + 5)
+            ),
             Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", Inst::read32(iseq, pc + 1)),
             Inst::CREATE_PROC => format!("CREATE_PROC method:{}", Inst::read32(iseq, pc + 1)),
             Inst::CREATE_HASH => format!("CREATE_HASH {} items", Inst::read32(iseq, pc + 1)),

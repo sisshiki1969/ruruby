@@ -980,6 +980,16 @@ impl VM {
                     try_err!(self, self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
+                Inst::OPT_SEND => {
+                    let receiver = self.stack_pop();
+                    try_err!(self, self.vm_opt_send(iseq, receiver));
+                    self.pc += 11;
+                }
+                Inst::OPT_SEND_SELF => {
+                    let receiver = context.self_value;
+                    try_err!(self, self.vm_opt_send(iseq, receiver));
+                    self.pc += 11;
+                }
                 Inst::YIELD => {
                     try_err!(self, self.eval_yield(iseq));
                     self.pc += 5;
@@ -1965,6 +1975,17 @@ impl VM {
         };
         args.block = block;
         args.kw_arg = keyword;
+        let val = self.eval_send(methodref, receiver, &args)?;
+        Ok(val)
+    }
+
+    fn vm_opt_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
+        let method_id = self.read_id(iseq, 1);
+        let args_num = self.read16(iseq, 5);
+        let cache_slot = self.read32(iseq, 7);
+        let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+
+        let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
     }
