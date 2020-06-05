@@ -402,7 +402,7 @@ macro_rules! try_err {
                     }
                     Ok(result)
                 } else {
-                    $self.dump_values();
+                    //$self.dump_values();
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {

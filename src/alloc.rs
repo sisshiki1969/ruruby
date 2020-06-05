@@ -22,13 +22,13 @@ const OFFSET: usize = 0;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
 const PAGE_LEN: usize = 64 * 64;
 const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
-const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + ALIGN - 1;
-const GC_THRESHOLD: usize = 1024;
+const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + 1024;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
 }
 
+#[derive(Debug, Clone)]
 struct GCBox {
     inner: RValue,
     next: Option<GCBoxRef>,
@@ -37,6 +37,19 @@ struct GCBox {
 impl GCBox {
     fn inner_ptr(&self) -> *mut RValue {
         &self.inner as *const RValue as *mut RValue
+    }
+}
+
+impl std::ops::Deref for GCBox {
+    type Target = RValue;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl std::ops::DerefMut for GCBox {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
@@ -86,12 +99,12 @@ impl Allocator {
                 gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
             );
         }
-        let ptr = Allocator::alloc_page(ALLOC_SIZE);
+        let ptr = Allocator::alloc_page();
         Allocator {
             used: 0,
             allocated: 0,
             pages: vec![PageInfo {
-                ptr,
+                ptr: GCBoxRef::from_ptr(ptr),
                 bitmap: [0; 64],
             }],
             mark_counter: 0,
@@ -113,18 +126,21 @@ impl Allocator {
     }
 
     /// Allocate page with `alloc_size` and `align`.
-    fn alloc_page(alloc_size: usize) -> GCBoxRef {
+    fn alloc_page() -> *mut GCBox {
+        use std::alloc::{alloc, Layout};
+        let layout = Layout::from_size_align(ALLOC_SIZE, ALIGN).unwrap();
+        let ptr = unsafe { alloc(layout) };
+        /*
         let mut vec = Vec::<u8>::with_capacity(alloc_size);
         unsafe { vec.set_len(alloc_size) };
         let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
-            & !(ALIGN - 1);
-        let ptr = ptr as *mut GCBox;
+            & !(ALIGN - 1);*/
         #[cfg(debug_assertions)]
         {
             assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
             eprintln!("page allocated: {:?}", ptr);
         }
-        GCBoxRef::from_ptr(ptr)
+        ptr as *mut GCBox
     }
 
     pub fn gc(&mut self, root: &Globals) {
@@ -160,47 +176,52 @@ impl Allocator {
         ALLOC_THREAD.with(|m| {
             let mut m = m.borrow_mut();
             m.allocated += 1;
-            m.alloc_flag = m.allocated % GC_THRESHOLD == 0;
-            #[cfg(debug_assertions)]
-            { /*
-                     if m.alloc_flag {
-                         eprintln!("prepare GC... {:?}", std::thread::current().id());
-                     }
-                 */
-            }
+            m.alloc_flag = m.allocated % 1024 == 0;
         });
 
         match self.free {
-            Some(mut gcbox) => {
+            Some(gcbox) => {
                 // Allocate from the free list.
                 self.free = gcbox.next;
-                gcbox.next = None;
-                gcbox.inner = data;
+                unsafe {
+                    std::ptr::write(
+                        gcbox.as_ptr(),
+                        GCBox {
+                            inner: data,
+                            next: None,
+                        },
+                    );
+                }
                 return gcbox.inner_ptr();
             }
             None => {}
         }
 
-        let mut gcbox = if self.used == PAGE_LEN {
+        let gcbox = if self.used == PAGE_LEN {
             // Allocate new page.
-            let page_ptr = Allocator::alloc_page(ALLOC_SIZE);
+            let ptr = Allocator::alloc_page();
             self.used = 0;
             self.pages.push(PageInfo {
-                ptr: page_ptr,
+                ptr: GCBoxRef::from_ptr(ptr),
                 bitmap: [0; 64],
             });
-            page_ptr
+            ptr
         } else {
             // Bump allocation.
-            let ptr = unsafe { self.pages.last().unwrap().ptr.as_ptr().add(self.used) };
-            GCBoxRef::from_ptr(ptr)
+            unsafe { self.pages.last().unwrap().ptr.as_ptr().add(self.used) }
         };
-        //eprintln!("wm_alloc: {:?}", self.used);
 
         self.used += 1;
-        gcbox.next = None;
-        gcbox.inner = data;
-        gcbox.inner_ptr()
+        unsafe {
+            std::ptr::write(
+                gcbox,
+                GCBox {
+                    inner: data,
+                    next: None,
+                },
+            );
+            &mut (*gcbox).inner as *mut RValue
+        }
     }
 
     /// Mark object.

@@ -317,7 +317,8 @@ impl RValue {
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
-        Value::from(ALLOC.lock().unwrap().alloc(self) as u64)
+        Value::from_ptr(ALLOC.lock().unwrap().alloc(self))
+        //Value::from_ptr(Box::into_raw(Box::new(self)))
     }
 
     /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.

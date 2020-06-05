@@ -166,6 +166,10 @@ impl Value {
         Value(id)
     }
 
+    pub fn from_ptr(ptr: *mut RValue) -> Self {
+        Value(ptr as u64)
+    }
+
     pub fn dup(&self) -> Self {
         match self.as_rvalue() {
             Some(rv) => rv.dup().pack(),

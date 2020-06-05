@@ -117,7 +117,7 @@ def perf(app_name)
   command = "#{@time_command} ruby tests/#{app_name} > /dev/null"
   real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(command)
 
-  command = "#{@time_command} ./target/release/ruruby tests/#{app_name} > mandel.ppm"
+  command = "#{@time_command} ./target/release/ruruby tests/#{app_name} > /dev/null"
   real_ruruby, user_ruruby, sys_ruruby, rss_ruruby = get_results(command)
 
   # `convert mandel.ppm mandel.jpg`
