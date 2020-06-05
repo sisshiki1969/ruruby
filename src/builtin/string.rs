@@ -23,14 +23,14 @@ impl RString {
     /// Try to take reference of String from RString.
     /// If byte sequence is invalid as UTF-8, return Err.
     /// When valid, convert the byte sequence to UTF-8 string.
-    pub fn as_string(&self, vm: &VM) -> Result<&String, RubyError> {
+    pub fn as_string(&mut self, vm: &VM) -> Result<&String, RubyError> {
         match self {
             RString::Str(s) => Ok(s),
             RString::Bytes(bytes) => match String::from_utf8(bytes.clone()) {
                 Ok(s) => {
-                    let mut_rstring = self as *const RString as *mut RString;
+                    //let mut_rstring = self as *const RString as *mut RString;
                     // Convert RString::Bytes => RString::Str in place.
-                    std::mem::replace(unsafe { &mut *mut_rstring }, RString::Str(s));
+                    *self = RString::Str(s);
                     let s = match self {
                         RString::Str(s) => s,
                         RString::Bytes(_) => unreachable!(),
@@ -590,8 +590,10 @@ fn string_bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_chars(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let string = vm.expect_string(&self_val, "Receiver")?;
-    let ary: Vec<Value> = string
+    let mut self_val = self_val.clone();
+    //let string = vm.expect_string(&mut self_val, "Receiver")?;
+    let ary: Vec<Value> = vm
+        .expect_string(&mut self_val, "Receiver")?
         .chars()
         .map(|c| Value::string(&vm.globals, c.to_string()))
         .collect();
@@ -608,23 +610,23 @@ fn string_sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::fixnum((sum & ((1 << 16) - 1)) as i64))
 }
 
-fn string_upcase(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn string_upcase(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let self_ = vm.expect_string(&self_val, "Receiver")?;
+    let self_ = vm.expect_string(&mut self_val, "Receiver")?;
     let res = self_.to_uppercase();
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_chomp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn string_chomp(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let self_ = vm.expect_string(&self_val, "Receiver")?;
+    let self_ = vm.expect_string(&mut self_val, "Receiver")?;
     let res = self_.trim_end_matches('\n').to_string();
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_toi(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn string_toi(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let self_ = match vm.expect_string(&self_val, "Receiver") {
+    let self_ = match vm.expect_string(&mut self_val, "Receiver") {
         Ok(s) => s,
         Err(_) => return Ok(Value::fixnum(0)),
     };

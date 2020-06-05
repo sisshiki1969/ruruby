@@ -211,16 +211,19 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 4)?;
-    let program = vm.expect_string(&args[0], "1st arg")?;
+    let mut arg0 = args[0].clone();
+    let program = vm.expect_string(&mut arg0, "1st arg")?;
     if args.len() > 1 {
         if !args[1].is_nil() {
             return Err(vm.error_argument("Currently, 2nd arg must be Nil."));
         }
     }
     let env_name = if args.len() > 2 {
-        vm.expect_string(&args[2], "3rd arg must be String.")?
+        let mut arg2 = args[2].clone();
+        vm.expect_string(&mut arg2, "3rd arg must be String.")?
+            .clone()
     } else {
-        "(eval)"
+        "(eval)".to_string()
     };
 
     let method = vm.parse_program_eval(std::path::PathBuf::from(env_name), program)?;

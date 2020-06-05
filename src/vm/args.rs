@@ -133,7 +133,7 @@ impl ArgsArray {
                 if *len == ARG_ARRAY_SIZE {
                     let mut ary = ary.to_vec();
                     ary.push(val);
-                    std::mem::replace(self, ArgsArray::Vec(ary));
+                    *self = ArgsArray::Vec(ary);
                 } else {
                     ary[*len] = val;
                     *len += 1;

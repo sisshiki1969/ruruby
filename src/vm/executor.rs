@@ -1275,12 +1275,12 @@ impl VM {
 
     pub fn expect_string<'a>(
         &mut self,
-        val: &'a Value,
+        val: &'a mut Value,
         msg: &str,
     ) -> Result<&'a String, RubyError> {
-        let rstring = val.as_rstring().ok_or_else(|| {
-            let inspect = self.val_inspect(val.clone());
-            self.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        let rstring = val.as_mut_rstring().ok_or_else(|| {
+            //let inspect = self.val_inspect(val.clone());
+            self.error_type(format!("{} must be String.", msg))
         })?;
         rstring.as_string(self)
     }
