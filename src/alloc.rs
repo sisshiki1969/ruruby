@@ -18,7 +18,6 @@ thread_local! {
     };
 }
 
-const OFFSET: usize = 0;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
 const PAGE_LEN: usize = 64 * 64;
 const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
@@ -29,14 +28,27 @@ pub trait GC {
 }
 
 #[derive(Debug, Clone)]
-struct GCBox {
+pub struct GCBox {
     inner: RValue,
     next: Option<GCBoxRef>,
 }
 
 impl GCBox {
-    fn inner_ptr(&self) -> *mut RValue {
-        &self.inner as *const RValue as *mut RValue
+    pub fn inner(&self) -> &RValue {
+        &self.inner
+    }
+
+    pub fn inner_mut(&mut self) -> &mut RValue {
+        &mut self.inner
+    }
+}
+
+impl GCBox {
+    pub fn gc_mark(&self, alloc: &mut Allocator) {
+        if alloc.mark(self) {
+            return;
+        };
+        self.inner.mark(alloc);
     }
 }
 
@@ -90,14 +102,6 @@ impl Allocator {
         {
             assert_eq!(56, std::mem::size_of::<RValue>());
             assert_eq!(64, GCBOX_SIZE);
-            let gc_box = GCBox {
-                inner: RValue::new_invalid(),
-                next: None,
-            };
-            assert_eq!(
-                OFFSET,
-                gc_box.inner_ptr() as usize - &gc_box as *const GCBox as usize
-            );
         }
         let ptr = Allocator::alloc_page();
         Allocator {
@@ -171,7 +175,7 @@ impl Allocator {
     }
 
     /// Allocate object.
-    pub fn alloc(&mut self, data: RValue) -> *mut RValue {
+    pub fn alloc(&mut self, data: RValue) -> *mut GCBox {
         self.allocated += 1;
         ALLOC_THREAD.with(|m| {
             let mut m = m.borrow_mut();
@@ -192,7 +196,7 @@ impl Allocator {
                         },
                     );
                 }
-                return gcbox.inner_ptr();
+                return gcbox.as_ptr();
             }
             None => {}
         }
@@ -220,15 +224,15 @@ impl Allocator {
                     next: None,
                 },
             );
-            &mut (*gcbox).inner as *mut RValue
         }
+        gcbox
     }
 
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    pub fn mark(&mut self, ptr: &RValue) -> bool {
-        let ptr = (ptr as *const RValue as usize - OFFSET) as *const GCBox as *mut GCBox;
+    pub fn mark(&mut self, ptr: &GCBox) -> bool {
+        let ptr = ptr as *const GCBox as *mut GCBox;
         self.mark_ptr(ptr)
     }
 
@@ -286,7 +290,7 @@ impl Allocator {
                 if map & 1 == 0 {
                     unsafe {
                         (*ptr).next = self.free;
-                        (*ptr).inner.free();
+                        //(*ptr).inner.free();
                         (*ptr).inner = RValue::new_invalid();
                     }
                     self.free = Some(GCBoxRef::from_ptr(ptr));
@@ -304,7 +308,7 @@ impl Allocator {
             if map & 1 == 0 {
                 unsafe {
                     (*ptr).next = self.free;
-                    (*ptr).inner.free();
+                    //(*ptr).inner.free();
                     (*ptr).inner = RValue::new_invalid();
                 }
                 self.free = Some(GCBoxRef::from_ptr(ptr));
@@ -322,7 +326,7 @@ impl Allocator {
                     if map & 1 == 0 {
                         unsafe {
                             (*ptr).next = self.free;
-                            (*ptr).inner.free();
+                            //(*ptr).inner.free();
                             (*ptr).inner = RValue::new_invalid();
                         }
                         self.free = Some(GCBoxRef::from_ptr(ptr));

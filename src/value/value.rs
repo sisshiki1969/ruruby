@@ -124,7 +124,7 @@ impl GC for Value {
     fn mark(&self, alloc: &mut Allocator) {
         match self.as_rvalue() {
             Some(rvalue) => {
-                rvalue.mark(alloc);
+                rvalue.gc_mark(alloc);
             }
             None => {}
         }
@@ -166,7 +166,7 @@ impl Value {
         Value(id)
     }
 
-    pub fn from_ptr(ptr: *mut RValue) -> Self {
+    pub fn from_ptr(ptr: *mut GCBox) -> Self {
         Value(ptr as u64)
     }
 
@@ -179,7 +179,7 @@ impl Value {
 
     /// Get reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_rvalue(&self) -> Option<&RValue> {
+    pub fn as_rvalue(&self) -> Option<&GCBox> {
         if self.is_packed_value() {
             None
         } else {
@@ -189,7 +189,7 @@ impl Value {
 
     /// Get mutable reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
+    pub fn as_mut_rvalue(&mut self) -> Option<&mut GCBox> {
         if self.is_packed_value() {
             None
         } else {
@@ -197,12 +197,12 @@ impl Value {
         }
     }
 
-    pub fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.0 as *mut RValue) }
+    pub fn rvalue(&self) -> &GCBox {
+        unsafe { &*(self.0 as *const GCBox) }
     }
 
-    pub fn rvalue_mut(&self) -> &mut RValue {
-        unsafe { &mut *(self.0 as *mut RValue) }
+    pub fn rvalue_mut(&self) -> &mut GCBox {
+        unsafe { &mut *(self.0 as *mut GCBox) }
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {

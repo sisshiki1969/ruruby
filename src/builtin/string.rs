@@ -485,7 +485,7 @@ fn string_gsub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn string_gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (res, changed) = gsub(vm, self_val, args)?;
-    *self_val.rvalue_mut() = RValue::new_string(&vm.globals, res);
+    *self_val.rvalue_mut().inner_mut() = RValue::new_string(&vm.globals, res);
     let res = if changed { self_val } else { Value::nil() };
     Ok(res)
 }

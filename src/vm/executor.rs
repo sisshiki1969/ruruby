@@ -426,7 +426,7 @@ impl VM {
         };
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::GC);
-        self.globals.gc();
+        //self.globals.gc();
     }
 
     /// Main routine for VM execution.

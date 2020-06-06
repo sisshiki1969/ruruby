@@ -32,9 +32,6 @@ pub enum ObjKind {
 
 impl GC for RValue {
     fn mark(&self, alloc: &mut Allocator) {
-        if alloc.mark(self) {
-            return;
-        };
         self.class.mark(alloc);
         match &self.var_table {
             Some(table) => table.values().for_each(|v| v.mark(alloc)),
@@ -60,6 +57,7 @@ impl GC for RValue {
         }
     }
 }
+
 impl RValue {
     pub fn free(&mut self) {
         let _ = std::mem::replace(&mut self.var_table, None);
