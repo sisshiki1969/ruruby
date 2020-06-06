@@ -166,7 +166,7 @@ impl Value {
         Value(id)
     }
 
-    pub fn from_ptr(ptr: *mut GCBox) -> Self {
+    pub fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
         Value(ptr as u64)
     }
 
@@ -179,7 +179,7 @@ impl Value {
 
     /// Get reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_rvalue(&self) -> Option<&GCBox> {
+    pub fn as_rvalue(&self) -> Option<&GCBox<RValue>> {
         if self.is_packed_value() {
             None
         } else {
@@ -189,7 +189,7 @@ impl Value {
 
     /// Get mutable reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_mut_rvalue(&mut self) -> Option<&mut GCBox> {
+    pub fn as_mut_rvalue(&mut self) -> Option<&mut GCBox<RValue>> {
         if self.is_packed_value() {
             None
         } else {
@@ -197,12 +197,12 @@ impl Value {
         }
     }
 
-    pub fn rvalue(&self) -> &GCBox {
-        unsafe { &*(self.0 as *const GCBox) }
+    pub fn rvalue(&self) -> &GCBox<RValue> {
+        unsafe { &*(self.0 as *const GCBox<RValue>) }
     }
 
-    pub fn rvalue_mut(&self) -> &mut GCBox {
-        unsafe { &mut *(self.0 as *mut GCBox) }
+    pub fn rvalue_mut(&self) -> &mut GCBox<RValue> {
+        unsafe { &mut *(self.0 as *mut GCBox<RValue>) }
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {

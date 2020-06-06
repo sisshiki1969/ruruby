@@ -18,7 +18,7 @@ thread_local! {
     };
 }
 
-const GCBOX_SIZE: usize = std::mem::size_of::<GCBox>();
+const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
 const PAGE_LEN: usize = 64 * 64;
 const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + 1024;
@@ -28,22 +28,22 @@ pub trait GC {
 }
 
 #[derive(Debug, Clone)]
-pub struct GCBox {
-    inner: RValue,
-    next: Option<GCBoxRef>,
+pub struct GCBox<T: GC> {
+    inner: T,
+    next: Option<GCBoxRef<T>>,
 }
 
-impl GCBox {
-    pub fn inner(&self) -> &RValue {
+impl<T: GC> GCBox<T> {
+    pub fn inner(&self) -> &T {
         &self.inner
     }
 
-    pub fn inner_mut(&mut self) -> &mut RValue {
+    pub fn inner_mut(&mut self) -> &mut T {
         &mut self.inner
     }
 }
 
-impl GCBox {
+impl GCBox<RValue> {
     pub fn gc_mark(&self, alloc: &mut Allocator) {
         if alloc.mark(self) {
             return;
@@ -52,20 +52,20 @@ impl GCBox {
     }
 }
 
-impl std::ops::Deref for GCBox {
-    type Target = RValue;
+impl<T: GC> std::ops::Deref for GCBox<T> {
+    type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl std::ops::DerefMut for GCBox {
+impl<T: GC> std::ops::DerefMut for GCBox<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-type GCBoxRef = Ref<GCBox>;
+type GCBoxRef<T> = Ref<GCBox<T>>;
 
 pub struct Allocator {
     /// Allocated number of objects in current page.
@@ -73,11 +73,11 @@ pub struct Allocator {
     /// Total allocated objects.
     allocated: usize,
     /// Info for allocated pages.
-    pages: Vec<PageInfo>,
+    pages: Vec<PageInfo<RValue>>,
     /// Counter of marked objects,
     mark_counter: usize,
     /// List of free objects.
-    free: Option<GCBoxRef>,
+    free: Option<GCBoxRef<RValue>>,
 }
 
 pub struct AllocThread {
@@ -91,8 +91,8 @@ impl AllocThread {
     }
 }
 
-struct PageInfo {
-    ptr: GCBoxRef,
+struct PageInfo<T: GC> {
+    ptr: GCBoxRef<T>,
     bitmap: [u64; 64],
 }
 
@@ -130,7 +130,7 @@ impl Allocator {
     }
 
     /// Allocate page with `alloc_size` and `align`.
-    fn alloc_page() -> *mut GCBox {
+    fn alloc_page() -> *mut GCBox<RValue> {
         use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALIGN).unwrap();
         let ptr = unsafe { alloc(layout) };
@@ -144,7 +144,7 @@ impl Allocator {
             assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
             eprintln!("page allocated: {:?}", ptr);
         }
-        ptr as *mut GCBox
+        ptr as *mut GCBox<RValue>
     }
 
     pub fn gc(&mut self, root: &Globals) {
@@ -175,7 +175,7 @@ impl Allocator {
     }
 
     /// Allocate object.
-    pub fn alloc(&mut self, data: RValue) -> *mut GCBox {
+    pub fn alloc(&mut self, data: RValue) -> *mut GCBox<RValue> {
         self.allocated += 1;
         ALLOC_THREAD.with(|m| {
             let mut m = m.borrow_mut();
@@ -231,23 +231,26 @@ impl Allocator {
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    pub fn mark(&mut self, ptr: &GCBox) -> bool {
-        let ptr = ptr as *const GCBox as *mut GCBox;
+    pub fn mark(&mut self, ptr: &GCBox<RValue>) -> bool {
+        let ptr = ptr as *const GCBox<RValue> as *mut GCBox<RValue>;
         self.mark_ptr(ptr)
     }
 
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    fn mark_ptr(&mut self, ptr: *mut GCBox) -> bool {
-        let ptr = ptr as *const GCBox as usize;
+    fn mark_ptr(&mut self, ptr: *mut GCBox<RValue>) -> bool {
+        let ptr = ptr as *const GCBox<RValue> as usize;
         let page_ptr = ptr & !(ALIGN - 1);
         let page_info = self
             .pages
             .iter_mut()
-            .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox)
+            .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox<RValue>)
             .unwrap_or_else(|| {
-                panic!("The ptr is not in heap pages. {:?}", page_ptr as *mut GCBox)
+                panic!(
+                    "The ptr is not in heap pages. {:?}",
+                    page_ptr as *mut GCBox<RValue>
+                )
             });
         let offset = ptr - page_ptr;
         let index = offset / GCBOX_SIZE;
@@ -346,12 +349,12 @@ impl Allocator {
 
     // For debug
     #[allow(dead_code)]
-    fn check_ptr(&self, ptr: *mut GCBox) {
-        let ptr = ptr as *const GCBox as usize;
+    fn check_ptr(&self, ptr: *mut GCBox<RValue>) {
+        let ptr = ptr as *const GCBox<RValue> as usize;
         let page_ptr = ptr & !(ALIGN - 1);
         self.pages
             .iter()
-            .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox)
+            .find(|pinfo| pinfo.ptr.as_ptr() == page_ptr as *mut GCBox<RValue>)
             .unwrap_or_else(|| panic!("The ptr is not in heap pages."));
     }
 
