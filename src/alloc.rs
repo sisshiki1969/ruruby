@@ -81,8 +81,8 @@ pub struct Allocator {
     used: usize,
     /// Total allocated objects.
     allocated: usize,
-    /// Total sweeped objects.
-    sweeped: usize,
+    /// Total blocks in free list.
+    free_list_count: usize,
     /// Info for allocated pages.
     pages: Vec<PageInfo<RValue>>,
     /// Counter of marked objects,
@@ -115,7 +115,7 @@ impl Allocator {
         Allocator {
             used: 0,
             allocated: 0,
-            sweeped: 0,
+            free_list_count: 0,
             pages: vec![PageInfo {
                 ptr: GCBoxRef::from_ptr(ptr),
                 bitmap: [0; 64],
@@ -123,6 +123,10 @@ impl Allocator {
             mark_counter: 0,
             free: None,
         }
+    }
+
+    pub fn free_count(&self) -> usize {
+        self.free_list_count
     }
 
     /// Clear all mark bitmaps.
@@ -171,6 +175,7 @@ impl Allocator {
                         },
                     );
                 }
+                self.free_list_count -= 1;
                 return gcbox.as_ptr();
             }
             None => {}
@@ -226,7 +231,7 @@ impl Allocator {
         self.sweep();
         #[cfg(debug_assertions)]
         {
-            eprintln!("sweeed: {}", self.sweeped);
+            eprintln!("free list: {}", self.free_list_count);
         }
         ALLOC_THREAD.with(|m| {
             m.borrow_mut().alloc_flag = false;
@@ -355,7 +360,7 @@ impl Allocator {
             }
         }
         self.free = anchor.next;
-        self.sweeped += c;
+        self.free_list_count = c;
     }
 
     // For debug

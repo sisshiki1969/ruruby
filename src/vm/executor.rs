@@ -427,7 +427,8 @@ macro_rules! try_err {
 
 impl VM {
     fn gc(&mut self) {
-        let flag = ALLOC_THREAD.with(|m| m.borrow().is_allocated());
+        let flag = ALLOC_THREAD.with(|m| m.borrow().is_allocated())
+            && ALLOC.lock().unwrap().free_count() < 64;
         if !flag {
             return;
         };
