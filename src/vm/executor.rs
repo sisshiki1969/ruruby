@@ -249,10 +249,10 @@ impl VM {
     }
 
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
-        let mut parser = Parser::new();
-        std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
+        let parser = Parser::new();
+        //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let result = parser.parse_program(path, program)?;
-        self.globals.ident_table = result.ident_table;
+        //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
         #[cfg_attr(tarpaulin, skip)]
@@ -276,11 +276,11 @@ impl VM {
         path: PathBuf,
         program: &str,
     ) -> Result<MethodRef, RubyError> {
-        let mut parser = Parser::new();
-        std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
+        let parser = Parser::new();
+        //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let ext_lvar = self.context().iseq_ref.lvar.clone();
         let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
-        self.globals.ident_table = result.ident_table;
+        //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
         #[cfg_attr(tarpaulin, skip)]
@@ -332,7 +332,7 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        self.globals.ident_table = result.ident_table.clone();
+        //self.globals.ident_table = result.ident_table.clone();
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
@@ -372,7 +372,7 @@ impl VM {
             let value = self.val_debug(context.self_value);
             eprintln!("self: {}", value);
             for (k, v) in context.iseq_ref.lvar.table() {
-                let name = self.globals.get_ident_name(*k).to_string();
+                let name = IdentId::get_ident_name(*k).to_string();
                 let value = self.val_debug(context[*v]);
                 eprintln!("lvar({}): {} {}", v.as_u32(), name, value);
             }
@@ -565,7 +565,7 @@ impl VM {
                 }
                 Inst::PUSH_STRING => {
                     let id = self.read_id(iseq, 1);
-                    let string = self.globals.get_ident_name(id).to_string();
+                    let string = IdentId::get_ident_name(id);
                     self.stack_push(Value::string(&self.globals, string));
                     self.pc += 5;
                 }
@@ -873,7 +873,7 @@ impl VM {
                                 self.eval_send(mref.method, mref.receiver, &args)?
                             }
                             _ => {
-                                let id = self.globals.get_ident_id("[]");
+                                let id = IdentId::get_ident_id("[]");
                                 match self.get_method(receiver, id) {
                                     Ok(mref) => self.eval_send(mref, receiver, &args)?,
                                     Err(_) => {
@@ -1004,7 +1004,7 @@ impl VM {
                             if val.is_module().is_some() != is_module {
                                 return Err(self.error_type(format!(
                                     "{} is not {}.",
-                                    self.globals.get_ident_name(id),
+                                    IdentId::get_ident_name(id),
                                     if is_module { "module" } else { "class" },
                                 )));
                             };
@@ -1012,7 +1012,7 @@ impl VM {
                             if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                                 return Err(self.error_type(format!(
                                     "superclass mismatch for class {}.",
-                                    self.globals.get_ident_name(id),
+                                    IdentId::get_ident_name(id),
                                 )));
                             };
                             val.clone()
@@ -1428,7 +1428,7 @@ impl VM {
                         class = superclass;
                     }
                     None => {
-                        let name = self.globals.get_ident_name(id);
+                        let name = IdentId::get_ident_name(id);
                         return Err(self.error_name(format!("Uninitialized constant {}.", name)));
                     }
                 },
@@ -1485,7 +1485,7 @@ impl VM {
                 Ok(val)
             }
             Err(_) => {
-                let name = self.globals.get_ident_name(method);
+                let name = IdentId::get_ident_name(method);
                 Err(self.error_undefined_op(name, rhs, lhs))
             }
         }
@@ -1716,14 +1716,13 @@ impl VM {
                 }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
-                        RV::Symbol(sym) => self.globals.get_ident_name(sym),
+                        RV::Symbol(sym) => IdentId::get_ident_name(sym),
                         RV::Object(_) => match rhs.as_string() {
-                            Some(s) => s,
+                            Some(s) => s.to_owned(),
                             None => return Ok(false),
                         },
                         _ => return Ok(false),
-                    }
-                    .to_owned();
+                    };
                     let res = Regexp::find_one(self, &re.regexp, &given)?.is_some();
                     Ok(res)
                 }
@@ -1754,7 +1753,7 @@ impl VM {
                 _ => return Ok(Value::nil()),
             },
             _ => {
-                let id = self.globals.get_ident_id("<=>");
+                let id = IdentId::get_ident_id("<=>");
                 return self.fallback_to_method(id, lhs, rhs);
             }
         };
@@ -1827,15 +1826,15 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
+            RV::Symbol(i) => format!("{}", IdentId::get_ident_name(i)),
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner()),
                 ObjKind::String(s) => s.to_s(),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
-                ObjKind::Ordinary => oref.to_s(&self.globals),
+                ObjKind::Ordinary => oref.to_s(),
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Range(rinfo) => rinfo.to_s(self),
                 ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
@@ -1861,16 +1860,16 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
+            RV::Symbol(sym) => format!(":{}", IdentId::get_ident_name(sym)),
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::Ordinary => oref.debug(self),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
                 ObjKind::Module(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
                 ObjKind::String(s) => s.inspect(),
@@ -1904,17 +1903,17 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
+            RV::Symbol(sym) => format!(":{}", IdentId::get_ident_name(sym)),
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
                 ObjKind::Module(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
                 ObjKind::Array(aref) => aref.to_s(self),
@@ -1923,7 +1922,7 @@ impl VM {
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => {
-                    let id = self.globals.get_ident_id("inspect");
+                    let id = IdentId::get_ident_id("inspect");
                     self.send0(val, id)
                         .unwrap()
                         .as_string()
@@ -2201,7 +2200,7 @@ impl VM {
                             class = original_class.as_object().class();
                         } else {
                             let inspect = self.val_inspect(original_class);
-                            let method_name = self.globals.get_ident_name(method);
+                            let method_name = IdentId::get_ident_name(method);
                             return Err(self.error_nomethod(format!(
                                 "no method `{}' found for {}",
                                 method_name, inspect

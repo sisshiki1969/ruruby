@@ -124,7 +124,7 @@ impl std::hash::Hash for RString {
 }
 
 pub fn init_string(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("String");
+    let id = IdentId::get_ident_id("String");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "to_s", to_s);
     globals.add_builtin_instance_method(class, "inspect", inspect);
@@ -410,7 +410,7 @@ fn string_start_with(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn string_to_sym(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let string = vm.expect_string(&self_val, "Receiver")?;
-    let id = vm.globals.get_ident_id(string);
+    let id = IdentId::get_ident_id(string);
     Ok(Value::symbol(id))
 }
 

@@ -1,5 +1,6 @@
 use super::parser::LvarCollector;
-use crate::util::{Annot, IdentId, Loc};
+use crate::id_table::IdentId;
+use crate::util::{Annot, Loc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {

@@ -34,7 +34,7 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.is_object() {
         Some(oref) => {
-            let s = oref.to_s(&vm.globals);
+            let s = oref.to_s();
             Ok(Value::string(&vm.globals, s))
         }
         None => {
@@ -103,7 +103,7 @@ fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
         None => match name.as_string() {
-            Some(s) => vm.globals.get_ident_id(s),
+            Some(s) => IdentId::get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
@@ -118,7 +118,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
         None => match name.as_string() {
-            Some(s) => vm.globals.get_ident_id(s),
+            Some(s) => IdentId::get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
@@ -136,7 +136,7 @@ fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let res = match receiver.var_table() {
         Some(table) => table
             .keys()
-            .filter(|x| vm.globals.get_ident_name(**x).chars().nth(0) == Some('@'))
+            .filter(|x| IdentId::get_ident_name(**x).chars().nth(0) == Some('@'))
             .map(|x| Value::symbol(*x))
             .collect(),
         None => vec![],
@@ -160,7 +160,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let inspect = vm.val_inspect(self_val);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
-                    vm.globals.get_ident_name(m),
+                    IdentId::get_ident_name(m),
                     inspect,
                 )));
             }
@@ -171,7 +171,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let inspect = vm.val_inspect(self_val);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
-                    vm.globals.get_ident_name(m),
+                    IdentId::get_ident_name(m),
                     inspect,
                 )));
             }

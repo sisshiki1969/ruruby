@@ -221,9 +221,9 @@ impl Codegen {
         Codegen::push64(iseq, num as u64);
     }
 
-    fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
+    fn gen_string(&mut self, iseq: &mut ISeq, s: &str) {
         iseq.push(Inst::PUSH_STRING);
-        let id = globals.get_ident_id(s);
+        let id = IdentId::get_ident_id(s);
         Codegen::push32(iseq, id.into());
     }
 
@@ -522,8 +522,8 @@ impl Codegen {
             NodeKind::Send {
                 receiver, method, ..
             } => {
-                let name = globals.get_ident_name(*method).to_string() + "=";
-                let assign_id = globals.get_ident_id(name);
+                let name = IdentId::get_ident_name(*method).to_string() + "=";
+                let assign_id = IdentId::get_ident_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
                 self.gen_opt_send(globals, iseq, assign_id, 1);
@@ -712,7 +712,11 @@ impl Codegen {
             eprintln!("-----------------------------------------");
             eprintln!("{:?}", methodref);
             for (k, v) in iseq.lvar.table() {
-                eprint!("local var({}): {} ", v.as_u32(), globals.get_ident_name(*k));
+                eprint!(
+                    "local var({}): {} ",
+                    v.as_u32(),
+                    IdentId::get_ident_name(*k)
+                );
             }
             eprintln!("");
             eprintln!("block: {:?}", iseq.lvar.block());
@@ -763,17 +767,17 @@ impl Codegen {
                 Codegen::push64(iseq, f64::to_bits(*num));
             }
             NodeKind::String(s) => {
-                self.gen_string(globals, iseq, s);
+                self.gen_string(iseq, s);
             }
             NodeKind::Symbol(id) => {
                 self.gen_symbol(iseq, *id);
             }
             NodeKind::InterporatedString(nodes) => {
-                self.gen_string(globals, iseq, &"".to_string());
+                self.gen_string(iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
-                            self.gen_string(globals, iseq, &s);
+                            self.gen_string(iseq, &s);
                         }
                         NodeKind::CompStmt(nodes) => {
                             self.gen_comp_stmt(globals, iseq, nodes, true)?;
@@ -788,11 +792,11 @@ impl Codegen {
                 };
             }
             NodeKind::RegExp(nodes) => {
-                self.gen_string(globals, iseq, &"".to_string());
+                self.gen_string(iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
-                            self.gen_string(globals, iseq, &s);
+                            self.gen_string(iseq, &s);
                         }
                         NodeKind::CompStmt(nodes) => {
                             self.gen_comp_stmt(globals, iseq, nodes, true)?;
@@ -998,7 +1002,7 @@ impl Codegen {
                         iseq.push(Inst::TEQ);
                     }
                     BinOp::Match => {
-                        let method = globals.get_ident_id("=~");
+                        let method = IdentId::get_ident_id("=~");
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;

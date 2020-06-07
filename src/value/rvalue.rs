@@ -150,21 +150,21 @@ impl RValue {
         }
     }
 
-    pub fn class_name<'a>(&self, globals: &'a Globals) -> &'a str {
-        globals.get_ident_name(self.search_class().as_class().name)
+    pub fn class_name(&self) -> String {
+        IdentId::get_ident_name(self.search_class().as_class().name)
     }
 
-    pub fn to_s(&self, globals: &Globals) -> String {
-        format! {"#<{}:{:?}>", self.class_name(globals), self}
+    pub fn to_s(&self) -> String {
+        format! {"#<{}:{:?}>", self.class_name(), self}
     }
 
     pub fn inspect(&self, vm: &mut VM) -> String {
-        let mut s = format! {"#<{}:0x{:x}", self.class_name(&vm.globals), self.id()};
+        let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {
                     let inspect = vm.val_to_s(*v);
-                    let id = vm.globals.get_ident_name(*k);
+                    let id = IdentId::get_ident_name(*k);
                     s = format!("{} {}={}", s, id, inspect);
                 }
             }
@@ -175,12 +175,12 @@ impl RValue {
     }
 
     pub fn debug(&self, vm: &VM) -> String {
-        let mut s = format! {"#<{}:0x{:x}", self.class_name(&vm.globals), self.id()};
+        let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {
                     let inspect = vm.val_debug(*v);
-                    let id = vm.globals.get_ident_name(*k);
+                    let id = IdentId::get_ident_name(*k);
                     s = format!("{} {}={}", s, id, inspect);
                 }
             }

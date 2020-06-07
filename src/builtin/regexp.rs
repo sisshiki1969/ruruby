@@ -47,7 +47,7 @@ impl Regexp {
 }
 
 pub fn init_regexp(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Regexp");
+    let id = IdentId::get_ident_id("Regexp");
     let classref = ClassRef::from(id, globals.builtins.object);
     let regexp = Value::class(globals, classref);
     globals.add_builtin_class_method(regexp, "new", regexp_new);
@@ -80,8 +80,8 @@ fn regexp_escape(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 impl Regexp {
     fn get_captures(vm: &mut VM, captures: &Captures, given: &str) {
-        let id1 = vm.globals.get_ident_id("$&");
-        let id2 = vm.globals.get_ident_id("$'");
+        let id1 = IdentId::get_ident_id("$&");
+        let id2 = IdentId::get_ident_id("$'");
         match captures.get(0) {
             Some(m) => {
                 let val = Value::string(&vm.globals, given[m.start()..m.end()].to_string());
@@ -104,14 +104,14 @@ impl Regexp {
     }
 
     fn set_special_global(vm: &mut VM, i: usize, given: &str, start: usize, end: usize) {
-        let id = vm.globals.get_ident_id(format!("${}", i));
+        let id = IdentId::get_ident_id(format!("${}", i));
         let val = Value::string(&vm.globals, given[start..end].to_string());
         //eprintln!("${}: {}", i, given[start..end].to_string());
         vm.set_global_var(id, val);
     }
 
     fn set_special_global_nil(vm: &mut VM, i: usize) {
-        let id = vm.globals.get_ident_id(format!("${}", i));
+        let id = IdentId::get_ident_id(format!("${}", i));
         vm.set_global_var(id, Value::nil());
     }
 

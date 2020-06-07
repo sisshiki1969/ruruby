@@ -36,7 +36,7 @@ impl GC for FiberInfo {
 }
 
 pub fn init_fiber(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Fiber");
+    let id = IdentId::get_ident_id("Fiber");
     let class = ClassRef::from(id, globals.builtins.object);
     let val = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "inspect", inspect);

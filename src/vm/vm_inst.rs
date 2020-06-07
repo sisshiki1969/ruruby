@@ -242,7 +242,7 @@ impl Inst {
         }
     }
 
-    pub fn inst_info(globals: &mut Globals, iseq_ref: ISeqRef, pc: usize) -> String {
+    pub fn inst_info(iseq_ref: ISeqRef, pc: usize) -> String {
         let iseq = &iseq_ref.iseq;
         match iseq[pc] {
             Inst::END
@@ -308,52 +308,49 @@ impl Inst {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = globals.get_ident_name(ident_id);
+                let name = IdentId::get_ident_name(ident_id);
                 format!("SET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::GET_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = globals.get_ident_name(ident_id);
+                let name = IdentId::get_ident_name(ident_id);
                 format!("GET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::CHECK_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = globals.get_ident_name(ident_id);
+                let name = IdentId::get_ident_name(ident_id);
                 format!("CHECK_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
-            Inst::GET_CONST => format!("GET_CONST '{}'", Inst::ident_name(globals, iseq, pc + 1)),
-            Inst::GET_CONST_TOP => format!(
-                "GET_CONST_TOP '{}'",
-                Inst::ident_name(globals, iseq, pc + 1)
-            ),
-            Inst::SET_CONST => format!("SET_CONST '{}'", Inst::ident_name(globals, iseq, pc + 1)),
-            Inst::GET_SCOPE => format!("GET_SCOPE '{}'", Inst::ident_name(globals, iseq, pc + 1)),
-            Inst::GET_IVAR => format!("GET_IVAR '{}'", Inst::ident_name(globals, iseq, pc + 1)),
-            Inst::SET_IVAR => format!("SET_IVAR '{}'", Inst::ident_name(globals, iseq, pc + 1)),
+            Inst::GET_CONST => format!("GET_CONST '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::GET_CONST_TOP => format!("GET_CONST_TOP '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::SET_CONST => format!("SET_CONST '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::GET_SCOPE => format!("GET_SCOPE '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::GET_IVAR => format!("GET_IVAR '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::SET_IVAR => format!("SET_IVAR '{}'", Inst::ident_name(iseq, pc + 1)),
             Inst::GET_INDEX => format!("GET_INDEX {} items", Inst::read32(iseq, pc + 1)),
             Inst::SET_INDEX => format!("SET_INDEX {} items", Inst::read32(iseq, pc + 1)),
             Inst::SEND => format!(
                 "SEND '{}' {} items",
-                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::ident_name(iseq, pc + 1),
                 Inst::read32(iseq, pc + 5)
             ),
             Inst::SEND_SELF => format!(
                 "SEND_SELF '{}' {} items",
-                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::ident_name(iseq, pc + 1),
                 Inst::read32(iseq, pc + 5)
             ),
             Inst::OPT_SEND => format!(
                 "OPT_SEND '{}' {} items",
-                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::ident_name(iseq, pc + 1),
                 Inst::read32(iseq, pc + 5)
             ),
             Inst::OPT_SEND_SELF => format!(
                 "OPT_SEND_SELF '{}' {} items",
-                Inst::ident_name(globals, iseq, pc + 1),
+                Inst::ident_name(iseq, pc + 1),
                 Inst::read32(iseq, pc + 5)
             ),
             Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", Inst::read32(iseq, pc + 1)),
@@ -368,13 +365,11 @@ impl Inst {
                 } else {
                     "class"
                 },
-                Inst::ident_name(globals, iseq, pc + 2),
+                Inst::ident_name(iseq, pc + 2),
                 Inst::read32(iseq, pc)
             ),
-            Inst::DEF_METHOD => format!("DEF_METHOD '{}'", Inst::ident_name(globals, iseq, pc + 1)),
-            Inst::DEF_SMETHOD => {
-                format!("DEF_SMETHOD '{}'", Inst::ident_name(globals, iseq, pc + 1))
-            }
+            Inst::DEF_METHOD => format!("DEF_METHOD '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", Inst::ident_name(iseq, pc + 1)),
             _ => format!("undefined"),
         }
     }
@@ -393,7 +388,7 @@ impl Inst {
         iseq[pc]
     }
 
-    fn ident_name<'a>(globals: &'a Globals, iseq: &ISeq, pc: usize) -> &'a str {
-        globals.get_ident_name(IdentId::from(Inst::read32(iseq, pc)))
+    fn ident_name(iseq: &ISeq, pc: usize) -> String {
+        IdentId::get_name(IdentId::from(Inst::read32(iseq, pc)))
     }
 }

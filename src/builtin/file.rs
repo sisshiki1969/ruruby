@@ -5,7 +5,7 @@ use std::path::*;
 use crate::*;
 
 pub fn init_file(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("File");
+    let id = IdentId::get_ident_id("File");
     let class = ClassRef::from(id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "join", join);

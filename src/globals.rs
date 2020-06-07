@@ -4,7 +4,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
-    pub ident_table: IdentifierTable,
+    //pub ident_table: IdentifierTable,
     pub global_var: ValueTable,
     method_table: GlobalMethodTable,
     inline_cache: InlineCache,
@@ -108,10 +108,10 @@ impl GC for Globals {
 impl Globals {
     pub fn new() -> Self {
         use builtin::*;
-        let mut ident_table = IdentifierTable::new();
+        //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
-        let module_id = ident_table.get_ident_id("Module");
-        let class_id = ident_table.get_ident_id("Class");
+        let module_id = IdentId::get_ident_id("Module");
+        let class_id = IdentId::get_ident_id("Class");
         let mut object_class = ClassRef::from(object_id, None);
         let object = Value::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
@@ -126,7 +126,7 @@ impl Globals {
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
-            ident_table,
+            //ident_table,
             global_var: HashMap::new(),
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
@@ -166,7 +166,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                let id = globals.get_ident_id($name);
+                let id = IdentId::get_ident_id($name);
                 globals
                     .builtins
                     .object
@@ -176,7 +176,7 @@ impl Globals {
 
         macro_rules! set_class {
             ($name:expr, $class_object:expr) => {
-                let id = globals.get_ident_id($name);
+                let id = IdentId::get_ident_id($name);
                 let object = $class_object;
                 globals.builtins.object.set_var(id, object);
             };
@@ -213,18 +213,6 @@ impl Globals {
 
     pub fn print_bitmap(&self) {
         ALLOC.lock().unwrap().print_mark();
-    }
-
-    pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {
-        let id = id.into();
-        match id {
-            Some(id) => self.ident_table.get_name(id),
-            None => &"",
-        }
-    }
-
-    pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
-        self.ident_table.get_ident_id(name)
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
@@ -284,7 +272,7 @@ impl Globals {
     }
 
     pub fn add_builtin_class_method(&mut self, obj: Value, name: &str, func: BuiltinFunc) {
-        let id = self.get_ident_id(name);
+        let id = IdentId::get_ident_id(name);
         let info = MethodInfo::BuiltinFunc {
             name: name.to_string(),
             func,
@@ -300,7 +288,7 @@ impl Globals {
         name: &str,
         func: BuiltinFunc,
     ) {
-        let id = self.get_ident_id(name);
+        let id = IdentId::get_ident_id(name);
         let info = MethodInfo::BuiltinFunc {
             name: name.to_string(),
             func,
@@ -330,7 +318,7 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => oref.class_name(self).to_string(),
+                ObjKind::Ordinary => oref.class_name().to_string(),
                 ObjKind::Integer(_) => "Integer".to_string(),
                 ObjKind::Float(_) => "Float".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),

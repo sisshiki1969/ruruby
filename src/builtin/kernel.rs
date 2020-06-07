@@ -4,7 +4,7 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Kernel");
+    let id = IdentId::get_ident_id("Kernel");
     let kernel_class = ClassRef::from(id, None);
     globals.add_builtin_instance_method(kernel_class, "puts", puts);
     globals.add_builtin_instance_method(kernel_class, "p", p);

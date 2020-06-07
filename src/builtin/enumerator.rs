@@ -40,7 +40,7 @@ impl EnumRef {
 }
 
 pub fn init_enumerator(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Enumerator");
+    let id = IdentId::get_ident_id("Enumerator");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "map", map);
@@ -57,7 +57,7 @@ pub fn init_enumerator(globals: &mut Globals) -> Value {
 fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_min(args.len(), 1)?;
     let (receiver, method, new_args) = if args.len() == 1 {
-        let method = vm.globals.get_ident_id("each");
+        let method = IdentId::get_ident_id("each");
         let new_args = Args::new0();
         (self_val, method, new_args)
     } else {
@@ -96,7 +96,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let inspect = format!(
         "#<Enumerator: {}:{}({})>",
         vm.val_inspect(eref.receiver),
-        vm.globals.get_ident_name(eref.method),
+        IdentId::get_ident_name(eref.method),
         arg_string
     );
     Ok(Value::string(&vm.globals, inspect))
@@ -130,7 +130,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = vm.globals.get_ident_id("map");
+            let id = IdentId::get_ident_id("map");
             let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
             return Ok(e);
         }
@@ -154,7 +154,7 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = vm.globals.get_ident_id("with_index");
+            let id = IdentId::get_ident_id("with_index");
             let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
             return Ok(e);
         }
