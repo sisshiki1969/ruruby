@@ -33,6 +33,15 @@ pub struct GCBox<T: GC> {
     next: Option<GCBoxRef<T>>,
 }
 
+impl GCBox<RValue> {
+    fn new() -> Self {
+        GCBox {
+            inner: RValue::new_invalid(),
+            next: None,
+        }
+    }
+}
+
 impl<T: GC> GCBox<T> {
     pub fn inner(&self) -> &T {
         &self.inner
@@ -144,7 +153,7 @@ impl Allocator {
         ALLOC_THREAD.with(|m| {
             let mut m = m.borrow_mut();
             m.allocated += 1;
-            m.alloc_flag = m.allocated % 1024 == 0;
+            m.alloc_flag = m.allocated % 2048 == 0;
         });
 
         match self.free {
@@ -224,7 +233,7 @@ impl Allocator {
         });
         #[cfg(debug_assertions)]
         {
-            //self.print_mark();
+            self.print_mark();
             eprintln!("--GC completed");
         }
     }
@@ -270,18 +279,20 @@ impl Allocator {
         is_marked
     }
 
-    fn sweep_obj(&self, ptr: *mut GCBox<RValue>) -> bool {
+    fn sweep_obj(ptr: *mut GCBox<RValue>, head: &mut *mut GCBox<RValue>) -> bool {
         unsafe {
             match (*ptr).inner.kind {
                 ObjKind::Array(_) => return false,
                 _ => {}
-            } /*
-              println!(
-                  "free {:?} {:?}",
-                  &(*ptr).inner as *const RValue,
-                  (*ptr).inner
-              );*/
-            (*ptr).next = self.free;
+            }; /*
+               println!(
+                   "free {:?} {:?}",
+                   &(*ptr).inner as *const RValue,
+                   (*ptr).inner
+               );*/
+            (**head).next = Some(GCBoxRef::from_ptr(ptr));
+            *head = ptr;
+            (*ptr).next = None;
             (*ptr).inner.free();
             (*ptr).inner = RValue::new_invalid();
         }
@@ -290,25 +301,8 @@ impl Allocator {
 
     pub fn sweep(&mut self) {
         let mut c = 0;
-        let mut free = self.free;
-        loop {
-            match free {
-                Some(f) => {
-                    if self.mark_ptr(f.as_ptr()) {
-                        panic!("Marked object in free list.")
-                    };
-                    free = f.next;
-                    c += 1;
-                }
-                None => break,
-            };
-        }
-
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("free list: {}", c);
-        }
-        c = 0;
+        let mut anchor = GCBox::new();
+        let head = &mut ((&mut anchor) as *mut GCBox<RValue>);
 
         let pinfo = self.pages.last().unwrap();
         let mut ptr = pinfo.ptr.as_ptr();
@@ -323,8 +317,7 @@ impl Allocator {
                     ptr as usize - pinfo.ptr.as_ptr() as usize,
                     (_j * 64 + _b) * 64
                 );
-                if map & 1 == 0 && self.sweep_obj(ptr) {
-                    self.free = Some(GCBoxRef::from_ptr(ptr));
+                if map & 1 == 0 && Allocator::sweep_obj(ptr, head) {
                     c += 1;
                 }
                 ptr = unsafe { ptr.add(1) };
@@ -335,8 +328,7 @@ impl Allocator {
         if i < 64 {
             let mut map = pinfo.bitmap[i];
             for _ in 0..bit {
-                if map & 1 == 0 && self.sweep_obj(ptr) {
-                    self.free = Some(GCBoxRef::from_ptr(ptr));
+                if map & 1 == 0 && Allocator::sweep_obj(ptr, head) {
                     c += 1;
                 }
                 ptr = unsafe { ptr.add(1) };
@@ -354,8 +346,7 @@ impl Allocator {
                         ptr as usize - pinfo.ptr.as_ptr() as usize,
                         (_j * 64 + _b) * 64
                     );
-                    if map & 1 == 0 && self.sweep_obj(ptr) {
-                        self.free = Some(GCBoxRef::from_ptr(ptr));
+                    if map & 1 == 0 && Allocator::sweep_obj(ptr, head) {
                         c += 1;
                     }
                     ptr = unsafe { ptr.add(1) };
@@ -363,6 +354,7 @@ impl Allocator {
                 }
             }
         }
+        self.free = anchor.next;
         self.sweeped += c;
     }
 
