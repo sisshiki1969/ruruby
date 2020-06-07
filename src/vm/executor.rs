@@ -366,21 +366,28 @@ impl VM {
     }
 
     #[allow(dead_code)]
-    pub fn dump_values(&self) {
+    pub fn dump_context(&self) {
+        eprintln!("---dump");
         for (i, context) in self.exec_context.iter().enumerate() {
             eprintln!("context: {}", i);
-            let value = self.val_debug(context.self_value);
-            eprintln!("self: {}", value);
-            for (k, v) in context.iseq_ref.lvar.table() {
-                let name = IdentId::get_ident_name(*k).to_string();
-                let value = self.val_debug(context[*v]);
-                eprintln!("lvar({}): {} {}", v.as_u32(), name, value);
+            eprintln!("self: {:#?}", context.self_value);
+            for i in 0..context.iseq_ref.lvars {
+                let id = LvarId::from_usize(i);
+                let (k, _) = context
+                    .iseq_ref
+                    .lvar
+                    .table()
+                    .iter()
+                    .find(|(_, v)| **v == id)
+                    .unwrap();
+                let name = IdentId::get_ident_name(*k);
+                eprintln!("lvar({}): {} {:#?}", id.as_u32(), name, context[id]);
             }
         }
         for v in &self.exec_stack {
-            let value = self.val_debug(*v);
-            eprintln!("stack: {}", value);
+            eprintln!("stack: {:#?}", *v);
         }
+        eprintln!("---dump end");
     }
 }
 
@@ -402,7 +409,7 @@ macro_rules! try_err {
                     }
                     Ok(result)
                 } else {
-                    //$self.dump_values();
+                    //$self.dump_context();
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
@@ -1716,7 +1723,7 @@ impl VM {
                 }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
-                        RV::Symbol(sym) => IdentId::get_ident_name(sym),
+                        RV::Symbol(sym) => IdentId::get_name(sym),
                         RV::Object(_) => match rhs.as_string() {
                             Some(s) => s.to_owned(),
                             None => return Ok(false),

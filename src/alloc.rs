@@ -133,7 +133,7 @@ impl Allocator {
         #[cfg(debug_assertions)]
         {
             assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
-            eprintln!("page allocated: {:?}", ptr);
+            //eprintln!("page allocated: {:?}", ptr);
         }
         ptr as *mut GCBox<RValue>
     }
@@ -224,6 +224,7 @@ impl Allocator {
         });
         #[cfg(debug_assertions)]
         {
+            //self.print_mark();
             eprintln!("--GC completed");
         }
     }
@@ -274,8 +275,12 @@ impl Allocator {
             match (*ptr).inner.kind {
                 ObjKind::Array(_) => return false,
                 _ => {}
-            }
-            //eprintln!("free {:?}", (*ptr).inner);
+            } /*
+              println!(
+                  "free {:?} {:?}",
+                  &(*ptr).inner as *const RValue,
+                  (*ptr).inner
+              );*/
             (*ptr).next = self.free;
             (*ptr).inner.free();
             (*ptr).inner = RValue::new_invalid();

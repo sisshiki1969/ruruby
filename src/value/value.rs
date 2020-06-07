@@ -129,7 +129,7 @@ impl std::fmt::Debug for Value {
         } else if self.is_packed_num() {
             write!(f, "{}", self.as_packed_flonum())
         } else if self.is_packed_symbol() {
-            write!(f, "Symbol:{:?}", self.as_packed_symbol())
+            write!(f, ":\"{}\"", IdentId::get_name(self.as_packed_symbol()))
         } else {
             match self.0 {
                 NIL_VALUE => write!(f, "Nil"),
@@ -158,7 +158,11 @@ impl Value {
         if !self.is_packed_value() {
             let info = self.rvalue();
             match &info.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", info),
+                ObjKind::Invalid => panic!(
+                    "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
+                    info.inner() as *const RValue,
+                    info
+                ),
                 ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
                 _ => RV::Object(Ref::from_ref(info)),

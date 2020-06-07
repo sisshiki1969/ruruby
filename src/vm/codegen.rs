@@ -723,7 +723,7 @@ impl Codegen {
             //let iseq = &iseq.iseq;
             let mut pc = 0;
             while pc < iseq.iseq.len() {
-                eprintln!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
+                eprintln!("  {:05x} {}", pc, Inst::inst_info(iseq, pc));
                 pc += Inst::inst_size(iseq.iseq[pc]);
             }
         }

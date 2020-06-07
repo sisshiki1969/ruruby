@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 lazy_static! {
-    pub static ref ID: Mutex<IdentifierTable> = {
+    pub static ref ID: RwLock<IdentifierTable> = {
         let id = IdentifierTable::new();
-        Mutex::new(id)
+        RwLock::new(id)
     };
 }
 
@@ -63,25 +63,24 @@ impl IdentId {
 
 impl IdentId {
     pub fn get_ident_id(name: impl Into<String>) -> Self {
-        ID.lock().unwrap().get_ident_id(name)
+        ID.write().unwrap().get_ident_id(name)
     }
 
     pub fn get_name(id: IdentId) -> String {
-        ID.lock().unwrap().get_name(id).to_string()
+        ID.read().unwrap().get_name(id).to_string()
     }
 
     pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
         let id = id.into();
         match id {
-            Some(id) => IdentId::get_name(id),
+            Some(id) => IdentId::get_name(id).to_string(),
             None => "".to_string(),
         }
     }
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
-        let mut id_table = ID.lock().unwrap();
-        let new_name = id_table.get_name(id).to_string() + postfix;
-        id_table.get_ident_id(new_name)
+        let new_name = IdentId::get_name(id) + postfix;
+        IdentId::get_ident_id(new_name)
     }
 }
 
@@ -138,7 +137,15 @@ impl IdentifierTable {
         }
     }
 
-    fn get_name(&self, id: IdentId) -> &str {
+    pub fn get_name(&self, id: IdentId) -> &str {
         self.table_rev.get(&id.0.get()).unwrap()
+    }
+
+    pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {
+        let id = id.into();
+        match id {
+            Some(id) => self.get_name(id),
+            None => &"",
+        }
     }
 }

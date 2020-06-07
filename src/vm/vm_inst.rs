@@ -244,6 +244,7 @@ impl Inst {
 
     pub fn inst_info(iseq_ref: ISeqRef, pc: usize) -> String {
         let iseq = &iseq_ref.iseq;
+        let id_lock = ID.read().unwrap();
         match iseq[pc] {
             Inst::END
             | Inst::PUSH_NIL
@@ -308,21 +309,21 @@ impl Inst {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = IdentId::get_ident_name(ident_id);
+                let name = id_lock.get_ident_name(ident_id);
                 format!("SET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::GET_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = IdentId::get_ident_name(ident_id);
+                let name = id_lock.get_ident_name(ident_id);
                 format!("GET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::CHECK_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = IdentId::get_ident_name(ident_id);
+                let name = id_lock.get_ident_name(ident_id);
                 format!("CHECK_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::GET_CONST => format!("GET_CONST '{}'", Inst::ident_name(iseq, pc + 1)),
@@ -389,6 +390,6 @@ impl Inst {
     }
 
     fn ident_name(iseq: &ISeq, pc: usize) -> String {
-        IdentId::get_name(IdentId::from(Inst::read32(iseq, pc)))
+        IdentId::get_name(IdentId::from(Inst::read32(iseq, pc))).to_string()
     }
 }

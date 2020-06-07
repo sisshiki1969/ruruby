@@ -25,7 +25,9 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
                 &mut table
                     .keys()
                     .filter(|x| {
-                        IdentId::get_ident_name(**x)
+                        ID.read()
+                            .unwrap()
+                            .get_ident_name(**x)
                             .chars()
                             .nth(0)
                             .unwrap()
@@ -153,7 +155,7 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
 }
 
 fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
-    let s = IdentId::get_ident_name(id).to_string();
+    let s = IdentId::get_ident_name(id);
     IdentId::get_ident_id(format!("@{}", s))
 }
 

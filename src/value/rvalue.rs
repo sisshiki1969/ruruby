@@ -38,8 +38,14 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::String(rs) => write!(f, "String:{:?}", rs),
             ObjKind::Integer(i) => write!(f, "{}", *i),
             ObjKind::Float(i) => write!(f, "{}", *i),
-            ObjKind::Class(_) => write!(f, "Class"),
-            ObjKind::Module(_) => write!(f, "Modle"),
+            ObjKind::Class(cref) => match cref.name {
+                Some(id) => write!(f, "{}", IdentId::get_ident_name(id)),
+                None => write!(f, "#<Class:0x{:x}>", cref.id()),
+            },
+            ObjKind::Module(cref) => match cref.name {
+                Some(id) => write!(f, "{}", IdentId::get_ident_name(id)),
+                None => write!(f, "#<Module:0x{:x}>", cref.id()),
+            },
             ObjKind::Array(aref) => {
                 write!(f, "Array[")?;
                 match aref.elements.len() {
@@ -59,12 +65,23 @@ impl std::fmt::Debug for ObjKind {
                 }
                 write!(f, "]")
             }
-            ObjKind::Hash(_) => write!(f, "Hash"),
+            ObjKind::Hash(href) => {
+                write!(f, "{{")?;
+                let mut flag = false;
+                for (k, v) in href.iter() {
+                    if flag {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{:#?}=>{:#?}", k, v)?;
+                    flag = true;
+                }
+                write!(f, "}}")
+            }
             ObjKind::Range(RangeInfo { start, end, .. }) => {
                 write!(f, "Range({:?}, {:?})", start, end)
             }
-            ObjKind::Regexp(_) => write!(f, "Regexp"),
-            ObjKind::Splat(v) => write!(f, "Splat[{:?}]", v),
+            ObjKind::Regexp(rref) => write!(f, "/{}/", rref.regexp.as_str()),
+            ObjKind::Splat(v) => write!(f, "Splat[{:#?}]", v),
             ObjKind::Proc(_) => write!(f, "Proc"),
             ObjKind::Method(_) => write!(f, "Method"),
             ObjKind::Enumerator(_) => write!(f, "Enumerator"),
@@ -81,7 +98,10 @@ impl GC for RValue {
             None => {}
         }
         match self.kind {
-            ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
+            ObjKind::Invalid => panic!(
+                "Invalid rvalue. (maybe GC problem) {:?} {:?}",
+                self as *const RValue, self
+            ),
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
             ObjKind::Array(aref) => aref.mark(alloc),
             ObjKind::Hash(href) => href.mark(alloc),
@@ -143,7 +163,7 @@ impl RValue {
                 ObjKind::Ordinary => ObjKind::Ordinary,
                 ObjKind::Proc(pref) => ObjKind::Proc(pref.dup()),
                 ObjKind::Range(info) => ObjKind::Range(info.clone()),
-                ObjKind::Regexp(rref) => ObjKind::Regexp(*rref),
+                ObjKind::Regexp(rref) => ObjKind::Regexp(*rref), // TODO: this can cause some trouble.
                 ObjKind::Splat(v) => ObjKind::Splat(*v),
                 ObjKind::String(rstr) => ObjKind::String(rstr.clone()),
             },
