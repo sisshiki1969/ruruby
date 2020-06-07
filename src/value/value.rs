@@ -683,10 +683,6 @@ impl Value {
         Value::object(RValue::new_module(globals, class_ref))
     }
 
-    pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
-        Value::object(RValue::new_array(globals, array_ref))
-    }
-
     pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
         Value::object(RValue::new_array(globals, ArrayRef::from(ary)))
     }

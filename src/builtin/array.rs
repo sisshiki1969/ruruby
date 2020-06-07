@@ -683,14 +683,18 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     vm.check_args_num(args.len(), 0)?;
-    let aref = vm.expect_array(self_val, "Receiver")?.dup();
+    let mut ary = vm
+        .expect_array(self_val, "Receiver")?
+        .inner()
+        .elements
+        .clone();
     match args.block {
         None => {
-            vm.sort_array(aref)?;
+            vm.sort_array(&mut ary)?;
         }
         Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
     };
-    Ok(Value::array(&vm.globals, aref))
+    Ok(Value::array_from(&vm.globals, ary))
 }
 
 use std::collections::HashSet;

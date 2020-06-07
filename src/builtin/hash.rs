@@ -231,9 +231,8 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let ary = vec![k, v];
         vec.push(Value::array_from(&vm.globals, ary));
     }
-    let aref = ArrayRef::from(vec);
-    vm.sort_array(aref)?;
-    Ok(Value::array(&vm.globals, aref))
+    vm.sort_array(&mut vec)?;
+    Ok(Value::array_from(&vm.globals, vec))
 }
 
 fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
