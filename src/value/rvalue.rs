@@ -10,7 +10,7 @@ pub struct RValue {
     pub kind: ObjKind,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum ObjKind {
     Invalid,
     Ordinary,
@@ -30,6 +30,49 @@ pub enum ObjKind {
     Enumerator(EnumRef),
 }
 
+impl std::fmt::Debug for ObjKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjKind::Invalid => write!(f, "[Invalid]"),
+            ObjKind::Ordinary => write!(f, "Ordinary"),
+            ObjKind::String(rs) => write!(f, "String:{:?}", rs),
+            ObjKind::Integer(i) => write!(f, "{}", *i),
+            ObjKind::Float(i) => write!(f, "{}", *i),
+            ObjKind::Class(_) => write!(f, "Class"),
+            ObjKind::Module(_) => write!(f, "Modle"),
+            ObjKind::Array(aref) => {
+                write!(f, "Array[")?;
+                match aref.elements.len() {
+                    0 => {}
+                    1 => write!(f, "{:#?}", aref.elements[0])?,
+                    2 => write!(f, "{:#?}, {:#?}", aref.elements[0], aref.elements[1])?,
+                    3 => write!(
+                        f,
+                        "{:#?}, {:#?}, {:#?}",
+                        aref.elements[0], aref.elements[1], aref.elements[2]
+                    )?,
+                    n => write!(
+                        f,
+                        "{:#?}, {:#?}, {:#?}.. {} items",
+                        aref.elements[0], aref.elements[1], aref.elements[2], n
+                    )?,
+                }
+                write!(f, "]")
+            }
+            ObjKind::Hash(_) => write!(f, "Hash"),
+            ObjKind::Range(RangeInfo { start, end, .. }) => {
+                write!(f, "Range({:?}, {:?})", start, end)
+            }
+            ObjKind::Regexp(_) => write!(f, "Regexp"),
+            ObjKind::Splat(v) => write!(f, "Splat[{:?}]", v),
+            ObjKind::Proc(_) => write!(f, "Proc"),
+            ObjKind::Method(_) => write!(f, "Method"),
+            ObjKind::Enumerator(_) => write!(f, "Enumerator"),
+            ObjKind::Fiber(_) => write!(f, "Fiber"),
+        }
+    }
+}
+
 impl GC for RValue {
     fn mark(&self, alloc: &mut Allocator) {
         self.class.mark(alloc);
@@ -40,9 +83,7 @@ impl GC for RValue {
         match self.kind {
             ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
-            ObjKind::Array(aref) => {
-                aref.elements.iter().for_each(|v| v.mark(alloc));
-            }
+            ObjKind::Array(aref) => aref.mark(alloc),
             ObjKind::Hash(href) => href.mark(alloc),
             ObjKind::Range(RangeInfo { start, end, .. }) => {
                 start.mark(alloc);
@@ -60,7 +101,7 @@ impl GC for RValue {
 
 impl RValue {
     pub fn free(&mut self) {
-        let _ = std::mem::replace(&mut self.var_table, None);
+        self.var_table = None;
         match self.kind {
             ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", self),
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),

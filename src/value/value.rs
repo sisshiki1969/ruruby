@@ -36,7 +36,7 @@ impl RV {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Value(u64);
 
 impl std::ops::Deref for Value {
@@ -117,6 +117,28 @@ impl Eq for Value {}
 impl Default for Value {
     fn default() -> Self {
         Value::nil()
+    }
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.is_packed_value() {
+            write!(f, "{:?}", self.rvalue().kind)
+        } else if self.is_packed_fixnum() {
+            write!(f, "{}", self.as_packed_fixnum())
+        } else if self.is_packed_num() {
+            write!(f, "{}", self.as_packed_flonum())
+        } else if self.is_packed_symbol() {
+            write!(f, "Symbol:{:?}", self.as_packed_symbol())
+        } else {
+            match self.0 {
+                NIL_VALUE => write!(f, "Nil"),
+                TRUE_VALUE => write!(f, "True"),
+                FALSE_VALUE => write!(f, "False"),
+                UNINITIALIZED => write!(f, "[Uninitialized]"),
+                _ => write!(f, "[ILLEGAL]"),
+            }
+        }
     }
 }
 

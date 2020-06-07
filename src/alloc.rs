@@ -21,7 +21,7 @@ thread_local! {
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
 const PAGE_LEN: usize = 64 * 64;
 const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
-const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE + 1024;
+const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
@@ -72,6 +72,8 @@ pub struct Allocator {
     used: usize,
     /// Total allocated objects.
     allocated: usize,
+    /// Total sweeped objects.
+    sweeped: usize,
     /// Info for allocated pages.
     pages: Vec<PageInfo<RValue>>,
     /// Counter of marked objects,
@@ -98,15 +100,13 @@ struct PageInfo<T: GC> {
 
 impl Allocator {
     pub fn new() -> Self {
-        #[cfg(debug_assertions)]
-        {
-            assert_eq!(56, std::mem::size_of::<RValue>());
-            assert_eq!(64, GCBOX_SIZE);
-        }
+        assert_eq!(56, std::mem::size_of::<RValue>());
+        assert_eq!(64, GCBOX_SIZE);
         let ptr = Allocator::alloc_page();
         Allocator {
             used: 0,
             allocated: 0,
+            sweeped: 0,
             pages: vec![PageInfo {
                 ptr: GCBoxRef::from_ptr(ptr),
                 bitmap: [0; 64],
@@ -124,54 +124,18 @@ impl Allocator {
         self.mark_counter = 0;
     }
 
-    /// Get counter of marked objects.
-    pub fn get_counter(&self) -> usize {
-        self.mark_counter
-    }
-
     /// Allocate page with `alloc_size` and `align`.
     fn alloc_page() -> *mut GCBox<RValue> {
         use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALIGN).unwrap();
         let ptr = unsafe { alloc(layout) };
-        /*
-        let mut vec = Vec::<u8>::with_capacity(alloc_size);
-        unsafe { vec.set_len(alloc_size) };
-        let ptr = (Box::into_raw(vec.into_boxed_slice()) as *const u8 as usize + ALIGN - 1)
-            & !(ALIGN - 1);*/
+
         #[cfg(debug_assertions)]
         {
             assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
             eprintln!("page allocated: {:?}", ptr);
         }
         ptr as *mut GCBox<RValue>
-    }
-
-    pub fn gc(&mut self, root: &Globals) {
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("--GC start thread:{:?}", std::thread::current().id());
-            eprintln!("allocated: {}", self.allocated);
-            eprintln!("used in current page: {}", self.used);
-        }
-        self.clear_mark();
-        root.mark(self);
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("marked: {}", self.get_counter());
-        }
-        self.sweep();
-        ALLOC_THREAD.with(|m| {
-            m.borrow_mut().alloc_flag = false;
-        });
-        #[cfg(debug_assertions)]
-        {
-            self.print_mark();
-            for vm in &root.fibers {
-                vm.dump_values();
-            }
-            eprintln!("--GC completed")
-        }
     }
 
     /// Allocate object.
@@ -187,6 +151,8 @@ impl Allocator {
             Some(gcbox) => {
                 // Allocate from the free list.
                 self.free = gcbox.next;
+                #[cfg(debug_assertions)]
+                assert_eq!(gcbox.inner, RValue::new_invalid());
                 unsafe {
                     std::ptr::write(
                         gcbox.as_ptr(),
@@ -204,7 +170,7 @@ impl Allocator {
         let gcbox = if self.used == PAGE_LEN {
             // Allocate new page.
             let ptr = Allocator::alloc_page();
-            self.used = 0;
+            self.used = 1;
             self.pages.push(PageInfo {
                 ptr: GCBoxRef::from_ptr(ptr),
                 bitmap: [0; 64],
@@ -212,10 +178,16 @@ impl Allocator {
             ptr
         } else {
             // Bump allocation.
-            unsafe { self.pages.last().unwrap().ptr.as_ptr().add(self.used) }
+            let ptr = unsafe { self.pages.last().unwrap().ptr.as_ptr().add(self.used) };
+            self.used += 1;
+            ptr
         };
+        #[cfg(debug_assertions)]
+        {
+            assert!(self.used <= PAGE_LEN);
+            assert!(0 < self.used);
+        }
 
-        self.used += 1;
         unsafe {
             std::ptr::write(
                 gcbox,
@@ -226,6 +198,34 @@ impl Allocator {
             );
         }
         gcbox
+    }
+
+    pub fn gc(&mut self, root: &Globals) {
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("--GC start thread:{:?}", std::thread::current().id());
+            eprintln!("allocated: {}", self.allocated);
+            eprintln!("used in current page: {}", self.used);
+            eprintln!("allocated pages: {}", self.pages.len());
+        }
+        self.clear_mark();
+        root.mark(self);
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("marked: {}", self.mark_counter);
+        }
+        self.sweep();
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("sweeed: {}", self.sweeped);
+        }
+        ALLOC_THREAD.with(|m| {
+            m.borrow_mut().alloc_flag = false;
+        });
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("--GC completed");
+        }
     }
 
     /// Mark object.
@@ -269,7 +269,22 @@ impl Allocator {
         is_marked
     }
 
+    fn sweep_obj(&self, ptr: *mut GCBox<RValue>) -> bool {
+        unsafe {
+            match (*ptr).inner.kind {
+                ObjKind::Array(_) => return false,
+                _ => {}
+            }
+            //eprintln!("free {:?}", (*ptr).inner);
+            (*ptr).next = self.free;
+            (*ptr).inner.free();
+            (*ptr).inner = RValue::new_invalid();
+        }
+        true
+    }
+
     pub fn sweep(&mut self) {
+        let mut c = 0;
         let mut free = self.free;
         loop {
             match free {
@@ -278,24 +293,32 @@ impl Allocator {
                         panic!("Marked object in free list.")
                     };
                     free = f.next;
+                    c += 1;
                 }
                 None => break,
             };
         }
 
-        #[allow(unused_variables)]
-        let mut c = 0;
+        #[cfg(debug_assertions)]
+        {
+            eprintln!("free list: {}", c);
+        }
+        c = 0;
+
         let pinfo = self.pages.last().unwrap();
         let mut ptr = pinfo.ptr.as_ptr();
-        for map in pinfo.bitmap.iter().take(self.used / 64) {
+        assert!(self.used <= PAGE_LEN);
+        let i = self.used / 64;
+        let bit = self.used % 64;
+        for (_j, map) in pinfo.bitmap.iter().take(i).enumerate() {
             let mut map = *map;
-            for _ in 0..64 {
-                if map & 1 == 0 {
-                    unsafe {
-                        (*ptr).next = self.free;
-                        //(*ptr).inner.free();
-                        (*ptr).inner = RValue::new_invalid();
-                    }
+            for _b in 0..64 {
+                #[cfg(debug_assertions)]
+                assert_eq!(
+                    ptr as usize - pinfo.ptr.as_ptr() as usize,
+                    (_j * 64 + _b) * 64
+                );
+                if map & 1 == 0 && self.sweep_obj(ptr) {
                     self.free = Some(GCBoxRef::from_ptr(ptr));
                     c += 1;
                 }
@@ -304,34 +327,29 @@ impl Allocator {
             }
         }
 
-        let i = self.used / 64;
-        let bit = self.used % 64;
-        let mut map = pinfo.bitmap[i];
-        for _ in 0..bit {
-            if map & 1 == 0 {
-                unsafe {
-                    (*ptr).next = self.free;
-                    //(*ptr).inner.free();
-                    (*ptr).inner = RValue::new_invalid();
+        if i < 64 {
+            let mut map = pinfo.bitmap[i];
+            for _ in 0..bit {
+                if map & 1 == 0 && self.sweep_obj(ptr) {
+                    self.free = Some(GCBoxRef::from_ptr(ptr));
+                    c += 1;
                 }
-                self.free = Some(GCBoxRef::from_ptr(ptr));
-                c += 1;
+                ptr = unsafe { ptr.add(1) };
+                map >>= 1;
             }
-            ptr = unsafe { ptr.add(1) };
-            map >>= 1;
         }
 
         for pinfo in self.pages[0..self.pages.len() - 1].iter() {
             let mut ptr = pinfo.ptr.as_ptr();
-            for map in pinfo.bitmap.iter() {
+            for (_j, map) in pinfo.bitmap.iter().enumerate() {
                 let mut map = *map;
-                for _ in 0..64 {
-                    if map & 1 == 0 {
-                        unsafe {
-                            (*ptr).next = self.free;
-                            //(*ptr).inner.free();
-                            (*ptr).inner = RValue::new_invalid();
-                        }
+                for _b in 0..64 {
+                    #[cfg(debug_assertions)]
+                    assert_eq!(
+                        ptr as usize - pinfo.ptr.as_ptr() as usize,
+                        (_j * 64 + _b) * 64
+                    );
+                    if map & 1 == 0 && self.sweep_obj(ptr) {
                         self.free = Some(GCBoxRef::from_ptr(ptr));
                         c += 1;
                     }
@@ -340,11 +358,7 @@ impl Allocator {
                 }
             }
         }
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("sweep: {}", c);
-            eprintln!("free list: {}", self.check_free_list());
-        }
+        self.sweeped += c;
     }
 
     // For debug

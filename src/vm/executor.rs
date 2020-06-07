@@ -426,7 +426,7 @@ impl VM {
         };
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::GC);
-        //self.globals.gc();
+        self.globals.gc();
     }
 
     /// Main routine for VM execution.
@@ -757,7 +757,7 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = self.read_id(iseq, 1);
                     let mut parent = match self.stack_pop() {
-                        v if v == Value::nil() => self.class(),
+                        v if v.is_nil() => self.class(),
                         v => v,
                     };
                     let val = self.stack_pop();
@@ -1769,7 +1769,7 @@ impl VM {
             let val = aref.elements[0];
             for i in 1..aref.elements.len() {
                 match self.eval_cmp(aref.elements[i], val)? {
-                    v if v == Value::nil() => {
+                    v if v.is_nil() => {
                         let lhs = self.globals.get_class_name(val);
                         let rhs = self.globals.get_class_name(aref.elements[i]);
                         return Err(self.error_argument(format!(

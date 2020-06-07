@@ -5,6 +5,12 @@ pub struct ArrayInfo {
     pub elements: Vec<Value>,
 }
 
+impl GC for ArrayInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.elements.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
 impl ArrayInfo {
     pub fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
