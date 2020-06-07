@@ -327,7 +327,7 @@ impl HashInfo {
 pub type HashRef = Ref<HashInfo>;
 
 impl HashRef {
-    pub fn from(map: HashMap<HashKey, Value>) -> Self {
+    pub fn from_map(map: HashMap<HashKey, Value>) -> Self {
         HashRef::new(HashInfo::new(map))
     }
 }

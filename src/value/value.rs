@@ -691,12 +691,15 @@ impl Value {
         Value::object(RValue::new_splat(globals, val))
     }
 
-    pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
-        Value::object(RValue::new_hash(globals, hash_ref))
+    pub fn hash_from(globals: &Globals, hash: HashInfo) -> Self {
+        Value::object(RValue::new_hash(globals, HashRef::new(hash)))
     }
 
-    pub fn hash_from(globals: &Globals, hash: std::collections::HashMap<HashKey, Value>) -> Self {
-        Value::object(RValue::new_hash(globals, HashRef::from(hash)))
+    pub fn hash_from_map(
+        globals: &Globals,
+        hash: std::collections::HashMap<HashKey, Value>,
+    ) -> Self {
+        Value::object(RValue::new_hash(globals, HashRef::from_map(hash)))
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {

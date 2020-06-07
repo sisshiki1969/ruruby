@@ -265,7 +265,7 @@ impl From<u32> for IdentId {
         IdentId(id)
     }
 }
-
+/*
 pub struct OptionalId(Option<IdentId>);
 
 impl OptionalId {
@@ -280,7 +280,7 @@ impl std::ops::Deref for OptionalId {
         &self.0
     }
 }
-
+*/
 macro_rules! id {
     ($constant:expr) => {
         IdentId(unsafe { std::num::NonZeroU32::new_unchecked($constant) })

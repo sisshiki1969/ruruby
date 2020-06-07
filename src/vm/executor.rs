@@ -932,7 +932,7 @@ impl VM {
                 Inst::CREATE_HASH => {
                     let arg_num = self.read_usize(iseq, 1);
                     let key_value = self.pop_key_value_pair(arg_num);
-                    let hash = Value::hash_from(&self.globals, key_value);
+                    let hash = Value::hash_from_map(&self.globals, key_value);
                     self.stack_push(hash);
                     self.pc += 5;
                 }

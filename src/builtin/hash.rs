@@ -50,17 +50,17 @@ fn clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn clone(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::hash(&vm.globals, hash.dup()))
+    Ok(Value::hash_from(&vm.globals, hash.inner().clone()))
 }
 
 fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let hash = vm.expect_hash(self_val, "Receiver")?.dup();
-    match hash.inner_mut() {
-        HashInfo::Map(map) => map.retain(|_, &mut v| v != Value::nil()),
-        HashInfo::IdentMap(map) => map.retain(|_, &mut v| v != Value::nil()),
-    }
-    Ok(Value::hash(&vm.globals, hash))
+    let mut hash = vm.expect_hash(self_val, "Receiver")?.inner().clone();
+    match hash {
+        HashInfo::Map(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
+        HashInfo::IdentMap(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
+    };
+    Ok(Value::hash_from(&vm.globals, hash))
 }
 
 fn delete(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -93,7 +93,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         };
     }
 
-    Ok(Value::hash(&vm.globals, HashRef::from(res)))
+    Ok(Value::hash_from_map(&vm.globals, res))
 }
 
 fn has_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -172,7 +172,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut new = vm.expect_hash(self_val, "Receiver")?.dup();
+    let mut new = vm.expect_hash(self_val, "Receiver")?.inner().clone();
     for arg in args.iter() {
         let other = vm.expect_hash(*arg, "First arg")?;
         for (k, v) in other.iter() {
@@ -180,7 +180,7 @@ fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     }
 
-    Ok(Value::hash(&vm.globals, new))
+    Ok(Value::hash_from(&vm.globals, new))
 }
 
 fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -242,7 +242,7 @@ fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for (k, v) in hash.iter() {
         new_hash.insert(HashKey(v), k);
     }
-    Ok(Value::hash_from(&vm.globals, new_hash))
+    Ok(Value::hash_from_map(&vm.globals, new_hash))
 }
 
 #[cfg(test)]
