@@ -36,7 +36,7 @@ impl Hash for HashKey {
                         val.hash(state);
                     }
                 }
-                ObjKind::Method(lhs) => lhs.inner().hash(state),
+                ObjKind::Method(lhs) => (*lhs).hash(state),
                 _ => self.0.hash(state),
             },
         }
@@ -58,8 +58,8 @@ impl PartialEq for HashKey {
                 (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
-                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
+                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => **lhs == **rhs,
                 (ObjKind::Invalid, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 (_, ObjKind::Invalid) => panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs),
                 _ => lhs.kind == rhs.kind,

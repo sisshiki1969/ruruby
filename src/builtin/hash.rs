@@ -50,12 +50,12 @@ fn clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn clone(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::hash_from(&vm.globals, hash.inner().clone()))
+    Ok(Value::hash_from(&vm.globals, (*hash).clone()))
 }
 
 fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut hash = vm.expect_hash(self_val, "Receiver")?.inner().clone();
+    let mut hash = (*vm.expect_hash(self_val, "Receiver")?).clone();
     match hash {
         HashInfo::Map(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
         HashInfo::IdentMap(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
@@ -172,7 +172,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut new = vm.expect_hash(self_val, "Receiver")?.inner().clone();
+    let mut new = (*vm.expect_hash(self_val, "Receiver")?).clone();
     for arg in args.iter() {
         let other = vm.expect_hash(*arg, "First arg")?;
         for (k, v) in other.iter() {
@@ -211,8 +211,8 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn compare_by_identity(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let hash = self_val.as_hash().unwrap();
-    let inner = hash.inner_mut();
+    let mut hash = self_val.as_hash().unwrap();
+    let inner = &mut *hash;
     match inner {
         HashInfo::Map(map) => {
             let new_map = map.into_iter().map(|(k, v)| (IdentKey(k.0), *v)).collect();

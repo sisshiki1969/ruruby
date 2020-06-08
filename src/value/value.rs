@@ -63,7 +63,7 @@ impl std::hash::Hash for Value {
                         val.hash(state);
                     }
                 }
-                ObjKind::Method(lhs) => lhs.inner().hash(state),
+                ObjKind::Method(lhs) => (*lhs).hash(state),
                 _ => self.0.hash(state),
             },
         }
@@ -97,7 +97,7 @@ impl PartialEq for Value {
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
                 lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
             }
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (&**lhs, &**rhs) {
                 (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
                 (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
                 _ => false,
@@ -160,8 +160,7 @@ impl Value {
             match &info.kind {
                 ObjKind::Invalid => panic!(
                     "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
-                    info.inner() as *const RValue,
-                    info
+                    &**info as *const RValue, info
                 ),
                 ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
@@ -766,7 +765,7 @@ impl Value {
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
                 lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
             }
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
             (ObjKind::Invalid, _) => {
                 panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }

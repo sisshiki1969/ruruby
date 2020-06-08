@@ -1836,7 +1836,7 @@ impl VM {
             }
             RV::Symbol(i) => format!("{}", IdentId::get_ident_name(i)),
             RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", oref.inner()),
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(s) => s.to_s(),
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{}", IdentId::get_ident_name(id)},

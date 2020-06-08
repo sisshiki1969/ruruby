@@ -64,14 +64,6 @@ impl<T> Ref<T> {
         self.0.as_ptr()
     }
 
-    pub fn inner(&self) -> &T {
-        unsafe { &*self.0.as_ptr() }
-    }
-
-    pub fn inner_mut(&self) -> &mut T {
-        unsafe { &mut *self.0.as_ptr() }
-    }
-
     pub fn id(&self) -> u64 {
         self.0.as_ptr() as u64
     }
@@ -80,7 +72,7 @@ impl<T> Ref<T> {
 impl<T: Clone> Ref<T> {
     /// Allocates a copy of `self<T>` on the heap, returning `Ref`.
     pub fn dup(&self) -> Self {
-        Self::new(self.inner().clone())
+        Self::new((**self).clone())
     }
 }
 

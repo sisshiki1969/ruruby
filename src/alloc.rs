@@ -42,16 +42,6 @@ impl GCBox<RValue> {
     }
 }
 
-impl<T: GC> GCBox<T> {
-    pub fn inner(&self) -> &T {
-        &self.inner
-    }
-
-    pub fn inner_mut(&mut self) -> &mut T {
-        &mut self.inner
-    }
-}
-
 impl GCBox<RValue> {
     pub fn gc_mark(&self, alloc: &mut Allocator) {
         if alloc.mark(self) {

@@ -683,11 +683,7 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     vm.check_args_num(args.len(), 0)?;
-    let mut ary = vm
-        .expect_array(self_val, "Receiver")?
-        .inner()
-        .elements
-        .clone();
+    let mut ary = vm.expect_array(self_val, "Receiver")?.elements.clone();
     match args.block {
         None => {
             vm.sort_array(&mut ary)?;
