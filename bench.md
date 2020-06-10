@@ -10,18 +10,18 @@ OS: Ubuntu 18.04.4 LTS
 
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
-| so_mandelbrot.rb | 1.79 ± 0.01 s | 2.84 ± 0.01 s | x 1.59 |
-| app_mandelbrot.rb | 2.26 ± 0.03 s | 6.66 ± 0.22 s | x 2.95 |
-| fibo.rb | 0.47 ± 0.02 s | 2.56 ± 0.07 s | x 5.39 |
-| block.rb | 0.43 ± 0.01 s | 1.11 ± 0.03 s | x 2.56 |
-| ao_bench.rb | 9.73 ± 0.16 s | 27.83 ± 0.58 s | x 2.86 |
+| so_mandelbrot.rb | 1.75 ± 0.02 s | 2.99 ± 0.05 s | x 1.71 |
+| app_mandelbrot.rb | 2.31 ± 0.11 s | 6.66 ± 0.07 s | x 2.88 |
+| fibo.rb | 0.47 ± 0.00 s | 2.45 ± 0.01 s | x 5.17 |
+| block.rb | 0.42 ± 0.02 s | 1.07 ± 0.05 s | x 2.56 |
+| ao_bench.rb | 9.29 ± 0.18 s | 30.09 ± 0.94 s | x 3.24 |
 
 ## memory consumption
 
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
 | so_mandelbrot.rb | 13.8K | 4.8K | x 0.35 |
-| app_mandelbrot.rb | 13.8K | 5.1K | x 0.37 |
-| fibo.rb | 13.6K | 4.6K | x 0.34 |
-| block.rb | 13.6K | 4.5K | x 0.33 |
-| ao_bench.rb | 14.4K | 5.8K | x 0.40 |
+| app_mandelbrot.rb | 13.9K | 6.0K | x 0.43 |
+| fibo.rb | 13.6K | 4.7K | x 0.34 |
+| block.rb | 13.6K | 4.6K | x 0.34 |
+| ao_bench.rb | 0.0M | 4.5M | x 316.25 |

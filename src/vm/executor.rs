@@ -427,9 +427,7 @@ macro_rules! try_err {
 
 impl VM {
     fn gc(&mut self) {
-        let flag = ALLOC_THREAD.with(|m| m.borrow().is_allocated())
-            && ALLOC.lock().unwrap().free_count() < 64;
-        if !flag {
+        if !self.globals.gc_enabled || !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
             return;
         };
         #[cfg(feature = "perf")]
@@ -2068,7 +2066,11 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
+                let mut globals = self.globals.clone();
+                let gc_state = globals.gc_enabled;
+                globals.gc_enabled = false;
                 let val = func(self, self_val, args)?;
+                globals.gc_enabled = gc_state;
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {

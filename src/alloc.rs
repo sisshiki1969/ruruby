@@ -63,6 +63,9 @@ impl PageRef {
         unsafe { dealloc(self.as_ptr() as *mut u8, layout) };
     }
 
+    fn from_inner(ptr: *mut GCBox<RValue>) -> Self {
+        PageRef::from_ptr((ptr as usize & !(ALIGN - 1)) as *mut Page)
+    }
     ///
     /// Get raw pointer for inner GCBox with `index`.
     ///
@@ -82,6 +85,10 @@ impl PageRef {
     ///
     fn clear_bits(&self) {
         unsafe { std::ptr::write_bytes(self.get_bitmap_ptr(), 0, 1) }
+    }
+
+    fn all_dead(&self) -> bool {
+        self.mark_bits.iter().all(|bits| *bits == 0)
     }
 }
 
@@ -286,10 +293,9 @@ impl Allocator {
     fn mark_ptr(&mut self, ptr: *mut GCBox<RValue>) -> bool {
         #[cfg(debug_assertions)]
         self.check_ptr(ptr);
-        let ptr = ptr as *const GCBox<RValue> as usize;
-        let mut page_ptr = PageRef::from_ptr((ptr & !(ALIGN - 1)) as *mut Page);
+        let mut page_ptr = PageRef::from_inner(ptr);
 
-        let offset = ptr - page_ptr.get_data_ptr(0) as usize;
+        let offset = ptr as usize - page_ptr.get_data_ptr(0) as usize;
         let index = offset / GCBOX_SIZE;
         #[cfg(debug_assertions)]
         {
@@ -307,26 +313,6 @@ impl Allocator {
         is_marked
     }
 
-    fn sweep_obj(ptr: *mut GCBox<RValue>, head: &mut *mut GCBox<RValue>) -> bool {
-        unsafe {
-            match (*ptr).inner.kind {
-                ObjKind::Array(_) => return false,
-                _ => {}
-            }; /*
-               println!(
-                   "free {:?} {:?}",
-                   &(*ptr).inner as *const RValue,
-                   (*ptr).inner
-               );*/
-            (**head).next = Some(GCBoxRef::from_ptr(ptr));
-            *head = ptr;
-            (*ptr).next = None;
-            (*ptr).inner.free();
-            (*ptr).inner = RValue::new_invalid();
-        }
-        true
-    }
-
     fn sweep_bits(
         bit: usize,
         mut map: u64,
@@ -335,8 +321,15 @@ impl Allocator {
     ) -> usize {
         let mut c = 0;
         for _ in 0..bit {
-            if map & 1 == 0 && Allocator::sweep_obj(*ptr, head) {
-                c += 1;
+            if map & 1 == 0 {
+                unsafe {
+                    (**head).next = Some(GCBoxRef::from_ptr(*ptr));
+                    *head = *ptr;
+                    (**ptr).next = None;
+                    (**ptr).inner.free();
+                    (**ptr).inner = RValue::new_invalid();
+                    c += 1;
+                }
             }
             *ptr = unsafe { (*ptr).add(1) };
             map >>= 1;
@@ -348,18 +341,15 @@ impl Allocator {
         let mut c = 0;
         let mut anchor = GCBox::new();
         let head = &mut ((&mut anchor) as *mut GCBox<RValue>);
-        let mut ptr = self.current.get_data_ptr(0);
-        assert!(self.used <= PAGE_LEN);
-        let i = self.used / 64;
-        let bit = self.used % 64;
-        let bitmap = &self.current.mark_bits;
 
-        for (_j, map) in bitmap.iter().take(i).enumerate() {
-            c += Allocator::sweep_bits(64, *map, &mut ptr, head);
-        }
-
-        if i < 63 {
-            c += Allocator::sweep_bits(bit, bitmap[i], &mut ptr, head);
+        let len = self.pages.len();
+        for i in 0..len {
+            if self.pages[len - i - 1].all_dead() {
+                let page = self.pages.remove(len - i - 1);
+                page.dealloc_page();
+                #[cfg(debug_assertions)]
+                eprintln!("dealloc: {:?}", page.as_ptr());
+            }
         }
 
         for pinfo in &self.pages {
@@ -368,6 +358,21 @@ impl Allocator {
                 c += Allocator::sweep_bits(64, *map, &mut ptr, head);
             }
         }
+
+        let mut ptr = self.current.get_data_ptr(0);
+        assert!(self.used <= DATA_LEN);
+        let i = self.used / 64;
+        let bit = self.used % 64;
+        let bitmap = &self.current.mark_bits;
+
+        for map in bitmap.iter().take(i) {
+            c += Allocator::sweep_bits(64, *map, &mut ptr, head);
+        }
+
+        if i < 63 {
+            c += Allocator::sweep_bits(bit, bitmap[i], &mut ptr, head);
+        }
+
         self.free = anchor.next;
         self.free_list_count = c;
     }
@@ -375,13 +380,16 @@ impl Allocator {
     // For debug
     #[allow(dead_code)]
     fn check_ptr(&self, ptr: *mut GCBox<RValue>) {
-        let ptr = ptr as *const GCBox<RValue> as usize;
-        let page_ptr = (ptr & !(ALIGN - 1)) as *mut Page;
-        match self.pages.iter().find(|heap| heap.as_ptr() == page_ptr) {
+        let page_ptr = PageRef::from_inner(ptr);
+        match self
+            .pages
+            .iter()
+            .find(|heap| heap.as_ptr() == page_ptr.as_ptr())
+        {
             Some(_) => return,
             None => {}
         };
-        if self.current.as_ptr() == page_ptr {
+        if self.current.as_ptr() == page_ptr.as_ptr() {
             return;
         };
         panic!("The ptr is not in heap pages.");

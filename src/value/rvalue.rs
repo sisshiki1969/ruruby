@@ -99,7 +99,7 @@ impl GC for RValue {
         }
         match self.kind {
             ObjKind::Invalid => panic!(
-                "Invalid rvalue. (maybe GC problem) {:?} {:?}",
+                "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
                 self as *const RValue, self
             ),
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
@@ -123,7 +123,7 @@ impl RValue {
     pub fn free(&mut self) {
         self.var_table = None;
         match self.kind {
-            ObjKind::Invalid => {} //panic!("Invalid rvalue. (maybe GC problem) {:?}", self),
+            ObjKind::Invalid => {} // 'freed' object can be freed repeatedly.
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
             ObjKind::Array(aref) => aref.free(),
             ObjKind::Hash(href) => href.free(),

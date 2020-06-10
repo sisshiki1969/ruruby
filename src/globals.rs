@@ -21,6 +21,7 @@ pub struct Globals {
     pub class_class: ClassRef,
     pub module_class: ClassRef,
     pub object_class: ClassRef,
+    pub gc_enabled: bool,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -140,6 +141,7 @@ impl Globals {
             class_class,
             builtins,
             case_dispatch: CaseDispatchMap::new(),
+            gc_enabled: true,
         };
         // Generate singleton class for Object
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
