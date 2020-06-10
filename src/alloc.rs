@@ -63,6 +63,14 @@ impl PageRef {
         unsafe { dealloc(self.as_ptr() as *mut u8, layout) };
     }
 
+    fn free_page(&self) {
+        let mut ptr = self.get_data_ptr(0);
+        for _ in 0..DATA_LEN {
+            unsafe { (*ptr).free() };
+            ptr = unsafe { ptr.add(1) };
+        }
+    }
+
     fn from_inner(ptr: *mut GCBox<RValue>) -> Self {
         PageRef::from_ptr((ptr as usize & !(ALIGN - 1)) as *mut Page)
     }
@@ -346,6 +354,7 @@ impl Allocator {
         for i in 0..len {
             if self.pages[len - i - 1].all_dead() {
                 let page = self.pages.remove(len - i - 1);
+                page.free_page();
                 page.dealloc_page();
                 #[cfg(debug_assertions)]
                 eprintln!("dealloc: {:?}", page.as_ptr());
