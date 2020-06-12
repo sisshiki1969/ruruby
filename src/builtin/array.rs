@@ -288,15 +288,16 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let mut res = vec![];
     let mut args = Args::new1(Value::nil());
+    vm.temp_new();
 
     for elem in &aref.elements {
         args[0] = *elem;
         let val = vm.eval_block(method, &args)?;
-        res.push(val);
+        vm.temp_push(val);
     }
 
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
@@ -304,9 +305,10 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let method = vm.expect_block(args.block)?;
-    let mut res = vec![];
     let param_num = vm.get_iseq(method)?.params.req_params;
     let mut arg = Args::new(param_num);
+
+    vm.temp_new();
     for elem in &aref.elements {
         if param_num == 0 {
         } else if param_num == 1 {
@@ -325,11 +327,12 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let ary = vm.eval_block(method, &arg)?;
         match ary.as_array() {
             Some(mut ary) => {
-                res.append(&mut ary.elements);
+                vm.temp_append(&mut ary.elements);
             }
-            None => res.push(ary),
+            None => vm.temp_push(ary),
         }
     }
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }

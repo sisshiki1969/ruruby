@@ -22,6 +22,7 @@ pub struct VM {
     exec_context: Vec<ContextRef>,
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
+    temp_stack: Vec<Vec<Value>>,
     exception: bool,
     pc: usize,
     gc_counter: usize,
@@ -61,6 +62,9 @@ impl GC for VM {
         self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
+        self.temp_stack
+            .iter()
+            .for_each(|vec| vec.iter().for_each(|v| v.mark(alloc)));
     }
 }
 
@@ -75,6 +79,7 @@ impl VM {
             class_context: vec![(Value::nil(), DefineMode::default())],
             exec_context: vec![],
             exec_stack: vec![],
+            temp_stack: vec![],
             exception: false,
             pc: 0,
             gc_counter: 0,
@@ -92,6 +97,7 @@ impl VM {
             root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
             exec_context: vec![],
+            temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
             exception: false,
@@ -143,6 +149,22 @@ impl VM {
 
     pub fn stack_pop(&mut self) -> Value {
         self.exec_stack.pop().unwrap()
+    }
+
+    pub fn temp_new(&mut self) {
+        self.temp_stack.push(vec![]);
+    }
+
+    pub fn temp_finish(&mut self) -> Vec<Value> {
+        self.temp_stack.pop().unwrap()
+    }
+
+    pub fn temp_push(&mut self, v: Value) {
+        self.temp_stack.last_mut().unwrap().push(v);
+    }
+
+    pub fn temp_append(&mut self, vec: &mut Vec<Value>) {
+        self.temp_stack.last_mut().unwrap().append(vec);
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
@@ -2073,11 +2095,11 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                let mut globals = self.globals.clone();
-                let gc_state = globals.gc_enabled;
-                globals.gc_enabled = false;
+                //let mut globals = self.globals.clone();
+                //let gc_state = globals.gc_enabled;
+                //globals.gc_enabled = false;
                 let val = func(self, self_val, args)?;
-                globals.gc_enabled = gc_state;
+                //globals.gc_enabled = gc_state;
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {

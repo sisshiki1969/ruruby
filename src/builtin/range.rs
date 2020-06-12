@@ -136,15 +136,16 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let mut res = vec![];
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
+    vm.temp_new();
     for i in start..end {
         arg[0] = Value::fixnum(i);
         let val = vm.eval_block(method, &arg)?;
-        res.push(val);
+        vm.temp_push(val);
     }
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
@@ -152,21 +153,22 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let mut res = vec![];
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
+    vm.temp_new();
     for i in start..end {
         arg[0] = Value::fixnum(i);
         let val = vm.eval_block(method, &arg)?;
         match val.as_array() {
             Some(aref) => {
                 let mut other = aref.elements.clone();
-                res.append(&mut other);
+                vm.temp_append(&mut other);
             }
-            None => res.push(val),
+            None => vm.temp_push(val),
         };
     }
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }

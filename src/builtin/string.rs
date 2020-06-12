@@ -519,12 +519,14 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     match args.block {
         Some(block) if block == MethodRef::from(0) => {
-            let mut v = vec![];
+            vm.temp_new();
             for arg in vec {
                 let block_args = Args::new1(arg);
-                v.push(vm.eval_block(block, &block_args)?);
+                let v = vm.eval_block(block, &block_args)?;
+                vm.temp_push(v);
             }
-            Ok(Value::array_from(&vm.globals, v))
+            let res = vm.temp_finish();
+            Ok(Value::array_from(&vm.globals, res))
         }
         Some(block) => {
             for arg in vec {

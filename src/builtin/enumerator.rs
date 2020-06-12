@@ -118,7 +118,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut args = Args::new1(Value::nil());
     for elem in &ary.elements {
         args[0] = *elem;
-        let _ = vm.eval_block(block, &args)?;
+        vm.eval_block(block, &args)?;
     }
     Ok(val)
 }
@@ -139,11 +139,13 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let ary = vm.expect_array(val, "Base object")?;
     let mut args = Args::new1(Value::nil());
-    let mut res = vec![];
+    vm.temp_new();
     for elem in &ary.elements {
         args[0] = *elem;
-        res.push(vm.eval_block(block, &args)?);
+        let v = vm.eval_block(block, &args)?;
+        vm.temp_push(v);
     }
+    let res = vm.temp_finish();
     Ok(Value::array_from(&vm.globals, res))
 }
 
@@ -169,16 +171,16 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
         .collect();
 
-    let mut res = vec![];
     let mut arg = Args::new(2);
-
+    vm.temp_new();
     for (v, i) in &res_ary {
         arg[0] = *v;
         arg[1] = *i;
         let val = vm.eval_block(block, &arg)?;
-        res.push(val);
+        vm.temp_push(val);
     }
 
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
