@@ -353,30 +353,23 @@ impl Allocator {
         let mut anchor = GCBox::new();
         let head = &mut ((&mut anchor) as *mut GCBox<RValue>);
 
-        let mut empty_page = vec![];
-        for (i, pinfo) in self.pages.iter().enumerate() {
+        let len = self.pages.len();
+        for i in 0..len {
+            if self.pages[len - i - 1].all_dead() {
+                let page = self.pages.remove(len - i - 1);
+                page.free_page();
+                page.dealloc_page();
+                #[cfg(debug_assertions)]
+                eprintln!("dealloc: {:?}", page.as_ptr());
+            }
+        }
+
+        for pinfo in self.pages.iter() {
             let mut ptr = pinfo.get_data_ptr(0);
-            let mut temp_c = 0;
-            let head_save = *head;
             for map in pinfo.mark_bits.iter() {
-                temp_c += Allocator::sweep_bits(64, *map, &mut ptr, head);
+                c += Allocator::sweep_bits(64, *map, &mut ptr, head);
             }
-            if temp_c == DATA_LEN {
-                empty_page.push(i);
-                *head = head_save;
-            }
-            c += temp_c;
         }
-
-        for i in empty_page.iter().rev() {
-            let page = self.pages.remove(*i);
-            page.free_page();
-            page.dealloc_page();
-            #[cfg(debug_assertions)]
-            eprintln!("dealloc: {:?}", page.as_ptr());
-        }
-
-        unsafe { (**head).next = None };
 
         let mut ptr = self.current.get_data_ptr(0);
         assert!(self.used <= DATA_LEN);

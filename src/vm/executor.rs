@@ -24,6 +24,7 @@ pub struct VM {
     exec_stack: Vec<Value>,
     exception: bool,
     pc: usize,
+    gc_counter: usize,
     pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
     #[cfg_attr(tarpaulin, skip)]
@@ -76,6 +77,7 @@ impl VM {
             exec_stack: vec![],
             exception: false,
             pc: 0,
+            gc_counter: 0,
             channel: None,
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
@@ -94,6 +96,7 @@ impl VM {
             exec_stack: vec![],
             exception: false,
             pc: 0,
+            gc_counter: 0,
             channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
@@ -427,7 +430,11 @@ macro_rules! try_err {
 
 impl VM {
     fn gc(&mut self) {
-        if !self.globals.gc_enabled || !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
+        self.gc_counter += 1;
+        if !self.globals.gc_enabled || self.gc_counter % 16 != 0 {
+            return;
+        }
+        if !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
             return;
         };
         #[cfg(feature = "perf")]
