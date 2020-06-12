@@ -37,8 +37,6 @@ fn main() {
     let argv = Value::array_from(&vm.globals, res);
     vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, args[0]);
-    //vm.force_gc();
-    //vm.print_bitmap();
     return;
 }
 

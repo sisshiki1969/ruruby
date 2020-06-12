@@ -656,10 +656,12 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args.block {
         Some(block) => {
             let mut arg = Args::new1(Value::nil());
+            vm.temp_vec(ary.clone());
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;
             }
+            vm.temp_finish();
             Ok(Value::nil())
         }
         None => Ok(Value::array_from(&vm.globals, ary)),

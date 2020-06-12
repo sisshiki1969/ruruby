@@ -519,6 +519,7 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     match args.block {
         Some(block) if block == MethodRef::from(0) => {
+            vm.temp_vec(vec.clone());
             vm.temp_new();
             for arg in vec {
                 let block_args = Args::new1(arg);
@@ -526,9 +527,11 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 vm.temp_push(v);
             }
             let res = vm.temp_finish();
+            vm.temp_finish();
             Ok(Value::array_from(&vm.globals, res))
         }
         Some(block) => {
+            vm.temp_vec(vec.clone());
             for arg in vec {
                 match arg.as_array() {
                     Some(ary) => {
@@ -545,6 +548,7 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     }
                 }
             }
+            vm.temp_finish();
             Ok(self_val)
         }
         None => Ok(Value::array_from(&vm.globals, vec)),

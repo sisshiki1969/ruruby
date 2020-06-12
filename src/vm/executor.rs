@@ -155,6 +155,10 @@ impl VM {
         self.temp_stack.push(vec![]);
     }
 
+    pub fn temp_vec(&mut self, vec: Vec<Value>) {
+        self.temp_stack.push(vec);
+    }
+
     pub fn temp_finish(&mut self) -> Vec<Value> {
         self.temp_stack.pop().unwrap()
     }
@@ -2095,11 +2099,7 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                //let mut globals = self.globals.clone();
-                //let gc_state = globals.gc_enabled;
-                //globals.gc_enabled = false;
                 let val = func(self, self_val, args)?;
-                //globals.gc_enabled = gc_state;
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {
