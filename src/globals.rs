@@ -68,19 +68,6 @@ impl BuiltinClass {
 
 impl GC for BuiltinClass {
     fn mark(&self, alloc: &mut Allocator) {
-        self.integer.mark(alloc);
-        self.float.mark(alloc);
-        self.array.mark(alloc);
-        self.class.mark(alloc);
-        self.module.mark(alloc);
-        self.procobj.mark(alloc);
-        self.method.mark(alloc);
-        self.range.mark(alloc);
-        self.hash.mark(alloc);
-        self.regexp.mark(alloc);
-        self.string.mark(alloc);
-        self.fiber.mark(alloc);
-        self.enumerator.mark(alloc);
         self.object.mark(alloc);
     }
 }
