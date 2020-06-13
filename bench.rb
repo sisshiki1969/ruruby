@@ -31,6 +31,8 @@ else
   @os_info = Regexp.last_match(1)
 end
 
+@optcarrot = "../optcarrot/bin/optcarrot-bench"
+
 @time_command = if @platform == :macos
                   'gtime'
                 else
@@ -60,12 +62,12 @@ puts "CPU: #{@cpu_info}"
 def unit_conv(ruruby, ruby)
   ch = ''
   if ruruby > 1_000_000.0
-    ruruby = ruruby / 1_000_000.0
-    ruby = ruby / 1_000_000.0
+    ruruby /= 1_000_000.0
+    ruby /= 1_000_000.0
     ch = 'M'
   elsif ruruby > 1000
-    ruruby = ruruby / 1000.0
-    ruby = ruby / 1000.0
+    ruruby /= 1000.0
+    ruby /= 1000.0
     ch = 'K'
   end
   [ruruby, ruby, ch]
@@ -86,9 +88,9 @@ end
 
 class Array
   def ave_sd
-    ave = self.sum.to_f / self.length
-    sd = Math.sqrt(self.map {|x| (x - ave) ** 2}.sum / self.length)
-    {ave: ave, sd: sd}
+    ave = sum.to_f / length
+    sd = Math.sqrt(map { |x| (x - ave) ** 2 }.sum / length)
+    { ave: ave, sd: sd }
   end
 end
 
@@ -97,7 +99,7 @@ def get_results(command)
   user = []
   sys = []
   rss = []
-  5.times {
+  5.times do
     o, e, s = Open3.capture3(command)
     e.match(/(\d*):(\d*).(\d*)elapsed/)
     real << "#{Regexp.last_match(2)}.#{Regexp.last_match(3)}".to_f + Regexp.last_match(1).to_i * 60
@@ -107,9 +109,13 @@ def get_results(command)
     sys << "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
     e.match(/(\d*)maxresident/)
     rss << Regexp.last_match(1).to_i
-  }
+  end
 
   [real.ave_sd, user.ave_sd, sys.ave_sd, rss.ave_sd]
+end
+
+def print_avesd(ave_sd)
+  "#{'%.2f' % ave_sd[:ave]} ± #{'%.2f' % ave_sd[:sd]}"
 end
 
 def perf(app_name)
@@ -128,10 +134,21 @@ def perf(app_name)
   print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
 
   real_mul = real_ruruby[:ave] / real_ruby[:ave]
-  @md1 += "| #{app_name} | #{'%.2f' % real_ruby[:ave]} ± #{'%.2f' % real_ruby[:sd]} s | #{'%.2f' % real_ruruby[:ave]} ± #{'%.2f' % real_ruruby[:sd]} s | x #{'%.2f' % real_mul} |\n"
+  @md1 += "| #{app_name} | #{print_avesd(real_ruby)} s | #{print_avesd(real_ruruby)} s | x #{'%.2f' % real_mul} |\n"
   rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
   rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
   @md2 += "| #{app_name} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
+end
+
+def optcarrot(program)
+  command = "#{@time_command} #{program} #{@optcarrot}"
+  fps = []
+  5.times do
+    o, e, s = Open3.capture3(command)
+    o.match(/fps: (\d*.\d*)/)
+    fps << Regexp.last_match(1).to_f
+  end
+  fps.ave_sd
 end
 
 ['so_mandelbrot.rb',
@@ -139,6 +156,15 @@ end
  'fibo.rb',
  'block.rb',
  'ao_bench.rb'].each { |x| perf x }
+
+fps_ruby = optcarrot('ruby')
+fps_ruruby = optcarrot('target/release/ruruby')
+
+puts "benchmark: optcarrot"
+puts format("\t%10s  %10s", 'ruby', 'ruruby')
+print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave])
+
+@md1 += "| optcarrot | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
 
 File.open('bench.md', mode = 'w') do |f|
   f.write(@md0 + @md1 + @md2)

@@ -81,8 +81,8 @@ impl GC for Globals {
             None => {}
         });
         self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
-        self.main_object.mark(alloc);
-        self.builtins.mark(alloc);
+        //self.main_object.mark(alloc);
+        //self.builtins.mark(alloc);
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
