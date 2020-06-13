@@ -641,11 +641,11 @@ impl Value {
     }
 
     pub fn string(globals: &Globals, string: String) -> Self {
-        Value::object(RValue::new_string(globals, string))
+        RValue::new_string(globals, string).pack()
     }
 
     pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {
-        Value::object(RValue::new_bytes(globals, bytes))
+        RValue::new_bytes(globals, bytes).pack()
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -655,23 +655,19 @@ impl Value {
 
     pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        Value::object(RValue::new_range(globals, info))
-    }
-
-    fn object(obj_info: RValue) -> Self {
-        obj_info.pack()
+        RValue::new_range(globals, info).pack()
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
-        Value::object(RValue::new_bootstrap(classref))
+        RValue::new_bootstrap(classref).pack()
     }
 
     pub fn ordinary_object(class: Value) -> Self {
-        Value::object(RValue::new_ordinary(class))
+        RValue::new_ordinary(class).pack()
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(RValue::new_class(globals, class_ref))
+        RValue::new_class(globals, class_ref).pack()
     }
 
     pub fn class_from(
@@ -679,45 +675,42 @@ impl Value {
         id: impl Into<Option<IdentId>>,
         superclass: impl Into<Option<Value>>,
     ) -> Self {
-        Value::object(RValue::new_class(globals, ClassRef::from(id, superclass)))
+        RValue::new_class(globals, ClassRef::from(id, superclass)).pack()
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(RValue::new_module(globals, class_ref))
+        RValue::new_module(globals, class_ref).pack()
     }
 
     pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
-        Value::object(RValue::new_array(globals, ArrayRef::from(ary)))
+        RValue::new_array(globals, ArrayRef::from(ary)).pack()
     }
 
     pub fn splat(globals: &Globals, val: Value) -> Self {
-        Value::object(RValue::new_splat(globals, val))
+        RValue::new_splat(globals, val).pack()
     }
 
     pub fn hash_from(globals: &Globals, hash: HashInfo) -> Self {
-        Value::object(RValue::new_hash(globals, HashRef::new(hash)))
+        RValue::new_hash(globals, HashRef::new(hash)).pack()
     }
 
     pub fn hash_from_map(
         globals: &Globals,
         hash: std::collections::HashMap<HashKey, Value>,
     ) -> Self {
-        Value::object(RValue::new_hash(globals, HashRef::from_map(hash)))
+        RValue::new_hash(globals, HashRef::from_map(hash)).pack()
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
-        Value::object(RValue::new_regexp(globals, regexp_ref))
+        RValue::new_regexp(globals, regexp_ref).pack()
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        Value::object(RValue::new_proc(globals, ProcRef::from(context)))
+        RValue::new_proc(globals, ProcRef::from(context)).pack()
     }
 
     pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        Value::object(RValue::new_method(
-            globals,
-            MethodObjRef::from(name, receiver, method),
-        ))
+        RValue::new_method(globals, MethodObjRef::from(name, receiver, method)).pack()
     }
 
     pub fn fiber(
@@ -727,11 +720,11 @@ impl Value {
         rec: std::sync::mpsc::Receiver<VMResult>,
         tx: std::sync::mpsc::SyncSender<usize>,
     ) -> Self {
-        Value::object(RValue::new_fiber(globals, vm, context, rec, tx))
+        RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
 
     pub fn enumerator(globals: &Globals, method: IdentId, receiver: Value, args: Args) -> Self {
-        Value::object(RValue::new_enumerator(globals, method, receiver, args))
+        RValue::new_enumerator(globals, method, receiver, args).pack()
     }
 }
 

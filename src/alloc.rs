@@ -268,6 +268,7 @@ impl Allocator {
         self.sweep();
         #[cfg(debug_assertions)]
         {
+            assert_eq!(self.free_list_count, self.check_free_list());
             eprintln!("free list: {}", self.free_list_count);
         }
         ALLOC_THREAD.with(|m| {
@@ -275,7 +276,7 @@ impl Allocator {
         });
         #[cfg(debug_assertions)]
         {
-            self.print_mark();
+            //self.print_mark();
             eprintln!("--GC completed");
         }
     }
@@ -404,7 +405,12 @@ impl Allocator {
         if self.current.as_ptr() == page_ptr.as_ptr() {
             return;
         };
-        panic!("The ptr is not in heap pages.");
+        eprintln!("dump heap pages");
+        self.pages
+            .iter()
+            .for_each(|x| eprintln!("{:?}", x.as_ptr()));
+        eprintln!("{:?}", self.current.as_ptr());
+        panic!("The ptr is not in heap pages. {:?}", ptr);
     }
 
     #[allow(dead_code)]
@@ -458,14 +464,16 @@ mod tests {
         vm.clone().globals.fibers.push(vm);
         let program = r#"
             class Vec
-                def initialize
-                    @x = 100
-                    @y = 200
+                def initialize(x,y)
+                    @x = x
+                    @y = y
                 end
             end
-
-            100_000.times {
-                Vec.new
+            100.times {
+                a = []
+                100.times {|x|
+                    a << Vec.new(x,x)
+                }
             }
         "#;
         let res = vm.run(PathBuf::from("test"), &program, None);
