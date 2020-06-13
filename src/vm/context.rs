@@ -124,6 +124,9 @@ impl Context {
         args: &Args,
         outer: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
+        if iseq.opt_flag {
+            return Context::from_args_opt(vm, self_value, iseq, args, outer);
+        }
         let mut context = Context::new(self_value, args.block, iseq, outer);
         let params = &iseq.params;
         let kw = if params.keyword_params.is_empty() {
@@ -165,6 +168,38 @@ impl Context {
                 None => Value::nil(),
             }
         }
+        Ok(context)
+    }
+
+    pub fn from_args_opt(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+    ) -> Result<Self, RubyError> {
+        let mut context = Context::new(self_value, args.block, iseq, outer);
+        let req_len = iseq.params.req_params;
+        vm.check_args_num(args.len(), req_len)?;
+
+        // fill post_req params.
+        let req_opt = std::cmp::min(req_len, args.len());
+        if req_opt != 0 {
+            // fill req and opt params.
+            for i in 0..req_opt {
+                context[i] = args[i];
+            }
+            if req_opt < req_len {
+                // fill rest req params with nil.
+                for i in req_opt..req_len {
+                    context[i] = Value::nil();
+                }
+            }
+        }
+
+        if args.kw_arg.is_some() {
+            return Err(vm.error_argument("Undefined keyword."));
+        };
         Ok(context)
     }
 

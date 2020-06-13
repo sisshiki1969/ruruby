@@ -197,7 +197,7 @@ impl Allocator {
         ALLOC_THREAD.with(|m| {
             let mut m = m.borrow_mut();
             m.allocated += 1;
-            m.alloc_flag = m.allocated % 1024 == 0;
+            m.alloc_flag = m.allocated % 2048 == 0;
         });
 
         match self.free {
