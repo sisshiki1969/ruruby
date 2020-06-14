@@ -524,9 +524,9 @@ impl Value {
         }
     }
 
-    pub fn as_proc(&self) -> Option<ProcRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_proc(&self) -> Option<&ProcInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
                 _ => None,
             },
@@ -535,7 +535,7 @@ impl Value {
     }
 
     pub fn as_method(&self) -> Option<MethodObjRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Method(mref) => Some(mref),
                 _ => None,
@@ -706,7 +706,7 @@ impl Value {
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        RValue::new_proc(globals, ProcRef::from(context)).pack()
+        RValue::new_proc(globals, ProcInfo::new(context)).pack()
     }
 
     pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {

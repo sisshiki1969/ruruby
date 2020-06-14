@@ -1916,7 +1916,7 @@ impl VM {
                 ObjKind::Range(rinfo) => rinfo.debug(self),
                 ObjKind::Splat(v) => self.val_debug(*v),
                 ObjKind::Hash(href) => href.debug(self),
-                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
+                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
                 ObjKind::Method(_) => "Method".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),
@@ -1958,7 +1958,7 @@ impl VM {
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect(self),
-                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
+                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => {
                     let id = IdentId::get_ident_id("inspect");

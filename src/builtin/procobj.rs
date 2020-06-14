@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProcInfo {
     pub context: ContextRef,
 }
@@ -8,14 +8,6 @@ pub struct ProcInfo {
 impl ProcInfo {
     pub fn new(context: ContextRef) -> Self {
         ProcInfo { context }
-    }
-}
-
-pub type ProcRef = Ref<ProcInfo>;
-
-impl ProcRef {
-    pub fn from(context: ContextRef) -> Self {
-        ProcRef::new(ProcInfo::new(context))
     }
 }
 

@@ -23,7 +23,7 @@ pub enum ObjKind {
     Range(RangeInfo),
     Splat(Value), // internal use only.
     Hash(HashRef),
-    Proc(ProcRef),
+    Proc(Box<ProcInfo>),
     Regexp(RegexpRef),
     Method(MethodObjRef),
     Fiber(FiberRef),
@@ -97,7 +97,7 @@ impl GC for RValue {
             Some(table) => table.values().for_each(|v| v.mark(alloc)),
             None => {}
         }
-        match self.kind {
+        match &self.kind {
             ObjKind::Invalid => panic!(
                 "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
                 self as *const RValue, self
@@ -127,7 +127,6 @@ impl RValue {
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
             ObjKind::Array(aref) => aref.free(),
             ObjKind::Hash(href) => href.free(),
-            ObjKind::Proc(pref) => pref.free(),
             ObjKind::Method(mref) => mref.free(),
             ObjKind::Enumerator(eref) => eref.free(),
             ObjKind::Fiber(fref) => fref.free(),
@@ -161,7 +160,7 @@ impl RValue {
                 ObjKind::Method(mref) => ObjKind::Method(mref.dup()),
                 ObjKind::Module(cref) => ObjKind::Module(cref.dup()),
                 ObjKind::Ordinary => ObjKind::Ordinary,
-                ObjKind::Proc(pref) => ObjKind::Proc(pref.dup()),
+                ObjKind::Proc(pref) => ObjKind::Proc(pref.clone()),
                 ObjKind::Range(info) => ObjKind::Range(info.clone()),
                 ObjKind::Regexp(rref) => ObjKind::Regexp(*rref), // TODO: this can cause some trouble.
                 ObjKind::Splat(v) => ObjKind::Splat(*v),
@@ -322,11 +321,11 @@ impl RValue {
         }
     }
 
-    pub fn new_proc(globals: &Globals, procref: ProcRef) -> Self {
+    pub fn new_proc(globals: &Globals, proc_info: ProcInfo) -> Self {
         RValue {
             class: globals.builtins.procobj,
             var_table: None,
-            kind: ObjKind::Proc(procref),
+            kind: ObjKind::Proc(Box::new(proc_info)),
         }
     }
 
