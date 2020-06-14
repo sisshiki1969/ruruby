@@ -4,7 +4,7 @@ use std::ops::{Index, IndexMut, Range};
 
 const ARG_ARRAY_SIZE: usize = 8;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Args {
     pub block: Option<MethodRef>,
     pub kw_arg: Option<Value>,
@@ -102,7 +102,7 @@ impl Deref for Args {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum ArgsArray {
     Array {
         len: usize,

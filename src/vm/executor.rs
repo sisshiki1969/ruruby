@@ -1381,16 +1381,6 @@ impl VM {
             None => Err(self.error_argument(error_msg)),
         }
     }
-
-    pub fn expect_enumerator(&self, val: Value, error_msg: &str) -> Result<EnumRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Enumerator(e) => Ok(e),
-                _ => Err(self.error_argument(error_msg)),
-            },
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
 }
 
 impl VM {
@@ -2127,10 +2117,6 @@ impl VM {
             }
         };
         Ok(val)
-    }
-
-    pub fn eval_enumerator(&mut self, eref: EnumRef) -> VMResult {
-        eref.eval(self)
     }
 }
 

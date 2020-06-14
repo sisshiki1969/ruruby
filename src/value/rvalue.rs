@@ -27,7 +27,7 @@ pub enum ObjKind {
     Regexp(RegexpRef),
     Method(Box<MethodObjInfo>),
     Fiber(FiberRef),
-    Enumerator(EnumRef),
+    Enumerator(Box<EnumInfo>),
 }
 
 impl std::fmt::Debug for ObjKind {
@@ -126,7 +126,6 @@ impl RValue {
             ObjKind::Invalid => {} // 'freed' object can be freed repeatedly.
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
             ObjKind::Hash(href) => href.free(),
-            ObjKind::Enumerator(eref) => eref.free(),
             ObjKind::Fiber(fref) => fref.free(),
             _ => {}
         }
@@ -150,7 +149,7 @@ impl RValue {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
                 ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
-                ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.dup()),
+                ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.clone()),
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
@@ -357,11 +356,11 @@ impl RValue {
         mut args: Args,
     ) -> Self {
         args.block = Some(MethodRef::from(0));
-        let enum_info = EnumRef::from(method, receiver, args);
+        let enum_info = EnumInfo::new(method, receiver, args);
         RValue {
             class: globals.builtins.enumerator,
             var_table: None,
-            kind: ObjKind::Enumerator(enum_info),
+            kind: ObjKind::Enumerator(Box::new(enum_info)),
         }
     }
 }

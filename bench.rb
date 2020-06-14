@@ -143,12 +143,22 @@ end
 def optcarrot(program)
   command = "#{@time_command} #{program} #{@optcarrot}"
   fps = []
+  rss = []
   5.times do
     o, e, s = Open3.capture3(command)
     o.match(/fps: (\d*.\d*)/)
     fps << Regexp.last_match(1).to_f
+    o.match(/checksum: (\d*)/)
+    checksum = Regexp.last_match(1).to_i
+    if checksum == 59662
+      puts "optcarrot checksum ok: #{command}"
+    else
+      puts "checksum invalid: #{checksum} #{comamnd}"
+    end
+    e.match(/(\d*)maxresident/)
+    rss << Regexp.last_match(1).to_i
   end
-  fps.ave_sd
+  [fps.ave_sd, rss.ave_sd]
 end
 
 ['so_mandelbrot.rb',
@@ -157,14 +167,19 @@ end
  'block.rb',
  'ao_bench.rb'].each { |x| perf x }
 
-fps_ruby = optcarrot('ruby')
-fps_ruruby = optcarrot('target/release/ruruby')
+fps_ruby, rss_ruby = optcarrot('ruby')
+fps_ruruby, rss_ruruby = optcarrot('target/release/ruruby')
 
 puts "benchmark: optcarrot"
 puts format("\t%10s  %10s", 'ruby', 'ruruby')
 print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave])
+print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
 
 @md1 += "| optcarrot | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
+
+rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
+rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
+@md2 += "| optcarrot | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
 
 File.open('bench.md', mode = 'w') do |f|
   f.write(@md0 + @md1 + @md2)

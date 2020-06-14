@@ -565,13 +565,20 @@ impl Value {
         }
     }
 
-    pub fn as_enumerator(&self) -> Option<EnumRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_enumerator(&self) -> Option<&EnumInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
                 ObjKind::Enumerator(eref) => Some(eref),
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    pub fn expect_enumerator(&self, vm:&mut VM, error_msg: &str) -> Result<&EnumInfo, RubyError> {
+        match self.as_enumerator() {
+            Some(e) => Ok(e),
+            None => Err(vm.error_argument(error_msg)),
         }
     }
 

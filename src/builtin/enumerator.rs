@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumInfo {
     method: IdentId,
     receiver: Value,
@@ -16,26 +16,18 @@ impl EnumInfo {
             args,
         }
     }
+
+    pub fn eval(&self, vm: &mut VM) -> VMResult {
+        let receiver = self.receiver;
+        let method = vm.get_method(receiver, self.method)?;
+        vm.eval_send(method, receiver, &self.args)
+    }
 }
 
 impl GC for EnumInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.receiver.mark(alloc);
         self.args.iter().for_each(|v| v.mark(alloc));
-    }
-}
-
-pub type EnumRef = Ref<EnumInfo>;
-
-impl EnumRef {
-    pub fn from(method: IdentId, receiver: Value, args: Args) -> Self {
-        EnumRef::new(EnumInfo::new(method, receiver, args))
-    }
-
-    pub fn eval(&self, vm: &mut VM) -> VMResult {
-        let receiver = self.receiver;
-        let method = vm.get_method(receiver, self.method)?;
-        vm.eval_send(method, receiver, &self.args)
     }
 }
 
@@ -79,7 +71,7 @@ fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 // Instance methods
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let arg_string = {
         match eref.args.len() {
             0 => "".to_string(),
@@ -104,7 +96,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -112,7 +104,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let mut val = vm.eval_enumerator(eref)?;
+    let mut val = eref.eval(vm)?;
 
     let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
@@ -125,7 +117,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -135,7 +127,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(e);
         }
     };
-    let mut val = vm.eval_enumerator(eref)?;
+    let mut val = eref.eval(vm)?;
 
     let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
@@ -151,7 +143,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -162,7 +154,7 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let mut val = vm.eval_enumerator(eref)?;
+    let mut val = eref.eval(vm)?;
     let res_ary: Vec<(Value, Value)> = val
         .expect_array(vm, "Base object")?
         .elements
