@@ -474,7 +474,17 @@ impl Value {
         }
     }
 
-    pub fn as_array(&mut self) -> Option<&mut ArrayInfo> {
+    pub fn as_array(&self) -> Option<&ArrayInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Array(aref) => Some(aref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn as_mut_array(&mut self) -> Option<&mut ArrayInfo> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Array(aref) => Some(aref),
@@ -483,11 +493,10 @@ impl Value {
             None => None,
         }
     }
-
     
     pub fn expect_array(&mut self, vm:&mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
         let val = self.clone();
-        match self.as_array() {
+        match self.as_mut_array() {
             Some(ary) => Ok(ary),
             None=> {
                 Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val)))
@@ -515,14 +524,32 @@ impl Value {
         }
     }
 
-    pub fn as_hash(&self) -> Option<HashRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Hash(href) => Some(href),
+    pub fn as_hash(&self) -> Option<&HashInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Hash(hash) => Some(hash),
                 _ => None,
             },
             None => None,
         }
+    }
+
+    pub fn as_mut_hash(&mut self) -> Option<&mut HashInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Hash(hash) => Some(hash),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn expect_hash(&self, vm:&mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
+        let val = self.clone();
+        self.as_hash().ok_or_else(|| {
+            let inspect = vm.val_inspect(val);
+            vm.error_type(format!("{} must be Hash. (given:{})", msg, inspect))
+        })
     }
 
     pub fn as_regexp(&self) -> Option<RegexpRef> {
@@ -709,14 +736,14 @@ impl Value {
     }
 
     pub fn hash_from(globals: &Globals, hash: HashInfo) -> Self {
-        RValue::new_hash(globals, HashRef::new(hash)).pack()
+        RValue::new_hash(globals, hash).pack()
     }
 
     pub fn hash_from_map(
         globals: &Globals,
         hash: std::collections::HashMap<HashKey, Value>,
     ) -> Self {
-        RValue::new_hash(globals, HashRef::from_map(hash)).pack()
+        RValue::new_hash(globals, HashInfo::new(hash)).pack()
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {

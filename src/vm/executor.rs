@@ -884,7 +884,7 @@ impl VM {
                                     args.push(val);
                                     aref.set_elem(self, &args)?;
                                 }
-                                ObjKind::Hash(mut href) => href.insert(args[0], val),
+                                ObjKind::Hash(ref mut href) => href.insert(args[0], val),
                                 _ => return Err(self.error_undefined_method("[]=", receiver)),
                             };
                         }
@@ -1127,7 +1127,7 @@ impl VM {
                 }
                 Inst::TAKE => {
                     let len = self.read_usize(iseq, 1);
-                    let mut val = self.stack_pop();
+                    let val = self.stack_pop();
                     match val.as_array() {
                         Some(info) => {
                             let elem = &info.elements;
@@ -1340,13 +1340,6 @@ impl VM {
             self.error_type(format!("{} must be String. (given:{})", msg, inspect))
         })?;
         Ok(rstring.as_bytes())
-    }
-
-    pub fn expect_hash(&mut self, val: Value, msg: &str) -> Result<HashRef, RubyError> {
-        val.as_hash().ok_or_else(|| {
-            let inspect = self.val_inspect(val);
-            self.error_type(format!("{} must be Hash. (given:{})", msg, inspect))
-        })
     }
 
     /// Returns `ClassRef` if `self` is a Class.

@@ -22,7 +22,7 @@ pub enum ObjKind {
     Array(Box<ArrayInfo>),
     Range(RangeInfo),
     Splat(Value), // internal use only.
-    Hash(HashRef),
+    Hash(Box<HashInfo>),
     Proc(Box<ProcInfo>),
     Regexp(RegexpRef),
     Method(Box<MethodObjInfo>),
@@ -125,7 +125,6 @@ impl RValue {
         match self.kind {
             ObjKind::Invalid => {} // 'freed' object can be freed repeatedly.
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
-            ObjKind::Hash(href) => href.free(),
             ObjKind::Fiber(fref) => fref.free(),
             _ => {}
         }
@@ -153,7 +152,7 @@ impl RValue {
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
-                ObjKind::Hash(href) => ObjKind::Hash(href.dup()),
+                ObjKind::Hash(href) => ObjKind::Hash(href.clone()),
                 ObjKind::Method(mref) => ObjKind::Method(mref.clone()),
                 ObjKind::Module(cref) => ObjKind::Module(cref.dup()),
                 ObjKind::Ordinary => ObjKind::Ordinary,
@@ -302,11 +301,11 @@ impl RValue {
         }
     }
 
-    pub fn new_hash(globals: &Globals, hashref: HashRef) -> Self {
+    pub fn new_hash(globals: &Globals, hash: HashInfo) -> Self {
         RValue {
             class: globals.builtins.hash,
             var_table: None,
-            kind: ObjKind::Hash(hashref),
+            kind: ObjKind::Hash(Box::new(hash)),
         }
     }
 

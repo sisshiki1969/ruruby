@@ -159,7 +159,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.temp_new();
     for i in start..end {
         arg[0] = Value::fixnum(i);
-        let mut val = vm.eval_block(method, &arg)?;
+        let val = vm.eval_block(method, &arg)?;
         match val.as_array() {
             Some(aref) => {
                 let mut other = aref.elements.clone();

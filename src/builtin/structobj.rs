@@ -66,7 +66,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class_object(&vm.globals);
-    let mut name = class
+    let name = class
     .get_var(IdentId::get_ident_id("_members"))
     .unwrap();
     let members = name

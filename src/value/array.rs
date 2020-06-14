@@ -45,7 +45,7 @@ impl ArrayInfo {
 
     pub fn set_elem(&mut self, vm: &mut VM, args: &Args) -> VMResult {
         vm.check_args_range(args.len(), 2, 3)?;
-        let mut val = if args.len() == 3 { args[2] } else { args[1] };
+        let val = if args.len() == 3 { args[2] } else { args[1] };
         let index = args[0].expect_integer(&vm, "Index")?;
         let elements = &mut self.elements;
         let len = elements.len();

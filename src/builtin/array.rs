@@ -82,23 +82,22 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let s = aref.to_s(vm);
     Ok(Value::string(&vm.globals, s))
 }
 
 fn set_elem(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     let val = aref.set_elem(vm, args)?;
     Ok(val)
 }
 
-fn cmp(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = &self_val.as_array().unwrap().elements;
-    let mut arg0 = args[0];
-    let rhs = &(match arg0.as_array() {
+    let rhs = &(match args[0].as_array() {
         Some(aref) => aref,
         None => return Ok(Value::nil()),
     }
@@ -129,7 +128,7 @@ fn cmp(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn push(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     for arg in args.iter() {
         aref.elements.push(*arg);
     }
@@ -138,7 +137,7 @@ fn push(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn pop(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     let res = aref.elements.pop().unwrap_or_default();
     Ok(res)
 }
@@ -157,7 +156,7 @@ fn shift(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         i as usize
     };
 
-    let mut aref = self_val.as_array().unwrap();
+    let mut aref = self_val.as_mut_array().unwrap();
     if array_flag {
         if aref.elements.len() < num {
             return Ok(Value::array_from(&vm.globals, vec![]));
@@ -182,26 +181,26 @@ fn unshift(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         return Ok(self_val);
     }
     let mut new = args[0..args.len()].to_owned();
-    let mut aref = self_val.as_array().unwrap();
+    let mut aref = self_val.as_mut_array().unwrap();
     new.append(&mut aref.elements);
     aref.elements = new;
     Ok(self_val)
 }
 
-fn length(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn length(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     let res = Value::fixnum(aref.elements.len() as i64);
     Ok(res)
 }
 
-fn empty(_vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn empty(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let res = Value::bool(aref.elements.is_empty());
     Ok(res)
 }
 
-fn mul(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let aref = self_val.as_array().unwrap();
     if let Some(num) = args[0].as_fixnum() {
@@ -253,7 +252,7 @@ fn add(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let lhs = self_val.as_array().unwrap();
+    let lhs = self_val.as_mut_array().unwrap();
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array(vm, "Argument")?.elements.clone();
     lhs.elements.append(&mut rhs);
@@ -280,7 +279,7 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
-fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     let method = match args.block {
@@ -307,7 +306,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     let method = vm.expect_block(args.block)?;
     let param_num = vm.get_iseq(method)?.params.req_params;
     let mut arg = Args::new(param_num);
@@ -329,7 +328,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
 
         let mut ary = vm.eval_block(method, &arg)?;
-        match ary.as_array() {
+        match ary.as_mut_array() {
             Some(ary) => {
                 vm.temp_append(&mut ary.elements);
             }
@@ -343,7 +342,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     //let method = vm.expect_block(args.block)?;
 
     let method = match args.block {
@@ -380,7 +379,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let target = args[0];
     let aref = self_val.as_array().unwrap();
     for item in aref.elements.iter() {
@@ -391,7 +390,7 @@ fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
-fn reverse(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn reverse(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     let mut res = aref.elements.clone();
@@ -401,7 +400,7 @@ fn reverse(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn reverse_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     aref.elements.reverse();
     Ok(self_val)
 }
@@ -416,7 +415,7 @@ fn rotate_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             None => return Err(vm.error_argument("Must be Integer.")),
         }
     };
-    let mut aref = self_val.as_array().unwrap();
+    let mut aref = self_val.as_mut_array().unwrap();
     if i == 0 {
         Ok(self_val)
     } else if i > 0 {
@@ -439,7 +438,7 @@ fn rotate_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn transpose(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     if aref.elements.len() == 0 {
         return Ok(Value::array_from(&vm.globals, vec![]));
     }
@@ -470,7 +469,7 @@ fn transpose(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn min(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn min(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     fn to_float(vm: &VM, val: Value) -> Result<f64, RubyError> {
         if val.is_packed_fixnum() {
             Ok(val.as_packed_fixnum() as f64)
@@ -498,7 +497,7 @@ fn min(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     return Ok(min_obj);
 }
 
-fn max(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     if aref.elements.len() == 0 {
@@ -515,7 +514,7 @@ fn max(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn fill(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     for elem in &mut aref.elements {
         *elem = args[0];
     }
@@ -524,14 +523,14 @@ fn fill(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     aref.elements.clear();
     Ok(self_val)
 }
 
 fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     let mut set = std::collections::HashSet::new();
     match args.block {
         None => {
@@ -550,7 +549,7 @@ fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn slice_(vm: &mut VM,mut  self_val: Value, args: &Args) -> VMResult {
+fn slice_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2)?;
     let start = args[0].expect_integer(vm, "Currently, first arg must be Integer.")?;
     if start < 0 {
@@ -562,12 +561,12 @@ fn slice_(vm: &mut VM,mut  self_val: Value, args: &Args) -> VMResult {
     };
     let start = start as usize;
     let len = len as usize;
-    let aref = self_val.as_array().unwrap();
+    let aref = self_val.as_mut_array().unwrap();
     let new = aref.elements.drain(start..start + len).collect();
     Ok(Value::array_from(&vm.globals, new))
 }
 
-fn first(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     if aref.elements.len() == 0 {
@@ -577,7 +576,7 @@ fn first(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn last(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     if aref.elements.len() == 0 {
@@ -587,13 +586,13 @@ fn last(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn dup(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     Ok(Value::array_from(&vm.globals, aref.elements.clone()))
 }
 
-fn pack(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
     let aref = self_val.as_array().unwrap();
     let mut v = vec![];
@@ -607,7 +606,7 @@ fn pack(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bytes(&vm.globals, v))
 }
 
-fn join(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
     let sep = if args.len() == 0 {
         ""
@@ -630,7 +629,7 @@ fn join(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, res))
 }
 
-fn drop(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let aref = self_val.as_array().unwrap();
     let num = args[0].expect_integer(vm, "An argument must be Integer.")? as usize;
@@ -638,7 +637,7 @@ fn drop(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary.to_vec()))
 }
 
-fn zip(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_ary = self_val.as_array().unwrap();
     let mut args_ary = vec![];
     for a in args.iter() {
@@ -672,7 +671,7 @@ fn zip(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn grep(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let aref = self_val.as_array().unwrap();
     let ary = match args.block {
@@ -703,7 +702,7 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 use std::collections::HashSet;
-fn uniq(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
     let mut h: HashSet<HashKey> = HashSet::new();
