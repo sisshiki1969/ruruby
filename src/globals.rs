@@ -228,9 +228,9 @@ impl Globals {
         self.method_table.get_mut_method(method)
     }
 
-    pub fn get_singleton_class(&self, obj: Value) -> Result<Value, ()> {
-        match obj.unpack() {
-            RV::Object(mut oref) => {
+    pub fn get_singleton_class(&self, mut obj: Value) -> Result<Value, ()> {
+        match obj.as_mut_rvalue() {
+            Some(oref) => {
                 let class = oref.class();
                 if class.as_class().is_singleton {
                     Ok(class)

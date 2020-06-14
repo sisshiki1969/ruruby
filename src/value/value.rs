@@ -11,26 +11,26 @@ const MASK2: u64 = 0b0100u64 << 60;
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum RV {
+pub enum RV<'a> {
     Uninitialized,
     Nil,
     Bool(bool),
     Integer(i64),
     Float(f64),
     Symbol(IdentId),
-    Object(ObjectRef),
+    Object(&'a RValue),
 }
 
-impl RV {
-    pub fn pack(self) -> Value {
+impl<'a> RV<'a> {
+    pub fn pack(&'a self) -> Value {
         match self {
             RV::Uninitialized => Value::uninitialized(),
             RV::Nil => Value::nil(),
             RV::Bool(true) => Value::true_val(),
             RV::Bool(false) => Value::false_val(),
-            RV::Integer(num) => Value::fixnum(num),
-            RV::Float(num) => Value::flonum(num),
-            RV::Symbol(id) => Value::symbol(id),
+            RV::Integer(num) => Value::fixnum(*num),
+            RV::Float(num) => Value::flonum(*num),
+            RV::Symbol(id) => Value::symbol(*id),
             RV::Object(info) => Value(info.id()),
         }
     }
@@ -154,7 +154,7 @@ impl GC for Value {
 }
 
 impl Value {
-    pub fn unpack(self) -> RV {
+    pub fn unpack(&self) -> RV {
         if !self.is_packed_value() {
             let info = self.rvalue();
             match &info.kind {
@@ -164,7 +164,7 @@ impl Value {
                 ),
                 ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
-                _ => RV::Object(Ref::from_ref(info)),
+                _ => RV::Object(info),
             }
         } else if self.is_packed_fixnum() {
             RV::Integer(self.as_packed_fixnum())
@@ -833,7 +833,8 @@ mod tests {
     #[test]
     fn pack_bool1() {
         let expect = RV::Bool(true);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -842,7 +843,8 @@ mod tests {
     #[test]
     fn pack_bool2() {
         let expect = RV::Bool(false);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -851,7 +853,8 @@ mod tests {
     #[test]
     fn pack_nil() {
         let expect = RV::Nil;
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -860,7 +863,8 @@ mod tests {
     #[test]
     fn pack_uninit() {
         let expect = RV::Uninitialized;
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -869,7 +873,8 @@ mod tests {
     #[test]
     fn pack_integer1() {
         let expect = RV::Integer(12054);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -898,7 +903,8 @@ mod tests {
     #[test]
     fn pack_integer2() {
         let expect = RV::Integer(-58993);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -907,7 +913,8 @@ mod tests {
     #[test]
     fn pack_integer3() {
         let expect = RV::Integer(0x8000_0000_0000_0000 as u64 as i64);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -916,7 +923,8 @@ mod tests {
     #[test]
     fn pack_integer4() {
         let expect = RV::Integer(0x4000_0000_0000_0000 as u64 as i64);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -925,7 +933,8 @@ mod tests {
     #[test]
     fn pack_integer5() {
         let expect = RV::Integer(0x7fff_ffff_ffff_ffff as u64 as i64);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -934,7 +943,8 @@ mod tests {
     #[test]
     fn pack_float0() {
         let expect = RV::Float(0.0);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -943,7 +953,8 @@ mod tests {
     #[test]
     fn pack_float1() {
         let expect = RV::Float(100.0);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -952,7 +963,8 @@ mod tests {
     #[test]
     fn pack_float2() {
         let expect = RV::Float(13859.628547);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -961,7 +973,8 @@ mod tests {
     #[test]
     fn pack_float3() {
         let expect = RV::Float(-5282.2541156);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -1003,7 +1016,8 @@ mod tests {
     #[test]
     fn pack_symbol() {
         let expect = RV::Symbol(IdentId::from(12345));
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }

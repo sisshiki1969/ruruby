@@ -1615,27 +1615,29 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_shl(&mut self, rhs: Value, mut lhs: Value, iseq: &ISeq) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::fixnum(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
-        match lhs.unpack() {
-            RV::Integer(lhs) => {
-                match rhs.as_fixnum() {
-                    Some(rhs) => return Ok(Value::fixnum(lhs << rhs)),
-                    _ => {}
-                };
+        match lhs.as_mut_rvalue() {
+            None => match lhs.unpack() {
+                RV::Integer(lhs) => {
+                    match rhs.as_fixnum() {
+                        Some(rhs) => return Ok(Value::fixnum(lhs << rhs)),
+                        _ => {}
+                    };
+                }
+                _ => {}
             }
-            RV::Object(mut lhs_o) => match lhs_o.kind {
+            Some(lhs_o) => match lhs_o.kind {
                 ObjKind::Array(ref mut aref) => {
                     aref.elements.push(rhs);
                     return Ok(lhs);
                 }
                 _ => {}
             },
-            _ => {}
         };
         let cache = self.read32(iseq, 1);
         let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
