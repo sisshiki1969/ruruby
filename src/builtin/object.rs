@@ -32,7 +32,7 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    match self_val.is_object() {
+    match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.to_s();
             Ok(Value::string(&vm.globals, s))
@@ -45,7 +45,7 @@ fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    match self_val.is_object() {
+    match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.inspect(vm);
             Ok(Value::string(&vm.globals, s))
@@ -107,7 +107,7 @@ fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
-    let mut self_obj = self_val.as_object();
+    let self_obj = self_val.rvalue_mut();
     self_obj.set_var(var_id, val);
     Ok(val)
 }
@@ -122,7 +122,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
-    let self_obj = self_val.as_object();
+    let self_obj = self_val.rvalue();
     let val = match self_obj.get_var(var_id) {
         Some(val) => val,
         None => Value::nil(),
@@ -132,7 +132,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let receiver = self_val.as_object();
+    let receiver = self_val.rvalue();
     let id_lock = ID.read().unwrap();
     let res = match receiver.var_table() {
         Some(table) => table

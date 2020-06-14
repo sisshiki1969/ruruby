@@ -385,7 +385,7 @@ impl RValue {
         let mut class = self.class;
         loop {
             if class.as_class().is_singleton {
-                class = class.as_object().class;
+                class = class.rvalue().class;
             } else {
                 return class;
             }

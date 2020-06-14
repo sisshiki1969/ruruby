@@ -20,7 +20,7 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
     loop {
-        match &mut class.as_object().var_table() {
+        match &mut class.rvalue().var_table() {
             Some(table) => v.append(
                 &mut table
                     .keys()

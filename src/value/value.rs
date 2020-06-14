@@ -144,7 +144,7 @@ impl std::fmt::Debug for Value {
 
 impl GC for Value {
     fn mark(&self, alloc: &mut Allocator) {
-        match self.as_rvalue() {
+        match self.as_gcbox() {
             Some(rvalue) => {
                 rvalue.gc_mark(alloc);
             }
@@ -160,7 +160,7 @@ impl Value {
             match &info.kind {
                 ObjKind::Invalid => panic!(
                     "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
-                    &**info as *const RValue, info
+                    &*info as *const RValue, info
                 ),
                 ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
@@ -202,9 +202,17 @@ impl Value {
         }
     }
 
+    pub fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
+        if self.is_packed_value() {
+            None
+        } else {
+            Some(self.gcbox())
+        }
+    }
+
     /// Get reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_rvalue(&self) -> Option<&GCBox<RValue>> {
+    pub fn as_rvalue(&self) -> Option<&RValue> {
         if self.is_packed_value() {
             None
         } else {
@@ -214,7 +222,7 @@ impl Value {
 
     /// Get mutable reference of RValue from Value.
     /// This method works only if `self` is not a packed value.
-    pub fn as_mut_rvalue(&mut self) -> Option<&mut GCBox<RValue>> {
+    pub fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
         if self.is_packed_value() {
             None
         } else {
@@ -222,12 +230,16 @@ impl Value {
         }
     }
 
-    pub fn rvalue(&self) -> &GCBox<RValue> {
+    pub fn gcbox(&self) -> &GCBox<RValue> {
         unsafe { &*(self.0 as *const GCBox<RValue>) }
     }
 
-    pub fn rvalue_mut(&self) -> &mut GCBox<RValue> {
-        unsafe { &mut *(self.0 as *mut GCBox<RValue>) }
+    pub fn rvalue(&self) -> &RValue {
+        unsafe { &*(self.0 as *const GCBox<RValue>) }.inner()
+    }
+
+    pub fn rvalue_mut(&self) -> &mut RValue {
+        unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
@@ -276,15 +288,15 @@ impl Value {
     }
 
     pub fn set_var(&mut self, id: IdentId, val: Value) {
-        self.as_object().set_var(id, val);
+        self.rvalue_mut().set_var(id, val);
     }
 
     pub fn get_var(&self, id: IdentId) -> Option<Value> {
-        self.as_object().get_var(id)
+        self.rvalue().get_var(id)
     }
 
     pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
-        match self.as_object().get_mut_var(id) {
+        match self.rvalue_mut().get_mut_var(id) {
             Some(entry) => {
                 *entry = val;
                 true
@@ -426,17 +438,6 @@ impl Value {
         }
     }
 
-    pub fn as_object(&self) -> ObjectRef {
-        self.is_object().unwrap()
-    }
-
-    pub fn is_object(&self) -> Option<ObjectRef> {
-        match self.as_rvalue() {
-            Some(info) => Some(info.as_ref()),
-            _ => None,
-        }
-    }
-
     pub fn as_class(&self) -> ClassRef {
         match self.is_class() {
             Some(class) => class,
@@ -445,7 +446,7 @@ impl Value {
     }
 
     pub fn is_class(&self) -> Option<ClassRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) => Some(cref),
                 _ => None,
@@ -455,7 +456,7 @@ impl Value {
     }
 
     pub fn as_module(&self) -> Option<ClassRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) | ObjKind::Module(cref) => Some(cref),
                 _ => None,
@@ -465,7 +466,7 @@ impl Value {
     }
 
     pub fn is_module(&self) -> Option<ClassRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Module(cref) => Some(cref),
                 _ => None,
@@ -515,7 +516,7 @@ impl Value {
     }
 
     pub fn as_splat(&self) -> Option<Value> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Splat(val) => Some(val),
                 _ => None,
@@ -553,7 +554,7 @@ impl Value {
     }
 
     pub fn as_regexp(&self) -> Option<RegexpRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Regexp(regref) => Some(regref),
                 _ => None,
@@ -583,7 +584,7 @@ impl Value {
     }
 
     pub fn as_fiber(&self) -> Option<FiberRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Fiber(info) => Some(info),
                 _ => None,

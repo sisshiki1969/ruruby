@@ -107,9 +107,9 @@ impl Globals {
         let class_class = ClassRef::from(class_id, module);
         let class = Value::bootstrap_class(class_class);
 
-        object.as_object().set_class(class);
-        module.as_object().set_class(class);
-        class.as_object().set_class(class);
+        object.rvalue_mut().set_class(class);
+        module.rvalue_mut().set_class(class);
+        class.rvalue_mut().set_class(class);
         let builtins = BuiltinClass::new(object, module, class);
 
         let main_object = Value::ordinary_object(object);
@@ -134,7 +134,7 @@ impl Globals {
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(&globals, singleton_class);
-        globals.builtins.object.as_object().set_class(singleton_obj);
+        globals.builtins.object.rvalue_mut().set_class(singleton_obj);
 
         module::init(&mut globals);
         class::init(&mut globals);
@@ -251,7 +251,7 @@ impl Globals {
                     };
                     singleton_class.is_singleton = true;
                     let singleton_obj = Value::class(&self, singleton_class);
-                    singleton_obj.as_object().set_class(class);
+                    singleton_obj.rvalue_mut().set_class(class);
                     oref.set_class(singleton_obj);
                     Ok(singleton_obj)
                 }

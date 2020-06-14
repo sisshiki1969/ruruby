@@ -119,6 +119,14 @@ impl GCBox<RValue> {
         }
     }
 
+    pub fn inner(&self) -> &RValue {
+        &self.inner
+    }
+
+    pub fn inner_mut(&mut self) -> &mut RValue {
+        &mut self.inner
+    }
+
     pub fn gc_mark(&self, alloc: &mut Allocator) {
         if alloc.mark(self) {
             return;
@@ -469,10 +477,10 @@ mod tests {
                     @y = y
                 end
             end
-            100.times {
+            1000.times {
                 a = []
-                100.times {|x|
-                    a << Vec.new(x,x)
+                1000.times {|x|
+                    a << Vec.new(x.to_s, x.to_s)
                 }
             }
         "#;

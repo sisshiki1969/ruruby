@@ -485,7 +485,7 @@ impl VM {
         self.context_push(context);
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
-        let mut self_oref = context.self_value.as_object();
+        let self_oref = context.self_value.rvalue_mut();
         self.gc();
 
         loop {
@@ -898,7 +898,7 @@ impl VM {
                     let args = self.pop_args_to_ary(arg_num);
                     let arg_num = args.len();
                     let receiver = self.stack_pop();
-                    let val = match receiver.is_object() {
+                    let val = match receiver.as_rvalue() {
                         Some(oref) => match &oref.kind {
                             ObjKind::Array(aref) => aref.get_elem(self, &args)?,
                             ObjKind::Hash(href) => {
@@ -1358,15 +1358,8 @@ impl VM {
         })
     }
 
-    pub fn expect_object(&self, val: Value, error_msg: &str) -> Result<ObjectRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => Ok(oref),
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
-
     pub fn expect_fiber(&self, val: Value, error_msg: &str) -> Result<FiberRef, RubyError> {
-        match val.is_object() {
+        match val.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Fiber(f) => Ok(f),
                 _ => Err(self.error_argument(error_msg)),
@@ -1723,7 +1716,7 @@ impl VM {
     }
 
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        match lhs.is_object() {
+        match lhs.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(_) => {
                     let res = rhs.get_class_object(&self.globals).id() == lhs.id();
@@ -2045,7 +2038,7 @@ impl VM {
     pub fn eval_method(
         &mut self,
         methodref: MethodRef,
-        self_val: Value,
+        mut self_val: Value,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
@@ -2083,15 +2076,15 @@ impl VM {
                 }
                 val
             }
-            MethodInfo::AttrReader { id } => match self_val.is_object() {
+            MethodInfo::AttrReader { id } => match self_val.as_rvalue() {
                 Some(oref) => match oref.get_var(*id) {
                     Some(v) => v,
                     None => Value::nil(),
                 },
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
-            MethodInfo::AttrWriter { id } => match self_val.is_object() {
-                Some(mut oref) => {
+            MethodInfo::AttrWriter { id } => match self_val.as_mut_rvalue() {
+                Some(oref) => {
                     oref.set_var(*id, args[0]);
                     args[0]
                 }
@@ -2208,7 +2201,7 @@ impl VM {
                     None => {
                         if singleton_flag {
                             singleton_flag = false;
-                            class = original_class.as_object().class();
+                            class = original_class.rvalue().class();
                         } else {
                             let inspect = self.val_inspect(original_class);
                             let method_name = IdentId::get_ident_name(method);
