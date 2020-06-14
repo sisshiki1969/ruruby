@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayInfo {
     pub elements: Vec<Value>,
 }
@@ -45,7 +45,7 @@ impl ArrayInfo {
 
     pub fn set_elem(&mut self, vm: &mut VM, args: &Args) -> VMResult {
         vm.check_args_range(args.len(), 2, 3)?;
-        let val = if args.len() == 3 { args[2] } else { args[1] };
+        let mut val = if args.len() == 3 { args[2] } else { args[1] };
         let index = args[0].expect_integer(&vm, "Index")?;
         let elements = &mut self.elements;
         let len = elements.len();
@@ -67,7 +67,7 @@ impl ArrayInfo {
             let length = length as usize;
             let end = std::cmp::min(len, index + length);
             match val.as_array() {
-                Some(mut val) => {
+                Some(val) => {
                     let mut tail = elements.split_off(end);
                     elements.truncate(index);
                     elements.append(&mut val.elements.clone());
@@ -111,10 +111,3 @@ impl ArrayInfo {
     }
 }
 
-pub type ArrayRef = Ref<ArrayInfo>;
-
-impl ArrayRef {
-    pub fn from(elements: Vec<Value>) -> Self {
-        ArrayRef::new(ArrayInfo::new(elements))
-    }
-}

@@ -207,10 +207,10 @@ impl Context {
         let iseq = self.iseq_ref;
         let req_len = iseq.params.req_params;
         let post_len = iseq.params.post_params;
-
         match self.kind {
             ISeqKind::Block(_) if args.len() == 1 && req_len + post_len > 1 => {
-                match args[0].as_array() {
+                let mut arg0 = args[0];
+                match arg0.as_array() {
                     Some(ary) => {
                         let args = &ary.elements;
                         self.fill_arguments(globals, args, args.len(), iseq, kw_arg);

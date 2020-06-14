@@ -19,7 +19,7 @@ pub enum ObjKind {
     Class(ClassRef),
     Module(ClassRef),
     String(RString),
-    Array(ArrayRef),
+    Array(Box<ArrayInfo>),
     Range(RangeInfo),
     Splat(Value), // internal use only.
     Hash(HashRef),
@@ -125,7 +125,6 @@ impl RValue {
         match self.kind {
             ObjKind::Invalid => {} // 'freed' object can be freed repeatedly.
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
-            ObjKind::Array(aref) => aref.free(),
             ObjKind::Hash(href) => href.free(),
             ObjKind::Enumerator(eref) => eref.free(),
             ObjKind::Fiber(fref) => fref.free(),
@@ -149,7 +148,7 @@ impl RValue {
             var_table: self.var_table.clone(),
             kind: match &self.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
-                ObjKind::Array(aref) => ObjKind::Array(aref.dup()),
+                ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
                 ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
                 ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.dup()),
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
@@ -280,11 +279,11 @@ impl RValue {
         }
     }
 
-    pub fn new_array(globals: &Globals, arrayref: ArrayRef) -> Self {
+    pub fn new_array(globals: &Globals, array_info: ArrayInfo) -> Self {
         RValue {
             class: globals.builtins.array,
             var_table: None,
-            kind: ObjKind::Array(arrayref),
+            kind: ObjKind::Array(Box::new(array_info)),
         }
     }
 

@@ -875,12 +875,12 @@ impl VM {
                 Inst::SET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
                     let mut args = self.pop_args_to_ary(arg_num);
-                    let receiver = self.stack_pop();
+                    let mut receiver = self.stack_pop();
                     let val = self.stack_pop();
-                    match receiver.is_object() {
+                    match receiver.as_mut_rvalue() {
                         Some(oref) => {
-                            match &oref.kind {
-                                ObjKind::Array(mut aref) => {
+                            match oref.kind {
+                                ObjKind::Array(ref mut aref) => {
                                     args.push(val);
                                     aref.set_elem(self, &args)?;
                                 }
@@ -1127,7 +1127,7 @@ impl VM {
                 }
                 Inst::TAKE => {
                     let len = self.read_usize(iseq, 1);
-                    let val = self.stack_pop();
+                    let mut val = self.stack_pop();
                     match val.as_array() {
                         Some(info) => {
                             let elem = &info.elements;
@@ -1340,13 +1340,6 @@ impl VM {
             self.error_type(format!("{} must be String. (given:{})", msg, inspect))
         })?;
         Ok(rstring.as_bytes())
-    }
-
-    pub fn expect_array(&mut self, val: Value, msg: &str) -> Result<ArrayRef, RubyError> {
-        val.as_array().ok_or_else(|| {
-            let inspect = self.val_inspect(val);
-            self.error_type(format!("{} must be Array. (given:{})", msg, inspect))
-        })
     }
 
     pub fn expect_hash(&mut self, val: Value, msg: &str) -> Result<HashRef, RubyError> {
@@ -1659,8 +1652,8 @@ impl VM {
                     _ => {}
                 };
             }
-            RV::Object(lhs_o) => match lhs_o.kind {
-                ObjKind::Array(mut aref) => {
+            RV::Object(mut lhs_o) => match lhs_o.kind {
+                ObjKind::Array(ref mut aref) => {
                     aref.elements.push(rhs);
                     return Ok(lhs);
                 }

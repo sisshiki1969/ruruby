@@ -474,13 +474,24 @@ impl Value {
         }
     }
 
-    pub fn as_array(&self) -> Option<ArrayRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_array(&mut self) -> Option<&mut ArrayInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
                 ObjKind::Array(aref) => Some(aref),
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    
+    pub fn expect_array(&mut self, vm:&mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
+        let val = self.clone();
+        match self.as_array() {
+            Some(ary) => Ok(ary),
+            None=> {
+                Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val)))
+            }
         }
     }
 
@@ -683,7 +694,7 @@ impl Value {
     }
 
     pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
-        RValue::new_array(globals, ArrayRef::from(ary)).pack()
+        RValue::new_array(globals, ArrayInfo::new(ary)).pack()
     }
 
     pub fn splat(globals: &Globals, val: Value) -> Self {

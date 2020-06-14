@@ -112,9 +112,9 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let val = vm.eval_enumerator(eref)?;
+    let mut val = vm.eval_enumerator(eref)?;
 
-    let ary = vm.expect_array(val, "Base object")?;
+    let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
     for elem in &ary.elements {
         args[0] = *elem;
@@ -135,9 +135,9 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(e);
         }
     };
-    let val = vm.eval_enumerator(eref)?;
+    let mut val = vm.eval_enumerator(eref)?;
 
-    let ary = vm.expect_array(val, "Base object")?;
+    let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
     vm.temp_new();
     for elem in &ary.elements {
@@ -162,9 +162,9 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let val = vm.eval_enumerator(eref)?;
-    let res_ary: Vec<(Value, Value)> = vm
-        .expect_array(val, "Base object")?
+    let mut val = vm.eval_enumerator(eref)?;
+    let res_ary: Vec<(Value, Value)> = val
+        .expect_array(vm, "Base object")?
         .elements
         .iter()
         .enumerate()

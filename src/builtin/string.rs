@@ -292,7 +292,8 @@ macro_rules! next_char {
 
 fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let arguments = match args[0].as_array() {
+    let mut arg0 = args[0];
+    let arguments = match arg0.as_array() {
         Some(ary) => ary.elements.clone(),
         None => vec![args[0]],
     };
@@ -532,7 +533,7 @@ fn string_scan(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => {
             vm.temp_vec(vec.clone());
-            for arg in vec {
+            for mut arg in vec {
                 match arg.as_array() {
                     Some(ary) => {
                         let len = ary.elements.len();
