@@ -263,15 +263,18 @@ impl Allocator {
         #[cfg(debug_assertions)]
         {
             eprintln!("--GC start thread:{:?}", std::thread::current().id());
-            eprintln!("allocated: {}", self.allocated);
-            eprintln!("used in current page: {}", self.used);
-            eprintln!("allocated pages: {}", self.pages.len());
+            eprintln!(
+                "allocated: {}  used in current page: {}  allocated pages: {}",
+                self.allocated,
+                self.used,
+                self.pages.len()
+            );
         }
         self.clear_mark();
         root.mark(self);
         #[cfg(debug_assertions)]
         {
-            eprintln!("marked: {}", self.mark_counter);
+            eprint!("marked: {}  ", self.mark_counter);
         }
         self.sweep();
         #[cfg(debug_assertions)]

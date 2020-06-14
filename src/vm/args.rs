@@ -182,11 +182,9 @@ impl Index<usize> for ArgsArray {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        unsafe {
-            match self {
-                ArgsArray::Array { ary, .. } => &ary.get_unchecked(index),
-                ArgsArray::Vec(v) => &v.get_unchecked(index),
-            }
+        match self {
+            ArgsArray::Array { ary, .. } => &ary[index],
+            ArgsArray::Vec(v) => &v[index],
         }
     }
 }
@@ -195,22 +193,18 @@ impl Index<Range<usize>> for ArgsArray {
     type Output = [Value];
 
     fn index(&self, range: Range<usize>) -> &Self::Output {
-        unsafe {
-            match self {
-                ArgsArray::Array { ary, .. } => &ary.get_unchecked(range),
-                ArgsArray::Vec(v) => &v.get_unchecked(range),
-            }
+        match self {
+            ArgsArray::Array { ary, .. } => &ary[range],
+            ArgsArray::Vec(v) => &v[range],
         }
     }
 }
 
 impl IndexMut<usize> for ArgsArray {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe {
-            match self {
-                ArgsArray::Array { ary, .. } => ary.get_unchecked_mut(index),
-                ArgsArray::Vec(v) => v.get_unchecked_mut(index),
-            }
+        match self {
+            ArgsArray::Array { ary, .. } => &mut ary[index],
+            ArgsArray::Vec(v) => &mut v[index],
         }
     }
 }

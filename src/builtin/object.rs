@@ -214,19 +214,22 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 4)?;
-    let program = vm.expect_string(&args[0], "1st arg")?;
+    let mut arg0 = args[0];
+    let program = arg0.expect_string(vm, "1st arg")?;
     if args.len() > 1 {
         if !args[1].is_nil() {
             return Err(vm.error_argument("Currently, 2nd arg must be Nil."));
         }
     }
-    let env_name = if args.len() > 2 {
-        vm.expect_string(&args[2], "3rd arg")?
+    let path = if args.len() > 2 {
+        let mut arg2 = args[2];
+        let name = arg2.expect_string(vm, "3rd arg")?;
+        std::path::PathBuf::from(name)
     } else {
-        "(eval)"
+        std::path::PathBuf::from("(eval)")
     };
 
-    let method = vm.parse_program_eval(std::path::PathBuf::from(env_name), program)?;
+    let method = vm.parse_program_eval(path, program)?;
     let args = Args::new0();
     let res = vm.eval_block(method, &args)?;
     Ok(res)

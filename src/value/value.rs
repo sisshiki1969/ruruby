@@ -428,6 +428,14 @@ impl Value {
         }
     }
 
+    pub fn expect_bytes(&self, vm: &mut VM, msg: &str) -> Result<&[u8], RubyError> {
+        let rstring = self.as_rstring().ok_or_else(|| {
+            let inspect = vm.val_inspect(self.clone());
+            vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        })?;
+        Ok(rstring.as_bytes())
+    }
+
     pub fn as_string(&self) -> Option<&String> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -436,6 +444,15 @@ impl Value {
             },
             None => None,
         }
+    }
+
+    pub fn expect_string(&mut self, vm: &mut VM, msg: &str) -> Result<&String, RubyError> {
+        let val = self.clone();
+        let rstring = self.as_mut_rstring().ok_or_else(|| {
+            let inspect = vm.val_inspect(val);
+            vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        })?;
+        rstring.as_string(vm)
     }
 
     pub fn as_class(&self) -> ClassRef {
@@ -494,14 +511,12 @@ impl Value {
             None => None,
         }
     }
-    
-    pub fn expect_array(&mut self, vm:&mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
+
+    pub fn expect_array(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
         let val = self.clone();
         match self.as_mut_array() {
             Some(ary) => Ok(ary),
-            None=> {
-                Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val)))
-            }
+            None => Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val))),
         }
     }
 
@@ -545,7 +560,7 @@ impl Value {
         }
     }
 
-    pub fn expect_hash(&self, vm:&mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
+    pub fn expect_hash(&self, vm: &mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
         let val = self.clone();
         self.as_hash().ok_or_else(|| {
             let inspect = vm.val_inspect(val);
@@ -603,7 +618,7 @@ impl Value {
         }
     }
 
-    pub fn expect_enumerator(&self, vm:&mut VM, error_msg: &str) -> Result<&EnumInfo, RubyError> {
+    pub fn expect_enumerator(&self, vm: &mut VM, error_msg: &str) -> Result<&EnumInfo, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
             None => Err(vm.error_argument(error_msg)),

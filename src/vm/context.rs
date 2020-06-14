@@ -25,12 +25,10 @@ impl Index<LvarId> for Context {
 
     fn index(&self, index: LvarId) -> &Self::Output {
         let i = index.as_usize();
-        unsafe {
-            if i < LVAR_ARRAY_SIZE {
-                &self.lvar_ary.get_unchecked(i)
-            } else {
-                &self.lvar_vec.get_unchecked(i - LVAR_ARRAY_SIZE)
-            }
+        if i < LVAR_ARRAY_SIZE {
+            &self.lvar_ary[i]
+        } else {
+            &self.lvar_vec[i - LVAR_ARRAY_SIZE]
         }
     }
 }
@@ -39,12 +37,10 @@ impl Index<usize> for Context {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        unsafe {
-            if index < LVAR_ARRAY_SIZE {
-                &self.lvar_ary.get_unchecked(index)
-            } else {
-                &self.lvar_vec.get_unchecked(index - LVAR_ARRAY_SIZE)
-            }
+        if index < LVAR_ARRAY_SIZE {
+            &self.lvar_ary[index]
+        } else {
+            &self.lvar_vec[index - LVAR_ARRAY_SIZE]
         }
     }
 }
@@ -52,24 +48,20 @@ impl Index<usize> for Context {
 impl IndexMut<LvarId> for Context {
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
         let i = index.as_usize();
-        unsafe {
-            if i < LVAR_ARRAY_SIZE {
-                self.lvar_ary.get_unchecked_mut(i)
-            } else {
-                self.lvar_vec.get_unchecked_mut(i - LVAR_ARRAY_SIZE)
-            }
+        if i < LVAR_ARRAY_SIZE {
+            &mut self.lvar_ary[i]
+        } else {
+            &mut self.lvar_vec[i - LVAR_ARRAY_SIZE]
         }
     }
 }
 
 impl IndexMut<usize> for Context {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe {
-            if index < LVAR_ARRAY_SIZE {
-                self.lvar_ary.get_unchecked_mut(index)
-            } else {
-                self.lvar_vec.get_unchecked_mut(index - LVAR_ARRAY_SIZE)
-            }
+        if index < LVAR_ARRAY_SIZE {
+            &mut self.lvar_ary[index]
+        } else {
+            &mut self.lvar_vec[index - LVAR_ARRAY_SIZE]
         }
     }
 }

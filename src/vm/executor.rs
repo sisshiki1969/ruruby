@@ -434,7 +434,7 @@ macro_rules! try_err {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
-                        println!("<--- METHOD_RETURN Ok({})", $self.val_inspect(result),);
+                        println!("<--- METHOD_RETURN Ok({:?})", result);
                     }
                     Ok(result)
                 } else {
@@ -518,9 +518,9 @@ impl VM {
                     #[cfg(feature = "trace")]
                     {
                         if _context.is_fiber {
-                            println!("<=== Ok({})", self.val_inspect(val));
+                            println!("<=== Ok({:?})", val);
                         } else {
-                            println!("<--- Ok({})", self.val_inspect(val));
+                            println!("<--- Ok({:?})", val);
                         }
                     }
                     if !self.exec_context.is_empty() {
@@ -545,7 +545,7 @@ impl VM {
                         let val = self.stack_pop();
                         #[cfg(feature = "trace")]
                         {
-                            println!("<--- Ok({})", self.val_inspect(val));
+                            println!("<--- Ok({:?})", val);
                         }
                         Ok(val)
                     };
@@ -1322,26 +1322,6 @@ impl VM {
         })
     }
 
-    pub fn expect_string<'a>(
-        &mut self,
-        val: &'a Value,
-        msg: &str,
-    ) -> Result<&'a String, RubyError> {
-        let rstring = val.as_rstring().ok_or_else(|| {
-            let inspect = self.val_inspect(val.clone());
-            self.error_type(format!("{} must be String. (given:{})", msg, inspect))
-        })?;
-        rstring.as_string(self)
-    }
-
-    pub fn expect_bytes<'a>(&mut self, val: &'a Value, msg: &str) -> Result<&'a [u8], RubyError> {
-        let rstring = val.as_rstring().ok_or_else(|| {
-            let inspect = self.val_inspect(val.clone());
-            self.error_type(format!("{} must be String. (given:{})", msg, inspect))
-        })?;
-        Ok(rstring.as_bytes())
-    }
-
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
@@ -1630,7 +1610,7 @@ impl VM {
                     };
                 }
                 _ => {}
-            }
+            },
             Some(lhs_o) => match lhs_o.kind {
                 ObjKind::Array(ref mut aref) => {
                     aref.elements.push(rhs);
@@ -2245,7 +2225,7 @@ impl VM {
         #[cfg(feature = "trace")]
         {
             match val {
-                Ok(val) => println!("<=== yield Ok({})", self.val_debug(val),),
+                Ok(val) => println!("<=== yield Ok({:?})", val),
                 Err(err) => println!("<=== yield Err({:?})", err.kind),
             }
         }
