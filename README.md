@@ -2,12 +2,13 @@
 
 An alternative Ruby implementation by Rust.
 
-## Feature
+## Features
 
 - Purely implemented with Rust.
 - No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
 - Hand-written original parser.
 - Virtual machine execution.
+- [NEW!] Simple mark & sweep garbage collector is implemented. (currently, only in `static-gc` branch)
 
 ## Related article (sorry, currently only in Japanese)
 
@@ -15,123 +16,12 @@ An alternative Ruby implementation by Rust.
 
 ## Implementation status
 
-Attention:
-Still in alpha, so the implementation and builtin libraries are immature.  
-Please note that some of features listed below are functional but still currently incomplete.
+[See here.](https://github.com/sisshiki1969/ruruby/wiki/Implementation-status)
 
-- Literals
-  - [x] Bool
-  - [x] Integer
-  - [x] Float
-  - [x] String literal
-  - [x] String literal with interpolation
-  - [x] Array literal
-  - [x] Hash literal
-  - [x] Lambda literal
-  - [x] Block literal
-  - [x] Regular expression
-- Builtin Class
-  - [x] Integer
-  - [x] Float
-  - [x] Symbol
-  - [x] String
-  - [x] Range
-  - [x] Array
-  - [x] Hash
-  - [x] Proc
-  - [x] Method
-  - [x] Regexp
-  - [x] Struct
-  - [x] Enumerator
-  - [x] Fiber
-- Variables
-  - [x] Local variable
-  - [x] Instance variable
-  - [ ] Class variable
-  - [x] Global variable
-- Constants
-  - [x] Constant
-- Branch and Loop
-  - [x] If-then-elsif-else
-  - [x] Unless-then-else
-  - [x] Postfix if / unless
-  - [x] For-in
-  - [x] Break / Continue
-  - [x] While
-  - [x] Until
-  - [x] Postfix while / until
-  - [x] Case-when
-  - [x] Return
-- Methods
-  - [x] Instance Method
-  - [x] Class Method
-  - [x] Singleton Method
-- Class and Module
-  - [x] Subclass / Inheritance
-  - [x] Initializer
-  - [x] Attribute accessor
-  - [x] Open class (Ad-hoc class definition)
-  - [x] Module
+## Benchmarks
 
-## Performance
-
-Currently, performance of ruruby in speed is not satisfactory.
-Here is a preliminary report:
-
-| benchmark           | ruruby  | CRuby(2.8.0) |
-| ------------------- | :-----: | :----------: |
-| so_mandelbrot.rb\*  | 2.88 s  |    1.89 s    |
-| app_mandelbrot.rb\* | 6.83 s  |    2.35 s    |
-| app_aobench.rb\*    | 27.96 s |    9.01 s    |
-| app_fib.rb\*        | 1.51 s  |    0.32 s    |
-| optcarrot\*\*       | 19.68 s |    4.05 s    |
-
-(Run on WSL2 on Windows10 with Intel Corei7-7700 @ 3.60GHz.)  
-Execution time in seconds are shown.  
-The lower, the better.  
-\*available on <https://github.com/ruby/ruby/blob/master/benchmark/>  
-\*\*Optcarrot is NES emulator, and a semi-official benchmark program for Ruby, on <https://github.com/mame/optcarrot>
-
-Optcarrot benchmark results
-| benchmark | ruruby | CRuby(2.8.0) |
-|-----------|:------:|:------------:|
-| optcarrot | 9.62 fps | 48.8 fps |
-
-Frames per seconds are shown.  
-The higher, the better.
-
-## Memory consumption
-
-To investigate memory consumption, maximum resident set size was measured using gnu-time.
-
-### app_aobench.rb
-
-(this benchmark program produce and consume huge number of objects)
-
-| engine        | max resident set size |
-| ------------- | :-------------------: |
-| CRuby(GC on)  |         15 MB         |
-| CRuby(GC off) |        1649 MB        |
-| ruruby        |        3864 MB        |
-
-### fibo.rb
-
-(producing almost no objects, huge number of method calls)
-
-| engine        | max resident set size |
-| ------------- | :-------------------: |
-| CRuby(GC on)  |        13.7 MB        |
-| CRuby(GC off) |        13.9 MB        |
-| ruruby        |        2.1 MB         |
-
-### optcarrot (benchmark mode)
-
-(a lot of arithmetic and array operations)
-| engine |max resident set size|
-|-----------------|:---------:|
-| CRuby(GC on) | 82.5 MB |
-| CRuby(GC off) | 85.5 MB|
-| ruruby | 355.6 MB |
+[See here.](https://github.com/sisshiki1969/ruruby/wiki/Benchmarks)  
+You can see the results of optcarrot benchmark for ruruby and other Ruby implementations [here](https://github.com/mame/optcarrot/blob/master/doc/benchmark.md).
 
 ## How to run ruruby
 
@@ -156,7 +46,9 @@ You can launch irb-like interactive shell, omitting file name.
 % cargo run
 ```
 
-### Option: Bytecode Trace execution
+There are some useful options for analysis and development. Use `feature` flag of cargo.
+
+### `trace` option: bytecode trace execution
 
 ```sh
 % cargo run --features trace -- tests/sample.rb
@@ -180,7 +72,7 @@ Hello world!
 <--- Ok(nil)
 ```
 
-### Option: Emit ByteCode
+### `emit-iseq` option: dump bytecode
 
 ```sh
 % cargo run --features emit-iseq -- tests/sample.rb
@@ -188,45 +80,76 @@ Hello world!
     Finished dev [unoptimized + debuginfo] target(s) in 6.72s
      Running `target/debug/ruruby tests/sample.rb`
 -----------------------------------------
-MethodRef(198)
-local var: 0:w
+MethodRef(200)
+local var(0): w 
 block: None
-  00000 PUSH_STRING 181
-  00005 SET_LOCAL outer:0 LvarId:0
-  00014 PUSH_STRING 182
-  00019 PUSH_STRING 183
-  00024 CONCAT_STR
-  00025 GET_LOCAL outer:0 LvarId:0
-  00034 TO_S
-  00035 CONCAT_STR
-  00036 PUSH_STRING 184
-  00041 CONCAT_STR
-  00042 SEND_SELF 'puts' 1 items
-  00059 END
+  00000 PUSH_STRING 182
+  00005 SET_LOCAL 'w' outer:0 LvarId:0
+  0000e PUSH_STRING 183
+  00013 PUSH_STRING 184
+  00018 CONCAT_STR
+  00019 GET_LOCAL 'w' outer:0 LvarId:0
+  00022 TO_S
+  00023 CONCAT_STR
+  00024 PUSH_STRING 185
+  00029 CONCAT_STR
+  0002a OPT_SEND_SELF 'puts' 1 items
+  00035 END
 Hello world!
 ```
 
-### Option: Performance analysis per VM instruction
+### `perf` option: performance analysis per VM instruction
 
 ```sh
-% cargo run --features perf -- tests/sample.rb
-   Compiling ruruby v0.1.0
-    Finished dev [unoptimized + debuginfo] target(s) in 3.53s
-     Running `target/debug/ruruby tests/sample.rb`
-Hello world!
+% cargo run --release --features perf -- tests/app_mandelbrot.rb > /dev/null
+    Finished release [optimized] target(s) in 0.50s
+     Running `target/release/ruruby tests/app_mandelbrot.rb`
 Performance analysis for Inst:
 ------------------------------------------
 Inst name         count    %time     nsec
                                     /inst
 ------------------------------------------
-PUSH_STRING           4     6.48    25993
-SET_LOCAL             1     0.19     3756
-GET_LOCAL             1     0.00      382
-SEND_SELF             1     2.58    41261
-CONCAT_STR            3     0.19     1166
-TO_S                  1     0.25     4707
-END                   1     0.06     1044
-CODEGEN               1    87.48  1391588
-EXTERN                1     2.45    39834
+PUSH_FIXNUM        680K     0.14       29
+PUSH_FLONUM        960K     0.20       28
+PUSH_TRUE           96K     0.02       30
+PUSH_FALSE         160K     0.03       30
+PUSH_NIL            96K     0.02       28
+PUSH_STRING           4     0.00      250
+PUSH_SYMBOL           3     0.00      166
+ADD                 19M     6.81       50
+SUB               4161K     1.10       37
+MUL                 27M    10.38       53
+DIV                320K     0.09       40
+EQ                 300K     0.08       39
+GT                7907K     2.30       41
+SHL                160K     0.04       37
+BIT_OR             160K     0.04       33
+ADDI              4065K     0.95       33
+SUBI               140K     0.04       38
+SET_LOCAL         8843K     1.92       30
+GET_LOCAL           64M    13.54       29
+GET_CONST           15M     5.65       50
+SET_CONST             2     0.00      100
+GET_IVAR            38M    10.86       39
+SET_IVAR            16M    10.72       94
+OPT_SEND            34M    16.62       67
+OPT_SEND_SELF       20K     0.01       84
+CREATE_RANGE          1     0.00      100
+POP                116K     0.03       31
+DUP               8002K     1.70       29
+CONCAT_STR            5     0.00      200
+TO_S                  2     0.00      550
+DEF_CLASS             1     0.00     1700
+DEF_METHOD            4     0.00      175
+JMP               4182K     0.82       27
+JMP_IF_FALSE      8367K     1.86       31
+END                 19M     3.97       28
+GC *                741     1.29   246414
+EXTERN **         8042K     8.76      153
 ------------------------------------------
 ```
+
+Instruction name, total execution count, percentage in the total execution time, and 
+execution time per single instruction are shown.  
+\* `GC` means garbage collection.  
+\** `EXTERN` means exectution of native methods.  
