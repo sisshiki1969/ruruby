@@ -25,7 +25,7 @@ pub enum ObjKind {
     Hash(HashRef),
     Proc(Box<ProcInfo>),
     Regexp(RegexpRef),
-    Method(MethodObjRef),
+    Method(Box<MethodObjInfo>),
     Fiber(FiberRef),
     Enumerator(EnumRef),
 }
@@ -127,7 +127,6 @@ impl RValue {
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
             ObjKind::Array(aref) => aref.free(),
             ObjKind::Hash(href) => href.free(),
-            ObjKind::Method(mref) => mref.free(),
             ObjKind::Enumerator(eref) => eref.free(),
             ObjKind::Fiber(fref) => fref.free(),
             _ => {}
@@ -157,7 +156,7 @@ impl RValue {
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
                 ObjKind::Hash(href) => ObjKind::Hash(href.dup()),
-                ObjKind::Method(mref) => ObjKind::Method(mref.dup()),
+                ObjKind::Method(mref) => ObjKind::Method(mref.clone()),
                 ObjKind::Module(cref) => ObjKind::Module(cref.dup()),
                 ObjKind::Ordinary => ObjKind::Ordinary,
                 ObjKind::Proc(pref) => ObjKind::Proc(pref.clone()),
@@ -329,11 +328,11 @@ impl RValue {
         }
     }
 
-    pub fn new_method(globals: &Globals, methodref: MethodObjRef) -> Self {
+    pub fn new_method(globals: &Globals, method_info: MethodObjInfo) -> Self {
         RValue {
             class: globals.builtins.method,
             var_table: None,
-            kind: ObjKind::Method(methodref),
+            kind: ObjKind::Method(Box::new(method_info)),
         }
     }
 

@@ -534,9 +534,9 @@ impl Value {
         }
     }
 
-    pub fn as_method(&self) -> Option<MethodObjRef> {
+    pub fn as_method(&self) -> Option<&MethodObjInfo> {
         match self.as_rvalue() {
-            Some(oref) => match oref.kind {
+            Some(oref) => match &oref.kind {
                 ObjKind::Method(mref) => Some(mref),
                 _ => None,
             },
@@ -710,7 +710,7 @@ impl Value {
     }
 
     pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        RValue::new_method(globals, MethodObjRef::from(name, receiver, method)).pack()
+        RValue::new_method(globals, MethodObjInfo::new(name, receiver, method)).pack()
     }
 
     pub fn fiber(

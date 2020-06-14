@@ -303,10 +303,3 @@ impl GC for MethodObjInfo {
     }
 }
 
-pub type MethodObjRef = Ref<MethodObjInfo>;
-
-impl MethodObjRef {
-    pub fn from(name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        MethodObjRef::new(MethodObjInfo::new(name, receiver, method))
-    }
-}
