@@ -538,12 +538,15 @@ fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             Ok(self_val)
         }
         Some(block) => {
+            vm.temp_new();
             let mut block_args = Args::new1(Value::nil());
             aref.elements.retain(|x| {
                 block_args[0] = *x;
                 let res = vm.eval_block(block, &block_args).unwrap();
+                vm.temp_push(res);
                 set.insert(HashKey(res))
             });
+            vm.temp_finish();
             Ok(self_val)
         }
     }

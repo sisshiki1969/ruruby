@@ -150,6 +150,10 @@ impl VM {
         self.exec_stack.pop().unwrap()
     }
 
+    pub fn stack_top(&mut self) -> Value {
+        self.exec_stack.last().unwrap().clone()
+    }
+
     pub fn temp_new(&mut self) {
         self.temp_stack.push(vec![]);
     }
@@ -886,7 +890,7 @@ impl VM {
                     let arg_num = self.read_usize(iseq, 1);
                     let args = self.pop_args_to_ary(arg_num);
                     let arg_num = args.len();
-                    let receiver = self.stack_pop();
+                    let receiver = self.stack_top();
                     let val = match receiver.as_rvalue() {
                         Some(oref) => match &oref.kind {
                             ObjKind::Array(aref) => aref.get_elem(self, &args)?,
@@ -923,6 +927,7 @@ impl VM {
                         }
                         _ => return Err(self.error_undefined_method("[]", receiver)),
                     };
+                    self.stack_pop();
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -2034,12 +2039,17 @@ impl VM {
         }
         let val = match info {
             MethodInfo::BuiltinFunc { func, .. } => {
+                let func = func.to_owned();
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
+                self.temp_new();
+                self.temp_push(self_val);
+                self.temp_append(&mut args.to_vec());
                 let val = func(self, self_val, args)?;
+                self.temp_finish();
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {

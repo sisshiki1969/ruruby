@@ -105,6 +105,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let mut val = eref.eval(vm)?;
+    vm.temp_new();
+    vm.temp_push(val);
 
     let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
@@ -112,6 +114,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         args[0] = *elem;
         vm.eval_block(block, &args)?;
     }
+    vm.temp_finish();
     Ok(val)
 }
 
