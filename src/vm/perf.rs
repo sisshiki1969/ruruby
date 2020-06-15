@@ -39,6 +39,13 @@ impl Perf {
         }
     }
 
+    pub fn add(&mut self, other: &Perf) {
+        for i in 0..256 {
+            self.counter[i].count += other.counter[i].count;
+            self.counter[i].duration += other.counter[i].duration;
+        }
+    }
+
     /// Record duration for current instruction.
     pub fn get_perf(&mut self, next_inst: u8) {
         let prev = self.prev_inst;
@@ -69,10 +76,10 @@ impl Perf {
         eprintln!("Performance analysis for Inst:");
         eprintln!("------------------------------------------");
         eprintln!(
-            "{:<12} {:>10} {:>8} {:>8}",
+            "{:<13} {:>10} {:>8} {:>8}",
             "Inst name", "count", "%time", "nsec"
         );
-        eprintln!("{:<12} {:>10} {:>8} {:>8}", "", "", "", "/inst");
+        eprintln!("{:<13} {:>10} {:>8} {:>8}", "", "", "", "/inst");
         eprintln!("------------------------------------------");
         let mut sum = std::time::Duration::from_secs(0);
         for c in &self.counter {
@@ -90,7 +97,7 @@ impl Perf {
                 continue;
             }
             eprintln!(
-                "{:<12} {:>10} {:>8.2} {:>8}",
+                "{:<13} {:>10} {:>8.2} {:>8}",
                 if i as u8 == Perf::CODEGEN {
                     "CODEGEN"
                 } else if i as u8 == Perf::EXTERN {

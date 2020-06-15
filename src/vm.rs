@@ -5,8 +5,7 @@ mod context;
 mod executor;
 mod method;
 #[cfg(feature = "perf")]
-#[cfg_attr(tarpaulin, skip)]
-mod perf;
+pub mod perf;
 pub mod vm_inst;
 
 pub use args::*;

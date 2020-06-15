@@ -1,3 +1,5 @@
+#[cfg(feature = "perf")]
+use crate::vm::perf::Perf;
 use crate::*;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
@@ -70,6 +72,9 @@ fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     if vm.channel.is_none() {
         return Err(vm.error_fiber("Can not yield from main fiber."));
     };
+    #[cfg(feature = "perf")]
+    #[cfg_attr(tarpaulin, skip)]
+    vm.perf.get_perf(Perf::INVALID);
     vm.fiber_send_to_parent(Ok(val));
     Ok(Value::nil())
 }
@@ -104,6 +109,9 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             let mut vm2 = fiber_vm;
             thread::spawn(move || vm2.run_context(context));
+            #[cfg(feature = "perf")]
+            #[cfg_attr(tarpaulin, skip)]
+            vm.perf.get_perf(Perf::INVALID);
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);
         }
@@ -112,6 +120,9 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             {
                 println!("===> resume");
             }
+            #[cfg(feature = "perf")]
+            #[cfg_attr(tarpaulin, skip)]
+            vm.perf.get_perf(Perf::INVALID);
             fiber.tx.send(1).unwrap();
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);

@@ -3,6 +3,8 @@ extern crate ansi_term;
 extern crate clap;
 extern crate ruruby;
 extern crate rustyline;
+#[cfg(feature = "perf")]
+use crate::vm::perf::*;
 
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
@@ -37,6 +39,16 @@ fn main() {
     let argv = Value::array_from(&vm.globals, res);
     vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, args[0]);
+    #[cfg(feature = "perf")]
+    #[cfg_attr(tarpaulin, skip)]
+    {
+        let mut perf = Perf::new();
+        let globals = vm.globals;
+        for vm in &globals.fibers {
+            perf.add(&vm.perf);
+        }
+        perf.print_perf();
+    }
     return;
 }
 

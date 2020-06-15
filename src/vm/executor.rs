@@ -2,7 +2,6 @@ use super::codegen::ContextKind;
 use crate::*;
 
 #[cfg(feature = "perf")]
-#[cfg_attr(tarpaulin, skip)]
 use super::perf::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -29,7 +28,7 @@ pub struct VM {
     pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
     #[cfg_attr(tarpaulin, skip)]
-    perf: Perf,
+    pub perf: Perf,
 }
 
 pub type VMRef = Ref<VM>;
@@ -347,11 +346,6 @@ impl VM {
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
-        {
-            self.perf.print_perf();
-        }
         Ok(val)
     }
 
@@ -386,11 +380,6 @@ impl VM {
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
-        {
-            self.perf.print_perf();
-        }
         Ok(val)
     }
 
