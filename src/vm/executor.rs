@@ -356,10 +356,12 @@ impl VM {
         {
             self.perf.get_perf(Perf::INVALID);
         }
+        /*
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
+        */
         Ok(val)
     }
 
@@ -390,10 +392,12 @@ impl VM {
         {
             self.perf.get_perf(Perf::INVALID);
         }
+        /*
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
+        */
         Ok(val)
     }
 
@@ -2055,13 +2059,11 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                //self.temp_new();
-                //self.temp_push(self_val);
-                //self.temp_push_vec(&mut args.to_vec());
-                self.stack_push(self_val);
+
+                self.stack_push(self_val); // If func() returns Err, self_val remains on exec stack.
                 let val = func(self, self_val, args)?;
                 self.stack_pop();
-                //self.temp_finish();
+
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {
