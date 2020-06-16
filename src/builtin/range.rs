@@ -216,3 +216,52 @@ fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
     Ok(Value::array_from(&vm.globals, v))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test::*;
+
+    #[test]
+    fn range_test() {
+        let program = r#"
+            assert(3, (3..100).begin)
+            assert(100, (3..100).end)
+            assert("3..100", (3..100).to_s)
+            assert("3..100", (3..100).inspect)
+            assert([6, 8, 10], (3..5).map{|x| x * 2})
+            assert(
+                [2, 4, 6, 8],
+                [[1, 2], [3, 4]].flat_map{|i| i.map{|j| j * 2}}
+            )
+            assert([2, 3, 4, 5], (2..5).to_a)
+            assert(true, (5..7).all? {|v| v > 0 })
+            assert(false, (-1..3).all? {|v| v > 0 })
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn range1() {
+        let program = "
+            assert(Range.new(5,10), 5..10)
+            assert(Range.new(5,10, false), 5..10)
+            assert(Range.new(5,10, true), 5...10)";
+        assert_script(program);
+    }
+
+    #[test]
+    fn range2() {
+        let program = "
+            assert(Range.new(5,10).first, 5)
+            assert(Range.new(5,10).first(4), [5,6,7,8])
+            assert(Range.new(5,10).first(100), [5,6,7,8,9,10])
+            assert(Range.new(5,10,true).first(4), [5,6,7,8])
+            assert(Range.new(5,10,true).first(100), [5,6,7,8,9])
+            assert(Range.new(5,10).last, 10)
+            assert(Range.new(5,10).last(4), [7,8,9,10])
+            assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
+            assert(Range.new(5,10,true).last(4), [6,7,8,9])
+            assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
+        assert_script(program);
+    }
+}
