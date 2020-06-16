@@ -105,8 +105,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let mut val = eref.eval(vm)?;
-    vm.temp_new();
-    vm.temp_push(val);
+    vm.temp_new_with_obj(val);
 
     let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
@@ -131,9 +130,10 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
     let mut val = eref.eval(vm)?;
-
+    vm.temp_new_with_obj(val);
     let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
+
     vm.temp_new();
     for elem in &ary.elements {
         args[0] = *elem;
@@ -141,6 +141,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vm.temp_push(v);
     }
     let res = vm.temp_finish();
+    vm.temp_finish();
     Ok(Value::array_from(&vm.globals, res))
 }
 
@@ -158,6 +159,7 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let mut val = eref.eval(vm)?;
+    vm.temp_new_with_obj(val);
     let res_ary: Vec<(Value, Value)> = val
         .expect_array(vm, "Base object")?
         .elements
@@ -176,6 +178,7 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 
     let res = vm.temp_finish();
+    vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }

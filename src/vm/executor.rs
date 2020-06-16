@@ -154,23 +154,33 @@ impl VM {
         self.exec_stack.last().unwrap().clone()
     }
 
+    /// Create empty temporary area for objects to be protected from GC.
     pub fn temp_new(&mut self) {
         self.temp_stack.push(vec![]);
     }
 
-    pub fn temp_vec(&mut self, vec: Vec<Value>) {
+    /// Create temporary area with a object.
+    pub fn temp_new_with_obj(&mut self, val: Value) {
+        self.temp_stack.push(vec![val]);
+    }
+
+    /// Create temporary area with objects to be protected from GC.
+    pub fn temp_new_with_vec(&mut self, vec: Vec<Value>) {
         self.temp_stack.push(vec);
     }
 
+    /// Dispose temporary area.
     pub fn temp_finish(&mut self) -> Vec<Value> {
         self.temp_stack.pop().unwrap()
     }
 
+    /// Push an object to the temporary area.
     pub fn temp_push(&mut self, v: Value) {
         self.temp_stack.last_mut().unwrap().push(v);
     }
 
-    pub fn temp_append(&mut self, vec: &mut Vec<Value>) {
+    /// Push objects to the temporary area.
+    pub fn temp_push_vec(&mut self, vec: &mut Vec<Value>) {
         self.temp_stack.last_mut().unwrap().append(vec);
     }
 
@@ -2045,11 +2055,13 @@ impl VM {
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
-                self.temp_new();
-                self.temp_push(self_val);
-                self.temp_append(&mut args.to_vec());
+                //self.temp_new();
+                //self.temp_push(self_val);
+                //self.temp_push_vec(&mut args.to_vec());
+                self.stack_push(self_val);
                 let val = func(self, self_val, args)?;
-                self.temp_finish();
+                self.stack_pop();
+                //self.temp_finish();
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {

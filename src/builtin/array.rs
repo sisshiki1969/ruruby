@@ -292,8 +292,8 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let mut args = Args::new1(Value::nil());
-    vm.temp_new();
 
+    vm.temp_new();
     for elem in &aref.elements {
         args[0] = *elem;
         let val = vm.eval_block(method, &args)?;
@@ -306,11 +306,11 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let aref = self_val.as_mut_array().unwrap();
     let method = vm.expect_block(args.block)?;
     let param_num = vm.get_iseq(method)?.params.req_params;
     let mut arg = Args::new(param_num);
 
+    let aref = self_val.as_mut_array().unwrap();
     vm.temp_new();
     for elem in &mut aref.elements {
         if param_num == 0 {
@@ -330,7 +330,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let mut ary = vm.eval_block(method, &arg)?;
         match ary.as_mut_array() {
             Some(ary) => {
-                vm.temp_append(&mut ary.elements);
+                vm.temp_push_vec(&mut ary.elements);
             }
             None => vm.temp_push(ary),
         }
@@ -342,7 +342,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_mut_array().unwrap();
+
     //let method = vm.expect_block(args.block)?;
 
     let method = match args.block {
@@ -354,6 +354,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
     };
 
+    let aref = self_val.as_mut_array().unwrap();
     let mut arg = Args::new(vm.get_iseq(method)?.params.req_params);
     for i in &mut aref.elements {
         match i.as_array() {
@@ -530,14 +531,16 @@ fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let aref = self_val.as_mut_array().unwrap();
+
     let mut set = std::collections::HashSet::new();
     match args.block {
         None => {
+            let aref = self_val.as_mut_array().unwrap();
             aref.elements.retain(|x| set.insert(HashKey(*x)));
             Ok(self_val)
         }
         Some(block) => {
+            let aref = self_val.as_mut_array().unwrap();
             vm.temp_new();
             let mut block_args = Args::new1(Value::nil());
             aref.elements.retain(|x| {
@@ -662,7 +665,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args.block {
         Some(block) => {
             let mut arg = Args::new1(Value::nil());
-            vm.temp_vec(ary.clone());
+            vm.temp_new_with_vec(ary.clone());
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;
