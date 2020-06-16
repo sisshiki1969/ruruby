@@ -31,8 +31,6 @@ else
   @os_info = Regexp.last_match(1)
 end
 
-@optcarrot = "../optcarrot/bin/optcarrot-bench"
-
 @time_command = if @platform == :macos
                   'gtime'
                 else
@@ -51,7 +49,13 @@ puts "CPU: #{@cpu_info}"
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
 "
-@md2 = "\n## memory consumption\n
+
+@md2 = "## optcarrot benchmark\n
+|benchmark|ruby|ruruby|rate|
+|:-----------:|:--------:|:---------:|:-------:|
+"
+
+@md3 = "\n## memory consumption\n
 |benchmark|ruby|ruruby|rate|
 |:-----------:|:--------:|:---------:|:-------:|
 "
@@ -137,11 +141,11 @@ def perf(app_name)
   @md1 += "| #{app_name} | #{print_avesd(real_ruby)} s | #{print_avesd(real_ruruby)} s | x #{'%.2f' % real_mul} |\n"
   rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
   rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
-  @md2 += "| #{app_name} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
+  @md3 += "| #{app_name} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
 end
 
-def optcarrot(program)
-  command = "#{@time_command} #{program} #{@optcarrot}"
+def optcarrot(program, option = "")
+  command = "#{@time_command} #{program} #{@optcarrot} #{option}"
   fps = []
   rss = []
   5.times do
@@ -161,26 +165,34 @@ def optcarrot(program)
   [fps.ave_sd, rss.ave_sd]
 end
 
+def perf_optcarrot(option = "")
+  fps_ruby, rss_ruby = optcarrot('ruby', option)
+  fps_ruruby, rss_ruruby = optcarrot('target/release/ruruby', option)
+
+  puts "benchmark: optcarrot #{option}"
+  puts format("\t%10s  %10s", 'ruby', 'ruruby')
+  print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave])
+  print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
+
+  @md2 += "| optcarrot #{option} | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
+
+  rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
+  rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
+  @md3 += "| optcarrot #{option} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
+end
+
 ['so_mandelbrot.rb',
  'app_mandelbrot.rb',
  'fibo.rb',
  'block.rb',
  'ao_bench.rb'].each { |x| perf x }
 
-fps_ruby, rss_ruby = optcarrot('ruby')
-fps_ruruby, rss_ruruby = optcarrot('target/release/ruruby')
+@optcarrot = "../optcarrot/bin/optcarrot-bench"
 
-puts "benchmark: optcarrot"
-puts format("\t%10s  %10s", 'ruby', 'ruruby')
-print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave])
-print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
+perf_optcarrot()
 
-@md1 += "| optcarrot | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
-
-rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
-rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
-@md2 += "| optcarrot | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
+perf_optcarrot("--opt")
 
 File.open('bench.md', mode = 'w') do |f|
-  f.write(@md0 + @md1 + @md2)
+  f.write(@md0 + @md1 + @md2 + @md3)
 end
