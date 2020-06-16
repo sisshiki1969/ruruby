@@ -3,10 +3,12 @@ extern crate ansi_term;
 extern crate clap;
 extern crate ruruby;
 extern crate rustyline;
+#[cfg(feature = "perf")]
+use crate::vm::perf::*;
 
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
-use std::thread;
+//use std::thread;
 mod repl;
 use repl::*;
 use ruruby::*;
@@ -27,7 +29,8 @@ fn main() {
         }
     };
     let mut vm = VMRef::new(VM::new());
-    let id = vm.globals.get_ident_id("ARGV");
+    vm.clone().globals.fibers.push(vm);
+    let id = IdentId::get_ident_id("ARGV");
     let mut res: Vec<Value> = args
         .iter()
         .map(|x| Value::string(&vm.globals, x.to_string()))
@@ -36,6 +39,16 @@ fn main() {
     let argv = Value::array_from(&vm.globals, res);
     vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, args[0]);
+    #[cfg(feature = "perf")]
+    #[cfg_attr(tarpaulin, skip)]
+    {
+        let mut perf = Perf::new();
+        let globals = vm.globals;
+        for vm in &globals.fibers {
+            perf.add(&vm.perf);
+        }
+        perf.print_perf();
+    }
     return;
 }
 
@@ -63,9 +76,7 @@ fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     let mut vm2 = vm.clone();
-    let res = thread::spawn(move || vm2.run(absolute_path, &program, None))
-        .join()
-        .unwrap();
+    let res = vm2.run(absolute_path, &program, None);
     match res {
         Ok(_) => {}
         Err(err) => {

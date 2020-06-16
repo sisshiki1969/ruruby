@@ -4,7 +4,7 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Kernel");
+    let id = IdentId::get_ident_id("Kernel");
     let kernel_class = ClassRef::from(id, None);
     globals.add_builtin_instance_method(kernel_class, "puts", puts);
     globals.add_builtin_instance_method(kernel_class, "p", p);
@@ -73,11 +73,12 @@ pub fn init(globals: &mut Globals) -> Value {
     fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 2)?;
         if !vm.eval_eq(args[0], args[1])? {
-            panic!(
+            let res = format!(
                 "Assertion error: Expected: {} Actual: {}",
                 vm.val_inspect(args[0]),
                 vm.val_inspect(args[1]),
             );
+            Err(vm.error_argument(res))
         } else {
             println!("Assert OK: {:?}", vm.val_inspect(args[0]));
             Ok(Value::nil())
@@ -88,12 +89,21 @@ pub fn init(globals: &mut Globals) -> Value {
         vm.check_args_num(args.len(), 0)?;
         let method = match args.block {
             Some(block) => block,
-            None => panic!("assert_error(): Block not given."),
+            None => return Err(vm.error_argument("assert_error(): Block not given.")),
         };
         match vm.eval_block(method, &Args::new0()) {
-            Ok(_) => panic!("Assertion error: No error occured"),
-            Err(_) => return Ok(Value::nil()),
-        };
+            Ok(val) => {
+                let res = format!(
+                    "Assertion error: No error occured. returned {}",
+                    vm.val_inspect(val)
+                );
+                Err(vm.error_argument(res))
+            }
+            Err(err) => {
+                println!("Assert_error OK: {:?}", err.kind);
+                Ok(Value::nil())
+            }
+        }
     }
 
     fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -191,41 +201,27 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 1)?;
-        let self_ = args[0];
-        let val = if self_.is_packed_value() {
-            if self_.is_packed_fixnum() {
-                self_.as_packed_fixnum()
-            } else if self_.is_packed_num() {
-                self_.as_packed_flonum().trunc() as i64
-            } else {
-                let inspect = vm.val_inspect(self_);
-                return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
-            }
-        } else {
-            match self_.unpack() {
-                RV::Integer(num) => num,
-                RV::Float(num) => num as i64,
-                RV::Object(obj) => match &obj.kind {
-                    ObjKind::String(s) => match s.parse::<i64>() {
-                        Some(num) => num,
-                        None => {
-                            let inspect = vm.val_inspect(self_);
-                            return Err(
-                                vm.error_type(format!("Invalid value for Integer(): {}", inspect))
-                            );
-                        }
-                    },
-                    _ => {
-                        let inspect = vm.val_inspect(self_);
+        let val = match args[0].unpack() {
+            RV::Integer(num) => num,
+            RV::Float(num) => num as i64,
+            RV::Object(obj) => match &obj.kind {
+                ObjKind::String(s) => match s.parse::<i64>() {
+                    Some(num) => num,
+                    None => {
+                        let inspect = vm.val_inspect(args[0]);
                         return Err(
-                            vm.error_type(format!("Can not convert {} into Integer.", inspect))
+                            vm.error_type(format!("Invalid value for Integer(): {}", inspect))
                         );
                     }
                 },
                 _ => {
-                    let inspect = vm.val_inspect(self_);
+                    let inspect = vm.val_inspect(args[0]);
                     return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
                 }
+            },
+            _ => {
+                let inspect = vm.val_inspect(args[0]);
+                return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
             }
         };
         Ok(Value::fixnum(val))
@@ -233,7 +229,11 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 0)?;
-        let mut path = vm.root_path.last().unwrap().clone();
+        let mut path = match vm.root_path.last() {
+            Some(path) => path,
+            None => return Ok(Value::nil()),
+        }
+        .clone();
         path.pop();
         Ok(Value::string(
             &vm.globals,
@@ -304,6 +304,46 @@ mod test {
         assert false, obj.is_a?(Array)
         assert false, obj.is_a?(M)
         ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn block_given() {
+        let program = "
+        def foo
+            return block_given?
+        end
+
+        assert true, foo {|x| x}
+        assert false, foo
+        ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer() {
+        let program = r#"
+        assert 4, Integer(4)
+        assert 9, Integer(9.88)
+        assert 9, Integer(9.02)
+        assert 10, Integer("10")
+        assert_error { Integer("13.55") }
+        assert_error { Integer([1,3,6]) }
+        assert_error { Integer(:"2") }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_etc() {
+        let program = r#"
+        assert_error { assert 2, 3 }
+        assert_error { assert_error { true } }
+        assert_error { raise }
+        require_relative "../../tests/kernel_test.rb"
+        assert_error { require_relative "kernel_test.rb" }
+        assert_error { assert rand. rand }
+        "#;
         assert_script(program);
     }
 }

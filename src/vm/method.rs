@@ -40,6 +40,18 @@ pub enum MethodInfo {
     BuiltinFunc { name: String, func: BuiltinFunc },
 }
 
+impl GC for MethodInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        match self {
+            MethodInfo::RubyFunc { iseq } => match iseq.class_defined {
+                Some(list) => list.mark(alloc),
+                None => return,
+            },
+            _ => return,
+        };
+    }
+}
+
 impl MethodInfo {
     pub fn default() -> Self {
         MethodInfo::AttrReader {
@@ -82,6 +94,7 @@ pub struct ISeqInfo {
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
+    pub opt_flag: bool,
     /// The Class where this method was described.
     /// This field is set to None when IseqInfo was created by Codegen.
     /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
@@ -103,6 +116,16 @@ pub struct ISeqParams {
     pub keyword_params: HashMap<IdentId, LvarId>,
 }
 
+impl ISeqParams {
+    pub fn is_opt(&self) -> bool {
+        self.opt_params == 0
+            && !self.rest_param
+            && self.post_params == 0
+            && !self.block_param
+            && self.keyword_params.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassList {
     /// The outer class of `class`.
@@ -116,6 +139,16 @@ pub type ClassListRef = Ref<ClassList>;
 impl ClassList {
     pub fn new(outer: Option<ClassListRef>, class: Value) -> Self {
         ClassList { outer, class }
+    }
+}
+
+impl GC for ClassList {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.class.mark(alloc);
+        match self.outer {
+            Some(list) => list.mark(alloc),
+            None => return,
+        }
     }
 }
 
@@ -143,20 +176,26 @@ impl ISeqInfo {
         kind: ISeqKind,
     ) -> Self {
         let lvars = lvar.len();
+        let params = ISeqParams {
+            req_params,
+            opt_params,
+            rest_param,
+            post_params,
+            block_param,
+            param_ident,
+            keyword_params,
+        };
+        let opt_flag = match kind {
+            ISeqKind::Block(_) => false,
+            _ => params.is_opt(),
+        };
         ISeqInfo {
             method,
-            params: ISeqParams {
-                req_params,
-                opt_params,
-                rest_param,
-                post_params,
-                block_param,
-                param_ident,
-                keyword_params,
-            },
+            params,
             iseq,
             lvar,
             lvars,
+            opt_flag,
             class_defined: None,
             iseq_sourcemap,
             source_info,
@@ -233,6 +272,12 @@ impl GlobalMethodTable {
     }
 }
 
+impl GC for GlobalMethodTable {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.table.iter().for_each(|m| m.mark(alloc));
+    }
+}
+
 //----------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -252,10 +297,9 @@ impl MethodObjInfo {
     }
 }
 
-pub type MethodObjRef = Ref<MethodObjInfo>;
-
-impl MethodObjRef {
-    pub fn from(name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        MethodObjRef::new(MethodObjInfo::new(name, receiver, method))
+impl GC for MethodObjInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.receiver.mark(alloc);
     }
 }
+

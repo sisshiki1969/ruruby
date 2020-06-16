@@ -32,9 +32,9 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    match self_val.is_object() {
+    match self_val.as_rvalue() {
         Some(oref) => {
-            let s = oref.to_s(&vm.globals);
+            let s = oref.to_s();
             Ok(Value::string(&vm.globals, s))
         }
         None => {
@@ -45,7 +45,7 @@ fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    match self_val.is_object() {
+    match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.inspect(vm);
             Ok(Value::string(&vm.globals, s))
@@ -103,11 +103,11 @@ fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
         None => match name.as_string() {
-            Some(s) => vm.globals.get_ident_id(s),
+            Some(s) => IdentId::get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
-    let mut self_obj = self_val.as_object();
+    let self_obj = self_val.rvalue_mut();
     self_obj.set_var(var_id, val);
     Ok(val)
 }
@@ -118,11 +118,11 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
         None => match name.as_string() {
-            Some(s) => vm.globals.get_ident_id(s),
+            Some(s) => IdentId::get_ident_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
-    let self_obj = self_val.as_object();
+    let self_obj = self_val.rvalue();
     let val = match self_obj.get_var(var_id) {
         Some(val) => val,
         None => Value::nil(),
@@ -132,13 +132,16 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let receiver = self_val.as_object();
-    let res = receiver
-        .var_table()
-        .keys()
-        .filter(|x| vm.globals.get_ident_name(**x).chars().nth(0) == Some('@'))
-        .map(|x| Value::symbol(*x))
-        .collect();
+    let receiver = self_val.rvalue();
+    let id_lock = ID.read().unwrap();
+    let res = match receiver.var_table() {
+        Some(table) => table
+            .keys()
+            .filter(|x| id_lock.get_ident_name(**x).chars().nth(0) == Some('@'))
+            .map(|x| Value::symbol(*x))
+            .collect(),
+        None => vec![],
+    };
     Ok(Value::array_from(&vm.globals, res))
 }
 
@@ -158,7 +161,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let inspect = vm.val_inspect(self_val);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
-                    vm.globals.get_ident_name(m),
+                    IdentId::get_ident_name(m),
                     inspect,
                 )));
             }
@@ -169,7 +172,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let inspect = vm.val_inspect(self_val);
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{}' for {}.",
-                    vm.globals.get_ident_name(m),
+                    IdentId::get_ident_name(m),
                     inspect,
                 )));
             }
@@ -211,22 +214,22 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 4)?;
-    let mut arg0 = args[0].clone();
-    let program = vm.expect_string(&mut arg0, "1st arg")?;
+    let mut arg0 = args[0];
+    let program = arg0.expect_string(vm, "1st arg")?;
     if args.len() > 1 {
         if !args[1].is_nil() {
             return Err(vm.error_argument("Currently, 2nd arg must be Nil."));
         }
     }
-    let env_name = if args.len() > 2 {
-        let mut arg2 = args[2].clone();
-        vm.expect_string(&mut arg2, "3rd arg must be String.")?
-            .clone()
+    let path = if args.len() > 2 {
+        let mut arg2 = args[2];
+        let name = arg2.expect_string(vm, "3rd arg")?;
+        std::path::PathBuf::from(name)
     } else {
-        "(eval)".to_string()
+        std::path::PathBuf::from("(eval)")
     };
 
-    let method = vm.parse_program_eval(std::path::PathBuf::from(env_name), program)?;
+    let method = vm.parse_program_eval(path, program)?;
     let args = Args::new0();
     let res = vm.eval_block(method, &args)?;
     Ok(res)

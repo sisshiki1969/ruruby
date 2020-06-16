@@ -66,6 +66,21 @@ impl IndexMut<usize> for Context {
     }
 }
 
+impl GC for Context {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.self_value.mark(alloc);
+        //self.lvar_ary.iter().for_each(|v| v.mark(alloc));
+        //self.lvar_vec.iter().for_each(|v| v.mark(alloc));
+        for i in 0..self.iseq_ref.lvars {
+            self[i].mark(alloc);
+        }
+        match self.outer {
+            Some(c) => c.mark(alloc),
+            None => {}
+        }
+    }
+}
+
 impl Context {
     pub fn new(
         self_value: Value,
@@ -101,6 +116,9 @@ impl Context {
         args: &Args,
         outer: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
+        if iseq.opt_flag {
+            return Context::from_args_opt(vm, self_value, iseq, args, outer);
+        }
         let mut context = Context::new(self_value, args.block, iseq, outer);
         let params = &iseq.params;
         let kw = if params.keyword_params.is_empty() {
@@ -145,11 +163,42 @@ impl Context {
         Ok(context)
     }
 
+    pub fn from_args_opt(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+    ) -> Result<Self, RubyError> {
+        let mut context = Context::new(self_value, args.block, iseq, outer);
+        let req_len = iseq.params.req_params;
+        vm.check_args_num(args.len(), req_len)?;
+
+        // fill post_req params.
+        let req_opt = std::cmp::min(req_len, args.len());
+        if req_opt != 0 {
+            // fill req and opt params.
+            for i in 0..req_opt {
+                context[i] = args[i];
+            }
+            if req_opt < req_len {
+                // fill rest req params with nil.
+                for i in req_opt..req_len {
+                    context[i] = Value::nil();
+                }
+            }
+        }
+
+        if args.kw_arg.is_some() {
+            return Err(vm.error_argument("Undefined keyword."));
+        };
+        Ok(context)
+    }
+
     fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
         let iseq = self.iseq_ref;
         let req_len = iseq.params.req_params;
         let post_len = iseq.params.post_params;
-
         match self.kind {
             ISeqKind::Block(_) if args.len() == 1 && req_len + post_len > 1 => {
                 match args[0].as_array() {

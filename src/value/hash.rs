@@ -24,6 +24,7 @@ impl Hash for HashKey {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::Integer(lhs) => lhs.hash(state),
                 ObjKind::Float(lhs) => (*lhs as u64).hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
@@ -35,7 +36,7 @@ impl Hash for HashKey {
                         val.hash(state);
                     }
                 }
-                ObjKind::Method(lhs) => lhs.inner().hash(state),
+                ObjKind::Method(lhs) => (*lhs).hash(state),
                 _ => self.0.hash(state),
             },
         }
@@ -57,8 +58,10 @@ impl PartialEq for HashKey {
                 (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
-                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs.inner() == *rhs.inner(),
+                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
+                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => **lhs == **rhs,
+                (ObjKind::Invalid, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
+                (_, ObjKind::Invalid) => panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs),
                 _ => lhs.kind == rhs.kind,
             },
             _ => false,
@@ -200,6 +203,15 @@ impl IntoIterator for HashInfo {
     }
 }
 
+impl GC for HashInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        for (k, v) in self.iter() {
+            k.mark(alloc);
+            v.mark(alloc);
+        }
+    }
+}
+
 impl HashInfo {
     pub fn new(map: HashMap<HashKey, Value>) -> Self {
         HashInfo::Map(map)
@@ -289,12 +301,26 @@ impl HashInfo {
             }
         }
     }
-}
 
-pub type HashRef = Ref<HashInfo>;
-
-impl HashRef {
-    pub fn from(map: HashMap<HashKey, Value>) -> Self {
-        HashRef::new(HashInfo::new(map))
+    pub fn debug(&self, vm: &VM) -> String {
+        match self.len() {
+            0 => "{}".to_string(),
+            _ => {
+                let mut result = "".to_string();
+                let mut first = true;
+                for (k, v) in self.iter() {
+                    let k_inspect = vm.val_debug(k);
+                    let v_inspect = vm.val_debug(v);
+                    result = if first {
+                        format!("{}=>{}", k_inspect, v_inspect)
+                    } else {
+                        format!("{}, {}=>{}", result, k_inspect, v_inspect)
+                    };
+                    first = false;
+                }
+                format! {"{{{}}}", result}
+            }
+        }
     }
 }
+

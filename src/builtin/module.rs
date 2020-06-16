@@ -20,22 +20,24 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
     loop {
-        v.append(
-            &mut class
-                .as_object()
-                .var_table()
-                .keys()
-                .filter(|x| {
-                    vm.globals
-                        .get_ident_name(**x)
-                        .chars()
-                        .nth(0)
-                        .unwrap()
-                        .is_ascii_uppercase()
-                })
-                .map(|k| Value::symbol(*k))
-                .collect(),
-        );
+        match &mut class.rvalue().var_table() {
+            Some(table) => v.append(
+                &mut table
+                    .keys()
+                    .filter(|x| {
+                        ID.read()
+                            .unwrap()
+                            .get_ident_name(**x)
+                            .chars()
+                            .nth(0)
+                            .unwrap()
+                            .is_ascii_uppercase()
+                    })
+                    .map(|k| Value::symbol(*k))
+                    .collect::<Vec<Value>>(),
+            ),
+            None => {}
+        };
         match class.superclass() {
             Some(superclass) => {
                 if superclass == vm.globals.builtins.object {
@@ -144,7 +146,7 @@ fn define_reader(vm: &mut VM, class: Value, id: IdentId) {
 
 fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
     let instance_var_id = get_instance_var(vm, id);
-    let assign_id = vm.globals.ident_table.add_postfix(id, "=");
+    let assign_id = IdentId::add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };
@@ -152,9 +154,9 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
     vm.add_instance_method(class, assign_id, methodref);
 }
 
-fn get_instance_var(vm: &mut VM, id: IdentId) -> IdentId {
-    let s = vm.globals.get_ident_name(id).to_string();
-    vm.globals.get_ident_id(format!("@{}", s))
+fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
+    let s = IdentId::get_ident_name(id);
+    IdentId::get_ident_id(format!("@{}", s))
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {

@@ -1,5 +1,4 @@
 use core::ptr::NonNull;
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,19 +44,24 @@ pub struct Ref<T>(NonNull<T>);
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
-        Ref(unsafe { NonNull::new_unchecked(boxed) })
+        Ref(NonNull::new(boxed).unwrap_or_else(|| panic!("Ref::new(): the pointer is NULL.")))
+    }
+
+    pub fn free(self) {
+        unsafe { Box::from_raw(self.as_ptr()) };
     }
 
     pub fn from_ref(info: &T) -> Self {
-        Ref(unsafe { NonNull::new_unchecked(info as *const T as *mut T) })
+        Ref(NonNull::new(info as *const T as *mut T)
+            .unwrap_or_else(|| panic!("Ref::from_ref(): the pointer is NULL.")))
     }
 
-    pub fn inner(&self) -> &T {
-        unsafe { &*self.0.as_ptr() }
+    pub fn from_ptr(info: *mut T) -> Self {
+        Ref(NonNull::new(info).unwrap_or_else(|| panic!("Ref::from_ptr(): the pointer is NULL.")))
     }
 
-    pub fn inner_mut(&self) -> &mut T {
-        unsafe { &mut *self.0.as_ptr() }
+    pub fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
     }
 
     pub fn id(&self) -> u64 {
@@ -68,7 +72,7 @@ impl<T> Ref<T> {
 impl<T: Clone> Ref<T> {
     /// Allocates a copy of `self<T>` on the heap, returning `Ref`.
     pub fn dup(&self) -> Self {
-        Self::new(self.inner().clone())
+        Self::new((**self).clone())
     }
 }
 
@@ -220,137 +224,5 @@ impl SourceInfo {
                 2
             }
         }
-    }
-}
-
-//------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IdentId(std::num::NonZeroU32);
-
-impl std::hash::Hash for IdentId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl Into<usize> for IdentId {
-    fn into(self) -> usize {
-        self.0.get() as usize
-    }
-}
-
-impl Into<u32> for IdentId {
-    fn into(self) -> u32 {
-        self.0.get()
-    }
-}
-
-impl From<u32> for IdentId {
-    fn from(id: u32) -> Self {
-        let id = unsafe { std::num::NonZeroU32::new_unchecked(id) };
-        IdentId(id)
-    }
-}
-
-pub struct OptionalId(Option<IdentId>);
-
-impl OptionalId {
-    pub fn new(id: impl Into<Option<IdentId>>) -> Self {
-        OptionalId(id.into())
-    }
-}
-
-impl std::ops::Deref for OptionalId {
-    type Target = Option<IdentId>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-macro_rules! id {
-    ($constant:expr) => {
-        IdentId(unsafe { std::num::NonZeroU32::new_unchecked($constant) })
-    };
-}
-
-impl IdentId {
-    pub const INITIALIZE: IdentId = id!(1);
-    pub const OBJECT: IdentId = id!(2);
-    pub const NEW: IdentId = id!(3);
-    pub const NAME: IdentId = id!(4);
-    pub const _ADD: IdentId = id!(5);
-    pub const _SUB: IdentId = id!(6);
-    pub const _MUL: IdentId = id!(7);
-    pub const _POW: IdentId = id!(8);
-    pub const _SHL: IdentId = id!(9);
-    pub const _REM: IdentId = id!(10);
-    pub const _EQ: IdentId = id!(11);
-    pub const _NEQ: IdentId = id!(12);
-    pub const _GT: IdentId = id!(13);
-    pub const _GE: IdentId = id!(14);
-    pub const _DIV: IdentId = id!(15);
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct IdentifierTable {
-    table: HashMap<String, u32>,
-    table_rev: HashMap<u32, String>,
-    ident_id: u32,
-}
-
-impl IdentifierTable {
-    pub fn new() -> Self {
-        let mut table = IdentifierTable {
-            table: HashMap::new(),
-            table_rev: HashMap::new(),
-            ident_id: 20,
-        };
-        table.set_ident_id("<null>", IdentId::from(0));
-        table.set_ident_id("initialize", IdentId::INITIALIZE);
-        table.set_ident_id("Object", IdentId::OBJECT);
-        table.set_ident_id("new", IdentId::NEW);
-        table.set_ident_id("name", IdentId::NAME);
-        table.set_ident_id("+", IdentId::_ADD);
-        table.set_ident_id("-", IdentId::_SUB);
-        table.set_ident_id("*", IdentId::_MUL);
-        table.set_ident_id("**", IdentId::_POW);
-        table.set_ident_id("<<", IdentId::_SHL);
-        table.set_ident_id("%", IdentId::_REM);
-        table.set_ident_id("==", IdentId::_EQ);
-        table.set_ident_id("!=", IdentId::_NEQ);
-        table.set_ident_id(">", IdentId::_GT);
-        table.set_ident_id(">=", IdentId::_GE);
-        table.set_ident_id("/", IdentId::_DIV);
-        table
-    }
-
-    fn set_ident_id(&mut self, name: impl Into<String>, id: IdentId) {
-        let name = name.into();
-        self.table.insert(name.clone(), id.into());
-        self.table_rev.insert(id.into(), name);
-    }
-
-    pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
-        let name = name.into();
-        match self.table.get(&name) {
-            Some(id) => IdentId::from(*id),
-            None => {
-                let id = self.ident_id;
-                self.table.insert(name.clone(), id);
-                self.table_rev.insert(id, name.clone());
-                self.ident_id += 1;
-                IdentId::from(id)
-            }
-        }
-    }
-
-    pub fn get_name(&self, id: IdentId) -> &str {
-        self.table_rev.get(&id.0.get()).unwrap()
-    }
-
-    pub fn add_postfix(&mut self, id: IdentId, postfix: &str) -> IdentId {
-        let new_name = self.get_name(id).to_string() + postfix;
-        self.get_ident_id(new_name)
     }
 }

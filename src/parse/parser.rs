@@ -1,5 +1,6 @@
 use crate::error::{ParseErrKind, RubyError};
 use crate::util::*;
+use crate::id_table::{IdentId};
 use super::*;
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -9,22 +10,22 @@ pub struct Parser {
     pub lexer: Lexer,
     prev_loc: Loc,
     context_stack: Vec<Context>,
-    pub ident_table: IdentifierTable,
+    //pub ident_table: IdentifierTable,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseResult {
     pub node: Node,
-    pub ident_table: IdentifierTable,
+    //pub ident_table: IdentifierTable,
     pub lvar_collector: LvarCollector,
     pub source_info: SourceInfoRef,
 }
 
 impl ParseResult {
-    pub fn default(node: Node, ident_table:IdentifierTable, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
+    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
         ParseResult {
             node,
-            ident_table,
+            //ident_table,
             lvar_collector,
             source_info,
         }
@@ -190,7 +191,7 @@ impl Parser {
             lexer,
             prev_loc: Loc(0, 0),
             context_stack: vec![],
-            ident_table: IdentifierTable::new(),
+            //ident_table: IdentifierTable::new(),
         }
     }
 
@@ -262,8 +263,8 @@ impl Parser {
         return false;
     }
 
-    fn get_ident_id(&mut self, method: impl Into<String>) -> IdentId {
-        self.ident_table.get_ident_id(method)
+    fn get_ident_id(&self, method: impl Into<String>) -> IdentId {
+        IdentId::get_ident_id(method)
     }
 
     /// Peek next token (skipping line terminators).
@@ -458,7 +459,7 @@ impl Parser {
 
         let tok = self.peek()?;
         if  tok.is_eof() {
-            let result = ParseResult::default(node, self.ident_table, lvar, self.lexer.source_info);
+            let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
@@ -481,7 +482,7 @@ impl Parser {
     
         let tok = self.peek()?;
         if tok.is_eof() {
-            let result = ParseResult::default(node, self.ident_table, lvar, self.lexer.source_info);
+            let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
         } else {
             let mut err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
@@ -518,7 +519,7 @@ impl Parser {
         
         let tok = self.peek()?;
         if  tok.is_eof() {
-            let result = ParseResult::default(node, self.ident_table, lvar, self.lexer.source_info);
+            let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
@@ -1397,7 +1398,7 @@ impl Parser {
                         _ => {
                             if let TokenKind::OpenString(s) = token.kind {
                                 let node = self.parse_interporated_string_literal(&s)?;
-                                let method = self.ident_table.get_ident_id("to_sym");
+                                let method = self.get_ident_id("to_sym");
                                 let loc = symbol_loc.merge(node.loc());
                                 return Ok(Node::new_send_noarg(
                                     node,
@@ -2060,7 +2061,7 @@ impl Parser {
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
-#[cfg_attr(tarpaulin, skip)]
+        #[cfg_attr(tarpaulin, skip)]
         eprintln!(
             "Parsed {} name:{}",
             if is_module { "module" } else { "class" },

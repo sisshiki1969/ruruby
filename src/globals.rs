@@ -4,11 +4,15 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
-    pub ident_table: IdentifierTable,
+    //pub ident_table: IdentifierTable,
     pub global_var: ValueTable,
     method_table: GlobalMethodTable,
     inline_cache: InlineCache,
     method_cache: MethodCache,
+    case_dispatch: CaseDispatchMap,
+
+    pub fibers: Vec<VMRef>,
+
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
@@ -17,8 +21,7 @@ pub struct Globals {
     pub class_class: ClassRef,
     pub module_class: ClassRef,
     pub object_class: ClassRef,
-
-    case_dispatch: CaseDispatchMap,
+    pub gc_enabled: bool,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -63,13 +66,40 @@ impl BuiltinClass {
     }
 }
 
+impl GC for BuiltinClass {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.object.mark(alloc);
+    }
+}
+
+impl GC for Globals {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.global_var.values().for_each(|v| v.mark(alloc));
+        self.method_table.mark(alloc);
+        self.inline_cache.table.iter().for_each(|e| match e {
+            Some(e) => e.class.mark(alloc),
+            None => {}
+        });
+        self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
+        //self.main_object.mark(alloc);
+        //self.builtins.mark(alloc);
+        for t in &self.case_dispatch.table {
+            t.keys().for_each(|k| k.mark(alloc));
+        }
+        //eprintln!("fibers {}", self.fibers.len());
+        for vm in &self.fibers {
+            vm.mark(alloc);
+        }
+    }
+}
+
 impl Globals {
     pub fn new() -> Self {
         use builtin::*;
-        let mut ident_table = IdentifierTable::new();
+        //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
-        let module_id = ident_table.get_ident_id("Module");
-        let class_id = ident_table.get_ident_id("Class");
+        let module_id = IdentId::get_ident_id("Module");
+        let class_id = IdentId::get_ident_id("Class");
         let mut object_class = ClassRef::from(object_id, None);
         let object = Value::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
@@ -77,18 +107,19 @@ impl Globals {
         let class_class = ClassRef::from(class_id, module);
         let class = Value::bootstrap_class(class_class);
 
-        object.as_object().set_class(class);
-        module.as_object().set_class(class);
-        class.as_object().set_class(class);
+        object.rvalue_mut().set_class(class);
+        module.rvalue_mut().set_class(class);
+        class.rvalue_mut().set_class(class);
         let builtins = BuiltinClass::new(object, module, class);
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
-            ident_table,
+            //ident_table,
             global_var: HashMap::new(),
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
+            fibers: vec![],
             instant: std::time::Instant::now(),
             class_version: 0,
             main_object,
@@ -97,12 +128,13 @@ impl Globals {
             class_class,
             builtins,
             case_dispatch: CaseDispatchMap::new(),
+            gc_enabled: true,
         };
         // Generate singleton class for Object
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(&globals, singleton_class);
-        globals.builtins.object.as_object().set_class(singleton_obj);
+        globals.builtins.object.rvalue_mut().set_class(singleton_obj);
 
         module::init(&mut globals);
         class::init(&mut globals);
@@ -120,19 +152,56 @@ impl Globals {
         object::init(&mut globals);
         let kernel = kernel::init(&mut globals);
         object_class.include.push(kernel);
+
+        macro_rules! set_builtin_class {
+            ($name:expr, $class_object:ident) => {
+                let id = IdentId::get_ident_id($name);
+                globals
+                    .builtins
+                    .object
+                    .set_var(id, globals.builtins.$class_object);
+            };
+        }
+
+        macro_rules! set_class {
+            ($name:expr, $class_object:expr) => {
+                let id = IdentId::get_ident_id($name);
+                let object = $class_object;
+                globals.builtins.object.set_var(id, object);
+            };
+        }
+
+        set_builtin_class!("Object", object);
+        set_builtin_class!("Module", module);
+        set_builtin_class!("Class", class);
+        set_builtin_class!("Integer", integer);
+        set_builtin_class!("Float", float);
+        set_builtin_class!("Array", array);
+        set_builtin_class!("Proc", procobj);
+        set_builtin_class!("Range", range);
+        set_builtin_class!("String", string);
+        set_builtin_class!("Hash", hash);
+        set_builtin_class!("Method", method);
+        set_builtin_class!("Regexp", regexp);
+        set_builtin_class!("Fiber", fiber);
+        set_builtin_class!("Enumerator", enumerator);
+
+        set_class!("Math", math::init_math(&mut globals));
+        set_class!("File", file::init_file(&mut globals));
+        set_class!("Process", process::init_process(&mut globals));
+        set_class!("Struct", structobj::init_struct(&mut globals));
+        set_class!("StandardError", Value::class(&globals, globals.class_class));
+        set_class!("RuntimeError", errorobj::init_error(&mut globals));
+
         globals
     }
 
-    pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {
-        let id = id.into();
-        match id {
-            Some(id) => self.ident_table.get_name(id),
-            None => &"",
-        }
+    pub fn gc(&self) {
+        ALLOC.lock().unwrap().gc(self);
     }
 
-    pub fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
-        self.ident_table.get_ident_id(name)
+    pub fn print_bitmap(&self) {
+        ALLOC.lock().unwrap().print_mark();
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
@@ -159,9 +228,9 @@ impl Globals {
         self.method_table.get_mut_method(method)
     }
 
-    pub fn get_singleton_class(&self, obj: Value) -> Result<Value, ()> {
-        match obj.unpack() {
-            RV::Object(mut oref) => {
+    pub fn get_singleton_class(&self, mut obj: Value) -> Result<Value, ()> {
+        match obj.as_mut_rvalue() {
+            Some(oref) => {
                 let class = oref.class();
                 if class.as_class().is_singleton {
                     Ok(class)
@@ -175,11 +244,14 @@ impl Globals {
                                 ClassRef::from(None, self.get_singleton_class(superclass)?)
                             }
                         }
+                        ObjKind::Invalid => {
+                            panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
+                        }
                         _ => ClassRef::from(None, None),
                     };
                     singleton_class.is_singleton = true;
                     let singleton_obj = Value::class(&self, singleton_class);
-                    singleton_obj.as_object().set_class(class);
+                    singleton_obj.rvalue_mut().set_class(class);
                     oref.set_class(singleton_obj);
                     Ok(singleton_obj)
                 }
@@ -189,7 +261,7 @@ impl Globals {
     }
 
     pub fn add_builtin_class_method(&mut self, obj: Value, name: &str, func: BuiltinFunc) {
-        let id = self.get_ident_id(name);
+        let id = IdentId::get_ident_id(name);
         let info = MethodInfo::BuiltinFunc {
             name: name.to_string(),
             func,
@@ -205,7 +277,7 @@ impl Globals {
         name: &str,
         func: BuiltinFunc,
     ) {
-        let id = self.get_ident_id(name);
+        let id = IdentId::get_ident_id(name);
         let info = MethodInfo::BuiltinFunc {
             name: name.to_string(),
             func,
@@ -224,6 +296,7 @@ impl Globals {
             RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
             RV::Object(oref) => match oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(_) => "String".to_string(),
                 ObjKind::Array(_) => "Array".to_string(),
                 ObjKind::Range(_) => "Range".to_string(),
@@ -234,7 +307,7 @@ impl Globals {
                 ObjKind::Module(_) => "Module".to_string(),
                 ObjKind::Proc(_) => "Proc".to_string(),
                 ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => oref.class_name(self).to_string(),
+                ObjKind::Ordinary => oref.class_name().to_string(),
                 ObjKind::Integer(_) => "Integer".to_string(),
                 ObjKind::Float(_) => "Float".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),

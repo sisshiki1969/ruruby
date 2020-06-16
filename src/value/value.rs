@@ -10,66 +10,33 @@ const MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
-#[macro_export]
-macro_rules! expect_string {
-    ($var:ident, $vm:ident, $val:expr) => {
-        let oref = match $val.as_rvalue() {
-            Some(oref) => oref,
-            None => return Err($vm.error_argument("Must be a String.")),
-        };
-        let $var: &str = match &oref.kind {
-            ObjKind::String(RString::Str(s)) => s,
-            ObjKind::String(RString::Bytes(b)) => match String::from_utf8_lossy(b) {
-                std::borrow::Cow::Borrowed(s) => s,
-                std::borrow::Cow::Owned(_) => return Err($vm.error_argument("Must be a String.")),
-            },
-            _ => return Err($vm.error_argument("Must be a String.")),
-        };
-    };
-}
-
-#[macro_export]
-macro_rules! expect_bytes {
-    ($var:ident, $vm:ident, $val:expr) => {
-        let oref = match $val.as_rvalue() {
-            Some(oref) => oref,
-            None => return Err($vm.error_argument("Must be a String.")),
-        };
-        let $var = match &oref.kind {
-            ObjKind::String(RString::Str(s)) => s.as_bytes(),
-            ObjKind::String(RString::Bytes(b)) => b,
-            _ => return Err($vm.error_argument("Must be a String.")),
-        };
-    };
-}
-
 #[derive(Debug, Clone, PartialEq)]
-pub enum RV {
+pub enum RV<'a> {
     Uninitialized,
     Nil,
     Bool(bool),
     Integer(i64),
     Float(f64),
     Symbol(IdentId),
-    Object(ObjectRef),
+    Object(&'a RValue),
 }
 
-impl RV {
-    pub fn pack(self) -> Value {
+impl<'a> RV<'a> {
+    pub fn pack(&'a self) -> Value {
         match self {
             RV::Uninitialized => Value::uninitialized(),
             RV::Nil => Value::nil(),
             RV::Bool(true) => Value::true_val(),
             RV::Bool(false) => Value::false_val(),
-            RV::Integer(num) => Value::fixnum(num),
-            RV::Float(num) => Value::flonum(num),
-            RV::Symbol(id) => Value::symbol(id),
+            RV::Integer(num) => Value::fixnum(*num),
+            RV::Float(num) => Value::flonum(*num),
+            RV::Symbol(id) => Value::symbol(*id),
             RV::Object(info) => Value(info.id()),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Value(u64);
 
 impl std::ops::Deref for Value {
@@ -84,6 +51,7 @@ impl std::hash::Hash for Value {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::Integer(lhs) => lhs.hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
@@ -95,7 +63,7 @@ impl std::hash::Hash for Value {
                         val.hash(state);
                     }
                 }
-                ObjKind::Method(lhs) => lhs.inner().hash(state),
+                ObjKind::Method(lhs) => (*lhs).hash(state),
                 _ => self.0.hash(state),
             },
         }
@@ -129,11 +97,17 @@ impl PartialEq for Value {
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
                 lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
             }
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (lhs.inner(), rhs.inner()) {
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (&**lhs, &**rhs) {
                 (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
                 (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
                 _ => false,
             },
+            (ObjKind::Invalid, _) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
+            }
+            (_, ObjKind::Invalid) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
+            }
             (_, _) => false,
         }
     }
@@ -146,14 +120,51 @@ impl Default for Value {
     }
 }
 
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if !self.is_packed_value() {
+            write!(f, "{:?}", self.rvalue().kind)
+        } else if self.is_packed_fixnum() {
+            write!(f, "{}", self.as_packed_fixnum())
+        } else if self.is_packed_num() {
+            write!(f, "{}", self.as_packed_flonum())
+        } else if self.is_packed_symbol() {
+            write!(f, ":\"{}\"", IdentId::get_name(self.as_packed_symbol()))
+        } else {
+            match self.0 {
+                NIL_VALUE => write!(f, "Nil"),
+                TRUE_VALUE => write!(f, "True"),
+                FALSE_VALUE => write!(f, "False"),
+                UNINITIALIZED => write!(f, "[Uninitialized]"),
+                _ => write!(f, "[ILLEGAL]"),
+            }
+        }
+    }
+}
+
+impl GC for Value {
+    fn mark(&self, alloc: &mut Allocator) {
+        match self.as_gcbox() {
+            Some(rvalue) => {
+                rvalue.gc_mark(alloc);
+            }
+            None => {}
+        }
+    }
+}
+
 impl Value {
-    pub fn unpack(self) -> RV {
+    pub fn unpack(&self) -> RV {
         if !self.is_packed_value() {
             let info = self.rvalue();
             match &info.kind {
+                ObjKind::Invalid => panic!(
+                    "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
+                    &*info as *const RValue, info
+                ),
                 ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
-                _ => RV::Object(Ref::from_ref(info)),
+                _ => RV::Object(info),
             }
         } else if self.is_packed_fixnum() {
             RV::Integer(self.as_packed_fixnum())
@@ -180,10 +191,22 @@ impl Value {
         Value(id)
     }
 
+    pub fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
+        Value(ptr as u64)
+    }
+
     pub fn dup(&self) -> Self {
         match self.as_rvalue() {
             Some(rv) => rv.dup().pack(),
             None => *self,
+        }
+    }
+
+    pub fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
+        if self.is_packed_value() {
+            None
+        } else {
+            Some(self.gcbox())
         }
     }
 
@@ -207,12 +230,16 @@ impl Value {
         }
     }
 
+    pub fn gcbox(&self) -> &GCBox<RValue> {
+        unsafe { &*(self.0 as *const GCBox<RValue>) }
+    }
+
     pub fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.0 as *mut RValue) }
+        unsafe { &*(self.0 as *const GCBox<RValue>) }.inner()
     }
 
     pub fn rvalue_mut(&self) -> &mut RValue {
-        unsafe { &mut *(self.0 as *mut RValue) }
+        unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
     }
 
     pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
@@ -229,6 +256,7 @@ impl Value {
                 }
             }
             Some(info) => match &info.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", info),
                 ObjKind::Integer(_) => globals.builtins.integer,
                 ObjKind::Float(_) => globals.builtins.float,
                 _ => info.class(),
@@ -260,15 +288,15 @@ impl Value {
     }
 
     pub fn set_var(&mut self, id: IdentId, val: Value) {
-        self.as_object().set_var(id, val);
+        self.rvalue_mut().set_var(id, val);
     }
 
     pub fn get_var(&self, id: IdentId) -> Option<Value> {
-        self.as_object().get_var(id)
+        self.rvalue().get_var(id)
     }
 
     pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
-        match self.as_object().get_mut_var(id) {
+        match self.rvalue_mut().get_mut_var(id) {
             Some(entry) => {
                 *entry = val;
                 true
@@ -348,7 +376,10 @@ impl Value {
     pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.as_fixnum() {
             Some(i) => Ok(i),
-            None => Err(vm.error_argument(msg.into() + " must be an Integer.")),
+            None => {
+                let val = vm.globals.get_class_name(*self);
+                Err(vm.error_argument(format!("{} must be an Integer. {}", msg.into(), val)))
+            }
         }
     }
 
@@ -397,6 +428,14 @@ impl Value {
         }
     }
 
+    pub fn expect_bytes(&self, vm: &mut VM, msg: &str) -> Result<&[u8], RubyError> {
+        let rstring = self.as_rstring().ok_or_else(|| {
+            let inspect = vm.val_inspect(self.clone());
+            vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        })?;
+        Ok(rstring.as_bytes())
+    }
+
     pub fn as_string(&self) -> Option<&String> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -407,23 +446,24 @@ impl Value {
         }
     }
 
-    pub fn as_object(&self) -> ObjectRef {
-        self.is_object().unwrap()
-    }
-
-    pub fn is_object(&self) -> Option<ObjectRef> {
-        match self.as_rvalue() {
-            Some(info) => Some(info.as_ref()),
-            _ => None,
-        }
+    pub fn expect_string(&mut self, vm: &mut VM, msg: &str) -> Result<&String, RubyError> {
+        let val = self.clone();
+        let rstring = self.as_mut_rstring().ok_or_else(|| {
+            let inspect = vm.val_inspect(val);
+            vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
+        })?;
+        rstring.as_string(vm)
     }
 
     pub fn as_class(&self) -> ClassRef {
-        self.is_class().unwrap()
+        match self.is_class() {
+            Some(class) => class,
+            None => panic!(format!("Class is not class. {:?}", *self)),
+        }
     }
 
     pub fn is_class(&self) -> Option<ClassRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) => Some(cref),
                 _ => None,
@@ -433,7 +473,7 @@ impl Value {
     }
 
     pub fn as_module(&self) -> Option<ClassRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(cref) | ObjKind::Module(cref) => Some(cref),
                 _ => None,
@@ -443,7 +483,7 @@ impl Value {
     }
 
     pub fn is_module(&self) -> Option<ClassRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Module(cref) => Some(cref),
                 _ => None,
@@ -452,13 +492,31 @@ impl Value {
         }
     }
 
-    pub fn as_array(&self) -> Option<ArrayRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_array(&self) -> Option<&ArrayInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
                 ObjKind::Array(aref) => Some(aref),
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    pub fn as_mut_array(&mut self) -> Option<&mut ArrayInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Array(aref) => Some(aref),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn expect_array(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
+        let val = self.clone();
+        match self.as_mut_array() {
+            Some(ary) => Ok(ary),
+            None => Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val))),
         }
     }
 
@@ -473,7 +531,7 @@ impl Value {
     }
 
     pub fn as_splat(&self) -> Option<Value> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Splat(val) => Some(val),
                 _ => None,
@@ -482,18 +540,36 @@ impl Value {
         }
     }
 
-    pub fn as_hash(&self) -> Option<HashRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Hash(href) => Some(href),
+    pub fn as_hash(&self) -> Option<&HashInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Hash(hash) => Some(hash),
                 _ => None,
             },
             None => None,
         }
     }
 
+    pub fn as_mut_hash(&mut self) -> Option<&mut HashInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Hash(hash) => Some(hash),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn expect_hash(&self, vm: &mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
+        let val = self.clone();
+        self.as_hash().ok_or_else(|| {
+            let inspect = vm.val_inspect(val);
+            vm.error_type(format!("{} must be Hash. (given:{})", msg, inspect))
+        })
+    }
+
     pub fn as_regexp(&self) -> Option<RegexpRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Regexp(regref) => Some(regref),
                 _ => None,
@@ -502,9 +578,9 @@ impl Value {
         }
     }
 
-    pub fn as_proc(&self) -> Option<ProcRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_proc(&self) -> Option<&ProcInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
                 _ => None,
             },
@@ -512,9 +588,9 @@ impl Value {
         }
     }
 
-    pub fn as_method(&self) -> Option<MethodObjRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_method(&self) -> Option<&MethodObjInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
                 ObjKind::Method(mref) => Some(mref),
                 _ => None,
             },
@@ -523,7 +599,7 @@ impl Value {
     }
 
     pub fn as_fiber(&self) -> Option<FiberRef> {
-        match self.is_object() {
+        match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Fiber(info) => Some(info),
                 _ => None,
@@ -532,13 +608,20 @@ impl Value {
         }
     }
 
-    pub fn as_enumerator(&self) -> Option<EnumRef> {
-        match self.is_object() {
-            Some(oref) => match oref.kind {
+    pub fn as_enumerator(&self) -> Option<&EnumInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
                 ObjKind::Enumerator(eref) => Some(eref),
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    pub fn expect_enumerator(&self, vm: &mut VM, error_msg: &str) -> Result<&EnumInfo, RubyError> {
+        match self.as_enumerator() {
+            Some(e) => Ok(e),
+            None => Err(vm.error_argument(error_msg)),
         }
     }
 
@@ -619,11 +702,11 @@ impl Value {
     }
 
     pub fn string(globals: &Globals, string: String) -> Self {
-        Value::object(RValue::new_string(globals, string))
+        RValue::new_string(globals, string).pack()
     }
 
     pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {
-        Value::object(RValue::new_bytes(globals, bytes))
+        RValue::new_bytes(globals, bytes).pack()
     }
 
     pub fn symbol(id: IdentId) -> Self {
@@ -633,23 +716,19 @@ impl Value {
 
     pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        Value::object(RValue::new_range(globals, info))
-    }
-
-    fn object(obj_info: RValue) -> Self {
-        obj_info.pack()
+        RValue::new_range(globals, info).pack()
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
-        Value::object(RValue::new_bootstrap(classref))
+        RValue::new_bootstrap(classref).pack()
     }
 
     pub fn ordinary_object(class: Value) -> Self {
-        Value::object(RValue::new_ordinary(class))
+        RValue::new_ordinary(class).pack()
     }
 
     pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(RValue::new_class(globals, class_ref))
+        RValue::new_class(globals, class_ref).pack()
     }
 
     pub fn class_from(
@@ -657,46 +736,42 @@ impl Value {
         id: impl Into<Option<IdentId>>,
         superclass: impl Into<Option<Value>>,
     ) -> Self {
-        Value::object(RValue::new_class(globals, ClassRef::from(id, superclass)))
+        RValue::new_class(globals, ClassRef::from(id, superclass)).pack()
     }
 
     pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        Value::object(RValue::new_module(globals, class_ref))
-    }
-
-    pub fn array(globals: &Globals, array_ref: ArrayRef) -> Self {
-        Value::object(RValue::new_array(globals, array_ref))
+        RValue::new_module(globals, class_ref).pack()
     }
 
     pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
-        Value::object(RValue::new_array(globals, ArrayRef::from(ary)))
+        RValue::new_array(globals, ArrayInfo::new(ary)).pack()
     }
 
     pub fn splat(globals: &Globals, val: Value) -> Self {
-        Value::object(RValue::new_splat(globals, val))
+        RValue::new_splat(globals, val).pack()
     }
 
-    pub fn hash(globals: &Globals, hash_ref: HashRef) -> Self {
-        Value::object(RValue::new_hash(globals, hash_ref))
+    pub fn hash_from(globals: &Globals, hash: HashInfo) -> Self {
+        RValue::new_hash(globals, hash).pack()
     }
 
-    pub fn hash_from(globals: &Globals, hash: std::collections::HashMap<HashKey, Value>) -> Self {
-        Value::object(RValue::new_hash(globals, HashRef::from(hash)))
+    pub fn hash_from_map(
+        globals: &Globals,
+        hash: std::collections::HashMap<HashKey, Value>,
+    ) -> Self {
+        RValue::new_hash(globals, HashInfo::new(hash)).pack()
     }
 
     pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
-        Value::object(RValue::new_regexp(globals, regexp_ref))
+        RValue::new_regexp(globals, regexp_ref).pack()
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        Value::object(RValue::new_proc(globals, ProcRef::from(context)))
+        RValue::new_proc(globals, ProcInfo::new(context)).pack()
     }
 
     pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        Value::object(RValue::new_method(
-            globals,
-            MethodObjRef::from(name, receiver, method),
-        ))
+        RValue::new_method(globals, MethodObjInfo::new(name, receiver, method)).pack()
     }
 
     pub fn fiber(
@@ -706,11 +781,11 @@ impl Value {
         rec: std::sync::mpsc::Receiver<VMResult>,
         tx: std::sync::mpsc::SyncSender<usize>,
     ) -> Self {
-        Value::object(RValue::new_fiber(globals, vm, context, rec, tx))
+        RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
 
     pub fn enumerator(globals: &Globals, method: IdentId, receiver: Value, args: Args) -> Self {
-        Value::object(RValue::new_enumerator(globals, method, receiver, args))
+        RValue::new_enumerator(globals, method, receiver, args).pack()
     }
 }
 
@@ -744,7 +819,13 @@ impl Value {
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
                 lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
             }
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs.inner() == rhs.inner(),
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
+            (ObjKind::Invalid, _) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
+            }
+            (_, ObjKind::Invalid) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
+            }
             (_, _) => false,
         }
     }
@@ -767,7 +848,8 @@ mod tests {
     #[test]
     fn pack_bool1() {
         let expect = RV::Bool(true);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -776,7 +858,8 @@ mod tests {
     #[test]
     fn pack_bool2() {
         let expect = RV::Bool(false);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -785,7 +868,8 @@ mod tests {
     #[test]
     fn pack_nil() {
         let expect = RV::Nil;
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -794,7 +878,8 @@ mod tests {
     #[test]
     fn pack_uninit() {
         let expect = RV::Uninitialized;
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -803,7 +888,8 @@ mod tests {
     #[test]
     fn pack_integer1() {
         let expect = RV::Integer(12054);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -832,7 +918,8 @@ mod tests {
     #[test]
     fn pack_integer2() {
         let expect = RV::Integer(-58993);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -841,7 +928,8 @@ mod tests {
     #[test]
     fn pack_integer3() {
         let expect = RV::Integer(0x8000_0000_0000_0000 as u64 as i64);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -850,7 +938,8 @@ mod tests {
     #[test]
     fn pack_integer4() {
         let expect = RV::Integer(0x4000_0000_0000_0000 as u64 as i64);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -859,7 +948,8 @@ mod tests {
     #[test]
     fn pack_integer5() {
         let expect = RV::Integer(0x7fff_ffff_ffff_ffff as u64 as i64);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -868,7 +958,8 @@ mod tests {
     #[test]
     fn pack_float0() {
         let expect = RV::Float(0.0);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -877,7 +968,8 @@ mod tests {
     #[test]
     fn pack_float1() {
         let expect = RV::Float(100.0);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -886,7 +978,8 @@ mod tests {
     #[test]
     fn pack_float2() {
         let expect = RV::Float(13859.628547);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -895,7 +988,8 @@ mod tests {
     #[test]
     fn pack_float3() {
         let expect = RV::Float(-5282.2541156);
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
@@ -937,7 +1031,8 @@ mod tests {
     #[test]
     fn pack_symbol() {
         let expect = RV::Symbol(IdentId::from(12345));
-        let got = expect.clone().pack().unpack();
+        let packed = expect.pack();
+        let got = packed.unpack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }

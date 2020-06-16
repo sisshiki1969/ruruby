@@ -1,8 +1,14 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayInfo {
     pub elements: Vec<Value>,
+}
+
+impl GC for ArrayInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.elements.iter().for_each(|v| v.mark(alloc));
+    }
 }
 
 impl ArrayInfo {
@@ -61,7 +67,7 @@ impl ArrayInfo {
             let length = length as usize;
             let end = std::cmp::min(len, index + length);
             match val.as_array() {
-                Some(mut val) => {
+                Some(val) => {
                     let mut tail = elements.split_off(end);
                     elements.truncate(index);
                     elements.append(&mut val.elements.clone());
@@ -89,12 +95,19 @@ impl ArrayInfo {
             }
         }
     }
-}
 
-pub type ArrayRef = Ref<ArrayInfo>;
-
-impl ArrayRef {
-    pub fn from(elements: Vec<Value>) -> Self {
-        ArrayRef::new(ArrayInfo::new(elements))
+    pub fn debug(&self, vm: &VM) -> String {
+        match self.elements.len() {
+            0 => "[]".to_string(),
+            1 => format!("[{}]", vm.val_debug(self.elements[0])),
+            len => {
+                let mut result = vm.val_debug(self.elements[0]);
+                for i in 1..len {
+                    result = format!("{}, {}", result, vm.val_debug(self.elements[i]));
+                }
+                format! {"[{}]", result}
+            }
+        }
     }
 }
+

@@ -1,7 +1,8 @@
 #!/bin/sh
 set -x
 cargo build --release
-/usr/bin/time -lp ruby tests/ao_bench.rb > ao1.ppm
-/usr/bin/time -lp ./target/release/ruruby tests/ao_bench.rb > ao.ppm
+/usr/bin/time ruby tests/ao_bench.rb > ao1.ppm
+/usr/bin/time ./target/release/ruruby tests/ao_bench.rb > ao.ppm
 convert ao.ppm ao.jpg
 convert ao1.ppm ao1.jpg
+diff ao.jpg ao1.jpg

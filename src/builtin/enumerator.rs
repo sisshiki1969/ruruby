@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EnumInfo {
     method: IdentId,
     receiver: Value,
@@ -16,14 +16,6 @@ impl EnumInfo {
             args,
         }
     }
-}
-
-pub type EnumRef = Ref<EnumInfo>;
-
-impl EnumRef {
-    pub fn from(method: IdentId, receiver: Value, args: Args) -> Self {
-        EnumRef::new(EnumInfo::new(method, receiver, args))
-    }
 
     pub fn eval(&self, vm: &mut VM) -> VMResult {
         let receiver = self.receiver;
@@ -32,8 +24,15 @@ impl EnumRef {
     }
 }
 
+impl GC for EnumInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.receiver.mark(alloc);
+        self.args.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
 pub fn init_enumerator(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Enumerator");
+    let id = IdentId::get_ident_id("Enumerator");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "map", map);
@@ -50,7 +49,7 @@ pub fn init_enumerator(globals: &mut Globals) -> Value {
 fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_min(args.len(), 1)?;
     let (receiver, method, new_args) = if args.len() == 1 {
-        let method = vm.globals.get_ident_id("each");
+        let method = IdentId::get_ident_id("each");
         let new_args = Args::new0();
         (self_val, method, new_args)
     } else {
@@ -72,7 +71,7 @@ fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 // Instance methods
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let arg_string = {
         match eref.args.len() {
             0 => "".to_string(),
@@ -89,7 +88,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let inspect = format!(
         "#<Enumerator: {}:{}({})>",
         vm.val_inspect(eref.receiver),
-        vm.globals.get_ident_name(eref.method),
+        IdentId::get_ident_name(eref.method),
         arg_string
     );
     Ok(Value::string(&vm.globals, inspect))
@@ -97,7 +96,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -105,73 +104,81 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let val = vm.eval_enumerator(eref)?;
+    let mut val = eref.eval(vm)?;
+    vm.temp_new_with_obj(val);
 
-    let ary = vm.expect_array(val, "Base object")?;
+    let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
     for elem in &ary.elements {
         args[0] = *elem;
-        let _ = vm.eval_block(block, &args)?;
+        vm.eval_block(block, &args)?;
     }
+    vm.temp_finish();
     Ok(val)
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = vm.globals.get_ident_id("map");
+            let id = IdentId::get_ident_id("map");
             let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
             return Ok(e);
         }
     };
-    let val = vm.eval_enumerator(eref)?;
-
-    let ary = vm.expect_array(val, "Base object")?;
+    let mut val = eref.eval(vm)?;
+    vm.temp_new_with_obj(val);
+    let ary = val.expect_array(vm, "Base object")?;
     let mut args = Args::new1(Value::nil());
-    let mut res = vec![];
+
+    vm.temp_new();
     for elem in &ary.elements {
         args[0] = *elem;
-        res.push(vm.eval_block(block, &args)?);
+        let v = vm.eval_block(block, &args)?;
+        vm.temp_push(v);
     }
+    let res = vm.temp_finish();
+    vm.temp_finish();
     Ok(Value::array_from(&vm.globals, res))
 }
 
 fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = vm.expect_enumerator(self_val, "Expect Enumerator.")?;
+    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let block = match args.block {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = vm.globals.get_ident_id("with_index");
+            let id = IdentId::get_ident_id("with_index");
             let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
             return Ok(e);
         }
     };
 
-    let val = vm.eval_enumerator(eref)?;
-    let res_ary: Vec<(Value, Value)> = vm
-        .expect_array(val, "Base object")?
+    let mut val = eref.eval(vm)?;
+    vm.temp_new_with_obj(val);
+    let res_ary: Vec<(Value, Value)> = val
+        .expect_array(vm, "Base object")?
         .elements
         .iter()
         .enumerate()
         .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
         .collect();
 
-    let mut res = vec![];
     let mut arg = Args::new(2);
-
+    vm.temp_new();
     for (v, i) in &res_ary {
         arg[0] = *v;
         arg[1] = *i;
         let val = vm.eval_block(block, &arg)?;
-        res.push(val);
+        vm.temp_push(val);
     }
 
+    let res = vm.temp_finish();
+    vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }

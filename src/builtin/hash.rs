@@ -2,7 +2,7 @@ use crate::*;
 use std::collections::HashMap;
 
 pub fn init_hash(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Hash");
+    let id = IdentId::get_ident_id("Hash");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "to_s", inspect);
     globals.add_builtin_instance_method(class, "inspect", inspect);
@@ -40,9 +40,9 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, s))
 }
 
-fn clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut hash = self_val.as_hash().unwrap();
+    let hash = self_val.as_mut_hash().unwrap();
     hash.clear();
     Ok(self_val)
 }
@@ -50,22 +50,22 @@ fn clear(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn clone(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::hash(&vm.globals, hash.dup()))
+    Ok(Value::hash_from(&vm.globals, (*hash).clone()))
 }
 
 fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let hash = vm.expect_hash(self_val, "Receiver")?.dup();
-    match hash.inner_mut() {
-        HashInfo::Map(map) => map.retain(|_, &mut v| v != Value::nil()),
-        HashInfo::IdentMap(map) => map.retain(|_, &mut v| v != Value::nil()),
-    }
-    Ok(Value::hash(&vm.globals, hash))
+    let mut hash = self_val.expect_hash(vm, "Receiver")?.clone();
+    match hash {
+        HashInfo::Map(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
+        HashInfo::IdentMap(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
+    };
+    Ok(Value::hash_from(&vm.globals, hash))
 }
 
-fn delete(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn delete(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let mut hash = self_val.as_hash().unwrap();
+    let hash = self_val.as_mut_hash().unwrap();
     let res = match hash.remove(args[0]) {
         Some(v) => v,
         None => Value::nil(),
@@ -93,7 +93,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         };
     }
 
-    Ok(Value::hash(&vm.globals, HashRef::from(res)))
+    Ok(Value::hash_from_map(&vm.globals, res))
 }
 
 fn has_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -172,15 +172,15 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut new = vm.expect_hash(self_val, "Receiver")?.dup();
+    let mut new = (self_val.expect_hash(vm, "Receiver")?).clone();
     for arg in args.iter() {
-        let other = vm.expect_hash(*arg, "First arg")?;
+        let other = arg.expect_hash(vm, "First arg")?;
         for (k, v) in other.iter() {
             new.insert(k, v);
         }
     }
 
-    Ok(Value::hash(&vm.globals, new))
+    Ok(Value::hash_from(&vm.globals, new))
 }
 
 fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -209,14 +209,13 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn compare_by_identity(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn compare_by_identity(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let hash = self_val.as_hash().unwrap();
-    let inner = hash.inner_mut();
-    match inner {
+    let hash = self_val.as_mut_hash().unwrap();
+    match hash {
         HashInfo::Map(map) => {
             let new_map = map.into_iter().map(|(k, v)| (IdentKey(k.0), *v)).collect();
-            *inner = HashInfo::IdentMap(new_map);
+            *hash = HashInfo::IdentMap(new_map);
         }
         HashInfo::IdentMap(_) => {}
     };
@@ -231,9 +230,8 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let ary = vec![k, v];
         vec.push(Value::array_from(&vm.globals, ary));
     }
-    let aref = ArrayRef::from(vec);
-    vm.sort_array(aref)?;
-    Ok(Value::array(&vm.globals, aref))
+    vm.sort_array(&mut vec)?;
+    Ok(Value::array_from(&vm.globals, vec))
 }
 
 fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -243,7 +241,7 @@ fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for (k, v) in hash.iter() {
         new_hash.insert(HashKey(v), k);
     }
-    Ok(Value::hash_from(&vm.globals, new_hash))
+    Ok(Value::hash_from_map(&vm.globals, new_hash))
 }
 
 #[cfg(test)]

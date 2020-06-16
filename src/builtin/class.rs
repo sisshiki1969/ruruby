@@ -37,10 +37,12 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Create new instance of `self`.
 pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let new_instance = Value::ordinary_object(self_val);
+    vm.temp_new_with_obj(new_instance);
     // Call initialize method if it exists.
     if let Some(method) = self_val.get_instance_method(IdentId::INITIALIZE) {
         vm.eval_send(method, new_instance, args)?;
     };
+    vm.temp_finish();
     Ok(new_instance)
 }
 
@@ -52,8 +54,9 @@ fn superclass(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let cref = vm.expect_class(self_val, "Receiver")?;
+    let id_lock = ID.read().unwrap();
     let s = match cref.name {
-        Some(id) => format! {"{}", vm.globals.get_ident_name(id)},
+        Some(id) => format! {"{}", id_lock.get_name(id)},
         None => format! {"#<Class:0x{:x}>", cref.id()},
     };
     Ok(Value::string(&vm.globals, s))

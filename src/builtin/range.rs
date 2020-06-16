@@ -29,10 +29,17 @@ impl RangeInfo {
         let sym = if self.exclude { "..." } else { ".." };
         format!("{}{}{}", start, sym, end)
     }
+
+    pub fn debug(&self, vm: &VM) -> String {
+        let start = vm.val_debug(self.start);
+        let end = vm.val_debug(self.end);
+        let sym = if self.exclude { "..." } else { ".." };
+        format!("{}{}{}", start, sym, end)
+    }
 }
 
 pub fn init_range(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("Range");
+    let id = IdentId::get_ident_id("Range");
     let class = ClassRef::from(id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_instance_method(class, "to_s", to_s);
@@ -42,7 +49,7 @@ pub fn init_range(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "all?", all);
     globals.add_builtin_instance_method(class, "begin", begin);
-    globals.add_builtin_instance_method(class, "first", firat);
+    globals.add_builtin_instance_method(class, "first", first);
     globals.add_builtin_instance_method(class, "end", end);
     globals.add_builtin_instance_method(class, "last", last);
     globals.add_builtin_instance_method(class, "to_a", to_a);
@@ -84,7 +91,7 @@ fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(range.end)
 }
 
-fn firat(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let start = range.start.as_fixnum().unwrap();
     let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
@@ -129,15 +136,16 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let mut res = vec![];
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
+    vm.temp_new();
     for i in start..end {
         arg[0] = Value::fixnum(i);
         let val = vm.eval_block(method, &arg)?;
-        res.push(val);
+        vm.temp_push(val);
     }
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
@@ -145,21 +153,22 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
-    let mut res = vec![];
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
+    vm.temp_new();
     for i in start..end {
         arg[0] = Value::fixnum(i);
         let val = vm.eval_block(method, &arg)?;
         match val.as_array() {
             Some(aref) => {
                 let mut other = aref.elements.clone();
-                res.append(&mut other);
+                vm.temp_push_vec(&mut other);
             }
-            None => res.push(val),
+            None => vm.temp_push(val),
         };
     }
+    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }

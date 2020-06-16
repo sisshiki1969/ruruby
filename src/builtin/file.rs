@@ -5,7 +5,7 @@ use std::path::*;
 use crate::*;
 
 pub fn init_file(globals: &mut Globals) -> Value {
-    let id = globals.get_ident_id("File");
+    let id = IdentId::get_ident_id("File");
     let class = ClassRef::from(id, globals.builtins.object);
     let obj = Value::class(globals, class);
     globals.add_builtin_class_method(obj, "join", join);
@@ -20,7 +20,7 @@ pub fn init_file(globals: &mut Globals) -> Value {
 // Utils
 
 fn string_to_path(vm: &mut VM, mut string: Value) -> Result<PathBuf, RubyError> {
-    let file = vm.expect_string(&mut string, "Must be string.")?;
+    let file = string.expect_string(vm, "")?;
     Ok(PathBuf::from(file))
 }
 
@@ -115,10 +115,10 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn write(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_num(len, 2)?;
-    let mut arg0 = args[0].clone();
-    let mut arg1 = args[1].clone();
-    let filename = vm.expect_string(&mut arg0, "1st arg")?;
-    let contents = vm.expect_string(&mut arg1, "2nd arg")?;
+    let mut arg0 = args[0];
+    let mut arg1 = args[1];
+    let filename = arg0.expect_string(vm, "1st arg")?;
+    let contents = arg1.expect_string(vm, "2nd arg")?;
     match std::fs::write(&filename, contents) {
         Ok(()) => {}
         Err(err) => {

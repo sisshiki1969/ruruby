@@ -2,7 +2,6 @@ use super::codegen::ContextKind;
 use crate::*;
 
 #[cfg(feature = "perf")]
-#[cfg_attr(tarpaulin, skip)]
 use super::perf::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,12 +21,14 @@ pub struct VM {
     exec_context: Vec<ContextRef>,
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
+    temp_stack: Vec<Vec<Value>>,
     exception: bool,
     pc: usize,
+    gc_counter: usize,
     pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
     #[cfg(feature = "perf")]
     #[cfg_attr(tarpaulin, skip)]
-    perf: Perf,
+    pub perf: Perf,
 }
 
 pub type VMRef = Ref<VM>;
@@ -54,84 +55,59 @@ impl DefineMode {
 
 // API's
 
+impl GC for VM {
+    fn mark(&self, alloc: &mut Allocator) {
+        //self.globals.mark(alloc);
+        self.exec_context.iter().for_each(|c| c.mark(alloc));
+        self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
+        self.exec_stack.iter().for_each(|v| v.mark(alloc));
+        self.temp_stack
+            .iter()
+            .for_each(|vec| vec.iter().for_each(|v| v.mark(alloc)));
+    }
+}
+
 impl VM {
     pub fn new() -> Self {
-        use builtin::*;
-        let mut globals = Globals::new();
-
-        macro_rules! set_builtin_class {
-            ($name:expr, $class_object:ident) => {
-                let id = globals.get_ident_id($name);
-                globals
-                    .builtins
-                    .object
-                    .set_var(id, globals.builtins.$class_object);
-            };
-        }
-
-        macro_rules! set_class {
-            ($name:expr, $class_object:expr) => {
-                let id = globals.get_ident_id($name);
-                let object = $class_object;
-                globals.builtins.object.set_var(id, object);
-            };
-        }
-
-        set_builtin_class!("Object", object);
-        set_builtin_class!("Module", module);
-        set_builtin_class!("Class", class);
-        set_builtin_class!("Integer", integer);
-        set_builtin_class!("Float", float);
-        set_builtin_class!("Array", array);
-        set_builtin_class!("Proc", procobj);
-        set_builtin_class!("Range", range);
-        set_builtin_class!("String", string);
-        set_builtin_class!("Hash", hash);
-        set_builtin_class!("Method", method);
-        set_builtin_class!("Regexp", regexp);
-        set_builtin_class!("Fiber", fiber);
-        set_builtin_class!("Enumerator", enumerator);
-
-        set_class!("Math", math::init_math(&mut globals));
-        set_class!("File", file::init_file(&mut globals));
-        set_class!("Process", process::init_process(&mut globals));
-        set_class!("Struct", structobj::init_struct(&mut globals));
-        set_class!("StandardError", Value::class(&globals, globals.class_class));
-        set_class!("RuntimeError", errorobj::init_error(&mut globals));
+        let globals = GlobalsRef::new(Globals::new());
 
         let vm = VM {
-            globals: GlobalsRef::new(globals),
+            globals,
             root_path: vec![],
             fiber_state: FiberState::Created,
             class_context: vec![(Value::nil(), DefineMode::default())],
             exec_context: vec![],
             exec_stack: vec![],
+            temp_stack: vec![],
             exception: false,
             pc: 0,
+            gc_counter: 0,
             channel: None,
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
         };
-
         vm
     }
 
-    pub fn dup_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
-        VM {
-            globals: self.globals.clone(),
+    pub fn dup_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+        let vm = VM {
+            globals: self.globals,
             root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
             exec_context: vec![],
+            temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
             exception: false,
             pc: 0,
+            gc_counter: 0,
             channel: Some((tx, rx)),
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
-            perf: self.perf.clone(),
-        }
+            perf: Perf::new(),
+        };
+        vm
     }
 
     pub fn context(&self) -> ContextRef {
@@ -172,6 +148,40 @@ impl VM {
 
     pub fn stack_pop(&mut self) -> Value {
         self.exec_stack.pop().unwrap()
+    }
+
+    pub fn stack_top(&mut self) -> Value {
+        self.exec_stack.last().unwrap().clone()
+    }
+
+    /// Create empty temporary area for objects to be protected from GC.
+    pub fn temp_new(&mut self) {
+        self.temp_stack.push(vec![]);
+    }
+
+    /// Create temporary area with a object.
+    pub fn temp_new_with_obj(&mut self, val: Value) {
+        self.temp_stack.push(vec![val]);
+    }
+
+    /// Create temporary area with objects to be protected from GC.
+    pub fn temp_new_with_vec(&mut self, vec: Vec<Value>) {
+        self.temp_stack.push(vec);
+    }
+
+    /// Dispose temporary area.
+    pub fn temp_finish(&mut self) -> Vec<Value> {
+        self.temp_stack.pop().unwrap()
+    }
+
+    /// Push an object to the temporary area.
+    pub fn temp_push(&mut self, v: Value) {
+        self.temp_stack.last_mut().unwrap().push(v);
+    }
+
+    /// Push objects to the temporary area.
+    pub fn temp_push_vec(&mut self, vec: &mut Vec<Value>) {
+        self.temp_stack.last_mut().unwrap().append(vec);
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
@@ -281,10 +291,10 @@ impl VM {
     }
 
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
-        let mut parser = Parser::new();
-        std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
+        let parser = Parser::new();
+        //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let result = parser.parse_program(path, program)?;
-        self.globals.ident_table = result.ident_table;
+        //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
         #[cfg_attr(tarpaulin, skip)]
@@ -308,11 +318,11 @@ impl VM {
         path: PathBuf,
         program: &str,
     ) -> Result<MethodRef, RubyError> {
-        let mut parser = Parser::new();
-        std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
+        let parser = Parser::new();
+        //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let ext_lvar = self.context().iseq_ref.lvar.clone();
         let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
-        self.globals.ident_table = result.ident_table;
+        //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
         #[cfg_attr(tarpaulin, skip)]
@@ -346,15 +356,12 @@ impl VM {
         {
             self.perf.get_perf(Perf::INVALID);
         }
+        /*
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
-        {
-            self.perf.print_perf();
-        }
+        */
         Ok(val)
     }
 
@@ -364,7 +371,7 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        self.globals.ident_table = result.ident_table.clone();
+        //self.globals.ident_table = result.ident_table.clone();
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
@@ -385,16 +392,38 @@ impl VM {
         {
             self.perf.get_perf(Perf::INVALID);
         }
+        /*
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
-        {
-            self.perf.print_perf();
-        }
+        */
         Ok(val)
+    }
+
+    #[allow(dead_code)]
+    pub fn dump_context(&self) {
+        eprintln!("---dump");
+        for (i, context) in self.exec_context.iter().enumerate() {
+            eprintln!("context: {}", i);
+            eprintln!("self: {:#?}", context.self_value);
+            for i in 0..context.iseq_ref.lvars {
+                let id = LvarId::from_usize(i);
+                let (k, _) = context
+                    .iseq_ref
+                    .lvar
+                    .table()
+                    .iter()
+                    .find(|(_, v)| **v == id)
+                    .unwrap();
+                let name = IdentId::get_ident_name(*k);
+                eprintln!("lvar({}): {} {:#?}", id.as_u32(), name, context[id]);
+            }
+        }
+        for v in &self.exec_stack {
+            eprintln!("stack: {:#?}", *v);
+        }
+        eprintln!("---dump end");
     }
 }
 
@@ -412,10 +441,11 @@ macro_rules! try_err {
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
-                        println!("<--- METHOD_RETURN Ok({})", $self.val_inspect(result),);
+                        println!("<--- METHOD_RETURN Ok({:?})", result);
                     }
                     Ok(result)
                 } else {
+                    //$self.dump_context();
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     {
@@ -432,6 +462,19 @@ macro_rules! try_err {
 }
 
 impl VM {
+    fn gc(&mut self) {
+        self.gc_counter += 1;
+        if !self.globals.gc_enabled || self.gc_counter % 16 != 0 {
+            return;
+        }
+        if !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
+            return;
+        };
+        #[cfg(feature = "perf")]
+        self.perf.get_perf(Perf::GC);
+        self.globals.gc();
+    }
+
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         #[cfg(feature = "trace")]
@@ -449,7 +492,9 @@ impl VM {
         self.context_push(context);
         self.pc = context.pc;
         let iseq = &context.iseq_ref.iseq;
-        let mut self_oref = context.self_value.as_object();
+        let self_oref = context.self_value.rvalue_mut();
+        self.gc();
+
         loop {
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
@@ -480,9 +525,9 @@ impl VM {
                     #[cfg(feature = "trace")]
                     {
                         if _context.is_fiber {
-                            println!("<=== Ok({})", self.val_inspect(val));
+                            println!("<=== Ok({:?})", val);
                         } else {
-                            println!("<--- Ok({})", self.val_inspect(val));
+                            println!("<--- Ok({:?})", val);
                         }
                     }
                     if !self.exec_context.is_empty() {
@@ -507,7 +552,7 @@ impl VM {
                         let val = self.stack_pop();
                         #[cfg(feature = "trace")]
                         {
-                            println!("<--- Ok({})", self.val_inspect(val));
+                            println!("<--- Ok({:?})", val);
                         }
                         Ok(val)
                     };
@@ -566,7 +611,7 @@ impl VM {
                 }
                 Inst::PUSH_STRING => {
                     let id = self.read_id(iseq, 1);
-                    let string = self.globals.get_ident_name(id).to_string();
+                    let string = IdentId::get_ident_name(id);
                     self.stack_push(Value::string(&self.globals, string));
                     self.pc += 5;
                 }
@@ -758,7 +803,7 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = self.read_id(iseq, 1);
                     let mut parent = match self.stack_pop() {
-                        v if v == Value::nil() => self.class(),
+                        v if v.is_nil() => self.class(),
                         v => v,
                     };
                     let val = self.stack_pop();
@@ -814,16 +859,11 @@ impl VM {
                 Inst::IVAR_ADDI => {
                     let var_id = self.read_id(iseq, 1);
                     let i = self.read32(iseq, 5) as i32;
-                    match self_oref.get_mut_var(var_id) {
-                        Some(val) => {
-                            let new_val = self.eval_addi(*val, i)?;
-                            *val = new_val;
-                        }
-                        None => {
-                            let new_val = self.eval_addi(Value::nil(), i)?;
-                            self_oref.set_var(var_id, new_val);
-                        }
-                    };
+                    let v = self_oref
+                        .var_table_mut()
+                        .entry(var_id)
+                        .or_insert(Value::nil());
+                    *v = self.eval_addi(*v, i)?;
 
                     self.pc += 9;
                 }
@@ -842,16 +882,16 @@ impl VM {
                 Inst::SET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
                     let mut args = self.pop_args_to_ary(arg_num);
-                    let receiver = self.stack_pop();
+                    let mut receiver = self.stack_pop();
                     let val = self.stack_pop();
-                    match receiver.is_object() {
+                    match receiver.as_mut_rvalue() {
                         Some(oref) => {
-                            match &oref.kind {
-                                ObjKind::Array(mut aref) => {
+                            match oref.kind {
+                                ObjKind::Array(ref mut aref) => {
                                     args.push(val);
                                     aref.set_elem(self, &args)?;
                                 }
-                                ObjKind::Hash(mut href) => href.insert(args[0], val),
+                                ObjKind::Hash(ref mut href) => href.insert(args[0], val),
                                 _ => return Err(self.error_undefined_method("[]=", receiver)),
                             };
                         }
@@ -864,8 +904,8 @@ impl VM {
                     let arg_num = self.read_usize(iseq, 1);
                     let args = self.pop_args_to_ary(arg_num);
                     let arg_num = args.len();
-                    let receiver = self.stack_pop();
-                    let val = match receiver.is_object() {
+                    let receiver = self.stack_top();
+                    let val = match receiver.as_rvalue() {
                         Some(oref) => match &oref.kind {
                             ObjKind::Array(aref) => aref.get_elem(self, &args)?,
                             ObjKind::Hash(href) => {
@@ -879,7 +919,7 @@ impl VM {
                                 self.eval_send(mref.method, mref.receiver, &args)?
                             }
                             _ => {
-                                let id = self.globals.get_ident_id("[]");
+                                let id = IdentId::get_ident_id("[]");
                                 match self.get_method(receiver, id) {
                                     Ok(mref) => self.eval_send(mref, receiver, &args)?,
                                     Err(_) => {
@@ -901,6 +941,7 @@ impl VM {
                         }
                         _ => return Err(self.error_undefined_method("[]", receiver)),
                     };
+                    self.stack_pop();
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -938,7 +979,7 @@ impl VM {
                 Inst::CREATE_HASH => {
                     let arg_num = self.read_usize(iseq, 1);
                     let key_value = self.pop_key_value_pair(arg_num);
-                    let hash = Value::hash(&self.globals, HashRef::from(key_value));
+                    let hash = Value::hash_from_map(&self.globals, key_value);
                     self.stack_push(hash);
                     self.pc += 5;
                 }
@@ -950,6 +991,9 @@ impl VM {
                 }
                 Inst::JMP => {
                     let disp = self.read_disp(iseq, 1);
+                    if 0 < disp {
+                        self.gc();
+                    }
                     self.jump_pc(5, disp);
                 }
                 Inst::JMP_IF_FALSE => {
@@ -958,6 +1002,9 @@ impl VM {
                         self.jump_pc(5, 0);
                     } else {
                         let disp = self.read_disp(iseq, 1);
+                        if 0 < disp {
+                            self.gc();
+                        }
                         self.jump_pc(5, disp);
                     }
                 }
@@ -980,6 +1027,16 @@ impl VM {
                     try_err!(self, self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
+                Inst::OPT_SEND => {
+                    let receiver = self.stack_pop();
+                    try_err!(self, self.vm_opt_send(iseq, receiver));
+                    self.pc += 11;
+                }
+                Inst::OPT_SEND_SELF => {
+                    let receiver = context.self_value;
+                    try_err!(self, self.vm_opt_send(iseq, receiver));
+                    self.pc += 11;
+                }
                 Inst::YIELD => {
                     try_err!(self, self.eval_yield(iseq));
                     self.pc += 5;
@@ -994,7 +1051,7 @@ impl VM {
                             if val.is_module().is_some() != is_module {
                                 return Err(self.error_type(format!(
                                     "{} is not {}.",
-                                    self.globals.get_ident_name(id),
+                                    IdentId::get_ident_name(id),
                                     if is_module { "module" } else { "class" },
                                 )));
                             };
@@ -1002,7 +1059,7 @@ impl VM {
                             if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                                 return Err(self.error_type(format!(
                                     "superclass mismatch for class {}.",
-                                    self.globals.get_ident_name(id),
+                                    IdentId::get_ident_name(id),
                                 )));
                             };
                             val.clone()
@@ -1273,32 +1330,6 @@ impl VM {
         })
     }
 
-    pub fn expect_string<'a>(
-        &mut self,
-        val: &'a mut Value,
-        msg: &str,
-    ) -> Result<&'a String, RubyError> {
-        let rstring = val.as_mut_rstring().ok_or_else(|| {
-            //let inspect = self.val_inspect(val.clone());
-            self.error_type(format!("{} must be String.", msg))
-        })?;
-        rstring.as_string(self)
-    }
-
-    pub fn expect_array(&mut self, val: Value, msg: &str) -> Result<ArrayRef, RubyError> {
-        val.as_array().ok_or_else(|| {
-            let inspect = self.val_inspect(val);
-            self.error_type(format!("{} must be Array. (given:{})", msg, inspect))
-        })
-    }
-
-    pub fn expect_hash(&mut self, val: Value, msg: &str) -> Result<HashRef, RubyError> {
-        val.as_hash().ok_or_else(|| {
-            let inspect = self.val_inspect(val);
-            self.error_type(format!("{} must be Hash. (given:{})", msg, inspect))
-        })
-    }
-
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
@@ -1315,27 +1346,10 @@ impl VM {
         })
     }
 
-    pub fn expect_object(&self, val: Value, error_msg: &str) -> Result<ObjectRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => Ok(oref),
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
-
     pub fn expect_fiber(&self, val: Value, error_msg: &str) -> Result<FiberRef, RubyError> {
-        match val.is_object() {
+        match val.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Fiber(f) => Ok(f),
-                _ => Err(self.error_argument(error_msg)),
-            },
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
-
-    pub fn expect_enumerator(&self, val: Value, error_msg: &str) -> Result<EnumRef, RubyError> {
-        match val.is_object() {
-            Some(oref) => match oref.kind {
-                ObjKind::Enumerator(e) => Ok(e),
                 _ => Err(self.error_argument(error_msg)),
             },
             None => Err(self.error_argument(error_msg)),
@@ -1410,7 +1424,7 @@ impl VM {
                         class = superclass;
                     }
                     None => {
-                        let name = self.globals.get_ident_name(id);
+                        let name = IdentId::get_ident_name(id);
                         return Err(self.error_name(format!("Uninitialized constant {}.", name)));
                     }
                 },
@@ -1467,7 +1481,7 @@ impl VM {
                 Ok(val)
             }
             Err(_) => {
-                let name = self.globals.get_ident_name(method);
+                let name = IdentId::get_ident_name(method);
                 Err(self.error_undefined_op(name, rhs, lhs))
             }
         }
@@ -1589,27 +1603,29 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_shl(&mut self, rhs: Value, mut lhs: Value, iseq: &ISeq) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::fixnum(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
-        match lhs.unpack() {
-            RV::Integer(lhs) => {
-                match rhs.as_fixnum() {
-                    Some(rhs) => return Ok(Value::fixnum(lhs << rhs)),
-                    _ => {}
-                };
-            }
-            RV::Object(lhs_o) => match lhs_o.kind {
-                ObjKind::Array(mut aref) => {
+        match lhs.as_mut_rvalue() {
+            None => match lhs.unpack() {
+                RV::Integer(lhs) => {
+                    match rhs.as_fixnum() {
+                        Some(rhs) => return Ok(Value::fixnum(lhs << rhs)),
+                        _ => {}
+                    };
+                }
+                _ => {}
+            },
+            Some(lhs_o) => match lhs_o.kind {
+                ObjKind::Array(ref mut aref) => {
                     aref.elements.push(rhs);
                     return Ok(lhs);
                 }
                 _ => {}
             },
-            _ => {}
         };
         let cache = self.read32(iseq, 1);
         let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
@@ -1690,7 +1706,7 @@ impl VM {
     }
 
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        match lhs.is_object() {
+        match lhs.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Class(_) => {
                     let res = rhs.get_class_object(&self.globals).id() == lhs.id();
@@ -1698,14 +1714,13 @@ impl VM {
                 }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
-                        RV::Symbol(sym) => self.globals.get_ident_name(sym),
+                        RV::Symbol(sym) => IdentId::get_name(sym),
                         RV::Object(_) => match rhs.as_string() {
-                            Some(s) => s,
+                            Some(s) => s.to_owned(),
                             None => return Ok(false),
                         },
                         _ => return Ok(false),
-                    }
-                    .to_owned();
+                    };
                     let res = Regexp::find_one(self, &re.regexp, &given)?.is_some();
                     Ok(res)
                 }
@@ -1736,7 +1751,7 @@ impl VM {
                 _ => return Ok(Value::nil()),
             },
             _ => {
-                let id = self.globals.get_ident_id("<=>");
+                let id = IdentId::get_ident_id("<=>");
                 return self.fallback_to_method(id, lhs, rhs);
             }
         };
@@ -1746,14 +1761,14 @@ impl VM {
         }
     }
 
-    pub fn sort_array(&mut self, mut aref: ArrayRef) -> Result<(), RubyError> {
-        if aref.elements.len() > 0 {
-            let val = aref.elements[0];
-            for i in 1..aref.elements.len() {
-                match self.eval_cmp(aref.elements[i], val)? {
-                    v if v == Value::nil() => {
+    pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
+        if vec.len() > 0 {
+            let val = vec[0];
+            for i in 1..vec.len() {
+                match self.eval_cmp(vec[i], val)? {
+                    v if v.is_nil() => {
                         let lhs = self.globals.get_class_name(val);
-                        let rhs = self.globals.get_class_name(aref.elements[i]);
+                        let rhs = self.globals.get_class_name(vec[i]);
                         return Err(self.error_argument(format!(
                             "Comparison of {} with {} failed.",
                             lhs, rhs
@@ -1762,8 +1777,7 @@ impl VM {
                     _ => {}
                 }
             }
-            aref.elements
-                .sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
+            vec.sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
         }
         Ok(())
     }
@@ -1810,19 +1824,63 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(i) => format!("{}", self.globals.get_ident_name(i)),
+            RV::Symbol(i) => format!("{}", IdentId::get_ident_name(i)),
             RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(s) => s.to_s(),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
-                ObjKind::Ordinary => oref.to_s(&self.globals),
+                ObjKind::Ordinary => oref.to_s(),
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Range(rinfo) => rinfo.to_s(self),
                 ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => format!("{:?}", oref.kind),
+            },
+        }
+    }
+
+    pub fn val_debug(&self, val: Value) -> String {
+        match val.unpack() {
+            RV::Uninitialized => "[Uninitialized]".to_string(),
+            RV::Nil => "nil".to_string(),
+            RV::Bool(b) => match b {
+                true => "true".to_string(),
+                false => "false".to_string(),
+            },
+            RV::Integer(i) => i.to_string(),
+            RV::Float(f) => {
+                if f.fract() == 0.0 {
+                    format!("{:.1}", f)
+                } else {
+                    f.to_string()
+                }
+            }
+            RV::Symbol(sym) => format!(":{}", IdentId::get_ident_name(sym)),
+            RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => "[Invalid]".to_string(),
+                ObjKind::Ordinary => oref.debug(self),
+                ObjKind::Class(cref) => match cref.name {
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
+                    None => format! {"#<Class:0x{:x}>", cref.id()},
+                },
+                ObjKind::Module(cref) => match cref.name {
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
+                    None => format! {"#<Module:0x{:x}>", cref.id()},
+                },
+                ObjKind::String(s) => s.inspect(),
+                ObjKind::Array(aref) => aref.debug(self),
+                ObjKind::Range(rinfo) => rinfo.debug(self),
+                ObjKind::Splat(v) => self.val_debug(*v),
+                ObjKind::Hash(href) => href.debug(self),
+                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
+                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
+                ObjKind::Method(_) => "Method".to_string(),
+                ObjKind::Fiber(_) => "Fiber".to_string(),
+                ObjKind::Enumerator(_) => "Enumerator".to_string(),
+                _ => "Not supported".to_string(),
             },
         }
     }
@@ -1843,25 +1901,26 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(sym) => format!(":{}", self.globals.get_ident_name(sym)),
+            RV::Symbol(sym) => format!(":{}", IdentId::get_ident_name(sym)),
             RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
                 ObjKind::Module(cref) => match cref.name {
-                    Some(id) => format! {"{}", self.globals.get_ident_name(id)},
+                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect(self),
-                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.id()),
+                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => {
-                    let id = self.globals.get_ident_id("inspect");
+                    let id = IdentId::get_ident_id("inspect");
                     self.send0(val, id)
                         .unwrap()
                         .as_string()
@@ -1915,6 +1974,17 @@ impl VM {
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
     }
+
+    fn vm_opt_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
+        let method_id = self.read_id(iseq, 1);
+        let args_num = self.read16(iseq, 5);
+        let cache_slot = self.read32(iseq, 7);
+        let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+
+        let args = self.pop_args_to_ary(args_num as usize);
+        let val = self.eval_send(methodref, receiver, &args)?;
+        Ok(val)
+    }
 }
 
 impl VM {
@@ -1958,7 +2028,7 @@ impl VM {
     pub fn eval_method(
         &mut self,
         methodref: MethodRef,
-        self_val: Value,
+        mut self_val: Value,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
@@ -1983,12 +2053,17 @@ impl VM {
         }
         let val = match info {
             MethodInfo::BuiltinFunc { func, .. } => {
+                let func = func.to_owned();
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
+
+                self.stack_push(self_val); // If func() returns Err, self_val remains on exec stack.
                 let val = func(self, self_val, args)?;
+                self.stack_pop();
+
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {
@@ -1996,15 +2071,15 @@ impl VM {
                 }
                 val
             }
-            MethodInfo::AttrReader { id } => match self_val.is_object() {
+            MethodInfo::AttrReader { id } => match self_val.as_rvalue() {
                 Some(oref) => match oref.get_var(*id) {
                     Some(v) => v,
                     None => Value::nil(),
                 },
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
-            MethodInfo::AttrWriter { id } => match self_val.is_object() {
-                Some(mut oref) => {
+            MethodInfo::AttrWriter { id } => match self_val.as_mut_rvalue() {
+                Some(oref) => {
                     oref.set_var(*id, args[0]);
                     args[0]
                 }
@@ -2023,10 +2098,6 @@ impl VM {
             }
         };
         Ok(val)
-    }
-
-    pub fn eval_enumerator(&mut self, eref: EnumRef) -> VMResult {
-        eref.eval(self)
     }
 }
 
@@ -2125,10 +2196,10 @@ impl VM {
                     None => {
                         if singleton_flag {
                             singleton_flag = false;
-                            class = original_class.as_object().class();
+                            class = original_class.rvalue().class();
                         } else {
                             let inspect = self.val_inspect(original_class);
-                            let method_name = self.globals.get_ident_name(method);
+                            let method_name = IdentId::get_ident_name(method);
                             return Err(self.error_nomethod(format!(
                                 "no method `{}' found for {}",
                                 method_name, inspect
@@ -2156,10 +2227,10 @@ impl VM {
         };
     }
 
-    pub fn fiber_send_to_parent(&mut self, val: VMResult) {
-        match &mut self.channel {
+    pub fn fiber_send_to_parent(&self, val: VMResult) {
+        match &self.channel {
             Some((tx, rx)) => {
-                tx.send(val.clone()).unwrap();
+                tx.send(val.to_owned()).unwrap();
                 rx.recv().unwrap();
             }
             None => return,
@@ -2167,7 +2238,7 @@ impl VM {
         #[cfg(feature = "trace")]
         {
             match val {
-                Ok(val) => println!("<=== yield Ok({})", self.val_inspect(val),),
+                Ok(val) => println!("<=== yield Ok({:?})", val),
                 Err(err) => println!("<=== yield Err({:?})", err.kind),
             }
         }

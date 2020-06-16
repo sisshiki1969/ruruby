@@ -11,6 +11,10 @@ pub fn repl_vm() {
         "HashMap: {}",
         std::mem::size_of::<std::collections::HashMap<Value, Value>>()
     );
+    println!(
+        "Option<Box<HashMap>>: {}",
+        std::mem::size_of::<Option<Box<std::collections::HashMap<Value, Value>>>>()
+    );
     println!("RValue: {}", std::mem::size_of::<RValue>());
     println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
     println!("RString: {}", std::mem::size_of::<RString>());
@@ -18,8 +22,9 @@ pub fn repl_vm() {
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
-    let mut vm = VM::new();
-    parser.ident_table = vm.globals.ident_table.clone();
+    let mut vm = VMRef::new(VM::new());
+    vm.clone().globals.fibers.push(vm);
+    //parser.ident_table = vm.globals.ident_table.clone();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
     let method = vm.globals.new_method();
@@ -46,7 +51,7 @@ pub fn repl_vm() {
             Ok(parse_result) => {
                 match vm.run_repl(&parse_result, context) {
                     Ok(result) => {
-                        parser.ident_table = vm.globals.ident_table.clone();
+                        //parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
                         println!("=> {}", vm.val_inspect(result));
