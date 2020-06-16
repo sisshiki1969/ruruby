@@ -8,7 +8,7 @@ An alternative Ruby implementation by Rust.
 - No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
 - Hand-written original parser.
 - Virtual machine execution.
-- [NEW!] Simple mark & sweep garbage collector is implemented. (currently, only in `static-gc` branch)
+- :ribbon: Simple mark & sweep garbage collector is implemented. 
 
 ## Related article (sorry, currently only in Japanese)
 
@@ -16,11 +16,11 @@ An alternative Ruby implementation by Rust.
 
 ## Implementation status
 
-[See here.](https://github.com/sisshiki1969/ruruby/wiki/Implementation-status)
+[See Wiki.](https://github.com/sisshiki1969/ruruby/wiki/Implementation-status)
 
 ## Benchmarks
 
-[See here.](https://github.com/sisshiki1969/ruruby/wiki/Benchmarks)  
+[See Wiki.](https://github.com/sisshiki1969/ruruby/wiki/Benchmarks)  
 You can see the results of optcarrot benchmark for ruruby and other Ruby implementations [here](https://github.com/mame/optcarrot/blob/master/doc/benchmark.md).
 
 ## How to run ruruby
