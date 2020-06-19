@@ -240,11 +240,27 @@ mod test {
     use crate::test::*;
 
     #[test]
+    fn dup() {
+        let program = r#"
+        obj = Object.new
+        obj.instance_variable_set(:@foo, 155)
+        obj2 = obj.dup
+        obj2.instance_variable_set(:@foo, 555)
+        assert(155, obj.instance_variable_get(:@foo))
+        assert(555, obj2.instance_variable_get(:@foo))
+        assert(false, obj.eql?(obj2))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn instance_variables() {
         let program = r#"
         obj = Object.new
         obj.instance_variable_set("@foo", "foo")
         obj.instance_variable_set(:@bar, 777)
+        assert(777, obj.instance_variable_get("@bar"))
+        assert("foo", obj.instance_variable_get(:@foo))
 
         def ary_cmp(a,b)
             return false if a - b != []

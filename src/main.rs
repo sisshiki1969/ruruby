@@ -14,6 +14,7 @@ mod repl;
 use repl::*;
 use ruruby::*;
 
+#[cfg_attr(tarpaulin, skip)]
 fn main() {
     let app = App::new("ruruby")
         .version("0.0.1")
@@ -53,6 +54,7 @@ fn main() {
     return;
 }
 
+#[cfg_attr(tarpaulin, skip)]
 fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
     let file_name = file_name.into();
     let (absolute_path, program) = match load_file(file_name.clone()) {

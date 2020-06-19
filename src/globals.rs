@@ -134,7 +134,11 @@ impl Globals {
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(&globals, singleton_class);
-        globals.builtins.object.rvalue_mut().set_class(singleton_obj);
+        globals
+            .builtins
+            .object
+            .rvalue_mut()
+            .set_class(singleton_obj);
 
         module::init(&mut globals);
         class::init(&mut globals);
@@ -186,6 +190,7 @@ impl Globals {
         set_builtin_class!("Fiber", fiber);
         set_builtin_class!("Enumerator", enumerator);
 
+        set_class!("Kernel", kernel);
         set_class!("Math", math::init_math(&mut globals));
         set_class!("File", file::init_file(&mut globals));
         set_class!("Process", process::init_process(&mut globals));

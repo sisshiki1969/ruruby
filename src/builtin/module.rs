@@ -278,18 +278,33 @@ mod test {
 
     #[test]
     fn attr_accessor() {
-        let program = "
+        let program = r#"
     class Foo
         attr_accessor :car, :cdr
+        attr_reader :bar
+        attr_writer :boo
+        def set_bar(x)
+            @bar = x
+        end
+        def get_boo
+            @boo
+        end
     end
     bar = Foo.new
     assert nil, bar.car
     assert nil, bar.cdr
+    assert nil, bar.bar
+    assert_error { bar.boo }
     bar.car = 1000
     bar.cdr = :something
+    assert_error { bar.bar = 4.7 }
+    bar.set_bar(9.55)
+    bar.boo = "Ruby"
     assert 1000, bar.car
     assert :something, bar.cdr
-    ";
+    assert 9.55, bar.bar
+    assert "Ruby", bar.get_boo
+    "#;
         assert_script(program);
     }
 
@@ -315,6 +330,17 @@ mod test {
     assert(true, ary_cmp(A.constants, [:Bar, :Foo]))
     assert(true, ary_cmp(A.instance_methods - Class.instance_methods, [:fn, :fo]))
     "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn ancestors() {
+        let program = r#"
+        assert([Class, Module, Object, Kernel], Class.ancestors)
+        assert([Kernel], Object.included_modules)
+        assert([Kernel], Class.included_modules)
+        assert(true, Class.singleton_class.singleton_class?)
+        "#;
         assert_script(program);
     }
 }
