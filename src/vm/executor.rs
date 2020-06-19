@@ -21,7 +21,7 @@ pub struct VM {
     exec_context: Vec<ContextRef>,
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
-    temp_stack: Vec<Vec<Value>>,
+    temp_stack: Vec<Value>,
     exception: bool,
     pc: usize,
     gc_counter: usize,
@@ -61,9 +61,7 @@ impl GC for VM {
         self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
-        self.temp_stack
-            .iter()
-            .for_each(|vec| vec.iter().for_each(|v| v.mark(alloc)));
+        self.temp_stack.iter().for_each(|v| v.mark(alloc));
     }
 }
 
@@ -154,34 +152,14 @@ impl VM {
         self.exec_stack.last().unwrap().clone()
     }
 
-    /// Create empty temporary area for objects to be protected from GC.
-    pub fn temp_new(&mut self) {
-        self.temp_stack.push(vec![]);
-    }
-
-    /// Create temporary area with a object.
-    pub fn temp_new_with_obj(&mut self, val: Value) {
-        self.temp_stack.push(vec![val]);
-    }
-
-    /// Create temporary area with objects to be protected from GC.
-    pub fn temp_new_with_vec(&mut self, vec: Vec<Value>) {
-        self.temp_stack.push(vec);
-    }
-
-    /// Dispose temporary area.
-    pub fn temp_finish(&mut self) -> Vec<Value> {
-        self.temp_stack.pop().unwrap()
-    }
-
     /// Push an object to the temporary area.
     pub fn temp_push(&mut self, v: Value) {
-        self.temp_stack.last_mut().unwrap().push(v);
+        self.temp_stack.push(v);
     }
 
     /// Push objects to the temporary area.
     pub fn temp_push_vec(&mut self, vec: &mut Vec<Value>) {
-        self.temp_stack.last_mut().unwrap().append(vec);
+        self.temp_stack.append(vec);
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
@@ -2060,9 +2038,12 @@ impl VM {
                     self.perf.get_perf(Perf::EXTERN);
                 }
 
-                self.stack_push(self_val); // If func() returns Err, self_val remains on exec stack.
-                let val = func(self, self_val, args)?;
-                self.stack_pop();
+                let len = self.temp_stack.len();
+                self.temp_push(self_val); // If func() returns Err, self_val remains on exec stack.
+                self.temp_push_vec(&mut args.to_vec());
+                let res = func(self, self_val, args);
+                self.temp_stack.truncate(len);
+                let val = res?;
 
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]

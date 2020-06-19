@@ -293,14 +293,14 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let mut args = Args::new1(Value::nil());
 
-    vm.temp_new();
+    let mut res = vec![];
     for elem in &aref.elements {
         args[0] = *elem;
         let val = vm.eval_block(method, &args)?;
         vm.temp_push(val);
+        res.push(val);
     }
 
-    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
@@ -311,7 +311,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut arg = Args::new(param_num);
 
     let aref = self_val.as_mut_array().unwrap();
-    vm.temp_new();
+    let mut res = vec![];
     for elem in &mut aref.elements {
         if param_num == 0 {
         } else if param_num == 1 {
@@ -328,14 +328,14 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
 
         let mut ary = vm.eval_block(method, &arg)?;
+        vm.temp_push(ary);
         match ary.as_mut_array() {
             Some(ary) => {
-                vm.temp_push_vec(&mut ary.elements);
+                res.append(&mut ary.elements);
             }
-            None => vm.temp_push(ary),
+            None => res.push(ary),
         }
     }
-    let res = vm.temp_finish();
     let res = Value::array_from(&vm.globals, res);
     Ok(res)
 }
@@ -541,7 +541,6 @@ fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => {
             let aref = self_val.as_mut_array().unwrap();
-            vm.temp_new();
             let mut block_args = Args::new1(Value::nil());
             aref.elements.retain(|x| {
                 block_args[0] = *x;
@@ -549,7 +548,6 @@ fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 vm.temp_push(res);
                 set.insert(HashKey(res))
             });
-            vm.temp_finish();
             Ok(self_val)
         }
     }
@@ -665,12 +663,11 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args.block {
         Some(block) => {
             let mut arg = Args::new1(Value::nil());
-            vm.temp_new_with_vec(ary.clone());
+            vm.temp_push_vec(&mut ary.clone());
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;
             }
-            vm.temp_finish();
             Ok(Value::nil())
         }
         None => Ok(Value::array_from(&vm.globals, ary)),

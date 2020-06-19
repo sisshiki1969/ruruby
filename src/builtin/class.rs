@@ -37,12 +37,10 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Create new instance of `self`.
 pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let new_instance = Value::ordinary_object(self_val);
-    vm.temp_new_with_obj(new_instance);
     // Call initialize method if it exists.
     if let Some(method) = self_val.get_instance_method(IdentId::INITIALIZE) {
         vm.eval_send(method, new_instance, args)?;
     };
-    vm.temp_finish();
     Ok(new_instance)
 }
 
