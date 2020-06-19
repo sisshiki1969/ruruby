@@ -609,8 +609,7 @@ impl VM {
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    let val = self.eval_addi(lhs, i)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_addi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::SUB => {
@@ -622,90 +621,79 @@ impl VM {
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    let val = self.eval_subi(lhs, i)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_subi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_mul(lhs, rhs, iseq)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_mul(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::POW => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_exp(lhs, rhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_exp(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_div(lhs, rhs, iseq)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_div(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::REM => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_rem(lhs, rhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_rem(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::SHR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_shr(lhs, rhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_shr(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_shl(lhs, rhs, iseq)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_shl(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::BIT_AND => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_bitand(lhs, rhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_bitand(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::BIT_OR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_bitor(lhs, rhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_bitor(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_bitxor(lhs, rhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_bitxor(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::BIT_NOT => {
                     let lhs = self.stack_pop();
-                    let val = self.eval_bitnot(lhs)?;
-                    self.stack_push(val);
+                    try_err!(self, self.eval_bitnot(lhs));
                     self.pc += 1;
                 }
                 Inst::EQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = Value::bool(self.eval_eq(rhs, lhs)?);
+                    let val = Value::bool(self.eval_eq(rhs, lhs));
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::NE => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = Value::bool(!self.eval_eq(rhs, lhs)?);
+                    let val = Value::bool(!self.eval_eq(rhs, lhs));
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -1681,8 +1669,8 @@ macro_rules! eval_cmp {
 }
 
 impl VM {
-    pub fn eval_eq(&self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        Ok(rhs.equal(lhs))
+    pub fn eval_eq(&self, rhs: Value, lhs: Value) -> bool {
+        rhs.equal(lhs)
     }
 
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
@@ -1704,9 +1692,9 @@ impl VM {
                     let res = Regexp::find_one(self, &re.regexp, &given)?.is_some();
                     Ok(res)
                 }
-                _ => Ok(self.eval_eq(lhs, rhs).unwrap_or(false)),
+                _ => Ok(self.eval_eq(lhs, rhs)),
             },
-            None => Ok(self.eval_eq(lhs, rhs).unwrap_or(false)),
+            None => Ok(self.eval_eq(lhs, rhs)),
         }
     }
 
@@ -2045,14 +2033,13 @@ impl VM {
                 self.temp_push_vec(&mut args.to_vec());
                 let res = func(self, self_val, args);
                 self.temp_stack.truncate(len);
-                let val = res?;
 
                 #[cfg(feature = "perf")]
                 #[cfg_attr(tarpaulin, skip)]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
-                val
+                res?
             }
             MethodInfo::AttrReader { id } => match self_val.as_rvalue() {
                 Some(oref) => match oref.get_var(*id) {

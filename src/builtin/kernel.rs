@@ -72,15 +72,14 @@ pub fn init(globals: &mut Globals) -> Value {
     /// Built-in function "assert".
     fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 2)?;
-        if !vm.eval_eq(args[0], args[1])? {
+        if !vm.eval_eq(args[0], args[1]) {
             let res = format!(
-                "Assertion error: Expected: {} Actual: {}",
-                vm.val_inspect(args[0]),
-                vm.val_inspect(args[1]),
+                "Assertion error: Expected: {:?} Actual: {:?}",
+                args[0], args[1],
             );
             Err(vm.error_argument(res))
         } else {
-            println!("Assert OK: {:?}", vm.val_inspect(args[0]));
+            println!("Assert OK: {:?}", args[0]);
             Ok(Value::nil())
         }
     }
@@ -92,13 +91,10 @@ pub fn init(globals: &mut Globals) -> Value {
             None => return Err(vm.error_argument("assert_error(): Block not given.")),
         };
         match vm.eval_block(method, &Args::new0()) {
-            Ok(val) => {
-                let res = format!(
-                    "Assertion error: No error occured. returned {}",
-                    vm.val_inspect(val)
-                );
-                Err(vm.error_argument(res))
-            }
+            Ok(val) => Err(vm.error_argument(format!(
+                "Assertion error: No error occured. returned {:?}",
+                val
+            ))),
             Err(err) => {
                 println!("Assert_error OK: {:?}", err.kind);
                 Ok(Value::nil())

@@ -129,6 +129,7 @@ mod tests {
         assert_error { a }
         assert_error { break }
         assert_error { Integer("z") }
+        assert_error { 5 * :sym }
         "#;
         assert_script(program);
     }
