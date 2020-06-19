@@ -480,7 +480,7 @@ mod tests {
                     @y = y
                 end
             end
-            1000.times {
+            100.times {
                 a = []
                 1000.times {|x|
                     a << Vec.new(x.to_s, x.to_s)
