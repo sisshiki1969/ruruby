@@ -118,3 +118,18 @@ impl RubyError {
         RubyError::new(RubyErrorKind::BlockReturn, source_info, 0, loc)
     }
 }
+
+#[allow(unused_imports)]
+mod tests {
+    use crate::test::*;
+
+    #[test]
+    fn errors() {
+        let program = r#"
+        assert_error { a }
+        assert_error { break }
+        assert_error { Integer("z") }
+        "#;
+        assert_script(program);
+    }
+}

@@ -130,17 +130,21 @@ impl SourceInfoRef {
 }
 
 impl SourceInfo {
+    #[cfg_attr(tarpaulin, skip)]
     pub fn new(path: PathBuf) -> Self {
         SourceInfo {
             path: path,
             code: vec![],
         }
     }
+
+    #[cfg_attr(tarpaulin, skip)]
     pub fn show_file_name(&self) {
         eprintln!("{}", self.path.to_string_lossy());
     }
 
     /// Show the location of the Loc in the source code using '^^^'.
+    #[cfg_attr(tarpaulin, skip)]
     pub fn show_loc(&self, loc: &Loc) {
         let mut line: u32 = 1;
         let mut line_top_pos: u32 = 0;

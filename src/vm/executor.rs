@@ -343,6 +343,7 @@ impl VM {
         Ok(val)
     }
 
+    #[cfg_attr(tarpaulin, skip)]
     pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
         #[cfg_attr(tarpaulin, skip)]
@@ -380,6 +381,7 @@ impl VM {
     }
 
     #[allow(dead_code)]
+    #[cfg_attr(tarpaulin, skip)]
     pub fn dump_context(&self) {
         eprintln!("---dump");
         for (i, context) in self.exec_context.iter().enumerate() {

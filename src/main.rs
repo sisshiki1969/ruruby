@@ -9,6 +9,7 @@ use crate::vm::perf::*;
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
 //use std::thread;
+#[cfg_attr(tarpaulin, skip)]
 mod repl;
 use repl::*;
 use ruruby::*;

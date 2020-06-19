@@ -245,7 +245,6 @@ fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 #[cfg(test)]
-#[allow(unused_imports, dead_code)]
 mod test {
     use crate::test::*;
     /*
