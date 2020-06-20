@@ -16,6 +16,7 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
             panic!("Got error: {:?}", err);
         }
     }
+    Allocator::init();
 }
 
 pub fn assert_script(script: impl Into<String>) {
@@ -29,4 +30,5 @@ pub fn assert_script(script: impl Into<String>) {
             panic!("Got error: {:?}", err);
         }
     }
+    Allocator::init();
 }

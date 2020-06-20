@@ -8,11 +8,11 @@ use test::Bencher;
 #[test]
 fn func1() {
     let program = "
-            def func(a,b,c)
-                a+b+c
-            end
-    
-            func(1,2,3)";
+        def func(a,b,c)
+            a+b+c
+        end
+
+        func(1,2,3)";
     let expected = Value::fixnum(6);
     eval_script(program, expected);
 }
@@ -20,16 +20,16 @@ fn func1() {
 #[test]
 fn func2() {
     let program = "
-            def fact(a)
-                puts(a)
-                if a == 1
-                    1
-                else
-                    a * fact(a-1)
-                end
+        def fact(a)
+            puts(a)
+            if a == 1
+                1
+            else
+                a * fact(a-1)
             end
-    
-            fact(5)";
+        end
+
+        fact(5)";
     let expected = Value::fixnum(120);
     eval_script(program, expected);
 }
@@ -37,31 +37,28 @@ fn func2() {
 #[bench]
 fn func3(b: &mut Bencher) {
     let program = "
-            def fibo(x)
-                if x <= 2
-                    1
-                else
-                    fibo(x-1) + fibo(x-2)
-                end
+        def fibo(x)
+            if x <= 2
+                1
+            else
+                fibo(x-1) + fibo(x-2)
             end
+        end
 
-            fibo(20)";
-    let expected = Value::fixnum(6765);
-    b.iter(|| eval_script(program, expected.clone()));
+        assert(55, fibo(10))";
+    b.iter(|| assert_script(program));
 }
 
-#[test]
-fn func4() {
+#[bench]
+fn func4(b: &mut Bencher) {
     let program = "
         def fact(a)
-            puts(a)
             return 1 if a == 1
             return a * fact(a-1)
         end
-    
-        fact(5)";
-    let expected = Value::fixnum(120);
-    eval_script(program, expected);
+
+        assert(120, fact(5))";
+    b.iter(|| assert_script(program));
 }
 
 #[test]

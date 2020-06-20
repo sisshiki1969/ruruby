@@ -27,31 +27,19 @@ fn nil_lit1() {
 
 #[test]
 fn string_lit1() {
-    let globals = Globals::new();
-    let program = r#""open "  "windows""#;
-    let expected = Value::string(&globals, "open windows".to_string());
-    eval_script(program, expected);
-}
-
-#[test]
-fn string_lit2() {
-    let globals = Globals::new();
-    let program = r#""open "
-    "windows""#;
-    let expected = Value::string(&globals, "windows".to_string());
-    eval_script(program, expected);
+    let program = r##"assert("open "  "windows", "open windows")"##;
+    assert_script(program);
 }
 
 #[test]
 fn interpolated_string_lit1() {
-    let globals = Globals::new();
     let program = r###"
-    x = 20
-    f = "fibonacci";
-    "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
+        x = 20
+        f = "fibonacci";
+        res = "#{f} #{def fibo(x); if x<2 then x else fibo(x-1)+fibo(x-2); end; end;""} fibo(#{x}) = #{fibo(x)}"
+        assert("fibonacci  fibo(20) = 6765", res)
     "###;
-    let expected = Value::string(&globals, "fibonacci  fibo(20) = 6765".to_string());
-    eval_script(program, expected);
+    assert_script(program);
 }
 
 #[test]
@@ -74,7 +62,7 @@ fn array_lit1() {
 #[test]
 fn percent_notation() {
     let program = r#"
-    assert(%w(We are the champions), ["We", "are", "the", "champions"])
+        assert(%w(We are the champions), ["We", "are", "the", "champions"])
     "#;
     assert_script(program);
 }

@@ -157,7 +157,7 @@ def optcarrot(program, option = "")
     if checksum == 59662
       puts "optcarrot checksum ok: #{command}"
     else
-      puts "checksum invalid: #{checksum} #{comamnd}"
+      puts "checksum invalid: #{checksum} #{command}"
     end
     e.match(/(\d*)maxresident/)
     rss << Regexp.last_match(1).to_i

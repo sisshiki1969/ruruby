@@ -12,7 +12,7 @@ lazy_static! {
 thread_local! {
     pub static ALLOC_THREAD: RefCell<AllocThread> = {
         RefCell::new(AllocThread {
-            allocated:0,
+            //allocated:0,
             alloc_flag:false
         })
     };
@@ -168,7 +168,7 @@ pub struct Allocator {
 }
 
 pub struct AllocThread {
-    allocated: usize,
+    //allocated: usize,
     alloc_flag: bool,
 }
 
@@ -199,14 +199,16 @@ impl Allocator {
         self.free_list_count
     }
 
+    pub fn init() {
+        *ALLOC.lock().unwrap() = {
+            let alloc = Allocator::new();
+            alloc
+        };
+    }
+
     /// Allocate object.
     pub fn alloc(&mut self, data: RValue) -> *mut GCBox<RValue> {
         self.allocated += 1;
-        ALLOC_THREAD.with(|m| {
-            let mut m = m.borrow_mut();
-            m.allocated += 1;
-            m.alloc_flag = m.allocated % 2048 == 0;
-        });
 
         match self.free {
             Some(gcbox) => {
@@ -228,6 +230,12 @@ impl Allocator {
             }
             None => {}
         }
+
+        ALLOC_THREAD.with(|m| {
+            let mut m = m.borrow_mut();
+            //m.allocated += 1;
+            m.alloc_flag = true;
+        });
 
         let gcbox = if self.used == DATA_LEN {
             // Allocate new page.
