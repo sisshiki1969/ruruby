@@ -997,7 +997,7 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let globals = Globals::new();
+        let globals = GlobalsRef::new_globals();
         let from = RV::Integer(7).pack();
         let to = RV::Integer(36).pack();
         let expect = Value::range(&globals, from, to, true);
@@ -1009,7 +1009,7 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let globals = Globals::new();
+        let globals = GlobalsRef::new_globals();
         let expect = Value::class(&globals, ClassRef::from(IdentId::from(1), None));
         let got = expect.unpack().pack();
         if expect != got {
@@ -1019,7 +1019,7 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let globals = Globals::new();
+        let globals = GlobalsRef::new_globals();
         let class = Value::class_from(&globals, IdentId::from(1), None);
         let expect = Value::ordinary_object(class);
         let got = expect.unpack().pack();

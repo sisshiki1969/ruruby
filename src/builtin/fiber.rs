@@ -57,8 +57,8 @@ fn new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     context.is_fiber = true;
     let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
     let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-    let new_vm = VMRef::new(vm.dup_fiber(tx0, rx1));
-    vm.globals.fibers.push(new_vm);
+    let new_vm_info = vm.dup_fiber(tx0, rx1);
+    let new_vm = vm.globals.new_vm_with(new_vm_info);
     let val = Value::fiber(&vm.globals, new_vm, context, rx0, tx1);
     Ok(val)
 }

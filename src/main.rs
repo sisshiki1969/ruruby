@@ -30,8 +30,8 @@ fn main() {
             return;
         }
     };
-    let mut vm = VMRef::new(VM::new());
-    vm.clone().globals.fibers.push(vm);
+    let mut globals = GlobalsRef::new_globals();
+    let mut vm = globals.new_vm();
     let id = IdentId::get_ident_id("ARGV");
     let mut res: Vec<Value> = args
         .iter()

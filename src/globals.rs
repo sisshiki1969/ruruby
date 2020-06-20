@@ -93,8 +93,26 @@ impl GC for Globals {
     }
 }
 
+impl GlobalsRef {
+    pub fn new_globals() -> Self {
+        Ref::new(Globals::new())
+    }
+
+    pub fn new_vm(&mut self) -> VMRef {
+        let vm = VMRef::new(VM::new(self.to_owned()));
+        self.fibers.push(vm);
+        vm
+    }
+
+    pub fn new_vm_with(&mut self, vm: VM) -> VMRef {
+        let vm = VMRef::new(vm);
+        self.fibers.push(vm);
+        vm
+    }
+}
+
 impl Globals {
-    pub fn new() -> Self {
+    fn new() -> Self {
         use builtin::*;
         //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;

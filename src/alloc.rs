@@ -483,8 +483,8 @@ mod tests {
 
     #[test]
     fn gc_test() {
-        let mut vm = VMRef::new(VM::new());
-        vm.clone().globals.fibers.push(vm);
+        let mut globals = GlobalsRef::new_globals();
+        let mut vm = globals.new_vm();
         let program = r#"
             class Vec
                 def initialize(x,y)

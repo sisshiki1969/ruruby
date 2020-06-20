@@ -2,8 +2,8 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn eval_script(script: impl Into<String>, expected: Value) {
-    let mut vm = VMRef::new(VM::new());
-    vm.clone().globals.fibers.push(vm);
+    let mut globals = GlobalsRef::new_globals();
+    let mut vm = globals.new_vm();
     match vm.run(PathBuf::from(""), &script.into(), None) {
         Ok(res) => {
             if res != expected {
@@ -20,8 +20,8 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
 }
 
 pub fn assert_script(script: impl Into<String>) {
-    let mut vm = VMRef::new(VM::new());
-    vm.clone().globals.fibers.push(vm);
+    let mut globals = GlobalsRef::new_globals();
+    let mut vm = globals.new_vm();
     match vm.run(PathBuf::from(""), &script.into(), None) {
         Ok(_) => {}
         Err(err) => {

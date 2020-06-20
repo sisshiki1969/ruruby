@@ -25,7 +25,7 @@ pub struct VM {
     exception: bool,
     pc: usize,
     gc_counter: usize,
-    pub channel: Option<(SyncSender<VMResult>, Receiver<usize>)>,
+    pub channel: Option<(SyncSender<VMResult>, Receiver<usize>, VMRef)>,
     #[cfg(feature = "perf")]
     #[cfg_attr(tarpaulin, skip)]
     pub perf: Perf,
@@ -62,13 +62,15 @@ impl GC for VM {
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
+        match self.channel {
+            Some((_, _, vm)) => vm.mark(alloc),
+            None => {}
+        }
     }
 }
 
 impl VM {
-    pub fn new() -> Self {
-        let globals = GlobalsRef::new(Globals::new());
-
+    pub fn new(globals: GlobalsRef) -> Self {
         let vm = VM {
             globals,
             root_path: vec![],
@@ -100,7 +102,7 @@ impl VM {
             exception: false,
             pc: 0,
             gc_counter: 0,
-            channel: Some((tx, rx)),
+            channel: Some((tx, rx, VMRef::from_ptr(self as *mut VM))),
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
@@ -2199,7 +2201,7 @@ impl VM {
 
     pub fn fiber_send_to_parent(&self, val: VMResult) {
         match &self.channel {
-            Some((tx, rx)) => {
+            Some((tx, rx, _)) => {
                 tx.send(val.to_owned()).unwrap();
                 rx.recv().unwrap();
             }

@@ -22,9 +22,8 @@ pub fn repl_vm() {
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
-    let mut vm = VMRef::new(VM::new());
-    vm.clone().globals.fibers.push(vm);
-    //parser.ident_table = vm.globals.ident_table.clone();
+    let mut globals = GlobalsRef::new_globals();
+    let mut vm = globals.new_vm();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
     let method = vm.globals.new_method();
