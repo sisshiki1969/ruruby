@@ -105,7 +105,6 @@ impl Inst {
             Inst::TEQ => "TEQ",
             Inst::GT => "GT",
             Inst::GE => "GE",
-            Inst::CMP => "CMP",
             Inst::NOT => "NOT",
             Inst::SHR => "SHR",
             Inst::SHL => "SHL",
@@ -114,6 +113,7 @@ impl Inst {
             Inst::BIT_XOR => "BIT_XOR",
             Inst::BIT_NOT => "BIT_NOT",
             Inst::POW => "POW",
+            Inst::CMP => "CMP",
 
             Inst::ADDI => "ADDI",
             Inst::SUBI => "SUBI",
@@ -133,12 +133,12 @@ impl Inst {
             Inst::GET_INDEX => "GET_INDEX",
             Inst::SET_INDEX => "SET_INDEX",
 
-            Inst::SEND => "SEND",
-            Inst::SEND_SELF => "SEND_SELF",
-            Inst::OPT_SEND => "OPT_SEND",
-            Inst::OPT_SEND_SELF => "OPT_SEND_SELF",
-
             Inst::CHECK_LOCAL => "CHECK_LOCAL",
+
+            Inst::SEND => "SEND",
+            Inst::SEND_SELF => "SENDSLF",
+            Inst::OPT_SEND => "OPT_SEND",
+            Inst::OPT_SEND_SELF => "OPT_SENDSLF",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
@@ -258,9 +258,9 @@ impl Inst {
             | Inst::REM
             | Inst::EQ
             | Inst::NE
+            | Inst::TEQ
             | Inst::GT
             | Inst::GE
-            | Inst::CMP
             | Inst::NOT
             | Inst::SHR
             | Inst::SHL
@@ -268,10 +268,13 @@ impl Inst {
             | Inst::BIT_AND
             | Inst::BIT_XOR
             | Inst::BIT_NOT
+            | Inst::POW
+            | Inst::CMP
             | Inst::CONCAT_STRING
             | Inst::CREATE_RANGE
             | Inst::CREATE_REGEXP
             | Inst::RETURN
+            | Inst::MRETURN
             | Inst::TO_S
             | Inst::SPLAT
             | Inst::POP
@@ -280,6 +283,11 @@ impl Inst {
             Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL {}", Inst::read32(iseq, pc + 1) as i32),
             Inst::ADDI => format!("ADDI {}", Inst::read32(iseq, pc + 1) as i32),
             Inst::SUBI => format!("SUBI {}", Inst::read32(iseq, pc + 1) as i32),
+            Inst::IVAR_ADDI => format!(
+                "IVAR_ADDI {} +{}",
+                Inst::ident_name(iseq, pc + 1),
+                Inst::read32(iseq, pc + 5) as i32
+            ),
             Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", Inst::read64(iseq, pc + 1) as i64),
             Inst::PUSH_FLONUM => {
                 format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
@@ -293,18 +301,10 @@ impl Inst {
                 "JMP_IF_FALSE {:>05x}",
                 pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
             ),
-            Inst::OPT_CASE => {
-                //let val = Value::from(Inst::read64(iseq, pc + 1));
-                //let info = val.as_hash().unwrap();
-                /*let map = match info.inner_mut() {
-                    HashInfo::Map(map) => map,
-                    _ => panic!(),
-                };*/
-                format!(
-                    "OPT_CASE {:>05}",
-                    pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
-                )
-            }
+            Inst::OPT_CASE => format!(
+                "OPT_CASE {:>05}",
+                pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
+            ),
             Inst::SET_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;

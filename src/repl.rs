@@ -50,7 +50,6 @@ pub fn repl_vm() {
             Ok(parse_result) => {
                 match vm.run_repl(&parse_result, context) {
                     Ok(result) => {
-                        //parser.ident_table = vm.globals.ident_table.clone();
                         parser.lexer.source_info = parse_result.source_info;
                         lvar_collector = parse_result.lvar_collector;
                         println!("=> {}", vm.val_inspect(result));

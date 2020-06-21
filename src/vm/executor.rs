@@ -25,7 +25,7 @@ pub struct VM {
     exception: bool,
     pc: usize,
     gc_counter: usize,
-    pub channel: Option<(SyncSender<VMResult>, Receiver<usize>, VMRef)>,
+    pub parent_fiber: Option<ParentFiberInfo>,
     #[cfg(feature = "perf")]
     #[cfg_attr(tarpaulin, skip)]
     pub perf: Perf,
@@ -38,6 +38,19 @@ pub enum FiberState {
     Created,
     Running,
     Dead,
+}
+
+#[derive(Debug)]
+pub struct ParentFiberInfo {
+    parent: VMRef,
+    tx: SyncSender<VMResult>,
+    rx: Receiver<usize>,
+}
+
+impl ParentFiberInfo {
+    fn new(parent: VMRef, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+        ParentFiberInfo { parent, tx, rx }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,9 +75,8 @@ impl GC for VM {
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
-        match self.channel {
-            Some((_, _, vm)) => vm.mark(alloc),
-            None => {}
+        if let Some(ParentFiberInfo { parent, .. }) = self.parent_fiber {
+            parent.mark(alloc)
         }
     }
 }
@@ -82,7 +94,7 @@ impl VM {
             exception: false,
             pc: 0,
             gc_counter: 0,
-            channel: None,
+            parent_fiber: None,
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
@@ -90,7 +102,7 @@ impl VM {
         vm
     }
 
-    pub fn dup_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+    pub fn dup_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
         let vm = VM {
             globals: self.globals,
             root_path: self.root_path.clone(),
@@ -102,7 +114,7 @@ impl VM {
             exception: false,
             pc: 0,
             gc_counter: 0,
-            channel: Some((tx, rx, VMRef::from_ptr(self as *mut VM))),
+            parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             #[cfg(feature = "perf")]
             #[cfg_attr(tarpaulin, skip)]
             perf: Perf::new(),
@@ -336,12 +348,12 @@ impl VM {
         {
             self.perf.get_perf(Perf::INVALID);
         }
-        /*
+
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        */
+
         Ok(val)
     }
 
@@ -352,7 +364,6 @@ impl VM {
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
-        //self.globals.ident_table = result.ident_table.clone();
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
@@ -373,12 +384,12 @@ impl VM {
         {
             self.perf.get_perf(Perf::INVALID);
         }
-        /*
+
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
-        */
+
         Ok(val)
     }
 
@@ -2200,9 +2211,9 @@ impl VM {
     }
 
     pub fn fiber_send_to_parent(&self, val: VMResult) {
-        match &self.channel {
-            Some((tx, rx, _)) => {
-                tx.send(val.to_owned()).unwrap();
+        match &self.parent_fiber {
+            Some(ParentFiberInfo { tx, rx, .. }) => {
+                tx.send(val).unwrap();
                 rx.recv().unwrap();
             }
             None => return,

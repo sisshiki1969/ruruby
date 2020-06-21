@@ -11,8 +11,7 @@ pub struct Globals {
     method_cache: MethodCache,
     case_dispatch: CaseDispatchMap,
 
-    pub fibers: Vec<VMRef>,
-
+    main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
@@ -86,8 +85,7 @@ impl GC for Globals {
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
-        //eprintln!("fibers {}", self.fibers.len());
-        for vm in &self.fibers {
+        if let Some(vm) = self.main_fiber {
             vm.mark(alloc);
         }
     }
@@ -100,13 +98,7 @@ impl GlobalsRef {
 
     pub fn new_vm(&mut self) -> VMRef {
         let vm = VMRef::new(VM::new(self.to_owned()));
-        self.fibers.push(vm);
-        vm
-    }
-
-    pub fn new_vm_with(&mut self, vm: VM) -> VMRef {
-        let vm = VMRef::new(vm);
-        self.fibers.push(vm);
+        self.main_fiber = Some(vm);
         vm
     }
 }
@@ -137,7 +129,7 @@ impl Globals {
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
-            fibers: vec![],
+            main_fiber: None,
             instant: std::time::Instant::now(),
             class_version: 0,
             main_object,
