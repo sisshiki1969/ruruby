@@ -34,6 +34,10 @@ impl Inst {
     pub const ADDI: u8 = 30;
     pub const SUBI: u8 = 31;
     pub const IVAR_ADDI: u8 = 32;
+    pub const B_ANDI: u8 = 33;
+    pub const B_ORI: u8 = 34;
+    pub const EQI: u8 = 35;
+    pub const NEI: u8 = 36;
 
     pub const SET_LOCAL: u8 = 40;
     pub const GET_LOCAL: u8 = 41;
@@ -118,6 +122,10 @@ impl Inst {
             Inst::ADDI => "ADDI",
             Inst::SUBI => "SUBI",
             Inst::IVAR_ADDI => "IVAR_ADDI",
+            Inst::B_ANDI => "B_ANDI",
+            Inst::B_ORI => "B_ORI",
+            Inst::EQI => "EQI",
+            Inst::NEI => "NEI",
 
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
@@ -220,8 +228,12 @@ impl Inst {
             | Inst::SUB                 // inline cache: u32
             | Inst::MUL                 // inline cache: u32
             | Inst::DIV                 // inline cache: u32
-            | Inst::ADDI                // inline cache: u32
-            | Inst::SUBI                // inline cache: u32
+            | Inst::ADDI                // immediate: i32
+            | Inst::SUBI                // immediate: i32
+            | Inst::B_ANDI              // immediate: i32
+            | Inst::B_ORI               // immediate: i32
+            | Inst::EQI                 // immediate: i32
+            | Inst::NEI                 // immediate: i32
             | Inst::SHL                 // inline cache: u32
             | Inst::CREATE_HASH         // number of items: u32
             | Inst::YIELD               // number of items: u32
@@ -234,6 +246,7 @@ impl Inst {
             | Inst::DEF_METHOD
             | Inst::DEF_SMETHOD
             | Inst::OPT_CASE
+            | Inst::CHECK_LOCAL
             | Inst::IVAR_ADDI => 9,
             Inst::DEF_CLASS => 10,
             Inst::OPT_SEND | Inst::OPT_SEND_SELF => 11,
@@ -243,6 +256,13 @@ impl Inst {
     }
 
     pub fn inst_info(iseq_ref: ISeqRef, pc: usize) -> String {
+        fn imm_i32(iseq: &Vec<u8>, pc: usize) -> String {
+            format!(
+                "{} {}",
+                Inst::inst_name(iseq[pc]),
+                Inst::read32(iseq, pc + 1) as i32
+            )
+        }
         let iseq = &iseq_ref.iseq;
         let id_lock = ID.read().unwrap();
         match iseq[pc] {
@@ -279,10 +299,14 @@ impl Inst {
             | Inst::SPLAT
             | Inst::POP
             | Inst::YIELD => format!("{}", Inst::inst_name(iseq[pc])),
-            Inst::PUSH_STRING => format!("PUSH_STRING {}", Inst::read32(iseq, pc + 1) as i32),
-            Inst::PUSH_SYMBOL => format!("PUSH_SYMBOL {}", Inst::read32(iseq, pc + 1) as i32),
-            Inst::ADDI => format!("ADDI {}", Inst::read32(iseq, pc + 1) as i32),
-            Inst::SUBI => format!("SUBI {}", Inst::read32(iseq, pc + 1) as i32),
+            Inst::PUSH_STRING
+            | Inst::PUSH_SYMBOL
+            | Inst::ADDI
+            | Inst::SUBI
+            | Inst::B_ANDI
+            | Inst::B_ORI
+            | Inst::EQI
+            | Inst::NEI => imm_i32(iseq, pc),
             Inst::IVAR_ADDI => format!(
                 "IVAR_ADDI {} +{}",
                 Inst::ident_name(iseq, pc + 1),

@@ -679,11 +679,23 @@ impl VM {
                     try_err!(self, self.eval_bitand(lhs, rhs));
                     self.pc += 1;
                 }
+                Inst::B_ANDI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    try_err!(self, self.eval_bitandi(lhs, i));
+                    self.pc += 5;
+                }
                 Inst::BIT_OR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     try_err!(self, self.eval_bitor(lhs, rhs));
                     self.pc += 1;
+                }
+                Inst::B_ORI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    try_err!(self, self.eval_bitori(lhs, i));
+                    self.pc += 5;
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.stack_pop();
@@ -703,12 +715,26 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 1;
                 }
+                Inst::EQI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let val = Value::bool(self.eval_eqi(lhs, i));
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
                 Inst::NE => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let val = Value::bool(!self.eval_eq(rhs, lhs));
                     self.stack_push(val);
                     self.pc += 1;
+                }
+                Inst::NEI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let val = Value::bool(!self.eval_eqi(lhs, i));
+                    self.stack_push(val);
+                    self.pc += 5;
                 }
                 Inst::TEQ => {
                     let lhs = self.stack_pop();
@@ -1637,6 +1663,17 @@ impl VM {
         }
     }
 
+    fn eval_bitandi(&mut self, lhs: Value, i: i32) -> VMResult {
+        let i = i as i64;
+        if lhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(lhs.as_packed_fixnum() & i));
+        }
+        match lhs.unpack() {
+            RV::Integer(lhs) => Ok(Value::fixnum(lhs & i)),
+            _ => return Err(self.error_undefined_op("&", Value::fixnum(i), lhs)),
+        }
+    }
+
     fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::fixnum(
@@ -1646,6 +1683,17 @@ impl VM {
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs | rhs)),
             (_, _) => return Err(self.error_undefined_op("|", rhs, lhs)),
+        }
+    }
+
+    fn eval_bitori(&mut self, lhs: Value, i: i32) -> VMResult {
+        let i = i as i64;
+        if lhs.is_packed_fixnum() {
+            return Ok(Value::fixnum(lhs.as_packed_fixnum() | i));
+        }
+        match lhs.unpack() {
+            RV::Integer(lhs) => Ok(Value::fixnum(lhs | i)),
+            _ => return Err(self.error_undefined_op("|", Value::fixnum(i), lhs)),
         }
     }
 
@@ -1683,7 +1731,11 @@ macro_rules! eval_cmp {
 
 impl VM {
     pub fn eval_eq(&self, rhs: Value, lhs: Value) -> bool {
-        rhs.equal(lhs)
+        lhs.equal(rhs)
+    }
+
+    pub fn eval_eqi(&self, lhs: Value, i: i32) -> bool {
+        lhs.equal_i(i)
     }
 
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
