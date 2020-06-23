@@ -785,13 +785,25 @@ impl VM {
                 }
                 Inst::SET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
+                    let val = self.stack_pop();
+                    self.context()[id] = val;
+                    self.pc += 5;
+                }
+                Inst::GET_LOCAL => {
+                    let id = self.read_lvar_id(iseq, 1);
+                    let val = self.context()[id];
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
+                Inst::SET_DYNLOCAL => {
+                    let id = self.read_lvar_id(iseq, 1);
                     let outer = self.read32(iseq, 5);
                     let val = self.stack_pop();
                     let mut cref = self.get_outer_context(outer);
                     cref[id] = val;
                     self.pc += 9;
                 }
-                Inst::GET_LOCAL => {
+                Inst::GET_DYNLOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
                     let outer = self.read32(iseq, 5);
                     let cref = self.get_outer_context(outer);

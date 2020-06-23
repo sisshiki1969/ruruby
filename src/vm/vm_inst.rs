@@ -39,21 +39,23 @@ impl Inst {
     pub const EQI: u8 = 35;
     pub const NEI: u8 = 36;
 
-    pub const SET_LOCAL: u8 = 40;
-    pub const GET_LOCAL: u8 = 41;
-    pub const GET_CONST: u8 = 42;
-    pub const SET_CONST: u8 = 43;
-    pub const GET_CONST_TOP: u8 = 44;
-    pub const GET_SCOPE: u8 = 45;
+    pub const SET_LOCAL: u8 = 240;
+    pub const GET_LOCAL: u8 = 241;
+    pub const SET_DYNLOCAL: u8 = 42;
+    pub const GET_DYNLOCAL: u8 = 43;
+    pub const GET_CONST: u8 = 44;
+    pub const SET_CONST: u8 = 45;
+    pub const GET_CONST_TOP: u8 = 46;
+    pub const GET_SCOPE: u8 = 47;
 
-    pub const GET_IVAR: u8 = 46;
-    pub const SET_IVAR: u8 = 47;
-    pub const GET_GVAR: u8 = 48;
-    pub const SET_GVAR: u8 = 49;
-    pub const GET_INDEX: u8 = 50;
-    pub const SET_INDEX: u8 = 51;
+    pub const GET_IVAR: u8 = 48;
+    pub const SET_IVAR: u8 = 49;
+    pub const GET_GVAR: u8 = 50;
+    pub const SET_GVAR: u8 = 51;
+    pub const GET_INDEX: u8 = 52;
+    pub const SET_INDEX: u8 = 53;
 
-    pub const CHECK_LOCAL: u8 = 52;
+    pub const CHECK_LOCAL: u8 = 54;
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
@@ -129,6 +131,8 @@ impl Inst {
 
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
+            Inst::SET_DYNLOCAL => "SET_DYNLOCAL",
+            Inst::GET_DYNLOCAL => "GET_DYNLOCAL",
             Inst::GET_CONST => "GET_CONST",
             Inst::SET_CONST => "SET_CONST",
             Inst::GET_CONST_TOP => "GET_CONSTTOP",
@@ -208,6 +212,9 @@ impl Inst {
                                         // operand
             Inst::PUSH_STRING           // IdentId: u32
             | Inst::PUSH_SYMBOL         // IdentId: u32
+
+            | Inst::SET_LOCAL           // LvarId: u32
+            | Inst::GET_LOCAL           // LVarId: u32
             | Inst::GET_CONST           // IdentId: u32
             | Inst::SET_CONST           // IdentId: u32
             | Inst::GET_CONST_TOP       // IdentId: u32
@@ -241,8 +248,8 @@ impl Inst {
 
             Inst::PUSH_FIXNUM
             | Inst::PUSH_FLONUM
-            | Inst::SET_LOCAL
-            | Inst::GET_LOCAL
+            | Inst::SET_DYNLOCAL
+            | Inst::GET_DYNLOCAL
             | Inst::DEF_METHOD
             | Inst::DEF_SMETHOD
             | Inst::OPT_CASE
@@ -330,18 +337,30 @@ impl Inst {
                 pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
             ),
             Inst::SET_LOCAL => {
-                let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
                 let name = id_lock.get_ident_name(ident_id);
-                format!("SET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
+                format!("SET_LOCAL '{}' LvarId:{}", name, id)
             }
             Inst::GET_LOCAL => {
+                let id = Inst::read32(iseq, pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let name = id_lock.get_ident_name(ident_id);
+                format!("GET_LOCAL '{}' LvarId:{}", name, id)
+            }
+            Inst::SET_DYNLOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
                 let name = id_lock.get_ident_name(ident_id);
-                format!("GET_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
+                format!("SET_DYNLOCAL '{}' outer:{} LvarId:{}", name, frame, id)
+            }
+            Inst::GET_DYNLOCAL => {
+                let frame = Inst::read32(iseq, pc + 5);
+                let id = Inst::read32(iseq, pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let name = id_lock.get_ident_name(ident_id);
+                format!("GET_DYNLOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::CHECK_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
