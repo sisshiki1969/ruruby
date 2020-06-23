@@ -739,7 +739,7 @@ impl VM {
                 Inst::TEQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let res = self.eval_teq(rhs, lhs)?;
+                    let res = self.eval_teq(lhs, rhs)?;
                     let val = Value::bool(res);
                     self.stack_push(val);
                     self.pc += 1;
@@ -761,7 +761,7 @@ impl VM {
                 Inst::CMP => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_cmp(rhs, lhs)?;
+                    let val = self.eval_cmp(lhs, rhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
