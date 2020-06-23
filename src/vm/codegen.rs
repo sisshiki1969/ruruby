@@ -326,14 +326,14 @@ impl Codegen {
                 id
             )),
         };
-        //if outer == 0 {
-        //    iseq.push(Inst::SET_LOCAL);
-        //    Codegen::push32(iseq, lvar_id.as_u32());
-        //} else {
-        iseq.push(Inst::SET_DYNLOCAL);
-        Codegen::push32(iseq, lvar_id.as_u32());
-        Codegen::push32(iseq, outer);
-        //}
+        if outer == 0 {
+            iseq.push(Inst::SET_LOCAL);
+            Codegen::push32(iseq, lvar_id.as_u32());
+        } else {
+            iseq.push(Inst::SET_DYNLOCAL);
+            Codegen::push32(iseq, lvar_id.as_u32());
+            Codegen::push32(iseq, outer);
+        }
     }
 
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
@@ -341,14 +341,14 @@ impl Codegen {
             Some((outer, id)) => (outer, id),
             None => return Err(self.error_name("undefined local variable.")),
         };
-        //if outer == 0 {
-        //    iseq.push(Inst::GET_LOCAL);
-        //    Codegen::push32(iseq, lvar_id.as_u32());
-        //} else {
-        iseq.push(Inst::GET_DYNLOCAL);
-        Codegen::push32(iseq, lvar_id.as_u32());
-        Codegen::push32(iseq, outer);
-        //}
+        if outer == 0 {
+            iseq.push(Inst::GET_LOCAL);
+            Codegen::push32(iseq, lvar_id.as_u32());
+        } else {
+            iseq.push(Inst::GET_DYNLOCAL);
+            Codegen::push32(iseq, lvar_id.as_u32());
+            Codegen::push32(iseq, outer);
+        }
         Ok(())
     }
 

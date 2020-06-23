@@ -778,7 +778,7 @@ impl VM {
                         (Some(lhs), Some(rhs)) => {
                             Value::string(&self.globals, format!("{}{}", lhs, rhs))
                         }
-                        (_, _) => unreachable!("Illegal CAONCAT_STRING arguments."),
+                        (_, _) => unreachable!("Illegal CONCAT_STRING arguments."),
                     };
                     self.stack_push(val);
                     self.pc += 1;

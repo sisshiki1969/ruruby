@@ -21,6 +21,8 @@ pub struct Globals {
     pub module_class: ClassRef,
     pub object_class: ClassRef,
     pub gc_enabled: bool,
+
+    pub fibers: Vec<VMRef>,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -99,6 +101,7 @@ impl GlobalsRef {
     pub fn new_vm(&mut self) -> VMRef {
         let vm = VMRef::new(VM::new(self.to_owned()));
         self.main_fiber = Some(vm);
+        self.fibers.push(vm);
         vm
     }
 }
@@ -139,6 +142,7 @@ impl Globals {
             builtins,
             case_dispatch: CaseDispatchMap::new(),
             gc_enabled: true,
+            fibers: vec![],
         };
         // Generate singleton class for Object
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
