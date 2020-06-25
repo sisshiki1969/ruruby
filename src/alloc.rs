@@ -18,11 +18,11 @@ thread_local! {
     };
 }
 
+const SIZE: usize = 64;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
-const PAGE_LEN: usize = 64 * 64;
-const DATA_LEN: usize = 64 * 63;
-const ALIGN: usize = 0x4_0000; // 2^18 = 256kb
-const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE;
+const PAGE_LEN: usize = 64 * SIZE;
+const DATA_LEN: usize = 64 * (SIZE - 1);
+const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE; // 2^18 = 256kb
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
@@ -36,7 +36,7 @@ pub trait GC {
 ///
 struct Page {
     data: [GCBox<RValue>; DATA_LEN],
-    mark_bits: [u64; 63],
+    mark_bits: [u64; SIZE - 1],
 }
 
 type PageRef = Ref<Page>;
@@ -47,19 +47,19 @@ impl PageRef {
     ///
     fn alloc_page() -> Self {
         use std::alloc::{alloc, Layout};
-        let layout = Layout::from_size_align(ALLOC_SIZE, ALIGN).unwrap();
+        let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         let ptr = unsafe { alloc(layout) };
         #[cfg(debug_assertions)]
         {
-            assert_eq!(0, ptr as *const u8 as usize & (ALIGN - 1));
-            //eprintln!("page allocated: {:?}", ptr);
+            assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
         }
         PageRef::from_ptr(ptr as *mut Page)
     }
 
+    #[allow(dead_code)]
     fn dealloc_page(&self) {
         use std::alloc::{dealloc, Layout};
-        let layout = Layout::from_size_align(ALLOC_SIZE, ALIGN).unwrap();
+        let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         unsafe { dealloc(self.as_ptr() as *mut u8, layout) };
     }
 
@@ -72,7 +72,7 @@ impl PageRef {
     }
 
     fn from_inner(ptr: *mut GCBox<RValue>) -> Self {
-        PageRef::from_ptr((ptr as usize & !(ALIGN - 1)) as *mut Page)
+        PageRef::from_ptr((ptr as usize & !(ALLOC_SIZE - 1)) as *mut Page)
     }
     ///
     /// Get raw pointer for inner GCBox with `index`.
@@ -84,8 +84,8 @@ impl PageRef {
     ///
     /// Get raw pointer for marking bitmap.
     ///
-    fn get_bitmap_ptr(&self) -> *mut [u64; 63] {
-        &self.mark_bits as *const [u64; 63] as *mut [u64; 63]
+    fn get_bitmap_ptr(&self) -> *mut [u64; SIZE - 1] {
+        &self.mark_bits as *const [u64; SIZE - 1] as *mut [u64; SIZE - 1]
     }
 
     ///
@@ -165,6 +165,8 @@ pub struct Allocator {
     mark_counter: usize,
     /// List of free objects.
     free: Option<GCBoxRef<RValue>>,
+    /// Deallocated pages.
+    free_pages: Vec<PageRef>,
 }
 
 pub struct AllocThread {
@@ -184,15 +186,19 @@ impl Allocator {
         assert_eq!(64, GCBOX_SIZE);
         assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
         let ptr = PageRef::alloc_page();
-        Allocator {
-            used: 0,
+        let mut alloc = Allocator {
+            used: DATA_LEN,
             allocated: 0,
             free_list_count: 0,
             current: ptr,
             pages: vec![],
             mark_counter: 0,
             free: None,
-        }
+            free_pages: vec![],
+        };
+        alloc.clear_mark();
+        alloc.sweep();
+        alloc
     }
 
     pub fn free_count(&self) -> usize {
@@ -241,7 +247,11 @@ impl Allocator {
             // Allocate new page.
             self.used = 1;
             self.pages.push(self.current);
-            self.current = PageRef::alloc_page();
+            self.current = if self.free_pages.len() == 0 {
+                PageRef::alloc_page()
+            } else {
+                self.free_pages.pop().unwrap()
+            };
             self.current.get_data_ptr(0)
         } else {
             // Bump allocation.
@@ -284,6 +294,7 @@ impl Allocator {
         {
             eprint!("marked: {}  ", self.mark_counter);
         }
+        self.dealloc_empty_pages();
         self.sweep();
         #[cfg(debug_assertions)]
         {
@@ -341,6 +352,20 @@ impl Allocator {
         is_marked
     }
 
+    pub fn dealloc_empty_pages(&mut self) {
+        let len = self.pages.len();
+        for i in 0..len {
+            if self.pages[len - i - 1].all_dead() {
+                let page = self.pages.remove(len - i - 1);
+                page.free_page();
+                self.free_pages.push(page);
+                //page.dealloc_page();
+                #[cfg(debug_assertions)]
+                eprintln!("dealloc: {:?}", page.as_ptr());
+            }
+        }
+    }
+
     fn sweep_bits(
         bit: usize,
         mut map: u64,
@@ -373,17 +398,6 @@ impl Allocator {
         let mut anchor = GCBox::new();
         let head = &mut ((&mut anchor) as *mut GCBox<RValue>);
 
-        let len = self.pages.len();
-        for i in 0..len {
-            if self.pages[len - i - 1].all_dead() {
-                let page = self.pages.remove(len - i - 1);
-                page.free_page();
-                page.dealloc_page();
-                #[cfg(debug_assertions)]
-                eprintln!("dealloc: {:?}", page.as_ptr());
-            }
-        }
-
         for pinfo in self.pages.iter() {
             let mut ptr = pinfo.get_data_ptr(0);
             for map in pinfo.mark_bits.iter() {
@@ -401,7 +415,7 @@ impl Allocator {
             c += Allocator::sweep_bits(64, *map, &mut ptr, head);
         }
 
-        if i < 63 {
+        if i < SIZE - 1 {
             c += Allocator::sweep_bits(bit, bitmap[i], &mut ptr, head);
         }
 
@@ -453,7 +467,7 @@ impl Allocator {
 
     #[allow(dead_code)]
     #[cfg_attr(tarpaulin, skip)]
-    fn print_bits(&self, bitmap: &[u64; 63]) {
+    fn print_bits(&self, bitmap: &[u64; SIZE - 1]) {
         let mut i = 0;
         bitmap.iter().for_each(|m| {
             eprint!("{:016x} ", m.reverse_bits());

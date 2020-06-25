@@ -457,7 +457,7 @@ macro_rules! try_err {
 impl VM {
     fn gc(&mut self) {
         self.gc_counter += 1;
-        if !self.globals.gc_enabled || self.gc_counter % 32 != 0 {
+        if !self.globals.gc_enabled || self.gc_counter % 128 != 0 {
             return;
         }
         if !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
