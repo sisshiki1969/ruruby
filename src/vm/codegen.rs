@@ -561,8 +561,9 @@ impl Codegen {
         Codegen::push32(iseq, len as u32);
     }
 
-    fn gen_concat(&mut self, iseq: &mut ISeq) {
+    fn gen_concat(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::CONCAT_STRING);
+        Codegen::push32(iseq, len as u32);
     }
 
     fn gen_comp_stmt(
@@ -716,12 +717,9 @@ impl Codegen {
             };
             eprintln!("-----------------------------------------");
             eprintln!("{:?}", methodref);
+            eprint!("local var: ");
             for (k, v) in iseq.lvar.table() {
-                eprint!(
-                    "local var({}): {} ",
-                    v.as_u32(),
-                    IdentId::get_ident_name(*k)
-                );
+                eprint!("{}:{} ", v.as_u32(), IdentId::get_ident_name(*k));
             }
             eprintln!("");
             eprintln!("block: {:?}", iseq.lvar.block());
@@ -778,7 +776,7 @@ impl Codegen {
                 self.gen_symbol(iseq, *id);
             }
             NodeKind::InterporatedString(nodes) => {
-                self.gen_string(iseq, &"".to_string());
+                //self.gen_string(iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
@@ -790,14 +788,13 @@ impl Codegen {
                         }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
                     }
-                    self.gen_concat(iseq);
                 }
+                self.gen_concat(iseq, nodes.len());
                 if !use_value {
                     self.gen_pop(iseq)
                 };
             }
             NodeKind::RegExp(nodes) => {
-                self.gen_string(iseq, &"".to_string());
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
@@ -809,8 +806,8 @@ impl Codegen {
                         }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
                     }
-                    self.gen_concat(iseq);
                 }
+                self.gen_concat(iseq, nodes.len());
                 let loc = self.loc;
                 self.save_loc(iseq, loc);
                 self.gen_create_regexp(iseq);

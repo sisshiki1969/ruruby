@@ -772,16 +772,25 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CONCAT_STRING => {
-                    let rhs = self.stack_pop();
-                    let lhs = self.stack_pop();
-                    let val = match (lhs.as_string(), rhs.as_string()) {
-                        (Some(lhs), Some(rhs)) => {
-                            Value::string(&self.globals, format!("{}{}", lhs, rhs))
+                    let val = match self.read32(iseq, 1) as usize {
+                        0 => Value::string(&self.globals, "".to_string()),
+                        i => {
+                            let mut res = match self.stack_pop().as_string() {
+                                Some(s) => s.to_owned(),
+                                None => unreachable!("Illegal CONCAT_STRING arguments."),
+                            };
+                            for _ in 0..i - 1 {
+                                res = match self.stack_pop().as_string() {
+                                    Some(lhs) => format!("{}{}", lhs, res),
+                                    None => unreachable!("Illegal CONCAT_STRING arguments."),
+                                };
+                            }
+                            Value::string(&self.globals, res)
                         }
-                        (_, _) => unreachable!("Illegal CONCAT_STRING arguments."),
                     };
+
                     self.stack_push(val);
-                    self.pc += 1;
+                    self.pc += 5;
                 }
                 Inst::SET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);

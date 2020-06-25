@@ -201,7 +201,6 @@ impl Inst {
             | Inst::BIT_AND
             | Inst::BIT_XOR
             | Inst::BIT_NOT
-            | Inst::CONCAT_STRING
             | Inst::CREATE_RANGE
             | Inst::CREATE_REGEXP
             | Inst::TO_S
@@ -231,6 +230,7 @@ impl Inst {
             | Inst::JMP_IF_FALSE        // disp: u32
             | Inst::DUP                 // number of items: u32
             | Inst::TAKE                // number of items: u32
+            | Inst::CONCAT_STRING       // number of items: u32
             | Inst::ADD                 // inline cache: u32
             | Inst::SUB                 // inline cache: u32
             | Inst::MUL                 // inline cache: u32
@@ -297,7 +297,6 @@ impl Inst {
             | Inst::BIT_NOT
             | Inst::POW
             | Inst::CMP
-            | Inst::CONCAT_STRING
             | Inst::CREATE_RANGE
             | Inst::CREATE_REGEXP
             | Inst::RETURN
@@ -306,14 +305,14 @@ impl Inst {
             | Inst::SPLAT
             | Inst::POP
             | Inst::YIELD => format!("{}", Inst::inst_name(iseq[pc])),
-            Inst::PUSH_STRING
-            | Inst::PUSH_SYMBOL
-            | Inst::ADDI
-            | Inst::SUBI
-            | Inst::B_ANDI
-            | Inst::B_ORI
-            | Inst::EQI
-            | Inst::NEI => imm_i32(iseq, pc),
+            Inst::PUSH_STRING | Inst::PUSH_SYMBOL => {
+                let id = IdentId::from(Inst::read32(iseq, pc + 1));
+                let name = id_lock.get_ident_name(id);
+                format!("{} '{}'", Inst::inst_name(iseq[pc]), name)
+            }
+            Inst::ADDI | Inst::SUBI | Inst::B_ANDI | Inst::B_ORI | Inst::EQI | Inst::NEI => {
+                imm_i32(iseq, pc)
+            }
             Inst::IVAR_ADDI => format!(
                 "IVAR_ADDI {} +{}",
                 Inst::ident_name(iseq, pc + 1),
@@ -390,18 +389,23 @@ impl Inst {
             Inst::OPT_SEND => format!(
                 "OPT_SEND '{}' {} items",
                 Inst::ident_name(iseq, pc + 1),
-                Inst::read32(iseq, pc + 5)
+                Inst::read16(iseq, pc + 5)
             ),
             Inst::OPT_SEND_SELF => format!(
                 "OPT_SEND_SELF '{}' {} items",
                 Inst::ident_name(iseq, pc + 1),
-                Inst::read32(iseq, pc + 5)
+                Inst::read16(iseq, pc + 5)
             ),
-            Inst::CREATE_ARRAY => format!("CREATE_ARRAY {} items", Inst::read32(iseq, pc + 1)),
-            Inst::CREATE_PROC => format!("CREATE_PROC method:{}", Inst::read32(iseq, pc + 1)),
-            Inst::CREATE_HASH => format!("CREATE_HASH {} items", Inst::read32(iseq, pc + 1)),
-            Inst::DUP => format!("DUP {}", Inst::read32(iseq, pc + 1)),
-            Inst::TAKE => format!("TAKE {}", Inst::read32(iseq, pc + 1)),
+            Inst::CREATE_ARRAY
+            | Inst::CREATE_PROC
+            | Inst::CREATE_HASH
+            | Inst::DUP
+            | Inst::TAKE
+            | Inst::CONCAT_STRING => format!(
+                "{} {} items",
+                Inst::inst_name(iseq[pc]),
+                Inst::read32(iseq, pc + 1)
+            ),
             Inst::DEF_CLASS => format!(
                 "DEF_CLASS {} '{}' method:{}",
                 if Inst::read8(iseq, pc + 1) == 1 {
@@ -425,6 +429,11 @@ impl Inst {
 
     fn read32(iseq: &ISeq, pc: usize) -> u32 {
         let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
+        unsafe { *ptr }
+    }
+
+    fn read16(iseq: &ISeq, pc: usize) -> u16 {
+        let ptr = iseq[pc..pc + 1].as_ptr() as *const u16;
         unsafe { *ptr }
     }
 
