@@ -1072,12 +1072,25 @@ impl Codegen {
             NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes, use_value)?,
             NodeKind::If { cond, then_, else_ } => {
                 self.gen(globals, iseq, &cond, true)?;
-                let src1 = self.gen_jmp_if_false(iseq);
-                self.gen(globals, iseq, &then_, use_value)?;
-                let src2 = Codegen::gen_jmp(iseq);
-                Codegen::write_disp_from_cur(iseq, src1);
-                self.gen(globals, iseq, &else_, use_value)?;
-                Codegen::write_disp_from_cur(iseq, src2);
+                if use_value {
+                    let src1 = self.gen_jmp_if_false(iseq);
+                    self.gen(globals, iseq, &then_, true)?;
+                    let src2 = Codegen::gen_jmp(iseq);
+                    Codegen::write_disp_from_cur(iseq, src1);
+                    self.gen(globals, iseq, &else_, true)?;
+                    Codegen::write_disp_from_cur(iseq, src2);
+                } else {
+                    let src1 = self.gen_jmp_if_false(iseq);
+                    self.gen(globals, iseq, &then_, false)?;
+                    if else_.is_empty() {
+                        Codegen::write_disp_from_cur(iseq, src1);
+                    } else {
+                        let src2 = Codegen::gen_jmp(iseq);
+                        Codegen::write_disp_from_cur(iseq, src1);
+                        self.gen(globals, iseq, &else_, false)?;
+                        Codegen::write_disp_from_cur(iseq, src2);
+                    }
+                }
             }
             NodeKind::For { param, iter, body } => {
                 let id = match param.kind {

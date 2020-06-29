@@ -171,7 +171,7 @@ def perf_optcarrot(option = "")
 
   puts "benchmark: optcarrot #{option}"
   puts format("\t%10s  %10s", 'ruby', 'ruruby')
-  print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave])
+  print_cmp('fps', fps_ruruby[:ave], fps_ruby[:ave])
   print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
 
   @md2 += "| optcarrot #{option} | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
@@ -183,9 +183,9 @@ end
 
 ['so_mandelbrot.rb',
  'app_mandelbrot.rb',
- 'fibo.rb',
+ 'app_fibo.rb',
  'block.rb',
- 'ao_bench.rb'].each { |x| perf x }
+ 'app_aobench.rb'].each { |x| perf x }
 
 @optcarrot = "../optcarrot/bin/optcarrot-bench"
 

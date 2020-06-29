@@ -170,6 +170,13 @@ pub type Node = Annot<NodeKind>;
 pub type NodeVec = Vec<Node>;
 
 impl Node {
+    pub fn is_empty(&self) -> bool {
+        match &self.kind {
+            NodeKind::CompStmt(nodes) => nodes.len() == 0,
+            _ => false,
+        }
+    }
+
     pub fn new_nil(loc: Loc) -> Self {
         Node::new(NodeKind::Nil, loc)
     }
