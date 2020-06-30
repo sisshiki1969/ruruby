@@ -576,28 +576,49 @@ fn local_var1() {
 }
 
 #[test]
+fn local_var2() {
+    let program = "
+        a = 100
+        b = a += 3
+        assert(103, b)";
+    assert_script(program);
+}
+
+#[test]
+fn instance_var1() {
+    let program = "
+        assert(nil, @some)
+        @some = 100
+        @some += 15
+        assert(115, @some)
+        assert(125, @some += 10)";
+    assert_script(program);
+}
+
+#[test]
 fn global_var() {
     let program = "
-            class A
-                $global = 1250
+        class A
+            $global = 1250
+        end
+        class B
+            class C
+                assert(1250, $global)
             end
-            class B
-                class C
-                    assert(1250, $global)
-                end
-            end
-            ";
+        end
+        ";
     assert_script(program);
 }
 
 #[test]
 fn mul_assign1() {
-    let program = "
+    let program = r#"
+            assert_error { eval("@foo + 4 = 100") }
             a,b,c = 1,2,3
             assert(1,a)
             assert(2,b)
             assert(3,c)
-            ";
+            "#;
     assert_script(program);
 }
 

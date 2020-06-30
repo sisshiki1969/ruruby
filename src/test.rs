@@ -32,3 +32,14 @@ pub fn assert_script(script: impl Into<String>) {
     }
     Allocator::init();
 }
+
+pub fn assert_error(script: impl Into<String>) {
+    let mut globals = GlobalsRef::new_globals();
+    let mut vm = globals.new_vm();
+    let program = script.into();
+    match vm.run(PathBuf::from(""), &program, None) {
+        Ok(_) => panic!("Must be an error:{}", program),
+        Err(_) => {}
+    }
+    Allocator::init();
+}

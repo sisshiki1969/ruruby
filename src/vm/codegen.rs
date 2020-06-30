@@ -1673,3 +1673,36 @@ impl Codegen {
         RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info, self.loc)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test::*;
+
+    #[test]
+    fn codegen_usevalue() {
+        let program = r#"
+        a = 100
+        true; 4; 3.2; "and"; :foo; self;
+        1..3; [1,2]; {s:0}; a; $foo; Object; @boo; false
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn codegen_invalid_break() {
+        assert_error(r#"eval("break")"#);
+        assert_error(r#"break"#);
+    }
+
+    #[test]
+    fn codegen_invalid_next() {
+        assert_error(r#"eval("next")"#);
+        assert_error(r#"next"#);
+    }
+
+    #[test]
+    fn codegen_error() {
+        assert_error(r#"a"#);
+        assert_error(r#"a + 3 = 100"#);
+    }
+}
