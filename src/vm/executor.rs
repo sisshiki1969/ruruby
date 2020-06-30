@@ -804,6 +804,13 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
+                Inst::LVAR_ADDI => {
+                    let id = self.read_lvar_id(iseq, 1);
+                    let i = self.read32(iseq, 5) as i32;
+                    let val = self.context()[id];
+                    self.context()[id] = self.eval_addi(val, i)?;
+                    self.pc += 9;
+                }
                 Inst::SET_DYNLOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
                     let outer = self.read32(iseq, 5);

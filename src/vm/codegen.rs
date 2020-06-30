@@ -363,6 +363,45 @@ impl Codegen {
         Ok(())
     }
 
+    fn gen_lvar_addi(
+        &mut self,
+        iseq: &mut ISeq,
+        id: IdentId,
+        val: i32,
+        use_value: bool,
+    ) -> Result<(), RubyError> {
+        let (outer, lvar_id) = match self.get_local_var(id) {
+            Some((outer, id)) => (outer, id),
+            None => return Err(self.error_name("undefined local variable.")),
+        };
+        if outer == 0 {
+            let loc = self.loc;
+            self.save_loc(iseq, loc);
+            iseq.push(Inst::LVAR_ADDI);
+            Codegen::push32(iseq, lvar_id.as_u32());
+            Codegen::push32(iseq, val as u32);
+            if use_value {
+                self.gen_get_local(iseq, id)?;
+            }
+        } else {
+            iseq.push(Inst::GET_DYNLOCAL);
+            Codegen::push32(iseq, lvar_id.as_u32());
+            Codegen::push32(iseq, outer);
+            let loc = self.loc;
+            self.save_loc(iseq, loc);
+            iseq.push(Inst::ADDI);
+            Codegen::push32(iseq, val as u32);
+            if use_value {
+                self.gen_dup(iseq, 1);
+            }
+            iseq.push(Inst::SET_DYNLOCAL);
+            Codegen::push32(iseq, lvar_id.as_u32());
+            Codegen::push32(iseq, outer);
+        }
+
+        Ok(())
+    }
+
     fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
         for (i, context) in self.context_stack.iter().rev().enumerate() {
             match context.lvar_info.get(&id) {
@@ -1289,6 +1328,24 @@ impl Codegen {
                                 let loc = mlhs[0].loc.merge(mrhs[0].loc);
                                 self.save_loc(iseq, loc);
                                 self.gen_ivar_addi(iseq, *id1, *i as i32 as u32, use_value);
+                            }
+                            (
+                                NodeKind::LocalVar(id1),
+                                NodeKind::BinOp(
+                                    BinOp::Add,
+                                    box Node {
+                                        kind: NodeKind::LocalVar(id2),
+                                        ..
+                                    },
+                                    box Node {
+                                        kind: NodeKind::Integer(i),
+                                        ..
+                                    },
+                                ),
+                            ) if *id1 == *id2 && *i as i32 as i64 == *i => {
+                                let loc = mlhs[0].loc.merge(mrhs[0].loc);
+                                self.save_loc(iseq, loc);
+                                self.gen_lvar_addi(iseq, *id1, *i as i32, use_value)?;
                             }
                             _ => {
                                 self.gen(globals, iseq, &mrhs[0], true)?;

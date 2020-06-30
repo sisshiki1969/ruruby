@@ -38,9 +38,10 @@ impl Inst {
     pub const B_ORI: u8 = 34;
     pub const EQI: u8 = 35;
     pub const NEI: u8 = 36;
+    pub const LVAR_ADDI: u8 = 37;
 
-    pub const SET_LOCAL: u8 = 240;
-    pub const GET_LOCAL: u8 = 241;
+    pub const SET_LOCAL: u8 = 40;
+    pub const GET_LOCAL: u8 = 41;
     pub const SET_DYNLOCAL: u8 = 42;
     pub const GET_DYNLOCAL: u8 = 43;
     pub const GET_CONST: u8 = 44;
@@ -128,6 +129,7 @@ impl Inst {
             Inst::B_ORI => "B_ORI",
             Inst::EQI => "EQI",
             Inst::NEI => "NEI",
+            Inst::LVAR_ADDI => "LVAR_ADDI",
 
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
@@ -190,6 +192,7 @@ impl Inst {
             | Inst::PUSH_SELF
             | Inst::REM
             | Inst::POW
+            | Inst::TEQ
             | Inst::EQ
             | Inst::NE
             | Inst::GT
@@ -254,11 +257,12 @@ impl Inst {
             | Inst::DEF_SMETHOD
             | Inst::OPT_CASE
             | Inst::CHECK_LOCAL
-            | Inst::IVAR_ADDI => 9,
+            | Inst::IVAR_ADDI
+            | Inst::LVAR_ADDI => 9,
             Inst::DEF_CLASS => 10,
             Inst::OPT_SEND | Inst::OPT_SEND_SELF => 11,
             Inst::SEND | Inst::SEND_SELF => 17,
-            _ => 1,
+            _ => panic!(),
         }
     }
 
@@ -318,6 +322,17 @@ impl Inst {
                 Inst::ident_name(iseq, pc + 1),
                 Inst::read32(iseq, pc + 5) as i32
             ),
+            Inst::LVAR_ADDI => {
+                let id = Inst::read32(iseq, pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let name = id_lock.get_ident_name(ident_id);
+                format!(
+                    "LVAR_ADDI '{}' LvarId:{} +{}",
+                    name,
+                    id,
+                    Inst::read32(iseq, pc + 5) as i32
+                )
+            }
             Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", Inst::read64(iseq, pc + 1) as i64),
             Inst::PUSH_FLONUM => {
                 format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
@@ -336,30 +351,30 @@ impl Inst {
                 pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
             ),
             Inst::SET_LOCAL => {
-                let id = Inst::read32(iseq, pc + 1) as usize;
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let id = Inst::read32(iseq, pc + 1);
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
                 let name = id_lock.get_ident_name(ident_id);
                 format!("SET_LOCAL '{}' LvarId:{}", name, id)
             }
             Inst::GET_LOCAL => {
-                let id = Inst::read32(iseq, pc + 1) as usize;
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let id = Inst::read32(iseq, pc + 1);
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
                 let name = id_lock.get_ident_name(ident_id);
                 format!("GET_LOCAL '{}' LvarId:{}", name, id)
             }
             Inst::SET_DYNLOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
-                let id = Inst::read32(iseq, pc + 1) as usize;
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = id_lock.get_ident_name(ident_id);
-                format!("SET_DYNLOCAL '{}' outer:{} LvarId:{}", name, frame, id)
+                let id = Inst::read32(iseq, pc + 1);
+                //let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
+                //let name = id_lock.get_ident_name(ident_id);
+                format!("SET_DYNLOCAL outer:{} LvarId:{}", frame, id)
             }
             Inst::GET_DYNLOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
-                let id = Inst::read32(iseq, pc + 1) as usize;
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = id_lock.get_ident_name(ident_id);
-                format!("GET_DYNLOCAL '{}' outer:{} LvarId:{}", name, frame, id)
+                let id = Inst::read32(iseq, pc + 1);
+                //let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
+                //let name = id_lock.get_ident_name(ident_id);
+                format!("GET_DYNLOCAL outer:{} LvarId:{}", frame, id)
             }
             Inst::CHECK_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
