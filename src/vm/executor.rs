@@ -435,42 +435,78 @@ impl VM {
         self.globals.gc();
     }
 
+    fn handle_error(&mut self, mut err: RubyError) -> VMResult {
+        let m = self.context().iseq_ref.method;
+        let res = if RubyErrorKind::MethodReturn(m) == err.kind {
+            let result = self.stack_pop();
+            let prev_len = self.context().stack_len;
+            self.exec_stack.truncate(prev_len);
+            self.unwind_context(&mut err);
+            #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
+            {
+                println!("<--- METHOD_RETURN Ok({:?})", result);
+            }
+            Ok(result)
+        } else {
+            //self.dump_context();
+            self.unwind_context(&mut err);
+            #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
+            {
+                println!("<--- Err({:?})", err.kind);
+            }
+            Err(err)
+        };
+        self.fiberstate_dead();
+        self.fiber_send_to_parent(res.clone());
+        return res;
+    }
+
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
-        macro_rules! try_err {
+        /// Evaluate expr, and push return value to stack.
+        #[cfg(not(tarpaulin_include))]
+        macro_rules! try_push {
             ($eval:expr) => {
                 match $eval {
                     Ok(val) => self.stack_push(val),
                     Err(err) if err.kind == RubyErrorKind::BlockReturn => {}
-                    Err(mut err) => {
-                        let m = self.context().iseq_ref.method;
-                        let res = if RubyErrorKind::MethodReturn(m) == err.kind {
-                            let result = self.stack_pop();
-                            let prev_len = self.context().stack_len;
-                            self.exec_stack.truncate(prev_len);
-                            self.unwind_context(&mut err);
-                            #[cfg(feature = "trace")]
-                            #[cfg(not(tarpaulin_include))]
-                            {
-                                println!("<--- METHOD_RETURN Ok({:?})", result);
-                            }
-                            Ok(result)
-                        } else {
-                            //self.dump_context();
-                            self.unwind_context(&mut err);
-                            #[cfg(feature = "trace")]
-                            #[cfg(not(tarpaulin_include))]
-                            {
-                                println!("<--- Err({:?})", err.kind);
-                            }
-                            Err(err)
-                        };
-                        self.fiberstate_dead();
-                        self.fiber_send_to_parent(res.clone());
-                        return res;
+                    Err(err) => {
+                        return self.handle_error(err);
                     }
                 };
             };
+        }
+
+        /// Evaluate expr. Stack is not changed.
+        #[cfg(not(tarpaulin_include))]
+        macro_rules! try_eval {
+            ($eval:expr) => {{
+                match $eval {
+                    Ok(_) => {}
+                    Err(err) if err.kind == RubyErrorKind::BlockReturn => {
+                        self.stack_pop();
+                    }
+                    Err(err) => {
+                        return self.handle_error(err);
+                    }
+                }
+            }};
+        }
+
+        /// Evaluate expr, and return the value.
+        #[cfg(not(tarpaulin_include))]
+        macro_rules! try_get {
+            ($eval:expr) => {{
+                match $eval {
+                    Ok(val) => val,
+                    Err(err) if err.kind == RubyErrorKind::BlockReturn => self.stack_pop(),
+                    Err(err) => {
+                        return self.handle_error(err);
+                    }
+                }
+            }};
         }
 
         #[cfg(feature = "trace")]
@@ -625,96 +661,96 @@ impl VM {
                 Inst::ADD => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_add(lhs, rhs, iseq));
+                    try_push!(self.eval_add(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self.eval_addi(lhs, i));
+                    try_push!(self.eval_addi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_sub(lhs, rhs, iseq));
+                    try_push!(self.eval_sub(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self.eval_subi(lhs, i));
+                    try_push!(self.eval_subi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_mul(lhs, rhs, iseq));
+                    try_push!(self.eval_mul(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::POW => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_exp(lhs, rhs));
+                    try_push!(self.eval_exp(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_div(lhs, rhs, iseq));
+                    try_push!(self.eval_div(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::REM => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_rem(lhs, rhs));
+                    try_push!(self.eval_rem(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::SHR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_shr(lhs, rhs));
+                    try_push!(self.eval_shr(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_shl(lhs, rhs, iseq));
+                    try_push!(self.eval_shl(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::BIT_AND => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_bitand(lhs, rhs));
+                    try_push!(self.eval_bitand(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::B_ANDI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self.eval_bitandi(lhs, i));
+                    try_push!(self.eval_bitandi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::BIT_OR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_bitor(lhs, rhs));
+                    try_push!(self.eval_bitor(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::B_ORI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self.eval_bitori(lhs, i));
+                    try_push!(self.eval_bitori(lhs, i));
                     self.pc += 5;
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self.eval_bitxor(lhs, rhs));
+                    try_push!(self.eval_bitxor(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::BIT_NOT => {
                     let lhs = self.stack_pop();
-                    try_err!(self.eval_bitnot(lhs));
+                    try_push!(self.eval_bitnot(lhs));
                     self.pc += 1;
                 }
                 Inst::EQ => {
@@ -925,28 +961,12 @@ impl VM {
                 }
                 Inst::SET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
-                    let mut args = self.pop_args_to_ary(arg_num);
-                    let mut receiver = self.stack_pop();
-                    let val = self.stack_pop();
-                    match receiver.as_mut_rvalue() {
-                        Some(oref) => {
-                            match oref.kind {
-                                ObjKind::Array(ref mut aref) => {
-                                    args.push(val);
-                                    aref.set_elem(self, &args)?;
-                                }
-                                ObjKind::Hash(ref mut href) => href.insert(args[0], val),
-                                _ => try_err!(Err(self.error_undefined_method("[]=", receiver))),
-                            };
-                        }
-                        None => try_err!(Err(self.error_undefined_method("[]=", receiver))),
-                    }
-
+                    try_eval!(self.set_index(arg_num));
                     self.pc += 5;
                 }
                 Inst::GET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
-                    try_err!(self.get_index(arg_num));
+                    try_push!(self.get_index(arg_num));
                     self.pc += 5;
                 }
                 Inst::SPLAT => {
@@ -1023,26 +1043,26 @@ impl VM {
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
-                    try_err!(self.vm_send(iseq, receiver));
+                    try_push!(self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
-                    try_err!(self.vm_send(iseq, receiver));
+                    try_push!(self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
-                    try_err!(self.vm_opt_send(iseq, receiver));
+                    try_push!(self.vm_opt_send(iseq, receiver));
                     self.pc += 11;
                 }
                 Inst::OPT_SEND_SELF => {
                     let receiver = context.self_value;
-                    try_err!(self.vm_opt_send(iseq, receiver));
+                    try_push!(self.vm_opt_send(iseq, receiver));
                     self.pc += 11;
                 }
                 Inst::YIELD => {
-                    try_err!(self.eval_yield(iseq));
+                    try_push!(self.eval_yield(iseq));
                     self.pc += 5;
                 }
                 Inst::DEF_CLASS => {
@@ -1050,47 +1070,13 @@ impl VM {
                     let id = self.read_id(iseq, 2);
                     let method = self.read_methodref(iseq, 6);
                     let super_val = self.stack_pop();
-                    let val = match self.globals.builtins.object.get_var(id) {
-                        Some(val) => {
-                            if val.is_module().is_some() != is_module {
-                                return Err(self.error_type(format!(
-                                    "{} is not {}.",
-                                    IdentId::get_ident_name(id),
-                                    if is_module { "module" } else { "class" },
-                                )));
-                            };
-                            let classref = self.expect_module(val.clone())?;
-                            if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
-                                return Err(self.error_type(format!(
-                                    "superclass mismatch for class {}.",
-                                    IdentId::get_ident_name(id),
-                                )));
-                            };
-                            val.clone()
-                        }
-                        None => {
-                            let super_val = if super_val.is_nil() {
-                                self.globals.builtins.object
-                            } else {
-                                self.expect_class(super_val, "Superclass")?;
-                                super_val
-                            };
-                            let classref = ClassRef::from(id, super_val);
-                            let val = if is_module {
-                                Value::module(&mut self.globals, classref)
-                            } else {
-                                Value::class(&mut self.globals, classref)
-                            };
-                            self.class().set_var(id, val);
-                            val
-                        }
-                    };
+                    let val = try_get!(self.define_class(id, is_module, super_val));
 
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.gen_class_defined(val);
                     let arg = Args::new0();
-                    try_err!(self.eval_send(method, val, &arg));
+                    try_push!(self.eval_send(method, val, &arg));
                     self.pc += 10;
                     self.class_pop();
                 }
@@ -1791,6 +1777,26 @@ impl VM {
         }
     }
 
+    fn set_index(&mut self, arg_num: usize) -> Result<(), RubyError> {
+        let mut args = self.pop_args_to_ary(arg_num);
+        let mut receiver = self.stack_pop();
+        let val = self.stack_pop();
+        match receiver.as_mut_rvalue() {
+            Some(oref) => {
+                match oref.kind {
+                    ObjKind::Array(ref mut aref) => {
+                        args.push(val);
+                        aref.set_elem(self, &args)?;
+                    }
+                    ObjKind::Hash(ref mut href) => href.insert(args[0], val),
+                    _ => return Err(self.error_undefined_method("[]=", receiver)),
+                };
+            }
+            None => return Err(self.error_undefined_method("[]=", receiver)),
+        }
+        Ok(())
+    }
+
     fn get_index(&mut self, arg_num: usize) -> VMResult {
         let args = self.pop_args_to_ary(arg_num);
         let arg_num = args.len();
@@ -1830,6 +1836,45 @@ impl VM {
             _ => return Err(self.error_undefined_method("[]", receiver)),
         };
         self.stack_pop();
+        Ok(val)
+    }
+
+    fn define_class(&mut self, id: IdentId, is_module: bool, super_val: Value) -> VMResult {
+        let val = match self.globals.builtins.object.get_var(id) {
+            Some(val) => {
+                if val.is_module().is_some() != is_module {
+                    return Err(self.error_type(format!(
+                        "{} is not {}.",
+                        IdentId::get_ident_name(id),
+                        if is_module { "module" } else { "class" },
+                    )));
+                };
+                let classref = self.expect_module(val.clone())?;
+                if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
+                    return Err(self.error_type(format!(
+                        "superclass mismatch for class {}.",
+                        IdentId::get_ident_name(id),
+                    )));
+                };
+                val.clone()
+            }
+            None => {
+                let super_val = if super_val.is_nil() {
+                    self.globals.builtins.object
+                } else {
+                    self.expect_class(super_val, "Superclass")?;
+                    super_val
+                };
+                let classref = ClassRef::from(id, super_val);
+                let val = if is_module {
+                    Value::module(&mut self.globals, classref)
+                } else {
+                    Value::class(&mut self.globals, classref)
+                };
+                self.class().set_var(id, val);
+                val
+            }
+        };
         Ok(val)
     }
 

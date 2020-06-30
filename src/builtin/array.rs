@@ -856,6 +856,16 @@ mod tests {
     }
 
     #[test]
+    fn array_sort() {
+        let program = r#"
+        assert([-3,2,6], [6,2,-3].sort)
+        assert([-3,2.34,6.3], [6.3,2.34,-3].sort)
+        assert_error {[1,2.5,nil].sort}
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn array_min_max() {
         let program = r#"
         assert nil, [].min

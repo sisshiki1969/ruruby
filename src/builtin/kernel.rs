@@ -95,6 +95,11 @@ pub fn init(globals: &mut Globals) -> Value {
                 "Assertion error: No error occured. returned {:?}",
                 val
             ))),
+            Err(err) if err.kind == RubyErrorKind::BlockReturn => {
+                vm.stack_pop();
+                println!("Assert_error OK: {:?}", err.kind);
+                Ok(Value::nil())
+            }
             Err(err) => {
                 println!("Assert_error OK: {:?}", err.kind);
                 Ok(Value::nil())

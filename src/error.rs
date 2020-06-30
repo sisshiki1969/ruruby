@@ -44,7 +44,10 @@ impl RubyError {
             level,
         }
     }
+}
 
+#[cfg(not(tarpaulin_include))]
+impl RubyError {
     pub fn loc(&self) -> Loc {
         self.info[0].1
     }
@@ -130,6 +133,29 @@ mod tests {
         assert_error { break }
         assert_error { Integer("z") }
         assert_error { 5 * :sym }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn class_define_error() {
+        let program = r#"
+        assert_error {
+            class Foo < 3
+            end
+        }
+        assert_error {
+            class Foo < Object
+            end
+            class Foo < Array
+            end
+        }
+        assert_error {
+            class Foo < Object
+            end
+            module Foo
+            end
+        }
         "#;
         assert_script(program);
     }
