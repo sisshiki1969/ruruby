@@ -3,9 +3,7 @@
 *.ppm
 *.jpg
 *.png
-.vscode
-.github
-.devcontainer
 .*
-cobertura.xml
+/bench.md
+/cobertura.xml
 !.rubocop*
