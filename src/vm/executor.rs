@@ -433,6 +433,7 @@ macro_rules! try_err {
                     $self.exec_stack.truncate(prev_len);
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
+                    #[cfg(not(tarpaulin_include))]
                     {
                         println!("<--- METHOD_RETURN Ok({:?})", result);
                     }
@@ -441,6 +442,7 @@ macro_rules! try_err {
                     //$self.dump_context();
                     $self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
+                    #[cfg(not(tarpaulin_include))]
                     {
                         println!("<--- Err({:?})", err.kind);
                     }
@@ -464,6 +466,7 @@ impl VM {
             return;
         };
         #[cfg(feature = "perf")]
+        #[cfg(not(tarpaulin_include))]
         self.perf.get_perf(Perf::GC);
         self.globals.gc();
     }
@@ -471,6 +474,7 @@ impl VM {
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         #[cfg(feature = "trace")]
+        #[cfg(not(tarpaulin_include))]
         {
             if context.is_fiber {
                 println!("===> {:?}", context.iseq_ref.method);
@@ -495,6 +499,7 @@ impl VM {
                 self.perf.get_perf(iseq[self.pc]);
             }
             #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
             {
                 println!(
                     "{:>4x}:{:<15} stack:{}",
@@ -516,6 +521,7 @@ impl VM {
                     let _context = self.context_pop().unwrap();
                     let val = self.stack_pop();
                     #[cfg(feature = "trace")]
+                    #[cfg(not(tarpaulin_include))]
                     {
                         if _context.is_fiber {
                             println!("<=== Ok({:?})", val);
@@ -536,6 +542,7 @@ impl VM {
                         // if in block context, exit with Err(BLOCK_RETURN).
                         let err = self.error_block_return();
                         #[cfg(feature = "trace")]
+                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -544,6 +551,7 @@ impl VM {
                         // if in method context, exit with Ok(rerurn_value).
                         let val = self.stack_pop();
                         #[cfg(feature = "trace")]
+                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Ok({:?})", val);
                         }
@@ -563,6 +571,7 @@ impl VM {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
+                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -2292,6 +2301,7 @@ impl VM {
             None => return,
         };
         #[cfg(feature = "trace")]
+        #[cfg(not(tarpaulin_include))]
         {
             match val {
                 Ok(val) => println!("<=== yield Ok({:?})", val),

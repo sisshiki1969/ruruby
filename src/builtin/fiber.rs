@@ -103,6 +103,7 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         FiberState::Created => {
             fiber_vm.fiberstate_running();
             #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume(spawn)");
             }
@@ -116,6 +117,7 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         FiberState::Running => {
             #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume");
             }

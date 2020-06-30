@@ -64,6 +64,16 @@ fn expr8() {
         assert(1033, 8227^9258)
         assert(201, -275&475)
         assert(-1301, 487555|-25879)
+        a = 854
+        assert(320, 12745&a)
+        a = 98331
+        assert(100799, 2486|a)
+        a = 9258
+        assert(1033, 8227^a)
+        a = 475
+        assert(201, -275&a)
+        a = -25879
+        assert(-1301, 487555|a)
         ";
     assert_script(program);
 }
