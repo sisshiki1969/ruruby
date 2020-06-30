@@ -29,13 +29,6 @@ impl RangeInfo {
         let sym = if self.exclude { "..." } else { ".." };
         format!("{}{}{}", start, sym, end)
     }
-
-    pub fn debug(&self, vm: &VM) -> String {
-        let start = vm.val_debug(self.start);
-        let end = vm.val_debug(self.end);
-        let sym = if self.exclude { "..." } else { ".." };
-        format!("{}{}{}", start, sym, end)
-    }
 }
 
 pub fn init_range(globals: &mut Globals) -> Value {

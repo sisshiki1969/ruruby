@@ -1959,49 +1959,6 @@ impl VM {
         }
     }
 
-    pub fn val_debug(&self, val: Value) -> String {
-        match val.unpack() {
-            RV::Uninitialized => "[Uninitialized]".to_string(),
-            RV::Nil => "nil".to_string(),
-            RV::Bool(b) => match b {
-                true => "true".to_string(),
-                false => "false".to_string(),
-            },
-            RV::Integer(i) => i.to_string(),
-            RV::Float(f) => {
-                if f.fract() == 0.0 {
-                    format!("{:.1}", f)
-                } else {
-                    f.to_string()
-                }
-            }
-            RV::Symbol(sym) => format!(":{}", IdentId::get_ident_name(sym)),
-            RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => "[Invalid]".to_string(),
-                ObjKind::Ordinary => oref.debug(self),
-                ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
-                    None => format! {"#<Class:0x{:x}>", cref.id()},
-                },
-                ObjKind::Module(cref) => match cref.name {
-                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
-                    None => format! {"#<Module:0x{:x}>", cref.id()},
-                },
-                ObjKind::String(s) => s.inspect(),
-                ObjKind::Array(aref) => aref.debug(self),
-                ObjKind::Range(rinfo) => rinfo.debug(self),
-                ObjKind::Splat(v) => self.val_debug(*v),
-                ObjKind::Hash(href) => href.debug(self),
-                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
-                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
-                ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Fiber(_) => "Fiber".to_string(),
-                ObjKind::Enumerator(_) => "Enumerator".to_string(),
-                _ => "Not supported".to_string(),
-            },
-        }
-    }
-
     pub fn val_inspect(&mut self, val: Value) -> String {
         match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),

@@ -189,22 +189,6 @@ impl RValue {
         format!("{}>", s)
     }
 
-    pub fn debug(&self, vm: &VM) -> String {
-        let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
-        match self.var_table() {
-            Some(table) => {
-                for (k, v) in table {
-                    let inspect = vm.val_debug(*v);
-                    let id = IdentId::get_ident_name(*k);
-                    s = format!("{} {}={}", s, id, inspect);
-                }
-            }
-            None => {}
-        }
-
-        format!("{}>", s)
-    }
-
     pub fn new_invalid() -> Self {
         RValue {
             class: Value::nil(),

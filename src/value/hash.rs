@@ -301,26 +301,4 @@ impl HashInfo {
             }
         }
     }
-
-    pub fn debug(&self, vm: &VM) -> String {
-        match self.len() {
-            0 => "{}".to_string(),
-            _ => {
-                let mut result = "".to_string();
-                let mut first = true;
-                for (k, v) in self.iter() {
-                    let k_inspect = vm.val_debug(k);
-                    let v_inspect = vm.val_debug(v);
-                    result = if first {
-                        format!("{}=>{}", k_inspect, v_inspect)
-                    } else {
-                        format!("{}, {}=>{}", result, k_inspect, v_inspect)
-                    };
-                    first = false;
-                }
-                format! {"{{{}}}", result}
-            }
-        }
-    }
 }
-
