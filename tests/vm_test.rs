@@ -170,6 +170,17 @@ fn op10() {
 }
 
 #[test]
+fn index_op() {
+    let program = "
+        assert_error{ :a[3] }
+        assert_error{ Object[3] }
+        assert_error{ :a[3] = 100 }
+        assert_error{ Object[3] = 200 }
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn int1() {
     let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
     let i2 = 0x4000_0000_0000_0005u64 as i64;
