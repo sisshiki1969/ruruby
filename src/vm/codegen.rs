@@ -746,7 +746,7 @@ impl Codegen {
         }
         globals.set_method(methodref, info);
         #[cfg(feature = "emit-iseq")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             let info = globals.get_method_info(methodref);
             let iseq = if let MethodInfo::RubyFunc { iseq } = info {

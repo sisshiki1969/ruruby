@@ -72,7 +72,7 @@ fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         return Err(vm.error_fiber("Can not yield from main fiber."));
     };
     #[cfg(feature = "perf")]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     vm.perf.get_perf(Perf::INVALID);
     vm.fiber_send_to_parent(Ok(val));
     Ok(Value::nil())
@@ -103,24 +103,26 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         FiberState::Created => {
             fiber_vm.fiberstate_running();
             #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume(spawn)");
             }
             let mut vm2 = fiber_vm;
             thread::spawn(move || vm2.run_context(context));
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             vm.perf.get_perf(Perf::INVALID);
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);
         }
         FiberState::Running => {
             #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume");
             }
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             vm.perf.get_perf(Perf::INVALID);
             fiber.tx.send(1).unwrap();
             let res = fiber.rec.recv().unwrap()?;

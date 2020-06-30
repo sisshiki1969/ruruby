@@ -27,7 +27,7 @@ pub struct VM {
     gc_counter: usize,
     pub parent_fiber: Option<ParentFiberInfo>,
     #[cfg(feature = "perf")]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub perf: Perf,
 }
 
@@ -96,7 +96,7 @@ impl VM {
             gc_counter: 0,
             parent_fiber: None,
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             perf: Perf::new(),
         };
         vm
@@ -116,7 +116,7 @@ impl VM {
             gc_counter: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             perf: Perf::new(),
         };
         vm
@@ -289,7 +289,7 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -317,7 +317,7 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -344,7 +344,7 @@ impl VM {
         let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -357,10 +357,10 @@ impl VM {
         Ok(val)
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
@@ -380,7 +380,7 @@ impl VM {
 
         let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -394,7 +394,7 @@ impl VM {
     }
 
     #[allow(dead_code)]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn dump_context(&self) {
         eprintln!("---dump");
         for (i, context) in self.exec_context.iter().enumerate() {
@@ -420,40 +420,6 @@ impl VM {
     }
 }
 
-macro_rules! try_err {
-    ($self:ident, $eval:expr) => {
-        match $eval {
-            Ok(val) => $self.stack_push(val),
-            Err(err) if err.kind == RubyErrorKind::BlockReturn => {}
-            Err(mut err) => {
-                let m = $self.context().iseq_ref.method;
-                let res = if RubyErrorKind::MethodReturn(m) == err.kind {
-                    let result = $self.stack_pop();
-                    let prev_len = $self.context().stack_len;
-                    $self.exec_stack.truncate(prev_len);
-                    $self.unwind_context(&mut err);
-                    #[cfg(feature = "trace")]
-                    {
-                        println!("<--- METHOD_RETURN Ok({:?})", result);
-                    }
-                    Ok(result)
-                } else {
-                    //$self.dump_context();
-                    $self.unwind_context(&mut err);
-                    #[cfg(feature = "trace")]
-                    {
-                        println!("<--- Err({:?})", err.kind);
-                    }
-                    Err(err)
-                };
-                $self.fiberstate_dead();
-                $self.fiber_send_to_parent(res.clone());
-                return res;
-            }
-        };
-    };
-}
-
 impl VM {
     fn gc(&mut self) {
         self.gc_counter += 1;
@@ -464,13 +430,51 @@ impl VM {
             return;
         };
         #[cfg(feature = "perf")]
+        #[cfg(not(tarpaulin_include))]
         self.perf.get_perf(Perf::GC);
         self.globals.gc();
     }
 
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
+        macro_rules! try_err {
+            ($eval:expr) => {
+                match $eval {
+                    Ok(val) => self.stack_push(val),
+                    Err(err) if err.kind == RubyErrorKind::BlockReturn => {}
+                    Err(mut err) => {
+                        let m = self.context().iseq_ref.method;
+                        let res = if RubyErrorKind::MethodReturn(m) == err.kind {
+                            let result = self.stack_pop();
+                            let prev_len = self.context().stack_len;
+                            self.exec_stack.truncate(prev_len);
+                            self.unwind_context(&mut err);
+                            #[cfg(feature = "trace")]
+                            #[cfg(not(tarpaulin_include))]
+                            {
+                                println!("<--- METHOD_RETURN Ok({:?})", result);
+                            }
+                            Ok(result)
+                        } else {
+                            //self.dump_context();
+                            self.unwind_context(&mut err);
+                            #[cfg(feature = "trace")]
+                            #[cfg(not(tarpaulin_include))]
+                            {
+                                println!("<--- Err({:?})", err.kind);
+                            }
+                            Err(err)
+                        };
+                        self.fiberstate_dead();
+                        self.fiber_send_to_parent(res.clone());
+                        return res;
+                    }
+                };
+            };
+        }
+
         #[cfg(feature = "trace")]
+        #[cfg(not(tarpaulin_include))]
         {
             if context.is_fiber {
                 println!("===> {:?}", context.iseq_ref.method);
@@ -490,11 +494,12 @@ impl VM {
 
         loop {
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             {
                 self.perf.get_perf(iseq[self.pc]);
             }
             #[cfg(feature = "trace")]
+            #[cfg(not(tarpaulin_include))]
             {
                 println!(
                     "{:>4x}:{:<15} stack:{}",
@@ -516,6 +521,7 @@ impl VM {
                     let _context = self.context_pop().unwrap();
                     let val = self.stack_pop();
                     #[cfg(feature = "trace")]
+                    #[cfg(not(tarpaulin_include))]
                     {
                         if _context.is_fiber {
                             println!("<=== Ok({:?})", val);
@@ -536,6 +542,7 @@ impl VM {
                         // if in block context, exit with Err(BLOCK_RETURN).
                         let err = self.error_block_return();
                         #[cfg(feature = "trace")]
+                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -544,6 +551,7 @@ impl VM {
                         // if in method context, exit with Ok(rerurn_value).
                         let val = self.stack_pop();
                         #[cfg(feature = "trace")]
+                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Ok({:?})", val);
                         }
@@ -563,6 +571,7 @@ impl VM {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
+                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -616,96 +625,96 @@ impl VM {
                 Inst::ADD => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_add(lhs, rhs, iseq));
+                    try_err!(self.eval_add(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self, self.eval_addi(lhs, i));
+                    try_err!(self.eval_addi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_sub(lhs, rhs, iseq));
+                    try_err!(self.eval_sub(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self, self.eval_subi(lhs, i));
+                    try_err!(self.eval_subi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_mul(lhs, rhs, iseq));
+                    try_err!(self.eval_mul(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::POW => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_exp(lhs, rhs));
+                    try_err!(self.eval_exp(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_div(lhs, rhs, iseq));
+                    try_err!(self.eval_div(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::REM => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_rem(lhs, rhs));
+                    try_err!(self.eval_rem(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::SHR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_shr(lhs, rhs));
+                    try_err!(self.eval_shr(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_shl(lhs, rhs, iseq));
+                    try_err!(self.eval_shl(lhs, rhs, iseq));
                     self.pc += 5;
                 }
                 Inst::BIT_AND => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_bitand(lhs, rhs));
+                    try_err!(self.eval_bitand(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::B_ANDI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self, self.eval_bitandi(lhs, i));
+                    try_err!(self.eval_bitandi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::BIT_OR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_bitor(lhs, rhs));
+                    try_err!(self.eval_bitor(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::B_ORI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_err!(self, self.eval_bitori(lhs, i));
+                    try_err!(self.eval_bitori(lhs, i));
                     self.pc += 5;
                 }
                 Inst::BIT_XOR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_err!(self, self.eval_bitxor(lhs, rhs));
+                    try_err!(self.eval_bitxor(lhs, rhs));
                     self.pc += 1;
                 }
                 Inst::BIT_NOT => {
                     let lhs = self.stack_pop();
-                    try_err!(self, self.eval_bitnot(lhs));
+                    try_err!(self.eval_bitnot(lhs));
                     self.pc += 1;
                 }
                 Inst::EQ => {
@@ -927,57 +936,17 @@ impl VM {
                                     aref.set_elem(self, &args)?;
                                 }
                                 ObjKind::Hash(ref mut href) => href.insert(args[0], val),
-                                _ => return Err(self.error_undefined_method("[]=", receiver)),
+                                _ => try_err!(Err(self.error_undefined_method("[]=", receiver))),
                             };
                         }
-                        None => return Err(self.error_undefined_method("[]=", receiver)),
+                        None => try_err!(Err(self.error_undefined_method("[]=", receiver))),
                     }
 
                     self.pc += 5;
                 }
                 Inst::GET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
-                    let args = self.pop_args_to_ary(arg_num);
-                    let arg_num = args.len();
-                    let receiver = self.stack_top();
-                    let val = match receiver.as_rvalue() {
-                        Some(oref) => match &oref.kind {
-                            ObjKind::Array(aref) => aref.get_elem(self, &args)?,
-                            ObjKind::Hash(href) => {
-                                self.check_args_range(arg_num, 1, 1)?;
-                                match href.get(&args[0]) {
-                                    Some(val) => *val,
-                                    None => Value::nil(),
-                                }
-                            }
-                            ObjKind::Method(mref) => {
-                                self.eval_send(mref.method, mref.receiver, &args)?
-                            }
-                            _ => {
-                                let id = IdentId::get_ident_id("[]");
-                                match self.get_method(receiver, id) {
-                                    Ok(mref) => self.eval_send(mref, receiver, &args)?,
-                                    Err(_) => {
-                                        return Err(self.error_undefined_method("[]", receiver))
-                                    }
-                                }
-                            }
-                        },
-                        None if receiver.is_packed_fixnum() => {
-                            let i = receiver.as_packed_fixnum();
-                            self.check_args_range(arg_num, 1, 1)?;
-                            let index = args[0].expect_integer(&self, "Index")?;
-                            let val = if index < 0 || 63 < index {
-                                0
-                            } else {
-                                (i >> index) & 1
-                            };
-                            Value::fixnum(val)
-                        }
-                        _ => return Err(self.error_undefined_method("[]", receiver)),
-                    };
-                    self.stack_pop();
-                    self.stack_push(val);
+                    try_err!(self.get_index(arg_num));
                     self.pc += 5;
                 }
                 Inst::SPLAT => {
@@ -1054,26 +1023,26 @@ impl VM {
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
-                    try_err!(self, self.vm_send(iseq, receiver));
+                    try_err!(self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
                 Inst::SEND_SELF => {
                     let receiver = context.self_value;
-                    try_err!(self, self.vm_send(iseq, receiver));
+                    try_err!(self.vm_send(iseq, receiver));
                     self.pc += 17;
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
-                    try_err!(self, self.vm_opt_send(iseq, receiver));
+                    try_err!(self.vm_opt_send(iseq, receiver));
                     self.pc += 11;
                 }
                 Inst::OPT_SEND_SELF => {
                     let receiver = context.self_value;
-                    try_err!(self, self.vm_opt_send(iseq, receiver));
+                    try_err!(self.vm_opt_send(iseq, receiver));
                     self.pc += 11;
                 }
                 Inst::YIELD => {
-                    try_err!(self, self.eval_yield(iseq));
+                    try_err!(self.eval_yield(iseq));
                     self.pc += 5;
                 }
                 Inst::DEF_CLASS => {
@@ -1121,7 +1090,7 @@ impl VM {
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.gen_class_defined(val);
                     let arg = Args::new0();
-                    try_err!(self, self.eval_send(method, val, &arg));
+                    try_err!(self.eval_send(method, val, &arg));
                     self.pc += 10;
                     self.class_pop();
                 }
@@ -1822,6 +1791,48 @@ impl VM {
         }
     }
 
+    fn get_index(&mut self, arg_num: usize) -> VMResult {
+        let args = self.pop_args_to_ary(arg_num);
+        let arg_num = args.len();
+        let receiver = self.stack_top();
+        let val = match receiver.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Array(aref) => aref.get_elem(self, &args)?,
+                ObjKind::Hash(href) => {
+                    self.check_args_range(arg_num, 1, 1)?;
+                    match href.get(&args[0]) {
+                        Some(val) => *val,
+                        None => Value::nil(),
+                    }
+                }
+                ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
+                _ => {
+                    let id = IdentId::get_ident_id("[]");
+                    match self.get_method(receiver, id) {
+                        Ok(mref) => self.eval_send(mref, receiver, &args)?,
+                        Err(_) => {
+                            return Err(self.error_undefined_method("[]", receiver));
+                        }
+                    }
+                }
+            },
+            None if receiver.is_packed_fixnum() => {
+                let i = receiver.as_packed_fixnum();
+                self.check_args_range(arg_num, 1, 1)?;
+                let index = args[0].expect_integer(&self, "Index")?;
+                let val = if index < 0 || 63 < index {
+                    0
+                } else {
+                    (i >> index) & 1
+                };
+                Value::fixnum(val)
+            }
+            _ => return Err(self.error_undefined_method("[]", receiver)),
+        };
+        self.stack_pop();
+        Ok(val)
+    }
+
     pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
         if vec.len() > 0 {
             let val = vec[0];
@@ -2108,7 +2119,7 @@ impl VM {
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             inst = self.perf.get_prev_inst();
         }
@@ -2116,7 +2127,7 @@ impl VM {
             MethodInfo::BuiltinFunc { func, .. } => {
                 let func = func.to_owned();
                 #[cfg(feature = "perf")]
-                #[cfg_attr(tarpaulin, skip)]
+                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
@@ -2128,7 +2139,7 @@ impl VM {
                 self.temp_stack.truncate(len);
 
                 #[cfg(feature = "perf")]
-                #[cfg_attr(tarpaulin, skip)]
+                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2153,7 +2164,7 @@ impl VM {
                 let context = Context::from_args(self, self_val, iseq, args, outer)?;
                 let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
-                #[cfg_attr(tarpaulin, skip)]
+                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2293,12 +2304,13 @@ impl VM {
     pub fn fiber_send_to_parent(&self, val: VMResult) {
         match &self.parent_fiber {
             Some(ParentFiberInfo { tx, rx, .. }) => {
-                tx.send(val).unwrap();
+                tx.send(val.clone()).unwrap();
                 rx.recv().unwrap();
             }
             None => return,
         };
         #[cfg(feature = "trace")]
+        #[cfg(not(tarpaulin_include))]
         {
             match val {
                 Ok(val) => println!("<=== yield Ok({:?})", val),

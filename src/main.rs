@@ -9,12 +9,12 @@ use crate::vm::perf::*;
 use clap::{App, AppSettings, Arg};
 use ruruby::loader::{load_file, LoadError};
 //use std::thread;
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 mod repl;
 use repl::*;
 use ruruby::*;
 
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 fn main() {
     let app = App::new("ruruby")
         .version("0.0.1")
@@ -42,7 +42,7 @@ fn main() {
     vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, args[0]);
     #[cfg(feature = "perf")]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     {
         let mut perf = Perf::new();
         let globals = vm.globals;
@@ -54,7 +54,7 @@ fn main() {
     return;
 }
 
-#[cfg_attr(tarpaulin, skip)]
+#[cfg(not(tarpaulin_include))]
 fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
     let file_name = file_name.into();
     let (absolute_path, program) = match load_file(file_name.clone()) {
@@ -75,7 +75,7 @@ fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
 
     let root_path = absolute_path.clone();
     #[cfg(feature = "verbose")]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     let mut vm2 = vm.clone();
