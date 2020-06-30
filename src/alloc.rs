@@ -425,7 +425,7 @@ impl Allocator {
 
     // For debug
     #[allow(dead_code)]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn check_ptr(&self, ptr: *mut GCBox<RValue>) {
         let page_ptr = PageRef::from_inner(ptr);
         match self
@@ -448,7 +448,7 @@ impl Allocator {
     }
 
     #[allow(dead_code)]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn check_free_list(&self) -> usize {
         let mut c = 0;
         let mut free = self.free;
@@ -466,7 +466,7 @@ impl Allocator {
     }
 
     #[allow(dead_code)]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     fn print_bits(&self, bitmap: &[u64; SIZE - 1]) {
         let mut i = 0;
         bitmap.iter().for_each(|m| {
@@ -479,7 +479,7 @@ impl Allocator {
     }
 
     #[allow(dead_code)]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn print_mark(&self) {
         self.pages.iter().for_each(|pinfo| {
             self.print_bits(&pinfo.mark_bits);

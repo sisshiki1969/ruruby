@@ -27,7 +27,7 @@ pub struct VM {
     gc_counter: usize,
     pub parent_fiber: Option<ParentFiberInfo>,
     #[cfg(feature = "perf")]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub perf: Perf,
 }
 
@@ -96,7 +96,7 @@ impl VM {
             gc_counter: 0,
             parent_fiber: None,
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             perf: Perf::new(),
         };
         vm
@@ -116,7 +116,7 @@ impl VM {
             gc_counter: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             perf: Perf::new(),
         };
         vm
@@ -289,7 +289,7 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -317,7 +317,7 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -344,7 +344,7 @@ impl VM {
         let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -357,10 +357,10 @@ impl VM {
         Ok(val)
     }
 
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
@@ -380,7 +380,7 @@ impl VM {
 
         let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -394,7 +394,7 @@ impl VM {
     }
 
     #[allow(dead_code)]
-    #[cfg_attr(tarpaulin, skip)]
+    #[cfg(not(tarpaulin_include))]
     pub fn dump_context(&self) {
         eprintln!("---dump");
         for (i, context) in self.exec_context.iter().enumerate() {
@@ -490,7 +490,7 @@ impl VM {
 
         loop {
             #[cfg(feature = "perf")]
-            #[cfg_attr(tarpaulin, skip)]
+            #[cfg(not(tarpaulin_include))]
             {
                 self.perf.get_perf(iseq[self.pc]);
             }
@@ -2101,7 +2101,7 @@ impl VM {
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
-        #[cfg_attr(tarpaulin, skip)]
+        #[cfg(not(tarpaulin_include))]
         {
             inst = self.perf.get_prev_inst();
         }
@@ -2109,7 +2109,7 @@ impl VM {
             MethodInfo::BuiltinFunc { func, .. } => {
                 let func = func.to_owned();
                 #[cfg(feature = "perf")]
-                #[cfg_attr(tarpaulin, skip)]
+                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
@@ -2121,7 +2121,7 @@ impl VM {
                 self.temp_stack.truncate(len);
 
                 #[cfg(feature = "perf")]
-                #[cfg_attr(tarpaulin, skip)]
+                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2146,7 +2146,7 @@ impl VM {
                 let context = Context::from_args(self, self_val, iseq, args, outer)?;
                 let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
-                #[cfg_attr(tarpaulin, skip)]
+                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2286,7 +2286,7 @@ impl VM {
     pub fn fiber_send_to_parent(&self, val: VMResult) {
         match &self.parent_fiber {
             Some(ParentFiberInfo { tx, rx, .. }) => {
-                tx.send(val).unwrap();
+                tx.send(val.clone()).unwrap();
                 rx.recv().unwrap();
             }
             None => return,
