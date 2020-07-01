@@ -17,9 +17,9 @@ pub enum NodeKind {
         end: Box<Node>,
         exclude_end: bool,
     }, // start, end, exclude_end
-    Array(NodeVec),
-    Hash(Vec<(Node, Node)>),
-    RegExp(Vec<Node>),
+    Array(NodeVec, bool),          // Vec<ELEM>, is_constant_expr
+    Hash(Vec<(Node, Node)>, bool), // Vec<KEY, VALUE>, is_constant_expr
+    RegExp(Vec<Node>, bool),       // Vec<STRING>, is_constant_expr
 
     LocalVar(IdentId),
     Ident(IdentId),
@@ -177,6 +177,20 @@ impl Node {
         }
     }
 
+    pub fn is_const_expr(&self) -> bool {
+        match &self.kind {
+            NodeKind::Bool(_)
+            | NodeKind::Integer(_)
+            | NodeKind::Float(_)
+            | NodeKind::Nil
+            | NodeKind::Symbol(_)
+            | NodeKind::String(_)
+            | NodeKind::Hash(_, true)
+            | NodeKind::Array(_, true) => true,
+            _ => false,
+        }
+    }
+
     pub fn new_nil(loc: Loc) -> Self {
         Node::new(NodeKind::Nil, loc)
     }
@@ -202,7 +216,8 @@ impl Node {
             Some(node) => loc.merge(node.loc()),
             None => loc,
         };
-        Node::new(NodeKind::Array(nodes), loc)
+        let is_const = nodes.iter().all(|n| n.is_const_expr());
+        Node::new(NodeKind::Array(nodes, is_const), loc)
     }
 
     pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
@@ -217,11 +232,15 @@ impl Node {
     }
 
     pub fn new_hash(key_value: Vec<(Node, Node)>, loc: Loc) -> Self {
-        Node::new(NodeKind::Hash(key_value), loc)
+        let is_const = key_value
+            .iter()
+            .all(|(k, v)| k.is_const_expr() && v.is_const_expr());
+        Node::new(NodeKind::Hash(key_value, is_const), loc)
     }
 
     pub fn new_regexp(regex: Vec<Node>, loc: Loc) -> Self {
-        Node::new(NodeKind::RegExp(regex), loc)
+        let is_const = regex.iter().all(|n| n.is_const_expr());
+        Node::new(NodeKind::RegExp(regex, is_const), loc)
     }
 
     pub fn new_self(loc: Loc) -> Self {

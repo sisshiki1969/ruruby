@@ -68,6 +68,7 @@ impl Inst {
     pub const CREATE_PROC: u8 = 72;
     pub const CREATE_HASH: u8 = 73;
     pub const CREATE_REGEXP: u8 = 74;
+    pub const CONST_VAL: u8 = 75;
 
     pub const POP: u8 = 80;
     pub const DUP: u8 = 81;
@@ -159,6 +160,7 @@ impl Inst {
             Inst::CREATE_PROC => "CREATE_PROC",
             Inst::CREATE_HASH => "CREATE_HASH",
             Inst::CREATE_REGEXP => "CREATE_REGEX",
+            Inst::CONST_VAL => "CONST_VAL",
 
             Inst::POP => "POP",
             Inst::DUP => "DUP",
@@ -229,6 +231,7 @@ impl Inst {
             | Inst::SET_INDEX
             | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CREATE_PROC
+            | Inst::CONST_VAL           // ConstId: u32
             | Inst::JMP                 // disp: u32
             | Inst::JMP_IF_FALSE        // disp: u32
             | Inst::DUP                 // number of items: u32
@@ -266,7 +269,7 @@ impl Inst {
         }
     }
 
-    pub fn inst_info(iseq_ref: ISeqRef, pc: usize) -> String {
+    pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: usize) -> String {
         fn imm_i32(iseq: &Vec<u8>, pc: usize) -> String {
             format!(
                 "{} {}",
@@ -421,6 +424,10 @@ impl Inst {
                 Inst::inst_name(iseq[pc]),
                 Inst::read32(iseq, pc + 1)
             ),
+            Inst::CONST_VAL => {
+                let id = Inst::read32(iseq, pc + 1);
+                format!("CONST_VAL {:?}", globals.const_values.get(id as usize))
+            }
             Inst::DEF_CLASS => format!(
                 "DEF_CLASS {} '{}' method:{}",
                 if Inst::read8(iseq, pc + 1) == 1 {

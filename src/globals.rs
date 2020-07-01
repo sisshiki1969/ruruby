@@ -4,7 +4,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
-    //pub ident_table: IdentifierTable,
+    pub const_values: ConstantValues,
     pub global_var: ValueTable,
     method_table: GlobalMethodTable,
     inline_cache: InlineCache,
@@ -75,6 +75,7 @@ impl GC for BuiltinClass {
 
 impl GC for Globals {
     fn mark(&self, alloc: &mut Allocator) {
+        self.const_values.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
         self.method_table.mark(alloc);
         self.inline_cache.table.iter().for_each(|e| match e {
@@ -127,7 +128,7 @@ impl Globals {
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
-            //ident_table,
+            const_values: ConstantValues::new(),
             global_var: HashMap::new(),
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
@@ -391,6 +392,40 @@ impl Globals {
 
     pub fn get_mut_case_dispatch_map(&mut self, id: u32) -> &mut HashMap<Value, i32> {
         self.case_dispatch.get_mut_entry(id)
+    }
+}
+
+//-------------------------------------------------------------------------------------------------------------
+//
+//  Contant value
+//
+//
+//-------------------------------------------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct ConstantValues {
+    table: Vec<Value>,
+}
+
+impl ConstantValues {
+    pub fn new() -> Self {
+        Self { table: vec![] }
+    }
+
+    pub fn insert(&mut self, val: Value) -> usize {
+        let id = self.table.len();
+        self.table.push(val);
+        id
+    }
+
+    pub fn get(&self, id: usize) -> Value {
+        self.table[id].dup()
+    }
+}
+
+impl GC for ConstantValues {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.table.iter().for_each(|v| v.mark(alloc));
     }
 }
 

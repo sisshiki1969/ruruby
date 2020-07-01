@@ -247,6 +247,14 @@ impl Codegen {
         Codegen::push32(iseq, i as u32);
     }
 
+    fn gen_const_val(&mut self, iseq: &mut ISeq, id: usize) {
+        if id > u32::MAX as usize {
+            panic!("Constant value id overflow.")
+        };
+        iseq.push(Inst::CONST_VAL);
+        Codegen::push32(iseq, id as u32);
+    }
+
     fn gen_create_array(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::CREATE_ARRAY);
         Codegen::push32(iseq, len as u32);
@@ -765,7 +773,7 @@ impl Codegen {
             //let iseq = &iseq.iseq;
             let mut pc = 0;
             while pc < iseq.iseq.len() {
-                eprintln!("  {:05x} {}", pc, Inst::inst_info(iseq, pc));
+                eprintln!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
                 pc += Inst::inst_size(iseq.iseq[pc]);
             }
         }
@@ -833,26 +841,65 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::RegExp(nodes) => {
-                for node in nodes {
-                    match &node.kind {
-                        NodeKind::String(s) => {
-                            self.gen_string(iseq, &s);
+            NodeKind::RegExp(nodes, is_const) => {
+                if *is_const {
+                    if use_value {
+                        let mut string = String::new();
+                        for node in nodes {
+                            match &node.kind {
+                                NodeKind::String(s) => {
+                                    string += s;
+                                }
+                                _ => unreachable!(),
+                            }
                         }
-                        NodeKind::CompStmt(nodes) => {
-                            self.gen_comp_stmt(globals, iseq, nodes, true)?;
-                            iseq.push(Inst::TO_S);
-                        }
-                        _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
+                        match string.pop().unwrap() {
+                            'i' => string.insert_str(0, "(?mi)"),
+                            'm' => string.insert_str(0, "(?ms)"),
+                            'x' => string.insert_str(0, "(?mx)"),
+                            'o' => string.insert_str(0, "(?mo)"),
+                            '-' => string.insert_str(0, "(?m)"),
+                            _ => {
+                                return Err(self
+                                    .error_syntax("Illegal internal regexp expression.", node.loc))
+                            }
+                        };
+                        let re = match RegexpRef::from_string(&string) {
+                            Ok(re) => re,
+                            Err(_) => {
+                                return Err(self.error_syntax(
+                                    format!("Invalid string for a regular expression. {}", string),
+                                    node.loc,
+                                ))
+                            }
+                        };
+                        let val = Value::regexp(globals, re);
+                        let id = globals.const_values.insert(val);
+                        self.gen_const_val(iseq, id);
                     }
+                } else {
+                    for node in nodes {
+                        match &node.kind {
+                            NodeKind::String(s) => {
+                                self.gen_string(iseq, &s);
+                            }
+                            NodeKind::CompStmt(nodes) => {
+                                self.gen_comp_stmt(globals, iseq, nodes, true)?;
+                                iseq.push(Inst::TO_S);
+                            }
+                            _ => {
+                                unimplemented!("Illegal arguments in Nodekind::InterporatedString.")
+                            }
+                        }
+                    }
+                    self.gen_concat(iseq, nodes.len());
+                    let loc = self.loc;
+                    self.save_loc(iseq, loc);
+                    self.gen_create_regexp(iseq);
+                    if !use_value {
+                        self.gen_pop(iseq)
+                    };
                 }
-                self.gen_concat(iseq, nodes.len());
-                let loc = self.loc;
-                self.save_loc(iseq, loc);
-                self.gen_create_regexp(iseq);
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
             }
             NodeKind::SelfValue => {
                 self.gen_push_self(iseq);
@@ -876,26 +923,56 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::Array(nodes) => {
-                let len = nodes.len();
-                for node in nodes {
-                    self.gen(globals, iseq, node, true)?;
+            NodeKind::Array(nodes, is_const) => {
+                if *is_const {
+                    if use_value {
+                        let ary: Vec<Value> = nodes
+                            .iter()
+                            .rev()
+                            .map(|n| self.const_expr(globals, n))
+                            .collect();
+                        let val = Value::array_from(globals, ary);
+                        //eprintln!("const: {:?}", val);
+                        let id = globals.const_values.insert(val);
+                        self.gen_const_val(iseq, id);
+                    }
+                } else {
+                    let len = nodes.len();
+                    for node in nodes {
+                        self.gen(globals, iseq, node, true)?;
+                    }
+                    self.gen_create_array(iseq, len);
+                    if !use_value {
+                        self.gen_pop(iseq)
+                    };
                 }
-                self.gen_create_array(iseq, len);
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
             }
-            NodeKind::Hash(key_value) => {
-                let len = key_value.len();
-                for (k, v) in key_value {
-                    self.gen(globals, iseq, k, true)?;
-                    self.gen(globals, iseq, v, true)?;
+            NodeKind::Hash(key_value, is_const) => {
+                if *is_const {
+                    if use_value {
+                        let mut map = HashMap::new();
+                        for (k, v) in key_value {
+                            map.insert(
+                                HashKey(self.const_expr(globals, k)),
+                                self.const_expr(globals, v),
+                            );
+                        }
+                        let val = Value::hash_from_map(globals, map);
+                        //eprintln!("const: {:?}", val);
+                        let id = globals.const_values.insert(val);
+                        self.gen_const_val(iseq, id);
+                    }
+                } else {
+                    let len = key_value.len();
+                    for (k, v) in key_value {
+                        self.gen(globals, iseq, k, true)?;
+                        self.gen(globals, iseq, v, true)?;
+                    }
+                    self.gen_create_hash(iseq, len);
+                    if !use_value {
+                        self.gen_pop(iseq)
+                    };
                 }
-                self.gen_create_hash(iseq, len);
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
             }
             NodeKind::Ident(id) => {
                 self.gen_send_self(globals, iseq, *id, 0, 0, None);
@@ -1671,6 +1748,39 @@ impl Codegen {
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info, self.loc)
+    }
+}
+
+impl Codegen {
+    /// Construct and return value of constant expression.
+    fn const_expr(&self, globals: &Globals, node: &Node) -> Value {
+        match &node.kind {
+            NodeKind::Bool(b) => Value::bool(*b),
+            NodeKind::Integer(i) => Value::fixnum(*i),
+            NodeKind::Float(f) => Value::flonum(*f),
+            NodeKind::Nil => Value::nil(),
+            NodeKind::Symbol(s) => Value::symbol(*s),
+            NodeKind::String(s) => Value::string(globals, s.to_owned()),
+            NodeKind::Hash(key_value, true) => {
+                let mut map = HashMap::new();
+                for (k, v) in key_value {
+                    map.insert(
+                        HashKey(self.const_expr(globals, k)),
+                        self.const_expr(globals, v),
+                    );
+                }
+                Value::hash_from_map(globals, map)
+            }
+            NodeKind::Array(nodes, true) => {
+                let ary: Vec<Value> = nodes
+                    .iter()
+                    .rev()
+                    .map(|n| self.const_expr(globals, n))
+                    .collect();
+                Value::array_from(globals, ary)
+            }
+            _ => unreachable!(),
+        }
     }
 }
 

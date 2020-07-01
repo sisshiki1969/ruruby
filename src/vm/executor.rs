@@ -975,6 +975,12 @@ impl VM {
                     self.stack_push(res);
                     self.pc += 1;
                 }
+                Inst::CONST_VAL => {
+                    let id = self.read_usize(iseq, 1);
+                    let val = self.globals.const_values.get(id);
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
                 Inst::CREATE_RANGE => {
                     let start = self.stack_pop();
                     let end = self.stack_pop();
