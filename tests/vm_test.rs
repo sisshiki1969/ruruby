@@ -4,7 +4,7 @@ extern crate ruruby;
 extern crate test;
 use ruruby::parse::Lexer;
 //use ruruby::parser::{LvarCollector, Parser};
-use ruruby::test::{assert_script, eval_script};
+use ruruby::test::*;
 use ruruby::*;
 use test::Bencher;
 
@@ -177,52 +177,6 @@ fn index_op() {
         assert_error{ :a[3] = 100 }
         assert_error{ Object[3] = 200 }
         ";
-    assert_script(program);
-}
-
-#[test]
-fn int1() {
-    let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
-    let i2 = 0x4000_0000_0000_0005u64 as i64;
-    let program = format!("{}+6=={}", i1, i2);
-    let expected = Value::bool(true);
-    eval_script(program, expected);
-}
-
-#[test]
-fn int2() {
-    let i1 = 0x3fff_ffff_ffff_ffffu64 as i64;
-    let i2 = 0x4000_0000_0000_0005u64 as i64;
-    let program = format!("{}-6=={}", i2, i1);
-    let expected = Value::bool(true);
-    eval_script(program, expected);
-}
-
-#[test]
-fn int3() {
-    let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
-    let i2 = 0xc000_0000_0000_0005u64 as i64;
-    let program = format!("{}+6=={}", i1, i2);
-    let expected = Value::bool(true);
-    eval_script(program, expected);
-}
-
-#[test]
-fn int4() {
-    let i1 = 0xbfff_ffff_ffff_ffffu64 as i64;
-    let i2 = 0xc000_0000_0000_0005u64 as i64;
-    let program = format!("{}-6=={}", i2, i1);
-    let expected = Value::bool(true);
-    eval_script(program, expected);
-}
-
-#[test]
-fn regexp_literal() {
-    let program = r#"
-        j = "Ruby"
-        assert 1, "aaRubyvv" =~ /a#{j}v/
-        assert :"CRuby(MRI)", :"C#{j}(MRI)"
-        "#;
     assert_script(program);
 }
 
@@ -639,6 +593,7 @@ fn mul_assign3() {
             assert(1,f)
             assert(2,g)
             assert(nil,h)
+            assert([5,6], (i,j = 5,6))
             ";
     assert_script(program);
 }
@@ -876,18 +831,6 @@ fn define_binop() {
     assert v.x, 5
     assert v.y, 9
     ";
-    assert_script(program);
-}
-
-#[test]
-fn lambda_literal() {
-    let program = "
-        f0 = ->{100}
-        f1 = ->x{x*6}
-        f2 = ->(x,y){x*y}
-        assert 100, f0.call
-        assert 300, f1.call(50)
-        assert 35, f2.call(5,7)";
     assert_script(program);
 }
 

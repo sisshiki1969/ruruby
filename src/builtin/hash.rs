@@ -277,7 +277,9 @@ mod test {
     #[test]
     fn hash2() {
         let program = r#"
-            h = {true: "true", false: "false", nil: "nil", 100 => "100", 7.7 => "7.7", ruby: "string"}
+            a = "100"
+            @b = 7.7
+            h = {true: "true", false: "false", nil: "nil", 100 => a, @b => "7.7", ruby: "string"}
             assert(h[:true], "true")
             assert(h[:false], "false")
             assert(h[:nil], "nil")

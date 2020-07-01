@@ -1017,6 +1017,7 @@ impl Codegen {
             }
             NodeKind::BinOp(op, lhs, rhs) => {
                 let loc = self.loc;
+                #[cfg(not(tarpaulin_include))]
                 macro_rules! binop {
                     ($inst:expr) => {{
                         self.gen(globals, iseq, lhs, true)?;
@@ -1025,6 +1026,7 @@ impl Codegen {
                         iseq.push($inst);
                     }};
                 }
+                #[cfg(not(tarpaulin_include))]
                 macro_rules! binop_imm {
                     ($inst:expr, $inst_i:expr) => {
                         match &rhs.kind {
@@ -1726,12 +1728,7 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            _ => {
-                return Err(self.error_syntax(
-                    format!("Codegen: Unimplemented syntax. {:?}", node.kind),
-                    self.loc,
-                ))
-            }
+            _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())
     }
@@ -1793,7 +1790,7 @@ mod tests {
         let program = r#"
         a = 100
         true; 4; 3.2; "and"; :foo; self;
-        1..3; [1,2]; {s:0}; a; $foo; Object; @boo; false
+        1..3; [1,0]; {s:0}; a; $foo; nil; Object; @boo; false
         "#;
         assert_script(program);
     }
@@ -1802,12 +1799,14 @@ mod tests {
     fn codegen_invalid_break() {
         assert_error(r#"eval("break")"#);
         assert_error(r#"break"#);
+        assert_error("def foo; break; end");
     }
 
     #[test]
     fn codegen_invalid_next() {
         assert_error(r#"eval("next")"#);
         assert_error(r#"next"#);
+        assert_error("def foo; next; end");
     }
 
     #[test]
