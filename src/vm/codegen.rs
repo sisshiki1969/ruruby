@@ -1484,6 +1484,7 @@ impl Codegen {
                 for arg in &send_args.args {
                     self.gen(globals, iseq, arg, true)?;
                 }
+                // A flag whether keyword parametera exist or not.
                 let kw_flag = send_args.kw_args.len() != 0;
                 if kw_flag {
                     for (id, default) in &send_args.kw_args {
@@ -1495,6 +1496,7 @@ impl Codegen {
                 let mut block_flag = false;
                 let block_ref = match &send_args.block {
                     Some(block) => match &block.kind {
+                        // Block literal ({})
                         NodeKind::Proc { params, body, lvar } => {
                             self.loop_stack.push(LoopInfo::new_top());
                             let methodref = self.gen_iseq(
@@ -1509,6 +1511,7 @@ impl Codegen {
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
                         }
+                        // Block parameter (&block)
                         _ => {
                             self.gen(globals, iseq, block, true)?;
                             block_flag = true;
@@ -1517,6 +1520,7 @@ impl Codegen {
                     },
                     None => None,
                 };
+                // If the method call without block nor keyword/block paramters, gen OPT_SEND.
                 if !block_flag && !kw_flag && block_ref.is_none() {
                     if NodeKind::SelfValue == receiver.kind {
                         self.loc = loc;

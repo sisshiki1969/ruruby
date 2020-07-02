@@ -94,6 +94,9 @@ pub struct ISeqInfo {
     pub iseq: ISeq,
     pub lvar: LvarCollector,
     pub lvars: usize,
+    /// This flag is set when the following conditions are met.
+    /// 1) Not a block.
+    /// 2) Has no optional/post/rest/block/keyword parameters.
     pub opt_flag: bool,
     /// The Class where this method was described.
     /// This field is set to None when IseqInfo was created by Codegen.
@@ -302,4 +305,3 @@ impl GC for MethodObjInfo {
         self.receiver.mark(alloc);
     }
 }
-

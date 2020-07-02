@@ -174,19 +174,8 @@ impl Context {
         let req_len = iseq.params.req_params;
         vm.check_args_num(args.len(), req_len)?;
 
-        // fill post_req params.
-        let req_opt = std::cmp::min(req_len, args.len());
-        if req_opt != 0 {
-            // fill req and opt params.
-            for i in 0..req_opt {
-                context[i] = args[i];
-            }
-            if req_opt < req_len {
-                // fill rest req params with nil.
-                for i in req_opt..req_len {
-                    context[i] = Value::nil();
-                }
-            }
+        for i in 0..req_len {
+            context[i] = args[i];
         }
 
         if args.kw_arg.is_some() {
