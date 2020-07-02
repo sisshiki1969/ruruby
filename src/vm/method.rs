@@ -66,12 +66,6 @@ impl MethodInfo {
             Err(vm.error_unimplemented("Methodref is illegal."))
         }
     }
-    /*
-    pub fn set_iseq_kind(&mut self, kind: ISeqKind) {
-        if let MethodInfo::RubyFunc { iseq } = self {
-            iseq.kind = kind;
-        }
-    }*/
 }
 
 impl std::fmt::Debug for MethodInfo {
@@ -157,9 +151,9 @@ impl GC for ClassList {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ISeqKind {
-    Other,
-    Method(IdentId),  // Method or Lambda
-    Block(MethodRef), // Block or Proc
+    Other,            // eval or unnamed method
+    Method(IdentId),  // method or lambda
+    Block(MethodRef), // block or proc
 }
 
 impl ISeqInfo {

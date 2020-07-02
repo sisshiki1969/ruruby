@@ -1448,10 +1448,9 @@ impl VM {
     fn get_method_from_cache(
         &mut self,
         cache_slot: u32,
-        receiver: Value,
+        rec_class: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_object_for_method(&self.globals);
         if rec_class.is_nil() {
             return Err(self.error_unimplemented("receiver's class is nil."));
         };
@@ -1490,7 +1489,8 @@ impl VM {
         method: IdentId,
         cache: u32,
     ) -> VMResult {
-        let methodref = self.get_method_from_cache(cache, lhs, method)?;
+        let rec_class = lhs.get_class_object_for_method(&self.globals);
+        let methodref = self.get_method_from_cache(cache, rec_class, method)?;
         let arg = Args::new1(rhs);
         self.eval_send(methodref, lhs, &arg)
     }
@@ -2026,7 +2026,8 @@ impl VM {
         let flag = self.read16(iseq, 7);
         let cache_slot = self.read32(iseq, 9);
         let block = self.read32(iseq, 13);
-        let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
+        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
 
         let keyword = if flag & 0b01 == 1 {
             let val = self.stack_pop();
@@ -2059,8 +2060,8 @@ impl VM {
         let method_id = self.read_id(iseq, 1);
         let args_num = self.read16(iseq, 5);
         let cache_slot = self.read32(iseq, 7);
-        let methodref = self.get_method_from_cache(cache_slot, receiver, method_id)?;
-
+        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
         let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)

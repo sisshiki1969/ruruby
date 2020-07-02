@@ -248,7 +248,7 @@ impl Codegen {
     }
 
     fn gen_const_val(&mut self, iseq: &mut ISeq, id: usize) {
-        if id > u32::MAX as usize {
+        if id > u32::max_value() as usize {
             panic!("Constant value id overflow.")
         };
         iseq.push(Inst::CONST_VAL);
