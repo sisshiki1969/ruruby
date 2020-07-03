@@ -77,7 +77,7 @@ def unit_conv(ruruby, ruby)
   [ruruby, ruby, ch]
 end
 
-def print_cmp(kind, ruby, ruruby)
+def print_cmp(kind, ruby, ruruby, ratio)
   ruruby, ruby, ch = unit_conv(ruruby, ruby)
 
   if ruby.is_a?(Float)
@@ -87,7 +87,7 @@ def print_cmp(kind, ruby, ruruby)
     res_ruby = "%6d#{ch}" % ruby
     res_ruruby = format("%6d#{ch}", ruruby)
   end
-  puts format("#{kind}\t%10s  %10s  x %7.2f", res_ruby, res_ruruby, ruruby.to_f / ruby)
+  puts format("#{kind}\t%10s  %10s  x %7.2f", res_ruby, res_ruruby, ratio)
 end
 
 class Array
@@ -132,10 +132,10 @@ def perf(app_name)
 
   # `convert mandel.ppm mandel.jpg`
   puts format("\t%10s  %10s", 'ruby', 'ruruby')
-  print_cmp('real', real_ruby[:ave], real_ruruby[:ave])
-  print_cmp('user', user_ruby[:ave], user_ruruby[:ave])
-  print_cmp('sys', sys_ruby[:ave], sys_ruruby[:ave])
-  print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
+  print_cmp('real', real_ruby[:ave], real_ruruby[:ave], real_ruruby[:ave]/real_ruby[:ave])
+  print_cmp('user', user_ruby[:ave], user_ruruby[:ave], user_ruruby[:ave]/user_ruby[:ave])
+  print_cmp('sys', sys_ruby[:ave], sys_ruruby[:ave], sys_ruruby[:ave]/sys_ruby[:ave])
+  print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave], rss_ruruby[:ave]/rss_ruby[:ave])
 
   real_mul = real_ruruby[:ave] / real_ruby[:ave]
   @md1 += "| #{app_name} | #{print_avesd(real_ruby)} s | #{print_avesd(real_ruruby)} s | x #{'%.2f' % real_mul} |\n"
@@ -171,8 +171,8 @@ def perf_optcarrot(option = "")
 
   puts "benchmark: optcarrot #{option}"
   puts format("\t%10s  %10s", 'ruby', 'ruruby')
-  print_cmp('fps', fps_ruruby[:ave], fps_ruby[:ave])
-  print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave])
+  print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave], fps_ruby[:ave]/fps_ruruby[:ave])
+  print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave], rss_ruruby[:ave]/rss_ruby[:ave])
 
   @md2 += "| optcarrot #{option} | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
 
@@ -189,7 +189,7 @@ end
 
 @optcarrot = "../optcarrot/bin/optcarrot-bench"
 
-perf_optcarrot()
+perf_optcarrot
 
 perf_optcarrot("--opt")
 
