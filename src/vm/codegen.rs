@@ -221,10 +221,10 @@ impl Codegen {
         Codegen::push64(iseq, num as u64);
     }
 
-    fn gen_string(&mut self, iseq: &mut ISeq, s: &str) {
-        iseq.push(Inst::PUSH_STRING);
-        let id = IdentId::get_ident_id(s);
-        Codegen::push32(iseq, id.into());
+    fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
+        let val = Value::string(globals, s.to_string());
+        let id = globals.const_values.insert(val);
+        self.gen_const_val(iseq, id);
     }
 
     fn gen_symbol(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -817,7 +817,7 @@ impl Codegen {
                 Codegen::push64(iseq, f64::to_bits(*num));
             }
             NodeKind::String(s) => {
-                self.gen_string(iseq, s);
+                self.gen_string(globals, iseq, s);
             }
             NodeKind::Symbol(id) => {
                 self.gen_symbol(iseq, *id);
@@ -827,7 +827,7 @@ impl Codegen {
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
-                            self.gen_string(iseq, &s);
+                            self.gen_string(globals, iseq, &s);
                         }
                         NodeKind::CompStmt(nodes) => {
                             self.gen_comp_stmt(globals, iseq, nodes, true)?;
@@ -881,7 +881,7 @@ impl Codegen {
                     for node in nodes {
                         match &node.kind {
                             NodeKind::String(s) => {
-                                self.gen_string(iseq, &s);
+                                self.gen_string(globals, iseq, &s);
                             }
                             NodeKind::CompStmt(nodes) => {
                                 self.gen_comp_stmt(globals, iseq, nodes, true)?;

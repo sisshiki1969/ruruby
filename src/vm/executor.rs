@@ -647,12 +647,6 @@ impl VM {
                     self.pc += 9;
                     self.stack_push(Value::flonum(num));
                 }
-                Inst::PUSH_STRING => {
-                    let id = self.read_id(iseq, 1);
-                    let string = IdentId::get_ident_name(id);
-                    self.stack_push(Value::string(&self.globals, string));
-                    self.pc += 5;
-                }
                 Inst::PUSH_SYMBOL => {
                     let id = self.read_id(iseq, 1);
                     self.stack_push(Value::symbol(id));

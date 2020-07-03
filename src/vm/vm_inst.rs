@@ -7,7 +7,6 @@ impl Inst {
     pub const PUSH_TRUE: u8 = 3;
     pub const PUSH_FALSE: u8 = 4;
     pub const PUSH_NIL: u8 = 5;
-    pub const PUSH_STRING: u8 = 6;
     pub const PUSH_SYMBOL: u8 = 7;
     pub const PUSH_SELF: u8 = 8;
 
@@ -99,7 +98,6 @@ impl Inst {
             Inst::PUSH_TRUE => "PUSH_TRUE",
             Inst::PUSH_FALSE => "PUSH_FALSE",
             Inst::PUSH_NIL => "PUSH_NIL",
-            Inst::PUSH_STRING => "PUSH_STRING",
             Inst::PUSH_SYMBOL => "PUSH_SYMBOL",
             Inst::PUSH_SELF => "PUSH_SELF",
 
@@ -214,9 +212,7 @@ impl Inst {
             | Inst::RETURN
             | Inst::MRETURN => 1,
                                         // operand
-            Inst::PUSH_STRING           // IdentId: u32
-            | Inst::PUSH_SYMBOL         // IdentId: u32
-
+            Inst::PUSH_SYMBOL         // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32
             | Inst::GET_LOCAL           // LVarId: u32
             | Inst::GET_CONST           // IdentId: u32
@@ -312,11 +308,6 @@ impl Inst {
             | Inst::SPLAT
             | Inst::POP
             | Inst::YIELD => format!("{}", Inst::inst_name(iseq[pc])),
-            Inst::PUSH_STRING | Inst::PUSH_SYMBOL => {
-                let id = IdentId::from(Inst::read32(iseq, pc + 1));
-                let name = id_lock.get_ident_name(id);
-                format!("{} '{}'", Inst::inst_name(iseq[pc]), name)
-            }
             Inst::ADDI | Inst::SUBI | Inst::B_ANDI | Inst::B_ORI | Inst::EQI | Inst::NEI => {
                 imm_i32(iseq, pc)
             }
