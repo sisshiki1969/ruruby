@@ -11,6 +11,7 @@ default = []
 perf = []
 trace = []
 emit-iseq = []
+gc-debug = []
 verbose = []
 
 [dependencies]

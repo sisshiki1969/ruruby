@@ -81,12 +81,13 @@ impl Inst {
     pub const DEF_SMETHOD: u8 = 92;
 
     pub const JMP: u8 = 100;
-    pub const JMP_IF_FALSE: u8 = 101;
-    pub const END: u8 = 102;
-    pub const RETURN: u8 = 103;
-    pub const OPT_CASE: u8 = 104;
-    pub const MRETURN: u8 = 105;
-    pub const YIELD: u8 = 106;
+    pub const JMP_IF_F: u8 = 101;
+    pub const JMP_IF_T: u8 = 102;
+    pub const END: u8 = 103;
+    pub const RETURN: u8 = 104;
+    pub const OPT_CASE: u8 = 105;
+    pub const MRETURN: u8 = 106;
+    pub const YIELD: u8 = 107;
 }
 
 #[allow(dead_code)]
@@ -172,7 +173,8 @@ impl Inst {
             Inst::DEF_SMETHOD => "DEF_CMETHOD".to_string(),
 
             Inst::JMP => "JMP".to_string(),
-            Inst::JMP_IF_FALSE => "JMP_IF_FALSE".to_string(),
+            Inst::JMP_IF_F => "JMP_IF_F".to_string(),
+            Inst::JMP_IF_T => "JMP_IF_T".to_string(),
             Inst::END => "END".to_string(),
             Inst::RETURN => "RETURN".to_string(),
             Inst::OPT_CASE => "OPT_CASE".to_string(),
@@ -229,7 +231,8 @@ impl Inst {
             | Inst::CREATE_PROC
             | Inst::CONST_VAL           // ConstId: u32
             | Inst::JMP                 // disp: u32
-            | Inst::JMP_IF_FALSE        // disp: u32
+            | Inst::JMP_IF_F            // disp: u32
+            | Inst::JMP_IF_T            // disp: u32
             | Inst::DUP                 // number of items: u32
             | Inst::TAKE                // number of items: u32
             | Inst::CONCAT_STRING       // number of items: u32
@@ -300,7 +303,7 @@ impl Inst {
                 format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
             }
 
-            Inst::JMP | Inst::JMP_IF_FALSE => format!(
+            Inst::JMP | Inst::JMP_IF_F | Inst::JMP_IF_T => format!(
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32

@@ -12,7 +12,6 @@ lazy_static! {
 thread_local! {
     pub static ALLOC_THREAD: RefCell<AllocThread> = {
         RefCell::new(AllocThread {
-            //allocated:0,
             alloc_flag:false
         })
     };
@@ -22,6 +21,7 @@ const SIZE: usize = 64;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
 const PAGE_LEN: usize = 64 * SIZE;
 const DATA_LEN: usize = 64 * (SIZE - 1);
+const THRESHOLD: usize = 64 * (SIZE - 2);
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE; // 2^18 = 256kb
 
 pub trait GC {
@@ -31,8 +31,8 @@ pub trait GC {
 ///
 /// Heap page struct.
 ///
-/// Single page ocupies 256kb in memory.
-/// This struct contains 64 * 63 GCBox cells, and bitmap (8 * 64 bytes each) for marking phase.
+/// Single page ocupies `ALLOC_SIZE` bytes in memory.
+/// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
 ///
 struct Page {
     data: [GCBox<RValue>; DATA_LEN],
@@ -49,7 +49,7 @@ impl PageRef {
         use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         let ptr = unsafe { alloc(layout) };
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
         }
@@ -170,7 +170,6 @@ pub struct Allocator {
 }
 
 pub struct AllocThread {
-    //allocated: usize,
     alloc_flag: bool,
 }
 
@@ -186,8 +185,8 @@ impl Allocator {
         assert_eq!(64, GCBOX_SIZE);
         assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
         let ptr = PageRef::alloc_page();
-        let mut alloc = Allocator {
-            used: DATA_LEN,
+        let alloc = Allocator {
+            used: 0,
             allocated: 0,
             free_list_count: 0,
             current: ptr,
@@ -196,8 +195,8 @@ impl Allocator {
             free: None,
             free_pages: vec![],
         };
-        alloc.clear_mark();
-        alloc.sweep();
+        //alloc.clear_mark();
+        //alloc.sweep();
         alloc
     }
 
@@ -220,7 +219,7 @@ impl Allocator {
             Some(gcbox) => {
                 // Allocate from the free list.
                 self.free = gcbox.next;
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "gc-debug")]
                 assert_eq!(gcbox.inner, RValue::new_invalid());
                 unsafe {
                     std::ptr::write(
@@ -237,12 +236,6 @@ impl Allocator {
             None => {}
         }
 
-        ALLOC_THREAD.with(|m| {
-            let mut m = m.borrow_mut();
-            //m.allocated += 1;
-            m.alloc_flag = true;
-        });
-
         let gcbox = if self.used == DATA_LEN {
             // Allocate new page.
             self.used = 1;
@@ -255,11 +248,17 @@ impl Allocator {
             self.current.get_data_ptr(0)
         } else {
             // Bump allocation.
+            if self.used == THRESHOLD {
+                ALLOC_THREAD.with(|m| {
+                    let mut m = m.borrow_mut();
+                    m.alloc_flag = true;
+                });
+            }
             let ptr = self.current.get_data_ptr(self.used);
             self.used += 1;
             ptr
         };
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             assert!(self.used <= DATA_LEN);
             assert!(0 < self.used);
@@ -278,7 +277,7 @@ impl Allocator {
     }
 
     pub fn gc(&mut self, root: &Globals) {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             eprintln!("--GC start thread:{:?}", std::thread::current().id());
             eprintln!(
@@ -290,13 +289,13 @@ impl Allocator {
         }
         self.clear_mark();
         root.mark(self);
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             eprint!("marked: {}  ", self.mark_counter);
         }
         self.dealloc_empty_pages();
         self.sweep();
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             assert_eq!(self.free_list_count, self.check_free_list());
             eprintln!("free list: {}", self.free_list_count);
@@ -304,7 +303,7 @@ impl Allocator {
         ALLOC_THREAD.with(|m| {
             m.borrow_mut().alloc_flag = false;
         });
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             //self.print_mark();
             eprintln!("--GC completed");
@@ -330,13 +329,13 @@ impl Allocator {
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
     fn mark_ptr(&mut self, ptr: *mut GCBox<RValue>) -> bool {
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         self.check_ptr(ptr);
         let mut page_ptr = PageRef::from_inner(ptr);
 
         let offset = ptr as usize - page_ptr.get_data_ptr(0) as usize;
         let index = offset / GCBOX_SIZE;
-        #[cfg(debug_assertions)]
+        #[cfg(feature = "gc-debug")]
         {
             assert_eq!(0, offset % GCBOX_SIZE);
             assert!(index < DATA_LEN);
@@ -360,7 +359,7 @@ impl Allocator {
                 page.free_page();
                 self.free_pages.push(page);
                 //page.dealloc_page();
-                #[cfg(debug_assertions)]
+                #[cfg(feature = "gc-debug")]
                 eprintln!("dealloc: {:?}", page.as_ptr());
             }
         }

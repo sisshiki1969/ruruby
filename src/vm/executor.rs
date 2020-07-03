@@ -423,7 +423,7 @@ impl VM {
 impl VM {
     fn gc(&mut self) {
         self.gc_counter += 1;
-        if !self.globals.gc_enabled || self.gc_counter % 128 != 0 {
+        if !self.globals.gc_enabled || self.gc_counter % 8 != 0 {
             return;
         }
         if !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
@@ -1020,9 +1020,21 @@ impl VM {
                     }
                     self.jump_pc(5, disp);
                 }
-                Inst::JMP_IF_FALSE => {
+                Inst::JMP_IF_F => {
                     let val = self.stack_pop();
                     if self.val_to_bool(val) {
+                        self.jump_pc(5, 0);
+                    } else {
+                        let disp = self.read_disp(iseq, 1);
+                        if 0 < disp {
+                            self.gc();
+                        }
+                        self.jump_pc(5, disp);
+                    }
+                }
+                Inst::JMP_IF_T => {
+                    let val = self.stack_pop();
+                    if !self.val_to_bool(val) {
                         self.jump_pc(5, 0);
                     } else {
                         let disp = self.read_disp(iseq, 1);

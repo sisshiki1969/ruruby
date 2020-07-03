@@ -284,7 +284,13 @@ impl Codegen {
     }
 
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
-        iseq.push(Inst::JMP_IF_FALSE);
+        iseq.push(Inst::JMP_IF_F);
+        Codegen::push32(iseq, 0);
+        ISeqPos(iseq.len())
+    }
+
+    fn gen_jmp_if_true(&mut self, iseq: &mut ISeq) -> ISeqPos {
+        iseq.push(Inst::JMP_IF_T);
         Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
@@ -763,19 +769,19 @@ impl Codegen {
             } else {
                 panic!("CodeGen: Illegal methodref.")
             };
-            eprintln!("-----------------------------------------");
+            println!("-----------------------------------------");
             let name = IdentId::get_ident_name(iseq.name);
-            eprintln!("{} {:?} opt_flag:{:?}", name, methodref, iseq.opt_flag);
-            eprint!("local var: ");
+            println!("{} {:?} opt_flag:{:?}", name, methodref, iseq.opt_flag);
+            print!("local var: ");
             for (k, v) in iseq.lvar.table() {
-                eprint!("{}:{} ", v.as_u32(), IdentId::get_ident_name(*k));
+                print!("{}:{} ", v.as_u32(), IdentId::get_ident_name(*k));
             }
-            eprintln!("");
-            eprintln!("block: {:?}", iseq.lvar.block());
+            println!("");
+            println!("block: {:?}", iseq.lvar.block());
             //let iseq = &iseq.iseq;
             let mut pc = 0;
             while pc < iseq.iseq.len() {
-                eprintln!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
+                println!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
                 pc += Inst::inst_size(iseq.iseq[pc]);
             }
         }
@@ -1130,22 +1136,19 @@ impl Codegen {
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
                         self.gen(globals, iseq, lhs, true)?;
-                        let src1 = self.gen_jmp_if_false(iseq);
+                        self.gen_dup(iseq, 1);
+                        let src = self.gen_jmp_if_false(iseq);
+                        self.gen_pop(iseq);
                         self.gen(globals, iseq, rhs, true)?;
-                        let src2 = Codegen::gen_jmp(iseq);
-                        Codegen::write_disp_from_cur(iseq, src1);
-                        iseq.push(Inst::PUSH_FALSE);
-                        Codegen::write_disp_from_cur(iseq, src2);
+                        Codegen::write_disp_from_cur(iseq, src);
                     }
                     BinOp::LOr => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen_dup(iseq, 1);
-                        let src1 = self.gen_jmp_if_false(iseq);
-                        let src2 = Codegen::gen_jmp(iseq);
-                        Codegen::write_disp_from_cur(iseq, src1);
+                        let src = self.gen_jmp_if_true(iseq);
                         self.gen_pop(iseq);
                         self.gen(globals, iseq, rhs, true)?;
-                        Codegen::write_disp_from_cur(iseq, src2);
+                        Codegen::write_disp_from_cur(iseq, src);
                     }
                 }
                 if !use_value {
@@ -1355,8 +1358,7 @@ impl Codegen {
                             self.gen(globals, iseq, elem, true)?;
                             self.save_loc(iseq, elem.loc);
                             iseq.push(Inst::TEQ);
-                            iseq.push(Inst::NOT);
-                            jmp_dest.push(self.gen_jmp_if_false(iseq));
+                            jmp_dest.push(self.gen_jmp_if_true(iseq));
                         }
                         next = Some(Codegen::gen_jmp(iseq));
                         for dest in jmp_dest {

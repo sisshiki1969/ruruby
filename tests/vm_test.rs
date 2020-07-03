@@ -156,8 +156,12 @@ fn op9() {
     let program = "
         assert(4, 4 || 5)
         assert(4, 4 || nil)
-        assert(4, nil || 4)
-        assert(nil, nil || nil)
+        assert(5, nil || 5)
+        assert(false, nil || false)
+        assert(5, 4 && 5)
+        assert(nil, 4 && nil)
+        assert(nil, nil && 5)
+        assert(nil, nil && false)
         ";
     assert_script(program);
 }
