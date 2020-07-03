@@ -84,6 +84,7 @@ pub type ISeqRef = Ref<ISeqInfo>;
 #[derive(Debug, Clone)]
 pub struct ISeqInfo {
     pub method: MethodRef,
+    pub name: Option<IdentId>,
     pub params: ISeqParams,
     pub iseq: ISeq,
     pub lvar: LvarCollector,
@@ -159,6 +160,7 @@ pub enum ISeqKind {
 impl ISeqInfo {
     pub fn new(
         method: MethodRef,
+        name: Option<IdentId>,
         req_params: usize,
         opt_params: usize,
         rest_param: bool,
@@ -188,6 +190,7 @@ impl ISeqInfo {
         };
         ISeqInfo {
             method,
+            name,
             params,
             iseq,
             lvar,
@@ -203,6 +206,7 @@ impl ISeqInfo {
     pub fn default(method: MethodRef) -> Self {
         ISeqInfo::new(
             method,
+            None,
             0,
             0,
             false,

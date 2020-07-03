@@ -99,11 +99,11 @@ impl Perf {
             eprintln!(
                 "{:<13} {:>10} {:>8.2} {:>8}",
                 if i as u8 == Perf::CODEGEN {
-                    "CODEGEN"
+                    "CODEGEN".to_string()
                 } else if i as u8 == Perf::EXTERN {
-                    "EXTERN"
+                    "EXTERN".to_string()
                 } else if i as u8 == Perf::GC {
-                    "GC"
+                    "GC".to_string()
                 } else {
                     Inst::inst_name(i as u8)
                 },

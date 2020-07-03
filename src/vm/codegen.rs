@@ -724,6 +724,7 @@ impl Codegen {
         let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
                 methodref,
+                name,
                 req_params,
                 opt_params,
                 rest_param,
@@ -763,7 +764,8 @@ impl Codegen {
                 panic!("CodeGen: Illegal methodref.")
             };
             eprintln!("-----------------------------------------");
-            eprintln!("{:?}", methodref);
+            let name = IdentId::get_ident_name(iseq.name);
+            eprintln!("{} {:?} opt_flag:{:?}", name, methodref, iseq.opt_flag);
             eprint!("local var: ");
             for (k, v) in iseq.lvar.table() {
                 eprint!("{}:{} ", v.as_u32(), IdentId::get_ident_name(*k));

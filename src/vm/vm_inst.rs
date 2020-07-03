@@ -91,95 +91,95 @@ impl Inst {
 
 #[allow(dead_code)]
 impl Inst {
-    pub fn inst_name(inst: u8) -> &'static str {
+    pub fn inst_name(inst: u8) -> String {
         match inst {
-            Inst::PUSH_FIXNUM => "PUSH_FIXNUM",
-            Inst::PUSH_FLONUM => "PUSH_FLONUM",
-            Inst::PUSH_TRUE => "PUSH_TRUE",
-            Inst::PUSH_FALSE => "PUSH_FALSE",
-            Inst::PUSH_NIL => "PUSH_NIL",
-            Inst::PUSH_SYMBOL => "PUSH_SYMBOL",
-            Inst::PUSH_SELF => "PUSH_SELF",
+            Inst::PUSH_FIXNUM => "PUSH_FIXNUM".to_string(),
+            Inst::PUSH_FLONUM => "PUSH_FLONUM".to_string(),
+            Inst::PUSH_TRUE => "PUSH_TRUE".to_string(),
+            Inst::PUSH_FALSE => "PUSH_FALSE".to_string(),
+            Inst::PUSH_NIL => "PUSH_NIL".to_string(),
+            Inst::PUSH_SYMBOL => "PUSH_SYMBOL".to_string(),
+            Inst::PUSH_SELF => "PUSH_SELF".to_string(),
 
-            Inst::ADD => "ADD",
-            Inst::SUB => "SUB",
-            Inst::MUL => "MUL",
-            Inst::DIV => "DIV",
-            Inst::REM => "REM",
-            Inst::EQ => "EQ",
-            Inst::NE => "NE",
-            Inst::TEQ => "TEQ",
-            Inst::GT => "GT",
-            Inst::GE => "GE",
-            Inst::NOT => "NOT",
-            Inst::SHR => "SHR",
-            Inst::SHL => "SHL",
-            Inst::BIT_OR => "BIT_OR",
-            Inst::BIT_AND => "BIT_AND",
-            Inst::BIT_XOR => "BIT_XOR",
-            Inst::BIT_NOT => "BIT_NOT",
-            Inst::POW => "POW",
-            Inst::CMP => "CMP",
+            Inst::ADD => "ADD".to_string(),
+            Inst::SUB => "SUB".to_string(),
+            Inst::MUL => "MUL".to_string(),
+            Inst::DIV => "DIV".to_string(),
+            Inst::REM => "REM".to_string(),
+            Inst::EQ => "EQ".to_string(),
+            Inst::NE => "NE".to_string(),
+            Inst::TEQ => "TEQ".to_string(),
+            Inst::GT => "GT".to_string(),
+            Inst::GE => "GE".to_string(),
+            Inst::NOT => "NOT".to_string(),
+            Inst::SHR => "SHR".to_string(),
+            Inst::SHL => "SHL".to_string(),
+            Inst::BIT_OR => "BIT_OR".to_string(),
+            Inst::BIT_AND => "BIT_AND".to_string(),
+            Inst::BIT_XOR => "BIT_XOR".to_string(),
+            Inst::BIT_NOT => "BIT_NOT".to_string(),
+            Inst::POW => "POW".to_string(),
+            Inst::CMP => "CMP".to_string(),
 
-            Inst::ADDI => "ADDI",
-            Inst::SUBI => "SUBI",
-            Inst::IVAR_ADDI => "IVAR_ADDI",
-            Inst::B_ANDI => "B_ANDI",
-            Inst::B_ORI => "B_ORI",
-            Inst::EQI => "EQI",
-            Inst::NEI => "NEI",
-            Inst::LVAR_ADDI => "LVAR_ADDI",
+            Inst::ADDI => "ADDI".to_string(),
+            Inst::SUBI => "SUBI".to_string(),
+            Inst::IVAR_ADDI => "IVAR_ADDI".to_string(),
+            Inst::B_ANDI => "B_ANDI".to_string(),
+            Inst::B_ORI => "B_ORI".to_string(),
+            Inst::EQI => "EQI".to_string(),
+            Inst::NEI => "NEI".to_string(),
+            Inst::LVAR_ADDI => "LVAR_ADDI".to_string(),
 
-            Inst::SET_LOCAL => "SET_LOCAL",
-            Inst::GET_LOCAL => "GET_LOCAL",
-            Inst::SET_DYNLOCAL => "SET_DYNLOCAL",
-            Inst::GET_DYNLOCAL => "GET_DYNLOCAL",
-            Inst::GET_CONST => "GET_CONST",
-            Inst::SET_CONST => "SET_CONST",
-            Inst::GET_CONST_TOP => "GET_CONSTTOP",
-            Inst::GET_SCOPE => "GET_SCOPE",
+            Inst::SET_LOCAL => "SET_LOCAL".to_string(),
+            Inst::GET_LOCAL => "GET_LOCAL".to_string(),
+            Inst::SET_DYNLOCAL => "SET_DYNLOCAL".to_string(),
+            Inst::GET_DYNLOCAL => "GET_DYNLOCAL".to_string(),
+            Inst::GET_CONST => "GET_CONST".to_string(),
+            Inst::SET_CONST => "SET_CONST".to_string(),
+            Inst::GET_CONST_TOP => "GET_CONSTTOP".to_string(),
+            Inst::GET_SCOPE => "GET_SCOPE".to_string(),
 
-            Inst::GET_IVAR => "GET_IVAR",
-            Inst::SET_IVAR => "SET_IVAR",
-            Inst::GET_GVAR => "GET_GVAR",
-            Inst::SET_GVAR => "SET_GVAR",
-            Inst::GET_INDEX => "GET_INDEX",
-            Inst::SET_INDEX => "SET_INDEX",
+            Inst::GET_IVAR => "GET_IVAR".to_string(),
+            Inst::SET_IVAR => "SET_IVAR".to_string(),
+            Inst::GET_GVAR => "GET_GVAR".to_string(),
+            Inst::SET_GVAR => "SET_GVAR".to_string(),
+            Inst::GET_INDEX => "GET_INDEX".to_string(),
+            Inst::SET_INDEX => "SET_INDEX".to_string(),
 
-            Inst::CHECK_LOCAL => "CHECK_LOCAL",
+            Inst::CHECK_LOCAL => "CHECK_LOCAL".to_string(),
 
-            Inst::SEND => "SEND",
-            Inst::SEND_SELF => "SENDSLF",
-            Inst::OPT_SEND => "OPT_SEND",
-            Inst::OPT_SEND_SELF => "OPT_SENDSLF",
+            Inst::SEND => "SEND".to_string(),
+            Inst::SEND_SELF => "SENDSLF".to_string(),
+            Inst::OPT_SEND => "OPT_SEND".to_string(),
+            Inst::OPT_SEND_SELF => "OPT_SENDSLF".to_string(),
 
-            Inst::CREATE_RANGE => "CREATE_RANGE",
-            Inst::CREATE_ARRAY => "CREATE_ARRAY",
-            Inst::CREATE_PROC => "CREATE_PROC",
-            Inst::CREATE_HASH => "CREATE_HASH",
-            Inst::CREATE_REGEXP => "CREATE_REGEX",
-            Inst::CONST_VAL => "CONST_VAL",
+            Inst::CREATE_RANGE => "CREATE_RANGE".to_string(),
+            Inst::CREATE_ARRAY => "CREATE_ARRAY".to_string(),
+            Inst::CREATE_PROC => "CREATE_PROC".to_string(),
+            Inst::CREATE_HASH => "CREATE_HASH".to_string(),
+            Inst::CREATE_REGEXP => "CREATE_REGEX".to_string(),
+            Inst::CONST_VAL => "CONST_VAL".to_string(),
 
-            Inst::POP => "POP",
-            Inst::DUP => "DUP",
-            Inst::TAKE => "TAKE",
-            Inst::SPLAT => "SPLAT",
-            Inst::CONCAT_STRING => "CONCAT_STR",
-            Inst::TO_S => "TO_S",
+            Inst::POP => "POP".to_string(),
+            Inst::DUP => "DUP".to_string(),
+            Inst::TAKE => "TAKE".to_string(),
+            Inst::SPLAT => "SPLAT".to_string(),
+            Inst::CONCAT_STRING => "CONCAT_STR".to_string(),
+            Inst::TO_S => "TO_S".to_string(),
 
-            Inst::DEF_CLASS => "DEF_CLASS",
-            Inst::DEF_METHOD => "DEF_METHOD",
-            Inst::DEF_SMETHOD => "DEF_CMETHOD",
+            Inst::DEF_CLASS => "DEF_CLASS".to_string(),
+            Inst::DEF_METHOD => "DEF_METHOD".to_string(),
+            Inst::DEF_SMETHOD => "DEF_CMETHOD".to_string(),
 
-            Inst::JMP => "JMP",
-            Inst::JMP_IF_FALSE => "JMP_IF_FALSE",
-            Inst::END => "END",
-            Inst::RETURN => "RETURN",
-            Inst::OPT_CASE => "OPT_CASE",
-            Inst::MRETURN => "MRETURN",
-            Inst::YIELD => "YIELD",
+            Inst::JMP => "JMP".to_string(),
+            Inst::JMP_IF_FALSE => "JMP_IF_FALSE".to_string(),
+            Inst::END => "END".to_string(),
+            Inst::RETURN => "RETURN".to_string(),
+            Inst::OPT_CASE => "OPT_CASE".to_string(),
+            Inst::MRETURN => "MRETURN".to_string(),
+            Inst::YIELD => "YIELD".to_string(),
 
-            _ => "undefined",
+            _ => format!("undefined {}", inst),
         }
     }
 
@@ -276,38 +276,6 @@ impl Inst {
         let iseq = &iseq_ref.iseq;
         let id_lock = ID.read().unwrap();
         match iseq[pc] {
-            Inst::END
-            | Inst::PUSH_NIL
-            | Inst::PUSH_TRUE
-            | Inst::PUSH_FALSE
-            | Inst::PUSH_SELF
-            | Inst::ADD
-            | Inst::SUB
-            | Inst::MUL
-            | Inst::DIV
-            | Inst::REM
-            | Inst::EQ
-            | Inst::NE
-            | Inst::TEQ
-            | Inst::GT
-            | Inst::GE
-            | Inst::NOT
-            | Inst::SHR
-            | Inst::SHL
-            | Inst::BIT_OR
-            | Inst::BIT_AND
-            | Inst::BIT_XOR
-            | Inst::BIT_NOT
-            | Inst::POW
-            | Inst::CMP
-            | Inst::CREATE_RANGE
-            | Inst::CREATE_REGEXP
-            | Inst::RETURN
-            | Inst::MRETURN
-            | Inst::TO_S
-            | Inst::SPLAT
-            | Inst::POP
-            | Inst::YIELD => format!("{}", Inst::inst_name(iseq[pc])),
             Inst::ADDI | Inst::SUBI | Inst::B_ANDI | Inst::B_ORI | Inst::EQI | Inst::NEI => {
                 imm_i32(iseq, pc)
             }
@@ -332,43 +300,32 @@ impl Inst {
                 format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
             }
 
-            Inst::JMP => format!(
-                "JMP {:>05x}",
-                pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
-            ),
-            Inst::JMP_IF_FALSE => format!(
-                "JMP_IF_FALSE {:>05x}",
+            Inst::JMP | Inst::JMP_IF_FALSE => format!(
+                "{} {:>05x}",
+                Inst::inst_name(iseq[pc]),
                 pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
             ),
             Inst::OPT_CASE => format!(
                 "OPT_CASE {:>05}",
                 pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
             ),
-            Inst::SET_LOCAL => {
+            Inst::SET_LOCAL | Inst::GET_LOCAL => {
                 let id = Inst::read32(iseq, pc + 1);
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
                 let name = id_lock.get_ident_name(ident_id);
-                format!("SET_LOCAL '{}' LvarId:{}", name, id)
+                format!("{} '{}' LvarId:{}", Inst::inst_name(iseq[pc]), name, id)
             }
-            Inst::GET_LOCAL => {
-                let id = Inst::read32(iseq, pc + 1);
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
-                let name = id_lock.get_ident_name(ident_id);
-                format!("GET_LOCAL '{}' LvarId:{}", name, id)
-            }
-            Inst::SET_DYNLOCAL => {
+            Inst::SET_DYNLOCAL | Inst::GET_DYNLOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1);
                 //let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
                 //let name = id_lock.get_ident_name(ident_id);
-                format!("SET_DYNLOCAL outer:{} LvarId:{}", frame, id)
-            }
-            Inst::GET_DYNLOCAL => {
-                let frame = Inst::read32(iseq, pc + 5);
-                let id = Inst::read32(iseq, pc + 1);
-                //let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
-                //let name = id_lock.get_ident_name(ident_id);
-                format!("GET_DYNLOCAL outer:{} LvarId:{}", frame, id)
+                format!(
+                    "{} outer:{} LvarId:{}",
+                    Inst::inst_name(iseq[pc]),
+                    frame,
+                    id
+                )
             }
             Inst::CHECK_LOCAL => {
                 let frame = Inst::read32(iseq, pc + 5);
@@ -377,31 +334,29 @@ impl Inst {
                 let name = id_lock.get_ident_name(ident_id);
                 format!("CHECK_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
-            Inst::GET_CONST => format!("GET_CONST '{}'", Inst::ident_name(iseq, pc + 1)),
-            Inst::GET_CONST_TOP => format!("GET_CONST_TOP '{}'", Inst::ident_name(iseq, pc + 1)),
-            Inst::SET_CONST => format!("SET_CONST '{}'", Inst::ident_name(iseq, pc + 1)),
-            Inst::GET_SCOPE => format!("GET_SCOPE '{}'", Inst::ident_name(iseq, pc + 1)),
-            Inst::GET_IVAR => format!("GET_IVAR '{}'", Inst::ident_name(iseq, pc + 1)),
-            Inst::SET_IVAR => format!("SET_IVAR '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::PUSH_SYMBOL
+            | Inst::GET_CONST
+            | Inst::GET_CONST_TOP
+            | Inst::SET_CONST
+            | Inst::GET_SCOPE
+            | Inst::GET_IVAR
+            | Inst::SET_IVAR => format!(
+                "{} '{}'",
+                Inst::inst_name(iseq[pc]),
+                Inst::ident_name(iseq, pc + 1)
+            ),
+
             Inst::GET_INDEX => format!("GET_INDEX {} items", Inst::read32(iseq, pc + 1)),
             Inst::SET_INDEX => format!("SET_INDEX {} items", Inst::read32(iseq, pc + 1)),
-            Inst::SEND => format!(
-                "SEND '{}' {} items",
-                Inst::ident_name(iseq, pc + 1),
-                Inst::read32(iseq, pc + 5)
-            ),
-            Inst::SEND_SELF => format!(
-                "SEND_SELF '{}' {} items",
-                Inst::ident_name(iseq, pc + 1),
-                Inst::read32(iseq, pc + 5)
-            ),
-            Inst::OPT_SEND => format!(
-                "OPT_SEND '{}' {} items",
+            Inst::SEND | Inst::SEND_SELF => format!(
+                "{} '{}' {} items",
+                Inst::inst_name(iseq[pc]),
                 Inst::ident_name(iseq, pc + 1),
                 Inst::read16(iseq, pc + 5)
             ),
-            Inst::OPT_SEND_SELF => format!(
-                "OPT_SEND_SELF '{}' {} items",
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF => format!(
+                "{} '{}' {} items",
+                Inst::inst_name(iseq[pc]),
                 Inst::ident_name(iseq, pc + 1),
                 Inst::read16(iseq, pc + 5)
             ),
@@ -427,11 +382,11 @@ impl Inst {
                     "class"
                 },
                 Inst::ident_name(iseq, pc + 2),
-                Inst::read32(iseq, pc)
+                Inst::read32(iseq, pc + 6)
             ),
             Inst::DEF_METHOD => format!("DEF_METHOD '{}'", Inst::ident_name(iseq, pc + 1)),
             Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", Inst::ident_name(iseq, pc + 1)),
-            _ => format!("undefined"),
+            _ => format!("{}", Inst::inst_name(iseq[pc])),
         }
     }
 
