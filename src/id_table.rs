@@ -59,6 +59,8 @@ impl IdentId {
     pub const _GT: IdentId = id!(13);
     pub const _GE: IdentId = id!(14);
     pub const _DIV: IdentId = id!(15);
+    pub const _LT: IdentId = id!(16);
+    pub const _LE: IdentId = id!(17);
 }
 
 impl IdentId {
@@ -114,6 +116,8 @@ impl IdentifierTable {
         table.set_ident_id(">", IdentId::_GT);
         table.set_ident_id(">=", IdentId::_GE);
         table.set_ident_id("/", IdentId::_DIV);
+        table.set_ident_id("<", IdentId::_LT);
+        table.set_ident_id("<=", IdentId::_LE);
         table
     }
 

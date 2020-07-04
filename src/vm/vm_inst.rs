@@ -10,25 +10,27 @@ impl Inst {
     pub const PUSH_SYMBOL: u8 = 7;
     pub const PUSH_SELF: u8 = 8;
 
-    pub const ADD: u8 = 10;
-    pub const SUB: u8 = 11;
-    pub const MUL: u8 = 12;
-    pub const DIV: u8 = 13;
-    pub const REM: u8 = 14;
-    pub const EQ: u8 = 15;
-    pub const NE: u8 = 16;
-    pub const TEQ: u8 = 17;
-    pub const GT: u8 = 18;
-    pub const GE: u8 = 19;
-    pub const NOT: u8 = 20;
-    pub const SHR: u8 = 21;
-    pub const SHL: u8 = 22;
-    pub const BIT_OR: u8 = 23;
-    pub const BIT_AND: u8 = 24;
-    pub const BIT_XOR: u8 = 25;
-    pub const BIT_NOT: u8 = 26;
-    pub const POW: u8 = 27;
-    pub const CMP: u8 = 28;
+    pub const ADD: u8 = 120;
+    pub const SUB: u8 = 121;
+    pub const MUL: u8 = 122;
+    pub const DIV: u8 = 123;
+    pub const REM: u8 = 124;
+    pub const EQ: u8 = 125;
+    pub const NE: u8 = 126;
+    pub const TEQ: u8 = 127;
+    pub const GT: u8 = 128;
+    pub const GE: u8 = 129;
+    pub const NOT: u8 = 130;
+    pub const SHR: u8 = 131;
+    pub const SHL: u8 = 132;
+    pub const BIT_OR: u8 = 133;
+    pub const BIT_AND: u8 = 134;
+    pub const BIT_XOR: u8 = 135;
+    pub const BIT_NOT: u8 = 136;
+    pub const POW: u8 = 137;
+    pub const CMP: u8 = 138;
+    pub const LT: u8 = 139;
+    pub const LE: u8 = 140;
 
     pub const ADDI: u8 = 30;
     pub const SUBI: u8 = 31;
@@ -112,6 +114,8 @@ impl Inst {
             Inst::TEQ => "TEQ".to_string(),
             Inst::GT => "GT".to_string(),
             Inst::GE => "GE".to_string(),
+            Inst::LT => "LT".to_string(),
+            Inst::LE => "LE".to_string(),
             Inst::NOT => "NOT".to_string(),
             Inst::SHR => "SHR".to_string(),
             Inst::SHL => "SHL".to_string(),
@@ -199,6 +203,8 @@ impl Inst {
             | Inst::NE
             | Inst::GT
             | Inst::GE
+            | Inst::LT
+            | Inst::LE
             | Inst::CMP
             | Inst::NOT
             | Inst::SHR

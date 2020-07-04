@@ -655,7 +655,8 @@ impl VM {
                 Inst::ADD => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_add(lhs, rhs, iseq));
+                    let cache = self.read32(iseq, 1);
+                    try_push!(self.eval_add(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::ADDI => {
@@ -667,7 +668,8 @@ impl VM {
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_sub(lhs, rhs, iseq));
+                    let cache = self.read32(iseq, 1);
+                    try_push!(self.eval_sub(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::SUBI => {
@@ -679,7 +681,8 @@ impl VM {
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_mul(lhs, rhs, iseq));
+                    let cache = self.read32(iseq, 1);
+                    try_push!(self.eval_mul(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::POW => {
@@ -691,7 +694,8 @@ impl VM {
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_div(lhs, rhs, iseq));
+                    let cache = self.read32(iseq, 1);
+                    try_push!(self.eval_div(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::REM => {
@@ -709,7 +713,8 @@ impl VM {
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_shl(lhs, rhs, iseq));
+                    let cache = self.read32(iseq, 1);
+                    try_push!(self.eval_shl(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::BIT_AND => {
@@ -776,32 +781,41 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::TEQ => {
-                    let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let res = self.eval_teq(lhs, rhs)?;
+                    let lhs = self.stack_pop();
+                    let res = self.eval_teq(rhs, lhs)?;
                     let val = Value::bool(res);
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::GT => {
-                    let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_gt(lhs, rhs)?;
-                    self.stack_push(val);
+                    let lhs = self.stack_pop();
+                    try_push!(self.eval_gt(rhs, lhs));
                     self.pc += 1;
                 }
                 Inst::GE => {
-                    let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_ge(lhs, rhs)?;
-                    self.stack_push(val);
+                    let lhs = self.stack_pop();
+                    try_push!(self.eval_ge(rhs, lhs));
+                    self.pc += 1;
+                }
+                Inst::LT => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    try_push!(self.eval_lt(rhs, lhs));
+                    self.pc += 1;
+                }
+                Inst::LE => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    try_push!(self.eval_le(rhs, lhs));
                     self.pc += 1;
                 }
                 Inst::CMP => {
-                    let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = self.eval_cmp(lhs, rhs)?;
-                    self.stack_push(val);
+                    let lhs = self.stack_pop();
+                    try_push!(self.eval_cmp(rhs, lhs));
                     self.pc += 1;
                 }
                 Inst::NOT => {
@@ -1519,15 +1533,14 @@ macro_rules! eval_op_i {
 }
 
 macro_rules! eval_op {
-    ($vm:ident, $iseq:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+    ($vm:ident, $cache:expr, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         let val = match ($lhs.unpack(), $rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::fixnum(lhs.$op(rhs)),
             (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum((lhs as f64).$op(rhs)),
             (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(lhs.$op(rhs as f64)),
             (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(lhs.$op(rhs)),
             _ => {
-                let cache = $vm.read32($iseq, 1);
-                return $vm.fallback_to_method_with_cache($lhs, $rhs, $id, cache);
+                return $vm.fallback_to_method_with_cache($lhs, $rhs, $id, $cache);
             }
         };
         return Ok(val);
@@ -1535,19 +1548,19 @@ macro_rules! eval_op {
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_add(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
         use std::ops::Add;
-        eval_op!(self, iseq, rhs, lhs, add, IdentId::_ADD);
+        eval_op!(self, cache, rhs, lhs, add, IdentId::_ADD);
     }
 
-    fn eval_sub(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_sub(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
         use std::ops::Sub;
-        eval_op!(self, iseq, rhs, lhs, sub, IdentId::_SUB);
+        eval_op!(self, cache, rhs, lhs, sub, IdentId::_SUB);
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_mul(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
         use std::ops::Mul;
-        eval_op!(self, iseq, rhs, lhs, mul, IdentId::_MUL);
+        eval_op!(self, cache, rhs, lhs, mul, IdentId::_MUL);
     }
 
     fn eval_addi(&mut self, lhs: Value, i: i32) -> VMResult {
@@ -1560,9 +1573,9 @@ impl VM {
         eval_op_i!(self, iseq, lhs, i, sub, IdentId::_SUB);
     }
 
-    fn eval_div(&mut self, rhs: Value, lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_div(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
         use std::ops::Div;
-        eval_op!(self, iseq, rhs, lhs, div, IdentId::_DIV);
+        eval_op!(self, cache, rhs, lhs, div, IdentId::_DIV);
     }
 
     fn eval_rem(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -1605,7 +1618,7 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, mut lhs: Value, iseq: &ISeq) -> VMResult {
+    fn eval_shl(&mut self, rhs: Value, mut lhs: Value, cache: u32) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::fixnum(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
@@ -1629,7 +1642,6 @@ impl VM {
                 _ => {}
             },
         };
-        let cache = self.read32(iseq, 1);
         let val = self.fallback_to_method_with_cache(lhs, rhs, IdentId::_SHL, cache)?;
         Ok(val)
     }
@@ -1764,6 +1776,14 @@ impl VM {
 
     pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
         eval_cmp!(self, rhs, lhs, gt, IdentId::_GT)
+    }
+
+    fn eval_le(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        eval_cmp!(self, rhs, lhs, le, IdentId::_LE)
+    }
+
+    fn eval_lt(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        eval_cmp!(self, rhs, lhs, lt, IdentId::_LT)
     }
 
     pub fn eval_cmp(&mut self, rhs: Value, lhs: Value) -> VMResult {

@@ -1121,18 +1121,8 @@ impl Codegen {
                     }
                     BinOp::Ge => binop!(Inst::GE),
                     BinOp::Gt => binop!(Inst::GT),
-                    BinOp::Le => {
-                        self.gen(globals, iseq, rhs, true)?;
-                        self.gen(globals, iseq, lhs, true)?;
-                        self.save_loc(iseq, loc);
-                        iseq.push(Inst::GE);
-                    }
-                    BinOp::Lt => {
-                        self.gen(globals, iseq, rhs, true)?;
-                        self.gen(globals, iseq, lhs, true)?;
-                        self.save_loc(iseq, loc);
-                        iseq.push(Inst::GT);
-                    }
+                    BinOp::Le => binop!(Inst::LE),
+                    BinOp::Lt => binop!(Inst::LT),
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
                         self.gen(globals, iseq, lhs, true)?;
