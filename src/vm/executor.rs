@@ -220,6 +220,7 @@ impl VM {
         &self.class_context.last().unwrap().1
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn define_mode_mut(&mut self) -> &mut DefineMode {
         &mut self.class_context.last_mut().unwrap().1
     }
@@ -228,10 +229,12 @@ impl VM {
         self.class_context.last_mut().unwrap().1.module_function = flag;
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn get_pc(&mut self) -> usize {
         self.pc
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn set_pc(&mut self, pc: usize) {
         self.pc = pc;
     }
@@ -1495,9 +1498,9 @@ impl VM {
         rec_class: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        if rec_class.is_nil() {
+        /*if rec_class.is_nil() {
             return Err(self.error_unimplemented("receiver's class is nil."));
-        };
+        };*/
         match self
             .globals
             .get_method_from_inline_cache(cache_slot, rec_class)
