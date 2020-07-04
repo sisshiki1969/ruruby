@@ -565,13 +565,13 @@ impl Parser {
                 let loc = self.prev_loc();
                 let cond = self.parse_expr()?;
                 let loc = loc.merge(self.prev_loc());
-                node = Node::new_while(cond, node, loc);
+                node = Node::new_while(cond, node,true, loc);
             } else if self.consume_reserved_no_skip_line_term(Reserved::Until)? {
                 // STMT : STMT until EXPR
                 let loc = self.prev_loc();
-                let cond = Node::new_unop(UnOp::Not, self.parse_expr()?, loc);
+                let cond = self.parse_expr()?;
                 let loc = loc.merge(self.prev_loc());
-                node = Node::new_while(cond, node, loc);
+                node = Node::new_while(cond, node,false, loc);
             } else {
                 break;
             }
@@ -1496,17 +1496,16 @@ impl Parser {
                 let body = self.parse_comp_stmt()?;
                 self.expect_reserved(Reserved::End)?;
                 let loc = loc.merge(self.prev_loc());
-                Ok(Node::new_while(cond, body, loc))
+                Ok(Node::new_while(cond, body, true, loc))
             }
             TokenKind::Reserved(Reserved::Until) => {
                 let loc = self.prev_loc();
                 let cond = self.parse_expr()?;
-                let cond = Node::new_unop(UnOp::Not, cond, loc);
                 self.parse_do()?;
                 let body = self.parse_comp_stmt()?;
                 self.expect_reserved(Reserved::End)?;
                 let loc = loc.merge(self.prev_loc());
-                Ok(Node::new_while(cond, body, loc))
+                Ok(Node::new_while(cond, body, false,loc))
             }
             TokenKind::Reserved(Reserved::Case) => {
                 let loc = self.prev_loc();

@@ -10,36 +10,12 @@ impl Inst {
     pub const PUSH_SYMBOL: u8 = 7;
     pub const PUSH_SELF: u8 = 8;
 
-    pub const ADD: u8 = 120;
-    pub const SUB: u8 = 121;
-    pub const MUL: u8 = 122;
-    pub const DIV: u8 = 123;
-    pub const REM: u8 = 124;
-    pub const EQ: u8 = 125;
-    pub const NE: u8 = 126;
-    pub const TEQ: u8 = 127;
-    pub const GT: u8 = 128;
-    pub const GE: u8 = 129;
-    pub const NOT: u8 = 130;
-    pub const SHR: u8 = 131;
-    pub const SHL: u8 = 132;
-    pub const BIT_OR: u8 = 133;
-    pub const BIT_AND: u8 = 134;
-    pub const BIT_XOR: u8 = 135;
-    pub const BIT_NOT: u8 = 136;
-    pub const POW: u8 = 137;
-    pub const CMP: u8 = 138;
-    pub const LT: u8 = 139;
-    pub const LE: u8 = 140;
-
-    pub const ADDI: u8 = 30;
-    pub const SUBI: u8 = 31;
-    pub const IVAR_ADDI: u8 = 32;
-    pub const B_ANDI: u8 = 33;
-    pub const B_ORI: u8 = 34;
-    pub const EQI: u8 = 35;
-    pub const NEI: u8 = 36;
-    pub const LVAR_ADDI: u8 = 37;
+    pub const CREATE_RANGE: u8 = 10;
+    pub const CREATE_ARRAY: u8 = 11;
+    pub const CREATE_PROC: u8 = 12;
+    pub const CREATE_HASH: u8 = 13;
+    pub const CREATE_REGEXP: u8 = 14;
+    pub const CONST_VAL: u8 = 15;
 
     pub const SET_LOCAL: u8 = 40;
     pub const GET_LOCAL: u8 = 41;
@@ -49,7 +25,6 @@ impl Inst {
     pub const SET_CONST: u8 = 45;
     pub const GET_CONST_TOP: u8 = 46;
     pub const GET_SCOPE: u8 = 47;
-
     pub const GET_IVAR: u8 = 48;
     pub const SET_IVAR: u8 = 49;
     pub const GET_GVAR: u8 = 50;
@@ -63,13 +38,6 @@ impl Inst {
     pub const SEND_SELF: u8 = 61;
     pub const OPT_SEND: u8 = 62;
     pub const OPT_SEND_SELF: u8 = 63;
-
-    pub const CREATE_RANGE: u8 = 70;
-    pub const CREATE_ARRAY: u8 = 71;
-    pub const CREATE_PROC: u8 = 72;
-    pub const CREATE_HASH: u8 = 73;
-    pub const CREATE_REGEXP: u8 = 74;
-    pub const CONST_VAL: u8 = 75;
 
     pub const POP: u8 = 80;
     pub const DUP: u8 = 81;
@@ -90,6 +58,41 @@ impl Inst {
     pub const OPT_CASE: u8 = 105;
     pub const MRETURN: u8 = 106;
     pub const YIELD: u8 = 107;
+
+    pub const ADD: u8 = 120;
+    pub const SUB: u8 = 121;
+    pub const MUL: u8 = 122;
+    pub const DIV: u8 = 123;
+    pub const REM: u8 = 124;
+    pub const EQ: u8 = 125;
+    pub const NE: u8 = 126;
+    pub const TEQ: u8 = 127;
+    pub const GT: u8 = 128;
+    pub const GE: u8 = 129;
+    pub const LT: u8 = 130;
+    pub const LE: u8 = 131;
+    pub const NOT: u8 = 132;
+    pub const SHR: u8 = 133;
+    pub const SHL: u8 = 134;
+    pub const BOR: u8 = 135;
+    pub const BAND: u8 = 136;
+    pub const BXOR: u8 = 137;
+    pub const BNOT: u8 = 138;
+    pub const POW: u8 = 139;
+    pub const CMP: u8 = 140;
+
+    pub const ADDI: u8 = 150;
+    pub const SUBI: u8 = 151;
+    pub const EQI: u8 = 152;
+    pub const NEI: u8 = 153;
+    pub const GTI: u8 = 154;
+    pub const GEI: u8 = 155;
+    pub const LTI: u8 = 156;
+    pub const LEI: u8 = 157;
+    pub const B_ANDI: u8 = 160;
+    pub const B_ORI: u8 = 161;
+    pub const IVAR_ADDI: u8 = 162;
+    pub const LVAR_ADDI: u8 = 163;
 }
 
 #[allow(dead_code)]
@@ -119,10 +122,10 @@ impl Inst {
             Inst::NOT => "NOT".to_string(),
             Inst::SHR => "SHR".to_string(),
             Inst::SHL => "SHL".to_string(),
-            Inst::BIT_OR => "BIT_OR".to_string(),
-            Inst::BIT_AND => "BIT_AND".to_string(),
-            Inst::BIT_XOR => "BIT_XOR".to_string(),
-            Inst::BIT_NOT => "BIT_NOT".to_string(),
+            Inst::BOR => "BIT_OR".to_string(),
+            Inst::BAND => "BIT_AND".to_string(),
+            Inst::BXOR => "BIT_XOR".to_string(),
+            Inst::BNOT => "BIT_NOT".to_string(),
             Inst::POW => "POW".to_string(),
             Inst::CMP => "CMP".to_string(),
 
@@ -133,6 +136,10 @@ impl Inst {
             Inst::B_ORI => "B_ORI".to_string(),
             Inst::EQI => "EQI".to_string(),
             Inst::NEI => "NEI".to_string(),
+            Inst::GTI => "GTI".to_string(),
+            Inst::GEI => "GEI".to_string(),
+            Inst::LTI => "LTI".to_string(),
+            Inst::LEI => "LEI".to_string(),
             Inst::LVAR_ADDI => "LVAR_ADDI".to_string(),
 
             Inst::SET_LOCAL => "SET_LOCAL".to_string(),
@@ -208,10 +215,10 @@ impl Inst {
             | Inst::CMP
             | Inst::NOT
             | Inst::SHR
-            | Inst::BIT_OR
-            | Inst::BIT_AND
-            | Inst::BIT_XOR
-            | Inst::BIT_NOT
+            | Inst::BOR
+            | Inst::BAND
+            | Inst::BXOR
+            | Inst::BNOT
             | Inst::CREATE_RANGE
             | Inst::CREATE_REGEXP
             | Inst::TO_S
@@ -252,6 +259,10 @@ impl Inst {
             | Inst::B_ORI               // immediate: i32
             | Inst::EQI                 // immediate: i32
             | Inst::NEI                 // immediate: i32
+            | Inst::GTI                 // immediate: i32
+            | Inst::GEI                 // immediate: i32
+            | Inst::LTI                 // immediate: i32
+            | Inst::LEI                 // immediate: i32
             | Inst::SHL                 // inline cache: u32
             | Inst::CREATE_HASH         // number of items: u32
             | Inst::YIELD               // number of items: u32
@@ -285,9 +296,16 @@ impl Inst {
         let iseq = &iseq_ref.iseq;
         let id_lock = ID.read().unwrap();
         match iseq[pc] {
-            Inst::ADDI | Inst::SUBI | Inst::B_ANDI | Inst::B_ORI | Inst::EQI | Inst::NEI => {
-                imm_i32(iseq, pc)
-            }
+            Inst::ADDI
+            | Inst::SUBI
+            | Inst::B_ANDI
+            | Inst::B_ORI
+            | Inst::EQI
+            | Inst::NEI
+            | Inst::GTI
+            | Inst::GEI
+            | Inst::LTI
+            | Inst::LEI => imm_i32(iseq, pc),
             Inst::IVAR_ADDI => format!(
                 "IVAR_ADDI {} +{}",
                 Inst::ident_name(iseq, pc + 1),

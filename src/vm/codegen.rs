@@ -1106,9 +1106,9 @@ impl Codegen {
                         iseq.push(Inst::SHL);
                         Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
-                    BinOp::BitOr => binop_imm!(Inst::BIT_OR, Inst::B_ORI),
-                    BinOp::BitAnd => binop_imm!(Inst::BIT_AND, Inst::B_ANDI),
-                    BinOp::BitXor => binop!(Inst::BIT_XOR),
+                    BinOp::BitOr => binop_imm!(Inst::BOR, Inst::B_ORI),
+                    BinOp::BitAnd => binop_imm!(Inst::BAND, Inst::B_ANDI),
+                    BinOp::BitXor => binop!(Inst::BXOR),
                     BinOp::Eq => binop_imm!(Inst::EQ, Inst::EQI),
                     BinOp::Ne => binop_imm!(Inst::NE, Inst::NEI),
                     BinOp::TEq => binop!(Inst::TEQ),
@@ -1119,10 +1119,10 @@ impl Codegen {
                         self.loc = loc;
                         self.gen_opt_send(globals, iseq, method, 1);
                     }
-                    BinOp::Ge => binop!(Inst::GE),
-                    BinOp::Gt => binop!(Inst::GT),
-                    BinOp::Le => binop!(Inst::LE),
-                    BinOp::Lt => binop!(Inst::LT),
+                    BinOp::Ge => binop_imm!(Inst::GE, Inst::GEI),
+                    BinOp::Gt => binop_imm!(Inst::GT, Inst::GTI),
+                    BinOp::Le => binop_imm!(Inst::LE, Inst::LEI),
+                    BinOp::Lt => binop_imm!(Inst::LT, Inst::LTI),
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
                         self.gen(globals, iseq, lhs, true)?;
@@ -1150,7 +1150,7 @@ impl Codegen {
                     UnOp::BitNot => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.save_loc(iseq, node.loc());
-                        iseq.push(Inst::BIT_NOT);
+                        iseq.push(Inst::BNOT);
                     }
                     UnOp::Not => {
                         self.gen(globals, iseq, lhs, true)?;
@@ -1254,12 +1254,20 @@ impl Codegen {
 
                 Codegen::write_disp_from_cur(iseq, src);
             }
-            NodeKind::While { cond, body } => {
+            NodeKind::While {
+                cond,
+                body,
+                cond_op,
+            } => {
                 self.loop_stack.push(LoopInfo::new_loop());
 
                 let loop_start = Codegen::current(iseq);
                 self.gen(globals, iseq, cond, true)?;
-                let src = self.gen_jmp_if_false(iseq);
+                let src = if *cond_op {
+                    self.gen_jmp_if_false(iseq)
+                } else {
+                    self.gen_jmp_if_true(iseq)
+                };
                 self.gen(globals, iseq, body, false)?;
                 self.gen_jmp_back(iseq, loop_start);
                 Codegen::write_disp_from_cur(iseq, src);

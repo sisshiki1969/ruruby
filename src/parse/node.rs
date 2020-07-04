@@ -56,6 +56,7 @@ pub enum NodeKind {
     While {
         cond: Box<Node>,
         body: Box<Node>,
+        cond_op: bool, // true: While, false: Until
     },
     Case {
         cond: Box<Node>,
@@ -443,12 +444,13 @@ impl Node {
         )
     }
 
-    pub fn new_while(cond: Node, body: Node, loc: Loc) -> Self {
+    pub fn new_while(cond: Node, body: Node, cond_op: bool, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
         Node::new(
             NodeKind::While {
                 cond: Box::new(cond),
                 body: Box::new(body),
+                cond_op,
             },
             loc,
         )
