@@ -1661,6 +1661,7 @@ impl Codegen {
                         ex.entry.push(src);
                     }
                     None => {
+                        self.save_loc(iseq, node.loc);
                         if self.context().kind == ContextKind::Block {
                             self.gen_method_return(iseq);
                         } else {

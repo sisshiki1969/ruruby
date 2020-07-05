@@ -122,6 +122,12 @@ impl RubyError {
     pub fn new_block_return(source_info: SourceInfoRef, loc: Loc) -> Self {
         RubyError::new(RubyErrorKind::BlockReturn, source_info, 0, loc)
     }
+
+    pub fn conv_localjump_err(mut self) -> Self {
+        self.kind =
+            RubyErrorKind::RuntimeErr(RuntimeErrKind::LocalJump("Unexpected return.".to_string()));
+        self
+    }
 }
 
 #[allow(unused_imports)]

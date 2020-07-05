@@ -114,7 +114,30 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 println!("===> resume(spawn)");
             }
             let mut vm2 = fiber_vm;
-            thread::spawn(move || vm2.run_context(context));
+            thread::spawn(move || {
+                let res = vm2.run_context(context);
+                // If the fiber was finished, the fiber becomes DEAD.
+                // Return a value on the stack top to the parent fiber.
+                vm2.fiberstate_dead();
+                #[cfg(feature = "trace")]
+                #[cfg(not(tarpaulin_include))]
+                {
+                    println!("<=== yield {:?} and terminate fiber.", res);
+                }
+                let res = match res {
+                    Err(err) => match err.kind {
+                        RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
+                        _ => Err(err),
+                    },
+                    res => res,
+                };
+                match &vm2.parent_fiber {
+                    Some(ParentFiberInfo { tx, .. }) => {
+                        tx.send(res).unwrap();
+                    }
+                    None => unreachable!(),
+                };
+            });
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);
         }

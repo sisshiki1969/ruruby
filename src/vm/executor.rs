@@ -43,7 +43,7 @@ pub enum FiberState {
 #[derive(Debug)]
 pub struct ParentFiberInfo {
     parent: VMRef,
-    tx: SyncSender<VMResult>,
+    pub tx: SyncSender<VMResult>,
     rx: Receiver<usize>,
 }
 
@@ -554,23 +554,6 @@ impl VM {
                     // - the end of the method or block.
                     // - `next` in block AND outer of loops.
                     let val = self.stack_pop();
-                    if self.parent_fiber.is_some() && self.exec_context.len() == 1 {
-                        // If in the final context of a fiber, the fiber becomes DEAD.
-                        // Return a value on the stack top to the parent fiber.
-                        self.fiberstate_dead();
-                        #[cfg(feature = "trace")]
-                        #[cfg(not(tarpaulin_include))]
-                        {
-                            println!("<=== yield Ok({:?}) and terminate fiber.", val);
-                        }
-                        match &self.parent_fiber {
-                            Some(ParentFiberInfo { tx, .. }) => {
-                                tx.send(Ok(val)).unwrap();
-                            }
-                            None => unreachable!(),
-                        };
-                        return Ok(Value::nil());
-                    };
                     let _context = self.context_pop().unwrap();
                     #[cfg(feature = "trace")]
                     #[cfg(not(tarpaulin_include))]
@@ -608,11 +591,6 @@ impl VM {
                             Ok(val)
                         }
                     };
-                    if self.exec_context.len() == 1 {
-                        // if in the final context, the fiber becomes DEAD.
-                        self.fiberstate_dead();
-                        self.fiber_send_to_parent(Err(self.error_block_return()));
-                    };
                     self.context_pop().unwrap();
                     if !self.exec_context.is_empty() {
                         self.pc = self.context().pc;
@@ -622,24 +600,6 @@ impl VM {
                 Inst::MRETURN => {
                     // 'METHOD_RETURN' is executed.
                     // - `return` in block
-                    if self.parent_fiber.is_some() && self.exec_context.len() == 1 {
-                        // If in the final context of a fiber, the fiber becomes DEAD.
-                        // And return LocalJumpError to a parent fiber.
-                        self.fiberstate_dead();
-                        let err = self.error_local_jump("Unexpected return.");
-                        #[cfg(feature = "trace")]
-                        #[cfg(not(tarpaulin_include))]
-                        {
-                            println!("<=== yield Err({:?}) and terminate fiber.", err.kind);
-                        }
-                        match &self.parent_fiber {
-                            Some(ParentFiberInfo { tx, .. }) => {
-                                tx.send(Err(err)).unwrap();
-                            }
-                            None => unreachable!(),
-                        };
-                        return Ok(Value::nil());
-                    };
                     let res = if let ISeqKind::Block(method) = context.kind {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
