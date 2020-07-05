@@ -495,6 +495,14 @@ fn block_next() {
 }
 
 #[test]
+fn block_return() {
+    let program = "
+        assert_error { return }
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn proc_next() {
     let program = "
         p = Proc.new { |x|

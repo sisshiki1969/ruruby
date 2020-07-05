@@ -32,6 +32,9 @@ impl FiberInfo {
 
 impl GC for FiberInfo {
     fn mark(&self, alloc: &mut Allocator) {
+        if self.vm.fiberstate() == FiberState::Dead {
+            return;
+        }
         self.vm.mark(alloc);
         self.context.mark(alloc);
     }
@@ -102,6 +105,9 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         FiberState::Created => {
             fiber_vm.fiberstate_running();
+            #[cfg(feature = "perf")]
+            #[cfg(not(tarpaulin_include))]
+            vm.perf.get_perf(Perf::INVALID);
             #[cfg(feature = "trace")]
             #[cfg(not(tarpaulin_include))]
             {
@@ -109,21 +115,18 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             let mut vm2 = fiber_vm;
             thread::spawn(move || vm2.run_context(context));
-            #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
-            vm.perf.get_perf(Perf::INVALID);
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);
         }
         FiberState::Running => {
+            #[cfg(feature = "perf")]
+            #[cfg(not(tarpaulin_include))]
+            vm.perf.get_perf(Perf::INVALID);
             #[cfg(feature = "trace")]
             #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume");
             }
-            #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
-            vm.perf.get_perf(Perf::INVALID);
             fiber.tx.send(1).unwrap();
             let res = fiber.rec.recv().unwrap()?;
             return Ok(res);
@@ -145,13 +148,15 @@ mod test {
             end
         end
 
-        g = enum2gen(1..100)
+        g = enum2gen(1..5)
 
         assert(1, g.resume)
         assert(2, g.resume)
         assert(3, g.resume)
         assert(4, g.resume)
         assert(5, g.resume)
+        assert(1..5, g.resume)
+        assert_error { g.resume }
         "#;
         assert_script(program);
     }
@@ -169,6 +174,19 @@ mod test {
         assert(2, f.resume)
         assert(3, f.resume)
         assert(4, f.resume)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn fiber_test3() {
+        let program = r#"
+        f = Fiber.new {}
+        assert(nil, f.resume)
+        f = Fiber.new { 5 }
+        assert(5, f.resume)
+        f = Fiber.new { return 5 }
+        assert_error { f.resume }
         "#;
         assert_script(program);
     }

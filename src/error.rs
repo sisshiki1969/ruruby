@@ -34,6 +34,7 @@ pub enum RuntimeErrKind {
     Type(String),
     Regexp(String),
     Fiber(String),
+    LocalJump(String),
 }
 
 impl RubyError {
@@ -86,6 +87,7 @@ impl RubyError {
                 RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
                 RuntimeErrKind::Regexp(n) => eprintln!("RegexpError ({})", n),
                 RuntimeErrKind::Fiber(n) => eprintln!("FiberError ({})", n),
+                RuntimeErrKind::LocalJump(n) => eprintln!("LocalJumpError ({})", n),
             },
             RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
