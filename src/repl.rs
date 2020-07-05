@@ -6,19 +6,15 @@ use ruruby::*;
 
 pub fn repl_vm() {
     println!("RV: {}", std::mem::size_of::<RV>());
-    println!("Value: {}", std::mem::size_of::<Value>());
-    println!(
-        "HashMap: {}",
-        std::mem::size_of::<std::collections::HashMap<Value, Value>>()
-    );
-    println!(
-        "Option<Box<HashMap>>: {}",
-        std::mem::size_of::<Option<Box<std::collections::HashMap<Value, Value>>>>()
-    );
-    println!("RValue: {}", std::mem::size_of::<RValue>());
+    assert_eq!(8, std::mem::size_of::<Value>());
+    assert_eq!(56, std::mem::size_of::<RValue>());
     println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
+    println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
+    println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
     println!("RString: {}", std::mem::size_of::<RString>());
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
+    println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
+    println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();

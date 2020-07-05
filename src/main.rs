@@ -51,6 +51,11 @@ fn main() {
         }
         perf.print_perf();
     }
+    #[cfg(feature = "gc-debug")]
+    #[cfg(not(tarpaulin_include))]
+    {
+        ALLOC.lock().unwrap().print_mark();
+    }
     return;
 }
 

@@ -56,12 +56,13 @@ impl PageRef {
         PageRef::from_ptr(ptr as *mut Page)
     }
 
-    #[allow(dead_code)]
+    /*
     fn dealloc_page(&self) {
         use std::alloc::{dealloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         unsafe { dealloc(self.as_ptr() as *mut u8, layout) };
     }
+    */
 
     fn free_page(&self) {
         let mut ptr = self.get_data_ptr(0);
@@ -382,7 +383,6 @@ impl Allocator {
                     *head = *ptr;
                     (**ptr).next = None;
                     (**ptr).inner.free();
-                    (**ptr).inner = RValue::new_invalid();
                     c += 1;
                 }
             }
@@ -482,6 +482,19 @@ impl Allocator {
         });
         self.print_bits(&self.current.mark_bits);
         eprintln!("\n");
+        eprintln!(
+            "GC Info----------------------------------------------------------------------------"
+        );
+        eprintln!(
+            "active pages: {} free pages:{}",
+            self.pages.len() + 1,
+            self.free_pages.len(),
+        );
+        assert_eq!(self.free_list_count, self.check_free_list());
+        eprintln!(
+            "free list:{} allocated:{}  used in current page:{}",
+            self.free_list_count, self.allocated, self.used
+        );
     }
 }
 

@@ -120,15 +120,27 @@ impl GC for RValue {
 }
 
 impl RValue {
-    pub fn free(&mut self) {
-        self.var_table = None;
-        match self.kind {
-            ObjKind::Invalid => {} // 'freed' object can be freed repeatedly.
-            ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
-            //ObjKind::Regexp(rref) => rref.free(),
-            ObjKind::Fiber(fref) => fref.free(),
+    pub fn free(&mut self) -> bool {
+        match &mut self.kind {
+            ObjKind::Invalid => return false,
+            ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
+            ObjKind::String(rs) => drop(rs),
+            ObjKind::Array(a) => drop(a),
+            ObjKind::Range(r) => drop(r),
+            ObjKind::Hash(h) => drop(h),
+            ObjKind::Proc(p) => drop(p),
+            ObjKind::Regexp(r) => drop(r),
+            ObjKind::Method(m) => drop(m),
+            ObjKind::Fiber(f) => f.free(),
+            ObjKind::Enumerator(e) => drop(e),
             _ => {}
         }
+        match &mut self.var_table {
+            Some(t) => drop(t),
+            None => {}
+        }
+        *self = RValue::new_invalid();
+        true
     }
 }
 
