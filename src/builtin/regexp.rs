@@ -6,20 +6,20 @@ use crate::*;
 use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct RegexpRef(Rc<Regexp>);
+pub struct RegexpInfo(Rc<Regexp>);
 
-impl RegexpRef {
+impl RegexpInfo {
     pub fn from(reg: Regex) -> Self {
-        RegexpRef(Rc::new(Regexp::new(reg)))
+        RegexpInfo(Rc::new(Regexp::new(reg)))
     }
 
     pub fn from_string(reg_str: &str) -> Result<Self, Error> {
         let regex = Regex::new(reg_str)?;
-        Ok(RegexpRef(Rc::new(Regexp(regex))))
+        Ok(RegexpInfo(Rc::new(Regexp(regex))))
     }
 }
 
-impl PartialEq for RegexpRef {
+impl PartialEq for RegexpInfo {
     fn eq(&self, other: &Self) -> bool {
         if Rc::ptr_eq(&self.0, &other.0) {
             return true;
@@ -28,7 +28,7 @@ impl PartialEq for RegexpRef {
     }
 }
 
-impl std::ops::Deref for RegexpRef {
+impl std::ops::Deref for RegexpInfo {
     type Target = Regex;
     fn deref(&self) -> &Regex {
         &self.0

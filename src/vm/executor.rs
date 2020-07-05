@@ -2519,7 +2519,7 @@ impl VM {
     /// Regular expression meta characters are handled as is.
     /// Returns RubyError if `string` was invalid regular expression.
     pub fn create_regexp_from_string(&self, string: &str) -> VMResult {
-        let re = RegexpRef::from_string(string).map_err(|err| self.error_regexp(err))?;
+        let re = RegexpInfo::from_string(string).map_err(|err| self.error_regexp(err))?;
         let regexp = Value::regexp(&self.globals, re);
         Ok(regexp)
     }

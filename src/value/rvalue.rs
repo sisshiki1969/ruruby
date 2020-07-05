@@ -24,7 +24,7 @@ pub enum ObjKind {
     Splat(Value), // internal use only.
     Hash(Box<HashInfo>),
     Proc(Box<ProcInfo>),
-    Regexp(RegexpRef),
+    Regexp(RegexpInfo),
     Method(Box<MethodObjInfo>),
     Fiber(FiberRef),
     Enumerator(Box<EnumInfo>),
@@ -294,7 +294,7 @@ impl RValue {
         }
     }
 
-    pub fn new_regexp(globals: &Globals, regexpref: RegexpRef) -> Self {
+    pub fn new_regexp(globals: &Globals, regexpref: RegexpInfo) -> Self {
         RValue {
             class: globals.builtins.regexp,
             var_table: None,

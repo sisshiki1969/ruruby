@@ -112,7 +112,7 @@ def get_results(command)
     e.match(/(\d*).(\d*)system/)
     sys << "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
     e.match(/(\d*)maxresident/)
-    rss << Regexp.last_match(1).to_i
+    rss << Regexp.last_match(1).to_i * 1000
   end
 
   [real.ave_sd, user.ave_sd, sys.ave_sd, rss.ave_sd]
@@ -160,7 +160,7 @@ def optcarrot(program, option = "")
       puts "checksum invalid: #{checksum} #{command}"
     end
     e.match(/(\d*)maxresident/)
-    rss << Regexp.last_match(1).to_i
+    rss << Regexp.last_match(1).to_i * 1000
   end
   [fps.ave_sd, rss.ave_sd]
 end

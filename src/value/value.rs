@@ -568,7 +568,7 @@ impl Value {
         })
     }
 
-    pub fn as_regexp(&self) -> Option<RegexpRef> {
+    pub fn as_regexp(&self) -> Option<RegexpInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Regexp(regref) => Some(regref.clone()),
@@ -762,7 +762,7 @@ impl Value {
         RValue::new_hash(globals, HashInfo::new(hash)).pack()
     }
 
-    pub fn regexp(globals: &Globals, regexp_ref: RegexpRef) -> Self {
+    pub fn regexp(globals: &Globals, regexp_ref: RegexpInfo) -> Self {
         RValue::new_regexp(globals, regexp_ref).pack()
     }
 
@@ -816,10 +816,9 @@ impl Value {
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                lhs.start.equal(rhs.start) && lhs.end.equal(rhs.end) && lhs.exclude == rhs.exclude
-            }
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
+            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Invalid, _) => {
                 panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
