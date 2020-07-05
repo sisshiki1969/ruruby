@@ -517,7 +517,7 @@ fn string_scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let re = vm.regexp_from_string(&s)?;
         Regexp::find_all(vm, &re, given)?
     } else if let Some(re) = args[0].as_regexp() {
-        Regexp::find_all(vm, &re.regexp, given)?
+        Regexp::find_all(vm, &*re, given)?
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
@@ -561,7 +561,7 @@ fn string_rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     if let Some(re) = args[0].as_regexp() {
-        let res = match Regexp::find_one(vm, &re.regexp, given).unwrap() {
+        let res = match Regexp::find_one(vm, &*re, given).unwrap() {
             Some(mat) => Value::fixnum(mat.start() as i64),
             None => Value::nil(),
         };

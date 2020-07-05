@@ -1797,7 +1797,7 @@ impl VM {
 
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
-            Some(oref) => match oref.kind {
+            Some(oref) => match &oref.kind {
                 ObjKind::Class(_) => {
                     let res = rhs.get_class_object(&self.globals).id() == lhs.id();
                     Ok(res)
@@ -1811,7 +1811,7 @@ impl VM {
                         },
                         _ => return Ok(false),
                     };
-                    let res = Regexp::find_one(self, &re.regexp, &given)?.is_some();
+                    let res = Regexp::find_one(self, &*re, &given)?.is_some();
                     Ok(res)
                 }
                 _ => Ok(self.eval_eq(lhs, rhs)),
@@ -2036,7 +2036,7 @@ impl VM {
                 ObjKind::Ordinary => oref.to_s(),
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Range(rinfo) => rinfo.to_s(self),
-                ObjKind::Regexp(rref) => format!("({})", rref.regexp.as_str().to_string()),
+                ObjKind::Regexp(rref) => format!("({})", rref.as_str().to_string()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => format!("{:?}", oref.kind),
             },
@@ -2073,7 +2073,7 @@ impl VM {
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
                 ObjKind::Array(aref) => aref.to_s(self),
-                ObjKind::Regexp(rref) => format!("/{}/", rref.regexp.as_str().to_string()),
+                ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect(self),
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Hash(href) => href.to_s(self),

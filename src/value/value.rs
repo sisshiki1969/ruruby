@@ -570,8 +570,8 @@ impl Value {
 
     pub fn as_regexp(&self) -> Option<RegexpRef> {
         match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Regexp(regref) => Some(regref),
+            Some(oref) => match &oref.kind {
+                ObjKind::Regexp(regref) => Some(regref.clone()),
                 _ => None,
             },
             None => None,

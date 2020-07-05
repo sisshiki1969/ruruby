@@ -80,7 +80,7 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::Range(RangeInfo { start, end, .. }) => {
                 write!(f, "Range({:?}, {:?})", start, end)
             }
-            ObjKind::Regexp(rref) => write!(f, "/{}/", rref.regexp.as_str()),
+            ObjKind::Regexp(rref) => write!(f, "/{}/", rref.as_str()),
             ObjKind::Splat(v) => write!(f, "Splat[{:#?}]", v),
             ObjKind::Proc(_) => write!(f, "Proc"),
             ObjKind::Method(_) => write!(f, "Method"),
@@ -125,6 +125,7 @@ impl RValue {
         match self.kind {
             ObjKind::Invalid => {} // 'freed' object can be freed repeatedly.
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.free(),
+            //ObjKind::Regexp(rref) => rref.free(),
             ObjKind::Fiber(fref) => fref.free(),
             _ => {}
         }
@@ -158,7 +159,7 @@ impl RValue {
                 ObjKind::Ordinary => ObjKind::Ordinary,
                 ObjKind::Proc(pref) => ObjKind::Proc(pref.clone()),
                 ObjKind::Range(info) => ObjKind::Range(info.clone()),
-                ObjKind::Regexp(rref) => ObjKind::Regexp(*rref), // TODO: this can cause some trouble.
+                ObjKind::Regexp(rref) => ObjKind::Regexp(rref.clone()),
                 ObjKind::Splat(v) => ObjKind::Splat(*v),
                 ObjKind::String(rstr) => ObjKind::String(rstr.clone()),
             },

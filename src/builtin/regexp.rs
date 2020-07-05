@@ -3,30 +3,35 @@ use crate::vm::*;
 use fancy_regex::{Captures, Error, Match, Regex};
 //#[macro_use]
 use crate::*;
+use std::rc::Rc;
 
-#[derive(Debug)]
-pub struct RegexpInfo {
-    pub regexp: Regexp,
-}
-
-impl RegexpInfo {
-    pub fn new(regexp: Regex) -> Self {
-        RegexpInfo {
-            regexp: Regexp(regexp),
-        }
-    }
-}
-
-pub type RegexpRef = Ref<RegexpInfo>;
+#[derive(Clone)]
+pub struct RegexpRef(Rc<Regexp>);
 
 impl RegexpRef {
     pub fn from(reg: Regex) -> Self {
-        RegexpRef::new(RegexpInfo::new(reg))
+        RegexpRef(Rc::new(Regexp::new(reg)))
     }
 
     pub fn from_string(reg_str: &str) -> Result<Self, Error> {
         let regex = Regex::new(reg_str)?;
-        Ok(RegexpRef::new(RegexpInfo::new(regex)))
+        Ok(RegexpRef(Rc::new(Regexp(regex))))
+    }
+}
+
+impl PartialEq for RegexpRef {
+    fn eq(&self, other: &Self) -> bool {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            return true;
+        }
+        self.as_str() == other.as_str()
+    }
+}
+
+impl std::ops::Deref for RegexpRef {
+    type Target = Regex;
+    fn deref(&self) -> &Regex {
+        &self.0
     }
 }
 
@@ -170,7 +175,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, replace);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.regexp, given, replace);
+            return replace_(vm, &re.0, given, replace);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -210,7 +215,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, block);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.regexp, given, block);
+            return replace_(vm, &re.0, given, block);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -264,7 +269,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, replace);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.regexp, given, replace);
+            return replace_(vm, &re.0, given, replace);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -313,7 +318,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, block);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.regexp, given, block);
+            return replace_(vm, &re.0, given, block);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -321,7 +326,7 @@ impl Regexp {
 
     pub fn find_one<'a>(
         vm: &mut VM,
-        re: &Regexp,
+        re: &Regex,
         given: &'a str,
     ) -> Result<Option<Match<'a>>, RubyError> {
         match re.captures(given) {
@@ -334,7 +339,7 @@ impl Regexp {
         }
     }
 
-    pub fn find_all(vm: &mut VM, re: &Regexp, given: &str) -> Result<Vec<Value>, RubyError> {
+    pub fn find_all(vm: &mut VM, re: &Regex, given: &str) -> Result<Vec<Value>, RubyError> {
         let mut ary = vec![];
         let mut idx = 0;
         let mut last_captures = None;
