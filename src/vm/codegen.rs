@@ -761,7 +761,6 @@ impl Codegen {
         }
         globals.set_method(methodref, info);
         #[cfg(feature = "emit-iseq")]
-        #[cfg(not(tarpaulin_include))]
         {
             let info = globals.get_method_info(methodref);
             let iseq = if let MethodInfo::RubyFunc { iseq } = info {
@@ -1025,7 +1024,6 @@ impl Codegen {
             }
             NodeKind::BinOp(op, lhs, rhs) => {
                 let loc = self.loc;
-                #[cfg(not(tarpaulin_include))]
                 macro_rules! binop {
                     ($inst:expr) => {{
                         self.gen(globals, iseq, lhs, true)?;
@@ -1034,7 +1032,6 @@ impl Codegen {
                         iseq.push($inst);
                     }};
                 }
-                #[cfg(not(tarpaulin_include))]
                 macro_rules! binop_imm {
                     ($inst:expr, $inst_i:expr) => {
                         match &rhs.kind {

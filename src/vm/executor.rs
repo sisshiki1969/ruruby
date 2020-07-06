@@ -27,7 +27,6 @@ pub struct VM {
     gc_counter: usize,
     pub parent_fiber: Option<ParentFiberInfo>,
     #[cfg(feature = "perf")]
-    #[cfg(not(tarpaulin_include))]
     pub perf: Perf,
 }
 
@@ -96,7 +95,6 @@ impl VM {
             gc_counter: 0,
             parent_fiber: None,
             #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
             perf: Perf::new(),
         };
         vm
@@ -116,7 +114,6 @@ impl VM {
             gc_counter: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
             perf: Perf::new(),
         };
         vm
@@ -300,7 +297,6 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -328,7 +324,6 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::INVALID);
         }
@@ -355,7 +350,6 @@ impl VM {
         let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -371,7 +365,6 @@ impl VM {
     #[cfg(not(tarpaulin_include))]
     pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         {
             self.perf.set_prev_inst(Perf::CODEGEN);
         }
@@ -391,7 +384,6 @@ impl VM {
 
         let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         {
             self.perf.get_perf(Perf::INVALID);
         }
@@ -441,7 +433,6 @@ impl VM {
             return;
         };
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         self.perf.get_perf(Perf::GC);
         self.globals.gc();
     }
@@ -455,7 +446,6 @@ impl VM {
             self.exec_stack.truncate(prev_len);
             self.unwind_context(&mut err);
             #[cfg(feature = "trace")]
-            #[cfg(not(tarpaulin_include))]
             {
                 println!("<--- METHOD_RETURN Ok({:?})", result);
             }
@@ -464,7 +454,6 @@ impl VM {
             //self.dump_context();
             self.unwind_context(&mut err);
             #[cfg(feature = "trace")]
-            #[cfg(not(tarpaulin_include))]
             {
                 println!("<--- Err({:?})", err.kind);
             }
@@ -478,7 +467,6 @@ impl VM {
     /// Main routine for VM execution.
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         /// Evaluate expr, and push return value to stack.
-        #[cfg(not(tarpaulin_include))]
         macro_rules! try_push {
             ($eval:expr) => {
                 match $eval {
@@ -492,7 +480,6 @@ impl VM {
         }
 
         /// Evaluate expr. Stack is not changed.
-        #[cfg(not(tarpaulin_include))]
         macro_rules! try_eval {
             ($eval:expr) => {{
                 match $eval {
@@ -508,7 +495,6 @@ impl VM {
         }
 
         /// Evaluate expr, and return the value.
-        #[cfg(not(tarpaulin_include))]
         macro_rules! try_get {
             ($eval:expr) => {{
                 match $eval {
@@ -522,7 +508,6 @@ impl VM {
         }
 
         #[cfg(feature = "trace")]
-        #[cfg(not(tarpaulin_include))]
         {
             if context.is_fiber {
                 println!("===> {:?} {:?}", context.iseq_ref.method, context.kind);
@@ -542,12 +527,10 @@ impl VM {
 
         loop {
             #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
             {
                 self.perf.get_perf(iseq[self.pc]);
             }
             #[cfg(feature = "trace")]
-            #[cfg(not(tarpaulin_include))]
             {
                 println!(
                     "{:>4x}:{:<15} stack:{}",
@@ -564,7 +547,6 @@ impl VM {
                     let val = self.stack_pop();
                     let _context = self.context_pop().unwrap();
                     #[cfg(feature = "trace")]
-                    #[cfg(not(tarpaulin_include))]
                     {
                         println!("<--- Ok({:?})", val);
                     }
@@ -582,7 +564,6 @@ impl VM {
                             // if in block or eval context, exit with Err(BLOCK_RETURN).
                             let err = self.error_block_return();
                             #[cfg(feature = "trace")]
-                            #[cfg(not(tarpaulin_include))]
                             {
                                 println!("<--- Err({:?})", err.kind);
                             }
@@ -592,7 +573,6 @@ impl VM {
                             // if in method context, exit with Ok(rerurn_value).
                             let val = self.stack_pop();
                             #[cfg(feature = "trace")]
-                            #[cfg(not(tarpaulin_include))]
                             {
                                 println!("<--- Ok({:?})", val);
                             }
@@ -612,7 +592,6 @@ impl VM {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
-                        #[cfg(not(tarpaulin_include))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -2217,7 +2196,6 @@ impl VM {
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
-        #[cfg(not(tarpaulin_include))]
         {
             inst = self.perf.get_prev_inst();
         }
@@ -2225,7 +2203,6 @@ impl VM {
             MethodInfo::BuiltinFunc { func, .. } => {
                 let func = func.to_owned();
                 #[cfg(feature = "perf")]
-                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf(Perf::EXTERN);
                 }
@@ -2237,7 +2214,6 @@ impl VM {
                 self.temp_stack.truncate(len);
 
                 #[cfg(feature = "perf")]
-                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2262,7 +2238,6 @@ impl VM {
                 let context = Context::from_args(self, self_val, iseq, args, outer)?;
                 let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
-                #[cfg(not(tarpaulin_include))]
                 {
                     self.perf.get_perf_no_count(inst);
                 }
@@ -2408,7 +2383,6 @@ impl VM {
             None => return,
         };
         #[cfg(feature = "trace")]
-        #[cfg(not(tarpaulin_include))]
         {
             match val {
                 Ok(val) => println!("<=== yield Ok({:?})", val),

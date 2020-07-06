@@ -42,7 +42,6 @@ fn main() {
     vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, args[0]);
     #[cfg(feature = "perf")]
-    #[cfg(not(tarpaulin_include))]
     {
         let mut perf = Perf::new();
         let globals = vm.globals;
@@ -52,7 +51,6 @@ fn main() {
         perf.print_perf();
     }
     #[cfg(feature = "gc-debug")]
-    #[cfg(not(tarpaulin_include))]
     {
         ALLOC.with(|a| a.borrow_mut().as_ref().unwrap().print_mark());
     }
@@ -80,7 +78,6 @@ fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
 
     let root_path = absolute_path.clone();
     #[cfg(feature = "verbose")]
-    #[cfg(not(tarpaulin_include))]
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     let mut vm2 = vm.clone();

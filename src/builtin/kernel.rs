@@ -160,7 +160,6 @@ pub fn init(globals: &mut Globals) -> Value {
             }
         };
         #[cfg(feature = "verbose")]
-        #[cfg(not(tarpaulin_include))]
         eprintln!("reading:{}", absolute_path.to_string_lossy());
         vm.root_path.push(path);
         vm.class_push(vm.globals.builtins.object);

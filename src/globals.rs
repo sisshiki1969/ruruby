@@ -225,6 +225,7 @@ impl Globals {
         })
     }
 
+    #[cfg(feature = "gc-debug")]
     pub fn print_bitmap(&self) {
         ALLOC.with(|a| a.borrow().as_ref().unwrap().print_mark());
     }

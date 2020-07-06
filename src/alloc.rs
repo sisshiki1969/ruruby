@@ -418,8 +418,7 @@ impl Allocator {
 }
 
 // For debug
-#[allow(dead_code)]
-#[cfg(not(tarpaulin_include))]
+#[cfg(feature = "gc-debug")]
 impl Allocator {
     fn check_ptr(&self, ptr: *mut GCBox<RValue>) {
         let page_ptr = PageRef::from_inner(ptr);

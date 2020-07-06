@@ -75,7 +75,6 @@ fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         return Err(vm.error_fiber("Can not yield from main fiber."));
     };
     #[cfg(feature = "perf")]
-    #[cfg(not(tarpaulin_include))]
     vm.perf.get_perf(Perf::INVALID);
     vm.fiber_send_to_parent(Ok(val));
     Ok(Value::nil())
@@ -106,10 +105,8 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         FiberState::Created => {
             fiber_vm.fiberstate_running();
             #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
             vm.perf.get_perf(Perf::INVALID);
             #[cfg(feature = "trace")]
-            #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume(spawn)");
             }
@@ -121,7 +118,6 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 // Return a value on the stack top to the parent fiber.
                 vm2.fiberstate_dead();
                 #[cfg(feature = "trace")]
-                #[cfg(not(tarpaulin_include))]
                 {
                     println!("<=== yield {:?} and terminate fiber.", res);
                 }
@@ -144,10 +140,8 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         FiberState::Running => {
             #[cfg(feature = "perf")]
-            #[cfg(not(tarpaulin_include))]
             vm.perf.get_perf(Perf::INVALID);
             #[cfg(feature = "trace")]
-            #[cfg(not(tarpaulin_include))]
             {
                 println!("===> resume");
             }
