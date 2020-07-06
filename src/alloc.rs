@@ -1,21 +1,14 @@
 use crate::*;
 use std::cell::RefCell;
-use std::sync::Mutex;
+use std::rc::Rc;
 
-lazy_static! {
-    pub static ref ALLOC: Mutex<Allocator> = {
-        let alloc = Allocator::new();
-        Mutex::new(alloc)
-    };
-}
+thread_local!(
+    pub static ALLOC: RefCell<Option<Rc<RefCell<Allocator>>>> = RefCell::new(None);
+);
 
-thread_local! {
-    pub static ALLOC_THREAD: RefCell<AllocThread> = {
-        RefCell::new(AllocThread {
-            alloc_flag:false
-        })
-    };
-}
+thread_local!(
+    pub static ALLOC_THREAD: RefCell<AllocThread> = RefCell::new(AllocThread { alloc_flag: false });
+);
 
 const SIZE: usize = 64;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
@@ -37,6 +30,12 @@ pub trait GC {
 struct Page {
     data: [GCBox<RValue>; DATA_LEN],
     mark_bits: [u64; SIZE - 1],
+}
+
+impl std::fmt::Debug for Page {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Page")
+    }
 }
 
 type PageRef = Ref<Page>;
@@ -151,6 +150,7 @@ impl<T: GC> std::ops::DerefMut for GCBox<T> {
 
 type GCBoxRef<T> = Ref<GCBox<T>>;
 
+#[derive(Debug)]
 pub struct Allocator {
     /// Allocated number of objects in current page.
     used: usize,
@@ -203,13 +203,6 @@ impl Allocator {
 
     pub fn free_count(&self) -> usize {
         self.free_list_count
-    }
-
-    pub fn init() {
-        *ALLOC.lock().unwrap() = {
-            let alloc = Allocator::new();
-            alloc
-        };
     }
 
     /// Allocate object.

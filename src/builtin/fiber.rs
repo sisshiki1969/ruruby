@@ -115,6 +115,7 @@ fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             let mut vm2 = fiber_vm;
             thread::spawn(move || {
+                vm2.set_allocator();
                 let res = vm2.run_context(context);
                 // If the fiber was finished, the fiber becomes DEAD.
                 // Return a value on the stack top to the parent fiber.

@@ -1,9 +1,12 @@
 use crate::*;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
+    pub allocator: Rc<RefCell<Allocator>>,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
     method_table: GlobalMethodTable,
@@ -110,6 +113,8 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
+        let allocator = Rc::new(RefCell::new(Allocator::new()));
+        ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator.clone()));
         //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
         let module_id = IdentId::get_ident_id("Module");
@@ -128,6 +133,7 @@ impl Globals {
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
+            allocator,
             const_values: ConstantValues::new(),
             global_var: HashMap::new(),
             method_table: GlobalMethodTable::new(),
@@ -217,11 +223,11 @@ impl Globals {
     }
 
     pub fn gc(&self) {
-        ALLOC.lock().unwrap().gc(self);
+        ALLOC.with(|a| a.borrow().as_ref().unwrap().borrow_mut().gc(self));
     }
 
     pub fn print_bitmap(&self) {
-        ALLOC.lock().unwrap().print_mark();
+        ALLOC.with(|a| a.borrow().as_ref().unwrap().borrow_mut().print_mark());
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
