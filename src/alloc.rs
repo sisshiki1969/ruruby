@@ -500,13 +500,10 @@ impl Allocator {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
-    use std::path::PathBuf;
+    use crate::test::*;
 
     #[test]
     fn gc_test() {
-        let mut globals = GlobalsRef::new_globals();
-        let mut vm = globals.new_vm();
         let program = r#"
             class Vec
                 def initialize(x,y)
@@ -521,14 +518,6 @@ mod tests {
                 }
             }
         "#;
-        let res = vm.run(PathBuf::from("test"), &program, None);
-        match res {
-            Ok(_) => {}
-            Err(err) => {
-                err.show_err();
-                err.show_loc(0);
-                panic!("Got error: {:?}", err);
-            }
-        };
+        assert_script(program);
     }
 }
