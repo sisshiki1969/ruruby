@@ -369,7 +369,8 @@ impl RValue {
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
         ALLOC.with(|a| {
-            let ptr = a.borrow().as_ref().unwrap().borrow_mut().alloc(self);
+            let mut alloc = *a.borrow().as_ref().unwrap();
+            let ptr = alloc.alloc(self);
             Value::from_ptr(ptr)
         })
     }

@@ -1,9 +1,8 @@
 use crate::*;
 use std::cell::RefCell;
-use std::rc::Rc;
 
 thread_local!(
-    pub static ALLOC: RefCell<Option<Rc<RefCell<Allocator>>>> = RefCell::new(None);
+    pub static ALLOC: RefCell<Option<AllocatorRef>> = RefCell::new(None);
 );
 
 thread_local!(
@@ -169,6 +168,8 @@ pub struct Allocator {
     /// Deallocated pages.
     free_pages: Vec<PageRef>,
 }
+
+pub type AllocatorRef = Ref<Allocator>;
 
 pub struct AllocThread {
     alloc_flag: bool,

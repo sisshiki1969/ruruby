@@ -1,12 +1,10 @@
 use crate::*;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
-    pub allocator: Rc<RefCell<Allocator>>,
+    pub allocator: AllocatorRef,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
     method_table: GlobalMethodTable,
@@ -86,8 +84,6 @@ impl GC for Globals {
             None => {}
         });
         self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
-        //self.main_object.mark(alloc);
-        //self.builtins.mark(alloc);
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
@@ -113,8 +109,8 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
-        let allocator = Rc::new(RefCell::new(Allocator::new()));
-        ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator.clone()));
+        let allocator = AllocatorRef::new(Allocator::new());
+        ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
         //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
         let module_id = IdentId::get_ident_id("Module");
@@ -223,11 +219,14 @@ impl Globals {
     }
 
     pub fn gc(&self) {
-        ALLOC.with(|a| a.borrow().as_ref().unwrap().borrow_mut().gc(self));
+        ALLOC.with(|a| {
+            let mut alloc = *a.borrow().as_ref().unwrap();
+            alloc.gc(self);
+        })
     }
 
     pub fn print_bitmap(&self) {
-        ALLOC.with(|a| a.borrow().as_ref().unwrap().borrow_mut().print_mark());
+        ALLOC.with(|a| a.borrow().as_ref().unwrap().print_mark());
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
