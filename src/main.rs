@@ -54,7 +54,7 @@ fn main() {
     #[cfg(feature = "gc-debug")]
     #[cfg(not(tarpaulin_include))]
     {
-        ALLOC.lock().unwrap().print_mark();
+        ALLOC.with(|a| a.borrow_mut().as_ref().unwrap().print_mark());
     }
     return;
 }
