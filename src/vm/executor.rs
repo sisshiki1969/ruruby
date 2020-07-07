@@ -2124,12 +2124,18 @@ impl VM {
     }
 
     fn vm_opt_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
+        // No block nor keyword/block/splat arguments for OPT_SEND.
         let method_id = self.read_id(iseq, 1);
         let args_num = self.read16(iseq, 5);
         let cache_slot = self.read32(iseq, 7);
         let rec_class = receiver.get_class_object_for_method(&self.globals);
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
-        let args = self.pop_args_to_ary(args_num as usize);
+        //let args = self.pop_args_to_ary(args_num as usize);
+        let mut args = Args::new(0);
+        for _ in 0..args_num {
+            let val = self.stack_pop();
+            args.push(val);
+        }
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
     }
@@ -2202,20 +2208,16 @@ impl VM {
             MethodInfo::BuiltinFunc { func, .. } => {
                 let func = func.to_owned();
                 #[cfg(feature = "perf")]
-                {
-                    self.perf.get_perf(Perf::EXTERN);
-                }
+                self.perf.get_perf(Perf::EXTERN);
 
                 let len = self.temp_stack.len();
-                self.temp_push(self_val); // If func() returns Err, self_val remains on exec stack.
+                self.temp_push(self_val);
                 self.temp_push_vec(&mut args.to_vec());
                 let res = func(self, self_val, args);
                 self.temp_stack.truncate(len);
 
                 #[cfg(feature = "perf")]
-                {
-                    self.perf.get_perf_no_count(inst);
-                }
+                self.perf.get_perf_no_count(inst);
                 res?
             }
             MethodInfo::AttrReader { id } => match self_val.as_rvalue() {
@@ -2237,9 +2239,7 @@ impl VM {
                 let context = Context::from_args(self, self_val, iseq, args, outer)?;
                 let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
-                {
-                    self.perf.get_perf_no_count(inst);
-                }
+                self.perf.get_perf_no_count(inst);
                 val
             }
         };

@@ -1479,7 +1479,11 @@ impl Codegen {
                 ..
             } => {
                 let loc = self.loc;
+                let mut no_splat_flag = true;
                 for arg in &send_args.args {
+                    if let NodeKind::Splat(_) = arg.kind {
+                        no_splat_flag = false;
+                    };
                     self.gen(globals, iseq, arg, true)?;
                 }
                 // A flag whether keyword parametera exist or not.
@@ -1518,8 +1522,8 @@ impl Codegen {
                     },
                     None => None,
                 };
-                // If the method call without block nor keyword/block paramters, gen OPT_SEND.
-                if !block_flag && !kw_flag && block_ref.is_none() {
+                // If the method call without block nor keyword/block/splat arguments, gen OPT_SEND.
+                if !block_flag && !kw_flag && block_ref.is_none() && no_splat_flag {
                     if NodeKind::SelfValue == receiver.kind {
                         self.loc = loc;
                         self.gen_opt_send_self(globals, iseq, *method, send_args.args.len());
