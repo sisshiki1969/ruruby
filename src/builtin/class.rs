@@ -58,3 +58,23 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     };
     Ok(Value::string(&vm.globals, s))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::test::*;
+
+    #[test]
+    fn class_new() {
+        let program = r#"
+        A = Class.new{
+            attr_accessor :a
+            def initialize
+                @a = 100
+            end
+        }
+        assert(100, A.new.a)
+        assert("A", A.inspect)
+        "#;
+        assert_script(program);
+    }
+}
