@@ -3,12 +3,8 @@ extern crate ansi_term;
 extern crate clap;
 extern crate ruruby;
 extern crate rustyline;
-#[cfg(feature = "perf")]
-use crate::vm::perf::*;
 
 use clap::{App, AppSettings, Arg};
-use ruruby::loader::{load_file, LoadError};
-//use std::thread;
 #[cfg(not(tarpaulin_include))]
 mod repl;
 use repl::*;
@@ -41,39 +37,21 @@ fn main() {
     let argv = Value::array_from(&vm.globals, res);
     vm.globals.builtins.object.set_var(id, argv);
     exec_file(&mut vm, args[0]);
-    #[cfg(feature = "perf")]
-    {
-        let mut perf = Perf::new();
-        let globals = vm.globals;
-        for vm in &globals.fibers {
-            perf.add(&vm.perf);
-        }
-        perf.print_perf();
-    }
-    #[cfg(feature = "gc-debug")]
-    {
-        ALLOC.with(|a| a.borrow_mut().as_ref().unwrap().print_mark());
-    }
-    return;
 }
 
 #[cfg(not(tarpaulin_include))]
 fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
+    use crate::loader::*;
     let file_name = file_name.into();
-    let (absolute_path, program) = match load_file(file_name.clone()) {
+    let (absolute_path, program) = match crate::loader::load_file(file_name.clone()) {
         Ok((path, program)) => (path, program),
-        Err(err) => match err {
-            LoadError::NotFound(msg) => {
-                eprintln!("No such file or directory --- {} (LoadError)", &file_name);
-                eprintln!("{}", msg);
-                return;
-            }
-            LoadError::CouldntOpen(msg) => {
-                eprintln!("Cannot open file. '{}'", &file_name);
-                eprintln!("{}", msg);
-                return;
-            }
-        },
+        Err(err) => {
+            match err {
+                LoadError::NotFound(msg) => eprintln!("LoadError: {}\n{}", &file_name, msg),
+                LoadError::CouldntOpen(msg) => eprintln!("LoadError: {}\n{}", &file_name, msg),
+            };
+            return;
+        }
     };
 
     let root_path = absolute_path.clone();
@@ -81,9 +59,13 @@ fn exec_file(vm: &mut VMRef, file_name: impl Into<String>) {
     eprintln!("load file: {:?}", root_path);
     vm.root_path.push(root_path);
     let mut vm2 = vm.clone();
-    let res = vm2.run(absolute_path, &program, None);
-    match res {
-        Ok(_) => {}
+    match vm2.run(absolute_path, &program, None) {
+        Ok(_) => {
+            #[cfg(feature = "perf")]
+            vm.globals.print_perf();
+            #[cfg(feature = "gc-debug")]
+            vm.globals.print_mark();
+        }
         Err(err) => {
             err.show_err();
             for i in 0..err.info.len() {

@@ -219,15 +219,23 @@ impl Globals {
     }
 
     pub fn gc(&self) {
-        ALLOC.with(|a| {
-            let mut alloc = *a.borrow().as_ref().unwrap();
-            alloc.gc(self);
-        })
+        let mut alloc = self.allocator;
+        alloc.gc(self);
     }
 
     #[cfg(feature = "gc-debug")]
-    pub fn print_bitmap(&self) {
-        ALLOC.with(|a| a.borrow().as_ref().unwrap().print_mark());
+    pub fn print_mark(&self) {
+        self.allocator.print_mark();
+    }
+
+    #[cfg(feature = "perf")]
+    pub fn print_perf(&self) {
+        use crate::vm::perf::*;
+        let mut perf = Perf::new();
+        for vm in &self.fibers {
+            perf.add(&vm.perf);
+        }
+        perf.print_perf();
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {

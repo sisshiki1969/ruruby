@@ -2519,3 +2519,27 @@ impl VM {
         }
     }
 }
+
+impl VM {
+    pub fn load_file(
+        &mut self,
+        file_name: String,
+    ) -> Result<(std::path::PathBuf, String), RubyError> {
+        use crate::loader::*;
+        match crate::loader::load_file(file_name.clone()) {
+            Ok((path, program)) => Ok((path, program)),
+            Err(err) => {
+                let err_str = match err {
+                    LoadError::NotFound(msg) => format!(
+                        "LoadError: No such file or directory -- {}\n{}",
+                        &file_name, msg
+                    ),
+                    LoadError::CouldntOpen(msg) => {
+                        format!("Cannot open file. '{}'\n{}", &file_name, msg)
+                    }
+                };
+                Err(self.error_internal(err_str))
+            }
+        }
+    }
+}

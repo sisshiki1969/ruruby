@@ -1,4 +1,3 @@
-use crate::loader::*;
 use crate::*;
 use rand;
 use std::path::PathBuf;
@@ -143,22 +142,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn require_main(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
         let file_name = path.to_string_lossy().to_string();
-        let (absolute_path, program) = match load_file(file_name.clone()) {
-            Ok((path, program)) => (path, program),
-            Err(err) => {
-                match err {
-                    LoadError::NotFound(msg) => {
-                        eprintln!("No such file or directory --- {} (LoadError)", &file_name);
-                        eprintln!("{}", msg);
-                    }
-                    LoadError::CouldntOpen(msg) => {
-                        eprintln!("Cannot open file. '{}'", &file_name);
-                        eprintln!("{}", msg);
-                    }
-                }
-                return Err(vm.error_internal("LoadError"));
-            }
-        };
+        let (absolute_path, program) = vm.load_file(file_name)?;
         #[cfg(feature = "verbose")]
         eprintln!("reading:{}", absolute_path.to_string_lossy());
         vm.root_path.push(path);
