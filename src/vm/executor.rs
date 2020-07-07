@@ -24,7 +24,7 @@ pub struct VM {
     temp_stack: Vec<Value>,
     exception: bool,
     pc: usize,
-    gc_counter: usize,
+    //gc_counter: usize,
     pub parent_fiber: Option<ParentFiberInfo>,
     #[cfg(feature = "perf")]
     pub perf: Perf,
@@ -92,7 +92,7 @@ impl VM {
             temp_stack: vec![],
             exception: false,
             pc: 0,
-            gc_counter: 0,
+            //gc_counter: 0,
             parent_fiber: None,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
@@ -111,7 +111,7 @@ impl VM {
             exec_stack: vec![],
             exception: false,
             pc: 0,
-            gc_counter: 0,
+            //gc_counter: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             #[cfg(feature = "perf")]
             perf: Perf::new(),
@@ -425,16 +425,15 @@ impl VM {
 
 impl VM {
     fn gc(&mut self) {
-        self.gc_counter += 1;
-        if !self.globals.gc_enabled || self.gc_counter % 8 != 0 {
+        //self.gc_counter += 1;
+        if !self.globals.gc_enabled {
             return;
         }
-        if !ALLOC_THREAD.with(|m| m.borrow().is_allocated()) {
-            return;
+        if self.globals.allocator.is_allocated() {
+            #[cfg(feature = "perf")]
+            self.perf.get_perf(Perf::GC);
+            self.globals.gc();
         };
-        #[cfg(feature = "perf")]
-        self.perf.get_perf(Perf::GC);
-        self.globals.gc();
     }
 
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {

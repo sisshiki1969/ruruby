@@ -133,11 +133,10 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let receiver = self_val.rvalue();
-    let id_lock = ID.read().unwrap();
     let res = match receiver.var_table() {
         Some(table) => table
             .keys()
-            .filter(|x| id_lock.get_ident_name(**x).chars().nth(0) == Some('@'))
+            .filter(|x| IdentId::get_ident_name(**x).chars().nth(0) == Some('@'))
             .map(|x| Value::symbol(*x))
             .collect(),
         None => vec![],

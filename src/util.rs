@@ -168,7 +168,7 @@ impl SourceInfo {
             found = true;
             let start = line.1 as usize;
             let mut end = line.2 as usize;
-            if self.code[end] == '\n' {
+            if self.code[end] == '\n' && end > 0 {
                 end -= 1
             }
             eprintln!("{}", self.code[start..=end].iter().collect::<String>());

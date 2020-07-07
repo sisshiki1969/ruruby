@@ -294,7 +294,6 @@ impl Inst {
             )
         }
         let iseq = &iseq_ref.iseq;
-        let id_lock = ID.read().unwrap();
         match iseq[pc] {
             Inst::ADDI
             | Inst::SUBI
@@ -314,7 +313,7 @@ impl Inst {
             Inst::LVAR_ADDI => {
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = id_lock.get_ident_name(ident_id);
+                let name = IdentId::get_ident_name(ident_id);
                 format!(
                     "LVAR_ADDI '{}' LvarId:{} +{}",
                     name,
@@ -339,7 +338,7 @@ impl Inst {
             Inst::SET_LOCAL | Inst::GET_LOCAL => {
                 let id = Inst::read32(iseq, pc + 1);
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
-                let name = id_lock.get_ident_name(ident_id);
+                let name = IdentId::get_ident_name(ident_id);
                 format!("{} '{}' LvarId:{}", Inst::inst_name(iseq[pc]), name, id)
             }
             Inst::SET_DYNLOCAL | Inst::GET_DYNLOCAL => {
@@ -358,7 +357,7 @@ impl Inst {
                 let frame = Inst::read32(iseq, pc + 5);
                 let id = Inst::read32(iseq, pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
-                let name = id_lock.get_ident_name(ident_id);
+                let name = IdentId::get_ident_name(ident_id);
                 format!("CHECK_LOCAL '{}' outer:{} LvarId:{}", name, frame, id)
             }
             Inst::PUSH_SYMBOL

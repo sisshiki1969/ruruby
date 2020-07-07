@@ -96,11 +96,15 @@ pub fn init(globals: &mut Globals) -> Value {
             ))),
             Err(err) if err.kind == RubyErrorKind::BlockReturn => {
                 vm.stack_pop();
-                println!("Assert_error OK: {:?}", err.kind);
+                println!("Assert_error OK:");
+                err.show_err();
+                err.show_loc(0);
                 Ok(Value::nil())
             }
             Err(err) => {
-                println!("Assert_error OK: {:?}", err.kind);
+                println!("Assert_error OK:");
+                err.show_err();
+                err.show_loc(0);
                 Ok(Value::nil())
             }
         }

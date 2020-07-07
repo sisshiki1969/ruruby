@@ -141,15 +141,7 @@ impl IdentifierTable {
         }
     }
 
-    pub fn get_name(&self, id: IdentId) -> &str {
+    fn get_name(&self, id: IdentId) -> &str {
         self.table_rev.get(&id.0.get()).unwrap()
-    }
-
-    pub fn get_ident_name(&self, id: impl Into<Option<IdentId>>) -> &str {
-        let id = id.into();
-        match id {
-            Some(id) => self.get_name(id),
-            None => &"",
-        }
     }
 }

@@ -25,9 +25,7 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
                 &mut table
                     .keys()
                     .filter(|x| {
-                        ID.read()
-                            .unwrap()
-                            .get_ident_name(**x)
+                        IdentId::get_ident_name(**x)
                             .chars()
                             .nth(0)
                             .unwrap()

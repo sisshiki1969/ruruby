@@ -777,7 +777,6 @@ impl Codegen {
             }
             println!("");
             println!("block: {:?}", iseq.lvar.block());
-            //let iseq = &iseq.iseq;
             let mut pc = 0;
             while pc < iseq.iseq.len() {
                 println!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
@@ -1674,6 +1673,7 @@ impl Codegen {
                     match self.context().kind {
                         ContextKind::Block => {
                             self.gen(globals, iseq, val, true)?;
+                            self.save_loc(iseq, loc);
                             self.gen_return(iseq);
                         }
                         ContextKind::Method => {

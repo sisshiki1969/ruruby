@@ -5,10 +5,6 @@ thread_local!(
     pub static ALLOC: RefCell<Option<AllocatorRef>> = RefCell::new(None);
 );
 
-thread_local!(
-    pub static ALLOC_THREAD: RefCell<AllocThread> = RefCell::new(AllocThread { alloc_flag: false });
-);
-
 const SIZE: usize = 64;
 const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
 const PAGE_LEN: usize = 64 * SIZE;
@@ -167,19 +163,11 @@ pub struct Allocator {
     free: Option<GCBoxRef<RValue>>,
     /// Deallocated pages.
     free_pages: Vec<PageRef>,
-}
-
-pub type AllocatorRef = Ref<Allocator>;
-
-pub struct AllocThread {
+    /// Flag for GC timing.
     alloc_flag: bool,
 }
 
-impl AllocThread {
-    pub fn is_allocated(&self) -> bool {
-        self.alloc_flag
-    }
-}
+pub type AllocatorRef = Ref<Allocator>;
 
 impl Allocator {
     pub fn new() -> Self {
@@ -196,10 +184,13 @@ impl Allocator {
             mark_counter: 0,
             free: None,
             free_pages: vec![],
+            alloc_flag: false,
         };
-        //alloc.clear_mark();
-        //alloc.sweep();
         alloc
+    }
+
+    pub fn is_allocated(&self) -> bool {
+        self.alloc_flag
     }
 
     pub fn free_count(&self) -> usize {
@@ -244,10 +235,7 @@ impl Allocator {
         } else {
             // Bump allocation.
             if self.used == THRESHOLD {
-                ALLOC_THREAD.with(|m| {
-                    let mut m = m.borrow_mut();
-                    m.alloc_flag = true;
-                });
+                self.alloc_flag = true;
             }
             let ptr = self.current.get_data_ptr(self.used);
             self.used += 1;
@@ -285,9 +273,7 @@ impl Allocator {
         self.clear_mark();
         root.mark(self);
         #[cfg(feature = "gc-debug")]
-        {
-            eprint!("marked: {}  ", self.mark_counter);
-        }
+        eprint!("marked: {}  ", self.mark_counter);
         self.dealloc_empty_pages();
         self.sweep();
         #[cfg(feature = "gc-debug")]
@@ -295,14 +281,9 @@ impl Allocator {
             assert_eq!(self.free_list_count, self.check_free_list());
             eprintln!("free list: {}", self.free_list_count);
         }
-        ALLOC_THREAD.with(|m| {
-            m.borrow_mut().alloc_flag = false;
-        });
+        self.alloc_flag = false;
         #[cfg(feature = "gc-debug")]
-        {
-            //self.print_mark();
-            eprintln!("--GC completed");
-        }
+        eprintln!("--GC completed");
     }
 
     /// Clear all mark bitmaps.
@@ -509,6 +490,11 @@ mod tests {
                 1000.times {|x|
                     a << Vec.new(x.to_s, x.to_s)
                 }
+                b = {}
+                1000.times {|x|
+                    b[x.to_s] = [x...(x*2), (x+1).to_s, (x+2).to_s]
+                }
+                c = Fiber.new {}
             }
         "#;
         assert_script(program);

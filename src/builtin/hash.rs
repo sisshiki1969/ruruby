@@ -261,7 +261,7 @@ mod test {
     fn hash1() {
         let program = r#"
             h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7",
-            "ruby" => "string", :ruby => "symbol", [1,2,3] => {a:1}, {b:3} => [3,4,5]}
+            "ruby" => "string", :ruby => "symbol", [1,2,3] => {a:1}, {b:3} => [3,4,5], 1..4 => "1"}
             assert(h[true], "true")
             assert(h[false], "false")
             assert(h[nil], "nil")
@@ -271,10 +271,14 @@ mod test {
             assert(h[:ruby], "symbol")
             assert(h[[1,2,3]], {a:1})
             assert(h[{b:3}], [3,4,5])
-            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}])
-            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5]])
+            assert(h[1..4], "1")
+            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}, 1..4])
+            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5], "1"])
+
+            {a:7} == eval({a:7}.to_s)
+
             h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7",
-            "ruby" => "string", :ruby => "symbol", [1,2,3] => {a:1}, {b:3} => [3,4,5]}.compare_by_identity
+            "ruby" => "string", :ruby => "symbol", [1,2,3] => {a:1}, {b:3} => [3,4,5], 1..4 => "1"}.compare_by_identity
             assert(h[true], "true")
             assert(h[false], "false")
             assert(h[nil], "nil")
@@ -284,8 +288,9 @@ mod test {
             assert(h[:ruby], "symbol")
             assert(false, h[[1,2,3]]=={a:1})
             assert(false, h[{b:3}]==[3,4,5])
-            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}])
-            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5]])
+            assert(false, h[1..4]=="1")
+            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}, 1..4])
+            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5], "1"])
         "#;
         assert_script(program);
     }
