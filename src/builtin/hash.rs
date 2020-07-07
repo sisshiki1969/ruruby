@@ -260,7 +260,8 @@ mod test {
     #[test]
     fn hash1() {
         let program = r#"
-            h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7", "ruby" => "string", :ruby => "symbol"}
+            h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7",
+            "ruby" => "string", :ruby => "symbol", [1,2,3] => {a:1}, {b:3} => [3,4,5]}
             assert(h[true], "true")
             assert(h[false], "false")
             assert(h[nil], "nil")
@@ -268,8 +269,23 @@ mod test {
             assert(h[7.7], "7.7")
             assert(h["ruby"], "string")
             assert(h[:ruby], "symbol")
-            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby])
-            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol"])
+            assert(h[[1,2,3]], {a:1})
+            assert(h[{b:3}], [3,4,5])
+            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}])
+            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5]])
+            h = {true => "true", false => "false", nil => "nil", 100 => "100", 7.7 => "7.7",
+            "ruby" => "string", :ruby => "symbol", [1,2,3] => {a:1}, {b:3} => [3,4,5]}.compare_by_identity
+            assert(h[true], "true")
+            assert(h[false], "false")
+            assert(h[nil], "nil")
+            assert(h[100], "100")
+            assert(h[7.7], "7.7")
+            assert(false, h["ruby"]=="string")
+            assert(h[:ruby], "symbol")
+            assert(false, h[[1,2,3]]=={a:1})
+            assert(false, h[{b:3}]==[3,4,5])
+            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}])
+            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5]])
         "#;
         assert_script(program);
     }
@@ -286,6 +302,15 @@ mod test {
             assert(h[100], "100")
             assert(h[7.7], "7.7")
             assert(h[:ruby], "string")
+            
+            h2 = {true: "true", false: "false", nil: "nil", 100 => a, @b => "7.7", ruby: "string"}.compare_by_identity
+            assert(h2[:true], "true")
+            assert(h2[:false], "false")
+            assert(h2[:nil], "nil")
+            assert(h2[100], "100")
+            assert(h2[7.7], "7.7")
+            assert(h2[:ruby], "string")
+
             a = []
             h.each_key{|k| a << k}
             assert([], a - [:true, :false, :nil, 100, 7.7, :ruby])
@@ -294,6 +319,15 @@ mod test {
             assert([], a - ["true", "false", "nil", "100", "7.7", "string"])
             a = []
             h.each{|k, v| a << [k, v];}
+            assert([], a - [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
+            a = []
+            h2.each_key{|k| a << k}
+            assert([], a - [:true, :false, :nil, 100, 7.7, :ruby])
+            a = []
+            h2.each_value{|v| a << v}
+            assert([], a - ["true", "false", "nil", "100", "7.7", "string"])
+            a = []
+            h2.each{|k, v| a << [k, v];}
             assert([], a - [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
         "#;
         assert_script(program);
@@ -309,8 +343,30 @@ mod test {
             assert(h1.has_value?(500), false)
             assert(h1.length, 3)
             assert(h1.size, 3)
-            #assert(h1.keys, [:a, :d, :c])
-            #assert(h1.values, ["symbol", nil, nil])
+            assert([], h1.keys - [:a, :d, :c])
+            assert([], h1.values - ["symbol", nil, nil])
+            h2 = h1.clone()
+            h2[:b] = 100
+            assert(h2[:b], 100)
+            assert(h1[:b], nil)
+            h3 = h2.compact
+            assert(h3.delete(:a), "symbol")
+            assert(h3.empty?, false)
+            assert(h3.delete(:b), 100)
+            assert(h3.delete(:c), nil)
+            assert(h3.empty?, true)
+            h2.clear()
+            assert(h2.empty?, true)
+
+            h1 = {a: "symbol", c:nil, d:nil}.compare_by_identity
+            assert(h1.has_key?(:a), true)
+            assert(h1.has_key?(:b), false)
+            assert(h1.has_value?("symbol"), true)
+            assert(h1.has_value?(500), false)
+            assert(h1.length, 3)
+            assert(h1.size, 3)
+            assert([], h1.keys - [:a, :d, :c])
+            assert([], h1.values - ["symbol", nil, nil])
             h2 = h1.clone()
             h2[:b] = 100
             assert(h2[:b], 100)
@@ -333,12 +389,16 @@ mod test {
             h = { "a" => 100, "b" => 200, "c" => 300 }
             assert({"b" => 200, "c" => 300}, h.select {|k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
             assert({"a" => 100}, h.select {|k,v| v < 200})  #=> {"a" => 100}
+
+            h = { "a" => 100, "b" => 200, "c" => 300 }.compare_by_identity
+            assert({"b" => 200, "c" => 300}, h.select {|k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
+            assert({"a" => 100}, h.select {|k,v| v < 200})  #=> {"a" => 100}
         "#;
         assert_script(program);
     }
 
     #[test]
-    fn hash_merge() {
+    fn hash_merge1() {
         let program = r#"
         h1 = { "a" => 100, "b" => 200 }
         h2 = { "b" => 246, "c" => 300 }
@@ -347,6 +407,32 @@ mod test {
         assert({"a"=>100, "b"=>246, "c"=>300}, h1.merge(h2)) 
         assert({"a"=>100, "b"=>357, "c"=>300, "d"=>400}, h1.merge(h2, h3)) 
         assert({"a"=>100, "b"=>200}, h1)
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn hash_merge2() {
+        let program = r#"
+        h1 = { "a" => 100, "b" => 200 }.compare_by_identity
+        h2 = { "b" => 246, "c" => 300 }.compare_by_identity
+        h3 = { "b" => 357, "d" => 400 }.compare_by_identity
+        assert({"a"=>100, "b"=>200}.compare_by_identity, h1.merge)
+        r1 = {}.compare_by_identity
+        r1["a"] = 100
+        r1["b"] = 200
+        r1["b"] = 246
+        r1["c"] = 300
+        assert(r1, h1.merge(h2)) 
+        r1 = {}.compare_by_identity
+        r1["a"] = 100
+        r1["b"] = 200
+        r1["b"] = 246
+        r1["b"] = 357
+        r1["c"] = 300
+        r1["d"] = 400
+        assert(r1, h1.merge(h2, h3)) 
+        assert({"a"=>100, "b"=>200}.compare_by_identity, h1)
     "#;
         assert_script(program);
     }
@@ -373,6 +459,9 @@ mod test {
         let program = r#"
         h = { 0 => 20, 1 => 30, 2 => 10  }
         assert([[0, 20], [1, 30], [2, 10]], h.sort)
+
+        h = { 0 => 20, 1 => 30, 2 => 10  }.compare_by_identity
+        assert([[0, 20], [1, 30], [2, 10]], h.sort)
         "#;
         assert_script(program);
     }
@@ -381,6 +470,9 @@ mod test {
     fn hash_invert() {
         let program = r#"
         h = { "a" => 0, "b" => 100, "c" => 200, "e" => 300 }
+        assert({0=>"a", 100=>"b", 200=>"c", 300=>"e"}, h.invert)
+
+        h = { "a" => 0, "b" => 100, "c" => 200, "e" => 300 }.compare_by_identity
         assert({0=>"a", 100=>"b", 200=>"c", 300=>"e"}, h.invert)
         "#;
         assert_script(program);

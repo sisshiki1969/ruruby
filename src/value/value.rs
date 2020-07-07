@@ -856,6 +856,7 @@ mod tests {
 
     #[test]
     fn pack_bool1() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Bool(true);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -866,6 +867,7 @@ mod tests {
 
     #[test]
     fn pack_bool2() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Bool(false);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -876,6 +878,7 @@ mod tests {
 
     #[test]
     fn pack_nil() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Nil;
         let packed = expect.pack();
         let got = packed.unpack();
@@ -886,6 +889,7 @@ mod tests {
 
     #[test]
     fn pack_uninit() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Uninitialized;
         let packed = expect.pack();
         let got = packed.unpack();
@@ -896,6 +900,7 @@ mod tests {
 
     #[test]
     fn pack_integer1() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Integer(12054);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -906,6 +911,7 @@ mod tests {
 
     #[test]
     fn pack_integer11() {
+        let _globals = GlobalsRef::new_globals();
         let expect_ary = [
             12054,
             -58993,
@@ -926,6 +932,7 @@ mod tests {
 
     #[test]
     fn pack_integer2() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Integer(-58993);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -936,6 +943,7 @@ mod tests {
 
     #[test]
     fn pack_integer3() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Integer(0x8000_0000_0000_0000 as u64 as i64);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -946,6 +954,7 @@ mod tests {
 
     #[test]
     fn pack_integer4() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Integer(0x4000_0000_0000_0000 as u64 as i64);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -956,6 +965,7 @@ mod tests {
 
     #[test]
     fn pack_integer5() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Integer(0x7fff_ffff_ffff_ffff as u64 as i64);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -966,6 +976,7 @@ mod tests {
 
     #[test]
     fn pack_float0() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(0.0);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -976,6 +987,7 @@ mod tests {
 
     #[test]
     fn pack_float1() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(100.0);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -986,6 +998,7 @@ mod tests {
 
     #[test]
     fn pack_float2() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(13859.628547);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -996,6 +1009,7 @@ mod tests {
 
     #[test]
     fn pack_float3() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(-5282.2541156);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1006,8 +1020,7 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let mut globals = GlobalsRef::new_globals();
-        globals.gc_enabled = false;
+        let globals = GlobalsRef::new_globals();
         let from = RV::Integer(7).pack();
         let to = RV::Integer(36).pack();
         let expect = Value::range(&globals, from, to, true);
@@ -1019,8 +1032,7 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let mut globals = GlobalsRef::new_globals();
-        globals.gc_enabled = false;
+        let globals = GlobalsRef::new_globals();
         let expect = Value::class(&globals, ClassRef::from(IdentId::from(1), None));
         let got = expect.unpack().pack();
         if expect != got {
@@ -1030,8 +1042,7 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let mut globals = GlobalsRef::new_globals();
-        globals.gc_enabled = false;
+        let globals = GlobalsRef::new_globals();
         let class = Value::class_from(&globals, IdentId::from(1), None);
         let expect = Value::ordinary_object(class);
         let got = expect.unpack().pack();
@@ -1042,6 +1053,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
+        let _globals = GlobalsRef::new_globals();
         let expect = RV::Symbol(IdentId::from(12345));
         let packed = expect.pack();
         let got = packed.unpack();

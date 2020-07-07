@@ -4,6 +4,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
+    pub allocator: AllocatorRef,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
     method_table: GlobalMethodTable,
@@ -83,8 +84,6 @@ impl GC for Globals {
             None => {}
         });
         self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
-        //self.main_object.mark(alloc);
-        //self.builtins.mark(alloc);
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
@@ -110,6 +109,8 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
+        let allocator = AllocatorRef::new(Allocator::new());
+        ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
         //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
         let module_id = IdentId::get_ident_id("Module");
@@ -128,6 +129,7 @@ impl Globals {
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
+            allocator,
             const_values: ConstantValues::new(),
             global_var: HashMap::new(),
             method_table: GlobalMethodTable::new(),
@@ -217,11 +219,23 @@ impl Globals {
     }
 
     pub fn gc(&self) {
-        ALLOC.lock().unwrap().gc(self);
+        let mut alloc = self.allocator;
+        alloc.gc(self);
     }
 
-    pub fn print_bitmap(&self) {
-        ALLOC.lock().unwrap().print_mark();
+    #[cfg(feature = "gc-debug")]
+    pub fn print_mark(&self) {
+        self.allocator.print_mark();
+    }
+
+    #[cfg(feature = "perf")]
+    pub fn print_perf(&self) {
+        use crate::vm::perf::*;
+        let mut perf = Perf::new();
+        for vm in &self.fibers {
+            perf.add(&vm.perf);
+        }
+        perf.print_perf();
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {

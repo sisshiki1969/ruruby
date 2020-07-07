@@ -47,7 +47,6 @@ impl RubyError {
     }
 }
 
-#[cfg(not(tarpaulin_include))]
 impl RubyError {
     pub fn loc(&self) -> Loc {
         self.info[0].1

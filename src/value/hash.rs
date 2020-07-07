@@ -3,10 +3,47 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub enum HashInfo {
     Map(HashMap<HashKey, Value>),
     IdentMap(HashMap<IdentKey, Value>),
+}
+
+impl PartialEq for HashInfo {
+    // Object#eql?()
+    // This type of equality is used for comparison for keys of Hash.
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (HashInfo::Map(map1), HashInfo::Map(map2)) => map1 == map2,
+            (HashInfo::IdentMap(map1), HashInfo::IdentMap(map2)) => {
+                if map1.len() != map2.len() {
+                    return false;
+                };
+                let mut m1 = HashMap::new();
+                for (k, v) in map1 {
+                    let a = m1.get_mut(&(k.0, *v));
+                    match a {
+                        Some(c) => *c += 1,
+                        None => {
+                            m1.insert((k.0, *v), 1usize);
+                        }
+                    };
+                }
+                let mut m2 = HashMap::new();
+                for (k, v) in map2 {
+                    let a = m2.get_mut(&(k.0, *v));
+                    match a {
+                        Some(c) => *c += 1,
+                        None => {
+                            m2.insert((k.0, *v), 1usize);
+                        }
+                    };
+                }
+                m1 == m2
+            }
+            _ => return false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
