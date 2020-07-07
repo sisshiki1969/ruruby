@@ -194,6 +194,19 @@ mod tests {
     use crate::test::*;
 
     #[test]
+    fn integer1() {
+        let program = r#"
+        assert(4.0, 4.to_f)
+        assert(-4.0, -4.to_f)
+        assert(4, 4.floor)
+        assert(-4, -4.floor)
+        assert(true, 8.even?)
+        assert(false, 9.even?)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn integer_cmp() {
         let program = r#"
             assert true, 4.send(:"==", 4)
@@ -240,6 +253,14 @@ mod tests {
             assert false, 4.send(:"<", 4.0)
             assert true, 4.send(:"<", 4.1)
 
+            assert(0, 3.send(:"<=>", 3))
+            assert(1, 5.send(:"<=>", 3))
+            assert(-1, 3.send(:"<=>", 5))
+            assert(0, 3.send(:"<=>", 3.0))
+            assert(1, 5.send(:"<=>", 3.9))
+            assert(-1, 3.send(:"<=>", 5.8))
+            assert(nil, 3.send(:"<=>", "three"))
+
             assert(0, 3 <=> 3)
             assert(1, 5 <=> 3)
             assert(-1, 3 <=> 5)
@@ -260,6 +281,19 @@ mod tests {
         res = []
         assert 0, 0.times {|x| res[x] = x * x}
         assert [], res
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_step() {
+        let program = r#"
+        res = 0
+        4.step(20){|x| res += x}
+        assert(204, res)
+        res = 0
+        4.step(20, 3){|x| res += x}
+        assert(69, res)
         "#;
         assert_script(program);
     }
