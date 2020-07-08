@@ -111,6 +111,30 @@ fn return1() {
 }
 
 #[test]
+fn argument_number() {
+    let program = r#"
+    def fn1(a,b,c); end
+    def fn2; end
+    def fn3(a, *b); end
+    def fn4(a, b=nil, c=1); end
+    fn1(1,2,3)
+    fn2
+    fn3(1)
+    fn3(1,2,3)
+    fn4(1)
+    fn4(1,2)
+    fn4(1,2,3)
+    assert_error { fn1 }
+    assert_error { fn1(1,2,3,4) }
+    assert_error { fn2(1) }
+    assert_error { fn3 }
+    assert_error { fn4 }
+    assert_error { fn4(1,2,3,4) }
+    "#;
+    assert_script(program);
+}
+
+#[test]
 fn block_argument() {
     let program = r#"
         block = Proc.new {|x| x.upcase }

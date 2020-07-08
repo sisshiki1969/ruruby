@@ -1196,7 +1196,8 @@ impl VM {
     pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
-            RuntimeErrKind::NoMethod(msg.into()),
+            RuntimeErrKind::NoMethod,
+            msg.into(),
             self.source_info(),
             loc,
         )
@@ -1231,7 +1232,8 @@ impl VM {
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
-            RuntimeErrKind::Unimplemented(msg.into()),
+            RuntimeErrKind::Unimplemented,
+            msg.into(),
             self.source_info(),
             loc,
         )
@@ -1240,7 +1242,8 @@ impl VM {
     pub fn error_internal(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
-            RuntimeErrKind::Internal(msg.into()),
+            RuntimeErrKind::Internal,
+            msg.into(),
             self.source_info(),
             loc,
         )
@@ -1248,18 +1251,19 @@ impl VM {
 
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info(), loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into(), self.source_info(), loc)
     }
 
     pub fn error_type(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Type(msg.into()), self.source_info(), loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into(), self.source_info(), loc)
     }
 
     pub fn error_argument(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
-            RuntimeErrKind::Argument(msg.into()),
+            RuntimeErrKind::Argument,
+            msg.into(),
             self.source_info(),
             loc,
         )
@@ -1268,10 +1272,8 @@ impl VM {
     pub fn error_regexp(&self, err: fancy_regex::Error) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
-            RuntimeErrKind::Regexp(format!(
-                "Invalid string for a regular expression. {:?}",
-                err
-            )),
+            RuntimeErrKind::Regexp,
+            format!("Invalid string for a regular expression. {:?}", err),
             self.source_info(),
             loc,
         )
@@ -1279,12 +1281,22 @@ impl VM {
 
     pub fn error_index(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Index(msg.into()), self.source_info(), loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Index, msg.into(), self.source_info(), loc)
     }
 
     pub fn error_fiber(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_runtime_err(RuntimeErrKind::Fiber(msg.into()), self.source_info(), loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Fiber, msg.into(), self.source_info(), loc)
+    }
+
+    pub fn error_stop_iteration(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(
+            RuntimeErrKind::StopIteration,
+            msg.into(),
+            self.source_info(),
+            loc,
+        )
     }
 
     pub fn error_method_return(&self, method: MethodRef) -> RubyError {
@@ -1295,7 +1307,8 @@ impl VM {
     pub fn error_local_jump(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
-            RuntimeErrKind::LocalJump(msg.into()),
+            RuntimeErrKind::LocalJump,
+            msg.into(),
             self.source_info(),
             loc,
         )

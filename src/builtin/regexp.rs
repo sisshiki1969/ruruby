@@ -401,4 +401,10 @@ mod test {
     "#;
         assert_script(program);
     }
+
+    #[test]
+    fn regexp_error() {
+        assert_error(r#"/+/"#);
+        assert_error(r#"Regexp.new("+")"#);
+    }
 }

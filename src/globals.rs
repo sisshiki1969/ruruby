@@ -213,6 +213,9 @@ impl Globals {
         set_class!("Process", process::init_process(&mut globals));
         set_class!("Struct", structobj::init_struct(&mut globals));
         set_class!("StandardError", Value::class(&globals, globals.class_class));
+        let id = IdentId::get_ident_id("StopIteration");
+        let class = ClassRef::from(id, globals.builtins.object);
+        set_class!("StopIteration", Value::class(&globals, class));
         set_class!("RuntimeError", errorobj::init_error(&mut globals));
 
         globals

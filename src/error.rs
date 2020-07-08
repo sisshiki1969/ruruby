@@ -10,7 +10,10 @@ pub struct RubyError {
 #[derive(Debug, Clone, PartialEq)]
 pub enum RubyErrorKind {
     ParseErr(ParseErrKind),
-    RuntimeErr(RuntimeErrKind),
+    RuntimeErr {
+        kind: RuntimeErrKind,
+        message: String,
+    },
     MethodReturn(MethodRef),
     BlockReturn,
 }
@@ -25,16 +28,17 @@ pub enum ParseErrKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeErrKind {
-    Unimplemented(String),
-    Internal(String),
-    Name(String),
-    NoMethod(String),
-    Argument(String),
-    Index(String),
-    Type(String),
-    Regexp(String),
-    Fiber(String),
-    LocalJump(String),
+    Unimplemented,
+    Internal,
+    Name,
+    NoMethod,
+    Argument,
+    Index,
+    Type,
+    Regexp,
+    Fiber,
+    LocalJump,
+    StopIteration,
 }
 
 impl RubyError {
@@ -76,18 +80,22 @@ impl RubyError {
                 ParseErrKind::SyntaxError(n) => eprintln!("SyntaxError: {}", n),
                 ParseErrKind::LoadError(n) => eprintln!("LoadError: {}", n),
             },
-            RubyErrorKind::RuntimeErr(e) => match e {
-                RuntimeErrKind::Name(n) => eprintln!("NoNameError ({})", n),
-                RuntimeErrKind::NoMethod(n) => eprintln!("NoMethodError ({})", n),
-                RuntimeErrKind::Type(n) => eprintln!("TypeError ({})", n),
-                RuntimeErrKind::Unimplemented(n) => eprintln!("UnimplementedError ({})", n),
-                RuntimeErrKind::Internal(n) => eprintln!("InternalError ({})", n),
-                RuntimeErrKind::Argument(n) => eprintln!("ArgumentError ({})", n),
-                RuntimeErrKind::Index(n) => eprintln!("IndexError ({})", n),
-                RuntimeErrKind::Regexp(n) => eprintln!("RegexpError ({})", n),
-                RuntimeErrKind::Fiber(n) => eprintln!("FiberError ({})", n),
-                RuntimeErrKind::LocalJump(n) => eprintln!("LocalJumpError ({})", n),
-            },
+            RubyErrorKind::RuntimeErr { kind, message } => {
+                match kind {
+                    RuntimeErrKind::Name => eprint!("NoNameError"),
+                    RuntimeErrKind::NoMethod => eprint!("NoMethodError"),
+                    RuntimeErrKind::Type => eprint!("TypeError"),
+                    RuntimeErrKind::Unimplemented => eprint!("UnimplementedError"),
+                    RuntimeErrKind::Internal => eprint!("InternalError"),
+                    RuntimeErrKind::Argument => eprint!("ArgumentError"),
+                    RuntimeErrKind::Index => eprint!("IndexError"),
+                    RuntimeErrKind::Regexp => eprint!("RegexpError"),
+                    RuntimeErrKind::Fiber => eprint!("FiberError"),
+                    RuntimeErrKind::LocalJump => eprint!("LocalJumpError"),
+                    RuntimeErrKind::StopIteration => eprint!("StopIteration"),
+                };
+                eprintln!("({})", message);
+            }
             RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
             }
@@ -99,8 +107,13 @@ impl RubyError {
 }
 
 impl RubyError {
-    pub fn new_runtime_err(err: RuntimeErrKind, source_info: SourceInfoRef, loc: Loc) -> Self {
-        let kind = RubyErrorKind::RuntimeErr(err);
+    pub fn new_runtime_err(
+        kind: RuntimeErrKind,
+        message: String,
+        source_info: SourceInfoRef,
+        loc: Loc,
+    ) -> Self {
+        let kind = RubyErrorKind::RuntimeErr { kind, message };
         RubyError::new(kind, source_info, 0, loc)
     }
 
@@ -123,8 +136,10 @@ impl RubyError {
     }
 
     pub fn conv_localjump_err(mut self) -> Self {
-        self.kind =
-            RubyErrorKind::RuntimeErr(RuntimeErrKind::LocalJump("Unexpected return.".to_string()));
+        self.kind = RubyErrorKind::RuntimeErr {
+            kind: RuntimeErrKind::LocalJump,
+            message: "Unexpected return.".to_string(),
+        };
         self
     }
 }

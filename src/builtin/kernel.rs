@@ -238,10 +238,21 @@ pub fn init(globals: &mut Globals) -> Value {
         ))
     }
 
+    /// raise -> ()
+    /// fail -> ()
+    /// raise(message, cause: $!) -> ()
+    /// fail(message, cause: $!) -> ()
+    /// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
+    /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
     fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_range(args.len(), 0, 2)?;
-        for arg in args.iter() {
+        /*for arg in args.iter() {
             eprintln!("{}", vm.val_inspect(*arg));
+        }*/
+        if args.len() == 1 && args[0].is_class().is_some() {
+            if Some(IdentId::get_ident_id("StopIteration")) == args[0].as_class().name {
+                return Err(vm.error_stop_iteration(""));
+            };
         }
         Err(vm.error_unimplemented("error"))
     }

@@ -1752,7 +1752,7 @@ impl Codegen {
         )
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Name(msg.into()), self.source_info, self.loc)
+        RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into(), self.source_info, self.loc)
     }
 }
 
