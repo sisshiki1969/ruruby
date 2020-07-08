@@ -2102,14 +2102,16 @@ impl VM {
         } else {
             None
         };
-        let mut args = self.pop_args_to_ary(args_num as usize);
+
         let block = if block != 0 {
             Some(MethodRef::from(block))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
             let method = val
                 .as_proc()
-                .ok_or_else(|| self.error_argument("Block argument must be Proc."))?
+                .ok_or_else(|| {
+                    self.error_argument(format!("Block argument must be Proc. given:{:?}", val))
+                })?
                 .context
                 .iseq_ref
                 .method;
@@ -2117,6 +2119,7 @@ impl VM {
         } else {
             None
         };
+        let mut args = self.pop_args_to_ary(args_num as usize);
         args.block = block;
         args.kw_arg = keyword;
         let val = self.eval_send(methodref, receiver, &args)?;
