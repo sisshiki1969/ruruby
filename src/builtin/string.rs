@@ -128,28 +128,30 @@ pub fn init_string(globals: &mut Globals) -> Value {
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "to_s", to_s);
     globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "+", string_add);
-    globals.add_builtin_instance_method(class, "*", string_mul);
-    globals.add_builtin_instance_method(class, "%", string_rem);
-    globals.add_builtin_instance_method(class, "[]", string_index);
-    globals.add_builtin_instance_method(class, "<=>", string_cmp);
-    globals.add_builtin_instance_method(class, "start_with?", string_start_with);
-    globals.add_builtin_instance_method(class, "to_sym", string_to_sym);
-    globals.add_builtin_instance_method(class, "intern", string_to_sym);
-    globals.add_builtin_instance_method(class, "split", string_split);
-    globals.add_builtin_instance_method(class, "sub", string_sub);
-    globals.add_builtin_instance_method(class, "gsub", string_gsub);
-    globals.add_builtin_instance_method(class, "gsub!", string_gsub_);
-    globals.add_builtin_instance_method(class, "scan", string_scan);
-    globals.add_builtin_instance_method(class, "=~", string_rmatch);
-    globals.add_builtin_instance_method(class, "tr", string_tr);
-    globals.add_builtin_instance_method(class, "size", string_size);
-    globals.add_builtin_instance_method(class, "bytes", string_bytes);
-    globals.add_builtin_instance_method(class, "chars", string_chars);
-    globals.add_builtin_instance_method(class, "sum", string_sum);
-    globals.add_builtin_instance_method(class, "upcase", string_upcase);
-    globals.add_builtin_instance_method(class, "chomp", string_chomp);
-    globals.add_builtin_instance_method(class, "to_i", string_toi);
+    globals.add_builtin_instance_method(class, "+", add);
+    globals.add_builtin_instance_method(class, "*", mul);
+    globals.add_builtin_instance_method(class, "%", rem);
+    globals.add_builtin_instance_method(class, "[]", index);
+    globals.add_builtin_instance_method(class, "<=>", cmp);
+    globals.add_builtin_instance_method(class, "start_with?", start_with);
+    globals.add_builtin_instance_method(class, "to_sym", to_sym);
+    globals.add_builtin_instance_method(class, "intern", to_sym);
+    globals.add_builtin_instance_method(class, "split", split);
+    globals.add_builtin_instance_method(class, "sub", sub);
+    globals.add_builtin_instance_method(class, "gsub", gsub);
+    globals.add_builtin_instance_method(class, "gsub!", gsub_);
+    globals.add_builtin_instance_method(class, "scan", scan);
+    globals.add_builtin_instance_method(class, "=~", rmatch);
+    globals.add_builtin_instance_method(class, "tr", tr);
+    globals.add_builtin_instance_method(class, "size", size);
+    globals.add_builtin_instance_method(class, "bytes", bytes);
+    globals.add_builtin_instance_method(class, "each_byte", each_byte);
+    globals.add_builtin_instance_method(class, "chars", chars);
+    globals.add_builtin_instance_method(class, "each_char", each_char);
+    globals.add_builtin_instance_method(class, "sum", sum);
+    globals.add_builtin_instance_method(class, "upcase", upcase);
+    globals.add_builtin_instance_method(class, "chomp", chomp);
+    globals.add_builtin_instance_method(class, "to_i", toi);
     globals.add_builtin_instance_method(class, "<", lt);
     globals.add_builtin_instance_method(class, ">", gt);
 
@@ -168,7 +170,7 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, self_.inspect()))
 }
 
-fn string_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     let rhs = args[0]
@@ -197,7 +199,7 @@ fn string_add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn string_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     let rhs = match args[0].expect_integer(vm, "1st arg must be Integer.")? {
@@ -212,7 +214,7 @@ fn string_mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn string_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     fn conv_index(i: i64, len: usize) -> Option<usize> {
         if i >= 0 {
             if i < len as i64 {
@@ -264,7 +266,7 @@ fn string_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn string_cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
@@ -290,7 +292,7 @@ macro_rules! next_char {
     };
 }
 
-fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let arguments = match args[0].as_array() {
         Some(ary) => ary.elements.clone(),
@@ -399,7 +401,7 @@ fn string_rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn string_start_with(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn start_with(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let mut arg0 = args[0];
@@ -408,14 +410,14 @@ fn string_start_with(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult 
     Ok(Value::bool(res))
 }
 
-fn string_to_sym(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn to_sym(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let id = IdentId::get_ident_id(string);
     Ok(Value::symbol(id))
 }
 
-fn string_split(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn split(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let mut arg0 = args[0];
@@ -466,7 +468,7 @@ fn string_split(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn string_sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     let res = if args.len() == 2 {
@@ -481,19 +483,19 @@ fn string_sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_gsub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let (res, _) = gsub(vm, self_val, args)?;
+fn gsub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let (res, _) = gsub_main(vm, self_val, args)?;
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let (res, changed) = gsub(vm, self_val, args)?;
+fn gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let (res, changed) = gsub_main(vm, self_val, args)?;
     *self_val.rvalue_mut() = RValue::new_string(&vm.globals, res);
     let res = if changed { self_val } else { Value::nil() };
     Ok(res)
 }
 
-fn gsub(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, bool), RubyError> {
+fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, bool), RubyError> {
     match args.block {
         Some(block) => {
             vm.check_args_num(args.len(), 1)?;
@@ -510,7 +512,7 @@ fn gsub(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, bool),
     }
 }
 
-fn string_scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     let vec = if let Some(s) = args[0].as_string() {
@@ -557,7 +559,7 @@ fn string_scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn string_rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     if let Some(re) = args[0].as_regexp() {
@@ -571,7 +573,7 @@ fn string_rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
 }
 
-fn string_tr(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn tr(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2)?;
     let rec = self_val.expect_string(vm, "Receiver")?;
     let mut arg0 = args[0];
@@ -582,13 +584,13 @@ fn string_tr(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_size(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn size(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let rec = self_val.expect_string(vm, "Receiver")?;
     Ok(Value::fixnum(rec.chars().count() as i64))
 }
 
-fn string_bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let bytes = self_val.expect_bytes(vm, "Receiver")?;
     let mut ary = vec![];
@@ -598,7 +600,24 @@ fn string_bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
-fn string_chars(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let block = match args.block {
+        Some(block) => block,
+        None => return Err(vm.error_argument("Block is neccessary.")),
+    };
+    let rstr = match self_val.as_rstring() {
+        Some(rstr) => rstr,
+        None => return Err(vm.error_argument("Receiver must be String.")),
+    };
+    for b in rstr.as_bytes() {
+        let byte = Value::fixnum(*b as i64);
+        vm.eval_block(block, &Args::new1(byte))?;
+    }
+    Ok(self_val)
+}
+
+fn chars(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let ary: Vec<Value> = string
@@ -608,7 +627,21 @@ fn string_chars(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
-fn string_sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let block = match args.block {
+        Some(block) => block,
+        None => return Err(vm.error_argument("Block is neccessary.")),
+    };
+    let chars = self_val.expect_string(vm, "Receiver")?;
+    for c in chars.chars() {
+        let char = Value::string(&vm.globals, c.to_string());
+        vm.eval_block(block, &Args::new1(char))?;
+    }
+    Ok(self_val)
+}
+
+fn sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let bytes = self_val.as_bytes().unwrap();
     let mut sum = 0;
@@ -618,27 +651,30 @@ fn string_sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::fixnum((sum & ((1 << 16) - 1)) as i64))
 }
 
-fn string_upcase(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn upcase(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.expect_string(vm, "Receiver")?;
     let res = self_.to_uppercase();
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_chomp(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn chomp(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.expect_string(vm, "Receiver")?;
     let res = self_.trim_end_matches('\n').to_string();
     Ok(Value::string(&vm.globals, res))
 }
 
-fn string_toi(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn toi(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let self_ = match self_val.expect_string(vm, "Receiver") {
         Ok(s) => s,
         Err(_) => return Ok(Value::fixnum(0)),
     };
-    let i: i64 = self_.parse().unwrap();
+    let i: i64 = match self_.parse() {
+        Ok(i) => i,
+        Err(_) => 0,
+    };
     Ok(Value::fixnum(i))
 }
 
@@ -647,7 +683,7 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::bool(ord == Ordering::Less)),
-        None => Ok(Value::bool(false)),
+        None => Err(vm.error_argument(format!("Comparison of String with {:?} failed.", args[0]))),
     }
 }
 
@@ -656,7 +692,7 @@ fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::bool(ord == Ordering::Greater)),
-        None => Ok(Value::bool(false)),
+        None => Err(vm.error_argument(format!("Comparison of String with {:?} failed.", args[0]))),
     }
 }
 
@@ -667,12 +703,18 @@ mod test {
     #[test]
     fn string_test() {
         let program = r#"
-        assert true, "a" < "b"
-        assert false, "b" < "b"
-        assert false, "c" < "b"
-        assert false, "a" > "b"
-        assert false, "b" > "b"
-        assert true, "c" > "b"
+        assert(true, "a" < "b")
+        assert(false, "b" < "b")
+        assert(false, "c" < "b")
+        assert(false, "a" > "b")
+        assert(false, "b" > "b")
+        assert(true, "c" > "b")
+        assert(-1, "a" <=> "b")
+        assert(0, "b" <=> "b")
+        assert(1, "b" <=> "a")
+        assert_error { "a" < 9 }
+        assert_error { "a" > 9 }
+        assert(7, "hello世界".size)
         "#;
         assert_script(program);
     }
@@ -759,6 +801,26 @@ mod test {
     fn string_bytes() {
         let program = r#"
         assert [97, 98, 99, 100], "abcd".bytes
+        assert [228, 184, 150, 231, 149, 140], "世界".bytes
+        res = []
+        "str".each_byte do |byte|
+        res << byte
+        end
+        assert [115, 116, 114], res
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_chars() {
+        let program = r#"
+        assert ["a", "b", "c", "d"], "abcd".chars
+        assert ["世", "界"], "世界".chars
+        res = []
+        "str".each_char do |byte|
+        res << byte
+        end
+        assert ["s", "t", "r"], res
         "#;
         assert_script(program);
     }
@@ -828,6 +890,7 @@ mod test {
         a = ""
         [49, 53, 55, 56].map{ |elem| a += elem.chr }
         assert 1578, a.to_i
+        assert 0, "k".to_i
         "#;
         assert_script(program);
     }

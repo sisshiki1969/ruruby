@@ -266,7 +266,17 @@ pub fn init(globals: &mut Globals) -> Value {
         let method = vm.expect_block(args.block)?;
         let arg = Args::new0();
         loop {
-            vm.eval_block(method, &arg)?;
+            let res = vm.eval_block(method, &arg);
+            match res {
+                Ok(_) => {}
+                Err(err) => match &err.kind {
+                    RubyErrorKind::RuntimeErr {
+                        kind: RuntimeErrKind::StopIteration,
+                        ..
+                    } => return Ok(Value::nil()),
+                    _ => return Err(err),
+                },
+            }
         }
     }
 
@@ -345,4 +355,38 @@ mod test {
         "#;
         assert_script(program);
     }
+    /*
+    #[test]
+    fn kernel_loop() {
+        let program = r#"
+      class Enum
+        def initialize(receiver, method = :each, *args)
+          @fiber = Fiber.new do
+            receiver.send(method, *args) do |x|
+              Fiber.yield(x)
+            end
+            raise StopIteration
+          end
+        end
+        def each
+          if block_given?
+            loop do
+              yield @fiber.resume
+            end
+          else
+            loop do
+              @fiber.resume
+            end
+          end
+        end
+      end
+
+      str = "Yet Another Ruby Hacker"
+      e = Enum.new(str, :scan, /\w+/)
+      res = []
+      e.each { |x| res << x }
+      assert(["Yet", "Another", "Ruby", "Hacker"], res)
+        "#;
+        assert_script(program);
+    }*/
 }

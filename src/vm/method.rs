@@ -30,6 +30,30 @@ impl MethodRef {
     pub fn is_none(&self) -> bool {
         self.0 == 0
     }
+
+    pub fn print(&self, globals: &Globals) {
+        let info = globals.get_method_info(*self);
+        let iseq = if let MethodInfo::RubyFunc { iseq } = info {
+            *iseq
+        } else {
+            panic!("CodeGen: Illegal methodref.")
+        };
+        println!("-----------------------------------------");
+        let name = IdentId::get_ident_name(iseq.name);
+        println!("{} {:?} opt_flag:{:?}", name, *self, iseq.opt_flag);
+        print!("local var: ");
+        for (k, v) in iseq.lvar.table() {
+            print!("{}:{} ", v.as_u32(), IdentId::get_ident_name(*k));
+        }
+        println!("");
+        println!("block: {:?}", iseq.lvar.block());
+        println!("-----------------------------------------");
+        /*let mut pc = 0;
+        while pc < iseq.iseq.len() {
+            println!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
+            pc += Inst::inst_size(iseq.iseq[pc]);
+        }*/
+    }
 }
 
 #[derive(Clone)]

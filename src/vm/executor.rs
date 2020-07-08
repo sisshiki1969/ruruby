@@ -2185,12 +2185,8 @@ impl VM {
         let method = context
             .block
             .ok_or_else(|| self.error_unimplemented("No block given."))?;
-        let res = self.eval_method(
-            method,
-            self.context().self_value,
-            Some(self.caller_context()),
-            &args,
-        )?;
+
+        let res = self.eval_block(method, &args)?;
         Ok(res)
     }
 
