@@ -24,7 +24,7 @@ pub fn repl_vm() {
     let mut lvar_collector = LvarCollector::new();
     let method = vm.globals.new_method();
     let info = ISeqInfo::default(method);
-    let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None);
+    let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None, None);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline =

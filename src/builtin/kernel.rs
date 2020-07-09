@@ -124,7 +124,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 1)?;
-        let context = vm.context();
+        let context = vm.current_context();
         let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
 
         let file_name = match args[0].as_string() {
@@ -159,7 +159,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     /// Built-in function "block_given?".
     fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
-        Ok(Value::bool(vm.context().block.is_some()))
+        Ok(Value::bool(vm.current_context().block.is_some()))
     }
 
     fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -231,7 +231,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 0)?;
-        let path = vm.context().iseq_ref.source_info.path.clone();
+        let path = vm.current_context().iseq_ref.source_info.path.clone();
         Ok(Value::string(
             &vm.globals,
             path.to_string_lossy().to_string(),
@@ -355,7 +355,7 @@ mod test {
         "#;
         assert_script(program);
     }
-    /*
+
     #[test]
     fn kernel_loop() {
         let program = r#"
@@ -388,5 +388,5 @@ mod test {
       assert(["Yet", "Another", "Ruby", "Hacker"], res)
         "#;
         assert_script(program);
-    }*/
+    }
 }

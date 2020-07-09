@@ -26,5 +26,5 @@ end
 str = "Yet Another Ruby Hacker"
 e = Enum.new(str, :scan, /\w+/)
 res = []
-e.each { |x| puts x }
+e.each { |x| res << x }
 p res

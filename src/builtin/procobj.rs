@@ -41,6 +41,7 @@ fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         pref.context.iseq_ref,
         args,
         pref.context.outer,
+        vm.latest_context(),
     )?;
     let res = vm.run_context(ContextRef::from_local(&context))?;
     Ok(res)

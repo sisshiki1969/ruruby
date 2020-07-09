@@ -127,20 +127,24 @@ impl VM {
         })
     }
 
-    pub fn context(&self) -> ContextRef {
+    pub fn current_context(&self) -> ContextRef {
         *self.exec_context.last().unwrap()
     }
 
-    pub fn caller_context(&self) -> ContextRef {
-        let len = self.exec_context.len();
-        if len < 2 {
-            unreachable!("caller_context(): exec_context.len is {}", len)
-        };
-        self.exec_context[len - 2]
+    pub fn latest_context(&self) -> Option<ContextRef> {
+        self.exec_context.last().cloned()
     }
-
+    /*
+        pub fn caller_context(&self) -> ContextRef {
+            let len = self.exec_context.len();
+            if len < 2 {
+                unreachable!("caller_context(): exec_context.len is {}", len)
+            };
+            self.exec_context[len - 2]
+        }
+    */
     pub fn source_info(&self) -> SourceInfoRef {
-        self.context().iseq_ref.source_info
+        self.current_context().iseq_ref.source_info
     }
 
     pub fn fiberstate_created(&mut self) {
@@ -319,7 +323,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let parser = Parser::new();
         //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
-        let ext_lvar = self.context().iseq_ref.lvar.clone();
+        let ext_lvar = self.current_context().iseq_ref.lvar.clone();
         let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
         //self.globals.ident_table = result.ident_table;
 
@@ -437,11 +441,11 @@ impl VM {
     }
 
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {
-        let m = self.context().iseq_ref.method;
+        let m = self.current_context().iseq_ref.method;
         let res = if RubyErrorKind::MethodReturn(m) == err.kind {
             // Catch MethodReturn if this context is the target.
             let result = self.stack_pop();
-            let prev_len = self.context().stack_len;
+            let prev_len = self.current_context().stack_len;
             self.exec_stack.truncate(prev_len);
             self.unwind_context(&mut err);
             #[cfg(feature = "trace")]
@@ -550,7 +554,7 @@ impl VM {
                         println!("<--- Ok({:?})", val);
                     }
                     if !self.exec_context.is_empty() {
-                        self.pc = self.context().pc;
+                        self.pc = self.current_context().pc;
                     };
                     return Ok(val);
                 }
@@ -580,7 +584,7 @@ impl VM {
                     };
                     self.context_pop().unwrap();
                     if !self.exec_context.is_empty() {
-                        self.pc = self.context().pc;
+                        self.pc = self.current_context().pc;
                     }
                     return res;
                 }
@@ -600,7 +604,7 @@ impl VM {
                     };
                     self.context_pop().unwrap();
                     if !self.exec_context.is_empty() {
-                        self.pc = self.context().pc;
+                        self.pc = self.current_context().pc;
                     }
                     return res;
                 }
@@ -855,20 +859,20 @@ impl VM {
                 Inst::SET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
                     let val = self.stack_pop();
-                    self.context()[id] = val;
+                    self.current_context()[id] = val;
                     self.pc += 5;
                 }
                 Inst::GET_LOCAL => {
                     let id = self.read_lvar_id(iseq, 1);
-                    let val = self.context()[id];
+                    let val = self.current_context()[id];
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::LVAR_ADDI => {
                     let id = self.read_lvar_id(iseq, 1);
                     let i = self.read32(iseq, 5) as i32;
-                    let val = self.context()[id];
-                    self.context()[id] = self.eval_addi(val, i)?;
+                    let val = self.current_context()[id];
+                    self.current_context()[id] = self.eval_addi(val, i)?;
                     self.pc += 9;
                 }
                 Inst::SET_DYNLOCAL => {
@@ -1404,7 +1408,7 @@ impl VM {
 
 impl VM {
     fn get_loc(&self) -> Loc {
-        let sourcemap = &self.context().iseq_ref.iseq_sourcemap;
+        let sourcemap = &self.current_context().iseq_ref.iseq_sourcemap;
         sourcemap
             .iter()
             .find(|x| x.0 == ISeqPos::from(self.pc))
@@ -2165,7 +2169,7 @@ impl VM {
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> VMResult {
-        let context = self.context();
+        let context = self.current_context();
         self.eval_method(methodref, context.self_value, Some(context), args)
     }
 
@@ -2173,7 +2177,7 @@ impl VM {
     fn eval_yield(&mut self, iseq: &ISeq) -> VMResult {
         let args_num = self.read32(iseq, 1) as usize;
         let args = self.pop_args_to_ary(args_num);
-        let mut context = self.context();
+        let mut context = self.current_context();
         loop {
             if let ISeqKind::Method(_) = context.kind {
                 break;
@@ -2186,7 +2190,12 @@ impl VM {
             .block
             .ok_or_else(|| self.error_unimplemented("No block given."))?;
 
-        let res = self.eval_block(method, &args)?;
+        let res = self.eval_method(
+            method,
+            self.current_context().self_value,
+            context.caller,
+            &args,
+        )?;
         Ok(res)
     }
 
@@ -2248,7 +2257,8 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let iseq = *iseq;
-                let context = Context::from_args(self, self_val, iseq, args, outer)?;
+                let context =
+                    Context::from_args(self, self_val, iseq, args, outer, self.latest_context())?;
                 let val = self.run_context(ContextRef::from_local(&context))?;
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(inst);
@@ -2404,7 +2414,7 @@ impl VM {
 
     /// Get local variable table.
     fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.context();
+        let mut context = self.current_context();
         for _ in 0..outer {
             context = context.outer.unwrap();
         }
@@ -2503,8 +2513,14 @@ impl VM {
     pub fn create_block_context(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
         self.move_outer_to_heap();
         let iseq = self.get_iseq(method)?;
-        let outer = self.context();
-        Ok(ContextRef::from(outer.self_value, None, iseq, Some(outer)))
+        let outer = self.current_context();
+        Ok(ContextRef::from(
+            outer.self_value,
+            None,
+            iseq,
+            Some(outer),
+            None,
+        ))
     }
 
     pub fn get_iseq(&self, method: MethodRef) -> Result<ISeqRef, RubyError> {

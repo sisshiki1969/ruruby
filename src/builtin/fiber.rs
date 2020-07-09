@@ -28,6 +28,64 @@ impl FiberInfo {
             tx,
         }
     }
+
+    pub fn resume(&mut self, vm: &mut VM) -> VMResult {
+        let mut context = self.context;
+        context.is_fiber = true;
+        let mut fiber_vm = self.vm;
+        match fiber_vm.fiberstate() {
+            FiberState::Dead => {
+                return Err(vm.error_fiber("Dead fiber called."));
+            }
+            FiberState::Created => {
+                fiber_vm.fiberstate_running();
+                #[cfg(feature = "perf")]
+                vm.perf.get_perf(Perf::INVALID);
+                #[cfg(feature = "trace")]
+                {
+                    println!("===> resume(spawn)");
+                }
+                let mut vm2 = fiber_vm;
+                thread::spawn(move || {
+                    vm2.set_allocator();
+                    let res = vm2.run_context(context);
+                    // If the fiber was finished, the fiber becomes DEAD.
+                    // Return a value on the stack top to the parent fiber.
+                    vm2.fiberstate_dead();
+                    #[cfg(feature = "trace")]
+                    {
+                        println!("<=== yield {:?} and terminate fiber.", res);
+                    }
+                    let res = match res {
+                        Err(err) => match err.kind {
+                            RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
+                            _ => Err(err),
+                        },
+                        res => res,
+                    };
+                    match &vm2.parent_fiber {
+                        Some(ParentFiberInfo { tx, .. }) => {
+                            tx.send(res).unwrap();
+                        }
+                        None => unreachable!(),
+                    };
+                });
+                let res = self.rec.recv().unwrap()?;
+                return Ok(res);
+            }
+            FiberState::Running => {
+                #[cfg(feature = "perf")]
+                vm.perf.get_perf(Perf::INVALID);
+                #[cfg(feature = "trace")]
+                {
+                    println!("===> resume");
+                }
+                self.tx.send(1).unwrap();
+                let res = self.rec.recv().unwrap()?;
+                return Ok(res);
+            }
+        }
+    }
 }
 
 impl GC for FiberInfo {
@@ -94,62 +152,8 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let fiber = vm.expect_fiber(self_val, "")?;
-    let mut context = fiber.context;
-    context.is_fiber = true;
-    let mut fiber_vm = fiber.vm;
-    match fiber_vm.fiberstate() {
-        FiberState::Dead => {
-            return Err(vm.error_fiber("Dead fiber called."));
-        }
-        FiberState::Created => {
-            fiber_vm.fiberstate_running();
-            #[cfg(feature = "perf")]
-            vm.perf.get_perf(Perf::INVALID);
-            #[cfg(feature = "trace")]
-            {
-                println!("===> resume(spawn)");
-            }
-            let mut vm2 = fiber_vm;
-            thread::spawn(move || {
-                vm2.set_allocator();
-                let res = vm2.run_context(context);
-                // If the fiber was finished, the fiber becomes DEAD.
-                // Return a value on the stack top to the parent fiber.
-                vm2.fiberstate_dead();
-                #[cfg(feature = "trace")]
-                {
-                    println!("<=== yield {:?} and terminate fiber.", res);
-                }
-                let res = match res {
-                    Err(err) => match err.kind {
-                        RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
-                        _ => Err(err),
-                    },
-                    res => res,
-                };
-                match &vm2.parent_fiber {
-                    Some(ParentFiberInfo { tx, .. }) => {
-                        tx.send(res).unwrap();
-                    }
-                    None => unreachable!(),
-                };
-            });
-            let res = fiber.rec.recv().unwrap()?;
-            return Ok(res);
-        }
-        FiberState::Running => {
-            #[cfg(feature = "perf")]
-            vm.perf.get_perf(Perf::INVALID);
-            #[cfg(feature = "trace")]
-            {
-                println!("===> resume");
-            }
-            fiber.tx.send(1).unwrap();
-            let res = fiber.rec.recv().unwrap()?;
-            return Ok(res);
-        }
-    }
+    let mut fiber = vm.expect_fiber(self_val, "")?;
+    fiber.resume(vm)
 }
 
 #[cfg(test)]

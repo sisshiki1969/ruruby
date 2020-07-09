@@ -12,7 +12,10 @@ pub struct Context {
     lvar_vec: Vec<Value>,
     pub iseq_ref: ISeqRef,
     pub pc: usize,
+    /// Context of outer scope.
     pub outer: Option<ContextRef>,
+    /// Context of caller.
+    pub caller: Option<ContextRef>,
     pub on_stack: bool,
     pub stack_len: usize,
     pub kind: ISeqKind,
@@ -87,6 +90,7 @@ impl Context {
         block: Option<MethodRef>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
+        caller: Option<ContextRef>,
     ) -> Self {
         let lvar_num = iseq_ref.lvars;
         let lvar_vec = if lvar_num > LVAR_ARRAY_SIZE {
@@ -103,6 +107,7 @@ impl Context {
             iseq_ref,
             pc: 0,
             outer,
+            caller,
             on_stack: true,
             stack_len: 0,
             kind: iseq_ref.kind.clone(),
@@ -115,11 +120,12 @@ impl Context {
         iseq: ISeqRef,
         args: &Args,
         outer: Option<ContextRef>,
+        caller: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
-            return Context::from_args_opt(vm, self_value, iseq, args, outer);
+            return Context::from_args_opt(vm, self_value, iseq, args, outer, caller);
         }
-        let mut context = Context::new(self_value, args.block, iseq, outer);
+        let mut context = Context::new(self_value, args.block, iseq, outer, caller);
         let params = &iseq.params;
         let kw = if params.keyword_params.is_empty() {
             args.kw_arg
@@ -169,8 +175,9 @@ impl Context {
         iseq: ISeqRef,
         args: &Args,
         outer: Option<ContextRef>,
+        caller: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
-        let mut context = Context::new(self_value, args.block, iseq, outer);
+        let mut context = Context::new(self_value, args.block, iseq, outer, caller);
         let req_len = iseq.params.req_params;
         vm.check_args_num(args.len(), req_len)?;
 
@@ -272,8 +279,9 @@ impl ContextRef {
         block: Option<MethodRef>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
+        caller: Option<ContextRef>,
     ) -> Self {
-        let mut context = Context::new(self_value, block, iseq_ref, outer);
+        let mut context = Context::new(self_value, block, iseq_ref, outer, caller);
         context.on_stack = false;
         ContextRef::new(context)
     }

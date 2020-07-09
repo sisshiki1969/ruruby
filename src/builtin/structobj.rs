@@ -56,7 +56,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => {
             vm.class_push(val);
             let arg = Args::new1(val);
-            vm.eval_method(method, val, Some(vm.context()), &arg)?;
+            vm.eval_method(method, val, Some(vm.current_context()), &arg)?;
             vm.class_pop();
         }
         None => {}
@@ -66,12 +66,8 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class_object(&vm.globals);
-    let name = class
-    .get_var(IdentId::get_ident_id("_members"))
-    .unwrap();
-    let members = name
-        .as_array()
-        .unwrap();
+    let name = class.get_var(IdentId::get_ident_id("_members")).unwrap();
+    let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
         return Err(vm.error_argument("Struct size differs."));
     };
@@ -85,10 +81,9 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut name = self_val
-    .get_class_object(&vm.globals)
-    .get_var(IdentId::get_ident_id("_members"));
-    let members = match name
-    {
+        .get_class_object(&vm.globals)
+        .get_var(IdentId::get_ident_id("_members"));
+    let members = match name {
         Some(ref mut v) => match v.as_array() {
             Some(aref) => aref,
             None => return Err(vm.error_internal("Illegal _members value.")),
