@@ -95,7 +95,7 @@ fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
         None => match name.as_string() {
-            Some(s) => IdentId::get_ident_id(s),
+            Some(s) => IdentId::get_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };
@@ -110,7 +110,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
         None => match name.as_string() {
-            Some(s) => IdentId::get_ident_id(s),
+            Some(s) => IdentId::get_id(s),
             None => return Err(vm.error_type("1st arg must be Symbol or String.")),
         },
     };

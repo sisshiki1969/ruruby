@@ -8,8 +8,7 @@ pub struct EnumInfo {
 }
 
 impl EnumInfo {
-    pub fn new(method: IdentId, receiver: Value, mut args: Args) -> Self {
-        args.block = Some(MethodRef::from(0));
+    pub fn new(method: IdentId, receiver: Value, args: Args) -> Self {
         EnumInfo {
             method,
             receiver,
@@ -32,7 +31,7 @@ impl GC for EnumInfo {
 }
 
 pub fn init_enumerator(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("Enumerator");
+    let id = IdentId::get_id("Enumerator");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "map", map);
@@ -48,8 +47,11 @@ pub fn init_enumerator(globals: &mut Globals) -> Value {
 
 fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_min(args.len(), 1)?;
+    if args.block.is_some() {
+        return Err(vm.error_argument("Block is not allowed."));
+    };
     let (receiver, method, new_args) = if args.len() == 1 {
-        let method = IdentId::get_ident_id("each");
+        let method = IdentId::get_id("each");
         let new_args = Args::new0();
         (self_val, method, new_args)
     } else {
@@ -64,7 +66,7 @@ fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         new_args.block = None;
         (args[0], method, new_args)
     };
-    let val = Value::enumerator(&vm.globals, method, receiver, new_args);
+    let val = Value::enumerator(vm, method, receiver, new_args);
     Ok(val)
 }
 
@@ -75,19 +77,19 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let arg_string = {
         match eref.args.len() {
             0 => "".to_string(),
-            1 => vm.val_inspect(eref.args[0]),
+            1 => format!("{:?}", eref.args[0]),
             _ => {
-                let mut s = vm.val_inspect(eref.args[0]);
+                let mut s = format!("{:?}", eref.args[0]);
                 for i in 1..eref.args.len() {
-                    s = format!("{},{}", s, vm.val_inspect(eref.args[i]));
+                    s = format!("{},{:?}", s, eref.args[i]);
                 }
                 s
             }
         }
     };
     let inspect = format!(
-        "#<Enumerator: {}:{}({})>",
-        vm.val_inspect(eref.receiver),
+        "#<Enumerator: {:?}:{}({})>",
+        eref.receiver,
         IdentId::get_ident_name(eref.method),
         arg_string
     );
@@ -123,8 +125,8 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = IdentId::get_ident_id("map");
-            let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
+            let id = IdentId::get_id("map");
+            let e = Value::enumerator(vm, id, self_val, args.clone());
             return Ok(e);
         }
     };
@@ -150,8 +152,8 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = IdentId::get_ident_id("with_index");
-            let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
+            let id = IdentId::get_id("with_index");
+            let e = Value::enumerator(vm, id, self_val, args.clone());
             return Ok(e);
         }
     };

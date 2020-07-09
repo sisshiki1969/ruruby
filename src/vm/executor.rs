@@ -175,6 +175,14 @@ impl VM {
         self.exec_stack.last().unwrap().clone()
     }
 
+    pub fn stack_len(&self) -> usize {
+        self.exec_stack.len()
+    }
+
+    pub fn set_stack_len(&mut self, len: usize) {
+        self.exec_stack.truncate(len);
+    }
+
     /// Push an object to the temporary area.
     pub fn temp_push(&mut self, v: Value) {
         self.temp_stack.push(v);
@@ -1865,7 +1873,7 @@ impl VM {
                 _ => return Ok(Value::nil()),
             },
             _ => {
-                let id = IdentId::get_ident_id("<=>");
+                let id = IdentId::get_id("<=>");
                 return self.fallback_for_binop(id, lhs, rhs);
             }
         };
@@ -1910,7 +1918,7 @@ impl VM {
                     }
                 }
                 ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
-                _ => self.fallback(IdentId::get_ident_id("[]"), receiver, &args)?,
+                _ => self.fallback(IdentId::get_id("[]"), receiver, &args)?,
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
@@ -2084,7 +2092,7 @@ impl VM {
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => {
-                    let id = IdentId::get_ident_id("inspect");
+                    let id = IdentId::get_id("inspect");
                     self.send0(val, id)
                         .unwrap()
                         .as_string()
@@ -2207,17 +2215,6 @@ impl VM {
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
-        if methodref.is_none() {
-            let res = match args.len() {
-                0 => Value::nil(),
-                1 => args[0],
-                _ => {
-                    let ary = args.to_vec();
-                    Value::array_from(&self.globals, ary)
-                }
-            };
-            return Ok(res);
-        };
         let info = self.globals.get_method_info(methodref);
         #[allow(unused_variables, unused_mut)]
         let mut inst: u8;
@@ -2259,10 +2256,10 @@ impl VM {
                 let iseq = *iseq;
                 let context =
                     Context::from_args(self, self_val, iseq, args, outer, self.latest_context())?;
-                let val = self.run_context(ContextRef::from_local(&context))?;
+                let res = self.run_context(ContextRef::from_local(&context));
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(inst);
-                val
+                res?
             }
         };
         Ok(val)
@@ -2568,5 +2565,42 @@ impl VM {
                 Err(self.error_internal(err_str))
             }
         }
+    }
+
+    pub fn exec_file(&mut self, file_name: impl Into<String>) {
+        use crate::loader::*;
+        let file_name = file_name.into();
+        let (absolute_path, program) = match crate::loader::load_file(file_name.clone()) {
+            Ok((path, program)) => (path, program),
+            Err(err) => {
+                match err {
+                    LoadError::NotFound(msg) => eprintln!("LoadError: {}\n{}", &file_name, msg),
+                    LoadError::CouldntOpen(msg) => eprintln!("LoadError: {}\n{}", &file_name, msg),
+                };
+                return;
+            }
+        };
+
+        let root_path = absolute_path.clone();
+        #[cfg(feature = "verbose")]
+        eprintln!("load file: {:?}", root_path);
+        self.root_path.push(root_path);
+        let mut vm2 = Ref::from_ref(&self).clone();
+        match vm2.run(absolute_path, &program, None) {
+            Ok(_) => {
+                #[cfg(feature = "perf")]
+                self.globals.print_perf();
+                #[cfg(feature = "gc-debug")]
+                self.globals.print_mark();
+            }
+            Err(err) => {
+                err.show_err();
+                for i in 0..err.info.len() {
+                    eprint!("{}:", i);
+                    err.show_loc(i);
+                }
+            }
+        };
+        self.root_path.pop();
     }
 }

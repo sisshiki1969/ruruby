@@ -784,8 +784,24 @@ impl Value {
         RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
 
-    pub fn enumerator(globals: &Globals, method: IdentId, receiver: Value, args: Args) -> Self {
-        RValue::new_enumerator(globals, method, receiver, args).pack()
+    pub fn enumerator(vm: &mut VM, method: IdentId, receiver: Value, args: Args) -> Self {
+        //RValue::new_enumerator(globals, method, receiver, args).pack()
+        let class = vm
+            .globals
+            .builtins
+            .object
+            .as_mut_rvalue()
+            .unwrap()
+            .get_var(IdentId::get_id("Enumerator"))
+            .unwrap();
+        let methodref = vm.get_method(class, IdentId::get_id("new")).unwrap();
+        let mut args1 = Args::new(args.len() + 2);
+        args1[0] = receiver;
+        args1[1] = Value::symbol(method);
+        for i in 0..args.len() {
+            args1[i + 2] = args[i];
+        }
+        vm.eval_send(methodref, class, &args1).unwrap()
     }
 }
 

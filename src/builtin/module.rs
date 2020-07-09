@@ -154,7 +154,7 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
 
 fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
     let s = IdentId::get_ident_name(id);
-    IdentId::get_ident_id(format!("@{}", s))
+    IdentId::get_id(format!("@{}", s))
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {

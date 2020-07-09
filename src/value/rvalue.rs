@@ -345,7 +345,7 @@ impl RValue {
         }
     }
 
-    pub fn new_enumerator(
+    /*pub fn new_enumerator(
         globals: &Globals,
         method: IdentId,
         receiver: Value,
@@ -358,7 +358,7 @@ impl RValue {
             var_table: None,
             kind: ObjKind::Enumerator(Box::new(enum_info)),
         }
-    }
+    }*/
 }
 
 pub type ObjectRef = Ref<RValue>;

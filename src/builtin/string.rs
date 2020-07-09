@@ -124,7 +124,7 @@ impl std::hash::Hash for RString {
 }
 
 pub fn init_string(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("String");
+    let id = IdentId::get_id("String");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "to_s", to_s);
     globals.add_builtin_instance_method(class, "inspect", inspect);
@@ -413,7 +413,7 @@ fn start_with(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn to_sym(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let string = self_val.expect_string(vm, "Receiver")?;
-    let id = IdentId::get_ident_id(string);
+    let id = IdentId::get_id(string);
     Ok(Value::symbol(id))
 }
 
@@ -524,17 +524,6 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
     match args.block {
-        Some(block) if block == MethodRef::from(0) => {
-            let mut res = vec![];
-            vm.temp_push_vec(&mut vec.clone());
-            for arg in vec {
-                let block_args = Args::new1(arg);
-                let v = vm.eval_block(block, &block_args)?;
-                vm.temp_push(v);
-                res.push(v);
-            }
-            Ok(Value::array_from(&vm.globals, res))
-        }
         Some(block) => {
             vm.temp_push_vec(&mut vec.clone());
             for arg in vec {
