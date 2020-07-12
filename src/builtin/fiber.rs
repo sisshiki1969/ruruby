@@ -105,9 +105,8 @@ impl FiberInfo {
                 #[cfg(feature = "perf")]
                 vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
-                {
-                    println!("===> resume");
-                }
+                println!("===> resume");
+
                 self.tx.send(1).unwrap();
                 // Wait for fiber.resume.
                 let res = self.rec.recv().unwrap()?;

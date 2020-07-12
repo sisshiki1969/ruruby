@@ -277,7 +277,7 @@ impl GlobalMethodTable {
         }
     }
 
-    /// This BuiltinFunc is called when a enumerator create a fiber.
+    /// This BuiltinFunc is called in the fiber thread of a enumerator.
     /// `vm`: VM of created fiber.
     pub fn enum_fiber(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         // args[0]: receiver
@@ -315,10 +315,9 @@ impl GlobalMethodTable {
         ));
         vm.context_push(context);
         vm.eval_method(method, args[0], None, &block_args)?;
-        vm.fiber_send_to_parent(Err(vm.error_stop_iteration("msg")));
+        let res = Err(vm.error_stop_iteration("msg"));
         vm.context_pop();
-
-        Ok(Value::nil())
+        res
     }
 
     fn enum_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {

@@ -2400,7 +2400,7 @@ impl VM {
                 tx.send(val.clone()).unwrap();
                 rx.recv().unwrap();
             }
-            None => return,
+            None => unreachable!("Can not yield from main fiber."),
         };
         #[cfg(feature = "trace")]
         {
