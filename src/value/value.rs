@@ -608,9 +608,9 @@ impl Value {
         }
     }
 
-    pub fn as_enumerator(&self) -> Option<&EnumInfo> {
-        match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
+    pub fn as_enumerator(&mut self) -> Option<&mut EnumInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
                 ObjKind::Enumerator(eref) => Some(eref),
                 _ => None,
             },
@@ -618,7 +618,11 @@ impl Value {
         }
     }
 
-    pub fn expect_enumerator(&self, vm: &mut VM, error_msg: &str) -> Result<&EnumInfo, RubyError> {
+    pub fn expect_enumerator(
+        &mut self,
+        vm: &mut VM,
+        error_msg: &str,
+    ) -> Result<&mut EnumInfo, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
             None => Err(vm.error_argument(error_msg)),
@@ -799,7 +803,7 @@ impl Value {
         method: IdentId,
         receiver: Value,
         args: Args,
-        fiber: Value,
+        fiber: FiberInfo,
     ) -> Self {
         RValue::new_enumerator(globals, method, receiver, args, fiber).pack()
     }

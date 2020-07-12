@@ -1,6 +1,7 @@
 #[cfg(feature = "perf")]
 use crate::vm::perf::Perf;
 use crate::*;
+use std::clone::Clone;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 
@@ -10,6 +11,25 @@ pub struct FiberInfo {
     inner: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<usize>,
+}
+
+impl Clone for FiberInfo {
+    fn clone(&self) -> Self {
+        let vm = self.vm;
+        let parent_vm = match &vm.parent_fiber {
+            Some(info) => info.parent,
+            None => unreachable!(),
+        };
+        let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
+        let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
+        let fiber_vm = VMRef::new(parent_vm.create_fiber(tx0, rx1));
+        FiberInfo {
+            vm: fiber_vm,
+            inner: self.inner.clone(),
+            rec: rx0,
+            tx: tx1,
+        }
+    }
 }
 
 #[derive(Clone)]

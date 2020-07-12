@@ -41,7 +41,7 @@ pub enum FiberState {
 
 #[derive(Debug)]
 pub struct ParentFiberInfo {
-    parent: VMRef,
+    pub parent: VMRef,
     pub tx: SyncSender<VMResult>,
     rx: Receiver<usize>,
 }
@@ -435,6 +435,14 @@ impl VM {
             #[cfg(feature = "perf")]
             self.perf.get_perf(Perf::GC);
             self.globals.gc();
+        };
+    }
+
+    fn unwind_context(&mut self, err: &mut RubyError) {
+        self.context_pop().unwrap();
+        if let Some(context) = self.exec_context.last() {
+            self.pc = context.pc;
+            err.info.push((self.source_info(), self.get_loc()));
         };
     }
 
@@ -2385,14 +2393,6 @@ impl VM {
 }
 
 impl VM {
-    fn unwind_context(&mut self, err: &mut RubyError) {
-        self.context_pop().unwrap();
-        if let Some(context) = self.exec_context.last() {
-            self.pc = context.pc;
-            err.info.push((self.source_info(), self.get_loc()));
-        };
-    }
-
     /// Yield `return_val` to parent fiber. (execute Fiber.yield)
     pub fn fiber_yield(&mut self, return_val: Value) -> VMResult {
         if self.parent_fiber.is_none() {
@@ -2513,7 +2513,7 @@ impl VM {
         for (i, arg) in args.iter().enumerate() {
             fiber_args[i + 2] = *arg;
         }
-        let fiber = Value::fiber_internal(&self.globals, fiber_vm, fiber_args, rx0, tx1);
+        let fiber = FiberInfo::new_internal(fiber_vm, fiber_args, rx0, tx1);
 
         Ok(Value::enumerator(
             &self.globals,

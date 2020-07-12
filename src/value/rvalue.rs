@@ -365,7 +365,7 @@ impl RValue {
         method: IdentId,
         receiver: Value,
         args: Args,
-        fiber: Value,
+        fiber: FiberInfo,
     ) -> Self {
         let enum_info = EnumInfo::new(method, receiver, args, fiber);
         RValue {

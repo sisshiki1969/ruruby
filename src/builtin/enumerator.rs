@@ -1,15 +1,21 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct EnumInfo {
     method: IdentId,
     receiver: Value,
     args: Args,
-    fiber: Value,
+    fiber: FiberInfo,
+}
+
+impl PartialEq for EnumInfo {
+    fn eq(&self, other: &Self) -> bool {
+        &self == &other
+    }
 }
 
 impl EnumInfo {
-    pub fn new(method: IdentId, receiver: Value, args: Args, fiber: Value) -> Self {
+    pub fn new(method: IdentId, receiver: Value, args: Args, fiber: FiberInfo) -> Self {
         EnumInfo {
             method,
             receiver,
@@ -19,8 +25,7 @@ impl EnumInfo {
     }
 
     pub fn next(&mut self, vm: &mut VM) -> VMResult {
-        let mut fiber = self.fiber.as_fiber().unwrap();
-        fiber.resume(vm)
+        self.fiber.resume(vm)
     }
 }
 
@@ -102,7 +107,7 @@ pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
     let arg_string = {
         match eref.args.len() {
@@ -126,10 +131,10 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(&vm.globals, inspect))
 }
 
-fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
-    let mut fref = eref.fiber.as_fiber().unwrap();
+    let fref = &mut eref.fiber;
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -155,10 +160,9 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(eref.receiver)
 }
 
-fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
-    let mut fref = eref.fiber.as_fiber().unwrap();
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -171,7 +175,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut args = Args::new(1);
     let mut ary = vec![];
     loop {
-        let val = match fref.resume(vm) {
+        let val = match eref.fiber.resume(vm) {
             Ok(val) => val,
             Err(err) => {
                 if err.is_stop_iteration() {
@@ -189,10 +193,10 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
-fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
-    let mut fref = eref.fiber.as_fiber().unwrap();
+    //let fref = &mut eref.fiber;
     let block = match args.block {
         Some(method) => method,
         None => {
@@ -207,7 +211,7 @@ fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut c = 0;
     let mut ary = vec![];
     loop {
-        let val = match fref.resume(vm) {
+        let val = match eref.fiber.resume(vm) {
             Ok(val) => val,
             Err(err) => {
                 if err.is_stop_iteration() {
