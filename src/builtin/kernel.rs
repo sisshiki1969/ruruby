@@ -94,14 +94,10 @@ pub fn init(globals: &mut Globals) -> Value {
                 "Assertion error: No error occured. returned {:?}",
                 val
             ))),
-            Err(err) if err.kind == RubyErrorKind::BlockReturn => {
-                vm.stack_pop();
-                println!("Assert_error OK:");
-                err.show_err();
-                err.show_loc(0);
-                Ok(Value::nil())
-            }
             Err(err) => {
+                if err.is_block_return() || err.is_method_return() {
+                    vm.stack_pop();
+                }
                 println!("Assert_error OK:");
                 err.show_err();
                 err.show_loc(0);
@@ -266,9 +262,7 @@ pub fn init(globals: &mut Globals) -> Value {
         let method = vm.expect_block(args.block)?;
         let arg = Args::new0();
         loop {
-            let len = vm.stack_len();
             let res = vm.eval_block(method, &arg);
-            //assert_eq!(len, vm.stack_len());
             match res {
                 Ok(_) => {}
                 Err(err) => match &err.kind {
@@ -276,7 +270,6 @@ pub fn init(globals: &mut Globals) -> Value {
                         kind: RuntimeErrKind::StopIteration,
                         ..
                     } => {
-                        vm.set_stack_len(len);
                         return Ok(Value::nil());
                     }
 

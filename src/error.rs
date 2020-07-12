@@ -49,6 +49,30 @@ impl RubyError {
             level,
         }
     }
+
+    pub fn is_block_return(&self) -> bool {
+        match &self.kind {
+            RubyErrorKind::BlockReturn => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_method_return(&self) -> bool {
+        match &self.kind {
+            RubyErrorKind::MethodReturn(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_stop_iteration(&self) -> bool {
+        match &self.kind {
+            RubyErrorKind::RuntimeErr { kind, .. } => match kind {
+                RuntimeErrKind::StopIteration => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
 }
 
 impl RubyError {
@@ -65,7 +89,7 @@ impl RubyError {
     }
 
     pub fn show_file_name(&self, pos: usize) {
-        self.info[pos].0.show_file_name()
+        self.info[pos].0.show_file_name();
     }
 
     pub fn show_loc(&self, pos: usize) {

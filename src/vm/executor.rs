@@ -100,7 +100,7 @@ impl VM {
         vm
     }
 
-    pub fn dup_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+    pub fn create_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
         let vm = VM {
             globals: self.globals,
             root_path: self.root_path.clone(),
@@ -111,7 +111,6 @@ impl VM {
             exec_stack: vec![],
             exception: false,
             pc: 0,
-            //gc_counter: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             #[cfg(feature = "perf")]
             perf: Perf::new(),
@@ -134,15 +133,7 @@ impl VM {
     pub fn latest_context(&self) -> Option<ContextRef> {
         self.exec_context.last().cloned()
     }
-    /*
-        pub fn caller_context(&self) -> ContextRef {
-            let len = self.exec_context.len();
-            if len < 2 {
-                unreachable!("caller_context(): exec_context.len is {}", len)
-            };
-            self.exec_context[len - 2]
-        }
-    */
+
     pub fn source_info(&self) -> SourceInfoRef {
         self.current_context().iseq_ref.source_info
     }
@@ -244,16 +235,6 @@ impl VM {
 
     pub fn module_function(&mut self, flag: bool) {
         self.class_context.last_mut().unwrap().1.module_function = flag;
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn get_pc(&mut self) -> usize {
-        self.pc
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn set_pc(&mut self, pc: usize) {
-        self.pc = pc;
     }
 
     pub fn jump_pc(&mut self, inst_offset: i64, disp: i64) {
@@ -449,40 +430,68 @@ impl VM {
     }
 
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {
-        let m = self.current_context().iseq_ref.method;
-        let res = if RubyErrorKind::MethodReturn(m) == err.kind {
-            // Catch MethodReturn if this context is the target.
-            let result = self.stack_pop();
-            let prev_len = self.current_context().stack_len;
-            self.exec_stack.truncate(prev_len);
-            self.unwind_context(&mut err);
-            #[cfg(feature = "trace")]
-            {
-                println!("<--- METHOD_RETURN Ok({:?})", result);
+        let res = match err.kind {
+            RubyErrorKind::MethodReturn(method) => {
+                // Catch MethodReturn if this context is the target.
+                if method == self.current_context().iseq_ref.method {
+                    let result = self.stack_pop();
+                    let prev_len = self.current_context().stack_len;
+                    self.exec_stack.truncate(prev_len);
+                    self.unwind_context(&mut err);
+                    #[cfg(feature = "trace")]
+                    println!("<--- METHOD_RETURN Ok({:?})", result);
+                    Ok(result)
+                } else {
+                    self.unwind_context(&mut err);
+                    #[cfg(feature = "trace")]
+                    println!("<--- METHOD_RETURN({:?})", method);
+                    Err(err)
+                }
             }
-            Ok(result)
-        } else {
-            //self.dump_context();
-            self.unwind_context(&mut err);
-            #[cfg(feature = "trace")]
-            {
+            _ => {
+                //self.dump_context();
+                match self.latest_context() {
+                    Some(context) => {
+                        let prev_len = context.stack_len;
+                        self.exec_stack.truncate(prev_len);
+                        self.unwind_context(&mut err);
+                    }
+                    None => {}
+                }
+                #[cfg(feature = "trace")]
                 println!("<--- Err({:?})", err.kind);
+                Err(err)
             }
-            Err(err)
         };
-        self.fiberstate_dead();
-        self.fiber_send_to_parent(res.clone());
         return res;
     }
 
     /// Main routine for VM execution.
-    pub fn run_context(&mut self, context: ContextRef) -> VMResult {
+    pub fn run_context(&mut self, mut context: ContextRef) -> VMResult {
+        #[cfg(feature = "trace")]
+        {
+            if self.parent_fiber.is_some() {
+                println!("===> {:?} {:?}", context.iseq_ref.method, context.kind);
+            } else {
+                println!("---> {:?} {:?}", context.iseq_ref.method, context.kind);
+            }
+        }
+        if let Some(prev_context) = self.exec_context.last_mut() {
+            prev_context.pc = self.pc;
+            context.stack_len = self.exec_stack.len();
+        };
+        self.context_push(context);
+        self.pc = context.pc;
+        let iseq = &context.iseq_ref.iseq;
+        let self_oref = context.self_value.rvalue_mut();
+        self.gc();
+
         /// Evaluate expr, and push return value to stack.
         macro_rules! try_push {
             ($eval:expr) => {
                 match $eval {
                     Ok(val) => self.stack_push(val),
-                    Err(err) if err.kind == RubyErrorKind::BlockReturn => {}
+                    Err(err) if err.is_block_return() => {}
                     Err(err) => {
                         return self.handle_error(err);
                     }
@@ -495,7 +504,7 @@ impl VM {
             ($eval:expr) => {{
                 match $eval {
                     Ok(_) => {}
-                    Err(err) if err.kind == RubyErrorKind::BlockReturn => {
+                    Err(err) if err.is_block_return() => {
                         self.stack_pop();
                     }
                     Err(err) => {
@@ -510,31 +519,13 @@ impl VM {
             ($eval:expr) => {{
                 match $eval {
                     Ok(val) => val,
-                    Err(err) if err.kind == RubyErrorKind::BlockReturn => self.stack_pop(),
+                    Err(err) if err.is_block_return() => self.stack_pop(),
                     Err(err) => {
                         return self.handle_error(err);
                     }
                 }
             }};
         }
-
-        #[cfg(feature = "trace")]
-        {
-            if context.is_fiber {
-                println!("===> {:?} {:?}", context.iseq_ref.method, context.kind);
-            } else {
-                println!("---> {:?} {:?}", context.iseq_ref.method, context.kind);
-            }
-        }
-        if let Some(prev_context) = self.exec_context.last_mut() {
-            prev_context.pc = self.pc;
-            prev_context.stack_len = self.exec_stack.len();
-        };
-        self.context_push(context);
-        self.pc = context.pc;
-        let iseq = &context.iseq_ref.iseq;
-        let self_oref = context.self_value.rvalue_mut();
-        self.gc();
 
         loop {
             #[cfg(feature = "perf")]
@@ -556,11 +547,11 @@ impl VM {
                     // - the end of the method or block.
                     // - `next` in block AND outer of loops.
                     let val = self.stack_pop();
+                    #[cfg(debug_assertions)]
+                    assert_eq!(self.current_context().stack_len, self.exec_stack.len());
                     let _context = self.context_pop().unwrap();
                     #[cfg(feature = "trace")]
-                    {
-                        println!("<--- Ok({:?})", val);
-                    }
+                    println!("<--- Ok({:?})", val);
                     if !self.exec_context.is_empty() {
                         self.pc = self.current_context().pc;
                     };
@@ -575,18 +566,18 @@ impl VM {
                             // if in block or eval context, exit with Err(BLOCK_RETURN).
                             let err = self.error_block_return();
                             #[cfg(feature = "trace")]
-                            {
-                                println!("<--- Err({:?})", err.kind);
-                            }
+                            println!("<--- Err({:?})", err.kind);
+                            #[cfg(debug_assertions)]
+                            assert_eq!(self.current_context().stack_len + 1, self.exec_stack.len());
                             Err(err)
                         }
                         ISeqKind::Method(_) => {
                             // if in method context, exit with Ok(rerurn_value).
                             let val = self.stack_pop();
                             #[cfg(feature = "trace")]
-                            {
-                                println!("<--- Ok({:?})", val);
-                            }
+                            println!("<--- Ok({:?})", val);
+                            #[cfg(debug_assertions)]
+                            assert_eq!(self.current_context().stack_len, self.exec_stack.len());
                             Ok(val)
                         }
                     };
@@ -603,9 +594,9 @@ impl VM {
                         // exit with Err(METHOD_RETURN).
                         let err = self.error_method_return(method);
                         #[cfg(feature = "trace")]
-                        {
-                            println!("<--- Err({:?})", err.kind);
-                        }
+                        println!("<--- Err({:?})", err.kind);
+                        #[cfg(debug_assertions)]
+                        assert_eq!(self.current_context().stack_len + 1, self.exec_stack.len());
                         Err(err)
                     } else {
                         unreachable!()
@@ -1107,7 +1098,9 @@ impl VM {
                     self.pc += 11;
                 }
                 Inst::YIELD => {
-                    try_push!(self.eval_yield(iseq));
+                    let args_num = self.read32(iseq, 1) as usize;
+                    let args = self.pop_args_to_ary(args_num);
+                    try_push!(self.eval_yield(&args));
                     self.pc += 5;
                 }
                 Inst::DEF_CLASS => {
@@ -2182,9 +2175,7 @@ impl VM {
     }
 
     /// Evaluate method with self_val of current context, caller context as outer context, and given `args`.
-    fn eval_yield(&mut self, iseq: &ISeq) -> VMResult {
-        let args_num = self.read32(iseq, 1) as usize;
-        let args = self.pop_args_to_ary(args_num);
+    pub fn eval_yield(&mut self, args: &Args) -> VMResult {
         let mut context = self.current_context();
         loop {
             if let ISeqKind::Method(_) = context.kind {
@@ -2392,6 +2383,17 @@ impl VM {
         };
     }
 
+    /// Yield `return_val` to parent fiber. (execute Fiber.yield)
+    pub fn fiber_yield(&mut self, return_val: Value) -> VMResult {
+        if self.parent_fiber.is_none() {
+            return Err(self.error_fiber("Can not yield from main fiber."));
+        };
+        #[cfg(feature = "perf")]
+        self.perf.get_perf(Perf::INVALID);
+        self.fiber_send_to_parent(Ok(return_val));
+        Ok(Value::nil())
+    }
+
     pub fn fiber_send_to_parent(&self, val: VMResult) {
         match &self.parent_fiber {
             Some(ParentFiberInfo { tx, rx, .. }) => {
@@ -2484,6 +2486,32 @@ impl VM {
         self.move_outer_to_heap();
         let context = self.create_block_context(method)?;
         Ok(Value::procobj(&self.globals, context))
+    }
+
+    pub fn create_enumerator(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+        args: Args,
+    ) -> VMResult {
+        let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
+        let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
+        let fiber_vm = VMRef::new(self.create_fiber(tx0, rx1));
+        let mut fiber_args = Args::new(args.len() + 2);
+        fiber_args[0] = receiver;
+        fiber_args[1] = Value::symbol(method_id);
+        for (i, arg) in args.iter().enumerate() {
+            fiber_args[i + 2] = *arg;
+        }
+        let fiber = Value::fiber_internal(&self.globals, fiber_vm, fiber_args, rx0, tx1);
+
+        Ok(Value::enumerator(
+            &self.globals,
+            method_id,
+            receiver,
+            args,
+            fiber,
+        ))
     }
 
     /// Move outer execution contexts on the stack to the heap.

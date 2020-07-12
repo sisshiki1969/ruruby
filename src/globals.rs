@@ -43,7 +43,7 @@ pub struct BuiltinClass {
     pub string: Value,
     pub fiber: Value,
     pub object: Value,
-    //pub enumerator: Value,
+    pub enumerator: Value,
 }
 
 impl BuiltinClass {
@@ -62,7 +62,7 @@ impl BuiltinClass {
             regexp: nil,
             string: nil,
             fiber: nil,
-            //enumerator: nil,
+            enumerator: nil,
             object,
         }
     }
@@ -169,7 +169,7 @@ impl Globals {
         globals.builtins.hash = hash::init_hash(&mut globals);
         globals.builtins.regexp = regexp::init_regexp(&mut globals);
         globals.builtins.fiber = fiber::init_fiber(&mut globals);
-        //globals.builtins.enumerator = enumerator::init_enumerator(&mut globals);
+        globals.builtins.enumerator = enumerator::init_enumerator(&mut globals);
         object::init(&mut globals);
         let kernel = kernel::init(&mut globals);
         object_class.include.push(kernel);
@@ -205,7 +205,7 @@ impl Globals {
         set_builtin_class!("Method", method);
         set_builtin_class!("Regexp", regexp);
         set_builtin_class!("Fiber", fiber);
-        //set_builtin_class!("Enumerator", enumerator);
+        set_builtin_class!("Enumerator", enumerator);
 
         set_class!("Kernel", kernel);
         set_class!("Math", math::init_math(&mut globals));
@@ -218,8 +218,8 @@ impl Globals {
         set_class!("StopIteration", Value::class(&globals, class));
         set_class!("RuntimeError", errorobj::init_error(&mut globals));
 
-        let mut vm = Ref::from_ref(&globals).new_vm();
-        vm.exec_file("test.rb");
+        //let vm = Ref::from_ref(&globals).new_vm();
+        //vm.exec_file("test.rb");
 
         globals
     }

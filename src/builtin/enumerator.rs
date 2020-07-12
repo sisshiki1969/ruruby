@@ -5,27 +5,29 @@ pub struct EnumInfo {
     method: IdentId,
     receiver: Value,
     args: Args,
+    fiber: Value,
 }
 
 impl EnumInfo {
-    pub fn new(method: IdentId, receiver: Value, args: Args) -> Self {
+    pub fn new(method: IdentId, receiver: Value, args: Args, fiber: Value) -> Self {
         EnumInfo {
             method,
             receiver,
             args,
+            fiber,
         }
     }
 
-    pub fn eval(&self, vm: &mut VM) -> VMResult {
-        let receiver = self.receiver;
-        let method = vm.get_method(receiver, self.method)?;
-        vm.eval_send(method, receiver, &self.args)
+    pub fn next(&mut self, vm: &mut VM) -> VMResult {
+        let mut fiber = self.fiber.as_fiber().unwrap();
+        fiber.resume(vm)
     }
 }
 
 impl GC for EnumInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.receiver.mark(alloc);
+        self.fiber.mark(alloc);
         self.args.iter().for_each(|v| v.mark(alloc));
     }
 }
@@ -45,15 +47,16 @@ pub fn init_enumerator(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_min(args.len(), 1)?;
     if args.block.is_some() {
         return Err(vm.error_argument("Block is not allowed."));
     };
-    let (receiver, method, new_args) = if args.len() == 1 {
+    let receiver = args[0];
+    let (method, new_args) = if args.len() == 1 {
         let method = IdentId::get_id("each");
         let new_args = Args::new0();
-        (self_val, method, new_args)
+        (method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
             return Err(vm.error_argument("2nd arg must be Symbol."));
@@ -64,9 +67,9 @@ fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             new_args[i] = args[i + 2];
         }
         new_args.block = None;
-        (args[0], method, new_args)
+        (method, new_args)
     };
-    let val = Value::enumerator(vm, method, receiver, new_args);
+    let val = vm.create_enumerator(method, receiver, new_args)?;
     Ok(val)
 }
 
@@ -99,87 +102,102 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let mut fref = eref.fiber.as_fiber().unwrap();
     let block = match args.block {
         Some(method) => method,
         None => {
             return Ok(self_val);
         }
     };
-
-    let mut val = eref.eval(vm)?;
-    vm.temp_push(val);
-
-    let ary = val.expect_array(vm, "Base object")?;
-    let mut args = Args::new1(Value::nil());
-    for elem in &ary.elements {
-        args[0] = *elem;
+    let mut args = Args::new(1);
+    loop {
+        let val = match fref.resume(vm) {
+            Ok(val) => val,
+            Err(err) => {
+                if err.is_stop_iteration() {
+                    break;
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+        args[0] = val;
         vm.eval_block(block, &args)?;
     }
-    Ok(val)
+
+    Ok(eref.receiver)
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let mut fref = eref.fiber.as_fiber().unwrap();
     let block = match args.block {
         Some(method) => method,
         None => {
             // return Enumerator
             let id = IdentId::get_id("map");
-            let e = Value::enumerator(vm, id, self_val, args.clone());
+            let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
     };
-    let mut val = eref.eval(vm)?;
-    vm.temp_push(val);
-    let ary = val.expect_array(vm, "Base object")?;
-    let mut args = Args::new1(Value::nil());
-
-    let mut res = vec![];
-    for elem in &ary.elements {
-        args[0] = *elem;
-        let v = vm.eval_block(block, &args)?;
-        vm.temp_push(v);
-        res.push(v);
+    let mut args = Args::new(1);
+    let mut ary = vec![];
+    loop {
+        let val = match fref.resume(vm) {
+            Ok(val) => val,
+            Err(err) => {
+                if err.is_stop_iteration() {
+                    break;
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+        args[0] = val;
+        let res = vm.eval_block(block, &args)?;
+        ary.push(res);
+        vm.temp_push(res);
     }
-    Ok(Value::array_from(&vm.globals, res))
+    Ok(Value::array_from(&vm.globals, ary))
 }
 
 fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let mut fref = eref.fiber.as_fiber().unwrap();
     let block = match args.block {
         Some(method) => method,
         None => {
             // return Enumerator
             let id = IdentId::get_id("with_index");
-            let e = Value::enumerator(vm, id, self_val, args.clone());
+            let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
     };
 
-    let mut val = eref.eval(vm)?;
-    vm.temp_push(val);
-    let res_ary: Vec<(Value, Value)> = val
-        .expect_array(vm, "Base object")?
-        .elements
-        .iter()
-        .enumerate()
-        .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
-        .collect();
-
-    let mut arg = Args::new(2);
-    let mut res = vec![];
-    for (v, i) in &res_ary {
-        arg[0] = *v;
-        arg[1] = *i;
-        let val = vm.eval_block(block, &arg)?;
-        vm.temp_push(val);
-        res.push(val);
+    let mut args = Args::new(2);
+    let mut c = 0;
+    let mut ary = vec![];
+    loop {
+        let val = match fref.resume(vm) {
+            Ok(val) => val,
+            Err(err) => {
+                if err.is_stop_iteration() {
+                    break;
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+        args[0] = val;
+        args[1] = Value::fixnum(c);
+        let res = vm.eval_block(block, &args)?;
+        vm.temp_push(res);
+        ary.push(res);
+        c += 1;
     }
-
-    let res = Value::array_from(&vm.globals, res);
-    Ok(res)
+    Ok(Value::array_from(&vm.globals, ary))
 }
 
 #[cfg(test)]

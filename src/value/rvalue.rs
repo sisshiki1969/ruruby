@@ -345,20 +345,35 @@ impl RValue {
         }
     }
 
-    /*pub fn new_enumerator(
+    pub fn new_fiber_internal(
+        globals: &Globals,
+        vm: VMRef,
+        args: Args,
+        rec: std::sync::mpsc::Receiver<VMResult>,
+        tx: std::sync::mpsc::SyncSender<usize>,
+    ) -> Self {
+        let fiber = FiberInfo::new_internal(vm, args, rec, tx);
+        RValue {
+            class: globals.builtins.fiber,
+            var_table: None,
+            kind: ObjKind::Fiber(FiberRef::new(fiber)),
+        }
+    }
+
+    pub fn new_enumerator(
         globals: &Globals,
         method: IdentId,
         receiver: Value,
-        mut args: Args,
+        args: Args,
+        fiber: Value,
     ) -> Self {
-        args.block = Some(MethodRef::from(0));
-        let enum_info = EnumInfo::new(method, receiver, args);
+        let enum_info = EnumInfo::new(method, receiver, args, fiber);
         RValue {
             class: globals.builtins.enumerator,
             var_table: None,
             kind: ObjKind::Enumerator(Box::new(enum_info)),
         }
-    }*/
+    }
 }
 
 pub type ObjectRef = Ref<RValue>;
