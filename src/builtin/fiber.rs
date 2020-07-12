@@ -76,7 +76,7 @@ impl FiberInfo {
                         FiberKind::Ruby(context) => vm2.run_context(context),
                         FiberKind::Builtin(args) => {
                             let self_val = context.self_value;
-                            GlobalMethodTable::enum_fiber(&mut vm2, self_val, &args)
+                            enumerator_fiber(&mut vm2, self_val, &args)
                         }
                     };
                     // If the fiber was finished, the fiber becomes DEAD.
@@ -122,9 +122,13 @@ impl GC for FiberInfo {
             return;
         }
         self.vm.mark(alloc);
-        match self.inner {
+        match &self.inner {
             FiberKind::Ruby(context) => context.mark(alloc),
-            _ => {}
+            FiberKind::Builtin(args) => {
+                for arg in args.iter() {
+                    arg.mark(alloc);
+                }
+            }
         }
     }
 }

@@ -27,10 +27,6 @@ impl From<u32> for MethodRef {
 }
 
 impl MethodRef {
-    pub fn is_none(&self) -> bool {
-        self.0 == 0
-    }
-
     pub fn print(&self, globals: &Globals) {
         let info = globals.get_method_info(*self);
         let iseq = if let MethodInfo::RubyFunc { iseq } = info {
@@ -265,64 +261,16 @@ impl GlobalMethodTable {
         GlobalMethodTable {
             table: vec![
                 MethodInfo::BuiltinFunc {
-                    func: GlobalMethodTable::enum_fiber,
+                    func: enumerator_fiber,
                     name: "/fiber".to_string(),
                 },
                 MethodInfo::BuiltinFunc {
-                    func: GlobalMethodTable::enum_iterate,
+                    func: enumerator_iterate,
                     name: "/enum".to_string(),
                 },
             ],
             method_id: 2,
         }
-    }
-
-    /// This BuiltinFunc is called in the fiber thread of a enumerator.
-    /// `vm`: VM of created fiber.
-    pub fn enum_fiber(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        // args[0]: receiver
-        // args[1]: method
-        //eprintln!("receiver: {:?}", args[0]);
-
-        let method = vm.get_method(args[0], args[1].as_symbol().unwrap())?;
-        let mut block_args = Args::new(args.len() - 2);
-        block_args.block = Some(MethodRef::from(1));
-        for i in 0..args.len() - 2 {
-            block_args[i] = args[i + 2];
-        }
-        //eprintln!("method: {:?}", args[1]);
-        let context = ContextRef::new(Context::new(
-            args[0],
-            None,
-            ISeqRef::new(ISeqInfo::new(
-                MethodRef::from(0),
-                None,
-                0,
-                0,
-                false,
-                0,
-                false,
-                vec![],
-                HashMap::new(),
-                vec![],
-                LvarCollector::new(),
-                vec![],
-                SourceInfoRef::new(SourceInfo::new(std::path::PathBuf::new())),
-                ISeqKind::Block(MethodRef::from(0)),
-            )),
-            None,
-            None,
-        ));
-        vm.context_push(context);
-        vm.eval_method(method, args[0], None, &block_args)?;
-        let res = Err(vm.error_stop_iteration("msg"));
-        vm.context_pop();
-        res
-    }
-
-    fn enum_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        //eprintln!("enum_iterator {:?}", args[0]);
-        vm.fiber_yield(args[0])
     }
 
     pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {

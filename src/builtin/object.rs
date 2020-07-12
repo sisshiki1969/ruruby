@@ -144,7 +144,7 @@ fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let context = vm.current_context();
-    let iseq = context.iseq_ref;
+    let iseq = context.iseq_ref.unwrap();
     if let ISeqKind::Method(m) = context.kind {
         let class = match iseq.class_defined {
             Some(list) => list.class,

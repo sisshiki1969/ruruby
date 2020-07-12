@@ -18,6 +18,7 @@ pub struct VM {
     pub root_path: Vec<PathBuf>,
     // VM state
     fiber_state: FiberState,
+    cur_context: Option<ContextRef>,
     exec_context: Vec<ContextRef>,
     class_context: Vec<(Value, DefineMode)>,
     exec_stack: Vec<Value>,
@@ -69,7 +70,10 @@ impl DefineMode {
 
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        //self.globals.mark(alloc);
+        match self.cur_context {
+            Some(context) => context.mark(alloc),
+            None => {}
+        };
         self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
@@ -87,6 +91,7 @@ impl VM {
             root_path: vec![],
             fiber_state: FiberState::Created,
             class_context: vec![(Value::nil(), DefineMode::default())],
+            cur_context: None,
             exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
@@ -105,6 +110,7 @@ impl VM {
             globals: self.globals,
             root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
+            cur_context: None,
             exec_context: vec![],
             temp_stack: vec![],
             class_context: self.class_context.clone(),
@@ -127,15 +133,18 @@ impl VM {
     }
 
     pub fn current_context(&self) -> ContextRef {
-        *self.exec_context.last().unwrap()
+        self.cur_context.unwrap()
     }
 
     pub fn latest_context(&self) -> Option<ContextRef> {
-        self.exec_context.last().cloned()
+        self.cur_context
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
-        self.current_context().iseq_ref.source_info
+        match self.current_context().iseq_ref {
+            Some(iseq) => iseq.source_info,
+            None => SourceInfoRef::empty(),
+        }
     }
 
     pub fn fiberstate_created(&mut self) {
@@ -185,16 +194,29 @@ impl VM {
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
-        self.exec_context.push(ctx);
+        match self.cur_context {
+            None => self.cur_context = Some(ctx),
+            Some(prev_context) => {
+                self.exec_context.push(prev_context);
+                self.cur_context = Some(ctx)
+            }
+        }
     }
 
     pub fn context_pop(&mut self) -> Option<ContextRef> {
-        self.exec_context.pop()
+        match self.cur_context {
+            None => None,
+            Some(context) => {
+                self.cur_context = self.exec_context.pop();
+                Some(context)
+            }
+        }
     }
 
     pub fn clear(&mut self) {
         self.exec_stack.clear();
         self.class_context = vec![(Value::nil(), DefineMode::default())];
+        self.cur_context = None;
         self.exec_context.clear();
     }
 
@@ -312,7 +334,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let parser = Parser::new();
         //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
-        let ext_lvar = self.current_context().iseq_ref.lvar.clone();
+        let ext_lvar = self.current_context().iseq_ref.unwrap().lvar.clone();
         let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
         //self.globals.ident_table = result.ident_table;
 
@@ -371,7 +393,7 @@ impl VM {
             None,
         )?;
         let iseq = self.get_iseq(methodref)?;
-        context.iseq_ref = iseq;
+        context.iseq_ref = Some(iseq);
         context.adjust_lvar_size();
         context.pc = 0;
 
@@ -392,22 +414,36 @@ impl VM {
     #[allow(dead_code)]
     #[cfg(not(tarpaulin_include))]
     pub fn dump_context(&self) {
-        eprintln!("---dump");
-        for (i, context) in self.exec_context.iter().enumerate() {
-            eprintln!("context: {}", i);
+        fn dump_single_context(context: ContextRef) {
             eprintln!("self: {:#?}", context.self_value);
-            for i in 0..context.iseq_ref.lvars {
-                let id = LvarId::from_usize(i);
-                let (k, _) = context
-                    .iseq_ref
-                    .lvar
-                    .table()
-                    .iter()
-                    .find(|(_, v)| **v == id)
-                    .unwrap();
-                let name = IdentId::get_ident_name(*k);
-                eprintln!("lvar({}): {} {:#?}", id.as_u32(), name, context[id]);
+            match context.iseq_ref {
+                Some(iseq_ref) => {
+                    for i in 0..iseq_ref.lvars {
+                        let id = LvarId::from_usize(i);
+                        let (k, _) = iseq_ref
+                            .lvar
+                            .table()
+                            .iter()
+                            .find(|(_, v)| **v == id)
+                            .unwrap();
+                        let name = IdentId::get_ident_name(*k);
+                        eprintln!("lvar({}): {} {:#?}", id.as_u32(), name, context[id]);
+                    }
+                }
+                None => {}
             }
+        }
+        eprintln!("---dump");
+        match self.cur_context {
+            Some(context) => {
+                eprintln!("current context");
+                dump_single_context(context);
+            }
+            None => {}
+        }
+        for (i, context) in self.exec_context.iter().rev().enumerate() {
+            eprintln!("context: {}", i);
+            dump_single_context(*context);
         }
         for v in &self.exec_stack {
             eprintln!("stack: {:#?}", *v);
@@ -433,7 +469,8 @@ impl VM {
         let res = match err.kind {
             RubyErrorKind::MethodReturn(method) => {
                 // Catch MethodReturn if this context is the target.
-                if method == self.current_context().iseq_ref.method {
+                let iseq = self.current_context().iseq_ref;
+                if iseq.is_some() && method == iseq.unwrap().method {
                     let result = self.stack_pop();
                     let prev_len = self.current_context().stack_len;
                     self.exec_stack.truncate(prev_len);
@@ -471,18 +508,26 @@ impl VM {
         #[cfg(feature = "trace")]
         {
             if self.parent_fiber.is_some() {
-                println!("===> {:?} {:?}", context.iseq_ref.method, context.kind);
+                println!(
+                    "===> {:?} {:?}",
+                    context.iseq_ref.unwrap().method,
+                    context.kind
+                );
             } else {
-                println!("---> {:?} {:?}", context.iseq_ref.method, context.kind);
+                println!(
+                    "---> {:?} {:?}",
+                    context.iseq_ref.unwrap().method,
+                    context.kind
+                );
             }
         }
-        if let Some(prev_context) = self.exec_context.last_mut() {
+        if let Some(ref mut prev_context) = self.cur_context {
             prev_context.pc = self.pc;
             context.stack_len = self.exec_stack.len();
         };
         self.context_push(context);
         self.pc = context.pc;
-        let iseq = &context.iseq_ref.iseq;
+        let iseq = &context.iseq_ref.unwrap().iseq;
         let self_oref = context.self_value.rvalue_mut();
         self.gc();
 
@@ -552,7 +597,7 @@ impl VM {
                     let _context = self.context_pop().unwrap();
                     #[cfg(feature = "trace")]
                     println!("<--- Ok({:?})", val);
-                    if !self.exec_context.is_empty() {
+                    if self.cur_context.is_some() {
                         self.pc = self.current_context().pc;
                     };
                     return Ok(val);
@@ -582,7 +627,7 @@ impl VM {
                         }
                     };
                     self.context_pop().unwrap();
-                    if !self.exec_context.is_empty() {
+                    if self.cur_context.is_some() {
                         self.pc = self.current_context().pc;
                     }
                     return res;
@@ -602,7 +647,7 @@ impl VM {
                         unreachable!()
                     };
                     self.context_pop().unwrap();
-                    if !self.exec_context.is_empty() {
+                    if self.cur_context.is_some() {
                         self.pc = self.current_context().pc;
                     }
                     return res;
@@ -1409,26 +1454,33 @@ impl VM {
 
 impl VM {
     fn get_loc(&self) -> Loc {
-        let sourcemap = &self.current_context().iseq_ref.iseq_sourcemap;
-        sourcemap
-            .iter()
-            .find(|x| x.0 == ISeqPos::from(self.pc))
-            .unwrap_or(&(ISeqPos::from(0), Loc(0, 0)))
-            .1
+        match self.current_context().iseq_ref {
+            None => Loc(1, 1),
+            Some(iseq) => {
+                iseq.iseq_sourcemap
+                    .iter()
+                    .find(|x| x.0 == ISeqPos::from(self.pc))
+                    .unwrap_or(&(ISeqPos::from(0), Loc(0, 0)))
+                    .1
+            }
+        }
     }
 
     fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
-        let mut class_stack = None;
+        match self.cur_context {
+            Some(context) => match context.iseq_ref.unwrap().class_defined {
+                Some(class_list) => return Some(class_list),
+                None => {}
+            },
+            None => return None,
+        }
         for context in self.exec_context.iter().rev() {
-            match context.iseq_ref.class_defined {
-                Some(class_list) => {
-                    class_stack = Some(class_list);
-                    break;
-                }
+            match context.iseq_ref.unwrap().class_defined {
+                Some(class_list) => return Some(class_list),
                 None => {}
             }
         }
-        class_stack
+        None
     }
 
     /// Return None in top-level.
@@ -2132,6 +2184,7 @@ impl VM {
                 })?
                 .context
                 .iseq_ref
+                .unwrap()
                 .method;
             Some(method)
         } else {
@@ -2261,8 +2314,8 @@ impl VM {
 
 impl VM {
     pub fn define_method(&mut self, id: IdentId, method: MethodRef) {
-        if self.exec_context.len() == 1 {
-            // A method defined in "top level" is registered as an object method.
+        if self.parent_fiber.is_none() && self.exec_context.len() == 0 {
+            // A method defined in "top level of main fiber" is registered as an object method.
             self.add_object_method(id, method);
         } else {
             // A method defined in a class definition is registered as an instance method of the class.
@@ -2276,8 +2329,8 @@ impl VM {
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        if self.exec_context.len() == 1 {
-            // A method defined in "top level" is registered as an object method.
+        if self.parent_fiber.is_none() && self.exec_context.len() == 0 {
+            // A method defined in "top level of main fiber" is registered as an object method.
             self.add_object_method(id, method);
             Ok(())
         } else {
@@ -2377,7 +2430,7 @@ impl VM {
 impl VM {
     fn unwind_context(&mut self, err: &mut RubyError) {
         self.context_pop().unwrap();
-        if let Some(context) = self.exec_context.last_mut() {
+        if let Some(context) = self.cur_context {
             self.pc = context.pc;
             err.info.push((self.source_info(), self.get_loc()));
         };
@@ -2517,6 +2570,24 @@ impl VM {
     /// Move outer execution contexts on the stack to the heap.
     fn move_outer_to_heap(&mut self) {
         let mut prev_ctx: Option<ContextRef> = None;
+        let context = match self.cur_context {
+            None => return,
+            Some(ref mut context) => context,
+        };
+        if !context.on_stack {
+            return;
+        };
+        let mut heap_context = context.dup();
+        heap_context.on_stack = false;
+        *context = heap_context;
+        if let Some(mut ctx) = prev_ctx {
+            ctx.outer = Some(heap_context);
+        };
+        if heap_context.outer.is_none() {
+            return;
+        }
+        prev_ctx = Some(heap_context);
+
         for context in self.exec_context.iter_mut().rev() {
             if !context.on_stack {
                 break;

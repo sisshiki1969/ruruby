@@ -73,6 +73,33 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+/// This BuiltinFunc is called in the fiber thread of a enumerator.
+/// `vm`: VM of created fiber.
+pub fn enumerator_fiber(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    // args[0]: receiver
+    // args[1]: method
+    //eprintln!("receiver: {:?}", args[0]);
+
+    let method = vm.get_method(args[0], args[1].as_symbol().unwrap())?;
+    let mut block_args = Args::new(args.len() - 2);
+    block_args.block = Some(MethodRef::from(1));
+    for i in 0..args.len() - 2 {
+        block_args[i] = args[i + 2];
+    }
+    //eprintln!("method: {:?}", args[1]);
+    let context = ContextRef::new(Context::new_noiseq(args[0], None, None, None));
+    vm.context_push(context);
+    vm.eval_method(method, args[0], None, &block_args)?;
+    let res = Err(vm.error_stop_iteration("msg"));
+    vm.context_pop();
+    res
+}
+
+pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    //eprintln!("enum_iterator {:?}", args[0]);
+    vm.fiber_yield(args[0])
+}
+
 // Instance methods
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
