@@ -156,10 +156,9 @@ impl FiberInfo {
 
 impl GC for FiberInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        if self.vm.fiberstate() == FiberState::Dead {
-            return;
+        if self.vm.fiberstate() != FiberState::Dead {
+            self.vm.mark(alloc);
         }
-        self.vm.mark(alloc);
         match &self.inner {
             FiberKind::Ruby(context) => context.mark(alloc),
             FiberKind::Builtin(receiver, _, args) => {
