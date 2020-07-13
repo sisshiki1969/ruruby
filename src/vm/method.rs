@@ -259,17 +259,11 @@ pub struct GlobalMethodTable {
 impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
-            table: vec![
-                MethodInfo::BuiltinFunc {
-                    func: enumerator_fiber,
-                    name: "/fiber".to_string(),
-                },
-                MethodInfo::BuiltinFunc {
-                    func: enumerator_iterate,
-                    name: "/enum".to_string(),
-                },
-            ],
-            method_id: 2,
+            table: vec![MethodInfo::BuiltinFunc {
+                func: enumerator_iterate,
+                name: "/enum".to_string(),
+            }],
+            method_id: 1,
         }
     }
 

@@ -35,7 +35,7 @@ impl Clone for FiberInfo {
 #[derive(Clone)]
 pub enum FiberKind {
     Ruby(ContextRef),
-    Builtin(Args),
+    Builtin(Value, IdentId, Args),
 }
 
 impl std::fmt::Debug for FiberKind {
@@ -63,16 +63,40 @@ impl FiberInfo {
 
     pub fn new_internal(
         vm: VMRef,
+        receiver: Value,
+        method_id: IdentId,
         args: Args,
         rec: Receiver<VMResult>,
         tx: SyncSender<usize>,
     ) -> Self {
         FiberInfo {
             vm,
-            inner: FiberKind::Builtin(args),
+            inner: FiberKind::Builtin(receiver, method_id, args),
             rec,
             tx,
         }
+    }
+
+    /// This BuiltinFunc is called in the fiber thread of a enumerator.
+    /// `vm`: VM of created fiber.
+    pub fn enumerator_fiber(
+        vm: &mut VM,
+        receiver: Value,
+        method_id: IdentId,
+        args: &Args,
+    ) -> VMResult {
+        let method = vm.get_method(receiver, method_id)?;
+        let mut block_args = Args::new(args.len() - 2);
+        block_args.block = Some(MethodRef::from(0));
+        for i in 0..args.len() - 2 {
+            block_args[i] = args[i + 2];
+        }
+        let context = ContextRef::new(Context::new_noiseq(receiver, None, None, None));
+        vm.context_push(context);
+        vm.eval_method(method, receiver, None, &block_args)?;
+        let res = Err(vm.error_stop_iteration("msg"));
+        vm.context_pop();
+        res
     }
 
     pub fn resume(&mut self, vm: &mut VM) -> VMResult {
@@ -89,14 +113,12 @@ impl FiberInfo {
                 println!("===> resume(spawn)");
                 let mut vm2 = fiber_vm;
                 let fiber_kind = self.inner.clone();
-                let context = vm.current_context();
                 thread::spawn(move || {
                     vm2.set_allocator();
                     let res = match fiber_kind {
                         FiberKind::Ruby(context) => vm2.run_context(context),
-                        FiberKind::Builtin(args) => {
-                            let self_val = context.self_value;
-                            enumerator_fiber(&mut vm2, self_val, &args)
+                        FiberKind::Builtin(receiver, method_id, args) => {
+                            Self::enumerator_fiber(&mut vm2, receiver, method_id, &args)
                         }
                     };
                     // If the fiber was finished, the fiber becomes DEAD.
@@ -144,7 +166,8 @@ impl GC for FiberInfo {
         self.vm.mark(alloc);
         match &self.inner {
             FiberKind::Ruby(context) => context.mark(alloc),
-            FiberKind::Builtin(args) => {
+            FiberKind::Builtin(receiver, _, args) => {
+                receiver.mark(alloc);
                 for arg in args.iter() {
                     arg.mark(alloc);
                 }

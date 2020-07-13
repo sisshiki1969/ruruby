@@ -2513,7 +2513,7 @@ impl VM {
         for (i, arg) in args.iter().enumerate() {
             fiber_args[i + 2] = *arg;
         }
-        let fiber = FiberInfo::new_internal(fiber_vm, fiber_args, rx0, tx1);
+        let fiber = FiberInfo::new_internal(fiber_vm, receiver, method_id, fiber_args, rx0, tx1);
 
         Ok(Value::enumerator(
             &self.globals,

@@ -345,21 +345,6 @@ impl RValue {
         }
     }
 
-    pub fn new_fiber_internal(
-        globals: &Globals,
-        vm: VMRef,
-        args: Args,
-        rec: std::sync::mpsc::Receiver<VMResult>,
-        tx: std::sync::mpsc::SyncSender<usize>,
-    ) -> Self {
-        let fiber = FiberInfo::new_internal(vm, args, rec, tx);
-        RValue {
-            class: globals.builtins.fiber,
-            var_table: None,
-            kind: ObjKind::Fiber(FiberRef::new(fiber)),
-        }
-    }
-
     pub fn new_enumerator(
         globals: &Globals,
         method: IdentId,

@@ -788,16 +788,6 @@ impl Value {
         RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
 
-    pub fn fiber_internal(
-        globals: &Globals,
-        vm: VMRef,
-        args: Args,
-        rec: std::sync::mpsc::Receiver<VMResult>,
-        tx: std::sync::mpsc::SyncSender<usize>,
-    ) -> Self {
-        RValue::new_fiber_internal(globals, vm, args, rec, tx).pack()
-    }
-
     pub fn enumerator(
         globals: &Globals,
         method: IdentId,
