@@ -156,6 +156,10 @@ impl VM {
         self.fiber_state
     }
 
+    pub fn is_dead(&self) -> bool {
+        self.fiber_state == FiberState::Dead
+    }
+
     pub fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
@@ -2498,18 +2502,35 @@ impl VM {
         Ok(Value::procobj(&self.globals, context))
     }
 
+    pub fn create_enum_info(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+        args: Args,
+    ) -> FiberInfo {
+        let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
+        let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
+        let mut fiber_vm = VMRef::new(self.create_fiber(tx0, rx1));
+        let context = ContextRef::new(Context::new_noiseq());
+        fiber_vm.context_push(context);
+        FiberInfo::new_internal(fiber_vm, receiver, method_id, args, rx0, tx1)
+    }
+
+    pub fn dup_enum(&mut self, eref: FiberRef) -> FiberInfo {
+        let (receiver, method_id, args) = match &eref.inner {
+            FiberKind::Builtin(receiver, method_id, args) => (*receiver, *method_id, args.clone()),
+            _ => unreachable!(),
+        };
+        self.create_enum_info(method_id, receiver, args)
+    }
+
     pub fn create_enumerator(
         &mut self,
         method_id: IdentId,
         receiver: Value,
         args: Args,
     ) -> VMResult {
-        let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
-        let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-        let fiber_vm = VMRef::new(self.create_fiber(tx0, rx1));
-
-        let fiber = FiberInfo::new_internal(fiber_vm, receiver, method_id, args, rx0, tx1);
-
+        let fiber = self.create_enum_info(method_id, receiver, args);
         Ok(Value::enumerator(&self.globals, fiber))
     }
 

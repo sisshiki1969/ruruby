@@ -143,6 +143,10 @@ impl SourceInfo {
 
     /// Show the location of the Loc in the source code using '^^^'.
     pub fn show_loc(&self, loc: &Loc) {
+        if self.code.len() == 0 {
+            eprintln!("(internal)");
+            return;
+        }
         let mut line: u32 = 1;
         let mut line_top_pos: u32 = 0;
         let mut line_pos = vec![];

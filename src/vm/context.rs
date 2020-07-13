@@ -117,21 +117,16 @@ impl Context {
         }
     }
 
-    pub fn new_noiseq(
-        self_value: Value,
-        block: Option<MethodRef>,
-        outer: Option<ContextRef>,
-        caller: Option<ContextRef>,
-    ) -> Self {
+    pub fn new_noiseq() -> Self {
         Context {
-            self_value,
-            block,
+            self_value: Value::nil(),
+            block: None,
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec: vec![],
             iseq_ref: None,
             pc: 0,
-            outer,
-            caller,
+            outer: None,
+            caller: None,
             on_stack: true,
             stack_len: 0,
             kind: ISeqKind::Block(MethodRef::from(0)),

@@ -7,12 +7,12 @@ use std::thread;
 
 #[derive(Debug)]
 pub struct FiberInfo {
-    vm: VMRef,
+    pub vm: VMRef,
     pub inner: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<usize>,
 }
-
+/*
 impl Clone for FiberInfo {
     fn clone(&self) -> Self {
         let vm = self.vm;
@@ -31,7 +31,7 @@ impl Clone for FiberInfo {
         }
     }
 }
-
+*/
 #[derive(Clone)]
 pub enum FiberKind {
     Ruby(ContextRef),
@@ -86,15 +86,13 @@ impl FiberInfo {
         args: &Args,
     ) -> VMResult {
         let method = vm.get_method(receiver, method_id)?;
-        //.block = Some(MethodRef::from(0));
-
-        let context = ContextRef::new(Context::new_noiseq(receiver, None, None, None));
-        vm.context_push(context);
+        // let context = ContextRef::new(Context::new_noiseq());
+        // vm.context_push(context);
         let mut args = args.clone();
         args.block = Some(MethodRef::from(0));
         vm.eval_method(method, receiver, None, &args)?;
         let res = Err(vm.error_stop_iteration("msg"));
-        vm.context_pop();
+        // vm.context_pop();
         res
     }
 
@@ -139,8 +137,8 @@ impl FiberInfo {
                         None => unreachable!(),
                     };
                 });
-                let res = self.rec.recv().unwrap()?;
-                return Ok(res);
+                // Wait for fiber.resume.
+                self.rec.recv().unwrap()
             }
             FiberState::Running => {
                 #[cfg(feature = "perf")]
@@ -150,8 +148,7 @@ impl FiberInfo {
 
                 self.tx.send(1).unwrap();
                 // Wait for fiber.resume.
-                let res = self.rec.recv().unwrap()?;
-                return Ok(res);
+                self.rec.recv().unwrap()
             }
         }
     }

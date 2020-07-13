@@ -608,10 +608,10 @@ impl Value {
         }
     }
 
-    pub fn as_enumerator(&mut self) -> Option<&mut EnumInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Enumerator(eref) => Some(eref),
+    pub fn as_enumerator(&mut self) -> Option<FiberRef> {
+        match self.as_rvalue() {
+            Some(oref) => match oref.kind {
+                ObjKind::Enumerator(fref) => Some(fref),
                 _ => None,
             },
             None => None,
@@ -622,7 +622,7 @@ impl Value {
         &mut self,
         vm: &mut VM,
         error_msg: &str,
-    ) -> Result<&mut EnumInfo, RubyError> {
+    ) -> Result<FiberRef, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
             None => Err(vm.error_argument(error_msg)),

@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use crate::*;
 
 /// Heap-allocated objects.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct RValue {
     class: Value,
     var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq)]
 pub enum ObjKind {
     Invalid,
     Ordinary,
@@ -27,7 +27,7 @@ pub enum ObjKind {
     Regexp(RegexpInfo),
     Method(Box<MethodObjInfo>),
     Fiber(FiberRef),
-    Enumerator(Box<EnumInfo>),
+    Enumerator(FiberRef),
 }
 
 impl std::fmt::Debug for ObjKind {
@@ -161,7 +161,7 @@ impl RValue {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
                 ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
-                ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.clone()),
+                ObjKind::Enumerator(_eref) => ObjKind::Ordinary,
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
@@ -346,11 +346,11 @@ impl RValue {
     }
 
     pub fn new_enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
-        let enum_info = EnumInfo::new(fiber);
+        let fref = FiberRef::new(fiber);
         RValue {
             class: globals.builtins.enumerator,
             var_table: None,
-            kind: ObjKind::Enumerator(Box::new(enum_info)),
+            kind: ObjKind::Enumerator(fref),
         }
     }
 }
