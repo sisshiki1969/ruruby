@@ -345,14 +345,8 @@ impl RValue {
         }
     }
 
-    pub fn new_enumerator(
-        globals: &Globals,
-        method: IdentId,
-        receiver: Value,
-        args: Args,
-        fiber: FiberInfo,
-    ) -> Self {
-        let enum_info = EnumInfo::new(method, receiver, args, fiber);
+    pub fn new_enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
+        let enum_info = EnumInfo::new(fiber);
         RValue {
             class: globals.builtins.enumerator,
             var_table: None,

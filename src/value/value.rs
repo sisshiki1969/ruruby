@@ -788,14 +788,8 @@ impl Value {
         RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
 
-    pub fn enumerator(
-        globals: &Globals,
-        method: IdentId,
-        receiver: Value,
-        args: Args,
-        fiber: FiberInfo,
-    ) -> Self {
-        RValue::new_enumerator(globals, method, receiver, args, fiber).pack()
+    pub fn enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
+        RValue::new_enumerator(globals, fiber).pack()
     }
 }
 

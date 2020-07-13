@@ -2,9 +2,9 @@ use crate::*;
 
 #[derive(Debug, Clone)]
 pub struct EnumInfo {
-    method: IdentId,
-    receiver: Value,
-    args: Args,
+    //method: IdentId,
+    //receiver: Value,
+    //args: Args,
     fiber: FiberInfo,
 }
 
@@ -15,13 +15,8 @@ impl PartialEq for EnumInfo {
 }
 
 impl EnumInfo {
-    pub fn new(method: IdentId, receiver: Value, args: Args, fiber: FiberInfo) -> Self {
-        EnumInfo {
-            method,
-            receiver,
-            args,
-            fiber,
-        }
+    pub fn new(fiber: FiberInfo) -> Self {
+        EnumInfo { fiber }
     }
 
     pub fn next(&mut self, vm: &mut VM) -> VMResult {
@@ -31,9 +26,9 @@ impl EnumInfo {
 
 impl GC for EnumInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        self.receiver.mark(alloc);
+        //self.receiver.mark(alloc);
         self.fiber.mark(alloc);
-        self.args.iter().for_each(|v| v.mark(alloc));
+        //self.args.iter().for_each(|v| v.mark(alloc));
     }
 }
 
@@ -60,7 +55,8 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let receiver = args[0];
     let (method, new_args) = if args.len() == 1 {
         let method = IdentId::get_id("each");
-        let new_args = Args::new0();
+        let mut new_args = Args::new0();
+        new_args.block = Some(MethodRef::from(0));
         (method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
@@ -71,7 +67,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         for i in 0..args.len() - 2 {
             new_args[i] = args[i + 2];
         }
-        new_args.block = None;
+        new_args.block = Some(MethodRef::from(0));
         (method, new_args)
     };
     let val = vm.create_enumerator(method, receiver, new_args)?;
@@ -86,23 +82,28 @@ pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let (receiver, method, args) = match &eref.fiber.inner {
+        FiberKind::Builtin(receiver, method, args) => (receiver, method, args),
+        _ => unreachable!(),
+    };
+
     let arg_string = {
-        match eref.args.len() {
+        match args.len() {
             0 => "".to_string(),
-            1 => format!("{:?}", eref.args[0]),
+            1 => format!(" {:?}", args[0]),
             _ => {
-                let mut s = format!("{:?}", eref.args[0]);
-                for i in 1..eref.args.len() {
-                    s = format!("{},{:?}", s, eref.args[i]);
+                let mut s = format!(" {:?}", args[0]);
+                for i in 1..args.len() {
+                    s = format!("{},{:?}", s, args[i]);
                 }
                 s
             }
         }
     };
     let inspect = format!(
-        "#<Enumerator: {:?}:{}({})>",
-        eref.receiver,
-        IdentId::get_ident_name(eref.method),
+        "#<Enumerator:{:?}:{}{}>",
+        receiver,
+        IdentId::get_ident_name(*method),
         arg_string
     );
     Ok(Value::string(&vm.globals, inspect))
@@ -134,7 +135,12 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         vm.eval_block(block, &args)?;
     }
 
-    Ok(eref.receiver)
+    let receiver = match fref.inner {
+        FiberKind::Builtin(receiver, _, _) => receiver,
+        _ => unreachable!(),
+    };
+
+    Ok(receiver)
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

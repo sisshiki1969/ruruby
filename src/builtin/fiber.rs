@@ -8,7 +8,7 @@ use std::thread;
 #[derive(Debug)]
 pub struct FiberInfo {
     vm: VMRef,
-    inner: FiberKind,
+    pub inner: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<usize>,
 }
@@ -86,14 +86,13 @@ impl FiberInfo {
         args: &Args,
     ) -> VMResult {
         let method = vm.get_method(receiver, method_id)?;
-        let mut block_args = Args::new(args.len() - 2);
-        block_args.block = Some(MethodRef::from(0));
-        for i in 0..args.len() - 2 {
-            block_args[i] = args[i + 2];
-        }
+        //.block = Some(MethodRef::from(0));
+
         let context = ContextRef::new(Context::new_noiseq(receiver, None, None, None));
         vm.context_push(context);
-        vm.eval_method(method, receiver, None, &block_args)?;
+        let mut args = args.clone();
+        args.block = Some(MethodRef::from(0));
+        vm.eval_method(method, receiver, None, &args)?;
         let res = Err(vm.error_stop_iteration("msg"));
         vm.context_pop();
         res

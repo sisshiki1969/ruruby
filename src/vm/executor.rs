@@ -2507,21 +2507,10 @@ impl VM {
         let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
         let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
         let fiber_vm = VMRef::new(self.create_fiber(tx0, rx1));
-        let mut fiber_args = Args::new(args.len() + 2);
-        fiber_args[0] = receiver;
-        fiber_args[1] = Value::symbol(method_id);
-        for (i, arg) in args.iter().enumerate() {
-            fiber_args[i + 2] = *arg;
-        }
-        let fiber = FiberInfo::new_internal(fiber_vm, receiver, method_id, fiber_args, rx0, tx1);
 
-        Ok(Value::enumerator(
-            &self.globals,
-            method_id,
-            receiver,
-            args,
-            fiber,
-        ))
+        let fiber = FiberInfo::new_internal(fiber_vm, receiver, method_id, args, rx0, tx1);
+
+        Ok(Value::enumerator(&self.globals, fiber))
     }
 
     /// Move outer execution contexts on the stack to the heap.
