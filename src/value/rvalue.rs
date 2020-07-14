@@ -35,7 +35,7 @@ impl std::fmt::Debug for ObjKind {
         match self {
             ObjKind::Invalid => write!(f, "[Invalid]"),
             ObjKind::Ordinary => write!(f, "Ordinary"),
-            ObjKind::String(rs) => write!(f, "String:{:?}", rs),
+            ObjKind::String(rs) => write!(f, r#""{:?}""#, rs),
             ObjKind::Integer(i) => write!(f, "{}", *i),
             ObjKind::Float(i) => write!(f, "{}", *i),
             ObjKind::Class(cref) => match cref.name {
@@ -47,7 +47,7 @@ impl std::fmt::Debug for ObjKind {
                 None => write!(f, "#<Module:0x{:x}>", cref.id()),
             },
             ObjKind::Array(aref) => {
-                write!(f, "Array[")?;
+                write!(f, "[")?;
                 match aref.elements.len() {
                     0 => {}
                     1 => write!(f, "{:#?}", aref.elements[0])?,

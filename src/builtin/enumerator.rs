@@ -44,7 +44,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.fiber_yield(args[0])
+    vm.fiber_yield(args)
 }
 
 // Instance methods
@@ -69,9 +69,11 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
             }
         }
     };
+
+    let receiver_string = vm.val_inspect(*receiver);
     let inspect = format!(
-        "#<Enumerator:{:?}:{}{}>",
-        receiver,
+        "#<Enumerator: {}:{}{}>",
+        receiver_string,
         IdentId::get_ident_name(*method),
         arg_string
     );
@@ -212,15 +214,15 @@ mod test {
         "#;
         assert_script(program);
     }
-    /*
-        #[test]
-        fn enumerator_map() {
-            let program = r#"
+
+    #[test]
+    fn enumerator_map() {
+        let program = r#"
             assert [0, 5, 12, 21], (4..7).each.with_index.map{|x,y| x * y}
             "#;
-            assert_script(program);
-        }
-    */
+        assert_script(program);
+    }
+
     #[test]
     fn enumerator_with_index() {
         let program = r#"

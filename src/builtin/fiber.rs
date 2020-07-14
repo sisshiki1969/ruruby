@@ -208,12 +208,7 @@ fn new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    let val = match args.len() {
-        0 => Value::nil(),
-        1 => args[0],
-        _ => Value::array_from(&vm.globals, args.to_vec()),
-    };
-    vm.fiber_yield(val)
+    vm.fiber_yield(args)
 }
 
 // Instance methods

@@ -296,9 +296,8 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        {
-            self.perf.set_prev_inst(Perf::INVALID);
-        }
+        self.perf.set_prev_inst(Perf::INVALID);
+
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
@@ -323,9 +322,8 @@ impl VM {
         //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
-        {
-            self.perf.set_prev_inst(Perf::INVALID);
-        }
+        self.perf.set_prev_inst(Perf::INVALID);
+
         let mut codegen = Codegen::new(result.source_info);
         codegen.context_push(ext_lvar);
         let method = codegen.gen_iseq(
@@ -349,9 +347,7 @@ impl VM {
         let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
-        {
-            self.perf.get_perf(Perf::INVALID);
-        }
+        self.perf.get_perf(Perf::INVALID);
 
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
@@ -364,9 +360,8 @@ impl VM {
     #[cfg(not(tarpaulin_include))]
     pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
-        {
-            self.perf.set_prev_inst(Perf::CODEGEN);
-        }
+        self.perf.set_prev_inst(Perf::CODEGEN);
+
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
@@ -383,9 +378,7 @@ impl VM {
 
         let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
-        {
-            self.perf.get_perf(Perf::INVALID);
-        }
+        self.perf.get_perf(Perf::INVALID);
 
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
@@ -2229,11 +2222,11 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let info = self.globals.get_method_info(methodref);
-        #[allow(unused_variables, unused_mut)]
-        let mut inst: u8;
+        #[cfg(feature = "perf")]
+        let mut _inst: u8;
         #[cfg(feature = "perf")]
         {
-            inst = self.perf.get_prev_inst();
+            _inst = self.perf.get_prev_inst();
         }
         let val = match info {
             MethodInfo::BuiltinFunc { func, .. } => {
@@ -2248,7 +2241,7 @@ impl VM {
                 self.temp_stack.truncate(len);
 
                 #[cfg(feature = "perf")]
-                self.perf.get_perf_no_count(inst);
+                self.perf.get_perf_no_count(_inst);
                 res?
             }
             MethodInfo::AttrReader { id } => match self_val.as_rvalue() {
@@ -2271,7 +2264,7 @@ impl VM {
                     Context::from_args(self, self_val, iseq, args, outer, self.latest_context())?;
                 let res = self.run_context(ContextRef::from_local(&context));
                 #[cfg(feature = "perf")]
-                self.perf.get_perf_no_count(inst);
+                self.perf.get_perf_no_count(_inst);
                 res?
             }
         };
@@ -2397,39 +2390,34 @@ impl VM {
 }
 
 impl VM {
-    /// Yield `return_val` to parent fiber. (execute Fiber.yield)
-    pub fn fiber_yield(&mut self, return_val: Value) -> VMResult {
-        if self.parent_fiber.is_none() {
-            return Err(self.error_fiber("Can not yield from main fiber."));
+    /// Yield args to parent fiber. (execute Fiber.yield)
+    pub fn fiber_yield(&mut self, args: &Args) -> VMResult {
+        let val = match args.len() {
+            0 => Value::nil(),
+            1 => args[0],
+            _ => Value::array_from(&self.globals, args.to_vec()),
         };
-        #[allow(unused_variables, unused_assignments, unused_mut)]
-        let mut inst: u8;
-        #[cfg(feature = "perf")]
-        {
-            inst = self.perf.get_prev_inst();
-        }
-        #[cfg(feature = "perf")]
-        self.perf.get_perf(Perf::INVALID);
-        self.fiber_send_to_parent(Ok(return_val));
-        #[cfg(feature = "perf")]
-        self.perf.get_perf_no_count(inst);
-        Ok(Value::nil())
-    }
-
-    pub fn fiber_send_to_parent(&self, val: VMResult) {
         match &self.parent_fiber {
+            None => return Err(self.error_fiber("Can not yield from main fiber.")),
             Some(ParentFiberInfo { tx, rx, .. }) => {
-                tx.send(val.clone()).unwrap();
+                #[cfg(feature = "perf")]
+                let mut _inst: u8;
+                #[cfg(feature = "perf")]
+                {
+                    _inst = self.perf.get_prev_inst();
+                }
+                #[cfg(feature = "perf")]
+                self.perf.get_perf(Perf::INVALID);
+                #[cfg(feature = "trace")]
+                println!("<=== yield Ok({:?})", val);
+
+                tx.send(Ok(val)).unwrap();
                 // Wait for fiber's response
                 rx.recv().unwrap();
-            }
-            None => unreachable!("Can not yield from main fiber."),
-        };
-        #[cfg(feature = "trace")]
-        {
-            match val {
-                Ok(val) => println!("<=== yield Ok({:?})", val),
-                Err(err) => println!("<=== yield Err({:?})", err.kind),
+                #[cfg(feature = "perf")]
+                self.perf.get_perf_no_count(_inst);
+                // TODO: this return value is not correct. The arg og Fiber#resume should be returned.
+                Ok(Value::nil())
             }
         }
     }
