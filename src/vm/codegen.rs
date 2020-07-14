@@ -829,20 +829,24 @@ impl Codegen {
                 self.gen_symbol(iseq, *id);
             }
             NodeKind::InterporatedString(nodes) => {
-                //self.gen_string(iseq, &"".to_string());
+                let mut c = 0;
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
-                            self.gen_string(globals, iseq, &s);
+                            if s.len() != 0 {
+                                self.gen_string(globals, iseq, &s);
+                                c += 1;
+                            }
                         }
                         NodeKind::CompStmt(nodes) => {
                             self.gen_comp_stmt(globals, iseq, nodes, true)?;
                             iseq.push(Inst::TO_S);
+                            c += 1;
                         }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
                     }
                 }
-                self.gen_concat(iseq, nodes.len());
+                self.gen_concat(iseq, c);
                 if !use_value {
                     self.gen_pop(iseq)
                 };
