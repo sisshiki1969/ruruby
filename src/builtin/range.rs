@@ -168,7 +168,15 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let method = match args.block {
+        Some(method) => method,
+        None => {
+            // return Enumerator
+            let id = IdentId::get_id("each");
+            let e = vm.create_enumerator(id, self_val, args.clone())?;
+            return Ok(e);
+        }
+    };
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {

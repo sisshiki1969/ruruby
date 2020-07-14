@@ -99,6 +99,7 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
+    // A new fiber must be constructed for each method call.
     let mut info = vm.dup_enum(eref);
     let block = match args.block {
         Some(method) => method,
@@ -117,12 +118,10 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         vm.eval_block(block, &args)?;
     }
 
-    let receiver = match info.inner {
-        FiberKind::Builtin(receiver, _, _) => receiver,
+    match info.inner {
+        FiberKind::Builtin(receiver, _, _) => Ok(receiver),
         _ => unreachable!(),
-    };
-
-    Ok(receiver)
+    }
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -213,7 +212,15 @@ mod test {
         "#;
         assert_script(program);
     }
-
+    /*
+        #[test]
+        fn enumerator_map() {
+            let program = r#"
+            assert [0, 5, 12, 21], (4..7).each.with_index.map{|x,y| x * y}
+            "#;
+            assert_script(program);
+        }
+    */
     #[test]
     fn enumerator_with_index() {
         let program = r#"

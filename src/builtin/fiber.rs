@@ -98,6 +98,12 @@ impl FiberInfo {
 
     pub fn resume(&mut self, vm: &mut VM) -> VMResult {
         let mut fiber_vm = self.vm;
+        #[allow(unused_variables, unused_assignments, unused_mut)]
+        let mut inst: u8;
+        #[cfg(feature = "perf")]
+        {
+            inst = vm.perf.get_prev_inst();
+        }
         match fiber_vm.fiberstate() {
             FiberState::Dead => {
                 return Err(vm.error_fiber("Dead fiber called."));
@@ -105,7 +111,7 @@ impl FiberInfo {
             FiberState::Created => {
                 fiber_vm.fiberstate_running();
                 #[cfg(feature = "perf")]
-                fiber_vm.perf.get_perf(Perf::INVALID);
+                vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 println!("===> resume(spawn)");
                 let mut vm2 = fiber_vm;
@@ -138,7 +144,10 @@ impl FiberInfo {
                     };
                 });
                 // Wait for fiber.resume.
-                self.rec.recv().unwrap()
+                let res = self.rec.recv().unwrap();
+                #[cfg(feature = "perf")]
+                vm.perf.get_perf_no_count(inst);
+                res
             }
             FiberState::Running => {
                 #[cfg(feature = "perf")]
@@ -148,7 +157,10 @@ impl FiberInfo {
 
                 self.tx.send(1).unwrap();
                 // Wait for fiber.resume.
-                self.rec.recv().unwrap()
+                let res = self.rec.recv().unwrap();
+                #[cfg(feature = "perf")]
+                vm.perf.get_perf_no_count(inst);
+                res
             }
         }
     }

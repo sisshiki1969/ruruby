@@ -112,8 +112,7 @@ impl GC for RValue {
             ObjKind::Splat(v) => v.mark(alloc),
             ObjKind::Proc(pref) => pref.context.mark(alloc),
             ObjKind::Method(mref) => mref.mark(alloc),
-            ObjKind::Enumerator(eref) => eref.mark(alloc),
-            ObjKind::Fiber(fref) => fref.mark(alloc),
+            ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
             _ => {}
         }
     }
@@ -131,8 +130,7 @@ impl RValue {
             ObjKind::Proc(p) => drop(p),
             ObjKind::Regexp(r) => drop(r),
             ObjKind::Method(m) => drop(m),
-            ObjKind::Fiber(f) => f.free(),
-            ObjKind::Enumerator(e) => drop(e),
+            ObjKind::Fiber(f) | ObjKind::Enumerator(f) => f.free(),
             _ => {}
         }
         match &mut self.var_table {

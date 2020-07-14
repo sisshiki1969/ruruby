@@ -2402,9 +2402,17 @@ impl VM {
         if self.parent_fiber.is_none() {
             return Err(self.error_fiber("Can not yield from main fiber."));
         };
+        #[allow(unused_variables, unused_assignments, unused_mut)]
+        let mut inst: u8;
+        #[cfg(feature = "perf")]
+        {
+            inst = self.perf.get_prev_inst();
+        }
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::INVALID);
         self.fiber_send_to_parent(Ok(return_val));
+        #[cfg(feature = "perf")]
+        self.perf.get_perf_no_count(inst);
         Ok(Value::nil())
     }
 
@@ -2412,6 +2420,7 @@ impl VM {
         match &self.parent_fiber {
             Some(ParentFiberInfo { tx, rx, .. }) => {
                 tx.send(val.clone()).unwrap();
+                // Wait for fiber's response
                 rx.recv().unwrap();
             }
             None => unreachable!("Can not yield from main fiber."),
