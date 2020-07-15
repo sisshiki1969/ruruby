@@ -874,7 +874,7 @@ impl Codegen {
                                     .error_syntax("Illegal internal regexp expression.", node.loc))
                             }
                         };
-                        let re = match RegexpInfo::from_string(&string) {
+                        let re = match RegexpInfo::from_string(globals, &string) {
                             Ok(re) => re,
                             Err(_) => {
                                 return Err(self.error_syntax(

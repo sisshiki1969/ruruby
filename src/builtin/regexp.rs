@@ -6,16 +6,30 @@ use crate::*;
 use std::rc::Rc;
 
 #[derive(Clone)]
-pub struct RegexpInfo(Rc<Regexp>);
+pub struct RegexpInfo(Rc<Regex>);
 
 impl RegexpInfo {
-    pub fn from(reg: Regex) -> Self {
-        RegexpInfo(Rc::new(Regexp::new(reg)))
+    /*pub fn from(reg: Regex) -> Self {
+        RegexpInfo(Rc::new(reg))
+    }*/
+
+    pub fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
+        let string = regex::escape(escaped_str);
+        RegexpInfo::from_string(globals, &string)
     }
 
-    pub fn from_string(reg_str: &str) -> Result<Self, Error> {
-        let regex = Regex::new(reg_str)?;
-        Ok(RegexpInfo(Rc::new(Regexp(regex))))
+    pub fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
+        match globals.regexp_cache.get(reg_str) {
+            Some(re) => Ok(RegexpInfo(re.clone())),
+            None => {
+                eprintln!("new: {}", reg_str);
+                let regex = Rc::new(Regex::new(reg_str)?);
+                globals
+                    .regexp_cache
+                    .insert(reg_str.to_string(), regex.clone());
+                Ok(RegexpInfo(regex))
+            }
+        }
     }
 }
 
@@ -32,22 +46,6 @@ impl std::ops::Deref for RegexpInfo {
     type Target = Regex;
     fn deref(&self) -> &Regex {
         &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct Regexp(Regex);
-
-impl std::ops::Deref for Regexp {
-    type Target = Regex;
-    fn deref(&self) -> &Regex {
-        &self.0
-    }
-}
-
-impl Regexp {
-    pub fn new(re: Regex) -> Self {
-        Regexp(re)
     }
 }
 
@@ -85,7 +83,7 @@ fn regexp_escape(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Utility methods
 
-impl Regexp {
+impl RegexpInfo {
     fn get_captures(vm: &mut VM, captures: &Captures, given: &str) {
         let id1 = IdentId::get_id("$&");
         let id2 = IdentId::get_id("$'");
@@ -104,8 +102,8 @@ impl Regexp {
 
         for i in 1..captures.len() {
             match captures.get(i) {
-                Some(m) => Regexp::set_special_global(vm, i, given, m.start(), m.end()),
-                None => Regexp::set_special_global_nil(vm, i),
+                Some(m) => Self::set_special_global(vm, i, given, m.start(), m.end()),
+                None => Self::set_special_global_nil(vm, i),
             };
         }
     }
@@ -131,7 +129,7 @@ impl Regexp {
     ) -> Result<String, RubyError> {
         fn replace_(
             vm: &mut VM,
-            re: &Regexp,
+            re: &RegexpInfo,
             given: &str,
             replace: &str,
         ) -> Result<String, RubyError> {
@@ -140,7 +138,7 @@ impl Regexp {
                 Ok(Some(captures)) => {
                     let mut res = given.to_string();
                     let m = captures.get(0).unwrap();
-                    Regexp::get_captures(vm, &captures, given);
+                    RegexpInfo::get_captures(vm, &captures, given);
                     let mut rep = "".to_string();
                     let mut escape = false;
                     for ch in replace.chars() {
@@ -175,7 +173,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, replace);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.0, given, replace);
+            return replace_(vm, &re, given, replace);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -189,7 +187,7 @@ impl Regexp {
     ) -> Result<(String, bool), RubyError> {
         fn replace_(
             vm: &mut VM,
-            re: &Regexp,
+            re: &RegexpInfo,
             given: &str,
             block: MethodRef,
         ) -> Result<(String, bool), RubyError> {
@@ -197,7 +195,7 @@ impl Regexp {
                 Ok(None) => return Ok((given.to_string(), false)),
                 Ok(Some(captures)) => {
                     let m = captures.get(0).unwrap();
-                    Regexp::get_captures(vm, &captures, given);
+                    RegexpInfo::get_captures(vm, &captures, given);
                     (m.start(), m.end(), m.as_str())
                 }
                 Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
@@ -215,7 +213,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, block);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.0, given, block);
+            return replace_(vm, &re, given, block);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -230,7 +228,7 @@ impl Regexp {
     ) -> Result<(String, bool), RubyError> {
         fn replace_(
             vm: &mut VM,
-            re: &Regexp,
+            re: &RegexpInfo,
             given: &str,
             replace: &str,
         ) -> Result<(String, bool), RubyError> {
@@ -253,7 +251,7 @@ impl Regexp {
                         };
                         range.push((m.start(), m.end()));
                         //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
-                        Regexp::get_captures(vm, &captures, given);
+                        RegexpInfo::get_captures(vm, &captures, given);
                     }
                     Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
                 };
@@ -269,7 +267,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, replace);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.0, given, replace);
+            return replace_(vm, &re, given, replace);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -284,7 +282,7 @@ impl Regexp {
     ) -> Result<(String, bool), RubyError> {
         fn replace_(
             vm: &mut VM,
-            re: &Regexp,
+            re: &RegexpInfo,
             given: &str,
             block: MethodRef,
         ) -> Result<(String, bool), RubyError> {
@@ -296,7 +294,7 @@ impl Regexp {
                     Ok(Some(captures)) => {
                         let m = captures.get(0).unwrap();
                         i = m.end();
-                        Regexp::get_captures(vm, &captures, given);
+                        RegexpInfo::get_captures(vm, &captures, given);
                         (m.start(), m.end(), m.as_str())
                     }
                     Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
@@ -318,7 +316,7 @@ impl Regexp {
             let re = vm.regexp_from_string(&s)?;
             return replace_(vm, &re, given, block);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re.0, given, block);
+            return replace_(vm, &re, given, block);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -332,7 +330,7 @@ impl Regexp {
         match re.captures(given) {
             Ok(None) => Ok(None),
             Ok(Some(captures)) => {
-                Regexp::get_captures(vm, &captures, given);
+                RegexpInfo::get_captures(vm, &captures, given);
                 Ok(captures.get(0))
             }
             Err(err) => Err(vm.error_internal(format!("Capture failed. {:?}", err))),
@@ -376,7 +374,7 @@ impl Regexp {
             };
         }
         match last_captures {
-            Some(c) => Regexp::get_captures(vm, &c, given),
+            Some(c) => RegexpInfo::get_captures(vm, &c, given),
             None => {}
         }
         Ok(ary)

@@ -1,4 +1,5 @@
 use crate::*;
+use fancy_regex::Regex;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -25,7 +26,7 @@ pub struct Globals {
     pub gc_enabled: bool,
 
     pub fibers: Vec<VMRef>,
-    pub regexp_cache: HashMap<String, Rc<Regexp>>,
+    pub regexp_cache: HashMap<String, Rc<Regex>>,
 }
 
 pub type GlobalsRef = Ref<Globals>;

@@ -1832,7 +1832,7 @@ impl VM {
                         },
                         _ => return Ok(false),
                     };
-                    let res = Regexp::find_one(self, &*re, &given)?.is_some();
+                    let res = RegexpInfo::find_one(self, &*re, &given)?.is_some();
                     Ok(res)
                 }
                 _ => Ok(self.eval_eq(lhs, rhs)),
@@ -2573,8 +2573,9 @@ impl VM {
     /// Create new Regexp object from `string`.
     /// Regular expression meta characters are handled as is.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn create_regexp_from_string(&self, string: &str) -> VMResult {
-        let re = RegexpInfo::from_string(string).map_err(|err| self.error_regexp(err))?;
+    pub fn create_regexp_from_string(&mut self, string: &str) -> VMResult {
+        let re = RegexpInfo::from_string(&mut self.globals, string)
+            .map_err(|err| self.error_regexp(err))?;
         let regexp = Value::regexp(&self.globals, re);
         Ok(regexp)
     }
@@ -2582,11 +2583,8 @@ impl VM {
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_string(&self, string: &str) -> Result<Regexp, RubyError> {
-        match fancy_regex::Regex::new(&regex::escape(string)) {
-            Ok(re) => Ok(Regexp::new(re)),
-            Err(err) => Err(self.error_regexp(err)),
-        }
+    pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+        RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| self.error_regexp(err))
     }
 }
 
