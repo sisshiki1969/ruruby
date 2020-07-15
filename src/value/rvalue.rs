@@ -304,11 +304,11 @@ impl RValue {
         }
     }
 
-    pub fn new_regexp(globals: &Globals, regexpref: RegexpInfo) -> Self {
+    pub fn new_regexp(globals: &Globals, regexp: RegexpInfo) -> Self {
         RValue {
             class: globals.builtins.regexp,
             var_table: None,
-            kind: ObjKind::Regexp(regexpref),
+            kind: ObjKind::Regexp(regexp),
         }
     }
 

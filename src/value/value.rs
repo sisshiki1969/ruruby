@@ -766,8 +766,8 @@ impl Value {
         RValue::new_hash(globals, HashInfo::new(hash)).pack()
     }
 
-    pub fn regexp(globals: &Globals, regexp_ref: RegexpInfo) -> Self {
-        RValue::new_regexp(globals, regexp_ref).pack()
+    pub fn regexp(globals: &Globals, regexp: RegexpInfo) -> Self {
+        RValue::new_regexp(globals, regexp).pack()
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {

@@ -1,5 +1,6 @@
 use crate::*;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
@@ -24,6 +25,7 @@ pub struct Globals {
     pub gc_enabled: bool,
 
     pub fibers: Vec<VMRef>,
+    pub regexp_cache: HashMap<String, Rc<Regexp>>,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -146,6 +148,7 @@ impl Globals {
             case_dispatch: CaseDispatchMap::new(),
             gc_enabled: true,
             fibers: vec![],
+            regexp_cache: HashMap::new(),
         };
         // Generate singleton class for Object
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
