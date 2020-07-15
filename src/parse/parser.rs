@@ -1709,7 +1709,7 @@ impl Parser {
                     tok.loc,
                 ));
             }
-            TokenKind::OpenRegex(s) => vec![Node::new_string(s.clone(), tok.loc)],
+            TokenKind::OpenRegex(s) => vec![Node::new_string(s, tok.loc)],
             _ => panic!(),
         };
         loop {
@@ -1717,12 +1717,12 @@ impl Parser {
                 TokenKind::CloseString(s) => {
                     self.get()?;
                     let end_loc = self.prev_loc();
-                    nodes.push(Node::new_string(s.clone(), end_loc));
+                    nodes.push(Node::new_string(s, end_loc));
                     return Ok(Node::new_regexp(nodes, tok.loc.merge(end_loc)));
                 }
                 TokenKind::InterString(s) => {
                     self.get()?;
-                    nodes.push(Node::new_string(s.clone(), self.prev_loc()));
+                    nodes.push(Node::new_string(s, self.prev_loc()));
                 }
                 TokenKind::EOF => {
                     let loc = self.loc();
