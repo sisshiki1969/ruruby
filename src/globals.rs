@@ -113,8 +113,8 @@ impl Globals {
         ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
         //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
-        let module_id = IdentId::get_ident_id("Module");
-        let class_id = IdentId::get_ident_id("Class");
+        let module_id = IdentId::get_id("Module");
+        let class_id = IdentId::get_id("Class");
         let mut object_class = ClassRef::from(object_id, None);
         let object = Value::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
@@ -176,7 +176,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                let id = IdentId::get_ident_id($name);
+                let id = IdentId::get_id($name);
                 globals
                     .builtins
                     .object
@@ -186,7 +186,7 @@ impl Globals {
 
         macro_rules! set_class {
             ($name:expr, $class_object:expr) => {
-                let id = IdentId::get_ident_id($name);
+                let id = IdentId::get_id($name);
                 let object = $class_object;
                 globals.builtins.object.set_var(id, object);
             };
@@ -213,7 +213,7 @@ impl Globals {
         set_class!("Process", process::init_process(&mut globals));
         set_class!("Struct", structobj::init_struct(&mut globals));
         set_class!("StandardError", Value::class(&globals, globals.class_class));
-        let id = IdentId::get_ident_id("StopIteration");
+        let id = IdentId::get_id("StopIteration");
         let class = ClassRef::from(id, globals.builtins.object);
         set_class!("StopIteration", Value::class(&globals, class));
         set_class!("RuntimeError", errorobj::init_error(&mut globals));
@@ -298,7 +298,7 @@ impl Globals {
     }
 
     pub fn add_builtin_class_method(&mut self, obj: Value, name: &str, func: BuiltinFunc) {
-        let id = IdentId::get_ident_id(name);
+        let id = IdentId::get_id(name);
         let info = MethodInfo::BuiltinFunc {
             name: name.to_string(),
             func,
@@ -314,7 +314,7 @@ impl Globals {
         name: &str,
         func: BuiltinFunc,
     ) {
-        let id = IdentId::get_ident_id(name);
+        let id = IdentId::get_id(name);
         let info = MethodInfo::BuiltinFunc {
             name: name.to_string(),
             func,

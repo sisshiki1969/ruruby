@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init_struct(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("Struct");
+    let id = IdentId::get_id("Struct");
     let class = ClassRef::from(id, globals.builtins.object);
     let class = Value::class(globals, class);
     globals.add_builtin_class_method(class, "new", struct_new);
@@ -19,7 +19,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 _ => return Err(vm.error_name(format!("Identifier `{}` needs to be constant.", s))),
             };
             i = 1;
-            let s = IdentId::get_ident_id(format!("Struct:{}", s));
+            let s = IdentId::get_id(format!("Struct:{}", s));
             Some(s)
         }
     };
@@ -47,7 +47,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         attr_args[index - i] = v;
     }
     val.set_var(
-        IdentId::get_ident_id("_members"),
+        IdentId::get_id("_members"),
         Value::array_from(&vm.globals, vec),
     );
     builtin::module::attr_accessor(vm, val, &attr_args)?;
@@ -66,7 +66,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class_object(&vm.globals);
-    let name = class.get_var(IdentId::get_ident_id("_members")).unwrap();
+    let name = class.get_var(IdentId::get_id("_members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
         return Err(vm.error_argument("Struct size differs."));
@@ -74,7 +74,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     for (i, arg) in args.iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
         let var = format!("@{}", IdentId::get_ident_name(id));
-        self_val.set_var(IdentId::get_ident_id(var), *arg);
+        self_val.set_var(IdentId::get_id(var), *arg);
     }
     Ok(Value::nil())
 }
@@ -82,7 +82,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut name = self_val
         .get_class_object(&vm.globals)
-        .get_var(IdentId::get_ident_id("_members"));
+        .get_var(IdentId::get_id("_members"));
     let members = match name {
         Some(ref mut v) => match v.as_array() {
             Some(aref) => aref,
@@ -96,7 +96,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         .map(|x| {
             let id = x.as_symbol().unwrap();
             let name = format!("@{}", IdentId::get_ident_name(id));
-            IdentId::get_ident_id(name)
+            IdentId::get_id(name)
         })
         .collect();
     let mut attr_str = String::new();

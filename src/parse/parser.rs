@@ -264,7 +264,7 @@ impl Parser {
     }
 
     fn get_ident_id(&self, method: impl Into<String>) -> IdentId {
-        IdentId::get_ident_id(method)
+        IdentId::get_id(method)
     }
 
     /// Peek next token (skipping line terminators).

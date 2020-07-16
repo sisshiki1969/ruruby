@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("Integer");
+    let id = IdentId::get_id("Integer");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "==", eq);
     globals.add_builtin_instance_method(class, "!=", neq);
@@ -97,7 +97,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = match args.block {
         Some(method) => method,
         None => {
-            let id = IdentId::get_ident_id("times");
+            let id = IdentId::get_id("times");
             let val = Value::enumerator(&vm.globals, id, self_val, args.clone());
             return Ok(val);
         }
@@ -119,7 +119,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = match args.block {
         Some(method) => method,
         None => {
-            let id = IdentId::get_ident_id("step");
+            let id = IdentId::get_id("step");
             let val = Value::enumerator(&vm.globals, id, self_val, args.clone());
             return Ok(val);
         }

@@ -3,7 +3,7 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("Kernel");
+    let id = IdentId::get_id("Kernel");
     let kernel_class = ClassRef::from(id, None);
     globals.add_builtin_instance_method(kernel_class, "puts", puts);
     globals.add_builtin_instance_method(kernel_class, "p", p);
@@ -250,7 +250,7 @@ pub fn init(globals: &mut Globals) -> Value {
             eprintln!("{}", vm.val_inspect(*arg));
         }*/
         if args.len() == 1 && args[0].is_class().is_some() {
-            if Some(IdentId::get_ident_id("StopIteration")) == args[0].as_class().name {
+            if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name {
                 return Err(vm.error_stop_iteration(""));
             };
         }

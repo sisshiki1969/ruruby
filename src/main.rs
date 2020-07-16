@@ -28,7 +28,7 @@ fn main() {
     };
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.new_vm();
-    let id = IdentId::get_ident_id("ARGV");
+    let id = IdentId::get_id("ARGV");
     let mut res: Vec<Value> = args
         .iter()
         .map(|x| Value::string(&vm.globals, x.to_string()))

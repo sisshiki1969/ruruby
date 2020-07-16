@@ -2,7 +2,7 @@ use crate::*;
 use std::collections::HashMap;
 
 pub fn init_hash(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("Hash");
+    let id = IdentId::get_id("Hash");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "to_s", inspect);
     globals.add_builtin_instance_method(class, "inspect", inspect);

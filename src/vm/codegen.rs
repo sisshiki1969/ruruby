@@ -581,7 +581,7 @@ impl Codegen {
                 receiver, method, ..
             } => {
                 let name = IdentId::get_ident_name(*method).to_string() + "=";
-                let assign_id = IdentId::get_ident_id(name);
+                let assign_id = IdentId::get_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
                 self.gen_opt_send(globals, iseq, assign_id, 1);
@@ -1109,7 +1109,7 @@ impl Codegen {
                     BinOp::Ne => binop_imm!(Inst::NE, Inst::NEI),
                     BinOp::TEq => binop!(Inst::TEQ),
                     BinOp::Match => {
-                        let method = IdentId::get_ident_id("=~");
+                        let method = IdentId::get_id("=~");
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;

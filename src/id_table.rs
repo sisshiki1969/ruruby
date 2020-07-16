@@ -64,7 +64,7 @@ impl IdentId {
 }
 
 impl IdentId {
-    pub fn get_ident_id(name: impl Into<String>) -> Self {
+    pub fn get_id(name: impl Into<String>) -> Self {
         ID.write().unwrap().get_ident_id(name)
     }
 
@@ -82,7 +82,7 @@ impl IdentId {
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
         let new_name = IdentId::get_name(id) + postfix;
-        IdentId::get_ident_id(new_name)
+        IdentId::get_id(new_name)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let id = IdentId::get_ident_id("Float");
+    let id = IdentId::get_id("Float");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "<=>", cmp);
     globals.add_builtin_instance_method(class, "floor", floor);

@@ -1865,7 +1865,7 @@ impl VM {
                 _ => return Ok(Value::nil()),
             },
             _ => {
-                let id = IdentId::get_ident_id("<=>");
+                let id = IdentId::get_id("<=>");
                 return self.fallback_for_binop(id, lhs, rhs);
             }
         };
@@ -1910,7 +1910,7 @@ impl VM {
                     }
                 }
                 ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
-                _ => self.fallback(IdentId::get_ident_id("[]"), receiver, &args)?,
+                _ => self.fallback(IdentId::get_id("[]"), receiver, &args)?,
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
@@ -2084,7 +2084,7 @@ impl VM {
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Hash(href) => href.to_s(self),
                 _ => {
-                    let id = IdentId::get_ident_id("inspect");
+                    let id = IdentId::get_id("inspect");
                     self.send0(val, id)
                         .unwrap()
                         .as_string()
