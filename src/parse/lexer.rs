@@ -1,7 +1,7 @@
 use super::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::util::*;
-use std::collections::HashMap;
+use fxhash::FxHashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
@@ -10,8 +10,8 @@ pub struct Lexer {
     pos: u32,
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
-    reserved: HashMap<String, Reserved>,
-    reserved_rev: HashMap<Reserved, String>,
+    reserved: FxHashMap<String, Reserved>,
+    reserved_rev: FxHashMap<Reserved, String>,
     quote_state: Vec<QuoteState>,
     pub source_info: SourceInfoRef,
     state_save: Vec<(u32, u32)>, // (token_start_pos, pos)
@@ -41,8 +41,8 @@ pub enum VarKind {
 
 impl Lexer {
     pub fn new() -> Self {
-        let mut reserved = HashMap::new();
-        let mut reserved_rev = HashMap::new();
+        let mut reserved = FxHashMap::default();
+        let mut reserved_rev = FxHashMap::default();
         macro_rules! reg_reserved {
             ( $($id:expr => $variant:path),+ ) => {
                 $(

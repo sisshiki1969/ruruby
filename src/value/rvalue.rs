@@ -1,16 +1,14 @@
-use std::collections::HashMap;
-//#[macro_use]
 use crate::*;
 
 /// Heap-allocated objects.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct RValue {
     class: Value,
     var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq)]
 pub enum ObjKind {
     Invalid,
     Ordinary,
@@ -27,7 +25,7 @@ pub enum ObjKind {
     Regexp(RegexpInfo),
     Method(Box<MethodObjInfo>),
     Fiber(FiberRef),
-    Enumerator(Box<EnumInfo>),
+    Enumerator(FiberRef),
 }
 
 impl std::fmt::Debug for ObjKind {
@@ -35,7 +33,7 @@ impl std::fmt::Debug for ObjKind {
         match self {
             ObjKind::Invalid => write!(f, "[Invalid]"),
             ObjKind::Ordinary => write!(f, "Ordinary"),
-            ObjKind::String(rs) => write!(f, "String:{:?}", rs),
+            ObjKind::String(rs) => write!(f, r#""{:?}""#, rs),
             ObjKind::Integer(i) => write!(f, "{}", *i),
             ObjKind::Float(i) => write!(f, "{}", *i),
             ObjKind::Class(cref) => match cref.name {
@@ -47,7 +45,7 @@ impl std::fmt::Debug for ObjKind {
                 None => write!(f, "#<Module:0x{:x}>", cref.id()),
             },
             ObjKind::Array(aref) => {
-                write!(f, "Array[")?;
+                write!(f, "[")?;
                 match aref.elements.len() {
                     0 => {}
                     1 => write!(f, "{:#?}", aref.elements[0])?,
@@ -112,8 +110,7 @@ impl GC for RValue {
             ObjKind::Splat(v) => v.mark(alloc),
             ObjKind::Proc(pref) => pref.context.mark(alloc),
             ObjKind::Method(mref) => mref.mark(alloc),
-            ObjKind::Enumerator(eref) => eref.mark(alloc),
-            ObjKind::Fiber(fref) => fref.mark(alloc),
+            ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
             _ => {}
         }
     }
@@ -131,8 +128,7 @@ impl RValue {
             ObjKind::Proc(p) => drop(p),
             ObjKind::Regexp(r) => drop(r),
             ObjKind::Method(m) => drop(m),
-            ObjKind::Fiber(f) => f.free(),
-            ObjKind::Enumerator(e) => drop(e),
+            ObjKind::Fiber(f) | ObjKind::Enumerator(f) => f.free(),
             _ => {}
         }
         match &mut self.var_table {
@@ -161,7 +157,7 @@ impl RValue {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
                 ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
-                ObjKind::Enumerator(eref) => ObjKind::Enumerator(eref.clone()),
+                ObjKind::Enumerator(_eref) => ObjKind::Ordinary,
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
@@ -306,11 +302,11 @@ impl RValue {
         }
     }
 
-    pub fn new_regexp(globals: &Globals, regexpref: RegexpInfo) -> Self {
+    pub fn new_regexp(globals: &Globals, regexp: RegexpInfo) -> Self {
         RValue {
             class: globals.builtins.regexp,
             var_table: None,
-            kind: ObjKind::Regexp(regexpref),
+            kind: ObjKind::Regexp(regexp),
         }
     }
 
@@ -345,18 +341,12 @@ impl RValue {
         }
     }
 
-    pub fn new_enumerator(
-        globals: &Globals,
-        method: IdentId,
-        receiver: Value,
-        mut args: Args,
-    ) -> Self {
-        args.block = Some(MethodRef::from(0));
-        let enum_info = EnumInfo::new(method, receiver, args);
+    pub fn new_enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
+        let fref = FiberRef::new(fiber);
         RValue {
             class: globals.builtins.enumerator,
             var_table: None,
-            kind: ObjKind::Enumerator(Box::new(enum_info)),
+            kind: ObjKind::Enumerator(fref),
         }
     }
 }
@@ -415,7 +405,7 @@ impl RValue {
         match &mut self.var_table {
             Some(table) => table.insert(id, val),
             None => {
-                let mut table = HashMap::new();
+                let mut table = FxHashMap::default();
                 let v = table.insert(id, val);
                 self.var_table = Some(Box::new(table));
                 v
@@ -432,7 +422,7 @@ impl RValue {
 
     pub fn var_table_mut(&mut self) -> &mut ValueTable {
         if self.var_table.is_none() {
-            self.var_table = Some(Box::new(HashMap::new()));
+            self.var_table = Some(Box::new(FxHashMap::default()));
         }
         self.var_table.as_deref_mut().unwrap()
     }

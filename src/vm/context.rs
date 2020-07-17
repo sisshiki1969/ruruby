@@ -5,12 +5,11 @@ const LVAR_ARRAY_SIZE: usize = 32;
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub is_fiber: bool,
     pub self_value: Value,
     pub block: Option<MethodRef>,
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
-    pub iseq_ref: ISeqRef,
+    pub iseq_ref: Option<ISeqRef>,
     pub pc: usize,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
@@ -74,8 +73,13 @@ impl GC for Context {
         self.self_value.mark(alloc);
         //self.lvar_ary.iter().for_each(|v| v.mark(alloc));
         //self.lvar_vec.iter().for_each(|v| v.mark(alloc));
-        for i in 0..self.iseq_ref.lvars {
-            self[i].mark(alloc);
+        match self.iseq_ref {
+            Some(iseq_ref) => {
+                for i in 0..iseq_ref.lvars {
+                    self[i].mark(alloc);
+                }
+            }
+            None => {}
         }
         match self.outer {
             Some(c) => c.mark(alloc),
@@ -99,18 +103,33 @@ impl Context {
             Vec::new()
         };
         Context {
-            is_fiber: false,
             self_value,
             block,
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec,
-            iseq_ref,
+            iseq_ref: Some(iseq_ref),
             pc: 0,
             outer,
             caller,
             on_stack: true,
             stack_len: 0,
             kind: iseq_ref.kind.clone(),
+        }
+    }
+
+    pub fn new_noiseq() -> Self {
+        Context {
+            self_value: Value::nil(),
+            block: None,
+            lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
+            lvar_vec: vec![],
+            iseq_ref: None,
+            pc: 0,
+            outer: None,
+            caller: None,
+            on_stack: true,
+            stack_len: 0,
+            kind: ISeqKind::Block(MethodRef::from(0)),
         }
     }
 
@@ -192,7 +211,7 @@ impl Context {
     }
 
     fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
-        let iseq = self.iseq_ref;
+        let iseq = self.iseq_ref.unwrap();
         let req_len = iseq.params.req_params;
         let post_len = iseq.params.post_params;
         match self.kind {
@@ -291,7 +310,7 @@ impl ContextRef {
     }
 
     pub fn adjust_lvar_size(&mut self) {
-        let len = self.iseq_ref.lvars;
+        let len = self.iseq_ref.unwrap().lvars;
         if LVAR_ARRAY_SIZE < len {
             for _ in 0..len - LVAR_ARRAY_SIZE {
                 self.lvar_vec.push(Value::nil());

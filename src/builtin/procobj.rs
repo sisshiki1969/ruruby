@@ -38,7 +38,7 @@ fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = Context::from_args(
         vm,
         self_val,
-        pref.context.iseq_ref,
+        pref.context.iseq_ref.unwrap(),
         args,
         pref.context.outer,
         vm.latest_context(),

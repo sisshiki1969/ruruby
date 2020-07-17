@@ -1,9 +1,8 @@
 use crate::*;
-use std::collections::HashMap;
 
 pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult;
 
-pub type MethodTable = HashMap<IdentId, MethodRef>;
+pub type MethodTable = FxHashMap<IdentId, MethodRef>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MethodRef(u32);
@@ -27,10 +26,6 @@ impl From<u32> for MethodRef {
 }
 
 impl MethodRef {
-    pub fn is_none(&self) -> bool {
-        self.0 == 0
-    }
-
     pub fn print(&self, globals: &Globals) {
         let info = globals.get_method_info(*self);
         let iseq = if let MethodInfo::RubyFunc { iseq } = info {
@@ -135,7 +130,7 @@ pub struct ISeqParams {
     pub post_params: usize,
     pub block_param: bool,
     pub param_ident: Vec<IdentId>,
-    pub keyword_params: HashMap<IdentId, LvarId>,
+    pub keyword_params: FxHashMap<IdentId, LvarId>,
 }
 
 impl ISeqParams {
@@ -191,7 +186,7 @@ impl ISeqInfo {
         post_params: usize,
         block_param: bool,
         param_ident: Vec<IdentId>,
-        keyword_params: HashMap<IdentId, LvarId>,
+        keyword_params: FxHashMap<IdentId, LvarId>,
         iseq: ISeq,
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
@@ -237,7 +232,7 @@ impl ISeqInfo {
             0,
             false,
             vec![],
-            std::collections::HashMap::new(),
+            FxHashMap::default(),
             vec![],
             LvarCollector::new(),
             vec![],
@@ -263,8 +258,9 @@ pub struct GlobalMethodTable {
 impl GlobalMethodTable {
     pub fn new() -> Self {
         GlobalMethodTable {
-            table: vec![MethodInfo::AttrReader {
-                id: IdentId::from(1),
+            table: vec![MethodInfo::BuiltinFunc {
+                func: enumerator_iterate,
+                name: "/enum".to_string(),
             }],
             method_id: 1,
         }

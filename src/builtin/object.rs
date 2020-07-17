@@ -19,6 +19,8 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "equal?", equal);
     globals.add_builtin_instance_method(object, "send", send);
     globals.add_builtin_instance_method(object, "eval", eval);
+    globals.add_builtin_instance_method(object, "to_enum", to_enum);
+    globals.add_builtin_instance_method(object, "enum_for", to_enum);
 }
 
 fn class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -144,7 +146,7 @@ fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let context = vm.current_context();
-    let iseq = context.iseq_ref;
+    let iseq = context.iseq_ref.unwrap();
     if let ISeqKind::Method(m) = context.kind {
         let class = match iseq.class_defined {
             Some(list) => list.class,
@@ -224,6 +226,31 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let args = Args::new0();
     let res = vm.eval_block(method, &args)?;
     Ok(res)
+}
+
+fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    if args.block.is_some() {
+        return Err(vm.error_argument("Curently, block is not allowed."));
+    };
+    let (method, new_args) = if args.len() == 0 {
+        let method = IdentId::get_id("each");
+        let mut new_args = Args::new0();
+        new_args.block = Some(MethodRef::from(0));
+        (method, new_args)
+    } else {
+        if !args[0].is_packed_symbol() {
+            return Err(vm.error_argument("2nd arg must be Symbol."));
+        };
+        let method = args[0].as_packed_symbol();
+        let mut new_args = Args::new(args.len() - 1);
+        for i in 0..args.len() - 1 {
+            new_args[i] = args[i + 1];
+        }
+        new_args.block = Some(MethodRef::from(0));
+        (method, new_args)
+    };
+    let val = vm.create_enumerator(method, self_val, new_args)?;
+    Ok(val)
 }
 
 #[cfg(test)]

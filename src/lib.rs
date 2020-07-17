@@ -4,6 +4,8 @@
 extern crate fancy_regex;
 #[macro_use]
 extern crate lazy_static;
+extern crate fxhash;
+pub use fxhash::FxHashMap;
 pub mod alloc;
 pub mod builtin;
 pub mod error;

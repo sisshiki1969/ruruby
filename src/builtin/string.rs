@@ -474,10 +474,10 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let res = if args.len() == 2 {
         let mut arg1 = args[1];
         let replace = arg1.expect_string(vm, "2nd arg")?;
-        Regexp::replace_one(vm, args[0], given, replace)?
+        RegexpInfo::replace_one(vm, args[0], given, replace)?
     } else {
         let block = vm.expect_block(args.block)?;
-        let (res, _) = Regexp::replace_one_block(vm, args[0], given, block)?;
+        let (res, _) = RegexpInfo::replace_one_block(vm, args[0], given, block)?;
         res
     };
     Ok(Value::string(&vm.globals, res))
@@ -500,14 +500,14 @@ fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, b
         Some(block) => {
             vm.check_args_num(args.len(), 1)?;
             let given = self_val.expect_string(vm, "Receiver")?;
-            Regexp::replace_all_block(vm, args[0], given, block)
+            RegexpInfo::replace_all_block(vm, args[0], given, block)
         }
         None => {
             vm.check_args_num(args.len(), 2)?;
             let given = self_val.expect_string(vm, "Receiver")?;
             let mut arg1 = args[1];
             let replace = arg1.expect_string(vm, "2nd arg")?;
-            Regexp::replace_all(vm, args[0], given, replace)
+            RegexpInfo::replace_all(vm, args[0], given, replace)
         }
     }
 }
@@ -517,24 +517,13 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let given = self_val.expect_string(vm, "Receiver")?;
     let vec = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(&s)?;
-        Regexp::find_all(vm, &re, given)?
+        RegexpInfo::find_all(vm, &re, given)?
     } else if let Some(re) = args[0].as_regexp() {
-        Regexp::find_all(vm, &*re, given)?
+        RegexpInfo::find_all(vm, &*re, given)?
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
     match args.block {
-        Some(block) if block == MethodRef::from(0) => {
-            let mut res = vec![];
-            vm.temp_push_vec(&mut vec.clone());
-            for arg in vec {
-                let block_args = Args::new1(arg);
-                let v = vm.eval_block(block, &block_args)?;
-                vm.temp_push(v);
-                res.push(v);
-            }
-            Ok(Value::array_from(&vm.globals, res))
-        }
         Some(block) => {
             vm.temp_push_vec(&mut vec.clone());
             for arg in vec {
@@ -563,7 +552,7 @@ fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     if let Some(re) = args[0].as_regexp() {
-        let res = match Regexp::find_one(vm, &*re, given).unwrap() {
+        let res = match RegexpInfo::find_one(vm, &*re, given).unwrap() {
             Some(mat) => Value::fixnum(mat.start() as i64),
             None => Value::nil(),
         };

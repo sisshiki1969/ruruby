@@ -608,17 +608,21 @@ impl Value {
         }
     }
 
-    pub fn as_enumerator(&self) -> Option<&EnumInfo> {
+    pub fn as_enumerator(&mut self) -> Option<FiberRef> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Enumerator(eref) => Some(eref),
+            Some(oref) => match oref.kind {
+                ObjKind::Enumerator(fref) => Some(fref),
                 _ => None,
             },
             None => None,
         }
     }
 
-    pub fn expect_enumerator(&self, vm: &mut VM, error_msg: &str) -> Result<&EnumInfo, RubyError> {
+    pub fn expect_enumerator(
+        &mut self,
+        vm: &mut VM,
+        error_msg: &str,
+    ) -> Result<FiberRef, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
             None => Err(vm.error_argument(error_msg)),
@@ -755,15 +759,12 @@ impl Value {
         RValue::new_hash(globals, hash).pack()
     }
 
-    pub fn hash_from_map(
-        globals: &Globals,
-        hash: std::collections::HashMap<HashKey, Value>,
-    ) -> Self {
+    pub fn hash_from_map(globals: &Globals, hash: FxHashMap<HashKey, Value>) -> Self {
         RValue::new_hash(globals, HashInfo::new(hash)).pack()
     }
 
-    pub fn regexp(globals: &Globals, regexp_ref: RegexpInfo) -> Self {
-        RValue::new_regexp(globals, regexp_ref).pack()
+    pub fn regexp(globals: &Globals, regexp: RegexpInfo) -> Self {
+        RValue::new_regexp(globals, regexp).pack()
     }
 
     pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
@@ -784,8 +785,8 @@ impl Value {
         RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
 
-    pub fn enumerator(globals: &Globals, method: IdentId, receiver: Value, args: Args) -> Self {
-        RValue::new_enumerator(globals, method, receiver, args).pack()
+    pub fn enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
+        RValue::new_enumerator(globals, fiber).pack()
     }
 }
 

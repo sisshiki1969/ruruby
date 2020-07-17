@@ -19,7 +19,7 @@ pub trait GC {
 ///
 /// Heap page struct.
 ///
-/// Single page ocupies `ALLOC_SIZE` bytes in memory.
+/// Single page occupies `ALLOC_SIZE` bytes in memory.
 /// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
 ///
 struct Page {

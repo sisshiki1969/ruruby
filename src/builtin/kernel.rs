@@ -94,14 +94,10 @@ pub fn init(globals: &mut Globals) -> Value {
                 "Assertion error: No error occured. returned {:?}",
                 val
             ))),
-            Err(err) if err.kind == RubyErrorKind::BlockReturn => {
-                vm.stack_pop();
-                println!("Assert_error OK:");
-                err.show_err();
-                err.show_loc(0);
-                Ok(Value::nil())
-            }
             Err(err) => {
+                if err.is_block_return() || err.is_method_return() {
+                    vm.stack_pop();
+                }
                 println!("Assert_error OK:");
                 err.show_err();
                 err.show_loc(0);
@@ -125,7 +121,7 @@ pub fn init(globals: &mut Globals) -> Value {
     fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 1)?;
         let context = vm.current_context();
-        let mut path = std::path::PathBuf::from(context.iseq_ref.source_info.path.clone());
+        let mut path = std::path::PathBuf::from(context.iseq_ref.unwrap().source_info.path.clone());
 
         let file_name = match args[0].as_string() {
             Some(string) => PathBuf::from(string),
@@ -231,7 +227,13 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_num(args.len(), 0)?;
-        let path = vm.current_context().iseq_ref.source_info.path.clone();
+        let path = vm
+            .current_context()
+            .iseq_ref
+            .unwrap()
+            .source_info
+            .path
+            .clone();
         Ok(Value::string(
             &vm.globals,
             path.to_string_lossy().to_string(),
@@ -273,7 +275,10 @@ pub fn init(globals: &mut Globals) -> Value {
                     RubyErrorKind::RuntimeErr {
                         kind: RuntimeErrKind::StopIteration,
                         ..
-                    } => return Ok(Value::nil()),
+                    } => {
+                        return Ok(Value::nil());
+                    }
+
                     _ => return Err(err),
                 },
             }

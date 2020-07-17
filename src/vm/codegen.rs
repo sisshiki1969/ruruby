@@ -2,7 +2,6 @@ use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
 use crate::parse::node::{BinOp, Node, NodeKind, UnOp};
 use crate::*;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Codegen {
@@ -63,7 +62,7 @@ enum EscapeKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Context {
-    lvar_info: HashMap<IdentId, LvarId>,
+    lvar_info: FxHashMap<IdentId, LvarId>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     exceptions: Vec<Exceptions>,
     kind: ContextKind,
@@ -90,14 +89,14 @@ pub enum ContextKind {
 impl Context {
     fn new() -> Self {
         Context {
-            lvar_info: HashMap::new(),
+            lvar_info: FxHashMap::default(),
             iseq_sourcemap: vec![],
             exceptions: vec![],
             kind: ContextKind::Eval,
         }
     }
 
-    fn from(lvar_info: HashMap<IdentId, LvarId>, kind: ContextKind) -> Self {
+    fn from(lvar_info: FxHashMap<IdentId, LvarId>, kind: ContextKind) -> Self {
         Context {
             lvar_info,
             iseq_sourcemap: vec![],
@@ -671,7 +670,7 @@ impl Codegen {
         let mut post_params = 0;
         let mut block_param = false;
         let mut param_ident = vec![];
-        let mut keyword_params = HashMap::new();
+        let mut keyword_params = FxHashMap::default();
         let mut iseq = ISeq::new();
 
         self.context_stack
@@ -829,20 +828,24 @@ impl Codegen {
                 self.gen_symbol(iseq, *id);
             }
             NodeKind::InterporatedString(nodes) => {
-                //self.gen_string(iseq, &"".to_string());
+                let mut c = 0;
                 for node in nodes {
                     match &node.kind {
                         NodeKind::String(s) => {
-                            self.gen_string(globals, iseq, &s);
+                            if s.len() != 0 {
+                                self.gen_string(globals, iseq, &s);
+                                c += 1;
+                            }
                         }
                         NodeKind::CompStmt(nodes) => {
                             self.gen_comp_stmt(globals, iseq, nodes, true)?;
                             iseq.push(Inst::TO_S);
+                            c += 1;
                         }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
                     }
                 }
-                self.gen_concat(iseq, nodes.len());
+                self.gen_concat(iseq, c);
                 if !use_value {
                     self.gen_pop(iseq)
                 };
@@ -870,7 +873,7 @@ impl Codegen {
                                     .error_syntax("Illegal internal regexp expression.", node.loc))
                             }
                         };
-                        let re = match RegexpInfo::from_string(&string) {
+                        let re = match RegexpInfo::from_string(globals, &string) {
                             Ok(re) => re,
                             Err(_) => {
                                 return Err(self.error_syntax(
@@ -956,7 +959,7 @@ impl Codegen {
             NodeKind::Hash(key_value, is_const) => {
                 if *is_const {
                     if use_value {
-                        let mut map = HashMap::new();
+                        let mut map = FxHashMap::default();
                         for (k, v) in key_value {
                             map.insert(
                                 HashKey(self.const_expr(globals, k)),
@@ -1767,7 +1770,7 @@ impl Codegen {
             NodeKind::Symbol(s) => Value::symbol(*s),
             NodeKind::String(s) => Value::string(globals, s.to_owned()),
             NodeKind::Hash(key_value, true) => {
-                let mut map = HashMap::new();
+                let mut map = FxHashMap::default();
                 for (k, v) in key_value {
                     map.insert(
                         HashKey(self.const_expr(globals, k)),

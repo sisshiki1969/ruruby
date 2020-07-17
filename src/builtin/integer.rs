@@ -98,7 +98,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             let id = IdentId::get_id("times");
-            let val = Value::enumerator(&vm.globals, id, self_val, args.clone());
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
     };
@@ -120,7 +120,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             let id = IdentId::get_id("step");
-            let val = Value::enumerator(&vm.globals, id, self_val, args.clone());
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
     };
@@ -135,20 +135,6 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     } else {
         1
     };
-
-    if method == MethodRef::from(0) {
-        let mut ary = vec![];
-        let mut i = start;
-        loop {
-            if step > 0 && i > limit || step < 0 && limit > i {
-                break;
-            }
-            ary.push(Value::fixnum(i));
-            i += step;
-        }
-        let val = Value::array_from(&vm.globals, ary);
-        return Ok(val);
-    }
 
     let mut arg = Args::new1(Value::nil());
     let mut i = start;

@@ -187,6 +187,7 @@ impl Node {
             | NodeKind::Symbol(_)
             | NodeKind::String(_)
             | NodeKind::Hash(_, true)
+            | NodeKind::RegExp(_, true)
             | NodeKind::Array(_, true) => true,
             _ => false,
         }

@@ -1,39 +1,9 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct EnumInfo {
-    method: IdentId,
-    receiver: Value,
-    args: Args,
-}
-
-impl EnumInfo {
-    pub fn new(method: IdentId, receiver: Value, mut args: Args) -> Self {
-        args.block = Some(MethodRef::from(0));
-        EnumInfo {
-            method,
-            receiver,
-            args,
-        }
-    }
-
-    pub fn eval(&self, vm: &mut VM) -> VMResult {
-        let receiver = self.receiver;
-        let method = vm.get_method(receiver, self.method)?;
-        vm.eval_send(method, receiver, &self.args)
-    }
-}
-
-impl GC for EnumInfo {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.receiver.mark(alloc);
-        self.args.iter().for_each(|v| v.mark(alloc));
-    }
-}
-
 pub fn init_enumerator(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Enumerator");
     let class = ClassRef::from(id, globals.builtins.object);
+    globals.add_builtin_instance_method(class, "next", next);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "map", map);
     globals.add_builtin_instance_method(class, "collect", map);
@@ -46,12 +16,17 @@ pub fn init_enumerator(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_min(args.len(), 1)?;
-    let (receiver, method, new_args) = if args.len() == 1 {
+    if args.block.is_some() {
+        return Err(vm.error_argument("Block is not allowed."));
+    };
+    let receiver = args[0];
+    let (method, new_args) = if args.len() == 1 {
         let method = IdentId::get_id("each");
-        let new_args = Args::new0();
-        (self_val, method, new_args)
+        let mut new_args = Args::new0();
+        new_args.block = Some(MethodRef::from(0));
+        (method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
             return Err(vm.error_argument("2nd arg must be Symbol."));
@@ -61,128 +36,192 @@ fn enum_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         for i in 0..args.len() - 2 {
             new_args[i] = args[i + 2];
         }
-        new_args.block = None;
-        (args[0], method, new_args)
+        new_args.block = Some(MethodRef::from(0));
+        (method, new_args)
     };
-    let val = Value::enumerator(&vm.globals, method, receiver, new_args);
+    let val = vm.create_enumerator(method, receiver, new_args)?;
     Ok(val)
+}
+
+pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.fiber_yield(args)
 }
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+    let eref = self_val.as_enumerator().unwrap();
+    let (receiver, method, args) = match &eref.inner {
+        FiberKind::Builtin(receiver, method, args) => (receiver, method, args),
+        _ => unreachable!(),
+    };
+
     let arg_string = {
-        match eref.args.len() {
+        match args.len() {
             0 => "".to_string(),
-            1 => vm.val_inspect(eref.args[0]),
+            1 => format!(" {:?}", args[0]),
             _ => {
-                let mut s = vm.val_inspect(eref.args[0]);
-                for i in 1..eref.args.len() {
-                    s = format!("{},{}", s, vm.val_inspect(eref.args[i]));
+                let mut s = format!(" {:?}", args[0]);
+                for i in 1..args.len() {
+                    s = format!("{},{:?}", s, args[i]);
                 }
                 s
             }
         }
     };
+
+    let receiver_string = vm.val_inspect(*receiver);
     let inspect = format!(
-        "#<Enumerator: {}:{}({})>",
-        vm.val_inspect(eref.receiver),
-        IdentId::get_ident_name(eref.method),
+        "#<Enumerator: {}:{}{}>",
+        receiver_string,
+        IdentId::get_ident_name(*method),
         arg_string
     );
     Ok(Value::string(&vm.globals, inspect))
 }
 
-fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let mut eref = self_val.as_enumerator().unwrap();
+    if args.block.is_some() {
+        return Err(vm.error_argument("Block in not allowed."));
+    };
+    if eref.vm.is_dead() {
+        return Err(vm.error_stop_iteration("Iteration reached an end."));
+    };
+    match eref.resume(vm) {
+        Ok(val) => Ok(val),
+        Err(err) if err.is_stop_iteration() => {
+            return Err(vm.error_stop_iteration("Iteration reached an end."))
+        }
+        Err(err) => Err(err),
+    }
+}
+
+fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let eref = self_val.as_enumerator().unwrap();
+    // A new fiber must be constructed for each method call.
+    let mut info = vm.dup_enum(eref);
     let block = match args.block {
         Some(method) => method,
         None => {
             return Ok(self_val);
         }
     };
-
-    let mut val = eref.eval(vm)?;
-    vm.temp_push(val);
-
-    let ary = val.expect_array(vm, "Base object")?;
-    let mut args = Args::new1(Value::nil());
-    for elem in &ary.elements {
-        args[0] = *elem;
+    let mut args = Args::new(1);
+    loop {
+        let val = match info.resume(vm) {
+            Ok(val) => val,
+            Err(err) if err.is_stop_iteration() => break,
+            Err(err) => return Err(err),
+        };
+        args[0] = val;
         vm.eval_block(block, &args)?;
     }
-    Ok(val)
+
+    match info.inner {
+        FiberKind::Builtin(receiver, _, _) => Ok(receiver),
+        _ => unreachable!(),
+    }
 }
 
-fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let eref = self_val.as_enumerator().unwrap();
+    let mut info = vm.dup_enum(eref);
     let block = match args.block {
         Some(method) => method,
         None => {
             // return Enumerator
             let id = IdentId::get_id("map");
-            let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
+            let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
     };
-    let mut val = eref.eval(vm)?;
-    vm.temp_push(val);
-    let ary = val.expect_array(vm, "Base object")?;
-    let mut args = Args::new1(Value::nil());
-
-    let mut res = vec![];
-    for elem in &ary.elements {
-        args[0] = *elem;
-        let v = vm.eval_block(block, &args)?;
-        vm.temp_push(v);
-        res.push(v);
+    let mut args = Args::new(1);
+    let mut ary = vec![];
+    loop {
+        let val = match info.resume(vm) {
+            Ok(val) => val,
+            Err(err) if err.is_stop_iteration() => break,
+            Err(err) => return Err(err),
+        };
+        args[0] = val;
+        let res = vm.eval_block(block, &args)?;
+        ary.push(res);
+        vm.temp_push(res);
     }
-    Ok(Value::array_from(&vm.globals, res))
+    Ok(Value::array_from(&vm.globals, ary))
 }
 
-fn with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let eref = self_val.expect_enumerator(vm, "Expect Enumerator.")?;
+    let eref = self_val.as_enumerator().unwrap();
+    let mut info = vm.dup_enum(eref);
+    //let fref = &mut eref.fiber;
     let block = match args.block {
         Some(method) => method,
         None => {
             // return Enumerator
             let id = IdentId::get_id("with_index");
-            let e = Value::enumerator(&vm.globals, id, self_val, args.clone());
+            let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
     };
 
-    let mut val = eref.eval(vm)?;
-    vm.temp_push(val);
-    let res_ary: Vec<(Value, Value)> = val
-        .expect_array(vm, "Base object")?
-        .elements
-        .iter()
-        .enumerate()
-        .map(|(i, v)| (v.clone(), Value::fixnum(i as i64)))
-        .collect();
-
-    let mut arg = Args::new(2);
-    let mut res = vec![];
-    for (v, i) in &res_ary {
-        arg[0] = *v;
-        arg[1] = *i;
-        let val = vm.eval_block(block, &arg)?;
-        vm.temp_push(val);
-        res.push(val);
+    let mut args = Args::new(2);
+    let mut c = 0;
+    let mut ary = vec![];
+    loop {
+        let val = match info.resume(vm) {
+            Ok(val) => val,
+            Err(err) => {
+                if err.is_stop_iteration() {
+                    break;
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+        args[0] = val;
+        args[1] = Value::fixnum(c);
+        let res = vm.eval_block(block, &args)?;
+        vm.temp_push(res);
+        ary.push(res);
+        c += 1;
     }
-
-    let res = Value::array_from(&vm.globals, res);
-    Ok(res)
+    Ok(Value::array_from(&vm.globals, ary))
 }
 
 #[cfg(test)]
 mod test {
     use crate::test::*;
+
+    #[test]
+    fn enumerator_next_each() {
+        let program = r#"
+        e = Enumerator.new(1..3)
+        assert(1, e.next)
+        assert(2, e.next)
+        a = []
+        e.each do |x|
+            a << x
+        end
+        assert([1,2,3], a)
+        assert(3, e.next)
+        assert_error { e.next }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn enumerator_map() {
+        let program = r#"
+            assert [0, 5, 12, 21], (4..7).each.with_index.map{|x,y| x * y}
+            "#;
+        assert_script(program);
+    }
 
     #[test]
     fn enumerator_with_index() {
