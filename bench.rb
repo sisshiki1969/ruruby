@@ -181,11 +181,12 @@ def perf_optcarrot(option = "")
   @md3 += "| optcarrot #{option} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
 end
 
-['so_mandelbrot.rb',
- 'app_mandelbrot.rb',
- 'app_fibo.rb',
- 'block.rb',
- 'app_aobench.rb'].each { |x| perf x }
+[ 'block.rb',
+  'for_loop.rb',
+  'so_mandelbrot.rb',
+  'app_mandelbrot.rb',
+  'app_fibo.rb',
+  'app_aobench.rb'].each { |x| perf x }
 
 @optcarrot = "../optcarrot/bin/optcarrot-bench"
 
