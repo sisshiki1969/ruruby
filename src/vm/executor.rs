@@ -1595,6 +1595,25 @@ macro_rules! eval_op_i {
 
 macro_rules! eval_op {
     ($vm:ident, $cache:expr, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+        if $lhs.is_packed_fixnum() {
+            let lhs = $lhs.as_packed_fixnum();
+            if $rhs.is_packed_fixnum() {
+                let rhs = $rhs.as_packed_fixnum();
+                return Ok(Value::fixnum(lhs.$op(rhs)));
+            } else if $rhs.is_packed_num() {
+                let rhs = $rhs.as_packed_flonum();
+                return Ok(Value::flonum((lhs as f64).$op(rhs)));
+            }
+        } else if $lhs.is_packed_num() {
+            let lhs = $lhs.as_packed_flonum();
+            if $rhs.is_packed_fixnum() {
+                let rhs = $rhs.as_packed_fixnum();
+                return Ok(Value::flonum(lhs.$op(rhs as f64)));
+            } else if $rhs.is_packed_num() {
+                let rhs = $rhs.as_packed_flonum();
+                return Ok(Value::flonum(lhs.$op(rhs)));
+            }
+        }
         let val = match ($lhs.unpack(), $rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::fixnum(lhs.$op(rhs)),
             (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum((lhs as f64).$op(rhs)),
@@ -1787,21 +1806,48 @@ impl VM {
 
 macro_rules! eval_cmp {
     ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
-        match ($lhs.unpack(), $rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
-            (RV::Float(lhs), RV::Integer(rhs)) => Ok(Value::bool(lhs.$op(&(rhs as f64)))),
-            (RV::Integer(lhs), RV::Float(rhs)) => Ok(Value::bool((lhs as f64).$op(&rhs))),
-            (RV::Float(lhs), RV::Float(rhs)) => Ok(Value::bool(lhs.$op(&rhs))),
-            (_, _) => return $vm.fallback_for_binop($id, $lhs, $rhs),
+        if $lhs.is_packed_fixnum() {
+            let lhs = $lhs.as_packed_fixnum();
+            if $rhs.is_packed_fixnum() {
+                let rhs = $rhs.as_packed_fixnum();
+                return Ok(Value::bool(lhs.$op(&rhs)));
+            } else if $rhs.is_packed_num() {
+                let rhs = $rhs.as_packed_flonum();
+                return Ok(Value::bool((lhs as f64).$op(&rhs)));
+            }
+        } else if $lhs.is_packed_num() {
+            let lhs = $lhs.as_packed_flonum();
+            if $rhs.is_packed_fixnum() {
+                let rhs = $rhs.as_packed_fixnum();
+                return Ok(Value::bool(lhs.$op(&(rhs as f64))));
+            } else if $rhs.is_packed_num() {
+                let rhs = $rhs.as_packed_flonum();
+                return Ok(Value::bool(lhs.$op(&rhs)));
+            }
         }
+        let val = match ($lhs.unpack(), $rhs.unpack()) {
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::bool(lhs.$op(&rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::bool(lhs.$op(&(rhs as f64))),
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::bool((lhs as f64).$op(&rhs)),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::bool(lhs.$op(&rhs)),
+            (_, _) => return $vm.fallback_for_binop($id, $lhs, $rhs),
+        };
+        return Ok(val);
     };
 }
 
 macro_rules! eval_cmp_i {
     ($vm:ident, $lhs:expr, $i:expr, $op:ident, $id:expr) => {
+        if $lhs.is_packed_fixnum() {
+            let i = $i as i64;
+            return Ok(Value::bool($lhs.as_packed_fixnum().$op(&i)));
+        } else if $lhs.is_packed_num() {
+            let i = $i as f64;
+            return Ok(Value::bool($lhs.as_packed_flonum().$op(&i)));
+        }
         match $lhs.unpack() {
-            RV::Integer(lhs) => Ok(Value::bool(lhs.$op(&($i as i64)))),
-            RV::Float(lhs) => Ok(Value::bool(lhs.$op(&($i as i64 as f64)))),
+            RV::Integer(lhs) => return Ok(Value::bool(lhs.$op(&($i as i64)))),
+            RV::Float(lhs) => return Ok(Value::bool(lhs.$op(&($i as f64)))),
             _ => return $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64)),
         }
     };
@@ -1842,29 +1888,29 @@ impl VM {
     }
 
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, ge, IdentId::_GE)
+        eval_cmp!(self, rhs, lhs, ge, IdentId::_GE);
     }
     pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, gt, IdentId::_GT)
+        eval_cmp!(self, rhs, lhs, gt, IdentId::_GT);
     }
     fn eval_le(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, le, IdentId::_LE)
+        eval_cmp!(self, rhs, lhs, le, IdentId::_LE);
     }
     fn eval_lt(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, lt, IdentId::_LT)
+        eval_cmp!(self, rhs, lhs, lt, IdentId::_LT);
     }
 
     fn eval_gei(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, ge, IdentId::_GE)
+        eval_cmp_i!(self, lhs, i, ge, IdentId::_GE);
     }
     fn eval_gti(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, gt, IdentId::_GT)
+        eval_cmp_i!(self, lhs, i, gt, IdentId::_GT);
     }
     fn eval_lei(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, le, IdentId::_LE)
+        eval_cmp_i!(self, lhs, i, le, IdentId::_LE);
     }
     fn eval_lti(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, lt, IdentId::_LT)
+        eval_cmp_i!(self, lhs, i, lt, IdentId::_LT);
     }
 
     pub fn eval_cmp(&mut self, rhs: Value, lhs: Value) -> VMResult {

@@ -9,10 +9,6 @@ use std::rc::Rc;
 pub struct RegexpInfo(Rc<Regex>);
 
 impl RegexpInfo {
-    /*pub fn from(reg: Regex) -> Self {
-        RegexpInfo(Rc::new(reg))
-    }*/
-
     pub fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
         let string = regex::escape(escaped_str);
         RegexpInfo::from_string(globals, &string)
@@ -22,7 +18,7 @@ impl RegexpInfo {
         match globals.regexp_cache.get(reg_str) {
             Some(re) => Ok(RegexpInfo(re.clone())),
             None => {
-                eprintln!("new: {}", reg_str);
+                //eprintln!("new: {}", reg_str);
                 let regex = Rc::new(Regex::new(reg_str)?);
                 globals
                     .regexp_cache
