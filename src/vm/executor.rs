@@ -3,12 +3,11 @@ use crate::*;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, SyncSender};
 use vm_inst::*;
 
-pub type ValueTable = HashMap<IdentId, Value>;
+pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
 
 #[derive(Debug)]
@@ -2490,8 +2489,8 @@ impl VM {
         }
     }
 
-    fn pop_key_value_pair(&mut self, arg_num: usize) -> HashMap<HashKey, Value> {
-        let mut hash = HashMap::new();
+    fn pop_key_value_pair(&mut self, arg_num: usize) -> FxHashMap<HashKey, Value> {
+        let mut hash = FxHashMap::default();
         for _ in 0..arg_num {
             let value = self.stack_pop();
             let key = self.stack_pop();

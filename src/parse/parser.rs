@@ -3,7 +3,7 @@ use crate::util::*;
 use crate::id_table::{IdentId};
 use super::*;
 use std::path::PathBuf;
-use std::collections::HashMap;
+use fxhash::FxHashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
@@ -69,7 +69,7 @@ impl LvarId {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LvarCollector {
     id: usize,
-    table: HashMap<IdentId, LvarId>,
+    table: FxHashMap<IdentId, LvarId>,
     block: Option<LvarId>,
 }
 
@@ -77,7 +77,7 @@ impl LvarCollector {
     pub fn new() -> Self {
         LvarCollector {
             id: 0,
-            table: HashMap::new(),
+            table: FxHashMap::default(),
             block: None,
         }
     }
@@ -130,7 +130,7 @@ impl LvarCollector {
         self.table.len()
     }
 
-    pub fn table(&self) -> &HashMap<IdentId, LvarId> {
+    pub fn table(&self) -> &FxHashMap<IdentId, LvarId> {
         &self.table
     }
 
@@ -138,7 +138,7 @@ impl LvarCollector {
         &self.block
     }
 
-    pub fn clone_table(&self) -> HashMap<IdentId, LvarId> {
+    pub fn clone_table(&self) -> FxHashMap<IdentId, LvarId> {
         self.table.clone()
     }
 }

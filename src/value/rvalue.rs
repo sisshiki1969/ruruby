@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-//#[macro_use]
 use crate::*;
 
 /// Heap-allocated objects.
@@ -407,7 +405,7 @@ impl RValue {
         match &mut self.var_table {
             Some(table) => table.insert(id, val),
             None => {
-                let mut table = HashMap::new();
+                let mut table = FxHashMap::default();
                 let v = table.insert(id, val);
                 self.var_table = Some(Box::new(table));
                 v
@@ -424,7 +422,7 @@ impl RValue {
 
     pub fn var_table_mut(&mut self) -> &mut ValueTable {
         if self.var_table.is_none() {
-            self.var_table = Some(Box::new(HashMap::new()));
+            self.var_table = Some(Box::new(FxHashMap::default()));
         }
         self.var_table.as_deref_mut().unwrap()
     }

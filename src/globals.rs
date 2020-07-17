@@ -1,6 +1,5 @@
 use crate::*;
 use fancy_regex::Regex;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -26,7 +25,7 @@ pub struct Globals {
     pub gc_enabled: bool,
 
     pub fibers: Vec<VMRef>,
-    pub regexp_cache: HashMap<String, Rc<Regex>>,
+    pub regexp_cache: FxHashMap<String, Rc<Regex>>,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -134,7 +133,7 @@ impl Globals {
         let mut globals = Globals {
             allocator,
             const_values: ConstantValues::new(),
-            global_var: HashMap::new(),
+            global_var: FxHashMap::default(),
             method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
@@ -149,7 +148,7 @@ impl Globals {
             case_dispatch: CaseDispatchMap::new(),
             gc_enabled: true,
             fibers: vec![],
-            regexp_cache: HashMap::new(),
+            regexp_cache: FxHashMap::default(),
         };
         // Generate singleton class for Object
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
@@ -410,11 +409,11 @@ impl Globals {
         self.case_dispatch.new_entry()
     }
 
-    pub fn get_case_dispatch_map(&self, id: u32) -> &HashMap<Value, i32> {
+    pub fn get_case_dispatch_map(&self, id: u32) -> &FxHashMap<Value, i32> {
         self.case_dispatch.get_entry(id)
     }
 
-    pub fn get_mut_case_dispatch_map(&mut self, id: u32) -> &mut HashMap<Value, i32> {
+    pub fn get_mut_case_dispatch_map(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
         self.case_dispatch.get_mut_entry(id)
     }
 }
@@ -461,7 +460,7 @@ impl GC for ConstantValues {
 //-------------------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub struct MethodCache(HashMap<(Value, IdentId), MethodCacheEntry>);
+pub struct MethodCache(FxHashMap<(Value, IdentId), MethodCacheEntry>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
@@ -471,7 +470,7 @@ pub struct MethodCacheEntry {
 
 impl MethodCache {
     fn new() -> Self {
-        MethodCache(HashMap::new())
+        MethodCache(FxHashMap::default())
     }
 
     fn add_entry(&mut self, class: Value, id: IdentId, version: usize, method: MethodRef) {
@@ -532,7 +531,7 @@ impl InlineCache {
 
 #[derive(Debug, Clone)]
 pub struct CaseDispatchMap {
-    table: Vec<HashMap<Value, i32>>,
+    table: Vec<FxHashMap<Value, i32>>,
     id: u32,
 }
 
@@ -546,15 +545,15 @@ impl CaseDispatchMap {
 
     fn new_entry(&mut self) -> u32 {
         self.id += 1;
-        self.table.push(HashMap::new());
+        self.table.push(FxHashMap::default());
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> &HashMap<Value, i32> {
+    fn get_entry(&self, id: u32) -> &FxHashMap<Value, i32> {
         &self.table[id as usize]
     }
 
-    fn get_mut_entry(&mut self, id: u32) -> &mut HashMap<Value, i32> {
+    fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
         &mut self.table[id as usize]
     }
 }

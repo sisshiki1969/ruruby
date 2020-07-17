@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use fxhash::FxHashMap;
 use std::num::NonZeroU32;
 use std::sync::RwLock;
 
@@ -88,16 +88,16 @@ impl IdentId {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdentifierTable {
-    table: HashMap<String, u32>,
-    table_rev: HashMap<u32, String>,
+    table: FxHashMap<String, u32>,
+    table_rev: FxHashMap<u32, String>,
     ident_id: u32,
 }
 
 impl IdentifierTable {
     pub fn new() -> Self {
         let mut table = IdentifierTable {
-            table: HashMap::new(),
-            table_rev: HashMap::new(),
+            table: FxHashMap::default(),
+            table_rev: FxHashMap::default(),
             ident_id: 20,
         };
         table.set_ident_id("<null>", IdentId::from(0));

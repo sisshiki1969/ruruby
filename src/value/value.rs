@@ -759,10 +759,7 @@ impl Value {
         RValue::new_hash(globals, hash).pack()
     }
 
-    pub fn hash_from_map(
-        globals: &Globals,
-        hash: std::collections::HashMap<HashKey, Value>,
-    ) -> Self {
+    pub fn hash_from_map(globals: &Globals, hash: FxHashMap<HashKey, Value>) -> Self {
         RValue::new_hash(globals, HashInfo::new(hash)).pack()
     }
 

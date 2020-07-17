@@ -1,5 +1,4 @@
 use crate::*;
-use std::collections::HashMap;
 
 pub fn init_hash(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Hash");
@@ -82,7 +81,7 @@ fn empty(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = vm.expect_block(args.block)?;
-    let mut res = HashMap::new();
+    let mut res = FxHashMap::default();
     let mut arg = Args::new2(Value::nil(), Value::nil());
     for (k, v) in hash.iter() {
         arg[0] = k;
@@ -237,7 +236,7 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    let mut new_hash = HashMap::new();
+    let mut new_hash = FxHashMap::default();
     for (k, v) in hash.iter() {
         new_hash.insert(HashKey(v), k);
     }

@@ -1,12 +1,11 @@
 use crate::*;
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Deref;
 
 #[derive(Debug, Clone, Eq)]
 pub enum HashInfo {
-    Map(HashMap<HashKey, Value>),
-    IdentMap(HashMap<IdentKey, Value>),
+    Map(FxHashMap<HashKey, Value>),
+    IdentMap(FxHashMap<IdentKey, Value>),
 }
 
 impl PartialEq for HashInfo {
@@ -19,7 +18,7 @@ impl PartialEq for HashInfo {
                 if map1.len() != map2.len() {
                     return false;
                 };
-                let mut m1 = HashMap::new();
+                let mut m1 = FxHashMap::default();
                 for (k, v) in map1 {
                     let a = m1.get_mut(&(k.0, *v));
                     match a {
@@ -29,7 +28,7 @@ impl PartialEq for HashInfo {
                         }
                     };
                 }
-                let mut m2 = HashMap::new();
+                let mut m2 = FxHashMap::default();
                 for (k, v) in map2 {
                     let a = m2.get_mut(&(k.0, *v));
                     match a {
@@ -250,7 +249,7 @@ impl GC for HashInfo {
 }
 
 impl HashInfo {
-    pub fn new(map: HashMap<HashKey, Value>) -> Self {
+    pub fn new(map: FxHashMap<HashKey, Value>) -> Self {
         HashInfo::Map(map)
     }
 

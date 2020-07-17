@@ -1,5 +1,4 @@
 use crate::*;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ClassInfo {
@@ -14,7 +13,7 @@ impl ClassInfo {
     pub fn new(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
         ClassInfo {
             name: name.into(),
-            method_table: HashMap::new(),
+            method_table: FxHashMap::default(),
             superclass,
             include: vec![],
             is_singleton: false,
