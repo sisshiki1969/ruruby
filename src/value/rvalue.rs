@@ -230,9 +230,9 @@ impl RValue {
         }
     }
 
-    pub fn new_string(globals: &Globals, s: String) -> Self {
+    pub fn new_string(builtins: &BuiltinClass, s: String) -> Self {
         RValue {
-            class: globals.builtins.string,
+            class: builtins.string,
             var_table: None,
             kind: ObjKind::String(RString::Str(s)),
         }

@@ -221,7 +221,7 @@ impl Codegen {
     }
 
     fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
-        let val = Value::string(globals, s.to_string());
+        let val = Value::string(&globals.builtins, s.to_string());
         let id = globals.const_values.insert(val);
         self.gen_const_val(iseq, id);
     }
@@ -1312,6 +1312,8 @@ impl Codegen {
                     for elem in &branch.when {
                         match elem.kind {
                             NodeKind::Integer(_) => (),
+                            NodeKind::Symbol(_) => (),
+                            NodeKind::String(_) => (),
                             _ => {
                                 opt_flag = false;
                                 break;
@@ -1323,15 +1325,19 @@ impl Codegen {
                     }
                 }
                 if opt_flag {
-                    let map_id = globals.new_case_dispatch_map();
+                    let map_id = globals.case_dispatch.new_entry();
                     self.save_cur_loc(iseq);
                     let start = self.gen_opt_case(iseq, map_id);
                     for branch in when_ {
-                        let map = globals.get_mut_case_dispatch_map(map_id);
+                        let map = globals.case_dispatch.get_mut_entry(map_id);
                         let disp = start.disp(Codegen::current(iseq)) as i32;
                         for elem in &branch.when {
-                            let k = match elem.kind {
-                                NodeKind::Integer(i) => Value::fixnum(i),
+                            let k = match &elem.kind {
+                                NodeKind::Integer(i) => Value::fixnum(*i),
+                                NodeKind::Symbol(sym) => Value::symbol(*sym),
+                                NodeKind::String(str) => {
+                                    Value::string(&globals.builtins, str.to_string())
+                                }
                                 _ => unreachable!(),
                             };
                             map.insert(k, disp);
@@ -1768,7 +1774,7 @@ impl Codegen {
             NodeKind::Float(f) => Value::flonum(*f),
             NodeKind::Nil => Value::nil(),
             NodeKind::Symbol(s) => Value::symbol(*s),
-            NodeKind::String(s) => Value::string(globals, s.to_owned()),
+            NodeKind::String(s) => Value::string(&globals.builtins, s.to_owned()),
             NodeKind::Hash(key_value, true) => {
                 let mut map = FxHashMap::default();
                 for (k, v) in key_value {

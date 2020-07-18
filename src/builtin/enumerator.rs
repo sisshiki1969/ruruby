@@ -77,7 +77,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         IdentId::get_ident_name(*method),
         arg_string
     );
-    Ok(Value::string(&vm.globals, inspect))
+    Ok(Value::string(&vm.globals.builtins, inspect))
 }
 
 fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

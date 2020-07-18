@@ -25,29 +25,26 @@ size = 400 # ARGV[0].to_i
 
 puts "P4\n#{size} #{size}"
 
-ITER = 49                           # Iterations - 1 for easy for..in looping
-LIMIT_SQUARED = 4.0                 # Presquared limit
+def mandelbrot?(z, c)
+  50.times do
+    z = z * z + c
+    return 0 if z.abs2 > 4.0
+  end
+  1
+end
 
 byte_acc = 0
 bit_num = 0
 
 # For..in loops are faster than .upto, .downto, .times, etc.
-for y in 0...size
-  for x in 0...size
+size.times do |y|
+  size.times do |x|
     z = Complex_.new(0.0, 0.0)
     c = Complex_.new(2.0*x/size-1.5, 2.0*y/size-1.0)
-    escape = false
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
-    for dummy in 0...ITER
-      z = z * z + c
-      if z.abs2 > LIMIT_SQUARED
-        escape = true
-        break
-      end
-    end
 
-    byte_acc = (byte_acc << 1) | (escape ? 0 : 1)
+    byte_acc = (byte_acc << 1) | mandelbrot?(z,c)
     bit_num += 1
 
     # Code is very similar for these cases, but using separate blocks

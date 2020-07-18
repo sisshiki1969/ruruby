@@ -849,7 +849,7 @@ impl VM {
                 }
                 Inst::CONCAT_STRING => {
                     let val = match self.read32(iseq, 1) as usize {
-                        0 => Value::string(&self.globals, "".to_string()),
+                        0 => Value::string(&self.globals.builtins, "".to_string()),
                         i => {
                             let mut res = match self.stack_pop().as_string() {
                                 Some(s) => s.to_owned(),
@@ -861,7 +861,7 @@ impl VM {
                                     None => unreachable!("Illegal CONCAT_STRING arguments."),
                                 };
                             }
-                            Value::string(&self.globals, res)
+                            Value::string(&self.globals.builtins, res)
                         }
                     };
 
@@ -1083,7 +1083,7 @@ impl VM {
                 }
                 Inst::OPT_CASE => {
                     let val = self.stack_pop();
-                    let map = self.globals.get_case_dispatch_map(self.read32(iseq, 1));
+                    let map = self.globals.case_dispatch.get_entry(self.read32(iseq, 1));
                     let disp = match map.get(&val) {
                         Some(disp) => *disp as i64,
                         None => self.read_disp(iseq, 5),
@@ -1157,7 +1157,7 @@ impl VM {
                 Inst::TO_S => {
                     let val = self.stack_pop();
                     let s = self.val_to_s(val);
-                    let res = Value::string(&self.globals, s);
+                    let res = Value::string(&self.globals.builtins, s);
                     self.stack_push(res);
                     self.pc += 1;
                 }

@@ -85,7 +85,7 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let s = aref.to_s(vm);
-    Ok(Value::string(&vm.globals, s))
+    Ok(Value::string(&vm.globals.builtins, s))
 }
 
 fn set_elem(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -225,17 +225,17 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Ok(res)
     } else if let Some(s) = args[0].as_string() {
         match aref.elements.len() {
-            0 => return Ok(Value::string(&vm.globals, "".to_string())),
+            0 => return Ok(Value::string(&vm.globals.builtins, "".to_string())),
             1 => {
                 let res = vm.val_to_s(aref.elements[0]);
-                return Ok(Value::string(&vm.globals, res));
+                return Ok(Value::string(&vm.globals.builtins, res));
             }
             _ => {
                 let mut res = vm.val_to_s(aref.elements[0]);
                 for i in 1..aref.elements.len() {
                     res = format!("{}{}{}", res, s, vm.val_to_s(aref.elements[i]));
                 }
-                return Ok(Value::string(&vm.globals, res));
+                return Ok(Value::string(&vm.globals.builtins, res));
             }
         };
     } else {
@@ -628,7 +628,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             res = res + sep + s.as_str();
         }
     }
-    Ok(Value::string(&vm.globals, res))
+    Ok(Value::string(&vm.globals.builtins, res))
 }
 
 fn drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

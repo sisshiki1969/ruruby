@@ -11,7 +11,7 @@ pub struct Globals {
     method_table: GlobalMethodTable,
     inline_cache: InlineCache,
     method_cache: MethodCache,
-    case_dispatch: CaseDispatchMap,
+    pub case_dispatch: CaseDispatchMap,
 
     main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
@@ -403,7 +403,7 @@ impl Globals {
         self.method_cache.get_entry(class, id)
     }
 }
-
+/*
 impl Globals {
     pub fn new_case_dispatch_map(&mut self) -> u32 {
         self.case_dispatch.new_entry()
@@ -417,7 +417,7 @@ impl Globals {
         self.case_dispatch.get_mut_entry(id)
     }
 }
-
+*/
 //-------------------------------------------------------------------------------------------------------------
 //
 //  Contant value
@@ -543,17 +543,17 @@ impl CaseDispatchMap {
         }
     }
 
-    fn new_entry(&mut self) -> u32 {
+    pub fn new_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(FxHashMap::default());
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> &FxHashMap<Value, i32> {
+    pub fn get_entry(&self, id: u32) -> &FxHashMap<Value, i32> {
         &self.table[id as usize]
     }
 
-    fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
+    pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
         &mut self.table[id as usize]
     }
 }

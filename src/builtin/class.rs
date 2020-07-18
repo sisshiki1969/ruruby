@@ -56,7 +56,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         Some(id) => format! {"{}", IdentId::get_name(id)},
         None => format! {"#<Class:0x{:x}>", cref.id()},
     };
-    Ok(Value::string(&vm.globals, s))
+    Ok(Value::string(&vm.globals.builtins, s))
 }
 
 #[cfg(test)]
