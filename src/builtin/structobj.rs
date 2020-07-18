@@ -114,7 +114,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         None => "".to_string(),
     };
     let inspect = format!("#<struct: {}{}>", class_name, attr_str);
-    Ok(Value::string(&vm.globals, inspect))
+    Ok(Value::string(&vm.globals.builtins, inspect))
 }
 
 #[cfg(test)]

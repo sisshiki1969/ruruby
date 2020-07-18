@@ -35,18 +35,18 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let s = vm.val_to_s(self_val);
-    Ok(Value::string(&vm.globals, s))
+    Ok(Value::string(&vm.globals.builtins, s))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.inspect(vm);
-            Ok(Value::string(&vm.globals, s))
+            Ok(Value::string(&vm.globals.builtins, s))
         }
         None => {
             let s = vm.val_inspect(self_val);
-            Ok(Value::string(&vm.globals, s))
+            Ok(Value::string(&vm.globals.builtins, s))
         }
     }
 }

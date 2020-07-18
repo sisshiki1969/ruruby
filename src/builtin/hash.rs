@@ -36,7 +36,7 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let s = hash.to_s(vm);
-    Ok(Value::string(&vm.globals, s))
+    Ok(Value::string(&vm.globals.builtins, s))
 }
 
 fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

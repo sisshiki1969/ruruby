@@ -39,7 +39,7 @@ fn join(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     Ok(Value::string(
-        &vm.globals,
+        &vm.globals.builtins,
         path.to_string_lossy().to_string(),
     ))
 }
@@ -49,7 +49,7 @@ fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
     let basename = match filename.file_name() {
-        Some(ostr) => Value::string(&vm.globals, ostr.to_string_lossy().into_owned()),
+        Some(ostr) => Value::string(&vm.globals.builtins, ostr.to_string_lossy().into_owned()),
         None => Value::nil(),
     };
     Ok(basename)
@@ -63,7 +63,7 @@ fn extname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(ostr) => format!(".{}", ostr.to_string_lossy().into_owned()),
         None => "".to_string(),
     };
-    Ok(Value::string(&vm.globals, extname))
+    Ok(Value::string(&vm.globals.builtins, extname))
 }
 
 fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -108,7 +108,7 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
-    Ok(Value::string(&vm.globals, contents))
+    Ok(Value::string(&vm.globals.builtins, contents))
 }
 
 /// IO.write(path, string)

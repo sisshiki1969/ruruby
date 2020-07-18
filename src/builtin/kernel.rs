@@ -220,7 +220,7 @@ pub fn init(globals: &mut Globals) -> Value {
         .clone();
         path.pop();
         Ok(Value::string(
-            &vm.globals,
+            &vm.globals.builtins,
             path.to_string_lossy().to_string(),
         ))
     }
@@ -235,7 +235,7 @@ pub fn init(globals: &mut Globals) -> Value {
             .path
             .clone();
         Ok(Value::string(
-            &vm.globals,
+            &vm.globals.builtins,
             path.to_string_lossy().to_string(),
         ))
     }

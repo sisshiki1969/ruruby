@@ -705,8 +705,8 @@ impl Value {
         }
     }
 
-    pub fn string(globals: &Globals, string: String) -> Self {
-        RValue::new_string(globals, string).pack()
+    pub fn string(builtins: &BuiltinClass, string: String) -> Self {
+        RValue::new_string(builtins, string).pack()
     }
 
     pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {

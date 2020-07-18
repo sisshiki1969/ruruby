@@ -71,7 +71,7 @@ fn regexp_escape(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut arg0 = args[0];
     let string = arg0.expect_string(vm, "1st arg")?;
     let res = regex::escape(string);
-    let regexp = Value::string(&vm.globals, res);
+    let regexp = Value::string(&vm.globals.builtins, res);
     Ok(regexp)
 }
 
@@ -85,9 +85,10 @@ impl RegexpInfo {
         let id2 = IdentId::get_id("$'");
         match captures.get(0) {
             Some(m) => {
-                let val = Value::string(&vm.globals, given[m.start()..m.end()].to_string());
+                let val =
+                    Value::string(&vm.globals.builtins, given[m.start()..m.end()].to_string());
                 vm.set_global_var(id1, val);
-                let val = Value::string(&vm.globals, given[m.end()..].to_string());
+                let val = Value::string(&vm.globals.builtins, given[m.end()..].to_string());
                 vm.set_global_var(id2, val);
             }
             None => {
@@ -106,7 +107,7 @@ impl RegexpInfo {
 
     fn set_special_global(vm: &mut VM, i: usize, given: &str, start: usize, end: usize) {
         let id = IdentId::get_id(format!("${}", i));
-        let val = Value::string(&vm.globals, given[start..end].to_string());
+        let val = Value::string(&vm.globals.builtins, given[start..end].to_string());
         //eprintln!("${}: {}", i, given[start..end].to_string());
         vm.set_global_var(id, val);
     }
@@ -198,7 +199,7 @@ impl RegexpInfo {
             };
 
             let mut res = given.to_string();
-            let matched = Value::string(&vm.globals, matched_str.to_string());
+            let matched = Value::string(&vm.globals.builtins, matched_str.to_string());
             let result = vm.eval_block(block, &Args::new1(matched))?;
             let s = vm.val_to_s(result);
             res.replace_range(start..end, &s);
@@ -295,7 +296,7 @@ impl RegexpInfo {
                     }
                     Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
                 };
-                let matched = Value::string(&vm.globals, matched_str.to_string());
+                let matched = Value::string(&vm.globals.builtins, matched_str.to_string());
                 let result = vm.eval_block(block, &Args::new1(matched))?;
                 let replace = vm.val_to_s(result);
                 range.push((start, end, replace));
@@ -345,8 +346,10 @@ impl RegexpInfo {
                     idx = m.end();
                     match captures.len() {
                         1 => {
-                            let val =
-                                Value::string(&vm.globals, given[m.start()..m.end()].to_string());
+                            let val = Value::string(
+                                &vm.globals.builtins,
+                                given[m.start()..m.end()].to_string(),
+                            );
                             ary.push(val);
                         }
                         len => {
@@ -355,7 +358,7 @@ impl RegexpInfo {
                                 match captures.get(i) {
                                     Some(m) => {
                                         let s = given[m.start()..m.end()].to_string();
-                                        vec.push(Value::string(&vm.globals, s));
+                                        vec.push(Value::string(&vm.globals.builtins, s));
                                     }
                                     None => vec.push(Value::nil()),
                                 }

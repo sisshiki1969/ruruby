@@ -438,7 +438,7 @@ fn until2() {
 }
 
 #[test]
-fn case0() {
+fn case_opt0() {
     let program = "
         i = 11
         case i
@@ -450,9 +450,53 @@ fn case0() {
             r = 5
         when 11 then
             r = 11
+        else
+            r = 13
         end
         assert 11, r
     ";
+    assert_script(program);
+}
+
+#[test]
+fn case_opt1() {
+    let program = "
+        i = :foo
+        case i
+        when :aoo then
+            r = 0
+        when :boo then
+            r = 1
+        when :foo then
+            r = 5
+        when :doo then
+            r = 11
+        else
+            r = 13
+        end
+        assert 5, r
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn case_opt2() {
+    let program = r#"
+        i = "afoo"
+        case i
+        when "aoo" then
+            r = 0
+        when "boo" then
+            r = 1
+        when "foo" then
+            r = 5
+        when "doo" then
+            r = 11
+        else
+            r = 13
+        end
+        assert 13, r
+    "#;
     assert_script(program);
 }
 

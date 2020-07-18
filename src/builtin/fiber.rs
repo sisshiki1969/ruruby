@@ -220,7 +220,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         fref.id(),
         fref.vm.fiberstate(),
     );
-    Ok(Value::string(&vm.globals, inspect))
+    Ok(Value::string(&vm.globals.builtins, inspect))
 }
 
 fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
