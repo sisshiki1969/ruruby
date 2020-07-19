@@ -11,7 +11,9 @@ else
   raise 'unknown platform'
 end
 
-`ruby -v`.match(/ruby (\d*).(\d*).(\d*)/) { @ruby_version = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}.#{Regexp.last_match(3)}" }
+`ruby -v`.match(/ruby (\d*).(\d*).(\d*)/) do
+  @ruby_version = "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}.#{Regexp.last_match(3)}"
+end
 
 if @platform == :macos
   `sysctl machdep.cpu.brand_string`.match(/brand_string:\s*(.*)/)
@@ -138,10 +140,12 @@ def perf(app_name)
   print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave], rss_ruruby[:ave]/rss_ruby[:ave])
 
   real_mul = real_ruruby[:ave] / real_ruby[:ave]
-  @md1 += "| #{app_name} | #{print_avesd(real_ruby)} s | #{print_avesd(real_ruruby)} s | x #{'%.2f' % real_mul} |\n"
+  @md1 += "| #{app_name} | #{print_avesd(real_ruby)} s "
+  @md1 += "| #{print_avesd(real_ruruby)} s | x #{'%.2f' % real_mul} |\n"
   rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
   rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
-  @md3 += "| #{app_name} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
+  @md3 += "| #{app_name} | #{'%.1f' % rss_ruby}#{ch} "
+  @md3 += "| #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
 end
 
 def optcarrot(program, option = "")
@@ -174,19 +178,21 @@ def perf_optcarrot(option = "")
   print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave], fps_ruby[:ave]/fps_ruruby[:ave])
   print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave], rss_ruruby[:ave]/rss_ruby[:ave])
 
-  @md2 += "| optcarrot #{option} | #{print_avesd(fps_ruby)} fps | #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
+  @md2 += "| optcarrot #{option} | #{print_avesd(fps_ruby)} fps "
+  @md2 += "| #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
 
   rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
   rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
-  @md3 += "| optcarrot #{option} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
+  @md3 += "| optcarrot #{option} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} "
+  @md3 += "| x #{'%.2f' % rss_mul} |\n"
 end
 
-[ 'block.rb',
-  'for_loop.rb',
-  'so_mandelbrot.rb',
-  'app_mandelbrot.rb',
-  'app_fibo.rb',
-  'app_aobench.rb'].each { |x| perf x }
+['block.rb',
+ 'for_loop.rb',
+ 'so_mandelbrot.rb',
+ 'app_mandelbrot.rb',
+ 'app_fibo.rb',
+ 'app_aobench.rb'].each { |x| perf x }
 
 @optcarrot = "../optcarrot/bin/optcarrot -b ../optcarrot/examples/Lan_Master.nes"
 perf_optcarrot

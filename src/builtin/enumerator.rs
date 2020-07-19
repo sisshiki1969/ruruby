@@ -120,6 +120,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         vm.eval_block(block, &args)?;
     }
 
+    info.free();
     match info.inner {
         FiberKind::Builtin(receiver, _, _) => Ok(receiver),
         _ => unreachable!(),
@@ -152,6 +153,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         ary.push(res);
         vm.temp_push(res);
     }
+    info.free();
     Ok(Value::array_from(&vm.globals, ary))
 }
 
@@ -191,6 +193,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         ary.push(res);
         c += 1;
     }
+    info.free();
     Ok(Value::array_from(&vm.globals, ary))
 }
 

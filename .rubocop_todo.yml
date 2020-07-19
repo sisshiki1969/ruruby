@@ -11,7 +11,7 @@
 # Configuration parameters: AutoCorrect, AllowHeredoc, AllowURI, URISchemes, IgnoreCopDirectives, IgnoredPatterns.
 # URISchemes: http, https
 Layout/LineLength:
-  Max: 81
+  Max: 100
 
 Layout/SpaceAroundOperators:
   Enabled: false

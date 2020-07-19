@@ -7,7 +7,7 @@ use std::thread;
 
 #[derive(Debug)]
 pub struct FiberInfo {
-    pub vm: Box<VM>,
+    pub vm: VMRef,
     pub inner: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<usize>,
@@ -58,7 +58,7 @@ impl FiberInfo {
         tx: SyncSender<usize>,
     ) -> Self {
         FiberInfo {
-            vm: Box::new(vm),
+            vm: VMRef::new(vm),
             inner: FiberKind::Ruby(context),
             rec,
             tx,
@@ -74,10 +74,20 @@ impl FiberInfo {
         tx: SyncSender<usize>,
     ) -> Self {
         FiberInfo {
-            vm: Box::new(vm),
+            vm: VMRef::new(vm),
             inner: FiberKind::Builtin(receiver, method_id, args),
             rec,
             tx,
+        }
+    }
+
+    pub fn free(&mut self) {
+        if !self.vm.is_running() {
+            self.vm.free();
+            match &mut self.inner {
+                FiberKind::Ruby(c) => c.free(),
+                _ => {}
+            }
         }
     }
 
@@ -178,9 +188,7 @@ impl FiberInfo {
 
 impl GC for FiberInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        if self.vm.fiberstate() != FiberState::Dead {
-            self.vm.mark(alloc);
-        }
+        self.vm.mark(alloc);
         match &self.inner {
             FiberKind::Ruby(context) => context.mark(alloc),
             FiberKind::Builtin(receiver, _, args) => {

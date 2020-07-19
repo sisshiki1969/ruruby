@@ -118,27 +118,26 @@ impl GC for RValue {
 
 impl RValue {
     pub fn free(&mut self) -> bool {
-        match &mut self.kind {
+        if self.kind == ObjKind::Invalid {
+            return false;
+        };
+        match std::mem::replace(&mut self.kind, ObjKind::Invalid) {
             ObjKind::Invalid => return false,
             ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
-            ObjKind::String(rs) => drop(rs),
-            ObjKind::Array(a) => drop(a),
-            ObjKind::Range(r) => drop(r),
-            ObjKind::Hash(h) => drop(h),
-            ObjKind::Proc(p) => drop(p),
-            ObjKind::Regexp(r) => drop(r),
-            ObjKind::Method(m) => drop(m),
-            ObjKind::Fiber(f) | ObjKind::Enumerator(f) => {
-                //eprintln!("freed {:?}", VMRef::from_ref(&f.vm));
-                drop(f);
-            }
-            _ => {}
+            ObjKind::Fiber(mut f) | ObjKind::Enumerator(mut f) => f.free(),
+            ObjKind::Ordinary => {}
+            ObjKind::Integer(_) => {}
+            ObjKind::Float(_) => {}
+            ObjKind::String(_) => {}
+            ObjKind::Array(_) => {}
+            ObjKind::Range(_) => {}
+            ObjKind::Splat(_) => {}
+            ObjKind::Hash(_) => {}
+            ObjKind::Proc(_) => {}
+            ObjKind::Regexp(_) => {}
+            ObjKind::Method(_) => {}
         }
-        match &mut self.var_table {
-            Some(t) => drop(t),
-            None => {}
-        }
-        *self = RValue::new_invalid();
+        std::mem::take(&mut self.var_table);
         true
     }
 }

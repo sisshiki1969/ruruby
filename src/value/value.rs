@@ -597,17 +597,17 @@ impl Value {
             None => None,
         }
     }
-/*
-    pub fn as_fiber(&mut self) -> Option<&mut FiberInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Fiber(info) => Some(info.as_mut()),
-                _ => None,
-            },
-            None => None,
+    /*
+        pub fn as_fiber(&mut self) -> Option<&mut FiberInfo> {
+            match self.as_mut_rvalue() {
+                Some(oref) => match &mut oref.kind {
+                    ObjKind::Fiber(info) => Some(info.as_mut()),
+                    _ => None,
+                },
+                None => None,
+            }
         }
-    }
-*/
+    */
     pub fn as_enumerator(&mut self) -> Option<&mut FiberInfo> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {

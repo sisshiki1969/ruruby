@@ -160,6 +160,10 @@ impl VM {
         self.fiber_state == FiberState::Dead
     }
 
+    pub fn is_running(&self) -> bool {
+        self.fiber_state == FiberState::Running
+    }
+
     pub fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
