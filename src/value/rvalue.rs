@@ -129,7 +129,7 @@ impl RValue {
             ObjKind::Regexp(r) => drop(r),
             ObjKind::Method(m) => drop(m),
             ObjKind::Fiber(f) | ObjKind::Enumerator(f) => {
-                eprintln!("freed {:?}", VMRef::from_ref(&f.vm));
+                //eprintln!("freed {:?}", VMRef::from_ref(&f.vm));
                 drop(f);
             }
             _ => {}

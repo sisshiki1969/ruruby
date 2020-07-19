@@ -1,5 +1,4 @@
 //#![feature(test)]
-#![feature(leading_trailing_ones)]
 #![feature(box_patterns)]
 extern crate fancy_regex;
 #[macro_use]

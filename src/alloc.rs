@@ -485,13 +485,13 @@ mod tests {
                     @y = y
                 end
             end
-            100.times {
+            300.times {
                 a = []
-                1000.times {|x|
+                100.times.each {|x|
                     a << Vec.new(x.to_s, x.to_s)
                 }
                 b = {}
-                1000.times {|x|
+                100.times.each {|x|
                     b[x.to_s] = [x...(x*2), (x+1).to_s, (x+2).to_s]
                 }
                 c = Fiber.new {}

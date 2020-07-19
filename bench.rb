@@ -188,8 +188,7 @@ end
   'app_fibo.rb',
   'app_aobench.rb'].each { |x| perf x }
 
-@optcarrot = "../optcarrot/bin/optcarrot-bench"
-
+@optcarrot = "../optcarrot/bin/optcarrot -b ../optcarrot/examples/Lan_Master.nes"
 perf_optcarrot
 
 perf_optcarrot("--opt")

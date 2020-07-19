@@ -112,7 +112,7 @@ impl FiberInfo {
                 return Err(current_vm.error_fiber("Dead fiber called."));
             }
             FiberState::Created => {
-                eprintln!("running {:?}", VMRef::from_ref(&self.vm));
+                //eprintln!("running {:?}", VMRef::from_ref(&self.vm));
                 self.vm.fiberstate_running();
                 #[cfg(feature = "perf")]
                 current_vm.perf.get_perf(Perf::INVALID);
@@ -141,12 +141,13 @@ impl FiberInfo {
                         res => res,
                     };
                     #[allow(unused_variables)]
+                    #[allow(unused_mut)]
                     match &fiber_vm.parent_fiber {
                         Some(ParentFiberInfo { tx, mut parent, .. }) => {
                             #[cfg(feature = "perf")]
                             parent.perf.add(&fiber_vm.perf);
 
-                            eprintln!("terminated & added {:?}", fiber_vm);
+                            //eprintln!("terminated & added {:?}", fiber_vm);
                             tx.send(res).unwrap();
                         }
                         None => unreachable!(),
