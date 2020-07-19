@@ -24,8 +24,8 @@ pub enum ObjKind {
     Proc(Box<ProcInfo>),
     Regexp(RegexpInfo),
     Method(Box<MethodObjInfo>),
-    Fiber(FiberRef),
-    Enumerator(FiberRef),
+    Fiber(Box<FiberInfo>),
+    Enumerator(Box<FiberInfo>),
 }
 
 impl std::fmt::Debug for ObjKind {
@@ -128,7 +128,10 @@ impl RValue {
             ObjKind::Proc(p) => drop(p),
             ObjKind::Regexp(r) => drop(r),
             ObjKind::Method(m) => drop(m),
-            ObjKind::Fiber(f) | ObjKind::Enumerator(f) => f.free(),
+            ObjKind::Fiber(f) | ObjKind::Enumerator(f) => {
+                eprintln!("freed {:?}", VMRef::from_ref(&f.vm));
+                drop(f);
+            }
             _ => {}
         }
         match &mut self.var_table {
@@ -328,7 +331,7 @@ impl RValue {
 
     pub fn new_fiber(
         globals: &Globals,
-        vm: VMRef,
+        vm: VM,
         context: ContextRef,
         rec: std::sync::mpsc::Receiver<VMResult>,
         tx: std::sync::mpsc::SyncSender<usize>,
@@ -337,16 +340,15 @@ impl RValue {
         RValue {
             class: globals.builtins.fiber,
             var_table: None,
-            kind: ObjKind::Fiber(FiberRef::new(fiber)),
+            kind: ObjKind::Fiber(Box::new(fiber)),
         }
     }
 
     pub fn new_enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
-        let fref = FiberRef::new(fiber);
         RValue {
             class: globals.builtins.enumerator,
             var_table: None,
-            kind: ObjKind::Enumerator(fref),
+            kind: ObjKind::Enumerator(Box::new(fiber)),
         }
     }
 }

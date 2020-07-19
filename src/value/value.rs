@@ -598,20 +598,20 @@ impl Value {
         }
     }
 
-    pub fn as_fiber(&self) -> Option<FiberRef> {
-        match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Fiber(info) => Some(info),
+    pub fn as_fiber(&mut self) -> Option<&mut FiberInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Fiber(info) => Some(info.as_mut()),
                 _ => None,
             },
             None => None,
         }
     }
 
-    pub fn as_enumerator(&mut self) -> Option<FiberRef> {
-        match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Enumerator(fref) => Some(fref),
+    pub fn as_enumerator(&mut self) -> Option<&mut FiberInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Enumerator(info) => Some(info.as_mut()),
                 _ => None,
             },
             None => None,
@@ -622,9 +622,23 @@ impl Value {
         &mut self,
         vm: &mut VM,
         error_msg: &str,
-    ) -> Result<FiberRef, RubyError> {
+    ) -> Result<&mut FiberInfo, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
+            None => Err(vm.error_argument(error_msg)),
+        }
+    }
+
+    pub fn expect_fiber(
+        &mut self,
+        vm: &mut VM,
+        error_msg: &str,
+    ) -> Result<&mut FiberInfo, RubyError> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Fiber(f) => Ok(f.as_mut()),
+                _ => Err(vm.error_argument(error_msg)),
+            },
             None => Err(vm.error_argument(error_msg)),
         }
     }
@@ -777,7 +791,7 @@ impl Value {
 
     pub fn fiber(
         globals: &Globals,
-        vm: VMRef,
+        vm: VM,
         context: ContextRef,
         rec: std::sync::mpsc::Receiver<VMResult>,
         tx: std::sync::mpsc::SyncSender<usize>,

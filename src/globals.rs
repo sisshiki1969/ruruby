@@ -237,16 +237,6 @@ impl Globals {
         self.allocator.print_mark();
     }
 
-    #[cfg(feature = "perf")]
-    pub fn print_perf(&self) {
-        use crate::vm::perf::*;
-        let mut perf = Perf::new();
-        for vm in &self.fibers {
-            perf.add(&vm.perf);
-        }
-        perf.print_perf();
-    }
-
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
         self.object_class.method_table.insert(id, info);
     }

@@ -7,10 +7,16 @@ use std::thread;
 
 #[derive(Debug)]
 pub struct FiberInfo {
-    pub vm: VMRef,
+    pub vm: Box<VM>,
     pub inner: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<usize>,
+}
+
+impl PartialEq for FiberInfo {
+    fn eq(&self, other: &Self) -> bool {
+        &*self.vm as *const VM == &*other.vm as *const VM && self.inner == other.inner
+    }
 }
 /*
 impl Clone for FiberInfo {
@@ -32,7 +38,7 @@ impl Clone for FiberInfo {
     }
 }
 */
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum FiberKind {
     Ruby(ContextRef),
     Builtin(Value, IdentId, Args),
@@ -44,17 +50,15 @@ impl std::fmt::Debug for FiberKind {
     }
 }
 
-pub type FiberRef = Ref<FiberInfo>;
-
 impl FiberInfo {
     pub fn new(
-        vm: VMRef,
+        vm: VM,
         context: ContextRef,
         rec: Receiver<VMResult>,
         tx: SyncSender<usize>,
     ) -> Self {
         FiberInfo {
-            vm,
+            vm: Box::new(vm),
             inner: FiberKind::Ruby(context),
             rec,
             tx,
@@ -62,7 +66,7 @@ impl FiberInfo {
     }
 
     pub fn new_internal(
-        vm: VMRef,
+        vm: VM,
         receiver: Value,
         method_id: IdentId,
         args: Args,
@@ -70,7 +74,7 @@ impl FiberInfo {
         tx: SyncSender<usize>,
     ) -> Self {
         FiberInfo {
-            vm,
+            vm: Box::new(vm),
             inner: FiberKind::Builtin(receiver, method_id, args),
             rec,
             tx,
@@ -86,47 +90,47 @@ impl FiberInfo {
         args: &Args,
     ) -> VMResult {
         let method = vm.get_method(receiver, method_id)?;
-        // let context = ContextRef::new(Context::new_noiseq());
-        // vm.context_push(context);
         let mut args = args.clone();
         args.block = Some(MethodRef::from(0));
+        let context = Context::new_noiseq();
+        vm.context_push(ContextRef::from_ref(&context));
         vm.eval_method(method, receiver, None, &args)?;
+        //vm.context_pop();
         let res = Err(vm.error_stop_iteration("msg"));
-        // vm.context_pop();
         res
     }
 
-    pub fn resume(&mut self, vm: &mut VM) -> VMResult {
-        let mut fiber_vm = self.vm;
+    pub fn resume(&mut self, current_vm: &mut VM) -> VMResult {
         #[allow(unused_variables, unused_assignments, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
         {
-            inst = vm.perf.get_prev_inst();
+            inst = current_vm.perf.get_prev_inst();
         }
-        match fiber_vm.fiberstate() {
+        match self.vm.fiberstate() {
             FiberState::Dead => {
-                return Err(vm.error_fiber("Dead fiber called."));
+                return Err(current_vm.error_fiber("Dead fiber called."));
             }
             FiberState::Created => {
-                fiber_vm.fiberstate_running();
+                eprintln!("running {:?}", VMRef::from_ref(&self.vm));
+                self.vm.fiberstate_running();
                 #[cfg(feature = "perf")]
-                vm.perf.get_perf(Perf::INVALID);
+                current_vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 println!("===> resume(spawn)");
-                let mut vm2 = fiber_vm;
+                let mut fiber_vm = VMRef::from_ref(&self.vm);
                 let fiber_kind = self.inner.clone();
                 thread::spawn(move || {
-                    vm2.set_allocator();
+                    fiber_vm.set_allocator();
                     let res = match fiber_kind {
-                        FiberKind::Ruby(context) => vm2.run_context(context),
+                        FiberKind::Ruby(context) => fiber_vm.run_context(context),
                         FiberKind::Builtin(receiver, method_id, args) => {
-                            Self::enumerator_fiber(&mut vm2, receiver, method_id, &args)
+                            Self::enumerator_fiber(&mut fiber_vm, receiver, method_id, &args)
                         }
                     };
                     // If the fiber was finished, the fiber becomes DEAD.
                     // Return a value on the stack top to the parent fiber.
-                    vm2.fiberstate_dead();
+                    fiber_vm.fiberstate_dead();
                     #[cfg(feature = "trace")]
                     println!("<=== yield {:?} and terminate fiber.", res);
                     let res = match res {
@@ -136,8 +140,13 @@ impl FiberInfo {
                         },
                         res => res,
                     };
-                    match &vm2.parent_fiber {
-                        Some(ParentFiberInfo { tx, .. }) => {
+                    #[allow(unused_variables)]
+                    match &fiber_vm.parent_fiber {
+                        Some(ParentFiberInfo { tx, mut parent, .. }) => {
+                            #[cfg(feature = "perf")]
+                            parent.perf.add(&fiber_vm.perf);
+
+                            eprintln!("terminated & added {:?}", fiber_vm);
                             tx.send(res).unwrap();
                         }
                         None => unreachable!(),
@@ -146,20 +155,20 @@ impl FiberInfo {
                 // Wait for fiber.resume.
                 let res = self.rec.recv().unwrap();
                 #[cfg(feature = "perf")]
-                vm.perf.get_perf_no_count(inst);
+                current_vm.perf.get_perf_no_count(inst);
                 res
             }
             FiberState::Running => {
                 #[cfg(feature = "perf")]
-                vm.perf.get_perf(Perf::INVALID);
+                current_vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 println!("===> resume");
-
+                //eprintln!("resume {:?}", VMRef::from_ref(&self.vm));
                 self.tx.send(1).unwrap();
                 // Wait for fiber.resume.
                 let res = self.rec.recv().unwrap();
                 #[cfg(feature = "perf")]
-                vm.perf.get_perf_no_count(inst);
+                current_vm.perf.get_perf_no_count(inst);
                 res
             }
         }
@@ -202,7 +211,8 @@ fn new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let context = vm.create_block_context(method)?;
     let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
     let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-    let new_fiber = VMRef::new(vm.create_fiber(tx0, rx1));
+    let new_fiber = vm.create_fiber(tx0, rx1);
+    //vm.globals.fibers.push(VMRef::from_ref(&new_fiber));
     let val = Value::fiber(&vm.globals, new_fiber, context, rx0, tx1);
     Ok(val)
 }
@@ -213,19 +223,19 @@ fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let fref = vm.expect_fiber(self_val, "Expect Fiber.")?;
+fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+    let fref = self_val.expect_fiber(vm, "Expect Fiber.")?;
     let inspect = format!(
         "#<Fiber:0x{:<016x} ({:?})>",
-        fref.id(),
+        fref as *mut FiberInfo as u64,
         fref.vm.fiberstate(),
     );
     Ok(Value::string(&vm.globals.builtins, inspect))
 }
 
-fn resume(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut fiber = vm.expect_fiber(self_val, "")?;
+    let fiber = self_val.expect_fiber(vm, "")?;
     fiber.resume(vm)
 }
 

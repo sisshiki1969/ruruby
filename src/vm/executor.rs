@@ -98,7 +98,7 @@ impl VM {
         vm
     }
 
-    pub fn create_fiber(&self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+    pub fn create_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
         let vm = VM {
             globals: self.globals,
             root_path: self.root_path.clone(),
@@ -113,6 +113,7 @@ impl VM {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
+        self.globals.fibers.push(VMRef::from_ref(&vm));
         vm
     }
 
@@ -1408,16 +1409,6 @@ impl VM {
             self.error_type(format!("Must be Module or Class. (given:{})", val))
         })
     }
-
-    pub fn expect_fiber(&self, val: Value, error_msg: &str) -> Result<FiberRef, RubyError> {
-        match val.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Fiber(f) => Ok(f),
-                _ => Err(self.error_argument(error_msg)),
-            },
-            None => Err(self.error_argument(error_msg)),
-        }
-    }
 }
 
 impl VM {
@@ -2552,13 +2543,14 @@ impl VM {
     ) -> FiberInfo {
         let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
         let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-        let mut fiber_vm = VMRef::new(self.create_fiber(tx0, rx1));
-        let context = ContextRef::new(Context::new_noiseq());
-        fiber_vm.context_push(context);
+        let fiber_vm = self.create_fiber(tx0, rx1);
+        //self.globals.fibers.push(VMRef::from_ref(&fiber_vm));
+        //let context = ContextRef::new(Context::new_noiseq());
+        //fiber_vm.context_push(context);
         FiberInfo::new_internal(fiber_vm, receiver, method_id, args, rx0, tx1)
     }
 
-    pub fn dup_enum(&mut self, eref: FiberRef) -> FiberInfo {
+    pub fn dup_enum(&mut self, eref: &FiberInfo) -> FiberInfo {
         let (receiver, method_id, args) = match &eref.inner {
             FiberKind::Builtin(receiver, method_id, args) => (*receiver, *method_id, args.clone()),
             _ => unreachable!(),
@@ -2674,11 +2666,11 @@ impl VM {
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", root_path);
         self.root_path.push(root_path);
-        let mut vm2 = Ref::from_ref(&self).clone();
-        match vm2.run(absolute_path, &program, None) {
+        //let mut vm2 = Ref::from_ref(&self).clone();
+        match self.run(absolute_path, &program, None) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
-                self.globals.print_perf();
+                self.perf.print_perf();
                 #[cfg(feature = "gc-debug")]
                 self.globals.print_mark();
             }

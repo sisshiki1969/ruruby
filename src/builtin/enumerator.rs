@@ -82,7 +82,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 
 fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut eref = self_val.as_enumerator().unwrap();
+    let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
         return Err(vm.error_argument("Block in not allowed."));
     };

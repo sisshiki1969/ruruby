@@ -14,3 +14,5 @@ pub use codegen::{Codegen, ISeq, ISeqPos};
 pub use context::*;
 pub use executor::*;
 pub use method::*;
+#[cfg(feature = "perf")]
+pub use perf::*;
