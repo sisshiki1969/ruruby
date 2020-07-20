@@ -206,7 +206,7 @@ impl Allocator {
                 // Allocate from the free list.
                 self.free = gcbox.next;
                 #[cfg(feature = "gc-debug")]
-                assert_eq!(gcbox.inner, RValue::new_invalid());
+                assert_eq!(gcbox.inner.kind, ObjKind::Invalid);
                 unsafe {
                     std::ptr::write(
                         gcbox.as_ptr(),
