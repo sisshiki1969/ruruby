@@ -44,9 +44,8 @@ impl PageRef {
         let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         let ptr = unsafe { alloc(layout) };
         #[cfg(feature = "gc-debug")]
-        {
-            assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
-        }
+        assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
+
         PageRef::from_ptr(ptr as *mut Page)
     }
 

@@ -935,12 +935,7 @@ impl Codegen {
             NodeKind::Array(nodes, is_const) => {
                 if *is_const {
                     if use_value {
-                        let ary: Vec<Value> = nodes
-                            .iter()
-                            .rev()
-                            .map(|n| self.const_expr(globals, n))
-                            .collect();
-                        let val = Value::array_from(globals, ary);
+                        let val = self.const_expr(globals, node);
                         //eprintln!("const: {:?}", val);
                         let id = globals.const_values.insert(val);
                         self.gen_const_val(iseq, id);
@@ -959,14 +954,7 @@ impl Codegen {
             NodeKind::Hash(key_value, is_const) => {
                 if *is_const {
                     if use_value {
-                        let mut map = FxHashMap::default();
-                        for (k, v) in key_value {
-                            map.insert(
-                                HashKey(self.const_expr(globals, k)),
-                                self.const_expr(globals, v),
-                            );
-                        }
-                        let val = Value::hash_from_map(globals, map);
+                        let val = self.const_expr(globals, node);
                         //eprintln!("const: {:?}", val);
                         let id = globals.const_values.insert(val);
                         self.gen_const_val(iseq, id);

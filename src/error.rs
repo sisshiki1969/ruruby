@@ -14,8 +14,8 @@ pub enum RubyErrorKind {
         kind: RuntimeErrKind,
         message: String,
     },
-    MethodReturn(MethodRef),
-    BlockReturn,
+    MethodReturn(MethodRef, Value),
+    BlockReturn(Value),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,14 +52,14 @@ impl RubyError {
 
     pub fn is_block_return(&self) -> bool {
         match &self.kind {
-            RubyErrorKind::BlockReturn => true,
+            RubyErrorKind::BlockReturn(_) => true,
             _ => false,
         }
     }
 
     pub fn is_method_return(&self) -> bool {
         match &self.kind {
-            RubyErrorKind::MethodReturn(_) => true,
+            RubyErrorKind::MethodReturn(_, _) => true,
             _ => false,
         }
     }
@@ -120,10 +120,10 @@ impl RubyError {
                 };
                 eprintln!("({})", message);
             }
-            RubyErrorKind::MethodReturn(_) => {
+            RubyErrorKind::MethodReturn(_, _) => {
                 eprintln!("LocalJumpError");
             }
-            RubyErrorKind::BlockReturn => {
+            RubyErrorKind::BlockReturn(_) => {
                 eprintln!("LocalJumpError");
             }
         }
@@ -151,12 +151,22 @@ impl RubyError {
         RubyError::new(kind, source_info, level, loc)
     }
 
-    pub fn new_method_return(method: MethodRef, source_info: SourceInfoRef, loc: Loc) -> Self {
-        RubyError::new(RubyErrorKind::MethodReturn(method), source_info, 0, loc)
+    pub fn new_method_return(
+        method: MethodRef,
+        val: Value,
+        source_info: SourceInfoRef,
+        loc: Loc,
+    ) -> Self {
+        RubyError::new(
+            RubyErrorKind::MethodReturn(method, val),
+            source_info,
+            0,
+            loc,
+        )
     }
 
-    pub fn new_block_return(source_info: SourceInfoRef, loc: Loc) -> Self {
-        RubyError::new(RubyErrorKind::BlockReturn, source_info, 0, loc)
+    pub fn new_block_return(val: Value, source_info: SourceInfoRef, loc: Loc) -> Self {
+        RubyError::new(RubyErrorKind::BlockReturn(val), source_info, 0, loc)
     }
 
     pub fn conv_localjump_err(mut self) -> Self {

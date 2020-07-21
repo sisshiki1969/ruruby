@@ -10,13 +10,13 @@ pub struct Context {
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
     pub iseq_ref: Option<ISeqRef>,
-    pub pc: usize,
+    //pub pc: usize,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
     /// Context of caller.
     pub caller: Option<ContextRef>,
     pub on_stack: bool,
-    pub stack_len: usize,
+    //pub stack_len: usize,
     pub kind: ISeqKind,
 }
 
@@ -108,11 +108,11 @@ impl Context {
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec,
             iseq_ref: Some(iseq_ref),
-            pc: 0,
+            //pc: 0,
             outer,
             caller,
             on_stack: true,
-            stack_len: 0,
+            //stack_len: 0,
             kind: iseq_ref.kind.clone(),
         }
     }
@@ -124,11 +124,11 @@ impl Context {
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec: vec![],
             iseq_ref: None,
-            pc: 0,
+            //pc: 0,
             outer: None,
             caller: None,
             on_stack: true,
-            stack_len: 0,
+            //stack_len: 0,
             kind: ISeqKind::Block(MethodRef::from(0)),
         }
     }

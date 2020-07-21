@@ -378,7 +378,7 @@ impl VM {
         let iseq = self.get_iseq(methodref)?;
         context.iseq_ref = Some(iseq);
         context.adjust_lvar_size();
-        context.pc = 0;
+        //context.pc = 0;
 
         let val = self.run_context(context)?;
         #[cfg(feature = "perf")]
@@ -441,25 +441,22 @@ impl VM {
 
     fn unwind_context(&mut self, err: &mut RubyError) {
         self.context_pop().unwrap();
-        if let Some(context) = self.exec_context.last() {
-            self.pc = context.pc;
+        if self.exec_context.last().is_some() {
+            //self.pc = context.pc;
             err.info.push((self.source_info(), self.get_loc()));
         };
     }
 
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {
         let res = match err.kind {
-            RubyErrorKind::MethodReturn(method) => {
+            RubyErrorKind::MethodReturn(method, val) => {
                 // Catch MethodReturn if this context is the target.
                 let iseq = self.current_context().iseq_ref;
                 if iseq.is_some() && method == iseq.unwrap().method {
-                    let result = self.stack_pop();
-                    let prev_len = self.current_context().stack_len;
-                    self.exec_stack.truncate(prev_len);
                     self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
-                    println!("<--- METHOD_RETURN Ok({:?})", result);
-                    Ok(result)
+                    println!("<--- METHOD_RETURN Ok({:?})", val);
+                    Ok(val)
                 } else {
                     self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
@@ -469,13 +466,8 @@ impl VM {
             }
             _ => {
                 //self.dump_context();
-                match self.latest_context() {
-                    Some(context) => {
-                        let prev_len = context.stack_len;
-                        self.exec_stack.truncate(prev_len);
-                        self.unwind_context(&mut err);
-                    }
-                    None => {}
+                if self.latest_context().is_some() {
+                    self.unwind_context(&mut err);
                 }
                 #[cfg(feature = "trace")]
                 println!("<--- Err({:?})", err.kind);
@@ -485,8 +477,27 @@ impl VM {
         return res;
     }
 
+    pub fn run_context(&mut self, context: ContextRef) -> VMResult {
+        let stack_len = self.exec_stack.len();
+        let pc = self.pc;
+        self.pc = 0;
+        match self.run_context_main(context) {
+            Ok(val) => {
+                #[cfg(debugg_assertions)]
+                assert_eq!(stack_len, self.exec_stack.len());
+                self.pc = pc;
+                Ok(val)
+            }
+            Err(err) => {
+                self.exec_stack.truncate(stack_len);
+                self.pc = pc;
+                Err(err)
+            }
+        }
+    }
+
     /// Main routine for VM execution.
-    pub fn run_context(&mut self, mut context: ContextRef) -> VMResult {
+    fn run_context_main(&mut self, context: ContextRef) -> VMResult {
         #[cfg(feature = "trace")]
         {
             if self.parent_fiber.is_some() {
@@ -496,12 +507,8 @@ impl VM {
             }
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
         }
-        if let Some(prev_context) = self.exec_context.last_mut() {
-            prev_context.pc = self.pc;
-            context.stack_len = self.exec_stack.len();
-        };
+
         self.context_push(context);
-        self.pc = context.pc;
         let iseq = &context.iseq_ref.unwrap().iseq;
         let self_oref = context.self_value.rvalue_mut();
         self.gc();
@@ -511,10 +518,10 @@ impl VM {
             ($eval:expr) => {
                 match $eval {
                     Ok(val) => self.stack_push(val),
-                    Err(err) if err.is_block_return() => {}
-                    Err(err) => {
-                        return self.handle_error(err);
-                    }
+                    Err(err) => match err.kind {
+                        RubyErrorKind::BlockReturn(val) => self.stack_push(val),
+                        _ => return self.handle_error(err),
+                    },
                 };
             };
         }
@@ -524,12 +531,10 @@ impl VM {
             ($eval:expr) => {{
                 match $eval {
                     Ok(_) => {}
-                    Err(err) if err.is_block_return() => {
-                        self.stack_pop();
-                    }
-                    Err(err) => {
-                        return self.handle_error(err);
-                    }
+                    Err(err) => match err.kind {
+                        RubyErrorKind::BlockReturn(_) => {}
+                        _ => return self.handle_error(err),
+                    },
                 }
             }};
         }
@@ -539,10 +544,10 @@ impl VM {
             ($eval:expr) => {{
                 match $eval {
                     Ok(val) => val,
-                    Err(err) if err.is_block_return() => self.stack_pop(),
-                    Err(err) => {
-                        return self.handle_error(err);
-                    }
+                    Err(err) => match err.kind {
+                        RubyErrorKind::BlockReturn(val) => val,
+                        _ => return self.handle_error(err),
+                    },
                 }
             }};
         }
@@ -565,14 +570,9 @@ impl VM {
                     // - the end of the method or block.
                     // - `next` in block AND outer of loops.
                     let val = self.stack_pop();
-                    #[cfg(debug_assertions)]
-                    assert_eq!(self.current_context().stack_len, self.exec_stack.len());
                     let _context = self.context_pop().unwrap();
                     #[cfg(feature = "trace")]
                     println!("<--- Ok({:?})", val);
-                    if let Some(context) = self.exec_context.last() {
-                        self.pc = context.pc;
-                    };
                     return Ok(val);
                 }
                 Inst::RETURN => {
@@ -582,11 +582,10 @@ impl VM {
                     let res = match context.kind {
                         ISeqKind::Block(_) | ISeqKind::Other => {
                             // if in block or eval context, exit with Err(BLOCK_RETURN).
-                            let err = self.error_block_return();
+                            let val = self.stack_pop();
+                            let err = self.error_block_return(val);
                             #[cfg(feature = "trace")]
                             println!("<--- Err({:?})", err.kind);
-                            #[cfg(debug_assertions)]
-                            assert_eq!(self.current_context().stack_len + 1, self.exec_stack.len());
                             Err(err)
                         }
                         ISeqKind::Method(_) => {
@@ -594,15 +593,10 @@ impl VM {
                             let val = self.stack_pop();
                             #[cfg(feature = "trace")]
                             println!("<--- Ok({:?})", val);
-                            #[cfg(debug_assertions)]
-                            assert_eq!(self.current_context().stack_len, self.exec_stack.len());
                             Ok(val)
                         }
                     };
                     self.context_pop().unwrap();
-                    if let Some(context) = self.exec_context.last() {
-                        self.pc = context.pc;
-                    }
                     return res;
                 }
                 Inst::MRETURN => {
@@ -610,19 +604,15 @@ impl VM {
                     // - `return` in block
                     let res = if let ISeqKind::Block(method) = context.kind {
                         // exit with Err(METHOD_RETURN).
-                        let err = self.error_method_return(method);
+                        let val = self.stack_pop();
+                        let err = self.error_method_return(method, val);
                         #[cfg(feature = "trace")]
                         println!("<--- Err({:?})", err.kind);
-                        #[cfg(debug_assertions)]
-                        assert_eq!(self.current_context().stack_len + 1, self.exec_stack.len());
                         Err(err)
                     } else {
                         unreachable!()
                     };
                     self.context_pop().unwrap();
-                    if let Some(context) = self.exec_context.last() {
-                        self.pc = context.pc;
-                    }
                     return res;
                 }
                 Inst::PUSH_NIL => {
@@ -1322,9 +1312,9 @@ impl VM {
         )
     }
 
-    pub fn error_method_return(&self, method: MethodRef) -> RubyError {
+    pub fn error_method_return(&self, method: MethodRef, val: Value) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_method_return(method, self.source_info(), loc)
+        RubyError::new_method_return(method, val, self.source_info(), loc)
     }
 
     pub fn error_local_jump(&self, msg: impl Into<String>) -> RubyError {
@@ -1337,9 +1327,9 @@ impl VM {
         )
     }
 
-    pub fn error_block_return(&self) -> RubyError {
+    pub fn error_block_return(&self, val: Value) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_block_return(self.source_info(), loc)
+        RubyError::new_block_return(val, self.source_info(), loc)
     }
 
     pub fn check_args_num(&self, len: usize, num: usize) -> Result<(), RubyError> {

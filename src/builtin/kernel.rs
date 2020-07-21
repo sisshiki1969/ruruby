@@ -95,9 +95,6 @@ pub fn init(globals: &mut Globals) -> Value {
                 val
             ))),
             Err(err) => {
-                if err.is_block_return() || err.is_method_return() {
-                    vm.stack_pop();
-                }
                 println!("Assert_error OK:");
                 err.show_err();
                 err.show_loc(0);

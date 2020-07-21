@@ -145,7 +145,7 @@ impl FiberInfo {
                     println!("<=== yield {:?} and terminate fiber.", res);
                     let res = match res {
                         Err(err) => match err.kind {
-                            RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
+                            RubyErrorKind::MethodReturn(_, _) => Err(err.conv_localjump_err()),
                             _ => Err(err),
                         },
                         res => res,
