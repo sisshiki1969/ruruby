@@ -82,13 +82,14 @@ impl FiberInfo {
     }
 
     pub fn free(&mut self) {
+        /*
         if !self.vm.is_running() {
             self.vm.free();
             match &mut self.inner {
                 FiberKind::Ruby(c) => c.free(),
                 _ => {}
             }
-        }
+        }*/
     }
 
     /// This BuiltinFunc is called in the fiber thread of a enumerator.
