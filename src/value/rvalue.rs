@@ -333,7 +333,7 @@ impl RValue {
         vm: VM,
         context: ContextRef,
         rec: std::sync::mpsc::Receiver<VMResult>,
-        tx: std::sync::mpsc::SyncSender<usize>,
+        tx: std::sync::mpsc::SyncSender<FiberMsg>,
     ) -> Self {
         let fiber = FiberInfo::new(vm, context, rec, tx);
         RValue {

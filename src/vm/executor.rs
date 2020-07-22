@@ -42,11 +42,11 @@ pub enum FiberState {
 pub struct ParentFiberInfo {
     pub parent: VMRef,
     pub tx: SyncSender<VMResult>,
-    rx: Receiver<usize>,
+    pub rx: Receiver<FiberMsg>,
 }
 
 impl ParentFiberInfo {
-    fn new(parent: VMRef, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+    fn new(parent: VMRef, tx: SyncSender<VMResult>, rx: Receiver<FiberMsg>) -> Self {
         ParentFiberInfo { parent, tx, rx }
     }
 }
@@ -98,7 +98,7 @@ impl VM {
         vm
     }
 
-    pub fn create_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<usize>) -> Self {
+    pub fn create_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<FiberMsg>) -> Self {
         let vm = VM {
             globals: self.globals,
             root_path: self.root_path.clone(),

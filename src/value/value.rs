@@ -794,7 +794,7 @@ impl Value {
         vm: VM,
         context: ContextRef,
         rec: std::sync::mpsc::Receiver<VMResult>,
-        tx: std::sync::mpsc::SyncSender<usize>,
+        tx: std::sync::mpsc::SyncSender<FiberMsg>,
     ) -> Self {
         RValue::new_fiber(globals, vm, context, rec, tx).pack()
     }
