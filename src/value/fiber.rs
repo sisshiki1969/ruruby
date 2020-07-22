@@ -133,6 +133,7 @@ impl FiberInfo {
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
                 let fiber_kind = self.inner.clone();
                 thread::spawn(move || {
+                    #[cfg(debugg_assertions)]
                     eprintln!("running {:?}", std::thread::current().id());
                     fiber_vm.set_allocator();
                     let res = match fiber_kind {
@@ -141,6 +142,7 @@ impl FiberInfo {
                             Self::enumerator_fiber(&mut fiber_vm, receiver, method_id, &args)
                         }
                     };
+                    #[cfg(debugg_assertions)]
                     eprintln!("finished {:?} {:?}", std::thread::current().id(), res);
                     // If the fiber was finished, the fiber becomes DEAD.
                     // Return a value on the stack top to the parent fiber.
@@ -160,13 +162,11 @@ impl FiberInfo {
                         Some(ParentFiberInfo { tx, rx, mut parent }) => {
                             #[cfg(feature = "perf")]
                             parent.perf.add(&fiber_vm.perf);
-                            //eprintln!("terminated & added {:?}", fiber_vm);
                             tx.send(res).unwrap();
-                            eprintln!("terminated {:?}", std::thread::current().id());
-                            //rx.recv().unwrap();
                         }
                         None => unreachable!(),
                     };
+                    #[cfg(debugg_assertions)]
                     eprintln!("killed {:?}", std::thread::current().id());
                 });
                 // Wait for fiber.resume.
