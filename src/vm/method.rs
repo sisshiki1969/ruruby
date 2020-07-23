@@ -56,7 +56,7 @@ pub enum MethodInfo {
     RubyFunc { iseq: ISeqRef },
     AttrReader { id: IdentId },
     AttrWriter { id: IdentId },
-    BuiltinFunc { name: String, func: BuiltinFunc },
+    BuiltinFunc { name: IdentId, func: BuiltinFunc },
 }
 
 impl GC for MethodInfo {
@@ -267,7 +267,7 @@ impl GlobalMethodTable {
         GlobalMethodTable {
             table: vec![MethodInfo::BuiltinFunc {
                 func: enumerator_iterate,
-                name: "/enum".to_string(),
+                name: IdentId::_ENUM_FUNC,
             }],
             method_id: 1,
         }

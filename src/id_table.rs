@@ -61,6 +61,7 @@ impl IdentId {
     pub const _DIV: IdentId = id!(15);
     pub const _LT: IdentId = id!(16);
     pub const _LE: IdentId = id!(17);
+    pub const _ENUM_FUNC: IdentId = id!(18);
 }
 
 impl IdentId {
@@ -118,6 +119,7 @@ impl IdentifierTable {
         table.set_ident_id("/", IdentId::_DIV);
         table.set_ident_id("<", IdentId::_LT);
         table.set_ident_id("<=", IdentId::_LE);
+        table.set_ident_id("/enum", IdentId::_ENUM_FUNC);
         table
     }
 

@@ -15,6 +15,7 @@ pub fn repl_vm() {
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
     println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
+    println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
     let mut rl = rustyline::Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();

@@ -189,6 +189,12 @@ impl VM {
         self.temp_stack.push(v);
     }
 
+    pub fn temp_push_args(&mut self, args: &Args) {
+        for a in args.iter() {
+            self.temp_stack.push(*a);
+        }
+    }
+
     /// Push objects to the temporary area.
     pub fn temp_push_vec(&mut self, vec: &mut Vec<Value>) {
         self.temp_stack.append(vec);
@@ -2248,7 +2254,7 @@ impl VM {
 
                 let len = self.temp_stack.len();
                 self.temp_push(self_val);
-                self.temp_push_vec(&mut args.to_vec());
+                self.temp_push_args(args);
                 let res = func(self, self_val, args);
                 self.temp_stack.truncate(len);
 

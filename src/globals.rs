@@ -294,14 +294,11 @@ impl Globals {
     }
 
     pub fn add_builtin_class_method(&mut self, obj: Value, name: &str, func: BuiltinFunc) {
-        let id = IdentId::get_id(name);
-        let info = MethodInfo::BuiltinFunc {
-            name: name.to_string(),
-            func,
-        };
+        let name = IdentId::get_id(name);
+        let info = MethodInfo::BuiltinFunc { name, func };
         let func_ref = self.add_method(info);
         let singleton = self.get_singleton_class(obj).unwrap();
-        singleton.as_class().method_table.insert(id, func_ref);
+        singleton.as_class().method_table.insert(name, func_ref);
     }
 
     pub fn add_builtin_instance_method(
@@ -310,13 +307,10 @@ impl Globals {
         name: &str,
         func: BuiltinFunc,
     ) {
-        let id = IdentId::get_id(name);
-        let info = MethodInfo::BuiltinFunc {
-            name: name.to_string(),
-            func,
-        };
+        let name = IdentId::get_id(name);
+        let info = MethodInfo::BuiltinFunc { name, func };
         let methodref = self.add_method(info);
-        classref.method_table.insert(id, methodref);
+        classref.method_table.insert(name, methodref);
     }
 
     pub fn get_class_name(&self, val: Value) -> String {
