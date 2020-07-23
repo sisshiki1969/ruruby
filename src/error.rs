@@ -14,7 +14,7 @@ pub enum RubyErrorKind {
         kind: RuntimeErrKind,
         message: String,
     },
-    MethodReturn(MethodRef, Value),
+    MethodReturn(Value),
     BlockReturn(Value),
 }
 
@@ -59,7 +59,7 @@ impl RubyError {
 
     pub fn is_method_return(&self) -> bool {
         match &self.kind {
-            RubyErrorKind::MethodReturn(_, _) => true,
+            RubyErrorKind::MethodReturn(_) => true,
             _ => false,
         }
     }
@@ -120,7 +120,7 @@ impl RubyError {
                 };
                 eprintln!("({})", message);
             }
-            RubyErrorKind::MethodReturn(_, _) => {
+            RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
             }
             RubyErrorKind::BlockReturn(_) => {
@@ -151,18 +151,8 @@ impl RubyError {
         RubyError::new(kind, source_info, level, loc)
     }
 
-    pub fn new_method_return(
-        method: MethodRef,
-        val: Value,
-        source_info: SourceInfoRef,
-        loc: Loc,
-    ) -> Self {
-        RubyError::new(
-            RubyErrorKind::MethodReturn(method, val),
-            source_info,
-            0,
-            loc,
-        )
+    pub fn new_method_return(val: Value, source_info: SourceInfoRef, loc: Loc) -> Self {
+        RubyError::new(RubyErrorKind::MethodReturn(val), source_info, 0, loc)
     }
 
     pub fn new_block_return(val: Value, source_info: SourceInfoRef, loc: Loc) -> Self {

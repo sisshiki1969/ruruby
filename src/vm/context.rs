@@ -129,7 +129,7 @@ impl Context {
             caller: None,
             on_stack: true,
             //stack_len: 0,
-            kind: ISeqKind::Block(MethodRef::from(0)),
+            kind: ISeqKind::Block,
         }
     }
 
@@ -215,7 +215,7 @@ impl Context {
         let req_len = iseq.params.req_params;
         let post_len = iseq.params.post_params;
         match self.kind {
-            ISeqKind::Block(_) if args.len() == 1 && req_len + post_len > 1 => {
+            ISeqKind::Block if args.len() == 1 && req_len + post_len > 1 => {
                 match args[0].as_array() {
                     Some(ary) => {
                         let args = &ary.elements;

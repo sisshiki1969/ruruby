@@ -171,9 +171,9 @@ impl GC for ClassList {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ISeqKind {
-    Other,            // eval or unnamed method
-    Method(IdentId),  // method or lambda
-    Block(MethodRef), // block or proc
+    Other,           // eval or unnamed method
+    Method(IdentId), // method or lambda
+    Block,           // block or proc
 }
 
 impl ISeqInfo {
@@ -204,7 +204,7 @@ impl ISeqInfo {
             keyword_params,
         };
         let opt_flag = match kind {
-            ISeqKind::Block(_) => false,
+            ISeqKind::Block => false,
             _ => params.is_opt(),
         };
         ISeqInfo {
@@ -243,7 +243,14 @@ impl ISeqInfo {
 
     pub fn is_block(&self) -> bool {
         match self.kind {
-            ISeqKind::Block(_) => true,
+            ISeqKind::Block => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_method(&self) -> bool {
+        match self.kind {
+            ISeqKind::Method(_) => true,
             _ => false,
         }
     }

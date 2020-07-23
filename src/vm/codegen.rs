@@ -742,7 +742,7 @@ impl Codegen {
                 iseq_sourcemap,
                 self.source_info,
                 match kind {
-                    ContextKind::Block => ISeqKind::Block(*self.method_stack.last().unwrap()),
+                    ContextKind::Block => ISeqKind::Block,
                     ContextKind::Eval => ISeqKind::Other,
                     ContextKind::Method => {
                         if name.is_some() {
@@ -1662,7 +1662,7 @@ impl Codegen {
                         if self.context().kind == ContextKind::Block {
                             self.gen_method_return(iseq);
                         } else {
-                            self.gen_return(iseq);
+                            self.gen_end(iseq);
                         }
                     }
                 }

@@ -87,7 +87,7 @@ impl FiberInfo {
     }
 
     pub fn free(&mut self) {
-        self.vm.free();
+        //self.vm.free();
         /*match &mut self.inner {
             FiberKind::Ruby(c) => c.free(),
             _ => {}
@@ -133,7 +133,7 @@ impl FiberInfo {
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
                 let fiber_kind = self.inner.clone();
                 thread::spawn(move || {
-                    #[cfg(debugg_assertions)]
+                    #[cfg(debug_assertions)]
                     eprintln!("running {:?}", std::thread::current().id());
                     fiber_vm.set_allocator();
                     let res = match fiber_kind {
@@ -142,7 +142,7 @@ impl FiberInfo {
                             Self::enumerator_fiber(&mut fiber_vm, receiver, method_id, &args)
                         }
                     };
-                    #[cfg(debugg_assertions)]
+                    #[cfg(debug_assertions)]
                     eprintln!("finished {:?} {:?}", std::thread::current().id(), res);
                     // If the fiber was finished, the fiber becomes DEAD.
                     // Return a value on the stack top to the parent fiber.
@@ -151,7 +151,7 @@ impl FiberInfo {
                     println!("<=== yield {:?} and terminate fiber.", res);
                     let res = match res {
                         Err(err) => match err.kind {
-                            RubyErrorKind::MethodReturn(_, _) => Err(err.conv_localjump_err()),
+                            RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
                             _ => Err(err),
                         },
                         res => res,
@@ -166,7 +166,7 @@ impl FiberInfo {
                         }
                         None => unreachable!(),
                     };
-                    #[cfg(debugg_assertions)]
+                    #[cfg(debug_assertions)]
                     eprintln!("killed {:?}", std::thread::current().id());
                 });
                 // Wait for fiber.resume.

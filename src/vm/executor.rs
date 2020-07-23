@@ -441,34 +441,33 @@ impl VM {
 
     fn unwind_context(&mut self, err: &mut RubyError) {
         self.context_pop().unwrap();
-        if self.exec_context.last().is_some() {
-            //self.pc = context.pc;
+        if self.latest_context().is_some() {
             err.info.push((self.source_info(), self.get_loc()));
         };
     }
 
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {
         let res = match err.kind {
-            RubyErrorKind::MethodReturn(method, val) => {
+            RubyErrorKind::MethodReturn(val) => {
                 // Catch MethodReturn if this context is the target.
                 let iseq = self.current_context().iseq_ref;
-                if iseq.is_some() && method == iseq.unwrap().method {
-                    self.unwind_context(&mut err);
+                if iseq.is_some() && iseq.unwrap().is_method() {
+                    //self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     println!("<--- METHOD_RETURN Ok({:?})", val);
                     Ok(val)
                 } else {
                     self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
-                    println!("<--- METHOD_RETURN({:?})", method);
+                    println!("<--- METHOD_RETURN");
                     Err(err)
                 }
             }
             _ => {
                 //self.dump_context();
-                if self.latest_context().is_some() {
-                    self.unwind_context(&mut err);
-                }
+                //if self.latest_context().is_some() {
+                self.unwind_context(&mut err);
+                //}
                 #[cfg(feature = "trace")]
                 println!("<--- Err({:?})", err.kind);
                 Err(err)
@@ -480,10 +479,12 @@ impl VM {
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         let stack_len = self.exec_stack.len();
         let pc = self.pc;
+        self.context_push(context);
         self.pc = 0;
         match self.run_context_main(context) {
             Ok(val) => {
-                #[cfg(debugg_assertions)]
+                self.context_pop().unwrap();
+                #[cfg(debug_assertions)]
                 assert_eq!(stack_len, self.exec_stack.len());
                 self.pc = pc;
                 Ok(val)
@@ -508,7 +509,6 @@ impl VM {
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
         }
 
-        self.context_push(context);
         let iseq = &context.iseq_ref.unwrap().iseq;
         let self_oref = context.self_value.rvalue_mut();
         self.gc();
@@ -567,53 +567,35 @@ impl VM {
             match iseq[self.pc] {
                 Inst::END => {
                     // reached the end of the method or block.
-                    // - the end of the method or block.
+                    // - the end of a method or block.
+                    // - `return` in method.
                     // - `next` in block AND outer of loops.
                     let val = self.stack_pop();
-                    let _context = self.context_pop().unwrap();
                     #[cfg(feature = "trace")]
                     println!("<--- Ok({:?})", val);
                     return Ok(val);
                 }
                 Inst::RETURN => {
-                    // 'Inst::RETURN' is executed.
-                    // - `return` in method.
-                    // - `break` outer of loops.
-                    let res = match context.kind {
-                        ISeqKind::Block(_) | ISeqKind::Other => {
-                            // if in block or eval context, exit with Err(BLOCK_RETURN).
-                            let val = self.stack_pop();
-                            let err = self.error_block_return(val);
-                            #[cfg(feature = "trace")]
-                            println!("<--- Err({:?})", err.kind);
-                            Err(err)
-                        }
-                        ISeqKind::Method(_) => {
-                            // if in method context, exit with Ok(rerurn_value).
-                            let val = self.stack_pop();
-                            #[cfg(feature = "trace")]
-                            println!("<--- Ok({:?})", val);
-                            Ok(val)
-                        }
-                    };
+                    // - `break`  in block or eval AND outer of loops.
+                    #[cfg(debug_assertions)]
+                    assert!(context.kind == ISeqKind::Block || context.kind == ISeqKind::Other);
+                    let val = self.stack_pop();
+                    let err = self.error_block_return(val);
                     self.context_pop().unwrap();
-                    return res;
+                    #[cfg(feature = "trace")]
+                    println!("<--- Err({:?})", err.kind);
+                    return Err(err);
                 }
                 Inst::MRETURN => {
-                    // 'METHOD_RETURN' is executed.
                     // - `return` in block
-                    let res = if let ISeqKind::Block(method) = context.kind {
-                        // exit with Err(METHOD_RETURN).
-                        let val = self.stack_pop();
-                        let err = self.error_method_return(method, val);
-                        #[cfg(feature = "trace")]
-                        println!("<--- Err({:?})", err.kind);
-                        Err(err)
-                    } else {
-                        unreachable!()
-                    };
+                    #[cfg(debug_assertions)]
+                    assert_eq!(context.kind, ISeqKind::Block);
+                    let val = self.stack_pop();
+                    let err = self.error_method_return(val);
                     self.context_pop().unwrap();
-                    return res;
+                    #[cfg(feature = "trace")]
+                    println!("<--- Err({:?})", err.kind);
+                    return Err(err);
                 }
                 Inst::PUSH_NIL => {
                     self.stack_push(Value::nil());
@@ -1312,9 +1294,9 @@ impl VM {
         )
     }
 
-    pub fn error_method_return(&self, method: MethodRef, val: Value) -> RubyError {
+    pub fn error_method_return(&self, val: Value) -> RubyError {
         let loc = self.get_loc();
-        RubyError::new_method_return(method, val, self.source_info(), loc)
+        RubyError::new_method_return(val, self.source_info(), loc)
     }
 
     pub fn error_local_jump(&self, msg: impl Into<String>) -> RubyError {
