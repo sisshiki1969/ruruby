@@ -5,6 +5,7 @@ pub mod errorobj;
 pub mod fiber;
 pub mod file;
 pub mod float;
+pub mod gc;
 pub mod hash;
 pub mod integer;
 pub mod kernel;

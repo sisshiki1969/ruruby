@@ -214,6 +214,7 @@ impl Globals {
         set_class!("Math", math::init_math(&mut globals));
         set_class!("File", file::init_file(&mut globals));
         set_class!("Process", process::init_process(&mut globals));
+        set_class!("GC", gc::init_gc(&mut globals));
         set_class!("Struct", structobj::init_struct(&mut globals));
         set_class!("StandardError", Value::class(&globals, globals.class_class));
         let id = IdentId::get_id("StopIteration");
