@@ -3,6 +3,7 @@ use ruruby::error::*;
 //use ruruby::parser::{LvarCollector, Parser};
 //#[macro_use]
 use ruruby::*;
+use rustyline::{error::ReadlineError, Editor};
 
 pub fn repl_vm() {
     println!("RV: {}", std::mem::size_of::<RV>());
@@ -15,7 +16,7 @@ pub fn repl_vm() {
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
     println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
-    let mut rl = rustyline::Editor::<()>::new();
+    let mut rl = Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
     let mut globals = GlobalsRef::new_globals();
@@ -31,7 +32,15 @@ pub fn repl_vm() {
             rl.readline(&format!("{}{:1}{} ", Red.bold().paint("irb:"), level, prompt).to_string());
         let mut line = match readline {
             Ok(line) => line,
-            Err(_) => return,
+            Err(err) => match err {
+                ReadlineError::Interrupted => {
+                    program = String::new();
+                    level = 0;
+                    continue;
+                }
+                ReadlineError::Eof => return,
+                _ => continue,
+            },
         };
         rl.add_history_entry(line.clone());
         line.push('\n');
