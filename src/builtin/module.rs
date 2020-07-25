@@ -142,7 +142,10 @@ fn define_reader(vm: &mut VM, class: Value, id: IdentId) {
         id: instance_var_id,
     };
     let methodref = vm.globals.add_method(info);
-    vm.add_instance_method(class, id, methodref);
+    class
+        .as_module()
+        .unwrap()
+        .add_method(&mut vm.globals, id, methodref);
 }
 
 fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
@@ -152,7 +155,10 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
         id: instance_var_id,
     };
     let methodref = vm.globals.add_method(info);
-    vm.add_instance_method(class, assign_id, methodref);
+    class
+        .as_module()
+        .unwrap()
+        .add_method(&mut vm.globals, assign_id, methodref);
 }
 
 fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
@@ -233,24 +239,26 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let method = match args.block {
+    let context = vm.current_context();
+    match args.block {
         Some(method) => {
             vm.check_args_num(args.len(), 0)?;
-            method
+            let args = Args::new0();
+            let res = vm.eval_method(method, self_val, Some(context), &args);
+            res
         }
         None => {
             vm.check_args_num(args.len(), 1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string(vm, "1st arg")?;
-            vm.parse_program_eval(PathBuf::from("(eval)"), program)?
+            let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
+            let args = Args::new0();
+            vm.class_push(self_val);
+            let res = vm.eval_method(method, self_val, Some(context), &args);
+            vm.class_pop();
+            res
         }
-    };
-    let args = Args::new0();
-    let context = vm.current_context();
-    vm.class_push(self_val);
-    let res = vm.eval_method(method, self_val, Some(context), &args);
-    vm.class_pop();
-    res
+    }
 }
 
 #[cfg(test)]
@@ -383,7 +391,7 @@ mod test {
         end
         assert("mew", C.new.bar)
         assert("view", x)
-        # assert(111, C.module_eval { D })
+        assert(111, C.module_eval { D })
         "##;
         assert_script(program);
     }

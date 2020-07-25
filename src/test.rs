@@ -4,7 +4,7 @@ use std::path::PathBuf;
 pub fn eval_script(script: impl Into<String>, expected: Value) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.new_vm();
-    let res = vm.run(PathBuf::from(""), &script.into(), None);
+    let res = vm.run(PathBuf::from(""), &script.into());
     #[cfg(feature = "perf")]
     vm.perf.print_perf();
     #[cfg(feature = "gc-debug")]
@@ -26,7 +26,7 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
 pub fn assert_script(script: impl Into<String>) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.new_vm();
-    let res = vm.run(PathBuf::from(""), &script.into(), None);
+    let res = vm.run(PathBuf::from(""), &script.into());
     #[cfg(feature = "perf")]
     vm.perf.print_perf();
     #[cfg(feature = "gc-debug")]
@@ -45,7 +45,7 @@ pub fn assert_error(script: impl Into<String>) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.new_vm();
     let program = script.into();
-    let res = vm.run(PathBuf::from(""), &program, None);
+    let res = vm.run(PathBuf::from(""), &program);
     #[cfg(feature = "perf")]
     vm.perf.print_perf();
 

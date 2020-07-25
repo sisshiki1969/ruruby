@@ -46,4 +46,14 @@ impl ClassRef {
             Some(self.superclass.as_class())
         }
     }
+
+    pub fn add_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        info: MethodRef,
+    ) -> Option<MethodRef> {
+        globals.class_version += 1;
+        self.method_table.insert(id, info)
+    }
 }
