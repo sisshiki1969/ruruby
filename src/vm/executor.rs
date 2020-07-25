@@ -2533,8 +2533,8 @@ impl VM {
     }
 
     pub fn dup_enum(&mut self, eref: &FiberInfo) -> FiberInfo {
-        let (receiver, method_id, args) = match &eref.inner {
-            FiberKind::Builtin(receiver, method_id, args) => (*receiver, *method_id, args.clone()),
+        let (receiver, method_id, args) = match &eref.kind {
+            FiberKind::Enum(receiver, method_id, args) => (*receiver, *method_id, args.clone()),
             _ => unreachable!(),
         };
         self.create_enum_info(method_id, receiver, args)

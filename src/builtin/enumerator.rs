@@ -51,8 +51,8 @@ pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
-    let (receiver, method, args) = match &eref.inner {
-        FiberKind::Builtin(receiver, method, args) => (receiver, method, args),
+    let (receiver, method, args) = match &eref.kind {
+        FiberKind::Enum(receiver, method, args) => (receiver, method, args),
         _ => unreachable!(),
     };
 
@@ -121,8 +121,8 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 
     info.free();
-    match info.inner {
-        FiberKind::Builtin(receiver, _, _) => Ok(receiver),
+    match info.kind {
+        FiberKind::Enum(receiver, _, _) => Ok(receiver),
         _ => unreachable!(),
     }
 }

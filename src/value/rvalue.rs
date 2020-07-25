@@ -124,7 +124,8 @@ impl RValue {
         match std::mem::replace(&mut self.kind, ObjKind::Invalid) {
             ObjKind::Invalid => return false,
             ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
-            ObjKind::Fiber(mut f) | ObjKind::Enumerator(mut f) => f.free(),
+            ObjKind::Fiber(_f) => {}
+            ObjKind::Enumerator(_f) => {}
             ObjKind::Ordinary => {}
             ObjKind::Integer(_) => {}
             ObjKind::Float(_) => {}

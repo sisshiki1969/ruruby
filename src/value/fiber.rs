@@ -8,14 +8,15 @@ use std::thread;
 #[derive(Debug)]
 pub struct FiberInfo {
     pub vm: VMRef,
-    pub inner: FiberKind,
+    pub kind: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<FiberMsg>,
+    pub handle: Option<thread::JoinHandle<()>>,
 }
 
 impl PartialEq for FiberInfo {
     fn eq(&self, other: &Self) -> bool {
-        &*self.vm as *const VM == &*other.vm as *const VM && self.inner == other.inner
+        &*self.vm as *const VM == &*other.vm as *const VM && self.kind == other.kind
     }
 }
 
@@ -45,8 +46,8 @@ impl Clone for FiberInfo {
 */
 #[derive(Clone, PartialEq)]
 pub enum FiberKind {
-    Ruby(ContextRef),
-    Builtin(Value, IdentId, Args),
+    Fiber(ContextRef),
+    Enum(Value, IdentId, Args),
 }
 
 impl std::fmt::Debug for FiberKind {
@@ -64,9 +65,10 @@ impl FiberInfo {
     ) -> Self {
         FiberInfo {
             vm: VMRef::new(vm),
-            inner: FiberKind::Ruby(context),
+            kind: FiberKind::Fiber(context),
             rec,
             tx,
+            handle: None,
         }
     }
 
@@ -80,14 +82,19 @@ impl FiberInfo {
     ) -> Self {
         FiberInfo {
             vm: VMRef::new(vm),
-            inner: FiberKind::Builtin(receiver, method_id, args),
+            kind: FiberKind::Enum(receiver, method_id, args),
             rec,
             tx,
+            handle: None,
         }
     }
 
     pub fn free(&mut self) {
-        //self.vm.free();
+        self.vm.free();
+        match self.handle.take() {
+            Some(h) => h.join().unwrap(),
+            None => {}
+        }
         /*match &mut self.inner {
             FiberKind::Ruby(c) => c.free(),
             _ => {}
@@ -131,14 +138,14 @@ impl FiberInfo {
                 #[cfg(feature = "trace")]
                 println!("===> resume(spawn)");
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
-                let fiber_kind = self.inner.clone();
-                thread::spawn(move || {
+                let fiber_kind = self.kind.clone();
+                let join = thread::spawn(move || {
                     #[cfg(debug_assertions)]
                     eprintln!("running {:?}", std::thread::current().id());
                     fiber_vm.set_allocator();
                     let res = match fiber_kind {
-                        FiberKind::Ruby(context) => fiber_vm.run_context(context),
-                        FiberKind::Builtin(receiver, method_id, args) => {
+                        FiberKind::Fiber(context) => fiber_vm.run_context(context),
+                        FiberKind::Enum(receiver, method_id, args) => {
                             Self::enumerator_fiber(&mut fiber_vm, receiver, method_id, &args)
                         }
                     };
@@ -156,19 +163,21 @@ impl FiberInfo {
                         },
                         res => res,
                     };
-                    #[allow(unused_variables)]
-                    #[allow(unused_mut)]
                     match &fiber_vm.parent_fiber {
-                        Some(ParentFiberInfo { tx, rx, mut parent }) => {
-                            #[cfg(feature = "perf")]
-                            parent.perf.add(&fiber_vm.perf);
+                        Some(ParentFiberInfo { tx, .. }) => {
                             tx.send(res).unwrap();
                         }
                         None => unreachable!(),
                     };
-                    #[cfg(debug_assertions)]
-                    eprintln!("killed {:?}", std::thread::current().id());
+                    #[cfg(feature = "perf")]
+                    match &fiber_vm.parent_fiber {
+                        Some(ParentFiberInfo { mut parent, .. }) => {
+                            parent.perf.add(&fiber_vm.perf);
+                        }
+                        None => {}
+                    };
                 });
+                self.handle = Some(join);
                 // Wait for fiber.resume.
                 let res = self.rec.recv().unwrap();
                 #[cfg(feature = "perf")]
@@ -198,9 +207,9 @@ impl GC for FiberInfo {
             return;
         }
         self.vm.mark(alloc);
-        match &self.inner {
-            FiberKind::Ruby(context) => context.mark(alloc),
-            FiberKind::Builtin(receiver, _, args) => {
+        match &self.kind {
+            FiberKind::Fiber(context) => context.mark(alloc),
+            FiberKind::Enum(receiver, _, args) => {
                 receiver.mark(alloc);
                 for arg in args.iter() {
                     arg.mark(alloc);
