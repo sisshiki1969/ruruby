@@ -2616,7 +2616,12 @@ impl VM {
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", root_path);
         self.root_path.push(root_path);
-        //let mut vm2 = Ref::from_ref(&self).clone();
+        self.exec_program(absolute_path, program);
+        self.root_path.pop();
+    }
+
+    pub fn exec_program(&mut self, absolute_path: PathBuf, program: String) {
+        //let absolute_path = PathBuf::default();
         match self.run(absolute_path, &program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
@@ -2632,6 +2637,5 @@ impl VM {
                 }
             }
         };
-        self.root_path.pop();
     }
 }
