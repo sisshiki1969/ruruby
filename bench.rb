@@ -63,7 +63,7 @@ puts "CPU: #{@cpu_info}"
 "
 
 `set -x`
-`rustup run nightly cargo build --release`
+`cargo build --release`
 
 def unit_conv(ruruby, ruby)
   ch = ''

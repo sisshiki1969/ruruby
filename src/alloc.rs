@@ -147,7 +147,7 @@ type GCBoxRef<T> = Ref<GCBox<T>>;
 #[derive(Debug)]
 pub struct Allocator {
     /// Allocated number of objects in current page.
-    used: usize,
+    used_in_current: usize,
     /// Total allocated objects.
     allocated: usize,
     /// Total blocks in free list.
@@ -162,6 +162,8 @@ pub struct Allocator {
     free: Option<GCBoxRef<RValue>>,
     /// Deallocated pages.
     free_pages: Vec<PageRef>,
+    /// Counter of GC execution.
+    count: usize,
     /// Flag for GC timing.
     alloc_flag: bool,
 }
@@ -175,7 +177,7 @@ impl Allocator {
         assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
         let ptr = PageRef::alloc_page();
         let alloc = Allocator {
-            used: 0,
+            used_in_current: 0,
             allocated: 0,
             free_list_count: 0,
             current: ptr,
@@ -183,6 +185,7 @@ impl Allocator {
             mark_counter: 0,
             free: None,
             free_pages: vec![],
+            count: 0,
             alloc_flag: false,
         };
         alloc
@@ -192,8 +195,30 @@ impl Allocator {
         self.alloc_flag
     }
 
+    /// Returns number of objects in the free list.
+    /// (sweeped objects in the previous GC.)
     pub fn free_count(&self) -> usize {
         self.free_list_count
+    }
+
+    /// Returns number of live objects in the previous GC.
+    pub fn live_count(&self) -> usize {
+        self.mark_counter
+    }
+
+    /// Returns number of total allocated objects.
+    pub fn total_allocated(&self) -> usize {
+        self.allocated
+    }
+
+    /// Return total count of GC execution.
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    /// Return total active pages.
+    pub fn pages_len(&self) -> usize {
+        self.pages.len() + 1
     }
 
     /// Allocate object.
@@ -221,9 +246,9 @@ impl Allocator {
             None => {}
         }
 
-        let gcbox = if self.used == DATA_LEN {
+        let gcbox = if self.used_in_current == DATA_LEN {
             // Allocate new page.
-            self.used = 1;
+            self.used_in_current = 1;
             self.pages.push(self.current);
             self.current = if self.free_pages.len() == 0 {
                 PageRef::alloc_page()
@@ -233,17 +258,17 @@ impl Allocator {
             self.current.get_data_ptr(0)
         } else {
             // Bump allocation.
-            if self.used == THRESHOLD {
+            if self.used_in_current == THRESHOLD {
                 self.alloc_flag = true;
             }
-            let ptr = self.current.get_data_ptr(self.used);
-            self.used += 1;
+            let ptr = self.current.get_data_ptr(self.used_in_current);
+            self.used_in_current += 1;
             ptr
         };
         #[cfg(feature = "gc-debug")]
         {
-            assert!(self.used <= DATA_LEN);
-            assert!(0 < self.used);
+            assert!(self.used_in_current <= DATA_LEN);
+            assert!(0 < self.used_in_current);
         }
 
         unsafe {
@@ -258,6 +283,12 @@ impl Allocator {
         gcbox
     }
 
+    pub fn gc_mark_only(&mut self, root: &Globals) {
+        self.clear_mark();
+        root.mark(self);
+        self.print_mark();
+    }
+
     pub fn gc(&mut self, root: &Globals) {
         #[cfg(feature = "gc-debug")]
         {
@@ -265,7 +296,7 @@ impl Allocator {
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
                 self.allocated,
-                self.used,
+                self.used_in_current,
                 self.pages.len()
             );
         }
@@ -281,6 +312,7 @@ impl Allocator {
             eprintln!("free list: {}", self.free_list_count);
         }
         self.alloc_flag = false;
+        self.count += 1;
         #[cfg(feature = "gc-debug")]
         eprintln!("--GC completed");
     }
@@ -379,9 +411,9 @@ impl Allocator {
         }
 
         let mut ptr = self.current.get_data_ptr(0);
-        assert!(self.used <= DATA_LEN);
-        let i = self.used / 64;
-        let bit = self.used % 64;
+        assert!(self.used_in_current <= DATA_LEN);
+        let i = self.used_in_current / 64;
+        let bit = self.used_in_current % 64;
         let bitmap = &self.current.mark_bits;
 
         for map in bitmap.iter().take(i) {
@@ -398,7 +430,6 @@ impl Allocator {
 }
 
 // For debug
-#[cfg(feature = "gc-debug")]
 impl Allocator {
     fn check_ptr(&self, ptr: *mut GCBox<RValue>) {
         let page_ptr = PageRef::from_inner(ptr);
@@ -466,7 +497,7 @@ impl Allocator {
         assert_eq!(self.free_list_count, self.check_free_list());
         eprintln!(
             "free list:{} allocated:{}  used in current page:{}",
-            self.free_list_count, self.allocated, self.used
+            self.free_list_count, self.allocated, self.used_in_current
         );
     }
 }

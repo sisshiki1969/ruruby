@@ -144,7 +144,7 @@ pub fn init(globals: &mut Globals) -> Value {
         eprintln!("reading:{}", absolute_path.to_string_lossy());
         vm.root_path.push(path);
         vm.class_push(vm.globals.builtins.object);
-        vm.run(absolute_path, &program, None)?;
+        vm.run(absolute_path, &program)?;
         vm.class_pop();
         vm.root_path.pop().unwrap();
         Ok(())

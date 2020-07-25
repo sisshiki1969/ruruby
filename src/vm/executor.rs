@@ -348,12 +348,9 @@ impl VM {
         Ok(method)
     }
 
-    pub fn run(&mut self, path: PathBuf, program: &str, self_value: Option<Value>) -> VMResult {
+    pub fn run(&mut self, path: PathBuf, program: &str) -> VMResult {
         let method = self.parse_program(path, program)?;
-        let self_value = match self_value {
-            Some(val) => val,
-            None => self.globals.main_object,
-        };
+        let self_value = self.globals.main_object;
         let arg = Args::new0();
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
@@ -458,7 +455,6 @@ impl VM {
                 // Catch MethodReturn if this context is the target.
                 let iseq = self.current_context().iseq_ref;
                 if iseq.is_some() && iseq.unwrap().is_method() {
-                    //self.unwind_context(&mut err);
                     #[cfg(feature = "trace")]
                     println!("<--- METHOD_RETURN Ok({:?})", val);
                     Ok(val)
@@ -471,15 +467,38 @@ impl VM {
             }
             _ => {
                 //self.dump_context();
-                //if self.latest_context().is_some() {
                 self.unwind_context(&mut err);
-                //}
                 #[cfg(feature = "trace")]
                 println!("<--- Err({:?})", err.kind);
                 Err(err)
             }
         };
         return res;
+    }
+
+    /// Evaluate expr, and return the value.
+    fn try_get(&mut self, expr: VMResult) -> VMResult {
+        match expr {
+            Ok(val) => Ok(val),
+            Err(err) => match err.kind {
+                RubyErrorKind::BlockReturn(val) => Ok(val),
+                _ => self.handle_error(err),
+            },
+        }
+    }
+
+    /// Evaluate expr. Stack is not changed.
+    fn try_eval(&mut self, expr: Result<(), RubyError>) -> Result<(), RubyError> {
+        match expr {
+            Ok(_) => Ok(()),
+            Err(err) => match err.kind {
+                RubyErrorKind::BlockReturn(_) => Ok(()),
+                _ => match self.handle_error(err) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err),
+                },
+            },
+        }
     }
 
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
@@ -530,32 +549,6 @@ impl VM {
                     },
                 };
             };
-        }
-
-        /// Evaluate expr. Stack is not changed.
-        macro_rules! try_eval {
-            ($eval:expr) => {{
-                match $eval {
-                    Ok(_) => {}
-                    Err(err) => match err.kind {
-                        RubyErrorKind::BlockReturn(_) => {}
-                        _ => return self.handle_error(err),
-                    },
-                }
-            }};
-        }
-
-        /// Evaluate expr, and return the value.
-        macro_rules! try_get {
-            ($eval:expr) => {{
-                match $eval {
-                    Ok(val) => val,
-                    Err(err) => match err.kind {
-                        RubyErrorKind::BlockReturn(val) => val,
-                        _ => return self.handle_error(err),
-                    },
-                }
-            }};
         }
 
         loop {
@@ -975,7 +968,8 @@ impl VM {
                 }
                 Inst::SET_INDEX => {
                     let arg_num = self.read_usize(iseq, 1);
-                    try_eval!(self.set_index(arg_num));
+                    let res = self.set_index(arg_num);
+                    self.try_eval(res)?;
                     self.pc += 5;
                 }
                 Inst::GET_INDEX => {
@@ -1104,11 +1098,12 @@ impl VM {
                     let id = self.read_id(iseq, 2);
                     let method = self.read_methodref(iseq, 6);
                     let super_val = self.stack_pop();
-                    let val = try_get!(self.define_class(id, is_module, super_val));
+                    let res = self.define_class(id, is_module, super_val);
+                    let val = self.try_get(res)?;
 
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_defined(val);
+                    iseq.class_defined = self.get_class_defined(val);
                     let arg = Args::new0();
                     try_push!(self.eval_send(method, val, &arg));
                     self.pc += 10;
@@ -1118,10 +1113,10 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_defined(None);
-                    self.define_method(id, method);
+                    iseq.class_defined = self.get_class_defined(None);
+                    self.define_method(context.self_value, id, method);
                     if self.define_mode().module_function {
-                        self.define_singleton_method(self.class(), id, method)?;
+                        self.define_singleton_method(context.self_value, id, method)?;
                     };
                     self.pc += 9;
                 }
@@ -1129,11 +1124,11 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_defined(None);
-                    let singleton = self.stack_pop();
-                    self.define_singleton_method(singleton, id, method)?;
+                    iseq.class_defined = self.get_class_defined(None);
+                    //let _singleton = self.stack_pop();
+                    self.define_singleton_method(context.self_value, id, method)?;
                     if self.define_mode().module_function {
-                        self.define_method(id, method);
+                        self.define_method(context.self_value, id, method);
                     };
                     self.pc += 9;
                 }
@@ -1407,6 +1402,7 @@ impl VM {
         }
     }
 
+    /// Get class list from the nearest exec context.
     fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
         for context in self.exec_context.iter().rev() {
             match context.iseq_ref.unwrap().class_defined {
@@ -1417,8 +1413,12 @@ impl VM {
         None
     }
 
-    /// Return None in top-level.
-    fn gen_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
+    /// Get class list in the current context.
+    ///
+    /// At first, this method searches the class list of outer context,
+    /// and adds a class given as an argument `new_class` on the top of the list.
+    /// return None in top-level.
+    fn get_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
         let new_class = new_class.into();
         match new_class {
             Some(class) => {
@@ -2293,57 +2293,31 @@ impl VM {
 // API's for handling instance/singleton methods.
 
 impl VM {
-    pub fn define_method(&mut self, id: IdentId, method: MethodRef) {
-        if self.parent_fiber.is_none() && self.exec_context.len() == 0 {
-            // A method defined in "top level of main fiber" is registered as an object method.
-            self.add_object_method(id, method);
-        } else {
-            // A method defined in a class definition is registered as an instance method of the class.
-            self.add_instance_method(self.class(), id, method);
-        }
+    /// Define a method on `target_obj`.
+    /// If `target_obj` is not Class, use Class of it.
+    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
+        let mut class = match target_obj.as_module() {
+            Some(mref) => mref,
+            None => target_obj
+                .get_class_object(&self.globals)
+                .as_module()
+                .unwrap(),
+        };
+        class.add_method(&mut self.globals, id, method);
     }
 
+    /// Define a method on a singleton class of `target_obj`.
     pub fn define_singleton_method(
         &mut self,
-        obj: Value,
+        target_obj: Value,
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        if self.parent_fiber.is_none() && self.exec_context.len() == 0 {
-            // A method defined in "top level of main fiber" is registered as an object method.
-            self.add_object_method(id, method);
-            Ok(())
-        } else {
-            // A method defined in a class definition is registered as an instance method of the class.
-            self.add_singleton_method(obj, id, method)
-        }
-    }
-
-    pub fn add_singleton_method(
-        &mut self,
-        obj: Value,
-        id: IdentId,
-        info: MethodRef,
-    ) -> Result<(), RubyError> {
-        self.globals.class_version += 1;
-        let singleton = self.get_singleton_class(obj)?;
-        let mut singleton_class = singleton.as_class();
-        singleton_class.method_table.insert(id, info);
+        let singleton = self.get_singleton_class(target_obj)?;
+        singleton
+            .as_class()
+            .add_method(&mut self.globals, id, method);
         Ok(())
-    }
-
-    pub fn add_instance_method(
-        &mut self,
-        class_obj: Value,
-        id: IdentId,
-        info: MethodRef,
-    ) -> Option<MethodRef> {
-        self.globals.class_version += 1;
-        class_obj.as_module().unwrap().method_table.insert(id, info)
-    }
-
-    pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.add_instance_method(self.globals.builtins.object, id, info);
     }
 
     /// Get method(MethodRef) for receiver.
@@ -2648,8 +2622,13 @@ impl VM {
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", root_path);
         self.root_path.push(root_path);
-        //let mut vm2 = Ref::from_ref(&self).clone();
-        match self.run(absolute_path, &program, None) {
+        self.exec_program(absolute_path, program);
+        self.root_path.pop();
+    }
+
+    pub fn exec_program(&mut self, absolute_path: PathBuf, program: String) {
+        //let absolute_path = PathBuf::default();
+        match self.run(absolute_path, &program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
                 self.perf.print_perf();
@@ -2664,6 +2643,5 @@ impl VM {
                 }
             }
         };
-        self.root_path.pop();
     }
 }
