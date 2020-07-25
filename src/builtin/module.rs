@@ -1,4 +1,5 @@
 use crate::*;
+use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
     let class = globals.module_class;
@@ -14,6 +15,8 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "include", include);
     globals.add_builtin_instance_method(class, "included_modules", included_modules);
     globals.add_builtin_instance_method(class, "ancestors", ancestors);
+    globals.add_builtin_instance_method(class, "module_eval", module_eval);
+    globals.add_builtin_instance_method(class, "class_eval", module_eval);
 }
 
 fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -229,6 +232,27 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, ary))
 }
 
+fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let method = match args.block {
+        Some(method) => {
+            vm.check_args_num(args.len(), 0)?;
+            method
+        }
+        None => {
+            vm.check_args_num(args.len(), 1)?;
+            let mut arg0 = args[0];
+            let program = arg0.expect_string(vm, "1st arg")?;
+            vm.parse_program_eval(PathBuf::from("(eval)"), program)?
+        }
+    };
+    let args = Args::new0();
+    let context = vm.current_context();
+    vm.class_push(self_val);
+    let res = vm.eval_method(method, self_val, Some(context), &args);
+    vm.class_pop();
+    res
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -339,6 +363,28 @@ mod test {
         assert([Kernel], Class.included_modules)
         assert(true, Class.singleton_class.singleton_class?)
         "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn module_eval() {
+        let program = r##"
+        class C; D = 777; end;
+        D = 111
+        x = "bow"
+        C.module_eval "def foo; \"#{x}\"; end"
+        assert("bow", C.new.foo)
+        assert(777, C.module_eval("D"))
+        C.module_eval do
+            x = "view"  # you can capture or manipulate local variables in outer scope of the block.
+            def bar
+                "mew"
+            end
+        end
+        assert("mew", C.new.bar)
+        assert("view", x)
+        # assert(111, C.module_eval { D })
+        "##;
         assert_script(program);
     }
 }

@@ -1,9 +1,9 @@
-use crate::error::{ParseErrKind, RubyError};
-use crate::util::*;
-use crate::id_table::{IdentId};
 use super::*;
-use std::path::PathBuf;
+use crate::error::{ParseErrKind, RubyError};
+use crate::id_table::IdentId;
+use crate::util::*;
 use fxhash::FxHashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
@@ -113,8 +113,8 @@ impl LvarCollector {
         self.table.get(val)
     }
 
-    pub fn get_name(&self, id:LvarId) -> Option<IdentId> {
-        for (k,v) in self.table.iter() {
+    pub fn get_name(&self, id: LvarId) -> Option<IdentId> {
+        for (k, v) in self.table.iter() {
             if *v == id {
                 return Some(*k);
             }
@@ -210,11 +210,11 @@ impl Parser {
     pub fn get_context_depth(&self) -> usize {
         self.context_stack.len()
     }
-/*
-    fn context(&self) -> &Context {
-        self.context_stack.last().unwrap()
-    }
-*/
+    /*
+        fn context(&self) -> &Context {
+            self.context_stack.last().unwrap()
+        }
+    */
     fn context_mut(&mut self) -> &mut Context {
         self.context_stack.last_mut().unwrap()
     }
@@ -450,15 +450,11 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse_program(
-        mut self,
-        path: PathBuf,
-        program: &str,
-    ) -> Result<ParseResult, RubyError> {
+    pub fn parse_program(mut self, path: PathBuf, program: &str) -> Result<ParseResult, RubyError> {
         let (node, lvar) = self.parse_program_core(path, program, None)?;
 
         let tok = self.peek()?;
-        if  tok.is_eof() {
+        if tok.is_eof() {
             let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
         } else {
@@ -479,7 +475,7 @@ impl Parser {
                 return Err(err);
             }
         };
-    
+
         let tok = self.peek()?;
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar, self.lexer.source_info);
@@ -516,9 +512,9 @@ impl Parser {
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         self.context_stack.pop().unwrap();
-        
+
         let tok = self.peek()?;
-        if  tok.is_eof() {
+        if tok.is_eof() {
             let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
         } else {
@@ -565,13 +561,13 @@ impl Parser {
                 let loc = self.prev_loc();
                 let cond = self.parse_expr()?;
                 let loc = loc.merge(self.prev_loc());
-                node = Node::new_while(cond, node,true, loc);
+                node = Node::new_while(cond, node, true, loc);
             } else if self.consume_reserved_no_skip_line_term(Reserved::Until)? {
                 // STMT : STMT until EXPR
                 let loc = self.prev_loc();
                 let cond = self.parse_expr()?;
                 let loc = loc.merge(self.prev_loc());
-                node = Node::new_while(cond, node,false, loc);
+                node = Node::new_while(cond, node, false, loc);
             } else {
                 break;
             }
@@ -668,10 +664,7 @@ impl Parser {
         return Ok(Node::new_mul_assign(mlhs, mrhs));
     }
 
-    fn parse_arg_list(
-        &mut self,
-        punct: impl Into<Option<Punct>>,
-    ) -> Result<Vec<Node>, RubyError> {
+    fn parse_arg_list(&mut self, punct: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
         let (flag, punct) = match punct.into() {
             Some(punct) => (true, punct),
             None => (false, Punct::Arrow /* dummy */),
@@ -716,13 +709,21 @@ impl Parser {
     fn parse_arglist(&mut self) -> Result<SendArgs, RubyError> {
         let first_arg = self.parse_arg()?;
         if self.is_line_term()? {
-            return Ok(SendArgs{args:vec![first_arg], kw_args:vec![], block:None});
+            return Ok(SendArgs {
+                args: vec![first_arg],
+                kw_args: vec![],
+                block: None,
+            });
         }
 
         if first_arg.is_operation() && self.is_command()? {
             let args =
                 vec![self.parse_command(first_arg.as_method_name().unwrap(), first_arg.loc())?];
-            return Ok(SendArgs{args, kw_args:vec![], block:None});
+            return Ok(SendArgs {
+                args,
+                kw_args: vec![],
+                block: None,
+            });
         }
 
         let mut args = vec![first_arg];
@@ -737,12 +738,21 @@ impl Parser {
         }
         match self.parse_block()? {
             Some(actual_block) => {
-                if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                if block.is_some() {
+                    return Err(self.error_unexpected(
+                        actual_block.loc(),
+                        "Both block arg and actual block given.",
+                    ));
+                }
                 block = Some(actual_block);
             }
             None => {}
         };
-        Ok(SendArgs{args, kw_args, block})
+        Ok(SendArgs {
+            args,
+            kw_args,
+            block,
+        })
     }
 
     fn is_command(&mut self) -> Result<bool, RubyError> {
@@ -827,7 +837,9 @@ impl Parser {
             for c in self.context_stack.iter().rev() {
                 match c.kind {
                     ContextKind::Class => return Ok(()),
-                    ContextKind::Method => return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment.")),
+                    ContextKind::Method => {
+                        return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment."))
+                    }
                     ContextKind::Block => {}
                 }
             }
@@ -1070,15 +1082,28 @@ impl Parser {
         let loc = node.loc();
         if self.consume_punct_no_term(Punct::LParen)? {
             // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-            let ArgList{args, kw_args, mut block} = self.parse_argument_list(Punct::RParen)?;
+            let ArgList {
+                args,
+                kw_args,
+                mut block,
+            } = self.parse_argument_list(Punct::RParen)?;
             match self.parse_block()? {
                 Some(actual_block) => {
-                    if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                    if block.is_some() {
+                        return Err(self.error_unexpected(
+                            actual_block.loc(),
+                            "Both block arg and actual block given.",
+                        ));
+                    }
                     block = Some(actual_block);
                 }
                 None => {}
             };
-            let send_args = SendArgs {args, kw_args, block};
+            let send_args = SendArgs {
+                args,
+                kw_args,
+                block,
+            };
 
             Ok(Node::new_send(
                 Node::new_self(loc),
@@ -1089,7 +1114,11 @@ impl Parser {
             ))
         } else if let Some(block) = self.parse_block()? {
             // PRIMARY-METHOD : FNAME BLOCK
-            let send_args = SendArgs {args:vec![], kw_args:vec![], block: Some(block)};
+            let send_args = SendArgs {
+                args: vec![],
+                kw_args: vec![],
+                block: Some(block),
+            };
             Ok(Node::new_send(
                 Node::new_self(loc),
                 node.as_method_name().unwrap(),
@@ -1103,7 +1132,7 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Node, RubyError> {
-        if self.consume_reserved(Reserved::Yield)?  {
+        if self.consume_reserved(Reserved::Yield)? {
             let loc = self.prev_loc();
             let tok = self.peek_no_term()?;
             // TODO: This is not correct.
@@ -1121,7 +1150,7 @@ impl Parser {
             } else {
                 self.parse_arglist()?
             };
-            return Ok(Node::new_yield(args, loc))
+            return Ok(Node::new_yield(args, loc));
         }
         // <一次式メソッド呼び出し>
         let mut node = self.parse_primary()?;
@@ -1145,8 +1174,8 @@ impl Parser {
                             //} else if self.consume_punct_no_term(Punct::Not)? {
                             //    s.clone() + "!"
                             //} else {
-                                s.clone()
-                            //}
+                            s.clone()
+                        //}
                         } else {
                             s.clone()
                         };
@@ -1176,7 +1205,12 @@ impl Parser {
                 }
                 match self.parse_block()? {
                     Some(actual_block) => {
-                        if block.is_some() {return Err(self.error_unexpected(actual_block.loc(), "Both block arg and actual block given."))}
+                        if block.is_some() {
+                            return Err(self.error_unexpected(
+                                actual_block.loc(),
+                                "Both block arg and actual block given.",
+                            ));
+                        }
                         block = Some(actual_block);
                     }
                     None => {}
@@ -1185,19 +1219,15 @@ impl Parser {
                     completed = true;
                 };
                 let node = match node.kind {
-                    NodeKind::Ident(id) => {
-                        Node::new_send_noarg(Node::new_self(loc), id, true, loc)
-                    }
+                    NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, true, loc),
                     _ => node,
                 };
-                let send_args = SendArgs {args, kw_args, block};
-                Node::new_send(
-                    node,
-                    id,
-                    send_args,
-                    completed,
-                    loc.merge(self.prev_loc()),
-                )
+                let send_args = SendArgs {
+                    args,
+                    kw_args,
+                    block,
+                };
+                Node::new_send(node, id, send_args, completed, loc.merge(self.prev_loc()))
             } else if self.consume_punct_no_term(Punct::Scope)? {
                 let id = self.expect_const()?;
                 Node::new_scope(node, id, self.prev_loc())
@@ -1231,7 +1261,11 @@ impl Parser {
         let mut block = None;
         loop {
             if flag && self.consume_punct(punct)? {
-                return Ok(ArgList {args, kw_args, block});
+                return Ok(ArgList {
+                    args,
+                    kw_args,
+                    block,
+                });
             }
             if self.consume_punct(Punct::Mul)? {
                 // splat argument
@@ -1261,13 +1295,19 @@ impl Parser {
                 break;
             } else {
                 let loc = self.prev_loc();
-                if block.is_some() { return Err(self.error_unexpected(loc, "unexpected ','.")) };
+                if block.is_some() {
+                    return Err(self.error_unexpected(loc, "unexpected ','."));
+                };
             }
         }
         if flag {
             self.expect_punct(punct)?
         };
-        Ok(ArgList {args, kw_args, block})
+        Ok(ArgList {
+            args,
+            kw_args,
+            block,
+        })
     }
 
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
@@ -1332,11 +1372,11 @@ impl Parser {
                         | TokenKind::Punct(Punct::Assign)
                         // Multiple assignment
                         | TokenKind::Punct(Punct::Comma) => return Ok(node),
-                        TokenKind::Punct(Punct::LBrace) 
+                        TokenKind::Punct(Punct::LBrace)
                         | TokenKind::Reserved(Reserved::Do) => return Ok(self.parse_function_args(node)?),
                         _ => {}
                     };
-                    if *trailing_space && self.is_command_()?{
+                    if *trailing_space && self.is_command_()? {
                         Ok(self.parse_command(id, loc)?)
                     } else {
                         Ok(node)
@@ -1400,12 +1440,7 @@ impl Parser {
                                 let node = self.parse_interporated_string_literal(&s)?;
                                 let method = self.get_ident_id("to_sym");
                                 let loc = symbol_loc.merge(node.loc());
-                                return Ok(Node::new_send_noarg(
-                                    node,
-                                    method,
-                                    true,
-                                    loc,
-                                ));
+                                return Ok(Node::new_send_noarg(node, method, true, loc));
                             }
                             return Err(
                                 self.error_unexpected(symbol_loc, "Expect identifier or string.")
@@ -1505,7 +1540,7 @@ impl Parser {
                 let body = self.parse_comp_stmt()?;
                 self.expect_reserved(Reserved::End)?;
                 let loc = loc.merge(self.prev_loc());
-                Ok(Node::new_while(cond, body, false,loc))
+                Ok(Node::new_while(cond, body, false, loc))
             }
             TokenKind::Reserved(Reserved::Case) => {
                 let loc = self.prev_loc();
@@ -1641,15 +1676,13 @@ impl Parser {
             | TokenKind::StringLit(_)
             | TokenKind::OpenString(_) => Ok(true),
             TokenKind::Punct(p) => match p {
-                Punct::LParen
-                | Punct::LBracket
-                | Punct::Colon
-                | Punct::Scope
-                | Punct::Arrow => Ok(true),
+                Punct::LParen | Punct::LBracket | Punct::Colon | Punct::Scope | Punct::Arrow => {
+                    Ok(true)
+                }
                 _ => Ok(false),
             },
             TokenKind::Reserved(r) => match r {
-                Reserved::False | Reserved::Nil | Reserved::True | Reserved::Self_=> Ok(true),
+                Reserved::False | Reserved::Nil | Reserved::True | Reserved::Self_ => Ok(true),
                 _ => Ok(false),
             },
             _ => Ok(false),
@@ -1899,14 +1932,16 @@ impl Parser {
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         match is_singleton_method {
-            Some(singleton) => Ok(Node::new_singleton_method_decl(singleton, id, args, body, lvar)),
+            Some(singleton) => Ok(Node::new_singleton_method_decl(
+                singleton, id, args, body, lvar,
+            )),
             None => Ok(Node::new_method_decl(id, args, body, lvar)),
         }
     }
 
     /// Parse parameters.
     /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
-    fn parse_params(&mut self, terminator:TokenKind) -> Result<Vec<Node>, RubyError> {
+    fn parse_params(&mut self, terminator: TokenKind) -> Result<Vec<Node>, RubyError> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
             Reqired,
@@ -1962,7 +1997,10 @@ impl Parser {
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
                     let next = self.peek_no_term()?.kind;
-                    let default = if next == TokenKind::Punct(Punct::Comma) || next == terminator || next == TokenKind::LineTerm {
+                    let default = if next == TokenKind::Punct(Punct::Comma)
+                        || next == terminator
+                        || next == TokenKind::LineTerm
+                    {
                         None
                     } else {
                         Some(self.parse_arg()?)
@@ -2003,7 +2041,7 @@ impl Parser {
             if !self.consume_punct_no_term(Punct::Comma)? {
                 break;
             }
-        };
+        }
         Ok(args)
     }
 

@@ -1102,7 +1102,7 @@ impl VM {
 
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_defined(val);
+                    iseq.class_defined = self.get_class_defined(val);
                     let arg = Args::new0();
                     try_push!(self.eval_send(method, val, &arg));
                     self.pc += 10;
@@ -1112,7 +1112,7 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_defined(None);
+                    iseq.class_defined = self.get_class_defined(None);
                     self.define_method(id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self.class(), id, method)?;
@@ -1123,7 +1123,7 @@ impl VM {
                     let id = self.read_id(iseq, 1);
                     let method = self.read_methodref(iseq, 5);
                     let mut iseq = self.get_iseq(method)?;
-                    iseq.class_defined = self.gen_class_defined(None);
+                    iseq.class_defined = self.get_class_defined(None);
                     let singleton = self.stack_pop();
                     self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
@@ -1401,6 +1401,7 @@ impl VM {
         }
     }
 
+    /// Get class list from the nearest exec context.
     fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
         for context in self.exec_context.iter().rev() {
             match context.iseq_ref.unwrap().class_defined {
@@ -1411,8 +1412,12 @@ impl VM {
         None
     }
 
-    /// Return None in top-level.
-    fn gen_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
+    /// Get class list in the current context.
+    ///
+    /// At first, this method searches the class list of outer context,
+    /// and adds a class given as an argument `new_class` on the top of the list.
+    /// return None in top-level.
+    fn get_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
         let new_class = new_class.into();
         match new_class {
             Some(class) => {

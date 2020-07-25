@@ -70,6 +70,7 @@ mod tests {
     #[test]
     fn gc_module() {
         let program = r#"
+            GC.count
             a = []
             100000.times do |x|
                 a << x.to_s
