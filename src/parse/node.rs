@@ -161,6 +161,15 @@ pub enum BinOp {
     Match,
 }
 
+impl BinOp {
+    pub fn is_cmp_op(&self) -> bool {
+        match self {
+            BinOp::Eq | BinOp::Ne | BinOp::Ge | BinOp::Gt | BinOp::Le | BinOp::Lt => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnOp {
     BitNot,
@@ -533,6 +542,18 @@ impl Node {
         if let NodeKind::Integer(i) = self.kind {
             if 0 <= i && i <= u32::max_value() as i64 {
                 Some(i as u32)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn is_imm_i32(&self) -> Option<i32> {
+        if let NodeKind::Integer(i) = self.kind {
+            if i32::min_value() as i64 <= i && i <= i32::max_value() as i64 {
+                Some(i as i32)
             } else {
                 None
             }

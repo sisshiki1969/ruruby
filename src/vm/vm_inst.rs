@@ -369,7 +369,7 @@ impl Inst {
                 "{} {} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 Inst::read32(iseq, pc + 1) as i32,
-                pc as i32 + 5 + Inst::read32(iseq, pc + 5) as i32
+                pc as i32 + 9 + Inst::read32(iseq, pc + 5) as i32
             ),
 
             Inst::OPT_CASE => format!(

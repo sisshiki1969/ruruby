@@ -282,14 +282,30 @@ impl Codegen {
         iseq.push(Inst::SPLAT);
     }
 
-    fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
+    fn gen_jmp_if_f(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_F);
         Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
 
-    fn gen_jmp_if_true(&mut self, iseq: &mut ISeq) -> ISeqPos {
+    fn gen_jmp_if_t(&mut self, iseq: &mut ISeq) -> ISeqPos {
         iseq.push(Inst::JMP_T);
+        Codegen::push32(iseq, 0);
+        ISeqPos(iseq.len())
+    }
+
+    fn gen_jmp_f_cmp_i(&mut self, iseq: &mut ISeq, op: BinOp, i: i32) -> ISeqPos {
+        let inst = match op {
+            BinOp::Eq => Inst::JMP_F_EQI,
+            BinOp::Ne => Inst::JMP_F_NEI,
+            BinOp::Ge => Inst::JMP_F_GEI,
+            BinOp::Gt => Inst::JMP_F_GTI,
+            BinOp::Le => Inst::JMP_F_LEI,
+            BinOp::Lt => Inst::JMP_F_LTI,
+            _ => unreachable!(),
+        };
+        iseq.push(inst);
+        Codegen::push32(iseq, i as u32);
         Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
@@ -700,7 +716,7 @@ impl Codegen {
                     param_ident.push(*id);
                     opt_params += 1;
                     self.gen_check_local(&mut iseq, *id)?;
-                    let src1 = self.gen_jmp_if_false(&mut iseq);
+                    let src1 = self.gen_jmp_if_f(&mut iseq);
                     self.gen(globals, &mut iseq, default, true)?;
                     self.gen_set_local(&mut iseq, *id);
                     Codegen::write_disp_from_cur(&mut iseq, src1);
@@ -715,7 +731,7 @@ impl Codegen {
                     match &**default {
                         Some(default) => {
                             self.gen_check_local(&mut iseq, *id)?;
-                            let src1 = self.gen_jmp_if_false(&mut iseq);
+                            let src1 = self.gen_jmp_if_f(&mut iseq);
                             self.gen(globals, &mut iseq, &default, true)?;
                             self.gen_set_local(&mut iseq, *id);
                             Codegen::write_disp_from_cur(&mut iseq, src1);
@@ -800,6 +816,26 @@ impl Codegen {
             }
         }
         Ok(methodref)
+    }
+
+    fn gen_jmp_if_false(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        cond: &Node,
+    ) -> Result<ISeqPos, RubyError> {
+        let pos = match &cond.kind {
+            NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() && rhs.is_imm_i32().is_some() => {
+                let i = rhs.is_imm_i32().unwrap();
+                self.gen(globals, iseq, lhs, true)?;
+                self.gen_jmp_f_cmp_i(iseq, *op, i)
+            }
+            _ => {
+                self.gen(globals, iseq, &cond, true)?;
+                self.gen_jmp_if_f(iseq)
+            }
+        };
+        Ok(pos)
     }
 
     pub fn gen(
@@ -1129,7 +1165,7 @@ impl Codegen {
                     BinOp::LAnd => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen_dup(iseq, 1);
-                        let src = self.gen_jmp_if_false(iseq);
+                        let src = self.gen_jmp_if_f(iseq);
                         self.gen_pop(iseq);
                         self.gen(globals, iseq, rhs, true)?;
                         Codegen::write_disp_from_cur(iseq, src);
@@ -1137,7 +1173,7 @@ impl Codegen {
                     BinOp::LOr => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen_dup(iseq, 1);
-                        let src = self.gen_jmp_if_true(iseq);
+                        let src = self.gen_jmp_if_t(iseq);
                         self.gen_pop(iseq);
                         self.gen(globals, iseq, rhs, true)?;
                         Codegen::write_disp_from_cur(iseq, src);
@@ -1200,17 +1236,14 @@ impl Codegen {
             }
             NodeKind::CompStmt(nodes) => self.gen_comp_stmt(globals, iseq, nodes, use_value)?,
             NodeKind::If { cond, then_, else_ } => {
-                self.gen(globals, iseq, &cond, true)?;
+                let src1 = self.gen_jmp_if_false(globals, iseq, cond)?;
+                self.gen(globals, iseq, &then_, use_value)?;
                 if use_value {
-                    let src1 = self.gen_jmp_if_false(iseq);
-                    self.gen(globals, iseq, &then_, true)?;
                     let src2 = Codegen::gen_jmp(iseq);
                     Codegen::write_disp_from_cur(iseq, src1);
                     self.gen(globals, iseq, &else_, true)?;
                     Codegen::write_disp_from_cur(iseq, src2);
                 } else {
-                    let src1 = self.gen_jmp_if_false(iseq);
-                    self.gen(globals, iseq, &then_, false)?;
                     if else_.is_empty() {
                         Codegen::write_disp_from_cur(iseq, src1);
                     } else {
@@ -1240,7 +1273,7 @@ impl Codegen {
                         self.gen(globals, iseq, end, true)?;
                         self.gen_get_local(iseq, id)?;
                         iseq.push(if *exclude_end { Inst::GT } else { Inst::GE });
-                        let src = self.gen_jmp_if_false(iseq);
+                        let src = self.gen_jmp_if_f(iseq);
                         self.gen(globals, iseq, body, false)?;
                         loop_continue = Codegen::current(iseq);
                         self.gen_get_local(iseq, id)?;
@@ -1278,11 +1311,11 @@ impl Codegen {
                 self.loop_stack.push(LoopInfo::new_loop());
 
                 let loop_start = Codegen::current(iseq);
-                self.gen(globals, iseq, cond, true)?;
                 let src = if *cond_op {
-                    self.gen_jmp_if_false(iseq)
+                    self.gen_jmp_if_false(globals, iseq, cond)?
                 } else {
-                    self.gen_jmp_if_true(iseq)
+                    self.gen(globals, iseq, cond, true)?;
+                    self.gen_jmp_if_t(iseq)
                 };
                 self.gen(globals, iseq, body, false)?;
                 self.gen_jmp_back(iseq, loop_start);
@@ -1378,7 +1411,7 @@ impl Codegen {
                             self.gen(globals, iseq, elem, true)?;
                             self.save_loc(iseq, elem.loc);
                             iseq.push(Inst::TEQ);
-                            jmp_dest.push(self.gen_jmp_if_true(iseq));
+                            jmp_dest.push(self.gen_jmp_if_t(iseq));
                         }
                         next = Some(Codegen::gen_jmp(iseq));
                         for dest in jmp_dest {

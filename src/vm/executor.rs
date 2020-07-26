@@ -500,6 +500,15 @@ impl VM {
         }
     }
 
+    fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: i64, dest_offset: usize) {
+        if cond {
+            self.jump_pc(inst_offset, 0);
+        } else {
+            let disp = self.read_disp(iseq, dest_offset);
+            self.jump_pc(inst_offset, disp);
+        }
+    }
+
     pub fn run_context(&mut self, context: ContextRef) -> VMResult {
         let stack_len = self.exec_stack.len();
         let pc = self.pc;
@@ -545,6 +554,22 @@ impl VM {
                     Err(err) => match err.kind {
                         RubyErrorKind::BlockReturn(val) => self.stack_push(val),
                         _ => return self.handle_error(err),
+                    },
+                };
+            };
+        }
+
+        /// Evaluate expr, and return value.
+        macro_rules! try_get_bool {
+            ($eval:expr) => {
+                match $eval {
+                    Ok(b) => b,
+                    Err(err) => match err.kind {
+                        RubyErrorKind::BlockReturn(val) => self.val_to_bool(val),
+                        _ => match self.handle_error(err) {
+                            Ok(res) => self.val_to_bool(res),
+                            Err(err) => return Err(err),
+                        },
                     },
                 };
             };
@@ -771,7 +796,7 @@ impl VM {
                 Inst::GTI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_push!(self.eval_gti(lhs, i));
+                    try_push!(self.eval_gti(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
                 Inst::GE => {
@@ -783,7 +808,7 @@ impl VM {
                 Inst::GEI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_push!(self.eval_gei(lhs, i));
+                    try_push!(self.eval_gei(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
                 Inst::LT => {
@@ -795,7 +820,7 @@ impl VM {
                 Inst::LTI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_push!(self.eval_lti(lhs, i));
+                    try_push!(self.eval_lti(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
                 Inst::LE => {
@@ -807,7 +832,7 @@ impl VM {
                 Inst::LEI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    try_push!(self.eval_lei(lhs, i));
+                    try_push!(self.eval_lei(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
                 Inst::CMP => {
@@ -1046,28 +1071,51 @@ impl VM {
                 }
                 Inst::JMP_F => {
                     let val = self.stack_pop();
-                    if self.val_to_bool(val) {
-                        self.jump_pc(5, 0);
-                    } else {
-                        let disp = self.read_disp(iseq, 1);
-                        if 0 < disp {
-                            self.gc();
-                        }
-                        self.jump_pc(5, disp);
-                    }
+                    let b = self.val_to_bool(val);
+                    self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_T => {
                     let val = self.stack_pop();
-                    if !self.val_to_bool(val) {
-                        self.jump_pc(5, 0);
-                    } else {
-                        let disp = self.read_disp(iseq, 1);
-                        if 0 < disp {
-                            self.gc();
-                        }
-                        self.jump_pc(5, disp);
-                    }
+                    let b = !self.val_to_bool(val);
+                    self.jmp_cond(iseq, b, 5, 1);
                 }
+                Inst::JMP_F_EQI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let b = self.eval_eqi(lhs, i);
+                    self.jmp_cond(iseq, b, 9, 5);
+                }
+                Inst::JMP_F_NEI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let b = !self.eval_eqi(lhs, i);
+                    self.jmp_cond(iseq, b, 9, 5);
+                }
+                Inst::JMP_F_GTI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let b = try_get_bool!(self.eval_gti(lhs, i));
+                    self.jmp_cond(iseq, b, 9, 5);
+                }
+                Inst::JMP_F_GEI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let b = try_get_bool!(self.eval_gei(lhs, i));
+                    self.jmp_cond(iseq, b, 9, 5);
+                }
+                Inst::JMP_F_LTI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let b = try_get_bool!(self.eval_lti(lhs, i));
+                    self.jmp_cond(iseq, b, 9, 5);
+                }
+                Inst::JMP_F_LEI => {
+                    let lhs = self.stack_pop();
+                    let i = self.read32(iseq, 1) as i32;
+                    let b = try_get_bool!(self.eval_lei(lhs, i));
+                    self.jmp_cond(iseq, b, 9, 5);
+                }
+
                 Inst::OPT_CASE => {
                     let val = self.stack_pop();
                     let map = self.globals.case_dispatch.get_entry(self.read32(iseq, 1));
@@ -1537,6 +1585,25 @@ impl VM {
         }
     }
 
+    fn fallback_for_cmpop(
+        &mut self,
+        method: IdentId,
+        lhs: Value,
+        rhs: Value,
+    ) -> Result<bool, RubyError> {
+        match self.get_method(lhs, method) {
+            Ok(mref) => {
+                let arg = Args::new1(rhs);
+                let val = self.eval_send(mref, lhs, &arg)?;
+                Ok(self.val_to_bool(val))
+            }
+            Err(_) => {
+                let name = IdentId::get_ident_name(method);
+                Err(self.error_undefined_op(name, rhs, lhs))
+            }
+        }
+    }
+
     fn fallback_cache_for_binop(
         &mut self,
         lhs: Value,
@@ -1814,15 +1881,16 @@ macro_rules! eval_cmp_i {
     ($vm:ident, $lhs:expr, $i:expr, $op:ident, $id:expr) => {
         if $lhs.is_packed_fixnum() {
             let i = $i as i64;
-            return Ok(Value::bool($lhs.as_packed_fixnum().$op(&i)));
+            Ok($lhs.as_packed_fixnum().$op(&i))
         } else if $lhs.is_packed_num() {
             let i = $i as f64;
-            return Ok(Value::bool($lhs.as_packed_flonum().$op(&i)));
-        }
-        match $lhs.unpack() {
-            RV::Integer(lhs) => return Ok(Value::bool(lhs.$op(&($i as i64)))),
-            RV::Float(lhs) => return Ok(Value::bool(lhs.$op(&($i as f64)))),
-            _ => return $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64)),
+            Ok($lhs.as_packed_flonum().$op(&i))
+        } else {
+            match $lhs.unpack() {
+                RV::Integer(lhs) => Ok(lhs.$op(&($i as i64))),
+                RV::Float(lhs) => Ok(lhs.$op(&($i as f64))),
+                _ => $vm.fallback_for_cmpop($id, $lhs, Value::fixnum($i as i64)),
+            }
         }
     };
 }
@@ -1874,17 +1942,17 @@ impl VM {
         eval_cmp!(self, rhs, lhs, lt, IdentId::_LT);
     }
 
-    fn eval_gei(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, ge, IdentId::_GE);
+    fn eval_gei(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
+        eval_cmp_i!(self, lhs, i, ge, IdentId::_GE)
     }
-    fn eval_gti(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, gt, IdentId::_GT);
+    fn eval_gti(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
+        eval_cmp_i!(self, lhs, i, gt, IdentId::_GT)
     }
-    fn eval_lei(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, le, IdentId::_LE);
+    fn eval_lei(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
+        eval_cmp_i!(self, lhs, i, le, IdentId::_LE)
     }
-    fn eval_lti(&mut self, lhs: Value, i: i32) -> VMResult {
-        eval_cmp_i!(self, lhs, i, lt, IdentId::_LT);
+    fn eval_lti(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
+        eval_cmp_i!(self, lhs, i, lt, IdentId::_LT)
     }
 
     pub fn eval_cmp(&mut self, rhs: Value, lhs: Value) -> VMResult {
