@@ -162,8 +162,8 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
 }
 
 fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
-    let s = IdentId::get_ident_name(id);
-    IdentId::get_id(format!("@{}", s))
+    //let s = IdentId::get_ident_name(id);
+    IdentId::get_id(format!("@{:?}", id))
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -201,9 +201,8 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 cref.superclass
             }
             None => {
-                let inspect = vm.val_inspect(class);
                 return Err(
-                    vm.error_internal(format!("Illegal value in superclass chain. {}", inspect))
+                    vm.error_internal(format!("Illegal value in superclass chain. {:?}", class))
                 );
             }
         };
@@ -228,10 +227,10 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 cref.superclass
             }
             None => {
-                let inspect = vm.val_inspect(superclass);
-                return Err(
-                    vm.error_internal(format!("Illegal value in superclass chain. {}", inspect))
-                );
+                return Err(vm.error_internal(format!(
+                    "Illegal value in superclass chain. {:?}",
+                    superclass
+                )));
             }
         };
     }

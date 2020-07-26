@@ -410,8 +410,7 @@ impl VM {
                             .iter()
                             .find(|(_, v)| **v == id)
                             .unwrap();
-                        let name = IdentId::get_ident_name(*k);
-                        eprintln!("lvar({}): {} {:#?}", id.as_u32(), name, context[id]);
+                        eprintln!("lvar({}): {:?} {:#?}", id.as_u32(), k, context[id]);
                     }
                 }
                 None => {}
@@ -1460,8 +1459,7 @@ impl VM {
                         class = superclass;
                     }
                     None => {
-                        let name = IdentId::get_ident_name(id);
-                        return Err(self.error_name(format!("Uninitialized constant {}.", name)));
+                        return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
                     }
                 },
             }
@@ -1967,17 +1965,16 @@ impl VM {
             Some(val) => {
                 if val.is_module().is_some() != is_module {
                     return Err(self.error_type(format!(
-                        "{} is not {}.",
-                        IdentId::get_ident_name(id),
+                        "{:?} is not {}.",
+                        id,
                         if is_module { "module" } else { "class" },
                     )));
                 };
                 let classref = self.expect_module(val.clone())?;
                 if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
-                    return Err(self.error_type(format!(
-                        "superclass mismatch for class {}.",
-                        IdentId::get_ident_name(id),
-                    )));
+                    return Err(
+                        self.error_type(format!("superclass mismatch for class {:?}.", id,))
+                    );
                 };
                 val.clone()
             }
@@ -2064,12 +2061,12 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(i) => format!("{}", IdentId::get_ident_name(i)),
+            RV::Symbol(i) => format!("{:?}", i),
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(s) => s.to_s(),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
+                    Some(id) => format! {"{:?}", id},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
                 ObjKind::Ordinary => oref.to_s(),
@@ -2098,17 +2095,17 @@ impl VM {
                     f.to_string()
                 }
             }
-            RV::Symbol(sym) => format!(":{}", IdentId::get_ident_name(sym)),
+            RV::Symbol(sym) => format!(":{:?}", sym),
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self),
                 ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
+                    Some(id) => format! {"{:?}", id},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
                 ObjKind::Module(cref) => match cref.name {
-                    Some(id) => format! {"{}", IdentId::get_ident_name(id)},
+                    Some(id) => format! {"{:?}", id},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
                 ObjKind::Array(aref) => aref.to_s(self),
@@ -2331,10 +2328,15 @@ impl VM {
         Ok(method)
     }
 
-    /// Get instance method(MethodRef) for the class object.
+    /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
+    ///
+    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
+    /// return MethodRef of the entry.
+    /// If not, search `method` by scanning a class chain.
+    /// `class` must be a Class.
     pub fn get_instance_method(
         &mut self,
-        mut class: Value,
+        class: Value,
         method: IdentId,
     ) -> Result<MethodRef, RubyError> {
         match self.globals.get_method_cache_entry(class, method) {
@@ -2345,27 +2347,25 @@ impl VM {
             }
             None => {}
         };
-        let original_class = class;
-        let mut singleton_flag = original_class.as_class().is_singleton;
+        let mut temp_class = class;
+        let mut singleton_flag = class.as_class().is_singleton;
         loop {
-            match class.get_instance_method(method) {
+            match temp_class.get_instance_method(method) {
                 Some(methodref) => {
                     self.globals
-                        .add_method_cache_entry(original_class, method, methodref);
+                        .add_method_cache_entry(class, method, methodref);
                     return Ok(methodref);
                 }
-                None => match class.superclass() {
-                    Some(superclass) => class = superclass,
+                None => match temp_class.superclass() {
+                    Some(superclass) => temp_class = superclass,
                     None => {
                         if singleton_flag {
                             singleton_flag = false;
-                            class = original_class.rvalue().class();
+                            temp_class = class.rvalue().class();
                         } else {
-                            let inspect = self.val_inspect(original_class);
-                            let method_name = IdentId::get_ident_name(method);
                             return Err(self.error_nomethod(format!(
-                                "no method `{}' found for {}",
-                                method_name, inspect
+                                "no method `{:?}' found for {:?}",
+                                method, class
                             )));
                         }
                     }
@@ -2374,9 +2374,8 @@ impl VM {
         }
     }
 
-    pub fn get_singleton_class(&mut self, obj: Value) -> VMResult {
-        self.globals
-            .get_singleton_class(obj)
+    pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {
+        obj.get_singleton_class(&self.globals)
             .map_err(|_| self.error_type("Can not define singleton."))
     }
 }

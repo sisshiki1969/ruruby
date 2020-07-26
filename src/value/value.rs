@@ -865,6 +865,45 @@ impl Value {
     }
 }
 
+impl Value {
+    /// Get singleton class object of `self`.
+    ///
+    /// When `self` already has a singleton class, simply return it.
+    /// If not, generate a new singleton class object.
+    /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, ..).
+    pub fn get_singleton_class(&mut self, globals: &Globals) -> Result<Value, ()> {
+        match self.as_mut_rvalue() {
+            Some(oref) => {
+                let class = oref.class();
+                if class.as_class().is_singleton {
+                    Ok(class)
+                } else {
+                    let mut singleton_class = match oref.kind {
+                        ObjKind::Class(cref) | ObjKind::Module(cref) => {
+                            let mut superclass = cref.superclass;
+                            if superclass.is_nil() {
+                                ClassRef::from(None, None)
+                            } else {
+                                ClassRef::from(None, superclass.get_singleton_class(globals)?)
+                            }
+                        }
+                        ObjKind::Invalid => {
+                            panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
+                        }
+                        _ => ClassRef::from(None, None),
+                    };
+                    singleton_class.is_singleton = true;
+                    let singleton_obj = Value::class(globals, singleton_class);
+                    singleton_obj.rvalue_mut().set_class(class);
+                    oref.set_class(singleton_obj);
+                    Ok(singleton_obj)
+                }
+            }
+            _ => Err(()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::*;

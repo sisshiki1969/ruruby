@@ -152,22 +152,18 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some(list) => list.class,
             None => {
                 let inspect = vm.val_inspect(self_val);
-                return Err(vm.error_nomethod(format!(
-                    "no superclass method `{}' for {}.",
-                    IdentId::get_ident_name(m),
-                    inspect,
-                )));
+                return Err(
+                    vm.error_nomethod(format!("no superclass method `{:?}' for {}.", m, inspect))
+                );
             }
         };
         let method = match class.superclass() {
             Some(class) => vm.get_instance_method(class, m)?,
             None => {
                 let inspect = vm.val_inspect(self_val);
-                return Err(vm.error_nomethod(format!(
-                    "no superclass method `{}' for {}.",
-                    IdentId::get_ident_name(m),
-                    inspect,
-                )));
+                return Err(
+                    vm.error_nomethod(format!("no superclass method `{:?}' for {}.", m, inspect,))
+                );
             }
         };
         let param_num = iseq.params.param_ident.len();

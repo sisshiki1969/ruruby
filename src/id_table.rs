@@ -1,4 +1,5 @@
 use fxhash::FxHashMap;
+use std::fmt;
 use std::num::NonZeroU32;
 use std::sync::RwLock;
 
@@ -9,8 +10,14 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct IdentId(NonZeroU32);
+
+impl fmt::Debug for IdentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", Self::get_name(*self))
+    }
+}
 
 impl std::hash::Hash for IdentId {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

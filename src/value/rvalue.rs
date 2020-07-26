@@ -37,11 +37,11 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::Integer(i) => write!(f, "{}", *i),
             ObjKind::Float(i) => write!(f, "{}", *i),
             ObjKind::Class(cref) => match cref.name {
-                Some(id) => write!(f, "{}", IdentId::get_ident_name(id)),
+                Some(id) => write!(f, "{:?}", id),
                 None => write!(f, "#<Class:0x{:x}>", cref.id()),
             },
             ObjKind::Module(cref) => match cref.name {
-                Some(id) => write!(f, "{}", IdentId::get_ident_name(id)),
+                Some(id) => write!(f, "{:?}", id),
                 None => write!(f, "#<Module:0x{:x}>", cref.id()),
             },
             ObjKind::Array(aref) => {
@@ -191,8 +191,7 @@ impl RValue {
             Some(table) => {
                 for (k, v) in table {
                     let inspect = vm.val_to_s(*v);
-                    let id = IdentId::get_ident_name(*k);
-                    s = format!("{} {}={}", s, id, inspect);
+                    s = format!("{} {:?}={}", s, k, inspect);
                 }
             }
             None => {}

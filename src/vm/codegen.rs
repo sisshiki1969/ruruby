@@ -579,7 +579,7 @@ impl Codegen {
             NodeKind::Send {
                 receiver, method, ..
             } => {
-                let name = IdentId::get_ident_name(*method).to_string() + "=";
+                let name = format!("{:?}=", method);
                 let assign_id = IdentId::get_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
@@ -768,11 +768,13 @@ impl Codegen {
                 panic!("CodeGen: Illegal methodref.")
             };
             println!("-----------------------------------------");
-            let name = IdentId::get_ident_name(iseq.name);
-            println!("{} {:?} opt_flag:{:?}", name, methodref, iseq.opt_flag);
+            println!(
+                "{:?} {:?} opt_flag:{:?}",
+                iseq.name, methodref, iseq.opt_flag
+            );
             print!("local var: ");
             for (k, v) in iseq.lvar.table() {
-                print!("{}:{} ", v.as_u32(), IdentId::get_ident_name(*k));
+                print!("{}:{:?} ", v.as_u32(), k);
             }
             println!("");
             println!("block: {:?}", iseq.lvar.block());

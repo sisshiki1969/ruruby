@@ -73,7 +73,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     for (i, arg) in args.iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
-        let var = format!("@{}", IdentId::get_ident_name(id));
+        let var = format!("@{:?}", id);
         self_val.set_var(IdentId::get_id(var), *arg);
     }
     Ok(Value::nil())
@@ -95,7 +95,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         .iter()
         .map(|x| {
             let id = x.as_symbol().unwrap();
-            let name = format!("@{}", IdentId::get_ident_name(id));
+            let name = format!("@{:?}", id);
             IdentId::get_id(name)
         })
         .collect();
@@ -105,9 +105,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
             Some(v) => vm.val_inspect(v),
             None => "<>".to_string(),
         };
-        let name = IdentId::get_ident_name(id);
-
-        attr_str = format!("{} {}={}", attr_str, name, val);
+        attr_str = format!("{} {:?}={}", attr_str, id, val);
     }
     let class_name = match self_val.get_class_object(&vm.globals).as_class().name {
         Some(id) => IdentId::get_ident_name(id),

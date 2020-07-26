@@ -72,10 +72,8 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 
     let receiver_string = vm.val_inspect(*receiver);
     let inspect = format!(
-        "#<Enumerator: {}:{}{}>",
-        receiver_string,
-        IdentId::get_ident_name(*method),
-        arg_string
+        "#<Enumerator: {}:{:?}{}>",
+        receiver_string, method, arg_string
     );
     Ok(Value::string(&vm.globals.builtins, inspect))
 }

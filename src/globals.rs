@@ -262,44 +262,9 @@ impl Globals {
         self.method_table.get_mut_method(method)
     }
 
-    pub fn get_singleton_class(&self, mut obj: Value) -> Result<Value, ()> {
-        match obj.as_mut_rvalue() {
-            Some(oref) => {
-                let class = oref.class();
-                if class.as_class().is_singleton {
-                    Ok(class)
-                } else {
-                    let mut singleton_class = match oref.kind {
-                        ObjKind::Class(cref) | ObjKind::Module(cref) => {
-                            let superclass = cref.superclass;
-                            if superclass.is_nil() {
-                                ClassRef::from(None, None)
-                            } else {
-                                ClassRef::from(None, self.get_singleton_class(superclass)?)
-                            }
-                        }
-                        ObjKind::Invalid => {
-                            panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
-                        }
-                        _ => ClassRef::from(None, None),
-                    };
-                    singleton_class.is_singleton = true;
-                    let singleton_obj = Value::class(&self, singleton_class);
-                    singleton_obj.rvalue_mut().set_class(class);
-                    oref.set_class(singleton_obj);
-                    Ok(singleton_obj)
-                }
-            }
-            _ => Err(()),
-        }
-    }
-
-    pub fn add_builtin_class_method(&mut self, obj: Value, name: &str, func: BuiltinFunc) {
-        let name = IdentId::get_id(name);
-        let info = MethodInfo::BuiltinFunc { name, func };
-        let func_ref = self.add_method(info);
-        let singleton = self.get_singleton_class(obj).unwrap();
-        singleton.as_class().method_table.insert(name, func_ref);
+    pub fn add_builtin_class_method(&mut self, mut obj: Value, name: &str, func: BuiltinFunc) {
+        let classref = obj.get_singleton_class(self).unwrap().as_class();
+        self.add_builtin_instance_method(classref, name, func);
     }
 
     pub fn add_builtin_instance_method(
