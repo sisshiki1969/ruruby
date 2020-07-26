@@ -53,7 +53,7 @@ fn superclass(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let cref = vm.expect_class(self_val, "Receiver")?;
     let s = match cref.name {
-        Some(id) => format! {"{}", IdentId::get_name(id)},
+        Some(id) => format! {"{:?}", id},
         None => format! {"#<Class:0x{:x}>", cref.id()},
     };
     Ok(Value::string(&vm.globals.builtins, s))

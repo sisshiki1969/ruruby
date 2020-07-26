@@ -43,6 +43,14 @@ impl ArrayInfo {
         Ok(val)
     }
 
+    pub fn get_elem_imm(&self, index: u32) -> Value {
+        if index as usize >= self.elements.len() {
+            Value::nil()
+        } else {
+            self.elements[index as usize]
+        }
+    }
+
     pub fn set_elem(&mut self, vm: &mut VM, args: &Args) -> VMResult {
         vm.check_args_range(args.len(), 2, 3)?;
         let val = if args.len() == 3 { args[2] } else { args[1] };
@@ -80,6 +88,18 @@ impl ArrayInfo {
             };
         };
         Ok(val)
+    }
+
+    pub fn set_elem_imm(&mut self, index: u32, val: Value) {
+        let elements = &mut self.elements;
+        let len = elements.len();
+        if index as usize >= len {
+            let padding = index as usize - len;
+            elements.append(&mut vec![Value::nil(); padding]);
+            elements.push(val);
+        } else {
+            elements[index as usize] = val;
+        }
     }
 
     pub fn to_s(&self, vm: &mut VM) -> String {

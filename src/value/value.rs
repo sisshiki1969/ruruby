@@ -129,7 +129,7 @@ impl std::fmt::Debug for Value {
         } else if self.is_packed_num() {
             write!(f, "{}", self.as_packed_flonum())
         } else if self.is_packed_symbol() {
-            write!(f, ":\"{}\"", IdentId::get_name(self.as_packed_symbol()))
+            write!(f, ":\"{:?}\"", self.as_packed_symbol())
         } else {
             match self.0 {
                 NIL_VALUE => write!(f, "Nil"),

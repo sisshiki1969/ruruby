@@ -976,6 +976,17 @@ impl VM {
                     try_push!(self.get_index(arg_num));
                     self.pc += 5;
                 }
+                Inst::OPT_SET_INDEX => {
+                    let idx = self.read32(iseq, 1);
+                    let res = self.opt_set_index(idx);
+                    self.try_eval(res)?;
+                    self.pc += 5;
+                }
+                Inst::OPT_GET_INDEX => {
+                    let idx = self.read32(iseq, 1);
+                    try_push!(self.opt_get_index(idx));
+                    self.pc += 5;
+                }
                 Inst::SPLAT => {
                     let val = self.stack_pop();
                     let res = Value::splat(&self.globals, val);
@@ -1033,7 +1044,7 @@ impl VM {
                     }
                     self.jump_pc(5, disp);
                 }
-                Inst::JMP_IF_F => {
+                Inst::JMP_F => {
                     let val = self.stack_pop();
                     if self.val_to_bool(val) {
                         self.jump_pc(5, 0);
@@ -1045,7 +1056,7 @@ impl VM {
                         self.jump_pc(5, disp);
                     }
                 }
-                Inst::JMP_IF_T => {
+                Inst::JMP_T => {
                     let val = self.stack_pop();
                     if !self.val_to_bool(val) {
                         self.jump_pc(5, 0);
@@ -1212,14 +1223,10 @@ impl VM {
         ))
     }
 
-    pub fn error_undefined_method(
-        &self,
-        method_name: impl Into<String>,
-        receiver: Value,
-    ) -> RubyError {
+    pub fn error_undefined_method(&self, method: IdentId, receiver: Value) -> RubyError {
         self.error_nomethod(format!(
-            "undefined method `{}' for {}",
-            method_name.into(),
+            "undefined method `{:?}' for {}",
+            method,
             self.globals.get_class_name(receiver)
         ))
     }
@@ -1512,10 +1519,7 @@ impl VM {
                 let val = self.eval_send(mref, receiver, args)?;
                 Ok(val)
             }
-            Err(_) => {
-                let name = IdentId::get_ident_name(method_id);
-                Err(self.error_undefined_method(name, receiver))
-            }
+            Err(_) => Err(self.error_undefined_method(method_id, receiver)),
         }
     }
 
@@ -1918,10 +1922,28 @@ impl VM {
                         aref.set_elem(self, &args)?;
                     }
                     ObjKind::Hash(ref mut href) => href.insert(args[0], val),
-                    _ => return Err(self.error_undefined_method("[]=", receiver)),
+                    _ => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
                 };
             }
-            None => return Err(self.error_undefined_method("[]=", receiver)),
+            None => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
+        }
+        Ok(())
+    }
+
+    fn opt_set_index(&mut self, idx: u32) -> Result<(), RubyError> {
+        let mut receiver = self.stack_pop();
+        let val = self.stack_pop();
+        match receiver.as_mut_rvalue() {
+            Some(oref) => {
+                match oref.kind {
+                    ObjKind::Array(ref mut aref) => {
+                        aref.set_elem_imm(idx, val);
+                    }
+                    ObjKind::Hash(ref mut href) => href.insert(Value::fixnum(idx as i64), val),
+                    _ => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
+                };
+            }
+            None => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
         }
         Ok(())
     }
@@ -1941,7 +1963,7 @@ impl VM {
                     }
                 }
                 ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
-                _ => self.fallback(IdentId::get_id("[]"), receiver, &args)?,
+                _ => self.fallback(IdentId::_INDEX, receiver, &args)?,
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
@@ -1954,7 +1976,36 @@ impl VM {
                 };
                 Value::fixnum(val)
             }
-            _ => return Err(self.error_undefined_method("[]", receiver)),
+            _ => return Err(self.error_undefined_method(IdentId::_INDEX, receiver)),
+        };
+        self.stack_pop();
+        Ok(val)
+    }
+
+    fn opt_get_index(&mut self, idx: u32) -> VMResult {
+        let receiver = self.stack_top();
+        let val = match receiver.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Array(aref) => aref.get_elem_imm(idx),
+                ObjKind::Hash(href) => match href.get(&Value::fixnum(idx as i64)) {
+                    Some(val) => *val,
+                    None => Value::nil(),
+                },
+                ObjKind::Method(mref) => {
+                    let args = Args::new1(Value::fixnum(idx as i64));
+                    self.eval_send(mref.method, mref.receiver, &args)?
+                }
+                _ => {
+                    let args = Args::new1(Value::fixnum(idx as i64));
+                    self.fallback(IdentId::_INDEX, receiver, &args)?
+                }
+            },
+            None if receiver.is_packed_fixnum() => {
+                let i = receiver.as_packed_fixnum();
+                let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
+                Value::fixnum(val)
+            }
+            _ => return Err(self.error_undefined_method(IdentId::_INDEX, receiver)),
         };
         self.stack_pop();
         Ok(val)

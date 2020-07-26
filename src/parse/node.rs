@@ -33,8 +33,8 @@ pub enum NodeKind {
 
     BinOp(BinOp, Box<Node>, Box<Node>),
     UnOp(UnOp, Box<Node>),
-    ArrayMember {
-        array: Box<Node>,
+    Index {
+        base: Box<Node>,
         index: Vec<Node>,
     },
     Splat(Box<Node>),
@@ -280,8 +280,8 @@ impl Node {
     }
 
     pub fn new_array_member(array: Node, index: Vec<Node>, loc: Loc) -> Self {
-        let kind = NodeKind::ArrayMember {
-            array: Box::new(array),
+        let kind = NodeKind::Index {
+            base: Box::new(array),
             index,
         };
         Node::new(kind, loc)
@@ -526,6 +526,18 @@ impl Node {
         match self.kind {
             NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn is_imm_u32(&self) -> Option<u32> {
+        if let NodeKind::Integer(i) = self.kind {
+            if 0 <= i && i <= u32::max_value() as i64 {
+                Some(i as u32)
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 

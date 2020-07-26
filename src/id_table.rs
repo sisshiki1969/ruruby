@@ -69,6 +69,8 @@ impl IdentId {
     pub const _LT: IdentId = id!(16);
     pub const _LE: IdentId = id!(17);
     pub const _ENUM_FUNC: IdentId = id!(18);
+    pub const _INDEX: IdentId = id!(19);
+    pub const _INDEX_ASSIGN: IdentId = id!(20);
 }
 
 impl IdentId {
@@ -89,7 +91,7 @@ impl IdentId {
     }
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
-        let new_name = IdentId::get_name(id) + postfix;
+        let new_name = format!("{:?}{}", id, postfix);
         IdentId::get_id(new_name)
     }
 }
@@ -127,6 +129,8 @@ impl IdentifierTable {
         table.set_ident_id("<", IdentId::_LT);
         table.set_ident_id("<=", IdentId::_LE);
         table.set_ident_id("/enum", IdentId::_ENUM_FUNC);
+        table.set_ident_id("[]", IdentId::_INDEX);
+        table.set_ident_id("[]=", IdentId::_INDEX_ASSIGN);
         table
     }
 

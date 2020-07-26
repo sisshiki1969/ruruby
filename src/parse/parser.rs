@@ -1913,9 +1913,9 @@ impl Parser {
             TokenKind::Punct(Punct::LBracket) => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {
-                        self.get_ident_id("[]=")
+                        IdentId::_INDEX_ASSIGN
                     } else {
-                        self.get_ident_id("[]")
+                        IdentId::_INDEX
                     }
                 } else {
                     let loc = self.loc();
@@ -2112,9 +2112,9 @@ impl Parser {
             Punct::LBracket => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {
-                        Ok(self.get_ident_id("[]="))
+                        Ok(IdentId::_INDEX_ASSIGN)
                     } else {
-                        Ok(self.get_ident_id("[]"))
+                        Ok(IdentId::_INDEX)
                     }
                 } else {
                     let loc = self.loc();

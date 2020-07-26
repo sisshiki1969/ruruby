@@ -283,13 +283,13 @@ impl Codegen {
     }
 
     fn gen_jmp_if_false(&mut self, iseq: &mut ISeq) -> ISeqPos {
-        iseq.push(Inst::JMP_IF_F);
+        iseq.push(Inst::JMP_F);
         Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
 
     fn gen_jmp_if_true(&mut self, iseq: &mut ISeq) -> ISeqPos {
-        iseq.push(Inst::JMP_IF_T);
+        iseq.push(Inst::JMP_T);
         Codegen::push32(iseq, 0);
         ISeqPos(iseq.len())
     }
@@ -586,8 +586,19 @@ impl Codegen {
                 self.gen_opt_send(globals, iseq, assign_id, 1);
                 self.gen_pop(iseq);
             }
-            NodeKind::ArrayMember { array, index } => {
-                self.gen(globals, iseq, array, true)?;
+            NodeKind::Index { base, index } => {
+                self.gen(globals, iseq, base, true)?;
+                if index.len() == 1 {
+                    match index[0].is_imm_u32() {
+                        Some(u) => {
+                            self.save_loc(iseq, lhs.loc());
+                            iseq.push(Inst::OPT_SET_INDEX);
+                            Codegen::push32(iseq, u);
+                            return Ok(());
+                        }
+                        None => {}
+                    }
+                }
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
                 }
@@ -768,9 +779,13 @@ impl Codegen {
                 panic!("CodeGen: Illegal methodref.")
             };
             println!("-----------------------------------------");
+            let method_name = match iseq.name {
+                Some(id) => format!("{:?}", id),
+                None => "<unnamed>".to_string(),
+            };
             println!(
-                "{:?} {:?} opt_flag:{:?}",
-                iseq.name, methodref, iseq.opt_flag
+                "{} {:?} opt_flag:{:?}",
+                method_name, methodref, iseq.opt_flag
             );
             print!("local var: ");
             for (k, v) in iseq.lvar.table() {
@@ -858,9 +873,7 @@ impl Codegen {
                         let mut string = String::new();
                         for node in nodes {
                             match &node.kind {
-                                NodeKind::String(s) => {
-                                    string += s;
-                                }
+                                NodeKind::String(s) => string += s,
                                 _ => unreachable!(),
                             }
                         }
@@ -1151,10 +1164,24 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::ArrayMember { array, index } => {
+            NodeKind::Index { base, index } => {
                 let loc = node.loc();
-                self.gen(globals, iseq, array, true)?;
+                self.gen(globals, iseq, base, true)?;
                 let num_args = index.len();
+                if num_args == 1 {
+                    match index[0].is_imm_u32() {
+                        Some(u) => {
+                            self.save_loc(iseq, loc);
+                            iseq.push(Inst::OPT_GET_INDEX);
+                            Codegen::push32(iseq, u);
+                            if !use_value {
+                                self.gen_pop(iseq)
+                            };
+                            return Ok(());
+                        }
+                        None => {}
+                    }
+                }
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
                 }
@@ -1574,15 +1601,6 @@ impl Codegen {
                 for arg in &send_args.args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                /*
-                let kw_flag = send_args.kw_args.len() != 0;
-                if kw_flag {
-                    for (id, default) in &send_args.kw_args {
-                        self.gen_symbol(iseq, *id);
-                        self.gen(globals, iseq, default, true)?;
-                    }
-                    self.gen_create_hash(iseq, send_args.kw_args.len());
-                }*/
                 self.gen_yield(iseq, send_args.args.len());
                 if !use_value {
                     self.gen_pop(iseq);

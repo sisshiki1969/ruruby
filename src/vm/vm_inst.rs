@@ -31,8 +31,10 @@ impl Inst {
     pub const SET_GVAR: u8 = 51;
     pub const GET_INDEX: u8 = 52;
     pub const SET_INDEX: u8 = 53;
+    pub const OPT_GET_INDEX: u8 = 54;
+    pub const OPT_SET_INDEX: u8 = 55;
 
-    pub const CHECK_LOCAL: u8 = 54;
+    pub const CHECK_LOCAL: u8 = 56;
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
@@ -51,8 +53,8 @@ impl Inst {
     pub const DEF_SMETHOD: u8 = 92;
 
     pub const JMP: u8 = 100;
-    pub const JMP_IF_F: u8 = 101;
-    pub const JMP_IF_T: u8 = 102;
+    pub const JMP_F: u8 = 101;
+    pub const JMP_T: u8 = 102;
     pub const END: u8 = 103;
     pub const RETURN: u8 = 104;
     pub const OPT_CASE: u8 = 105;
@@ -93,6 +95,13 @@ impl Inst {
     pub const B_ORI: u8 = 161;
     pub const IVAR_ADDI: u8 = 162;
     pub const LVAR_ADDI: u8 = 163;
+
+    pub const JMP_F_EQI: u8 = 170;
+    pub const JMP_F_NEI: u8 = 171;
+    pub const JMP_F_GTI: u8 = 172;
+    pub const JMP_F_GEI: u8 = 173;
+    pub const JMP_F_LTI: u8 = 174;
+    pub const JMP_F_LEI: u8 = 175;
 }
 
 #[allow(dead_code)]
@@ -142,6 +151,13 @@ impl Inst {
             Inst::LEI => "LEI".to_string(),
             Inst::LVAR_ADDI => "LVAR_ADDI".to_string(),
 
+            Inst::JMP_F_EQI => "JMP_F_EQI".to_string(),
+            Inst::JMP_F_NEI => "JMP_F_NEI".to_string(),
+            Inst::JMP_F_GTI => "JMP_F_GTI".to_string(),
+            Inst::JMP_F_GEI => "JMP_F_GEI".to_string(),
+            Inst::JMP_F_LTI => "JMP_F_LTI".to_string(),
+            Inst::JMP_F_LEI => "JMP_F_LEI".to_string(),
+
             Inst::SET_LOCAL => "SET_LOCAL".to_string(),
             Inst::GET_LOCAL => "GET_LOCAL".to_string(),
             Inst::SET_DYNLOCAL => "SET_DYNLOCAL".to_string(),
@@ -157,6 +173,8 @@ impl Inst {
             Inst::SET_GVAR => "SET_GVAR".to_string(),
             Inst::GET_INDEX => "GET_INDEX".to_string(),
             Inst::SET_INDEX => "SET_INDEX".to_string(),
+            Inst::OPT_GET_INDEX => "OPT_GET_IDX".to_string(),
+            Inst::OPT_SET_INDEX => "OPT_SET_IDX".to_string(),
 
             Inst::CHECK_LOCAL => "CHECK_LOCAL".to_string(),
 
@@ -184,8 +202,8 @@ impl Inst {
             Inst::DEF_SMETHOD => "DEF_CMETHOD".to_string(),
 
             Inst::JMP => "JMP".to_string(),
-            Inst::JMP_IF_F => "JMP_IF_F".to_string(),
-            Inst::JMP_IF_T => "JMP_IF_T".to_string(),
+            Inst::JMP_F => "JMP_IF_F".to_string(),
+            Inst::JMP_T => "JMP_IF_T".to_string(),
             Inst::END => "END".to_string(),
             Inst::RETURN => "RETURN".to_string(),
             Inst::OPT_CASE => "OPT_CASE".to_string(),
@@ -227,7 +245,7 @@ impl Inst {
             | Inst::RETURN
             | Inst::MRETURN => 1,
                                         // operand
-            Inst::PUSH_SYMBOL         // IdentId: u32
+            Inst::PUSH_SYMBOL           // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32
             | Inst::GET_LOCAL           // LVarId: u32
             | Inst::GET_CONST           // IdentId: u32
@@ -238,14 +256,16 @@ impl Inst {
             | Inst::SET_IVAR            // IdentId: u32
             | Inst::GET_GVAR            // IdentId: u32
             | Inst::SET_GVAR            // IdentId: u32
-            | Inst::GET_INDEX
-            | Inst::SET_INDEX
+            | Inst::GET_INDEX           // number of items: u32
+            | Inst::SET_INDEX           // number of items: u32
+            | Inst::OPT_GET_INDEX       // immediate: u32
+            | Inst::OPT_SET_INDEX       // immediate: u32
             | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CREATE_PROC
             | Inst::CONST_VAL           // ConstId: u32
-            | Inst::JMP                 // disp: u32
-            | Inst::JMP_IF_F            // disp: u32
-            | Inst::JMP_IF_T            // disp: u32
+            | Inst::JMP                 // disp: i32
+            | Inst::JMP_F               // disp: i32
+            | Inst::JMP_T               // disp: i32
             | Inst::DUP                 // number of items: u32
             | Inst::TAKE                // number of items: u32
             | Inst::CONCAT_STRING       // number of items: u32
@@ -268,8 +288,8 @@ impl Inst {
             | Inst::YIELD               // number of items: u32
             => 5,
 
-            Inst::PUSH_FIXNUM
-            | Inst::PUSH_FLONUM
+            Inst::PUSH_FIXNUM           // value:i64
+            | Inst::PUSH_FLONUM         // value:f64
             | Inst::SET_DYNLOCAL
             | Inst::GET_DYNLOCAL
             | Inst::DEF_METHOD
@@ -277,7 +297,14 @@ impl Inst {
             | Inst::OPT_CASE
             | Inst::CHECK_LOCAL
             | Inst::IVAR_ADDI
-            | Inst::LVAR_ADDI => 9,
+            | Inst::LVAR_ADDI
+            | Inst::JMP_F_EQI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_NEI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_GTI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_GEI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_LTI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
+            => 9,
             Inst::DEF_CLASS => 10,
             Inst::OPT_SEND | Inst::OPT_SEND_SELF => 11,
             Inst::SEND | Inst::SEND_SELF => 17,
@@ -304,7 +331,9 @@ impl Inst {
             | Inst::GTI
             | Inst::GEI
             | Inst::LTI
-            | Inst::LEI => imm_i32(iseq, pc),
+            | Inst::LEI
+            | Inst::OPT_GET_INDEX
+            | Inst::OPT_SET_INDEX => imm_i32(iseq, pc),
             Inst::IVAR_ADDI => format!(
                 "IVAR_ADDI {} +{}",
                 Inst::ident_name(iseq, pc + 1),
@@ -325,22 +354,38 @@ impl Inst {
                 format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
             }
 
-            Inst::JMP | Inst::JMP_IF_F | Inst::JMP_IF_T => format!(
+            Inst::JMP | Inst::JMP_F | Inst::JMP_T => format!(
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
             ),
+
+            Inst::JMP_F_EQI
+            | Inst::JMP_F_NEI
+            | Inst::JMP_F_GTI
+            | Inst::JMP_F_GEI
+            | Inst::JMP_F_LTI
+            | Inst::JMP_F_LEI => format!(
+                "{} {} {:>05x}",
+                Inst::inst_name(iseq[pc]),
+                Inst::read32(iseq, pc + 1) as i32,
+                pc as i32 + 5 + Inst::read32(iseq, pc + 5) as i32
+            ),
+
             Inst::OPT_CASE => format!(
                 "OPT_CASE {:>05}",
                 pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
             ),
             Inst::SET_LOCAL | Inst::GET_LOCAL => {
                 let id = Inst::read32(iseq, pc + 1);
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
+                let ident_name = match iseq_ref.lvar.get_name(LvarId::from_u32(id)) {
+                    Some(id) => format!("{:?}", id),
+                    None => "<unnamed>".to_string(),
+                };
                 format!(
-                    "{} '{:?}' LvarId:{}",
+                    "{} '{}' LvarId:{}",
                     Inst::inst_name(iseq[pc]),
-                    ident_id,
+                    ident_name,
                     id
                 )
             }
