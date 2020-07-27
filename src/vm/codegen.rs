@@ -294,22 +294,6 @@ impl Codegen {
         ISeqPos(iseq.len())
     }
 
-    fn gen_jmp_f_cmp_i(&mut self, iseq: &mut ISeq, op: BinOp, i: i32) -> ISeqPos {
-        let inst = match op {
-            BinOp::Eq => Inst::JMP_F_EQI,
-            BinOp::Ne => Inst::JMP_F_NEI,
-            BinOp::Ge => Inst::JMP_F_GEI,
-            BinOp::Gt => Inst::JMP_F_GTI,
-            BinOp::Le => Inst::JMP_F_LEI,
-            BinOp::Lt => Inst::JMP_F_LTI,
-            _ => unreachable!(),
-        };
-        iseq.push(inst);
-        Codegen::push32(iseq, i as u32);
-        Codegen::push32(iseq, 0);
-        ISeqPos(iseq.len())
-    }
-
     fn gen_jmp_back(&mut self, iseq: &mut ISeq, pos: ISeqPos) {
         let disp = Codegen::current(iseq).disp(pos) - 5;
         iseq.push(Inst::JMP);
@@ -818,6 +802,9 @@ impl Codegen {
         Ok(methodref)
     }
 
+    /// Generate `cond` + JMP_IF_FALSE.
+    ///
+    /// If `cond` is "lhs cmp Integer" (cmp: == or != or <= ...), generate optimized instruction. (JMP_F_EQI etc..)
     fn gen_jmp_if_false(
         &mut self,
         globals: &mut Globals,
@@ -825,11 +812,42 @@ impl Codegen {
         cond: &Node,
     ) -> Result<ISeqPos, RubyError> {
         let pos = match &cond.kind {
-            NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() && rhs.is_imm_i32().is_some() => {
-                let i = rhs.is_imm_i32().unwrap();
-                self.gen(globals, iseq, lhs, true)?;
-                self.gen_jmp_f_cmp_i(iseq, *op, i)
-            }
+            NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() => match rhs.is_imm_i32() {
+                Some(i) => {
+                    self.gen(globals, iseq, lhs, true)?;
+                    let inst = match op {
+                        BinOp::Eq => Inst::JMP_F_EQI,
+                        BinOp::Ne => Inst::JMP_F_NEI,
+                        BinOp::Ge => Inst::JMP_F_GEI,
+                        BinOp::Gt => Inst::JMP_F_GTI,
+                        BinOp::Le => Inst::JMP_F_LEI,
+                        BinOp::Lt => Inst::JMP_F_LTI,
+                        _ => unreachable!(),
+                    };
+                    self.save_loc(iseq, cond.loc);
+                    iseq.push(inst);
+                    Codegen::push32(iseq, i as u32);
+                    Codegen::push32(iseq, 0);
+                    ISeqPos(iseq.len())
+                }
+                None => {
+                    self.gen(globals, iseq, lhs, true)?;
+                    self.gen(globals, iseq, rhs, true)?;
+                    self.save_loc(iseq, cond.loc);
+                    let inst = match op {
+                        BinOp::Eq => Inst::JMP_F_EQ,
+                        BinOp::Ne => Inst::JMP_F_NE,
+                        BinOp::Ge => Inst::JMP_F_GE,
+                        BinOp::Gt => Inst::JMP_F_GT,
+                        BinOp::Le => Inst::JMP_F_LE,
+                        BinOp::Lt => Inst::JMP_F_LT,
+                        _ => unreachable!(),
+                    };
+                    iseq.push(inst);
+                    Codegen::push32(iseq, 0);
+                    ISeqPos(iseq.len())
+                }
+            },
             _ => {
                 self.gen(globals, iseq, &cond, true)?;
                 self.gen_jmp_if_f(iseq)

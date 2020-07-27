@@ -306,6 +306,57 @@ fn if6() {
 }
 
 #[test]
+fn if_cmp_ops() {
+    let program = "
+        a = 42
+        # JMP_F_EQI ..
+        assert(true, if a == 42 then true else false end)
+        assert(true, if a == 43 then false else true end)
+        assert(true, if a != 43 then true else false end)
+        assert(true, if a != 42 then false else true end)
+
+        assert(true, if a < 41 then false else true end)
+        assert(true, if a < 42 then false else true end)
+        assert(true, if a < 43 then true else false end)
+
+        assert(true, if a <= 41 then false else true end)
+        assert(true, if a <= 42 then true else false end)
+        assert(true, if a <= 43 then true else false end)
+
+        assert(true, if a > 43 then false else true end)
+        assert(true, if a > 42 then false else true end)
+        assert(true, if a > 41 then true else false end)
+
+        assert(true, if a >= 43 then false else true end)
+        assert(true, if a >= 42 then true else false end)
+        assert(true, if a >= 41 then true else false end)
+
+        # JMP_F_EQ ..
+        assert(true, if a == 42.0 then true else false end)
+        assert(true, if a == 43.0 then false else true end)
+        assert(true, if a != 43.0 then true else false end)
+        assert(true, if a != 42.0 then false else true end)
+
+        assert(true, if a < 41.0 then false else true end)
+        assert(true, if a < 42.0 then false else true end)
+        assert(true, if a < 43.0 then true else false end)
+
+        assert(true, if a <= 41.0 then false else true end)
+        assert(true, if a <= 42.0 then true else false end)
+        assert(true, if a <= 43.0 then true else false end)
+
+        assert(true, if a > 43.0 then false else true end)
+        assert(true, if a > 42.0 then false else true end)
+        assert(true, if a > 41.0 then true else false end)
+
+        assert(true, if a >= 43.0 then false else true end)
+        assert(true, if a >= 42.0 then true else false end)
+        assert(true, if a >= 41.0 then true else false end)
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn unless1() {
     let program = "a = 5; unless a > 3 then 10 else 50 end";
     let expected = Value::fixnum(50);

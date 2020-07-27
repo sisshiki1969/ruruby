@@ -751,6 +751,7 @@ impl VM {
                     try_push!(self.eval_bitnot(lhs));
                     self.pc += 1;
                 }
+
                 Inst::EQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
@@ -790,7 +791,7 @@ impl VM {
                 Inst::GT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_gt(rhs, lhs));
+                    try_push!(self.eval_gt(rhs, lhs).map(|x| Value::bool(x)));
                     self.pc += 1;
                 }
                 Inst::GTI => {
@@ -802,7 +803,7 @@ impl VM {
                 Inst::GE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_ge(rhs, lhs));
+                    try_push!(self.eval_ge(rhs, lhs).map(|x| Value::bool(x)));
                     self.pc += 1;
                 }
                 Inst::GEI => {
@@ -814,7 +815,7 @@ impl VM {
                 Inst::LT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_lt(rhs, lhs));
+                    try_push!(self.eval_lt(rhs, lhs).map(|x| Value::bool(x)));
                     self.pc += 1;
                 }
                 Inst::LTI => {
@@ -826,7 +827,7 @@ impl VM {
                 Inst::LE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_le(rhs, lhs));
+                    try_push!(self.eval_le(rhs, lhs).map(|x| Value::bool(x)));
                     self.pc += 1;
                 }
                 Inst::LEI => {
@@ -1079,6 +1080,44 @@ impl VM {
                     let b = !self.val_to_bool(val);
                     self.jmp_cond(iseq, b, 5, 1);
                 }
+
+                Inst::JMP_F_EQ => {
+                    let lhs = self.stack_pop();
+                    let rhs = self.stack_pop();
+                    let b = self.eval_eq(rhs, lhs);
+                    self.jmp_cond(iseq, b, 5, 1);
+                }
+                Inst::JMP_F_NE => {
+                    let lhs = self.stack_pop();
+                    let rhs = self.stack_pop();
+                    let b = !self.eval_eq(rhs, lhs);
+                    self.jmp_cond(iseq, b, 5, 1);
+                }
+                Inst::JMP_F_GT => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    let b = try_get_bool!(self.eval_gt(rhs, lhs));
+                    self.jmp_cond(iseq, b, 5, 1);
+                }
+                Inst::JMP_F_GE => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    let b = try_get_bool!(self.eval_ge(rhs, lhs));
+                    self.jmp_cond(iseq, b, 5, 1);
+                }
+                Inst::JMP_F_LT => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    let b = try_get_bool!(self.eval_lt(rhs, lhs));
+                    self.jmp_cond(iseq, b, 5, 1);
+                }
+                Inst::JMP_F_LE => {
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    let b = try_get_bool!(self.eval_le(rhs, lhs));
+                    self.jmp_cond(iseq, b, 5, 1);
+                }
+
                 Inst::JMP_F_EQI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
@@ -1585,25 +1624,6 @@ impl VM {
         }
     }
 
-    fn fallback_for_cmpop(
-        &mut self,
-        method: IdentId,
-        lhs: Value,
-        rhs: Value,
-    ) -> Result<bool, RubyError> {
-        match self.get_method(lhs, method) {
-            Ok(mref) => {
-                let arg = Args::new1(rhs);
-                let val = self.eval_send(mref, lhs, &arg)?;
-                Ok(self.val_to_bool(val))
-            }
-            Err(_) => {
-                let name = IdentId::get_ident_name(method);
-                Err(self.error_undefined_op(name, rhs, lhs))
-            }
-        }
-    }
-
     fn fallback_cache_for_binop(
         &mut self,
         lhs: Value,
@@ -1845,35 +1865,48 @@ impl VM {
     }
 }
 
+macro_rules! eval_cmp_sub {
+    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+        match ($lhs.unpack(), $rhs.unpack()) {
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&(rhs as f64))),
+            (RV::Integer(lhs), RV::Float(rhs)) => Ok((lhs as f64).$op(&rhs)),
+            (RV::Float(lhs), RV::Float(rhs)) => Ok(lhs.$op(&rhs)),
+            (_, _) => {
+                let res = $vm.fallback_for_binop($id, $lhs, $rhs);
+                res.map(|x| $vm.val_to_bool(x))
+            }
+        }
+    };
+}
+
 macro_rules! eval_cmp {
     ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         if $lhs.is_packed_fixnum() {
             let lhs = $lhs.as_packed_fixnum();
             if $rhs.is_packed_fixnum() {
                 let rhs = $rhs.as_packed_fixnum();
-                return Ok(Value::bool(lhs.$op(&rhs)));
+                Ok(lhs.$op(&rhs))
             } else if $rhs.is_packed_num() {
                 let rhs = $rhs.as_packed_flonum();
-                return Ok(Value::bool((lhs as f64).$op(&rhs)));
+                Ok((lhs as f64).$op(&rhs))
+            } else {
+                eval_cmp_sub!($vm, $rhs, $lhs, $op, $id)
             }
         } else if $lhs.is_packed_num() {
             let lhs = $lhs.as_packed_flonum();
             if $rhs.is_packed_fixnum() {
                 let rhs = $rhs.as_packed_fixnum();
-                return Ok(Value::bool(lhs.$op(&(rhs as f64))));
+                Ok(lhs.$op(&(rhs as f64)))
             } else if $rhs.is_packed_num() {
                 let rhs = $rhs.as_packed_flonum();
-                return Ok(Value::bool(lhs.$op(&rhs)));
+                Ok(lhs.$op(&rhs))
+            } else {
+                eval_cmp_sub!($vm, $rhs, $lhs, $op, $id)
             }
+        } else {
+            eval_cmp_sub!($vm, $rhs, $lhs, $op, $id)
         }
-        let val = match ($lhs.unpack(), $rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Value::bool(lhs.$op(&rhs)),
-            (RV::Float(lhs), RV::Integer(rhs)) => Value::bool(lhs.$op(&(rhs as f64))),
-            (RV::Integer(lhs), RV::Float(rhs)) => Value::bool((lhs as f64).$op(&rhs)),
-            (RV::Float(lhs), RV::Float(rhs)) => Value::bool(lhs.$op(&rhs)),
-            (_, _) => return $vm.fallback_for_binop($id, $lhs, $rhs),
-        };
-        return Ok(val);
     };
 }
 
@@ -1889,7 +1922,10 @@ macro_rules! eval_cmp_i {
             match $lhs.unpack() {
                 RV::Integer(lhs) => Ok(lhs.$op(&($i as i64))),
                 RV::Float(lhs) => Ok(lhs.$op(&($i as f64))),
-                _ => $vm.fallback_for_cmpop($id, $lhs, Value::fixnum($i as i64)),
+                _ => {
+                    let res = $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64));
+                    res.map(|x| $vm.val_to_bool(x))
+                }
             }
         }
     };
@@ -1929,17 +1965,17 @@ impl VM {
         }
     }
 
-    fn eval_ge(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, ge, IdentId::_GE);
+    fn eval_ge(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        eval_cmp!(self, rhs, lhs, ge, IdentId::_GE)
     }
-    pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, gt, IdentId::_GT);
+    pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        eval_cmp!(self, rhs, lhs, gt, IdentId::_GT)
     }
-    fn eval_le(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, le, IdentId::_LE);
+    fn eval_le(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        eval_cmp!(self, rhs, lhs, le, IdentId::_LE)
     }
-    fn eval_lt(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        eval_cmp!(self, rhs, lhs, lt, IdentId::_LT);
+    fn eval_lt(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        eval_cmp!(self, rhs, lhs, lt, IdentId::_LT)
     }
 
     fn eval_gei(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {

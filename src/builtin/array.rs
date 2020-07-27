@@ -504,7 +504,7 @@ fn max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     let mut max = aref.elements[0];
     for elem in &aref.elements {
-        if vm.eval_gt(max, *elem)? == Value::true_val() {
+        if vm.eval_gt(max, *elem)? {
             max = *elem;
         };
     }

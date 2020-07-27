@@ -96,12 +96,19 @@ impl Inst {
     pub const IVAR_ADDI: u8 = 162;
     pub const LVAR_ADDI: u8 = 163;
 
-    pub const JMP_F_EQI: u8 = 170;
-    pub const JMP_F_NEI: u8 = 171;
-    pub const JMP_F_GTI: u8 = 172;
-    pub const JMP_F_GEI: u8 = 173;
-    pub const JMP_F_LTI: u8 = 174;
-    pub const JMP_F_LEI: u8 = 175;
+    pub const JMP_F_EQ: u8 = 170;
+    pub const JMP_F_NE: u8 = 171;
+    pub const JMP_F_GT: u8 = 172;
+    pub const JMP_F_GE: u8 = 173;
+    pub const JMP_F_LT: u8 = 174;
+    pub const JMP_F_LE: u8 = 175;
+
+    pub const JMP_F_EQI: u8 = 180;
+    pub const JMP_F_NEI: u8 = 181;
+    pub const JMP_F_GTI: u8 = 182;
+    pub const JMP_F_GEI: u8 = 183;
+    pub const JMP_F_LTI: u8 = 184;
+    pub const JMP_F_LEI: u8 = 185;
 }
 
 #[allow(dead_code)]
@@ -150,6 +157,13 @@ impl Inst {
             Inst::LTI => "LTI".to_string(),
             Inst::LEI => "LEI".to_string(),
             Inst::LVAR_ADDI => "LVAR_ADDI".to_string(),
+
+            Inst::JMP_F_EQ => "JMP_F_EQ".to_string(),
+            Inst::JMP_F_NE => "JMP_F_NE".to_string(),
+            Inst::JMP_F_GT => "JMP_F_GT".to_string(),
+            Inst::JMP_F_GE => "JMP_F_GE".to_string(),
+            Inst::JMP_F_LT => "JMP_F_LT".to_string(),
+            Inst::JMP_F_LE => "JMP_F_LE".to_string(),
 
             Inst::JMP_F_EQI => "JMP_F_EQI".to_string(),
             Inst::JMP_F_NEI => "JMP_F_NEI".to_string(),
@@ -266,6 +280,14 @@ impl Inst {
             | Inst::JMP                 // disp: i32
             | Inst::JMP_F               // disp: i32
             | Inst::JMP_T               // disp: i32
+
+            | Inst::JMP_F_EQ            // disp: i32
+            | Inst::JMP_F_NE            // disp: i32
+            | Inst::JMP_F_GT            // disp: i32
+            | Inst::JMP_F_GE            // disp: i32
+            | Inst::JMP_F_LT            // disp: i32
+            | Inst::JMP_F_LE            // disp: i32
+
             | Inst::DUP                 // number of items: u32
             | Inst::TAKE                // number of items: u32
             | Inst::CONCAT_STRING       // number of items: u32
@@ -354,7 +376,15 @@ impl Inst {
                 format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
             }
 
-            Inst::JMP | Inst::JMP_F | Inst::JMP_T => format!(
+            Inst::JMP
+            | Inst::JMP_F
+            | Inst::JMP_T
+            | Inst::JMP_F_EQ
+            | Inst::JMP_F_NE
+            | Inst::JMP_F_GT
+            | Inst::JMP_F_GE
+            | Inst::JMP_F_LT
+            | Inst::JMP_F_LE => format!(
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
