@@ -152,6 +152,56 @@ fn op4() {
 }
 
 #[test]
+fn op5() {
+    let program = "
+        a = 42
+        assert(true, a == 42)
+        assert(false, a == 43)
+        assert(false, a != 42)
+        assert(true, a != 43)
+
+        assert(true, a <= 43)
+        assert(true, a <= 42)
+        assert(false, a <= 41)
+        assert(true, a < 43)
+        assert(false, a < 42)
+        assert(false, a < 41)
+        assert(false, a >= 43)
+        assert(true, a >= 42)
+        assert(true, a >= 41)
+        assert(false, a > 43)
+        assert(false, a > 42)
+        assert(true, a > 41)
+        ";
+    assert_script(program);
+}
+
+#[test]
+fn op6() {
+    let program = "
+        a = 42
+        assert(true, a == 42.0)
+        assert(false, a == 43.0)
+        assert(false, a != 42.0)
+        assert(true, a != 43.0)
+
+        assert(true, a <= 43.0)
+        assert(true, a <= 42.0)
+        assert(false, a <= 41.0)
+        assert(true, a < 43.0)
+        assert(false, a < 42.0)
+        assert(false, a < 41.0)
+        assert(false, a >= 43.0)
+        assert(true, a >= 42.0)
+        assert(true, a >= 41.0)
+        assert(false, a > 43.0)
+        assert(false, a > 42.0)
+        assert(true, a > 41.0)
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn op9() {
     let program = "
         assert(4, 4 || 5)
