@@ -55,8 +55,8 @@ impl Inst {
     pub const JMP: u8 = 100;
     pub const JMP_F: u8 = 101;
     pub const JMP_T: u8 = 102;
-    pub const END: u8 = 103;
-    pub const RETURN: u8 = 104;
+    pub const RETURN: u8 = 103;
+    pub const BREAK: u8 = 104;
     pub const OPT_CASE: u8 = 105;
     pub const MRETURN: u8 = 106;
     pub const YIELD: u8 = 107;
@@ -218,8 +218,8 @@ impl Inst {
             Inst::JMP => "JMP".to_string(),
             Inst::JMP_F => "JMP_IF_F".to_string(),
             Inst::JMP_T => "JMP_IF_T".to_string(),
-            Inst::END => "END".to_string(),
             Inst::RETURN => "RETURN".to_string(),
+            Inst::BREAK => "BREAK".to_string(),
             Inst::OPT_CASE => "OPT_CASE".to_string(),
             Inst::MRETURN => "MRETURN".to_string(),
             Inst::YIELD => "YIELD".to_string(),
@@ -230,7 +230,7 @@ impl Inst {
 
     pub fn inst_size(inst: u8) -> usize {
         match inst {
-            Inst::END
+            Inst::RETURN
             | Inst::PUSH_NIL
             | Inst::PUSH_TRUE
             | Inst::PUSH_FALSE
@@ -256,7 +256,7 @@ impl Inst {
             | Inst::TO_S
             | Inst::SPLAT
             | Inst::POP
-            | Inst::RETURN
+            | Inst::BREAK
             | Inst::MRETURN => 1,
                                         // operand
             Inst::PUSH_SYMBOL           // IdentId: u32

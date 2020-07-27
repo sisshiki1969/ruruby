@@ -54,11 +54,7 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
     vm.check_args_range(len, 2, 3)?;
     let (start, end) = (args[0], args[1]);
-    let exclude_end = if len == 2 {
-        false
-    } else {
-        vm.val_to_bool(args[2])
-    };
+    let exclude_end = if len == 2 { false } else { args[2].to_bool() };
     Ok(Value::range(&vm.globals, start, end, exclude_end))
 }
 
@@ -194,7 +190,7 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in start..end {
         let arg = Args::new1(Value::fixnum(i));
         let res = vm.eval_block(method, &arg)?;
-        if !vm.val_to_bool(res) {
+        if !res.to_bool() {
             return Ok(Value::false_val());
         }
     }

@@ -307,11 +307,11 @@ impl Codegen {
     }
 
     fn gen_end(&self, iseq: &mut ISeq) {
-        iseq.push(Inst::END);
+        iseq.push(Inst::RETURN);
     }
 
     fn gen_return(&self, iseq: &mut ISeq) {
-        iseq.push(Inst::RETURN);
+        iseq.push(Inst::BREAK);
     }
 
     fn gen_method_return(&self, iseq: &mut ISeq) {
@@ -1374,82 +1374,106 @@ impl Codegen {
             }
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];
-                self.gen(globals, iseq, cond, true)?;
-                let mut opt_flag = true;
-                for branch in when_ {
-                    for elem in &branch.when {
-                        match elem.kind {
-                            NodeKind::Integer(_) => (),
-                            NodeKind::Symbol(_) => (),
-                            NodeKind::String(_) => (),
-                            _ => {
-                                opt_flag = false;
+                match cond {
+                    Some(cond) => {
+                        self.gen(globals, iseq, cond, true)?;
+                        let mut opt_flag = true;
+                        for branch in when_ {
+                            for elem in &branch.when {
+                                match elem.kind {
+                                    NodeKind::Integer(_) => (),
+                                    NodeKind::Symbol(_) => (),
+                                    NodeKind::String(_) => (),
+                                    _ => {
+                                        opt_flag = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if !opt_flag {
                                 break;
                             }
                         }
-                    }
-                    if !opt_flag {
-                        break;
-                    }
-                }
-                if opt_flag {
-                    let map_id = globals.case_dispatch.new_entry();
-                    self.save_cur_loc(iseq);
-                    let start = self.gen_opt_case(iseq, map_id);
-                    for branch in when_ {
-                        let map = globals.case_dispatch.get_mut_entry(map_id);
-                        let disp = start.disp(Codegen::current(iseq)) as i32;
-                        for elem in &branch.when {
-                            let k = match &elem.kind {
-                                NodeKind::Integer(i) => Value::fixnum(*i),
-                                NodeKind::Symbol(sym) => Value::symbol(*sym),
-                                NodeKind::String(str) => {
-                                    Value::string(&globals.builtins, str.to_string())
+                        if opt_flag {
+                            let map_id = globals.case_dispatch.new_entry();
+                            self.save_cur_loc(iseq);
+                            let start = self.gen_opt_case(iseq, map_id);
+                            for branch in when_ {
+                                let map = globals.case_dispatch.get_mut_entry(map_id);
+                                let disp = start.disp(Codegen::current(iseq)) as i32;
+                                for elem in &branch.when {
+                                    let k = match &elem.kind {
+                                        NodeKind::Integer(i) => Value::fixnum(*i),
+                                        NodeKind::Symbol(sym) => Value::symbol(*sym),
+                                        NodeKind::String(str) => {
+                                            Value::string(&globals.builtins, str.to_string())
+                                        }
+                                        _ => unreachable!(),
+                                    };
+                                    map.insert(k, disp);
                                 }
-                                _ => unreachable!(),
-                            };
-                            map.insert(k, disp);
-                        }
-                        self.gen(globals, iseq, &branch.body, use_value)?;
-                        end.push(Codegen::gen_jmp(iseq));
-                    }
-                    Codegen::write_disp_from_cur(iseq, start);
-                } else {
-                    let mut next = None;
-                    for branch in when_ {
-                        let mut jmp_dest = vec![];
-                        match next {
-                            Some(next) => {
-                                Codegen::write_disp_from_cur(iseq, next);
+                                self.gen(globals, iseq, &branch.body, use_value)?;
+                                end.push(Codegen::gen_jmp(iseq));
                             }
-                            None => {}
+                            Codegen::write_disp_from_cur(iseq, start);
+                        } else {
+                            let mut next = None;
+                            for branch in when_ {
+                                let mut jmp_dest = vec![];
+                                match next {
+                                    Some(next) => {
+                                        Codegen::write_disp_from_cur(iseq, next);
+                                    }
+                                    None => {}
+                                }
+                                for elem in &branch.when {
+                                    self.gen_dup(iseq, 1);
+                                    self.gen(globals, iseq, elem, true)?;
+                                    self.save_loc(iseq, elem.loc);
+                                    iseq.push(Inst::TEQ);
+                                    jmp_dest.push(self.gen_jmp_if_t(iseq));
+                                }
+                                next = Some(Codegen::gen_jmp(iseq));
+                                for dest in jmp_dest {
+                                    Codegen::write_disp_from_cur(iseq, dest);
+                                }
+                                self.gen_pop(iseq);
+                                self.gen(globals, iseq, &branch.body, use_value)?;
+                                end.push(Codegen::gen_jmp(iseq));
+                            }
+                            match next {
+                                Some(next) => {
+                                    Codegen::write_disp_from_cur(iseq, next);
+                                }
+                                None => {}
+                            }
+                            self.gen_pop(iseq);
                         }
-                        for elem in &branch.when {
-                            self.gen_dup(iseq, 1);
-                            self.gen(globals, iseq, elem, true)?;
-                            self.save_loc(iseq, elem.loc);
-                            iseq.push(Inst::TEQ);
-                            jmp_dest.push(self.gen_jmp_if_t(iseq));
-                        }
-                        next = Some(Codegen::gen_jmp(iseq));
-                        for dest in jmp_dest {
+                        self.gen(globals, iseq, &else_, use_value)?;
+                        for dest in end {
                             Codegen::write_disp_from_cur(iseq, dest);
                         }
-                        self.gen_pop(iseq);
-                        self.gen(globals, iseq, &branch.body, use_value)?;
-                        end.push(Codegen::gen_jmp(iseq));
                     }
-                    match next {
-                        Some(next) => {
-                            Codegen::write_disp_from_cur(iseq, next);
+                    None => {
+                        for branch in when_ {
+                            let mut next = vec![];
+                            for elem in &branch.when {
+                                self.gen(globals, iseq, elem, true)?;
+                                self.save_loc(iseq, elem.loc);
+                                next.push(self.gen_jmp_if_f(iseq));
+                            }
+                            //next = Some(Codegen::gen_jmp(iseq));
+                            self.gen(globals, iseq, &branch.body, use_value)?;
+                            end.push(Codegen::gen_jmp(iseq));
+                            for dest in next {
+                                Codegen::write_disp_from_cur(iseq, dest);
+                            }
                         }
-                        None => {}
+                        self.gen(globals, iseq, &else_, use_value)?;
+                        for dest in end {
+                            Codegen::write_disp_from_cur(iseq, dest);
+                        }
                     }
-                    self.gen_pop(iseq);
-                }
-                self.gen(globals, iseq, &else_, use_value)?;
-                for dest in end {
-                    Codegen::write_disp_from_cur(iseq, dest);
                 }
             }
             NodeKind::MulAssign(mlhs, mrhs) => {

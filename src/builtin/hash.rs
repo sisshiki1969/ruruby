@@ -86,8 +86,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
-        let b = vm.eval_block(method, &arg)?;
-        if vm.val_to_bool(b) {
+        if vm.eval_block(method, &arg)?.to_bool() {
             res.insert(HashKey(k), v);
         };
     }

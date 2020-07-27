@@ -104,7 +104,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     .elements);
     if lhs.len() >= rhs.len() {
         for (i, rhs_v) in rhs.iter().enumerate() {
-            match vm.eval_cmp(*rhs_v, lhs[i])?.as_fixnum() {
+            match vm.eval_compare(*rhs_v, lhs[i])?.as_fixnum() {
                 Some(0) => {}
                 Some(ord) => return Ok(Value::fixnum(ord)),
                 None => return Ok(Value::nil()),
@@ -117,7 +117,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     } else {
         for (i, lhs_v) in lhs.iter().enumerate() {
-            match vm.eval_cmp(rhs[i], *lhs_v)?.as_fixnum() {
+            match vm.eval_compare(rhs[i], *lhs_v)?.as_fixnum() {
                 Some(0) => {}
                 Some(ord) => return Ok(Value::fixnum(ord)),
                 None => return Ok(Value::nil()),

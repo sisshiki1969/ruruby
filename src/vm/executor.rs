@@ -358,7 +358,7 @@ impl VM {
 
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
-            eprintln!("Error: stack length is illegal. {}", stack_len);
+            self.error_internal(format!("Error: stack length is illegal. {}", stack_len));
         };
 
         Ok(val)
@@ -500,6 +500,20 @@ impl VM {
         }
     }
 
+    /// Evaluate expr, and return value.
+    fn try_get_bool(&mut self, expr: Result<bool, RubyError>) -> Result<bool, RubyError> {
+        match expr {
+            Ok(b) => Ok(b),
+            Err(err) => match err.kind {
+                RubyErrorKind::BlockReturn(val) => Ok(val.to_bool()),
+                _ => match self.handle_error(err) {
+                    Ok(res) => Ok(res.to_bool()),
+                    Err(err) => Err(err),
+                },
+            },
+        }
+    }
+
     fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: i64, dest_offset: usize) {
         if cond {
             self.jump_pc(inst_offset, 0);
@@ -559,22 +573,6 @@ impl VM {
             };
         }
 
-        /// Evaluate expr, and return value.
-        macro_rules! try_get_bool {
-            ($eval:expr) => {
-                match $eval {
-                    Ok(b) => b,
-                    Err(err) => match err.kind {
-                        RubyErrorKind::BlockReturn(val) => self.val_to_bool(val),
-                        _ => match self.handle_error(err) {
-                            Ok(res) => self.val_to_bool(res),
-                            Err(err) => return Err(err),
-                        },
-                    },
-                };
-            };
-        }
-
         loop {
             #[cfg(feature = "perf")]
             self.perf.get_perf(iseq[self.pc]);
@@ -588,9 +586,8 @@ impl VM {
                 );
             }
             match iseq[self.pc] {
-                Inst::END => {
-                    // reached the end of the method or block.
-                    // - the end of a method or block.
+                Inst::RETURN => {
+                    // - reached the end of the method or block.
                     // - `return` in method.
                     // - `next` in block AND outer of loops.
                     let val = self.stack_pop();
@@ -598,7 +595,7 @@ impl VM {
                     println!("<--- Ok({:?})", val);
                     return Ok(val);
                 }
-                Inst::RETURN => {
+                Inst::BREAK => {
                     // - `break`  in block or eval AND outer of loops.
                     #[cfg(debug_assertions)]
                     assert!(context.kind == ISeqKind::Block || context.kind == ISeqKind::Other);
@@ -839,12 +836,12 @@ impl VM {
                 Inst::CMP => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_cmp(rhs, lhs));
+                    try_push!(self.eval_compare(rhs, lhs));
                     self.pc += 1;
                 }
                 Inst::NOT => {
                     let lhs = self.stack_pop();
-                    let val = Value::bool(!self.val_to_bool(lhs));
+                    let val = Value::bool(!lhs.to_bool());
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -1032,7 +1029,7 @@ impl VM {
                         return Err(self.error_argument("Bad value for range."));
                     };
                     let exclude_val = self.stack_pop();
-                    let exclude_end = self.val_to_bool(exclude_val);
+                    let exclude_end = exclude_val.to_bool();
                     let range = Value::range(&self.globals, start, end, exclude_end);
                     self.stack_push(range);
                     self.pc += 1;
@@ -1072,12 +1069,12 @@ impl VM {
                 }
                 Inst::JMP_F => {
                     let val = self.stack_pop();
-                    let b = self.val_to_bool(val);
+                    let b = val.to_bool();
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_T => {
                     let val = self.stack_pop();
-                    let b = !self.val_to_bool(val);
+                    let b = !val.to_bool();
                     self.jmp_cond(iseq, b, 5, 1);
                 }
 
@@ -1096,25 +1093,29 @@ impl VM {
                 Inst::JMP_F_GT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let b = try_get_bool!(self.eval_gt(rhs, lhs));
+                    let res = self.eval_gt(rhs, lhs);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_F_GE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let b = try_get_bool!(self.eval_ge(rhs, lhs));
+                    let res = self.eval_ge(rhs, lhs);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_F_LT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let b = try_get_bool!(self.eval_lt(rhs, lhs));
+                    let res = self.eval_lt(rhs, lhs);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_F_LE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let b = try_get_bool!(self.eval_le(rhs, lhs));
+                    let res = self.eval_le(rhs, lhs);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
 
@@ -1133,25 +1134,29 @@ impl VM {
                 Inst::JMP_F_GTI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    let b = try_get_bool!(self.eval_gti(lhs, i));
+                    let res = self.eval_gti(lhs, i);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_GEI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    let b = try_get_bool!(self.eval_gei(lhs, i));
+                    let res = self.eval_gei(lhs, i);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_LTI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    let b = try_get_bool!(self.eval_lti(lhs, i));
+                    let res = self.eval_lti(lhs, i);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_LEI => {
                     let lhs = self.stack_pop();
                     let i = self.read32(iseq, 1) as i32;
-                    let b = try_get_bool!(self.eval_lei(lhs, i));
+                    let res = self.eval_lei(lhs, i);
+                    let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
 
@@ -1865,21 +1870,6 @@ impl VM {
     }
 }
 
-macro_rules! eval_cmp_sub {
-    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
-        match ($lhs.unpack(), $rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&rhs)),
-            (RV::Float(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&(rhs as f64))),
-            (RV::Integer(lhs), RV::Float(rhs)) => Ok((lhs as f64).$op(&rhs)),
-            (RV::Float(lhs), RV::Float(rhs)) => Ok(lhs.$op(&rhs)),
-            (_, _) => {
-                let res = $vm.fallback_for_binop($id, $lhs, $rhs);
-                res.map(|x| $vm.val_to_bool(x))
-            }
-        }
-    };
-}
-
 macro_rules! eval_cmp {
     ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         if $lhs.is_packed_fixnum() {
@@ -1891,7 +1881,7 @@ macro_rules! eval_cmp {
                 let rhs = $rhs.as_packed_flonum();
                 Ok((lhs as f64).$op(&rhs))
             } else {
-                eval_cmp_sub!($vm, $rhs, $lhs, $op, $id)
+                $vm.fallback_for_binop($id, $lhs, $rhs).map(|x| x.to_bool())
             }
         } else if $lhs.is_packed_num() {
             let lhs = $lhs.as_packed_flonum();
@@ -1902,10 +1892,16 @@ macro_rules! eval_cmp {
                 let rhs = $rhs.as_packed_flonum();
                 Ok(lhs.$op(&rhs))
             } else {
-                eval_cmp_sub!($vm, $rhs, $lhs, $op, $id)
+                $vm.fallback_for_binop($id, $lhs, $rhs).map(|x| x.to_bool())
             }
         } else {
-            eval_cmp_sub!($vm, $rhs, $lhs, $op, $id)
+            match ($lhs.unpack(), $rhs.unpack()) {
+                (RV::Integer(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&rhs)),
+                (RV::Float(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&(rhs as f64))),
+                (RV::Integer(lhs), RV::Float(rhs)) => Ok((lhs as f64).$op(&rhs)),
+                (RV::Float(lhs), RV::Float(rhs)) => Ok(lhs.$op(&rhs)),
+                (_, _) => $vm.fallback_for_binop($id, $lhs, $rhs).map(|x| x.to_bool()),
+            }
         }
     };
 }
@@ -1924,7 +1920,7 @@ macro_rules! eval_cmp_i {
                 RV::Float(lhs) => Ok(lhs.$op(&($i as f64))),
                 _ => {
                     let res = $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64));
-                    res.map(|x| $vm.val_to_bool(x))
+                    res.map(|x| x.to_bool())
                 }
             }
         }
@@ -1991,7 +1987,7 @@ impl VM {
         eval_cmp_i!(self, lhs, i, lt, IdentId::_LT)
     }
 
-    pub fn eval_cmp(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    pub fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
         let res = match lhs.unpack() {
             RV::Integer(lhs) => match rhs.unpack() {
                 RV::Integer(rhs) => lhs.partial_cmp(&rhs),
@@ -2157,7 +2153,7 @@ impl VM {
         if vec.len() > 0 {
             let val = vec[0];
             for i in 1..vec.len() {
-                match self.eval_cmp(vec[i], val)? {
+                match self.eval_compare(vec[i], val)? {
                     v if v.is_nil() => {
                         let lhs = self.globals.get_class_name(val);
                         let rhs = self.globals.get_class_name(vec[i]);
@@ -2169,7 +2165,7 @@ impl VM {
                     _ => {}
                 }
             }
-            vec.sort_by(|a, b| self.eval_cmp(*b, *a).unwrap().to_ordering());
+            vec.sort_by(|a, b| self.eval_compare(*b, *a).unwrap().to_ordering());
         }
         Ok(())
     }
@@ -2196,10 +2192,6 @@ impl VM {
 // API's for handling values.
 
 impl VM {
-    pub fn val_to_bool(&self, val: Value) -> bool {
-        !val.is_nil() && !val.is_false_val() && !val.is_uninitialized()
-    }
-
     pub fn val_to_s(&mut self, val: Value) -> String {
         match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),

@@ -805,6 +805,10 @@ impl Value {
 }
 
 impl Value {
+    pub fn to_bool(&self) -> bool {
+        !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
+    }
+
     // ==
     pub fn equal(self, other: Value) -> bool {
         if self.id() == other.id() {

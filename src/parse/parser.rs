@@ -1544,7 +1544,11 @@ impl Parser {
             }
             TokenKind::Reserved(Reserved::Case) => {
                 let loc = self.prev_loc();
-                let cond = self.parse_expr()?;
+                let cond = if self.peek()?.kind != TokenKind::Reserved(Reserved::When) {
+                    Some(self.parse_expr()?)
+                } else {
+                    None
+                };
                 self.consume_term()?;
                 let mut when_ = vec![];
                 while self.consume_reserved(Reserved::When)? {
@@ -2109,6 +2113,8 @@ impl Parser {
 
     fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, RubyError> {
         match punct {
+            Punct::Plus => Ok(IdentId::_ADD),
+            Punct::Minus => Ok(IdentId::_SUB),
             Punct::LBracket => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {

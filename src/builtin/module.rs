@@ -66,7 +66,7 @@ fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut class = vm.expect_module(self_val)?;
     vm.check_args_range(args.len(), 0, 1)?;
-    let inherited_too = args.len() == 0 || vm.val_to_bool(args[0]);
+    let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
         false => {
             let v = class

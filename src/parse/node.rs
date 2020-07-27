@@ -2,6 +2,8 @@ use super::parser::LvarCollector;
 use crate::id_table::IdentId;
 use crate::util::{Annot, Loc};
 
+pub type Node = Annot<NodeKind>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     SelfValue,
@@ -17,7 +19,7 @@ pub enum NodeKind {
         end: Box<Node>,
         exclude_end: bool,
     }, // start, end, exclude_end
-    Array(NodeVec, bool),          // Vec<ELEM>, is_constant_expr
+    Array(Vec<Node>, bool),        // Vec<ELEM>, is_constant_expr
     Hash(Vec<(Node, Node)>, bool), // Vec<KEY, VALUE>, is_constant_expr
     RegExp(Vec<Node>, bool),       // Vec<STRING>, is_constant_expr
 
@@ -42,7 +44,7 @@ pub enum NodeKind {
     AssignOp(BinOp, Box<Node>, Box<Node>),
     MulAssign(Vec<Node>, Vec<Node>),
 
-    CompStmt(NodeVec),
+    CompStmt(Vec<Node>),
     If {
         cond: Box<Node>,
         then_: Box<Node>,
@@ -59,7 +61,7 @@ pub enum NodeKind {
         cond_op: bool, // true: While, false: Until
     },
     Case {
-        cond: Box<Node>,
+        cond: Option<Box<Node>>,
         when_: Vec<CaseBranch>,
         else_: Box<Node>,
     },
@@ -70,7 +72,7 @@ pub enum NodeKind {
         ensure: Box<Node>,
     },
     Proc {
-        params: NodeVec,
+        params: Vec<Node>,
         body: Box<Node>,
         lvar: LvarCollector,
     },
@@ -86,8 +88,8 @@ pub enum NodeKind {
     KeywordParam(IdentId, Box<Option<Node>>),
     BlockParam(IdentId),
 
-    MethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // id, params, body
-    SingletonMethodDef(IdentId, NodeVec, Box<Node>, LvarCollector), // singleton_class, id, params, body
+    MethodDef(IdentId, Vec<Node>, Box<Node>, LvarCollector), // id, params, body
+    SingletonMethodDef(IdentId, Vec<Node>, Box<Node>, LvarCollector), // singleton_class, id, params, body
     ClassDef {
         id: IdentId,
         superclass: Box<Node>,
@@ -105,7 +107,7 @@ pub enum NodeKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SendArgs {
-    pub args: NodeVec,
+    pub args: Vec<Node>,
     pub kw_args: Vec<(IdentId, Node)>,
     pub block: Option<Box<Node>>,
 }
@@ -175,9 +177,6 @@ pub enum UnOp {
     BitNot,
     Not,
 }
-
-pub type Node = Annot<NodeKind>;
-pub type NodeVec = Vec<Node>;
 
 impl Node {
     pub fn is_empty(&self) -> bool {
@@ -465,11 +464,14 @@ impl Node {
         )
     }
 
-    pub fn new_case(cond: Node, when_: Vec<CaseBranch>, else_: Node, loc: Loc) -> Self {
+    pub fn new_case(cond: Option<Node>, when_: Vec<CaseBranch>, else_: Node, loc: Loc) -> Self {
         let loc = loc.merge(else_.loc());
         Node::new(
             NodeKind::Case {
-                cond: Box::new(cond),
+                cond: match cond {
+                    Some(cond) => Some(Box::new(cond)),
+                    None => None,
+                },
                 when_,
                 else_: Box::new(else_),
             },
@@ -512,7 +514,7 @@ impl Node {
         Node::new(NodeKind::Yield(args), loc)
     }
 
-    pub fn new_proc(params: NodeVec, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
+    pub fn new_proc(params: Vec<Node>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
         Node::new(
             NodeKind::Proc {
