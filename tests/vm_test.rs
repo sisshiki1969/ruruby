@@ -622,6 +622,26 @@ fn case1() {
 }
 
 #[test]
+fn case_less_case() {
+    let program = "
+        i = 11
+        j = 3
+        case
+        when i == i - 11 then
+            r = 0
+        when 1 == i then
+            r = 1
+        when i == 5 then
+            r = 5
+        when j * j + 2 == i then
+            r = 11
+        end
+        assert 11, r
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn block_break() {
     let program = "
         assert(100, loop { break 100 })

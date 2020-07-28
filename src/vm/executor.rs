@@ -434,11 +434,13 @@ impl VM {
         if !self.globals.gc_enabled {
             return;
         }
-        if self.globals.allocator.is_allocated() {
-            #[cfg(feature = "perf")]
-            self.perf.get_perf(Perf::GC);
-            self.globals.gc();
+        #[cfg(not(feature = "gc-debug"))]
+        if !self.globals.allocator.is_allocated() {
+            return;
         };
+        #[cfg(feature = "perf")]
+        self.perf.get_perf(Perf::GC);
+        self.globals.gc();
     }
 
     fn unwind_context(&mut self, err: &mut RubyError) {
