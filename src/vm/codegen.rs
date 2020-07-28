@@ -106,7 +106,95 @@ impl Context {
     }
 }
 
-pub type ISeq = Vec<u8>;
+#[derive(Clone)]
+pub struct ISeq(Vec<u8>);
+
+use std::fmt;
+use std::ops::{Index, IndexMut, Range};
+impl Index<usize> for ISeq {
+    type Output = u8;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl IndexMut<usize> for ISeq {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
+    }
+}
+
+impl Index<Range<usize>> for ISeq {
+    type Output = [u8];
+
+    fn index(&self, range: Range<usize>) -> &Self::Output {
+        &self.0[range]
+    }
+}
+
+impl fmt::Debug for ISeq {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl ISeq {
+    pub fn new() -> Self {
+        ISeq(vec![])
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn ident_name(&self, pc: usize) -> String {
+        IdentId::get_name(IdentId::from(self.read32(pc))).to_string()
+    }
+
+    pub fn push(&mut self, val: u8) {
+        self.0.push(val);
+    }
+
+    pub fn read8(&self, pc: usize) -> u8 {
+        self[pc]
+    }
+
+    pub fn read16(&self, pc: usize) -> u16 {
+        let ptr = self[pc..pc + 1].as_ptr() as *const u16;
+        unsafe { *ptr }
+    }
+
+    pub fn read32(&self, pc: usize) -> u32 {
+        let ptr = self[pc..pc + 1].as_ptr() as *const u32;
+        unsafe { *ptr }
+    }
+
+    pub fn read64(&self, pc: usize) -> u64 {
+        let ptr = self[pc..pc + 1].as_ptr() as *const u64;
+        unsafe { *ptr }
+    }
+
+    pub fn read_usize(&self, pc: usize) -> usize {
+        self.read32(pc) as usize
+    }
+
+    pub fn read_id(&self, offset: usize) -> IdentId {
+        IdentId::from(self.read32(offset))
+    }
+
+    pub fn read_lvar_id(&self, offset: usize) -> LvarId {
+        LvarId::from_usize(self.read_usize(offset))
+    }
+
+    pub fn read_methodref(&self, offset: usize) -> MethodRef {
+        MethodRef::from(self.read32(offset))
+    }
+
+    pub fn read_disp(&self, offset: usize) -> i64 {
+        self.read32(offset) as i32 as i64
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ISeqPos(usize);

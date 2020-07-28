@@ -257,48 +257,6 @@ impl VM {
         self.pc = ((self.pc as i64) + inst_offset + disp) as usize;
     }
 
-    fn read16(&self, iseq: &ISeq, offset: usize) -> u16 {
-        let pc = self.pc + offset;
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u16;
-        unsafe { *ptr }
-    }
-
-    fn read32(&self, iseq: &ISeq, offset: usize) -> u32 {
-        let pc = self.pc + offset;
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
-        unsafe { *ptr }
-    }
-
-    fn read_usize(&self, iseq: &ISeq, offset: usize) -> usize {
-        self.read32(iseq, offset) as usize
-    }
-
-    fn read_id(&self, iseq: &ISeq, offset: usize) -> IdentId {
-        IdentId::from(self.read32(iseq, offset))
-    }
-
-    fn read_lvar_id(&self, iseq: &ISeq, offset: usize) -> LvarId {
-        LvarId::from_usize(self.read_usize(iseq, offset))
-    }
-
-    fn read_methodref(&self, iseq: &ISeq, offset: usize) -> MethodRef {
-        MethodRef::from(self.read32(iseq, offset))
-    }
-
-    fn read64(&self, iseq: &ISeq, offset: usize) -> u64 {
-        let pc = self.pc + offset;
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
-        unsafe { *ptr }
-    }
-
-    fn read8(&self, iseq: &ISeq, offset: usize) -> u8 {
-        iseq[self.pc + offset]
-    }
-
-    fn read_disp(&self, iseq: &ISeq, offset: usize) -> i64 {
-        self.read32(iseq, offset) as i32 as i64
-    }
-
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
         let parser = Parser::new();
         //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
@@ -519,7 +477,7 @@ impl VM {
         if cond {
             self.jump_pc(inst_offset, 0);
         } else {
-            let disp = self.read_disp(iseq, dest_offset);
+            let disp = iseq.read_disp(self.pc + dest_offset);
             self.jump_pc(inst_offset, disp);
         }
     }
@@ -635,50 +593,50 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
-                    let num = self.read64(iseq, 1);
+                    let num = iseq.read64(self.pc + 1);
                     self.pc += 9;
                     self.stack_push(Value::fixnum(num as i64));
                 }
                 Inst::PUSH_FLONUM => {
-                    let num = f64::from_bits(self.read64(iseq, 1));
+                    let num = f64::from_bits(iseq.read64(self.pc + 1));
                     self.pc += 9;
                     self.stack_push(Value::flonum(num));
                 }
                 Inst::PUSH_SYMBOL => {
-                    let id = self.read_id(iseq, 1);
+                    let id = iseq.read_id(self.pc + 1);
                     self.stack_push(Value::symbol(id));
                     self.pc += 5;
                 }
                 Inst::ADD => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = self.read32(iseq, 1);
+                    let cache = iseq.read32(self.pc + 1);
                     try_push!(self.eval_add(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_addi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = self.read32(iseq, 1);
+                    let cache = iseq.read32(self.pc + 1);
                     try_push!(self.eval_sub(lhs, rhs, cache));
                     self.pc += 5;
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_subi(lhs, i));
                     self.pc += 5;
                 }
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = self.read32(iseq, 1);
+                    let cache = iseq.read32(self.pc + 1);
                     try_push!(self.eval_mul(lhs, rhs, cache));
                     self.pc += 5;
                 }
@@ -691,7 +649,7 @@ impl VM {
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = self.read32(iseq, 1);
+                    let cache = iseq.read32(self.pc + 1);
                     try_push!(self.eval_div(lhs, rhs, cache));
                     self.pc += 5;
                 }
@@ -710,7 +668,7 @@ impl VM {
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = self.read32(iseq, 1);
+                    let cache = iseq.read32(self.pc + 1);
                     try_push!(self.eval_shl(lhs, rhs, cache));
                     self.pc += 5;
                 }
@@ -722,7 +680,7 @@ impl VM {
                 }
                 Inst::B_ANDI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_bitandi(lhs, i));
                     self.pc += 5;
                 }
@@ -734,7 +692,7 @@ impl VM {
                 }
                 Inst::B_ORI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_bitori(lhs, i));
                     self.pc += 5;
                 }
@@ -759,7 +717,7 @@ impl VM {
                 }
                 Inst::EQI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let val = Value::bool(self.eval_eqi(lhs, i));
                     self.stack_push(val);
                     self.pc += 5;
@@ -773,7 +731,7 @@ impl VM {
                 }
                 Inst::NEI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let val = Value::bool(!self.eval_eqi(lhs, i));
                     self.stack_push(val);
                     self.pc += 5;
@@ -794,7 +752,7 @@ impl VM {
                 }
                 Inst::GTI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_gti(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
@@ -806,7 +764,7 @@ impl VM {
                 }
                 Inst::GEI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_gei(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
@@ -818,7 +776,7 @@ impl VM {
                 }
                 Inst::LTI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_lti(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
@@ -830,7 +788,7 @@ impl VM {
                 }
                 Inst::LEI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     try_push!(self.eval_lei(lhs, i).map(|x| Value::bool(x)));
                     self.pc += 5;
                 }
@@ -847,7 +805,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CONCAT_STRING => {
-                    let val = match self.read32(iseq, 1) as usize {
+                    let val = match iseq.read32(self.pc + 1) as usize {
                         0 => Value::string(&self.globals.builtins, "".to_string()),
                         i => {
                             let mut res = match self.stack_pop().as_string() {
@@ -868,50 +826,50 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SET_LOCAL => {
-                    let id = self.read_lvar_id(iseq, 1);
+                    let id = iseq.read_lvar_id(self.pc + 1);
                     let val = self.stack_pop();
                     self.current_context()[id] = val;
                     self.pc += 5;
                 }
                 Inst::GET_LOCAL => {
-                    let id = self.read_lvar_id(iseq, 1);
+                    let id = iseq.read_lvar_id(self.pc + 1);
                     let val = self.current_context()[id];
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::LVAR_ADDI => {
-                    let id = self.read_lvar_id(iseq, 1);
-                    let i = self.read32(iseq, 5) as i32;
+                    let id = iseq.read_lvar_id(self.pc + 1);
+                    let i = iseq.read32(self.pc + 5) as i32;
                     let val = self.current_context()[id];
                     self.current_context()[id] = self.eval_addi(val, i)?;
                     self.pc += 9;
                 }
                 Inst::SET_DYNLOCAL => {
-                    let id = self.read_lvar_id(iseq, 1);
-                    let outer = self.read32(iseq, 5);
+                    let id = iseq.read_lvar_id(self.pc + 1);
+                    let outer = iseq.read32(self.pc + 5);
                     let val = self.stack_pop();
                     let mut cref = self.get_outer_context(outer);
                     cref[id] = val;
                     self.pc += 9;
                 }
                 Inst::GET_DYNLOCAL => {
-                    let id = self.read_lvar_id(iseq, 1);
-                    let outer = self.read32(iseq, 5);
+                    let id = iseq.read_lvar_id(self.pc + 1);
+                    let outer = iseq.read32(self.pc + 5);
                     let cref = self.get_outer_context(outer);
                     let val = cref[id];
                     self.stack_push(val);
                     self.pc += 9;
                 }
                 Inst::CHECK_LOCAL => {
-                    let id = self.read_lvar_id(iseq, 1);
-                    let outer = self.read32(iseq, 5);
+                    let id = iseq.read_lvar_id(self.pc + 1);
+                    let outer = iseq.read32(self.pc + 5);
                     let cref = self.get_outer_context(outer);
                     let val = cref[id].is_uninitialized();
                     self.stack_push(Value::bool(val));
                     self.pc += 9;
                 }
                 Inst::SET_CONST => {
-                    let id = self.read_id(iseq, 1);
+                    let id = iseq.read_id(self.pc + 1);
                     let mut parent = match self.stack_pop() {
                         v if v.is_nil() => self.class(),
                         v => v,
@@ -929,7 +887,7 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
-                    let id = self.read_id(iseq, 1);
+                    let id = iseq.read_id(self.pc + 1);
                     let val = match self.get_env_const(id) {
                         Some(val) => val,
                         None => self.get_super_const(self.class(), id)?,
@@ -938,7 +896,7 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_CONST_TOP => {
-                    let id = self.read_id(iseq, 1);
+                    let id = iseq.read_id(self.pc + 1);
                     let class = self.globals.builtins.object;
                     let val = self.get_super_const(class, id)?;
                     self.stack_push(val);
@@ -946,19 +904,19 @@ impl VM {
                 }
                 Inst::GET_SCOPE => {
                     let parent = self.stack_pop();
-                    let id = self.read_id(iseq, 1);
+                    let id = iseq.read_id(self.pc + 1);
                     let val = self.get_super_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SET_IVAR => {
-                    let var_id = self.read_id(iseq, 1);
+                    let var_id = iseq.read_id(self.pc + 1);
                     let new_val = self.stack_pop();
                     self_oref.set_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_IVAR => {
-                    let var_id = self.read_id(iseq, 1);
+                    let var_id = iseq.read_id(self.pc + 1);
                     let val = match self_oref.get_var(var_id) {
                         Some(val) => val.clone(),
                         None => Value::nil(),
@@ -967,8 +925,8 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::IVAR_ADDI => {
-                    let var_id = self.read_id(iseq, 1);
-                    let i = self.read32(iseq, 5) as i32;
+                    let var_id = iseq.read_id(self.pc + 1);
+                    let i = iseq.read32(self.pc + 5) as i32;
                     let v = self_oref
                         .var_table_mut()
                         .entry(var_id)
@@ -978,36 +936,36 @@ impl VM {
                     self.pc += 9;
                 }
                 Inst::SET_GVAR => {
-                    let var_id = self.read_id(iseq, 1);
+                    let var_id = iseq.read_id(self.pc + 1);
                     let new_val = self.stack_pop();
                     self.set_global_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_GVAR => {
-                    let var_id = self.read_id(iseq, 1);
+                    let var_id = iseq.read_id(self.pc + 1);
                     let val = self.get_global_var(var_id);
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SET_INDEX => {
-                    let arg_num = self.read_usize(iseq, 1);
+                    let arg_num = iseq.read_usize(self.pc + 1);
                     let res = self.set_index(arg_num);
                     self.try_eval(res)?;
                     self.pc += 5;
                 }
                 Inst::GET_INDEX => {
-                    let arg_num = self.read_usize(iseq, 1);
+                    let arg_num = iseq.read_usize(self.pc + 1);
                     try_push!(self.get_index(arg_num));
                     self.pc += 5;
                 }
                 Inst::OPT_SET_INDEX => {
-                    let idx = self.read32(iseq, 1);
+                    let idx = iseq.read32(self.pc + 1);
                     let res = self.opt_set_index(idx);
                     self.try_eval(res)?;
                     self.pc += 5;
                 }
                 Inst::OPT_GET_INDEX => {
-                    let idx = self.read32(iseq, 1);
+                    let idx = iseq.read32(self.pc + 1);
                     try_push!(self.opt_get_index(idx));
                     self.pc += 5;
                 }
@@ -1018,7 +976,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CONST_VAL => {
-                    let id = self.read_usize(iseq, 1);
+                    let id = iseq.read_usize(self.pc + 1);
                     let val = self.globals.const_values.get(id);
                     self.stack_push(val);
                     self.pc += 5;
@@ -1036,20 +994,20 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
-                    let arg_num = self.read_usize(iseq, 1);
+                    let arg_num = iseq.read_usize(self.pc + 1);
                     let elems = self.pop_args_to_ary(arg_num).into_vec();
                     let array = Value::array_from(&self.globals, elems);
                     self.stack_push(array);
                     self.pc += 5;
                 }
                 Inst::CREATE_PROC => {
-                    let method = self.read_methodref(iseq, 1);
+                    let method = iseq.read_methodref(self.pc + 1);
                     let proc_obj = self.create_proc(method)?;
                     self.stack_push(proc_obj);
                     self.pc += 5;
                 }
                 Inst::CREATE_HASH => {
-                    let arg_num = self.read_usize(iseq, 1);
+                    let arg_num = iseq.read_usize(self.pc + 1);
                     let key_value = self.pop_key_value_pair(arg_num);
                     let hash = Value::hash_from_map(&self.globals, key_value);
                     self.stack_push(hash);
@@ -1062,7 +1020,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::JMP => {
-                    let disp = self.read_disp(iseq, 1);
+                    let disp = iseq.read_disp(self.pc + 1);
                     if 0 < disp {
                         self.gc();
                     }
@@ -1122,40 +1080,40 @@ impl VM {
 
                 Inst::JMP_F_EQI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let b = self.eval_eqi(lhs, i);
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_NEI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let b = !self.eval_eqi(lhs, i);
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_GTI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let res = self.eval_gti(lhs, i);
                     let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_GEI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let res = self.eval_gei(lhs, i);
                     let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_LTI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let res = self.eval_lti(lhs, i);
                     let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_LEI => {
                     let lhs = self.stack_pop();
-                    let i = self.read32(iseq, 1) as i32;
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let res = self.eval_lei(lhs, i);
                     let b = self.try_get_bool(res)?;
                     self.jmp_cond(iseq, b, 9, 5);
@@ -1163,10 +1121,13 @@ impl VM {
 
                 Inst::OPT_CASE => {
                     let val = self.stack_pop();
-                    let map = self.globals.case_dispatch.get_entry(self.read32(iseq, 1));
+                    let map = self
+                        .globals
+                        .case_dispatch
+                        .get_entry(iseq.read32(self.pc + 1));
                     let disp = match map.get(&val) {
                         Some(disp) => *disp as i64,
-                        None => self.read_disp(iseq, 5),
+                        None => iseq.read_disp(self.pc + 5),
                     };
                     self.jump_pc(9, disp);
                 }
@@ -1191,15 +1152,15 @@ impl VM {
                     self.pc += 11;
                 }
                 Inst::YIELD => {
-                    let args_num = self.read32(iseq, 1) as usize;
+                    let args_num = iseq.read32(self.pc + 1) as usize;
                     let args = self.pop_args_to_ary(args_num);
                     try_push!(self.eval_yield(&args));
                     self.pc += 5;
                 }
                 Inst::DEF_CLASS => {
-                    let is_module = self.read8(iseq, 1) == 1;
-                    let id = self.read_id(iseq, 2);
-                    let method = self.read_methodref(iseq, 6);
+                    let is_module = iseq.read8(self.pc + 1) == 1;
+                    let id = iseq.read_id(self.pc + 2);
+                    let method = iseq.read_methodref(self.pc + 6);
                     let super_val = self.stack_pop();
                     let res = self.define_class(id, is_module, super_val);
                     let val = self.try_get(res)?;
@@ -1213,8 +1174,8 @@ impl VM {
                     self.class_pop();
                 }
                 Inst::DEF_METHOD => {
-                    let id = self.read_id(iseq, 1);
-                    let method = self.read_methodref(iseq, 5);
+                    let id = iseq.read_id(self.pc + 1);
+                    let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(None);
                     self.define_method(context.self_value, id, method);
@@ -1224,8 +1185,8 @@ impl VM {
                     self.pc += 9;
                 }
                 Inst::DEF_SMETHOD => {
-                    let id = self.read_id(iseq, 1);
-                    let method = self.read_methodref(iseq, 5);
+                    let id = iseq.read_id(self.pc + 1);
+                    let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(None);
                     //let _singleton = self.stack_pop();
@@ -1247,7 +1208,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::DUP => {
-                    let len = self.read_usize(iseq, 1);
+                    let len = iseq.read_usize(self.pc + 1);
                     let stack_len = self.exec_stack.len();
                     for i in stack_len - len..stack_len {
                         let val = self.exec_stack[i];
@@ -1256,7 +1217,7 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::TAKE => {
-                    let len = self.read_usize(iseq, 1);
+                    let len = iseq.read_usize(self.pc + 1);
                     let val = self.stack_pop();
                     match val.as_array() {
                         Some(info) => {
@@ -2283,11 +2244,11 @@ impl VM {
 
 impl VM {
     fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
-        let method_id = self.read_id(iseq, 1);
-        let args_num = self.read16(iseq, 5);
-        let flag = self.read16(iseq, 7);
-        let cache_slot = self.read32(iseq, 9);
-        let block = self.read32(iseq, 13);
+        let method_id = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5);
+        let flag = iseq.read16(self.pc + 7);
+        let cache_slot = iseq.read32(self.pc + 9);
+        let block = iseq.read32(self.pc + 13);
         let rec_class = receiver.get_class_object_for_method(&self.globals);
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
 
@@ -2324,9 +2285,9 @@ impl VM {
 
     fn vm_opt_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
         // No block nor keyword/block/splat arguments for OPT_SEND.
-        let method_id = self.read_id(iseq, 1);
-        let args_num = self.read16(iseq, 5);
-        let cache_slot = self.read32(iseq, 7);
+        let method_id = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5);
+        let cache_slot = iseq.read32(self.pc + 7);
         let rec_class = receiver.get_class_object_for_method(&self.globals);
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
         //let args = self.pop_args_to_ary(args_num as usize);

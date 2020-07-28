@@ -207,7 +207,7 @@ impl ISeqInfo {
             false,
             vec![],
             FxHashMap::default(),
-            vec![],
+            ISeq::new(),
             LvarCollector::new(),
             vec![],
             SourceInfoRef::empty(),

@@ -335,11 +335,11 @@ impl Inst {
     }
 
     pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: usize) -> String {
-        fn imm_i32(iseq: &Vec<u8>, pc: usize) -> String {
+        fn imm_i32(iseq: &ISeq, pc: usize) -> String {
             format!(
                 "{} {}",
                 Inst::inst_name(iseq[pc]),
-                Inst::read32(iseq, pc + 1) as i32
+                iseq.read32(pc + 1) as i32
             )
         }
         let iseq = &iseq_ref.iseq;
@@ -358,23 +358,21 @@ impl Inst {
             | Inst::OPT_SET_INDEX => imm_i32(iseq, pc),
             Inst::IVAR_ADDI => format!(
                 "IVAR_ADDI {} +{}",
-                Inst::ident_name(iseq, pc + 1),
-                Inst::read32(iseq, pc + 5) as i32
+                iseq.ident_name(pc + 1),
+                iseq.read32(pc + 5) as i32
             ),
             Inst::LVAR_ADDI => {
-                let id = Inst::read32(iseq, pc + 1) as usize;
+                let id = iseq.read32(pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
                 format!(
                     "LVAR_ADDI '{:?}' LvarId:{} +{}",
                     ident_id,
                     id,
-                    Inst::read32(iseq, pc + 5) as i32
+                    iseq.read32(pc + 5) as i32
                 )
             }
-            Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", Inst::read64(iseq, pc + 1) as i64),
-            Inst::PUSH_FLONUM => {
-                format!("PUSH_FLONUM {}", f64::from_bits(Inst::read64(iseq, pc + 1)))
-            }
+            Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", iseq.read64(pc + 1) as i64),
+            Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", f64::from_bits(iseq.read64(pc + 1))),
 
             Inst::JMP
             | Inst::JMP_F
@@ -387,7 +385,7 @@ impl Inst {
             | Inst::JMP_F_LE => format!(
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
-                pc as i32 + 5 + Inst::read32(iseq, pc + 1) as i32
+                pc as i32 + 5 + iseq.read32(pc + 1) as i32
             ),
 
             Inst::JMP_F_EQI
@@ -398,16 +396,16 @@ impl Inst {
             | Inst::JMP_F_LEI => format!(
                 "{} {} {:>05x}",
                 Inst::inst_name(iseq[pc]),
-                Inst::read32(iseq, pc + 1) as i32,
-                pc as i32 + 9 + Inst::read32(iseq, pc + 5) as i32
+                iseq.read32(pc + 1) as i32,
+                pc as i32 + 9 + iseq.read32(pc + 5) as i32
             ),
 
             Inst::OPT_CASE => format!(
                 "OPT_CASE {:>05}",
-                pc as i32 + 13 + Inst::read32(iseq, pc + 9) as i32,
+                pc as i32 + 13 + iseq.read32(pc + 9) as i32,
             ),
             Inst::SET_LOCAL | Inst::GET_LOCAL => {
-                let id = Inst::read32(iseq, pc + 1);
+                let id = iseq.read32(pc + 1);
                 let ident_name = match iseq_ref.lvar.get_name(LvarId::from_u32(id)) {
                     Some(id) => format!("{:?}", id),
                     None => "<unnamed>".to_string(),
@@ -420,8 +418,8 @@ impl Inst {
                 )
             }
             Inst::SET_DYNLOCAL | Inst::GET_DYNLOCAL => {
-                let frame = Inst::read32(iseq, pc + 5);
-                let id = Inst::read32(iseq, pc + 1);
+                let frame = iseq.read32(pc + 5);
+                let id = iseq.read32(pc + 1);
                 //let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
                 //let name = id_lock.get_ident_name(ident_id);
                 format!(
@@ -432,8 +430,8 @@ impl Inst {
                 )
             }
             Inst::CHECK_LOCAL => {
-                let frame = Inst::read32(iseq, pc + 5);
-                let id = Inst::read32(iseq, pc + 1) as usize;
+                let frame = iseq.read32(pc + 5);
+                let id = iseq.read32(pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
                 format!("CHECK_LOCAL '{:?}' outer:{} LvarId:{}", ident_id, frame, id)
             }
@@ -446,22 +444,22 @@ impl Inst {
             | Inst::SET_IVAR => format!(
                 "{} '{}'",
                 Inst::inst_name(iseq[pc]),
-                Inst::ident_name(iseq, pc + 1)
+                iseq.ident_name(pc + 1)
             ),
 
-            Inst::GET_INDEX => format!("GET_INDEX {} items", Inst::read32(iseq, pc + 1)),
-            Inst::SET_INDEX => format!("SET_INDEX {} items", Inst::read32(iseq, pc + 1)),
+            Inst::GET_INDEX => format!("GET_INDEX {} items", iseq.read32(pc + 1)),
+            Inst::SET_INDEX => format!("SET_INDEX {} items", iseq.read32(pc + 1)),
             Inst::SEND | Inst::SEND_SELF => format!(
                 "{} '{}' {} items",
                 Inst::inst_name(iseq[pc]),
-                Inst::ident_name(iseq, pc + 1),
-                Inst::read16(iseq, pc + 5)
+                iseq.ident_name(pc + 1),
+                iseq.read16(pc + 5)
             ),
             Inst::OPT_SEND | Inst::OPT_SEND_SELF => format!(
                 "{} '{}' {} items",
                 Inst::inst_name(iseq[pc]),
-                Inst::ident_name(iseq, pc + 1),
-                Inst::read16(iseq, pc + 5)
+                iseq.ident_name(pc + 1),
+                iseq.read16(pc + 5)
             ),
             Inst::CREATE_ARRAY
             | Inst::CREATE_PROC
@@ -471,48 +469,25 @@ impl Inst {
             | Inst::CONCAT_STRING => format!(
                 "{} {} items",
                 Inst::inst_name(iseq[pc]),
-                Inst::read32(iseq, pc + 1)
+                iseq.read32(pc + 1)
             ),
             Inst::CONST_VAL => {
-                let id = Inst::read32(iseq, pc + 1);
+                let id = iseq.read32(pc + 1);
                 format!("CONST_VAL {:?}", globals.const_values.get(id as usize))
             }
             Inst::DEF_CLASS => format!(
                 "DEF_CLASS {} '{}' method:{}",
-                if Inst::read8(iseq, pc + 1) == 1 {
+                if iseq.read8(pc + 1) == 1 {
                     "module"
                 } else {
                     "class"
                 },
-                Inst::ident_name(iseq, pc + 2),
-                Inst::read32(iseq, pc + 6)
+                iseq.ident_name(pc + 2),
+                iseq.read32(pc + 6)
             ),
-            Inst::DEF_METHOD => format!("DEF_METHOD '{}'", Inst::ident_name(iseq, pc + 1)),
-            Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", Inst::ident_name(iseq, pc + 1)),
+            Inst::DEF_METHOD => format!("DEF_METHOD '{}'", iseq.ident_name(pc + 1)),
+            Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", iseq.ident_name(pc + 1)),
             _ => format!("{}", Inst::inst_name(iseq[pc])),
         }
-    }
-
-    fn read64(iseq: &ISeq, pc: usize) -> u64 {
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u64;
-        unsafe { *ptr }
-    }
-
-    fn read32(iseq: &ISeq, pc: usize) -> u32 {
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u32;
-        unsafe { *ptr }
-    }
-
-    fn read16(iseq: &ISeq, pc: usize) -> u16 {
-        let ptr = iseq[pc..pc + 1].as_ptr() as *const u16;
-        unsafe { *ptr }
-    }
-
-    fn read8(iseq: &ISeq, pc: usize) -> u8 {
-        iseq[pc]
-    }
-
-    fn ident_name(iseq: &ISeq, pc: usize) -> String {
-        IdentId::get_name(IdentId::from(Inst::read32(iseq, pc))).to_string()
     }
 }
