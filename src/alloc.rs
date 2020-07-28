@@ -166,6 +166,8 @@ pub struct Allocator {
     count: usize,
     /// Flag for GC timing.
     alloc_flag: bool,
+    /// Flag for stress mode (for debug).
+    stress_flag: bool,
 }
 
 pub type AllocatorRef = Ref<Allocator>;
@@ -187,12 +189,13 @@ impl Allocator {
             free_pages: vec![],
             count: 0,
             alloc_flag: false,
+            stress_flag: false,
         };
         alloc
     }
 
     pub fn is_allocated(&self) -> bool {
-        self.alloc_flag
+        self.stress_flag || self.alloc_flag
     }
 
     /// Returns number of objects in the free list.

@@ -434,7 +434,6 @@ impl VM {
         if !self.globals.gc_enabled {
             return;
         }
-        #[cfg(not(feature = "gc-debug"))]
         if !self.globals.allocator.is_allocated() {
             return;
         };
