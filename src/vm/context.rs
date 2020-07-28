@@ -27,11 +27,7 @@ impl Index<LvarId> for Context {
 
     fn index(&self, index: LvarId) -> &Self::Output {
         let i = index.as_usize();
-        if i < LVAR_ARRAY_SIZE {
-            &self.lvar_ary[i]
-        } else {
-            &self.lvar_vec[i - LVAR_ARRAY_SIZE]
-        }
+        &self[i]
     }
 }
 
@@ -39,10 +35,12 @@ impl Index<usize> for Context {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        if index < LVAR_ARRAY_SIZE {
-            &self.lvar_ary[index]
-        } else {
-            &self.lvar_vec[index - LVAR_ARRAY_SIZE]
+        unsafe {
+            if index < LVAR_ARRAY_SIZE {
+                self.lvar_ary.get_unchecked(index)
+            } else {
+                self.lvar_vec.get_unchecked(index - LVAR_ARRAY_SIZE)
+            }
         }
     }
 }
@@ -50,20 +48,18 @@ impl Index<usize> for Context {
 impl IndexMut<LvarId> for Context {
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
         let i = index.as_usize();
-        if i < LVAR_ARRAY_SIZE {
-            &mut self.lvar_ary[i]
-        } else {
-            &mut self.lvar_vec[i - LVAR_ARRAY_SIZE]
-        }
+        &mut self[i]
     }
 }
 
 impl IndexMut<usize> for Context {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index < LVAR_ARRAY_SIZE {
-            &mut self.lvar_ary[index]
-        } else {
-            &mut self.lvar_vec[index - LVAR_ARRAY_SIZE]
+        unsafe {
+            if index < LVAR_ARRAY_SIZE {
+                self.lvar_ary.get_unchecked_mut(index)
+            } else {
+                self.lvar_vec.get_unchecked_mut(index - LVAR_ARRAY_SIZE)
+            }
         }
     }
 }
@@ -71,8 +67,6 @@ impl IndexMut<usize> for Context {
 impl GC for Context {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_value.mark(alloc);
-        //self.lvar_ary.iter().for_each(|v| v.mark(alloc));
-        //self.lvar_vec.iter().for_each(|v| v.mark(alloc));
         match self.iseq_ref {
             Some(iseq_ref) => {
                 for i in 0..iseq_ref.lvars {
