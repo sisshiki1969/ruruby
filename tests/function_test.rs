@@ -158,3 +158,19 @@ fn splat_argument() {
     "#;
     assert_script(program);
 }
+
+#[test]
+fn safe_navigation() {
+    // https://docs.ruby-lang.org/ja/latest/doc/spec=2fcall.html#block_arg
+    let program = r#"
+        a = nil
+        class C
+            def foo
+                4
+            end
+        end
+        assert(nil, a&.foo)
+        assert(4, C.new&.foo)
+    "#;
+    assert_script(program);
+}

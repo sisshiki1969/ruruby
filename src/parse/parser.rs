@@ -620,6 +620,7 @@ impl Parser {
                     receiver,
                     mut send_args,
                     completed: false,
+                    safe_nav,
                     ..
                 },
             loc,
@@ -630,7 +631,7 @@ impl Parser {
             } else {
                 send_args.block = self.parse_block()?
             };
-            let node = Node::new_send(*receiver, method, send_args, true, loc);
+            let node = Node::new_send(*receiver, method, send_args, true, safe_nav, loc);
             Ok(node)
         } else {
             // EXPR : ARG
@@ -702,6 +703,7 @@ impl Parser {
             operation,
             send_args,
             true,
+            false,
             loc,
         ))
     }
@@ -762,7 +764,7 @@ impl Parser {
             | TokenKind::InstanceVar(_)
             | TokenKind::GlobalVar(_)
             | TokenKind::Const(_, _, _)
-            | TokenKind::NumLit(_)
+            | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
             | TokenKind::OpenString(_) => Ok(true),
@@ -1032,7 +1034,7 @@ impl Parser {
         if self.consume_punct(Punct::Minus)? {
             let loc = self.prev_loc();
             match self.peek()?.kind {
-                TokenKind::NumLit(_) | TokenKind::FloatLit(_) => {
+                TokenKind::IntegerLit(_) | TokenKind::FloatLit(_) => {
                     self.restore_state();
                     let lhs = self.parse_exponent()?;
                     return Ok(lhs);
@@ -1110,6 +1112,7 @@ impl Parser {
                 node.as_method_name().unwrap(),
                 send_args,
                 true,
+                false,
                 loc,
             ))
         } else if let Some(block) = self.parse_block()? {
@@ -1124,11 +1127,90 @@ impl Parser {
                 node.as_method_name().unwrap(),
                 send_args,
                 true,
+                false,
                 loc,
             ))
         } else {
             Ok(node)
         }
+    }
+
+    /// PRIMARY-METHOD :
+    /// | PRIMARY . FNAME BLOCK => completed: true
+    /// | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
+    /// | PRIMARY . FNAME => completed: false
+    fn parse_primary_method(
+        &mut self,
+        node: Node,
+        safe_nav: bool,
+        loc: Loc,
+    ) -> Result<Node, RubyError> {
+        let tok = self.get()?;
+        let id = match &tok.kind {
+            TokenKind::Ident(s, has_suffix, _) => {
+                let name = if *has_suffix {
+                    //if self.consume_punct_no_term(Punct::Question)? {
+                    //    s.clone() + "?"
+                    //} else if self.consume_punct_no_term(Punct::Not)? {
+                    //    s.clone() + "!"
+                    //} else {
+                    s.clone()
+                //}
+                } else {
+                    s.clone()
+                };
+                self.get_ident_id(name)
+            }
+            TokenKind::Reserved(r) => {
+                let string = self.lexer.get_string_from_reserved(*r).to_owned();
+                self.get_ident_id(string)
+            }
+            TokenKind::Punct(p) => self.parse_op_definable(p)?,
+            _ => return Err(self.error_unexpected(tok.loc(), "method name must be an identifier.")),
+        };
+        let mut args = vec![];
+        let mut kw_args = vec![];
+        let mut block = None;
+        let mut completed = false;
+        if self.consume_punct_no_term(Punct::LParen)? {
+            let res = self.parse_argument_list(Punct::RParen)?;
+            args = res.args;
+            kw_args = res.kw_args;
+            block = res.block;
+            completed = true;
+        }
+        match self.parse_block()? {
+            Some(actual_block) => {
+                if block.is_some() {
+                    return Err(self.error_unexpected(
+                        actual_block.loc(),
+                        "Both block arg and actual block given.",
+                    ));
+                }
+                block = Some(actual_block);
+            }
+            None => {}
+        };
+        if block.is_some() {
+            completed = true;
+        };
+        let node = match node.kind {
+            NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, true, false, loc),
+            _ => node,
+        };
+        let send_args = SendArgs {
+            args,
+            kw_args,
+            block,
+        };
+        Ok(Node::new_send(
+            node,
+            id,
+            send_args,
+            completed,
+            safe_nav,
+            loc.merge(self.prev_loc()),
+        ))
     }
 
     fn parse_function(&mut self) -> Result<Node, RubyError> {
@@ -1161,73 +1243,9 @@ impl Parser {
         loop {
             //let tok = self.peek()?;
             node = if self.consume_punct(Punct::Dot)? {
-                // PRIMARY-METHOD :
-                // | PRIMARY . FNAME BLOCK => completed: true
-                // | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
-                // | PRIMARY . FNAME => completed: false
-                let tok = self.get()?;
-                let id = match &tok.kind {
-                    TokenKind::Ident(s, has_suffix, _) => {
-                        let name = if *has_suffix {
-                            //if self.consume_punct_no_term(Punct::Question)? {
-                            //    s.clone() + "?"
-                            //} else if self.consume_punct_no_term(Punct::Not)? {
-                            //    s.clone() + "!"
-                            //} else {
-                            s.clone()
-                        //}
-                        } else {
-                            s.clone()
-                        };
-                        self.get_ident_id(name)
-                    }
-                    TokenKind::Reserved(r) => {
-                        let string = self.lexer.get_string_from_reserved(*r).to_owned();
-                        self.get_ident_id(string)
-                    }
-                    TokenKind::Punct(p) => self.parse_op_definable(p)?,
-                    _ => {
-                        return Err(
-                            self.error_unexpected(tok.loc(), "method name must be an identifier.")
-                        )
-                    }
-                };
-                let mut args = vec![];
-                let mut kw_args = vec![];
-                let mut block = None;
-                let mut completed = false;
-                if self.consume_punct_no_term(Punct::LParen)? {
-                    let res = self.parse_argument_list(Punct::RParen)?;
-                    args = res.args;
-                    kw_args = res.kw_args;
-                    block = res.block;
-                    completed = true;
-                }
-                match self.parse_block()? {
-                    Some(actual_block) => {
-                        if block.is_some() {
-                            return Err(self.error_unexpected(
-                                actual_block.loc(),
-                                "Both block arg and actual block given.",
-                            ));
-                        }
-                        block = Some(actual_block);
-                    }
-                    None => {}
-                };
-                if block.is_some() {
-                    completed = true;
-                };
-                let node = match node.kind {
-                    NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, true, loc),
-                    _ => node,
-                };
-                let send_args = SendArgs {
-                    args,
-                    kw_args,
-                    block,
-                };
-                Node::new_send(node, id, send_args, completed, loc.merge(self.prev_loc()))
+                self.parse_primary_method(node, false, loc)?
+            } else if self.consume_punct_no_term(Punct::SafeNav)? {
+                self.parse_primary_method(node, true, loc)?
             } else if self.consume_punct_no_term(Punct::Scope)? {
                 let id = self.expect_const()?;
                 Node::new_scope(node, id, self.prev_loc())
@@ -1402,13 +1420,13 @@ impl Parser {
                 };
                 Ok(Node::new_const(id, false, loc))
             }
-            TokenKind::NumLit(num) => Ok(Node::new_integer(*num, loc)),
+            TokenKind::IntegerLit(num) => Ok(Node::new_integer(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
             TokenKind::OpenString(s) => Ok(self.parse_interporated_string_literal(s)?),
             TokenKind::Punct(punct) => match punct {
                 Punct::Minus => match self.get()?.kind {
-                    TokenKind::NumLit(num) => Ok(Node::new_integer(-num, loc)),
+                    TokenKind::IntegerLit(num) => Ok(Node::new_integer(-num, loc)),
                     TokenKind::FloatLit(num) => Ok(Node::new_float(-num, loc)),
                     _ => unreachable!(),
                 },
@@ -1440,7 +1458,7 @@ impl Parser {
                                 let node = self.parse_interporated_string_literal(&s)?;
                                 let method = self.get_ident_id("to_sym");
                                 let loc = symbol_loc.merge(node.loc());
-                                return Ok(Node::new_send_noarg(node, method, true, loc));
+                                return Ok(Node::new_send_noarg(node, method, true, false, loc));
                             }
                             return Err(
                                 self.error_unexpected(symbol_loc, "Expect identifier or string.")
@@ -1675,7 +1693,7 @@ impl Parser {
             TokenKind::Ident(_, _, _)
             | TokenKind::InstanceVar(_)
             | TokenKind::Const(_, _, _)
-            | TokenKind::NumLit(_)
+            | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
             | TokenKind::OpenString(_) => Ok(true),
@@ -1775,13 +1793,26 @@ impl Parser {
     fn parse_percent_notation(&mut self) -> Result<Node, RubyError> {
         let tok = self.lexer.lex_percent_notation()?;
         let loc = tok.loc;
-        if let TokenKind::PercentNotation(_kind, content) = tok.kind {
-            let ary = content
-                .split(' ')
-                .map(|x| Node::new_string(x.to_string(), loc))
-                .rev()
-                .collect();
-            Ok(Node::new_array(ary, tok.loc))
+        if let TokenKind::PercentNotation(kind, content) = tok.kind {
+            match kind {
+                'w' => {
+                    let ary = content
+                        .split(' ')
+                        .map(|x| Node::new_string(x.to_string(), loc))
+                        .rev()
+                        .collect();
+                    Ok(Node::new_array(ary, tok.loc))
+                }
+                'i' => {
+                    let ary = content
+                        .split(' ')
+                        .map(|x| Node::new_symbol(IdentId::get_id(x), loc))
+                        .rev()
+                        .collect();
+                    Ok(Node::new_array(ary, tok.loc))
+                }
+                _ => return Err(self.error_unexpected(loc, "Unsupported % notation.")),
+            }
         } else {
             panic!();
         }

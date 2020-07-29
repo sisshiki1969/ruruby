@@ -243,12 +243,9 @@ impl Lexer {
                 return self.lex_number_literal(ch);
             } else if ch.is_ascii_punctuation() {
                 match ch {
-                    '#' => {
-                        self.goto_eol();
-                    }
-                    '"' => {
-                        return self.lex_string_literal_double();
-                    }
+                    '#' => self.goto_eol(),
+                    '"' => return self.lex_string_literal_double(),
+                    '\'' => return self.lex_string_literal_single(),
                     ';' => return Ok(self.new_punct(Punct::Semi)),
                     ':' => {
                         if self.consume(':') {
@@ -386,6 +383,8 @@ impl Lexer {
                             return Ok(self.new_punct(Punct::LAnd));
                         } else if self.consume('=') {
                             return Ok(self.new_punct(Punct::AssignOp(BinOp::BitAnd)));
+                        } else if self.consume('.') {
+                            return Ok(self.new_punct(Punct::SafeNav));
                         } else {
                             return Ok(self.new_punct(Punct::BitAnd));
                         }
@@ -613,7 +612,7 @@ impl Lexer {
         Ok(self.new_numlit(val as i64))
     }
 
-    /// Read string literal
+    /// Read string literal ("..")
     fn lex_string_literal_double(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
@@ -625,6 +624,26 @@ impl Lexer {
                         return Ok(self.new_open_dq(s));
                     } else {
                         s.push('#');
+                    }
+                }
+                c => s.push(c),
+            }
+        }
+    }
+
+    /// Read string literal {'..'}
+    fn lex_string_literal_single(&mut self) -> Result<Token, RubyError> {
+        let mut s = "".to_string();
+        loop {
+            match self.get()? {
+                '\'' => return Ok(self.new_stringlit(s)),
+                '\\' => {
+                    let c = self.get()?;
+                    if c == '\'' {
+                        s.push('\'');
+                    } else {
+                        s.push('\\');
+                        s.push(c);
                     }
                 }
                 c => s.push(c),
@@ -716,19 +735,25 @@ impl Lexer {
     }
 
     pub fn lex_percent_notation(&mut self) -> Result<Token, RubyError> {
-        if self.consume('w') {
-            let mut s = "".to_string();
-            if !self.consume('(') {
-                return Err(self.error_unexpected(self.pos));
+        let kind = match self.get()? {
+            'w' => 'w',
+            'i' => 'i',
+            _ => return Err(self.error_unexpected(self.pos)),
+        };
+        let delimiter = self.get()?;
+        let term = match delimiter {
+            '(' => ')',
+            '{' => '}',
+            '[' => ']',
+            _ => return Err(self.error_unexpected(self.pos)),
+        };
+
+        let mut s = String::new();
+        loop {
+            match self.get()? {
+                ch if ch == term => return Ok(self.new_percent(kind, s)),
+                ch => s.push(ch),
             }
-            loop {
-                match self.get()? {
-                    ')' => return Ok(self.new_percent('w', s)),
-                    ch => s.push(ch),
-                }
-            }
-        } else {
-            return Err(self.error_unexpected(self.pos));
         }
     }
 

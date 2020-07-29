@@ -68,6 +68,12 @@ fn string_lit1() {
 }
 
 #[test]
+fn string_lit2() {
+    let program = r##"assert("\"ruby\\t is\\n 'great'\"", '"ruby\t is\n \'great\'"')"##;
+    assert_script(program);
+}
+
+#[test]
 fn interpolated_string_lit1() {
     let program = r###"
         x = 20
@@ -137,6 +143,7 @@ fn lambda_literal() {
 fn percent_notation() {
     let program = r#"
         assert(%w(We are the champions), ["We", "are", "the", "champions"])
+        assert(%i(We are the champions), [:"We", :"are", :"the", :"champions"])
     "#;
     assert_script(program);
 }

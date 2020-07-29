@@ -102,6 +102,7 @@ pub enum NodeKind {
         method: IdentId,
         send_args: SendArgs,
         completed: bool,
+        safe_nav: bool,
     }, //receiver, method_name, args
 }
 
@@ -405,6 +406,7 @@ impl Node {
         method: IdentId,
         mut send_args: SendArgs,
         completed: bool,
+        safe_nav: bool,
         loc: Loc,
     ) -> Self {
         let loc = match (send_args.args.last(), &send_args.block) {
@@ -418,12 +420,19 @@ impl Node {
                 method,
                 send_args,
                 completed,
+                safe_nav,
             },
             loc,
         )
     }
 
-    pub fn new_send_noarg(receiver: Node, method: IdentId, completed: bool, loc: Loc) -> Self {
+    pub fn new_send_noarg(
+        receiver: Node,
+        method: IdentId,
+        completed: bool,
+        safe_nav: bool,
+        loc: Loc,
+    ) -> Self {
         let send_args = SendArgs {
             args: vec![],
             kw_args: vec![],
@@ -435,6 +444,7 @@ impl Node {
                 method,
                 send_args,
                 completed,
+                safe_nav,
             },
             loc,
         )

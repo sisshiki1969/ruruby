@@ -1665,6 +1665,7 @@ impl Codegen {
                 receiver,
                 method,
                 send_args,
+                safe_nav,
                 ..
             } => {
                 let loc = self.loc;
@@ -1718,8 +1719,18 @@ impl Codegen {
                         self.gen_opt_send_self(globals, iseq, *method, send_args.args.len());
                     } else {
                         self.gen(globals, iseq, receiver, true)?;
-                        self.loc = loc;
-                        self.gen_opt_send(globals, iseq, *method, send_args.args.len());
+                        if *safe_nav {
+                            self.gen_dup(iseq, 1);
+                            self.gen_push_nil(iseq);
+                            iseq.push(Inst::NE);
+                            let src = self.gen_jmp_if_f(iseq);
+                            self.loc = loc;
+                            self.gen_opt_send(globals, iseq, *method, send_args.args.len());
+                            Codegen::write_disp_from_cur(iseq, src);
+                        } else {
+                            self.loc = loc;
+                            self.gen_opt_send(globals, iseq, *method, send_args.args.len());
+                        }
                     }
                 } else {
                     if NodeKind::SelfValue == receiver.kind {

@@ -40,7 +40,7 @@ pub enum TokenKind {
     InstanceVar(String),
     GlobalVar(String),
     Const(String, bool, bool),
-    NumLit(i64),
+    IntegerLit(i64),
     FloatLit(f64),
     StringLit(String),
     Reserved(Reserved),
@@ -132,6 +132,7 @@ pub enum Punct {
     LAnd,
     LOr,
     Match,
+    SafeNav,
 
     Backslash,
     Arrow,
@@ -177,7 +178,7 @@ impl Token {
     }
 
     pub fn new_numlit(num: i64, loc: Loc) -> Self {
-        Annot::new(TokenKind::NumLit(num), loc)
+        Annot::new(TokenKind::IntegerLit(num), loc)
     }
 
     pub fn new_floatlit(num: f64, loc: Loc) -> Self {
