@@ -11,7 +11,6 @@ pub struct FiberInfo {
     pub kind: FiberKind,
     rec: Receiver<VMResult>,
     tx: SyncSender<FiberMsg>,
-    pub handle: Option<thread::JoinHandle<()>>,
 }
 
 impl PartialEq for FiberInfo {
@@ -68,7 +67,6 @@ impl FiberInfo {
             kind: FiberKind::Fiber(context),
             rec,
             tx,
-            handle: None,
         }
     }
 
@@ -85,20 +83,25 @@ impl FiberInfo {
             kind: FiberKind::Enum(receiver, method_id, args),
             rec,
             tx,
-            handle: None,
         }
     }
 
     pub fn free(&mut self) {
-        self.vm.free();
-        match self.handle.take() {
-            Some(h) => h.join().unwrap(),
+        match self.vm.handle.take() {
+            // FiberState::Running or DEAD
+            Some(h) => {
+                let _id = h.thread().id();
+                if !self.vm.is_dead() {
+                    let _ = self.tx.send(FiberMsg::Terminate);
+                }
+                h.join().unwrap();
+                #[cfg(debug_assertions)]
+                eprintln!("fiber disposed {:?}", _id);
+            }
+            // FiberState::Created
             None => {}
-        }
-        /*match &mut self.inner {
-            FiberKind::Ruby(c) => c.free(),
-            _ => {}
-        }*/
+        };
+        self.vm.free();
     }
 
     /// This BuiltinFunc is called in the fiber thread of a enumerator.
@@ -132,14 +135,15 @@ impl FiberInfo {
                 return Err(current_vm.error_fiber("Dead fiber called."));
             }
             FiberState::Created => {
-                self.vm.fiberstate_running();
                 #[cfg(feature = "perf")]
                 current_vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 println!("===> resume(spawn)");
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
                 let fiber_kind = self.kind.clone();
+                //let builder = thread::Builder::new().stack_size(1024 * 1024);
                 let join = thread::spawn(move || {
+                    fiber_vm.fiberstate_running();
                     #[cfg(debug_assertions)]
                     eprintln!("running {:?}", std::thread::current().id());
                     fiber_vm.set_allocator();
@@ -153,19 +157,34 @@ impl FiberInfo {
                     eprintln!("finished {:?} {:?}", std::thread::current().id(), res);
                     // If the fiber was finished, the fiber becomes DEAD.
                     // Return a value on the stack top to the parent fiber.
-                    fiber_vm.fiberstate_dead();
                     #[cfg(feature = "trace")]
                     println!("<=== yield {:?} and terminate fiber.", res);
                     let res = match res {
                         Err(err) => match err.kind {
                             RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
+                            RubyErrorKind::RuntimeErr { kind, .. }
+                                if kind == RuntimeErrKind::Fiber =>
+                            {
+                                #[cfg(feature = "perf")]
+                                match &fiber_vm.parent_fiber {
+                                    Some(ParentFiberInfo { mut parent, .. }) => {
+                                        parent.perf.add(&fiber_vm.perf);
+                                    }
+                                    None => {}
+                                };
+                                #[cfg(debug_assertions)]
+                                eprintln!("killed {:?}", std::thread::current().id());
+                                fiber_vm.fiberstate_dead();
+                                return;
+                            }
                             _ => Err(err),
                         },
                         res => res,
                     };
+                    fiber_vm.fiberstate_dead();
                     match &fiber_vm.parent_fiber {
                         Some(ParentFiberInfo { tx, .. }) => {
-                            tx.send(res).unwrap();
+                            let _ = tx.send(res);
                         }
                         None => unreachable!(),
                     };
@@ -176,10 +195,12 @@ impl FiberInfo {
                         }
                         None => {}
                     };
+                    #[cfg(debug_assertions)]
+                    eprintln!("dead {:?}", std::thread::current().id());
                 });
-                self.handle = Some(join);
-                // Wait for fiber.resume.
+                // Wait for Fiber.yield.
                 let res = self.rec.recv().unwrap();
+                self.vm.handle = Some(join);
                 #[cfg(feature = "perf")]
                 current_vm.perf.get_perf_no_count(inst);
                 res
@@ -191,7 +212,7 @@ impl FiberInfo {
                 println!("===> resume");
                 //eprintln!("resume {:?}", VMRef::from_ref(&self.vm));
                 self.tx.send(FiberMsg::Resume).unwrap();
-                // Wait for fiber.resume.
+                // Wait for Fiber.yield.
                 let res = self.rec.recv().unwrap();
                 #[cfg(feature = "perf")]
                 current_vm.perf.get_perf_no_count(inst);

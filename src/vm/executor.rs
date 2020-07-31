@@ -5,6 +5,7 @@ use crate::*;
 use super::perf::*;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, SyncSender};
+use std::thread;
 use vm_inst::*;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
@@ -23,8 +24,8 @@ pub struct VM {
     temp_stack: Vec<Value>,
     exception: bool,
     pc: usize,
-    //gc_counter: usize,
     pub parent_fiber: Option<ParentFiberInfo>,
+    pub handle: Option<thread::JoinHandle<()>>,
     #[cfg(feature = "perf")]
     pub perf: Perf,
 }
@@ -92,6 +93,7 @@ impl VM {
             pc: 0,
             //gc_counter: 0,
             parent_fiber: None,
+            handle: None,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
@@ -110,6 +112,7 @@ impl VM {
             exception: false,
             pc: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
+            handle: None,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
@@ -2513,7 +2516,10 @@ impl VM {
 
                 tx.send(Ok(val)).unwrap();
                 // Wait for fiber's response
-                rx.recv().unwrap();
+                match rx.recv() {
+                    Ok(FiberMsg::Resume) => {}
+                    _ => return Err(self.error_fiber("terminated")),
+                }
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(_inst);
                 // TODO: this return value is not correct. The arg og Fiber#resume should be returned.

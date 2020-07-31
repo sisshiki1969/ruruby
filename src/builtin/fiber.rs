@@ -103,4 +103,37 @@ mod test {
         "#;
         assert_script(program);
     }
+
+    #[test]
+    fn fiber_gc_test1() {
+        let program = r#"
+        10000.times do |x|
+            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+        end
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn fiber_gc_test2() {
+        let program = r#"
+        10000.times do |x|
+            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f.resume
+        end
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn fiber_gc_test3() {
+        let program = r#"
+        10000.times do |x|
+            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f.resume
+            f.resume
+        end
+        "#;
+        assert_script(program);
+    }
 }
