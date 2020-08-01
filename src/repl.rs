@@ -16,6 +16,8 @@ pub fn repl_vm() {
     println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
     println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
     println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
+    println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
+    println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
     let mut rl = Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();

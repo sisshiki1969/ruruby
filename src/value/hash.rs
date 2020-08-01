@@ -95,7 +95,7 @@ impl PartialEq for HashKey {
                 (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
                 (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
                 (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
-                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => **lhs == **rhs,
+                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs == *rhs,
                 (ObjKind::Invalid, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 (_, ObjKind::Invalid) => panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs),
                 _ => lhs.kind == rhs.kind,

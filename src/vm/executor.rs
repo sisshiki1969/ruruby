@@ -2522,7 +2522,7 @@ impl VM {
                 }
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(_inst);
-                // TODO: this return value is not correct. The arg og Fiber#resume should be returned.
+                // TODO: this return value is not correct. The arg of Fiber#resume should be returned.
                 Ok(Value::nil())
             }
         }

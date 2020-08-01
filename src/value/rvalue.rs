@@ -17,13 +17,13 @@ pub enum ObjKind {
     Class(ClassRef),
     Module(ClassRef),
     String(RString),
-    Array(Box<ArrayInfo>),
+    Array(ArrayInfo),
     Range(RangeInfo),
     Splat(Value), // internal use only.
     Hash(Box<HashInfo>),
-    Proc(Box<ProcInfo>),
+    Proc(ProcInfo),
     Regexp(RegexpInfo),
-    Method(Box<MethodObjInfo>),
+    Method(MethodObjInfo),
     Fiber(Box<FiberInfo>),
     Enumerator(Box<FiberInfo>),
 }
@@ -276,7 +276,7 @@ impl RValue {
         RValue {
             class: globals.builtins.array,
             var_table: None,
-            kind: ObjKind::Array(Box::new(array_info)),
+            kind: ObjKind::Array(array_info),
         }
     }
 
@@ -316,7 +316,7 @@ impl RValue {
         RValue {
             class: globals.builtins.procobj,
             var_table: None,
-            kind: ObjKind::Proc(Box::new(proc_info)),
+            kind: ObjKind::Proc(proc_info),
         }
     }
 
@@ -324,7 +324,7 @@ impl RValue {
         RValue {
             class: globals.builtins.method,
             var_table: None,
-            kind: ObjKind::Method(Box::new(method_info)),
+            kind: ObjKind::Method(method_info),
         }
     }
 
