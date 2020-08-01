@@ -412,25 +412,15 @@ impl VM {
 
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {
         let res = match err.kind {
-            RubyErrorKind::MethodReturn(val) => {
-                // Catch MethodReturn if this context is the target.
-                let iseq = self.current_context().iseq_ref;
-                if iseq.is_some() && iseq.unwrap().is_method() {
-                    #[cfg(feature = "trace")]
-                    println!("<--- METHOD_RETURN Ok({:?})", val);
-                    Ok(val)
-                } else {
-                    self.unwind_context(&mut err);
-                    #[cfg(feature = "trace")]
-                    println!("<--- METHOD_RETURN");
-                    Err(err)
-                }
+            RubyErrorKind::BlockReturn(val) => Ok(val),
+            RubyErrorKind::MethodReturn(val)
+                if self.current_context().iseq_ref.unwrap().is_method() =>
+            {
+                Ok(val)
             }
             _ => {
                 //self.dump_context();
                 self.unwind_context(&mut err);
-                #[cfg(feature = "trace")]
-                println!("<--- Err({:?})", err.kind);
                 Err(err)
             }
         };
@@ -441,10 +431,7 @@ impl VM {
     fn try_get(&mut self, expr: VMResult) -> VMResult {
         match expr {
             Ok(val) => Ok(val),
-            Err(err) => match err.kind {
-                RubyErrorKind::BlockReturn(val) => Ok(val),
-                _ => self.handle_error(err),
-            },
+            Err(err) => self.handle_error(err),
         }
     }
 
@@ -452,12 +439,9 @@ impl VM {
     fn try_eval(&mut self, expr: Result<(), RubyError>) -> Result<(), RubyError> {
         match expr {
             Ok(_) => Ok(()),
-            Err(err) => match err.kind {
-                RubyErrorKind::BlockReturn(_) => Ok(()),
-                _ => match self.handle_error(err) {
-                    Ok(_) => Ok(()),
-                    Err(err) => Err(err),
-                },
+            Err(err) => match self.handle_error(err) {
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
             },
         }
     }
@@ -466,12 +450,9 @@ impl VM {
     fn try_get_bool(&mut self, expr: Result<bool, RubyError>) -> Result<bool, RubyError> {
         match expr {
             Ok(b) => Ok(b),
-            Err(err) => match err.kind {
-                RubyErrorKind::BlockReturn(val) => Ok(val.to_bool()),
-                _ => match self.handle_error(err) {
-                    Ok(res) => Ok(res.to_bool()),
-                    Err(err) => Err(err),
-                },
+            Err(err) => match self.handle_error(err) {
+                Ok(res) => Ok(res.to_bool()),
+                Err(err) => Err(err),
             },
         }
     }
@@ -490,17 +471,26 @@ impl VM {
         let pc = self.pc;
         self.context_push(context);
         self.pc = 0;
+        #[cfg(feature = "trace")]
+        {
+            print!("--->");
+            println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
+        }
         match self.run_context_main(context) {
             Ok(val) => {
                 self.context_pop().unwrap();
                 #[cfg(debug_assertions)]
                 assert_eq!(stack_len, self.exec_stack.len());
                 self.pc = pc;
+                #[cfg(feature = "trace")]
+                println!("<--- Ok({:?})", val);
                 Ok(val)
             }
             Err(err) => {
                 self.exec_stack.truncate(stack_len);
                 self.pc = pc;
+                #[cfg(feature = "trace")]
+                println!("<--- Err({:?})", err.kind);
                 Err(err)
             }
         }
@@ -508,16 +498,6 @@ impl VM {
 
     /// Main routine for VM execution.
     fn run_context_main(&mut self, context: ContextRef) -> VMResult {
-        #[cfg(feature = "trace")]
-        {
-            if self.parent_fiber.is_some() {
-                print!("===>");
-            } else {
-                print!("--->");
-            }
-            println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
-        }
-
         let iseq = &context.iseq_ref.unwrap().iseq;
         let self_value = context.self_value;
         let self_oref = self_value.rvalue_mut();
@@ -554,8 +534,6 @@ impl VM {
                     // - `return` in method.
                     // - `next` in block AND outer of loops.
                     let val = self.stack_pop();
-                    #[cfg(feature = "trace")]
-                    println!("<--- Ok({:?})", val);
                     return Ok(val);
                 }
                 Inst::BREAK => {
@@ -565,8 +543,6 @@ impl VM {
                     let val = self.stack_pop();
                     let err = self.error_block_return(val);
                     self.context_pop().unwrap();
-                    #[cfg(feature = "trace")]
-                    println!("<--- Err({:?})", err.kind);
                     return Err(err);
                 }
                 Inst::MRETURN => {
@@ -576,8 +552,6 @@ impl VM {
                     let val = self.stack_pop();
                     let err = self.error_method_return(val);
                     self.context_pop().unwrap();
-                    #[cfg(feature = "trace")]
-                    println!("<--- Err({:?})", err.kind);
                     return Err(err);
                 }
                 Inst::PUSH_NIL => {
