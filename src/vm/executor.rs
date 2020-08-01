@@ -519,7 +519,8 @@ impl VM {
         }
 
         let iseq = &context.iseq_ref.unwrap().iseq;
-        let self_oref = context.self_value.rvalue_mut();
+        let self_value = context.self_value;
+        let self_oref = self_value.rvalue_mut();
         self.gc();
 
         /// Evaluate expr, and push return value to stack.
@@ -592,7 +593,7 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::PUSH_SELF => {
-                    self.stack_push(context.self_value);
+                    self.stack_push(self_value);
                     self.pc += 1;
                 }
                 Inst::PUSH_FIXNUM => {
@@ -1140,8 +1141,7 @@ impl VM {
                     self.pc += 17;
                 }
                 Inst::SEND_SELF => {
-                    let receiver = context.self_value;
-                    try_push!(self.vm_send(iseq, receiver));
+                    try_push!(self.vm_send(iseq, self_value));
                     self.pc += 17;
                 }
                 Inst::OPT_SEND => {
@@ -1150,8 +1150,7 @@ impl VM {
                     self.pc += 11;
                 }
                 Inst::OPT_SEND_SELF => {
-                    let receiver = context.self_value;
-                    try_push!(self.vm_opt_send(iseq, receiver));
+                    try_push!(self.vm_opt_send(iseq, self_value));
                     self.pc += 11;
                 }
                 Inst::YIELD => {
@@ -1181,9 +1180,9 @@ impl VM {
                     let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(None);
-                    self.define_method(context.self_value, id, method);
+                    self.define_method(self_value, id, method);
                     if self.define_mode().module_function {
-                        self.define_singleton_method(context.self_value, id, method)?;
+                        self.define_singleton_method(self_value, id, method)?;
                     };
                     self.pc += 9;
                 }
@@ -1193,9 +1192,9 @@ impl VM {
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(None);
                     //let _singleton = self.stack_pop();
-                    self.define_singleton_method(context.self_value, id, method)?;
+                    self.define_singleton_method(self_value, id, method)?;
                     if self.define_mode().module_function {
-                        self.define_method(context.self_value, id, method);
+                        self.define_method(self_value, id, method);
                     };
                     self.pc += 9;
                 }
