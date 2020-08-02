@@ -167,6 +167,10 @@ impl VM {
         self.fiber_state == FiberState::Running
     }
 
+    pub fn is_method(&self) -> bool {
+        self.current_context().iseq_ref.unwrap().is_method()
+    }
+
     pub fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
@@ -413,11 +417,7 @@ impl VM {
     fn handle_error(&mut self, mut err: RubyError) -> VMResult {
         let res = match err.kind {
             RubyErrorKind::BlockReturn(val) => Ok(val),
-            RubyErrorKind::MethodReturn(val)
-                if self.current_context().iseq_ref.unwrap().is_method() =>
-            {
-                Ok(val)
-            }
+            RubyErrorKind::MethodReturn(val) if self.is_method() => Ok(val),
             _ => {
                 //self.dump_context();
                 self.unwind_context(&mut err);
@@ -425,14 +425,6 @@ impl VM {
             }
         };
         return res;
-    }
-
-    /// Evaluate expr, and return the value.
-    fn try_get(&mut self, expr: VMResult) -> VMResult {
-        match expr {
-            Ok(val) => Ok(val),
-            Err(err) => self.handle_error(err),
-        }
     }
 
     /// Evaluate expr. Stack is not changed.
@@ -1138,9 +1130,7 @@ impl VM {
                     let id = iseq.read_id(self.pc + 2);
                     let method = iseq.read_methodref(self.pc + 6);
                     let super_val = self.stack_pop();
-                    let res = self.define_class(id, is_module, super_val);
-                    let val = self.try_get(res)?;
-
+                    let val = self.define_class(id, is_module, super_val)?;
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(val);
@@ -2059,13 +2049,13 @@ impl VM {
                         if is_module { "module" } else { "class" },
                     )));
                 };
-                let classref = self.expect_module(val.clone())?;
+                let classref = self.expect_module(val)?;
                 if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                     return Err(
                         self.error_type(format!("superclass mismatch for class {:?}.", id,))
                     );
                 };
-                val.clone()
+                val
             }
             None => {
                 let super_val = if super_val.is_nil() {
