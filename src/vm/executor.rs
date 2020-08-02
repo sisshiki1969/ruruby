@@ -260,8 +260,8 @@ impl VM {
         self.class_context.last_mut().unwrap().1.module_function = flag;
     }
 
-    pub fn jump_pc(&mut self, inst_offset: i64, disp: i64) {
-        self.pc = ((self.pc as i64) + inst_offset + disp) as usize;
+    pub fn jump_pc(&mut self, inst_offset: usize, disp: i64) {
+        self.pc = (((self.pc + inst_offset) as i64) + disp) as usize;
     }
 
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
@@ -427,31 +427,9 @@ impl VM {
         return res;
     }
 
-    /// Evaluate expr. Stack is not changed.
-    fn try_eval(&mut self, expr: Result<(), RubyError>) -> Result<(), RubyError> {
-        match expr {
-            Ok(_) => Ok(()),
-            Err(err) => match self.handle_error(err) {
-                Ok(_) => Ok(()),
-                Err(err) => Err(err),
-            },
-        }
-    }
-
-    /// Evaluate expr, and return value.
-    fn try_get_bool(&mut self, expr: Result<bool, RubyError>) -> Result<bool, RubyError> {
-        match expr {
-            Ok(b) => Ok(b),
-            Err(err) => match self.handle_error(err) {
-                Ok(res) => Ok(res.to_bool()),
-                Err(err) => Err(err),
-            },
-        }
-    }
-
-    fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: i64, dest_offset: usize) {
+    fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: usize, dest_offset: usize) {
         if cond {
-            self.jump_pc(inst_offset, 0);
+            self.pc += inst_offset;
         } else {
             let disp = iseq.read_disp(self.pc + dest_offset);
             self.jump_pc(inst_offset, disp);
@@ -581,100 +559,116 @@ impl VM {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let cache = iseq.read32(self.pc + 1);
-                    try_push!(self.eval_add(lhs, rhs, cache));
+                    let val = self.eval_add(lhs, rhs, cache)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_addi(lhs, i));
+                    let val = self.eval_addi(lhs, i)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let cache = iseq.read32(self.pc + 1);
-                    try_push!(self.eval_sub(lhs, rhs, cache));
+                    let val = self.eval_sub(lhs, rhs, cache)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_subi(lhs, i));
+                    let val = self.eval_subi(lhs, i)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let cache = iseq.read32(self.pc + 1);
-                    try_push!(self.eval_mul(lhs, rhs, cache));
+                    let val = self.eval_mul(lhs, rhs, cache)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::POW => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_exp(lhs, rhs));
+                    let val = self.eval_exp(lhs, rhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let cache = iseq.read32(self.pc + 1);
-                    try_push!(self.eval_div(lhs, rhs, cache));
+                    let val = self.eval_div(lhs, rhs, cache)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::REM => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_rem(lhs, rhs));
+                    let val = self.eval_rem(lhs, rhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::SHR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_shr(lhs, rhs));
+                    let val = self.eval_shr(lhs, rhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
                     let cache = iseq.read32(self.pc + 1);
-                    try_push!(self.eval_shl(lhs, rhs, cache));
+                    let val = self.eval_shl(lhs, rhs, cache)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::BAND => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_bitand(lhs, rhs));
+                    let val = self.eval_bitand(lhs, rhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::B_ANDI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_bitandi(lhs, i));
+                    let val = self.eval_bitandi(lhs, i)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::BOR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_bitor(lhs, rhs));
+                    let val = self.eval_bitor(lhs, rhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::B_ORI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_bitori(lhs, i));
+                    let val = self.eval_bitori(lhs, i)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::BXOR => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    try_push!(self.eval_bitxor(lhs, rhs));
+                    let val = self.eval_bitxor(lhs, rhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::BNOT => {
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_bitnot(lhs));
+                    let val = self.eval_bitnot(lhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
 
@@ -717,55 +711,64 @@ impl VM {
                 Inst::GT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_gt(rhs, lhs).map(|x| Value::bool(x)));
+                    let val = self.eval_gt(rhs, lhs).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::GTI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_gti(lhs, i).map(|x| Value::bool(x)));
+                    let val = self.eval_gti(lhs, i).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::GE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_ge(rhs, lhs).map(|x| Value::bool(x)));
+                    let val = self.eval_ge(rhs, lhs).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::GEI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_gei(lhs, i).map(|x| Value::bool(x)));
+                    let val = self.eval_gei(lhs, i).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::LT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_lt(rhs, lhs).map(|x| Value::bool(x)));
+                    let val = self.eval_lt(rhs, lhs).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::LTI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_lti(lhs, i).map(|x| Value::bool(x)));
+                    let val = self.eval_lti(lhs, i).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::LE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_le(rhs, lhs).map(|x| Value::bool(x)));
+                    let val = self.eval_le(rhs, lhs).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::LEI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    try_push!(self.eval_lei(lhs, i).map(|x| Value::bool(x)));
+                    let val = self.eval_lei(lhs, i).map(|x| Value::bool(x))?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::CMP => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    try_push!(self.eval_compare(rhs, lhs));
+                    let val = self.eval_compare(rhs, lhs)?;
+                    self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::NOT => {
@@ -919,24 +922,24 @@ impl VM {
                 }
                 Inst::SET_INDEX => {
                     let arg_num = iseq.read_usize(self.pc + 1);
-                    let res = self.set_index(arg_num);
-                    self.try_eval(res)?;
+                    self.set_index(arg_num)?;
                     self.pc += 5;
                 }
                 Inst::GET_INDEX => {
                     let arg_num = iseq.read_usize(self.pc + 1);
-                    try_push!(self.get_index(arg_num));
+                    let val = self.get_index(arg_num)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::OPT_SET_INDEX => {
                     let idx = iseq.read32(self.pc + 1);
-                    let res = self.opt_set_index(idx);
-                    self.try_eval(res)?;
+                    self.opt_set_index(idx)?;
                     self.pc += 5;
                 }
                 Inst::OPT_GET_INDEX => {
                     let idx = iseq.read32(self.pc + 1);
-                    try_push!(self.opt_get_index(idx));
+                    let val = self.opt_get_index(idx)?;
+                    self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::SPLAT => {
@@ -1022,29 +1025,25 @@ impl VM {
                 Inst::JMP_F_GT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let res = self.eval_gt(rhs, lhs);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_gt(rhs, lhs)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_F_GE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let res = self.eval_ge(rhs, lhs);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_ge(rhs, lhs)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_F_LT => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let res = self.eval_lt(rhs, lhs);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_lt(rhs, lhs)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
                 Inst::JMP_F_LE => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let res = self.eval_le(rhs, lhs);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_le(rhs, lhs)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
 
@@ -1063,29 +1062,25 @@ impl VM {
                 Inst::JMP_F_GTI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    let res = self.eval_gti(lhs, i);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_gti(lhs, i)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_GEI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    let res = self.eval_gei(lhs, i);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_gei(lhs, i)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_LTI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    let res = self.eval_lti(lhs, i);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_lti(lhs, i)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
                 Inst::JMP_F_LEI => {
                     let lhs = self.stack_pop();
                     let i = iseq.read32(self.pc + 1) as i32;
-                    let res = self.eval_lei(lhs, i);
-                    let b = self.try_get_bool(res)?;
+                    let b = self.eval_lei(lhs, i)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }
 

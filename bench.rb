@@ -105,7 +105,7 @@ def get_results(command)
   user = []
   sys = []
   rss = []
-  5.times do
+  8.times do
     o, e, s = Open3.capture3(command)
     e.match(/(\d*):(\d*).(\d*)elapsed/)
     real << "#{Regexp.last_match(2)}.#{Regexp.last_match(3)}".to_f + Regexp.last_match(1).to_i * 60
