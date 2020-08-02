@@ -81,9 +81,15 @@ impl GC for Globals {
         self.const_values.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
         self.method_table.mark(alloc);
-        self.inline_cache.table.iter().for_each(|e| match e {
-            Some(e) => e.class.mark(alloc),
-            None => {}
+        self.inline_cache.table.iter().for_each(|e| {
+            match &e[0] {
+                Some(e) => e.class.mark(alloc),
+                None => {}
+            };
+            match &e[1] {
+                Some(e) => e.class.mark(alloc),
+                None => {}
+            };
         });
         self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
         for t in &self.case_dispatch.table {
@@ -312,34 +318,30 @@ impl Globals {
 
 impl Globals {
     pub fn set_inline_cache_entry(&mut self, id: u32, class: Value, method: MethodRef) {
-        self.inline_cache.table[id as usize] = Some(InlineCacheEntry {
+        let new_entry = Some(InlineCacheEntry {
             class,
             version: self.class_version,
             method,
         });
+        let entries = &mut self.inline_cache.table[id as usize];
+        if entries[0].is_none() {
+            entries[0] = new_entry;
+        } else {
+            entries[1] = new_entry;
+        }
     }
 
     pub fn add_inline_cache_entry(&mut self) -> u32 {
         self.inline_cache.add_entry()
     }
 
-    fn get_inline_cache_entry(&self, id: u32) -> &Option<InlineCacheEntry> {
-        self.inline_cache.get_entry(id)
-    }
-
     pub fn get_method_from_inline_cache(
         &mut self,
-        cache_slot: u32,
+        cache_id: u32,
         rec_class: Value,
     ) -> Option<MethodRef> {
-        match self.get_inline_cache_entry(cache_slot) {
-            Some(InlineCacheEntry {
-                class,
-                version,
-                method,
-            }) if class.id() == rec_class.id() && *version == self.class_version => Some(*method),
-            _ => None,
-        }
+        self.inline_cache
+            .get_method(cache_id, rec_class, self.class_version)
     }
 }
 
@@ -442,7 +444,7 @@ impl MethodCache {
 
 #[derive(Debug, Clone)]
 pub struct InlineCache {
-    table: Vec<Option<InlineCacheEntry>>,
+    table: Vec<[Option<InlineCacheEntry>; 2]>,
     id: u32,
 }
 
@@ -463,12 +465,24 @@ impl InlineCache {
     }
     fn add_entry(&mut self) -> u32 {
         self.id += 1;
-        self.table.push(None);
+        self.table.push([None, None]);
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> &Option<InlineCacheEntry> {
-        &self.table[id as usize]
+    fn get_method(&mut self, id: u32, class: Value, version: usize) -> Option<MethodRef> {
+        for entry in self.table[id as usize].iter_mut() {
+            match entry {
+                Some(e) if e.class.id() == class.id() => {
+                    if e.version == version {
+                        return Some(e.method);
+                    } else {
+                        *entry = None;
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
     }
 }
 

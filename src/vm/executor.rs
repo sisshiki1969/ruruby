@@ -1507,22 +1507,25 @@ impl VM {
     /// Otherwise, search a class chain for the method.
     fn get_method_from_cache(
         &mut self,
-        cache_slot: u32,
+        cache_id: u32,
         rec_class: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        /*if rec_class.is_nil() {
-            return Err(self.error_unimplemented("receiver's class is nil."));
-        };*/
         match self
             .globals
-            .get_method_from_inline_cache(cache_slot, rec_class)
+            .get_method_from_inline_cache(cache_id, rec_class)
         {
             Some(method) => Ok(method),
             _ => {
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "cache miss {} {:?}",
+                    IdentId::get_ident_name(method_id),
+                    rec_class
+                );
                 let method = self.get_instance_method(rec_class, method_id)?;
                 self.globals
-                    .set_inline_cache_entry(cache_slot, rec_class, method);
+                    .set_inline_cache_entry(cache_id, rec_class, method);
                 Ok(method)
             }
         }
