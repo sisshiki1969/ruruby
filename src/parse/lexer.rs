@@ -667,6 +667,16 @@ impl Lexer {
         }
     }
 
+    pub fn lex_char_literal(&mut self) -> Result<Token, RubyError> {
+        let c = self.get()?;
+        if c == '\\' {
+            let ch = self.read_escaped_char()?;
+            Ok(self.new_stringlit(ch))
+        } else {
+            Ok(self.new_stringlit(c))
+        }
+    }
+
     fn lex_interpolate_string(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
@@ -798,9 +808,11 @@ impl Lexer {
             c @ '\'' | c @ '"' | c @ '?' | c @ '\\' => c,
             'a' => '\x07',
             'b' => '\x08',
+            'e' => '\x1b',
             'f' => '\x0c',
             'n' => '\x0a',
             'r' => '\x0d',
+            's' => '\x20',
             't' => '\x09',
             'v' => '\x0b',
             'x' => {
@@ -811,6 +823,17 @@ impl Lexer {
                 match std::char::from_u32(c1 * 16 + c2) {
                     Some(c) => c,
                     None => return Err(self.error_unexpected(self.pos)),
+                }
+            }
+            'u' => {
+                let mut code = 0;
+                for _ in 0..4 {
+                    let c = self.get()?;
+                    code = code * 16 + self.char_to_hex(c)?;
+                }
+                match std::char::from_u32(code) {
+                    Some(ch) => ch,
+                    None => return Err(self.error_parse("Invalid UTF-8 character.", self.pos - 1)),
                 }
             }
             c => c,

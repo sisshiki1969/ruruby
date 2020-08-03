@@ -74,6 +74,18 @@ fn string_lit2() {
 }
 
 #[test]
+fn string_lit3() {
+    let program = r##"
+        assert("鬼", ?鬼)
+        assert("あ", ?\u3042)
+        assert("剪", ?\u526a)
+        assert("剪", ?\u526A)
+        #assert_error { ?\uffff }
+    "##;
+    assert_script(program);
+}
+
+#[test]
 fn interpolated_string_lit1() {
     let program = r###"
         x = 20

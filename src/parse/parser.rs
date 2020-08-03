@@ -413,8 +413,8 @@ impl Parser {
     /// Return IdentId of the Const.
     /// If not, return RubyError.
     fn expect_const(&mut self) -> Result<IdentId, RubyError> {
-        let name = match &self.get()?.kind {
-            TokenKind::Const(s, _, _) => s.clone(),
+        let name = match self.get()?.kind {
+            TokenKind::Const(s, _, _) => s,
             _ => {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
             }
@@ -530,17 +530,22 @@ impl Parser {
 
         loop {
             if self.peek()?.check_stmt_end() {
-                return Ok(Node::new_comp_stmt(nodes, loc));
+                let node = Node::new_comp_stmt(nodes, loc);
+                println!("comp_node_escape {:?}", node);
+                return Ok(node);
             }
 
             let node = self.parse_stmt()?;
-            //println!("node {:?}", node);
+            println!("node {:?}", node);
             nodes.push(node);
+            println!("next {:?}", self.peek_no_term()?);
             if !self.consume_term()? {
                 break;
             }
         }
-        Ok(Node::new_comp_stmt(nodes, loc))
+        let node = Node::new_comp_stmt(nodes, loc);
+        println!("comp_node {:?}", node);
+        Ok(node)
     }
 
     fn parse_stmt(&mut self) -> Result<Node, RubyError> {
@@ -1506,6 +1511,10 @@ impl Parser {
                     let node = self.parse_percent_notation()?;
                     Ok(node)
                 }
+                Punct::Question => {
+                    let node = self.parse_char_literal()?;
+                    Ok(node)
+                }
                 _ => {
                     return Err(
                         self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
@@ -1719,6 +1728,14 @@ impl Parser {
             s = format!("{}{}", s, next_s);
         }
         Ok(Node::new_string(s, loc))
+    }
+
+    fn parse_char_literal(&mut self) -> Result<Node, RubyError> {
+        let loc = self.loc();
+        match self.lexer.lex_char_literal()?.kind {
+            TokenKind::StringLit(s) => Ok(Node::new_string(s, loc.merge(self.prev_loc))),
+            _ => unreachable!(),
+        }
     }
 
     fn parse_interporated_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
