@@ -18,6 +18,7 @@ pub fn repl_vm() {
     println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
     println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
     println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
+    println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
     let mut rl = Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
@@ -25,7 +26,7 @@ pub fn repl_vm() {
     let mut vm = globals.new_vm();
     let mut level = parser.get_context_depth();
     let mut lvar_collector = LvarCollector::new();
-    let method = vm.globals.new_method();
+    let method = MethodRef::new(MethodInfo::default());
     let info = ISeqInfo::default(method);
     let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None, None);
     loop {

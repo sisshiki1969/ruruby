@@ -188,7 +188,7 @@ impl ISeq {
     }
 
     pub fn read_methodref(&self, offset: usize) -> MethodRef {
-        MethodRef::from(self.read32(offset))
+        MethodRef::from_u64(self.read64(offset))
     }
 
     pub fn read_disp(&self, offset: usize) -> i64 {
@@ -583,13 +583,12 @@ impl Codegen {
         Codegen::push16(iseq, args_num as u32 as u16);
         Codegen::push16(iseq, flag as u32 as u16);
         Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
-        Codegen::push32(
+        Codegen::push64(
             iseq,
             match block {
-                Some(block) => block,
-                None => MethodRef::from(0),
-            }
-            .into(),
+                Some(block) => block.id(),
+                None => 0,
+            },
         )
     }
 
@@ -608,13 +607,12 @@ impl Codegen {
         Codegen::push16(iseq, args_num as u32 as u16);
         Codegen::push16(iseq, flag as u32 as u16);
         Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
-        Codegen::push32(
+        Codegen::push64(
             iseq,
             match block {
-                Some(block) => block,
-                None => MethodRef::from(0),
-            }
-            .into(),
+                Some(block) => block.id(),
+                None => 0,
+            },
         )
     }
 
@@ -754,7 +752,7 @@ impl Codegen {
         kind: ContextKind,
         name: Option<IdentId>,
     ) -> Result<MethodRef, RubyError> {
-        let methodref = globals.new_method();
+        let mut methodref = MethodRef::new(MethodInfo::default());
         let is_block = match kind {
             ContextKind::Method => false,
             _ => true,
@@ -857,12 +855,11 @@ impl Codegen {
         if !is_block {
             self.method_stack.pop();
         }
-        globals.set_method(methodref, info);
+        *methodref = info;
         #[cfg(feature = "emit-iseq")]
         {
-            let info = globals.get_method_info(methodref);
-            let iseq = if let MethodInfo::RubyFunc { iseq } = info {
-                *iseq
+            let iseq = if let MethodInfo::RubyFunc { iseq } = *methodref {
+                iseq
             } else {
                 panic!("CodeGen: Illegal methodref.")
             };
@@ -1792,7 +1789,7 @@ impl Codegen {
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 Codegen::push32(iseq, (*id).into());
-                Codegen::push32(iseq, methodref.into());
+                Codegen::push64(iseq, methodref.id());
                 if use_value {
                     self.gen_symbol(iseq, *id);
                 };
@@ -1810,7 +1807,7 @@ impl Codegen {
                 //self.gen(globals, iseq, singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
                 Codegen::push32(iseq, (*id).into());
-                Codegen::push32(iseq, methodref.into());
+                Codegen::push64(iseq, methodref.id());
                 if use_value {
                     self.gen_symbol(iseq, *id);
                 };
@@ -1837,7 +1834,7 @@ impl Codegen {
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if *is_module { 1 } else { 0 });
                 Codegen::push32(iseq, (*id).into());
-                Codegen::push32(iseq, methodref.into());
+                Codegen::push64(iseq, methodref.id());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
@@ -1922,7 +1919,7 @@ impl Codegen {
                     self.gen_iseq(globals, params, body, lvar, true, ContextKind::Block, None)?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
-                Codegen::push32(iseq, methodref.into());
+                Codegen::push64(iseq, methodref.id());
                 if !use_value {
                     self.gen_pop(iseq)
                 };

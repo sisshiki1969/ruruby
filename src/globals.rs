@@ -8,7 +8,6 @@ pub struct Globals {
     pub allocator: AllocatorRef,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
-    method_table: GlobalMethodTable,
     inline_cache: InlineCache,
     method_cache: MethodCache,
     pub case_dispatch: CaseDispatchMap,
@@ -80,7 +79,6 @@ impl GC for Globals {
     fn mark(&self, alloc: &mut Allocator) {
         self.const_values.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
-        self.method_table.mark(alloc);
         self.inline_cache.table.iter().for_each(|e| {
             match &e[0] {
                 Some(e) => e.class.mark(alloc),
@@ -140,7 +138,6 @@ impl Globals {
             allocator,
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
-            method_table: GlobalMethodTable::new(),
             inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
             main_fiber: None,
@@ -248,26 +245,6 @@ impl Globals {
         self.object_class.method_table.insert(id, info);
     }
 
-    pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
-        self.method_table.add_method(info)
-    }
-
-    pub fn new_method(&mut self) -> MethodRef {
-        self.method_table.new_method()
-    }
-
-    pub fn set_method(&mut self, method: MethodRef, info: MethodInfo) {
-        self.method_table.set_method(method, info);
-    }
-
-    pub fn get_method_info(&self, method: MethodRef) -> &MethodInfo {
-        self.method_table.get_method(method)
-    }
-
-    pub fn get_mut_method_info(&mut self, method: MethodRef) -> &mut MethodInfo {
-        self.method_table.get_mut_method(method)
-    }
-
     pub fn add_builtin_class_method(&mut self, mut obj: Value, name: &str, func: BuiltinFunc) {
         let classref = obj.get_singleton_class(self).unwrap().as_class();
         self.add_builtin_instance_method(classref, name, func);
@@ -281,7 +258,7 @@ impl Globals {
     ) {
         let name = IdentId::get_id(name);
         let info = MethodInfo::BuiltinFunc { name, func };
-        let methodref = self.add_method(info);
+        let methodref = MethodRef::new(info);
         classref.method_table.insert(name, methodref);
     }
 

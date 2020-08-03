@@ -977,7 +977,7 @@ impl VM {
                     let method = iseq.read_methodref(self.pc + 1);
                     let proc_obj = self.create_proc(method)?;
                     self.stack_push(proc_obj);
-                    self.pc += 5;
+                    self.pc += 9;
                 }
                 Inst::CREATE_HASH => {
                     let arg_num = iseq.read_usize(self.pc + 1);
@@ -1099,11 +1099,11 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_send(iseq, receiver));
-                    self.pc += 17;
+                    self.pc += 21;
                 }
                 Inst::SEND_SELF => {
                     try_push!(self.vm_send(iseq, self_value));
-                    self.pc += 17;
+                    self.pc += 21;
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
@@ -1131,7 +1131,7 @@ impl VM {
                     iseq.class_defined = self.get_class_defined(val);
                     let arg = Args::new0();
                     try_push!(self.eval_send(method, val, &arg));
-                    self.pc += 10;
+                    self.pc += 14;
                     self.class_pop();
                 }
                 Inst::DEF_METHOD => {
@@ -1143,7 +1143,7 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_singleton_method(self_value, id, method)?;
                     };
-                    self.pc += 9;
+                    self.pc += 13;
                 }
                 Inst::DEF_SMETHOD => {
                     let id = iseq.read_id(self.pc + 1);
@@ -1155,7 +1155,7 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_method(self_value, id, method);
                     };
-                    self.pc += 9;
+                    self.pc += 13;
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
@@ -2212,7 +2212,7 @@ impl VM {
         let args_num = iseq.read16(self.pc + 5);
         let flag = iseq.read16(self.pc + 7);
         let cache_slot = iseq.read32(self.pc + 9);
-        let block = iseq.read32(self.pc + 13);
+        let block = iseq.read64(self.pc + 13);
         let rec_class = receiver.get_class_object_for_method(&self.globals);
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
 
@@ -2224,7 +2224,7 @@ impl VM {
         };
 
         let block = if block != 0 {
-            Some(MethodRef::from(block))
+            Some(MethodRef::from_u64(block))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
             let method = val
@@ -2309,16 +2309,14 @@ impl VM {
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
-        let info = self.globals.get_method_info(methodref);
         #[cfg(feature = "perf")]
         let mut _inst: u8;
         #[cfg(feature = "perf")]
         {
             _inst = self.perf.get_prev_inst();
         }
-        let val = match info {
+        let val = match &*methodref {
             MethodInfo::BuiltinFunc { func, .. } => {
-                let func = func.to_owned();
                 #[cfg(feature = "perf")]
                 self.perf.get_perf(Perf::EXTERN);
 
@@ -2347,9 +2345,8 @@ impl VM {
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
             MethodInfo::RubyFunc { iseq } => {
-                let iseq = *iseq;
                 let context =
-                    Context::from_args(self, self_val, iseq, args, outer, self.latest_context())?;
+                    Context::from_args(self, self_val, *iseq, args, outer, self.latest_context())?;
                 let res = self.run_context(ContextRef::from_local(&context));
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(_inst);
@@ -2635,7 +2632,7 @@ impl VM {
     }
 
     pub fn get_iseq(&self, method: MethodRef) -> Result<ISeqRef, RubyError> {
-        self.globals.get_method_info(method).as_iseq(&self)
+        method.as_iseq(&self)
     }
 
     /// Create new Regexp object from `string`.

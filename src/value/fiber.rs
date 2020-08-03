@@ -114,7 +114,7 @@ impl FiberInfo {
     ) -> VMResult {
         let method = vm.get_method(receiver, method_id)?;
         let mut args = args.clone();
-        args.block = Some(MethodRef::from(0));
+        args.block = Some(*METHODREF_ENUM);
         let context = Context::new_noiseq();
         vm.context_push(ContextRef::from_ref(&context));
         vm.eval_method(method, receiver, None, &args)?;

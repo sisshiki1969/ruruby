@@ -4,9 +4,10 @@ pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult
 
 pub type MethodTable = FxHashMap<IdentId, MethodRef>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MethodRef(u32);
+//#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub type MethodRef = Ref<MethodInfo>;
 
+/*
 impl std::hash::Hash for MethodRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
@@ -23,6 +24,16 @@ impl From<u32> for MethodRef {
     fn from(id: u32) -> Self {
         MethodRef(id)
     }
+}
+*/
+
+lazy_static! {
+    pub static ref METHODREF_ENUM: MethodRef = {
+        MethodRef::new(MethodInfo::BuiltinFunc {
+            func: enumerator_iterate,
+            name: IdentId::_ENUM_FUNC,
+        })
+    };
 }
 
 #[derive(Clone)]
@@ -227,56 +238,6 @@ impl ISeqInfo {
             ISeqKind::Method(_) => true,
             _ => false,
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct GlobalMethodTable {
-    table: Vec<MethodInfo>,
-    method_id: u32,
-}
-
-impl GlobalMethodTable {
-    pub fn new() -> Self {
-        GlobalMethodTable {
-            table: vec![MethodInfo::BuiltinFunc {
-                func: enumerator_iterate,
-                name: IdentId::_ENUM_FUNC,
-            }],
-            method_id: 1,
-        }
-    }
-
-    pub fn add_method(&mut self, info: MethodInfo) -> MethodRef {
-        let new_method = MethodRef(self.method_id);
-        self.method_id += 1;
-        self.table.push(info);
-        new_method
-    }
-
-    pub fn new_method(&mut self) -> MethodRef {
-        let new_method = MethodRef(self.method_id);
-        self.method_id += 1;
-        self.table.push(MethodInfo::default());
-        new_method
-    }
-
-    pub fn set_method(&mut self, method: MethodRef, info: MethodInfo) {
-        self.table[method.0 as usize] = info;
-    }
-
-    pub fn get_method(&self, method: MethodRef) -> &MethodInfo {
-        &self.table[method.0 as usize]
-    }
-
-    pub fn get_mut_method(&mut self, method: MethodRef) -> &mut MethodInfo {
-        &mut self.table[method.0 as usize]
-    }
-}
-
-impl GC for GlobalMethodTable {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.table.iter().for_each(|m| m.mark(alloc));
     }
 }
 

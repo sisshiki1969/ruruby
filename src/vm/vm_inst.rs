@@ -275,7 +275,6 @@ impl Inst {
             | Inst::OPT_GET_INDEX       // immediate: u32
             | Inst::OPT_SET_INDEX       // immediate: u32
             | Inst::CREATE_ARRAY        // number of items: u32
-            | Inst::CREATE_PROC
             | Inst::CONST_VAL           // ConstId: u32
             | Inst::JMP                 // disp: i32
             | Inst::JMP_F               // disp: i32
@@ -314,8 +313,6 @@ impl Inst {
             | Inst::PUSH_FLONUM         // value:f64
             | Inst::SET_DYNLOCAL
             | Inst::GET_DYNLOCAL
-            | Inst::DEF_METHOD
-            | Inst::DEF_SMETHOD
             | Inst::OPT_CASE
             | Inst::CHECK_LOCAL
             | Inst::IVAR_ADDI
@@ -326,10 +323,16 @@ impl Inst {
             | Inst::JMP_F_GEI           // immediate: i32 / disp: i32
             | Inst::JMP_F_LTI           // immediate: i32 / disp: i32
             | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
+            | Inst::CREATE_PROC         // block: u64
             => 9,
-            Inst::DEF_CLASS => 10,
+            Inst::DEF_METHOD            // method_id: u32 / method: u64
+            | Inst::DEF_SMETHOD         // method_id: u32 / method: u64
+            => 13,
+            Inst::DEF_CLASS => 14,      // is_module: u8 / method_id: u32 / block: u64
             Inst::OPT_SEND | Inst::OPT_SEND_SELF => 11,
-            Inst::SEND | Inst::SEND_SELF => 17,
+                                // method_id: u32 / number of args: u16 / cache_id: u32 
+            Inst::SEND | Inst::SEND_SELF => 21,
+                                // method_id: u32 / number of args: u16 / flag: u16 / cache_id: u32 / block: u64
             _ => panic!(),
         }
     }

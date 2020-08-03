@@ -231,7 +231,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (method, new_args) = if args.len() == 0 {
         let method = IdentId::get_id("each");
         let mut new_args = Args::new0();
-        new_args.block = Some(MethodRef::from(0));
+        new_args.block = Some(*METHODREF_ENUM);
         (method, new_args)
     } else {
         if !args[0].is_packed_symbol() {
@@ -242,7 +242,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         for i in 0..args.len() - 1 {
             new_args[i] = args[i + 1];
         }
-        new_args.block = Some(MethodRef::from(0));
+        new_args.block = Some(*METHODREF_ENUM);
         (method, new_args)
     };
     let val = vm.create_enumerator(method, self_val, new_args)?;

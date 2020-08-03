@@ -67,6 +67,10 @@ impl<T> Ref<T> {
     pub fn id(&self) -> u64 {
         self.0.as_ptr() as u64
     }
+
+    pub fn from_u64(val: u64) -> Self {
+        unsafe { Ref(NonNull::new_unchecked(val as *mut T)) }
+    }
 }
 
 impl<T: Clone> Ref<T> {
@@ -77,6 +81,7 @@ impl<T: Clone> Ref<T> {
 }
 
 unsafe impl<T> Send for Ref<T> {}
+unsafe impl<T> Sync for Ref<T> {}
 
 impl<T> Copy for Ref<T> {}
 

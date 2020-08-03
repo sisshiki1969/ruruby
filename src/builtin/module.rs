@@ -141,7 +141,7 @@ fn define_reader(vm: &mut VM, class: Value, id: IdentId) {
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
-    let methodref = vm.globals.add_method(info);
+    let methodref = MethodRef::new(info);
     class
         .as_module()
         .unwrap()
@@ -154,7 +154,7 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };
-    let methodref = vm.globals.add_method(info);
+    let methodref = MethodRef::new(info);
     class
         .as_module()
         .unwrap()
