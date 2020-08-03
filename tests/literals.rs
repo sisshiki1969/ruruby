@@ -143,7 +143,14 @@ fn lambda_literal() {
 fn percent_notation() {
     let program = r#"
         assert(%w(We are the champions), ["We", "are", "the", "champions"])
+        assert(%w{We are the champions}, ["We", "are", "the", "champions"])
+        assert(%w<We are the champions>, ["We", "are", "the", "champions"])
         assert(%i(We are the champions), [:"We", :"are", :"the", :"champions"])
+        assert(%q{evidence}, "evidence")
+        assert(%q[evidence], "evidence")
+        assert(%q<evidence>, "evidence")
+        assert(%q\evidence\, "evidence")
+        assert(%q{]>{evidence}}, "]>{evidence}")
     "#;
     assert_script(program);
 }

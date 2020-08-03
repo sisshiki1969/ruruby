@@ -245,7 +245,7 @@ impl Lexer {
                 match ch {
                     '#' => self.goto_eol(),
                     '"' => return self.lex_string_literal_double(),
-                    '\'' => return self.lex_string_literal_single(),
+                    '\'' => return self.lex_string_literal_single(None, '\''),
                     ';' => return Ok(self.new_punct(Punct::Semi)),
                     ':' => {
                         if self.consume(':') {
@@ -631,12 +631,28 @@ impl Lexer {
         }
     }
 
-    /// Read string literal {'..'}
-    fn lex_string_literal_single(&mut self) -> Result<Token, RubyError> {
+    /// Read string literal '..' or %q{..}
+    fn lex_string_literal_single(
+        &mut self,
+        open: Option<char>,
+        term: char,
+    ) -> Result<Token, RubyError> {
         let mut s = "".to_string();
+        let mut level = 0;
         loop {
             match self.get()? {
-                '\'' => return Ok(self.new_stringlit(s)),
+                c if c == term => {
+                    if level == 0 {
+                        return Ok(self.new_stringlit(s));
+                    } else {
+                        s.push(c);
+                        level -= 1;
+                    }
+                }
+                c if open == Some(c) => {
+                    s.push(c);
+                    level += 1;
+                }
                 '\\' => {
                     let c = self.get()?;
                     if c == '\'' {
@@ -738,21 +754,32 @@ impl Lexer {
         let kind = match self.get()? {
             'w' => 'w',
             'i' => 'i',
+            'q' => 'q',
             _ => return Err(self.error_unexpected(self.pos)),
         };
+        let pos = self.pos;
         let delimiter = self.get()?;
-        let term = match delimiter {
-            '(' => ')',
-            '{' => '}',
-            '[' => ']',
-            _ => return Err(self.error_unexpected(self.pos)),
+        if delimiter.is_ascii_alphanumeric() {
+            return Err(self.error_unexpected(pos));
+        }
+        let (open, term) = match delimiter {
+            '(' => (Some('('), ')'),
+            '{' => (Some('{'), '}'),
+            '[' => (Some('['), ']'),
+            '<' => (Some('<'), '>'),
+            ' ' | '\n' => return Err(self.error_unexpected(pos)),
+            ch => (None, ch),
         };
 
-        let mut s = String::new();
-        loop {
-            match self.get()? {
-                ch if ch == term => return Ok(self.new_percent(kind, s)),
-                ch => s.push(ch),
+        if kind == 'q' {
+            Ok(self.lex_string_literal_single(open, term)?)
+        } else {
+            let mut s = String::new();
+            loop {
+                match self.get()? {
+                    ch if ch == term => return Ok(self.new_percent(kind, s)),
+                    ch => s.push(ch),
+                }
             }
         }
     }

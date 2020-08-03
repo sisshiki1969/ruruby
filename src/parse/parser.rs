@@ -1813,6 +1813,8 @@ impl Parser {
                 }
                 _ => return Err(self.error_unexpected(loc, "Unsupported % notation.")),
             }
+        } else if let TokenKind::StringLit(s) = tok.kind {
+            return Ok(Node::new_string(s, loc));
         } else {
             panic!();
         }
