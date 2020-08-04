@@ -531,20 +531,20 @@ impl Parser {
         loop {
             if self.peek()?.check_stmt_end() {
                 let node = Node::new_comp_stmt(nodes, loc);
-                println!("comp_node_escape {:?}", node);
+                //println!("comp_node_escape {:?}", node);
                 return Ok(node);
             }
 
             let node = self.parse_stmt()?;
-            println!("node {:?}", node);
+            //println!("node {:?}", node);
             nodes.push(node);
-            println!("next {:?}", self.peek_no_term()?);
+            //println!("next {:?}", self.peek_no_term()?);
             if !self.consume_term()? {
                 break;
             }
         }
         let node = Node::new_comp_stmt(nodes, loc);
-        println!("comp_node {:?}", node);
+        //println!("comp_node {:?}", node);
         Ok(node)
     }
 

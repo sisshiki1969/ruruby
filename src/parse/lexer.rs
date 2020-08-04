@@ -669,6 +669,7 @@ impl Lexer {
 
     pub fn lex_char_literal(&mut self) -> Result<Token, RubyError> {
         let c = self.get()?;
+        self.buf = None;
         if c == '\\' {
             let ch = self.read_escaped_char()?;
             Ok(self.new_stringlit(ch))
