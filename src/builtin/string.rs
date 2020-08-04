@@ -3,10 +3,47 @@ use crate::vm::*;
 //#[macro_use]
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum RString {
     Str(String),
     Bytes(Vec<u8>),
+}
+
+use std::fmt;
+impl fmt::Debug for RString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RString::Str(s) => {
+                for ch in s.chars() {
+                    match ch {
+                        c @ '\'' | c @ '"' | c @ '?' | c @ '\\' => {
+                            write!(f, "\\{}", c)?;
+                        }
+                        '\x07' => write!(f, "\\a")?,
+                        '\x08' => write!(f, "\\b")?,
+                        '\x1b' => write!(f, "\\e")?,
+                        '\x0c' => write!(f, "\\f")?,
+                        '\x0a' => write!(f, "\\n")?,
+                        '\x0d' => write!(f, "\\r")?,
+                        '\x09' => write!(f, "\\t")?,
+                        '\x0b' => write!(f, "\\v")?,
+                        c => write!(f, "{}", c)?,
+                    };
+                }
+                Ok(())
+            }
+            RString::Bytes(v) => write!(f, "{}", String::from_utf8_lossy(v)),
+        }
+    }
+}
+
+impl fmt::Display for RString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RString::Str(s) => write!(f, "{}", s),
+            RString::Bytes(v) => write!(f, "{}", String::from_utf8_lossy(v)),
+        }
+    }
 }
 
 use std::cmp::Ordering;
@@ -62,26 +99,11 @@ impl RString {
     }
 
     pub fn to_s(&self) -> String {
-        match self {
-            RString::Str(s) => format!("{}", s),
-            RString::Bytes(b) => format!("{}", String::from_utf8_lossy(b)),
-        }
+        format!("{}", self)
     }
 
     pub fn inspect(&self) -> String {
-        match self {
-            RString::Str(s) => format!("\"{}\"", s.escape_debug()),
-            RString::Bytes(bytes) => match std::str::from_utf8(bytes) {
-                Ok(s) => format!("\"{}\"", s.replace("\\", "\\\\")),
-                Err(_) => {
-                    let mut s = String::new();
-                    for b in bytes {
-                        s = format!("{}\\x{:02X}", s, b);
-                    }
-                    format!("\"{}\"", s)
-                }
-            },
-        }
+        format!(r#""{:?}""#, self)
     }
 
     pub fn cmp(&self, other: Value) -> Option<Ordering> {

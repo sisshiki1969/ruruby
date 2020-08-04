@@ -1763,7 +1763,7 @@ impl Parser {
                 }
                 TokenKind::EOF => {
                     let loc = self.loc();
-                    return Err(self.error_unexpected(loc, "Unexpectd EOF."));
+                    return Err(self.error_eof(loc));
                 }
                 _ => {
                     nodes.push(self.parse_comp_stmt()?);
@@ -1798,7 +1798,7 @@ impl Parser {
                 }
                 TokenKind::EOF => {
                     let loc = self.loc();
-                    return Err(self.error_unexpected(loc, "Unexpectd EOF."));
+                    return Err(self.error_eof(loc));
                 }
                 _ => {
                     nodes.push(self.parse_comp_stmt()?);

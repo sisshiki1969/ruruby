@@ -205,6 +205,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 4)?;
     let mut arg0 = args[0];
     let program = arg0.expect_string(vm, "1st arg")?;
+    eprintln!("eval: {}", program);
     if args.len() > 1 {
         if !args[1].is_nil() {
             return Err(vm.error_argument("Currently, 2nd arg must be Nil."));

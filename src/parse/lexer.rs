@@ -786,9 +786,21 @@ impl Lexer {
             Ok(self.lex_string_literal_single(open, term)?)
         } else {
             let mut s = String::new();
+            let mut level = 0;
             loop {
                 match self.get()? {
-                    ch if ch == term => return Ok(self.new_percent(kind, s)),
+                    ch if Some(ch) == open => {
+                        level += 1;
+                        s.push(ch);
+                    }
+                    ch if ch == term => {
+                        if level == 0 {
+                            return Ok(self.new_percent(kind, s));
+                        } else {
+                            level -= 1;
+                            s.push(ch);
+                        }
+                    }
                     ch => s.push(ch),
                 }
             }

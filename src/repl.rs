@@ -31,8 +31,16 @@ pub fn repl_vm() {
     let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None, None);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
-        let readline =
-            rl.readline(&format!("{}{:1}{} ", Red.bold().paint("irb:"), level, prompt).to_string());
+        let readline = rl.readline(
+            &format!(
+                "{}{:1}{} {}",
+                Red.bold().paint("irb:"),
+                level,
+                prompt,
+                " ".repeat(level * 2)
+            )
+            .to_string(),
+        );
         let mut line = match readline {
             Ok(line) => line,
             Err(err) => match err {
@@ -48,7 +56,7 @@ pub fn repl_vm() {
         rl.add_history_entry(line.clone());
         line.push('\n');
 
-        program = format!("{}{}", program, line);
+        program = format!("{}{}\n", program, line);
 
         match parser.clone().parse_program_repl(
             std::path::PathBuf::from("REPL"),
