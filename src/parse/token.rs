@@ -45,7 +45,7 @@ pub enum TokenKind {
     StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
-    OpenString(String),
+    OpenString(String, char), // (content, delimiter)
     InterString(String),
     CloseString(String),
     OpenRegex(String),
@@ -189,8 +189,8 @@ impl Token {
         Annot::new(TokenKind::StringLit(string.into()), loc)
     }
 
-    pub fn new_open_dq(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::OpenString(s.into()), loc)
+    pub fn new_open_dq(s: impl Into<String>, delimiter: char, loc: Loc) -> Self {
+        Annot::new(TokenKind::OpenString(s.into(), delimiter), loc)
     }
 
     pub fn new_inter_dq(s: impl Into<String>, loc: Loc) -> Self {

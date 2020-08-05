@@ -19,7 +19,7 @@ pub struct Lexer {
 
 #[derive(Debug, Clone, PartialEq)]
 enum QuoteState {
-    DoubleQuote,
+    DoubleQuote(char), // delimiter
     RegEx,
     Brace,
     //Expr,
@@ -168,8 +168,8 @@ impl Lexer {
             TokenKind::Punct(Punct::RBrace) => {
                 self.quote_state.pop().unwrap();
             }
-            TokenKind::OpenString(_) => {
-                self.quote_state.push(QuoteState::DoubleQuote);
+            TokenKind::OpenString(_, delimiter) => {
+                self.quote_state.push(QuoteState::DoubleQuote(delimiter));
             }
             TokenKind::CloseString(_) => {
                 self.quote_state.pop().unwrap();
@@ -244,7 +244,7 @@ impl Lexer {
             } else if ch.is_ascii_punctuation() {
                 match ch {
                     '#' => self.goto_eol(),
-                    '"' => return self.lex_string_literal_double(),
+                    '"' => return self.lex_string_literal_double(None, '\"'),
                     '\'' => return self.lex_string_literal_single(None, '\''),
                     ';' => return Ok(self.new_punct(Punct::Semi)),
                     ':' => {
@@ -307,8 +307,10 @@ impl Lexer {
                     '[' => return Ok(self.new_punct(Punct::LBracket)),
                     ']' => return Ok(self.new_punct(Punct::RBracket)),
                     '{' => return Ok(self.new_punct(Punct::LBrace)),
-                    '}' => match self.quote_state.last() {
-                        Some(QuoteState::DoubleQuote) => return self.lex_interpolate_string(),
+                    '}' => match self.quote_state.last().cloned() {
+                        Some(QuoteState::DoubleQuote(delimiter)) => {
+                            return self.lex_interpolate_string(delimiter)
+                        }
                         Some(QuoteState::RegEx) => return self.lex_interpolate_regexp(),
                         Some(QuoteState::Brace) => return Ok(self.new_punct(Punct::RBrace)),
                         _ => return Err(self.error_unexpected(pos)),
@@ -616,16 +618,32 @@ impl Lexer {
         Ok(self.new_numlit(val as i64))
     }
 
-    /// Read string literal ("..")
-    fn lex_string_literal_double(&mut self) -> Result<Token, RubyError> {
+    /// Read string literal ("..", %Q{..}, %{..})
+    fn lex_string_literal_double(
+        &mut self,
+        open: Option<char>,
+        term: char,
+    ) -> Result<Token, RubyError> {
         let mut s = "".to_string();
+        let mut level = 0;
         loop {
             match self.get()? {
-                '"' => return Ok(self.new_stringlit(s)),
+                c if c == term => {
+                    if level == 0 {
+                        return Ok(self.new_stringlit(s));
+                    } else {
+                        s.push(c);
+                        level -= 1;
+                    }
+                }
                 '\\' => s.push(self.read_escaped_char()?),
+                c if open == Some(c) => {
+                    s.push(c);
+                    level += 1;
+                }
                 '#' => {
                     if self.consume('{') {
-                        return Ok(self.new_open_dq(s));
+                        return Ok(self.new_open_dq(s, term));
                     } else {
                         s.push('#');
                     }
@@ -682,11 +700,11 @@ impl Lexer {
         }
     }
 
-    fn lex_interpolate_string(&mut self) -> Result<Token, RubyError> {
+    fn lex_interpolate_string(&mut self, delimiter: char) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
-                '"' => return Ok(self.new_close_dq(s)),
+                c if c == delimiter => return Ok(self.new_close_dq(s)),
                 '\\' => s.push(self.read_escaped_char()?),
                 '#' => {
                     if self.consume('{') {
@@ -714,7 +732,7 @@ impl Lexer {
         };
     }
 
-    pub fn lex_regexp(&mut self) -> Result<Token, RubyError> {
+    pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -765,47 +783,56 @@ impl Lexer {
         }
     }
 
-    pub fn lex_percent_notation(&mut self) -> Result<Token, RubyError> {
-        let kind = match self.get()? {
-            'w' => 'w',
-            'i' => 'i',
-            'q' => 'q',
+    pub fn get_percent_notation(&mut self) -> Result<Token, RubyError> {
+        let c = self.get()?;
+        let (kind, delimiter) = match c {
+            'q' | 'Q' | 'x' | 'r' | 'w' | 'W' | 's' | 'i' | 'I' => {
+                let pos = self.pos;
+                let delimiter = self.get()?;
+                if delimiter.is_ascii_alphanumeric() {
+                    return Err(self.error_unexpected(pos));
+                }
+                (Some(c), delimiter)
+            }
+            delimiter if !c.is_ascii_alphanumeric() => (None, delimiter),
             _ => return Err(self.error_unexpected(self.pos)),
         };
-        let pos = self.pos;
-        let delimiter = self.get()?;
-        if delimiter.is_ascii_alphanumeric() {
-            return Err(self.error_unexpected(pos));
-        }
         let (open, term) = match delimiter {
             '(' => (Some('('), ')'),
             '{' => (Some('{'), '}'),
             '[' => (Some('['), ']'),
             '<' => (Some('<'), '>'),
-            ' ' | '\n' => return Err(self.error_unexpected(pos)),
+            ' ' | '\n' => match kind {
+                Some('i') | Some('I') | Some('w') | Some('W') => {
+                    return Err(self.error_unexpected(self.pos - 1))
+                }
+                _ => (Some(delimiter), delimiter),
+            },
             ch => (None, ch),
         };
 
-        if kind == 'q' {
-            Ok(self.lex_string_literal_single(open, term)?)
-        } else {
-            let mut s = String::new();
-            let mut level = 0;
-            loop {
-                match self.get()? {
-                    ch if Some(ch) == open => {
-                        level += 1;
-                        s.push(ch);
-                    }
-                    ch if ch == term => {
-                        if level == 0 {
-                            return Ok(self.new_percent(kind, s));
-                        } else {
-                            level -= 1;
+        match kind {
+            Some('q') => Ok(self.lex_string_literal_single(open, term)?),
+            Some('Q') | None => Ok(self.lex_string_literal_double(open, term)?),
+            Some(kind) => {
+                let mut s = String::new();
+                let mut level = 0;
+                loop {
+                    match self.get()? {
+                        ch if Some(ch) == open => {
+                            level += 1;
                             s.push(ch);
                         }
+                        ch if ch == term => {
+                            if level == 0 {
+                                return Ok(self.new_percent(kind, s));
+                            } else {
+                                level -= 1;
+                                s.push(ch);
+                            }
+                        }
+                        ch => s.push(ch),
                     }
-                    ch => s.push(ch),
                 }
             }
         }
@@ -1003,8 +1030,8 @@ impl Lexer {
         Annot::new(TokenKind::Punct(punc), self.cur_loc())
     }
 
-    fn new_open_dq(&self, s: String) -> Token {
-        Token::new_open_dq(s, self.cur_loc())
+    fn new_open_dq(&self, s: String, delimiter: char) -> Token {
+        Token::new_open_dq(s, delimiter, self.cur_loc())
     }
 
     fn new_inter_dq(&self, s: String) -> Token {
@@ -1101,8 +1128,8 @@ mod test {
         (StringLit($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_stringlit($item, Loc($loc_0, $loc_1))
         };
-        (OpenString($item:expr), $loc_0:expr, $loc_1:expr) => {
-            Token::new_open_dq($item, Loc($loc_0, $loc_1))
+        (OpenString($item:expr, $delimiter:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_open_dq($item, $delimiter, Loc($loc_0, $loc_1))
         };
         (InterString($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_inter_dq($item, Loc($loc_0, $loc_1))
@@ -1136,7 +1163,7 @@ mod test {
     fn string_literal3() {
         let program = r#""this is #{item1} and #{item2}. ""#;
         let ans = vec![
-            Token![OpenString("this is "), 0, 10],
+            Token![OpenString("this is ", '\"'), 0, 10],
             Token![Ident("item1", false, false), 11, 15],
             Token![InterString(" and "), 16, 23],
             Token![Ident("item2", false, false), 24, 28],

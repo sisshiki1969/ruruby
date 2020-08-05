@@ -163,6 +163,9 @@ fn percent_notation() {
         assert(%q<evidence>, "evidence")
         assert(%q\evidence\, "evidence")
         assert(%q{]>{evidence}}, "]>{evidence}")
+        assert(%Q{evidence}, "evidence")
+        assert(%{evidence}, "evidence")
+        #assert(%{evi{d)[#{"e""n"}}ce}, "evi{d)[en}ce")
     "#;
     assert_script(program);
 }

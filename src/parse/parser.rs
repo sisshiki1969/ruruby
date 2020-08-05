@@ -772,7 +772,7 @@ impl Parser {
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
-            | TokenKind::OpenString(_) => Ok(true),
+            | TokenKind::OpenString(_, _) => Ok(true),
             TokenKind::Punct(p) => match p {
                 Punct::LParen
                 | Punct::LBracket
@@ -1428,7 +1428,7 @@ impl Parser {
             TokenKind::IntegerLit(num) => Ok(Node::new_integer(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
-            TokenKind::OpenString(s) => Ok(self.parse_interporated_string_literal(s)?),
+            TokenKind::OpenString(s, _) => Ok(self.parse_interporated_string_literal(s)?),
             TokenKind::Punct(punct) => match punct {
                 Punct::Minus => match self.get()?.kind {
                     TokenKind::IntegerLit(num) => Ok(Node::new_integer(-num, loc)),
@@ -1459,7 +1459,7 @@ impl Parser {
                             self.get_ident_id(ident)
                         }
                         _ => {
-                            if let TokenKind::OpenString(s) = token.kind {
+                            if let TokenKind::OpenString(s, _) = token.kind {
                                 let node = self.parse_interporated_string_literal(&s)?;
                                 let method = self.get_ident_id("to_sym");
                                 let loc = symbol_loc.merge(node.loc());
@@ -1705,7 +1705,7 @@ impl Parser {
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
-            | TokenKind::OpenString(_) => Ok(true),
+            | TokenKind::OpenString(_, _) => Ok(true),
             TokenKind::Punct(p) => match p {
                 Punct::LParen | Punct::LBracket | Punct::Colon | Punct::Scope | Punct::Arrow => {
                     Ok(true)
@@ -1756,7 +1756,7 @@ impl Parser {
                     nodes.push(Node::new_string(s.clone(), self.loc()));
                     self.get()?;
                 }
-                TokenKind::OpenString(s) => {
+                TokenKind::OpenString(s, _) => {
                     let s = s.clone();
                     self.get()?;
                     self.parse_interporated_string_literal(&s)?;
@@ -1773,7 +1773,7 @@ impl Parser {
     }
 
     fn parse_regexp(&mut self) -> Result<Node, RubyError> {
-        let tok = self.lexer.lex_regexp()?;
+        let tok = self.lexer.get_regexp()?;
         let mut nodes = match tok.kind {
             TokenKind::StringLit(s) => {
                 return Ok(Node::new_regexp(
@@ -1808,7 +1808,7 @@ impl Parser {
     }
 
     fn parse_percent_notation(&mut self) -> Result<Node, RubyError> {
-        let tok = self.lexer.lex_percent_notation()?;
+        let tok = self.lexer.get_percent_notation()?;
         let loc = tok.loc;
         if let TokenKind::PercentNotation(kind, content) = tok.kind {
             match kind {
@@ -1832,6 +1832,9 @@ impl Parser {
             }
         } else if let TokenKind::StringLit(s) = tok.kind {
             return Ok(Node::new_string(s, loc));
+        //} else if let TokenKind::OpenString(s) = tok.kind {
+        //    panic!();
+        //let node = self.parse_interporated_string_literal(&s)?;
         } else {
             panic!();
         }
