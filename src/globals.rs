@@ -224,6 +224,7 @@ impl Globals {
         let class = ClassRef::from(id, globals.builtins.object);
         set_class!("StopIteration", Value::class(&globals, class));
         set_class!("RuntimeError", errorobj::init_error(&mut globals));
+        set_class!("IO", io::init_io(&mut globals));
 
         //let vm = Ref::from_ref(&globals).new_vm();
         //vm.exec_file("test.rb");

@@ -406,7 +406,11 @@ impl Lexer {
                         return self.lex_identifier(None, VarKind::InstanceVar);
                     }
                     '$' => {
-                        return self.lex_identifier(None, VarKind::GlobalVar);
+                        if self.consume('>') {
+                            return Ok(self.new_global_var("$>"));
+                        } else {
+                            return self.lex_identifier(None, VarKind::GlobalVar);
+                        }
                     }
                     _ => return Err(self.error_unexpected(pos)),
                 }

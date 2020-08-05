@@ -8,6 +8,7 @@ pub mod float;
 pub mod gc;
 pub mod hash;
 pub mod integer;
+pub mod io;
 pub mod kernel;
 pub mod math;
 pub mod method;
