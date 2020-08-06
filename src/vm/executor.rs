@@ -2186,6 +2186,7 @@ impl VM {
                 ObjKind::Ordinary => oref.inspect(self),
                 ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
                 ObjKind::Hash(href) => href.to_s(self),
+                ObjKind::Complex { .. } => format!("{:?}", oref.kind),
                 _ => {
                     let id = IdentId::get_id("inspect");
                     self.send0(val, id)

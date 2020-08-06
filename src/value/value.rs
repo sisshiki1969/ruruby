@@ -92,6 +92,9 @@ impl PartialEq for Value {
         match (&self.rvalue().kind, &other.rvalue().kind) {
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
+                *r1 == *r2 && *i1 == *i2
+            }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
@@ -199,6 +202,13 @@ impl Value {
         match self.as_rvalue() {
             Some(rv) => rv.dup().pack(),
             None => *self,
+        }
+    }
+
+    pub fn is_real(&self) -> bool {
+        match self.unpack() {
+            RV::Float(_) | RV::Integer(_) => true,
+            _ => false,
         }
     }
 
@@ -394,6 +404,16 @@ impl Value {
                 },
                 _ => None,
             }
+        }
+    }
+
+    pub fn as_complex(&self) -> Option<(Value, Value)> {
+        match self.as_rvalue() {
+            Some(info) => match &info.kind {
+                ObjKind::Complex { r, i } => Some((*r, *i)),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
@@ -719,6 +739,10 @@ impl Value {
         }
     }
 
+    pub fn complex(globals: &Globals, r: Value, i: Value) -> Self {
+        RValue::new_complex(globals, r, i).pack()
+    }
+
     pub fn string(builtins: &BuiltinClass, string: String) -> Self {
         RValue::new_string(builtins, string).pack()
     }
@@ -833,6 +857,9 @@ impl Value {
             (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
+                r1 == r2 && i1 == i2
+            }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
@@ -904,6 +931,79 @@ impl Value {
                 }
             }
             _ => Err(()),
+        }
+    }
+}
+
+impl Value {
+    pub fn to_real(&self) -> Option<Real> {
+        match self.unpack() {
+            RV::Integer(i) => Some(Real::Integer(i)),
+            RV::Float(f) => Some(Real::Float(f)),
+            _ => None,
+        }
+    }
+
+    pub fn to_complex(&self) -> Option<(Real, Real)> {
+        match self.unpack() {
+            RV::Integer(i) => Some((Real::Integer(i), Real::Integer(0))),
+            RV::Float(f) => Some((Real::Float(f), Real::Integer(0))),
+            RV::Object(obj) => match obj.kind {
+                ObjKind::Complex { r, i } => Some((r.to_real().unwrap(), i.to_real().unwrap())),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Real {
+    Integer(i64),
+    Float(f64),
+}
+
+impl Real {
+    pub fn to_val(self) -> Value {
+        match self {
+            Real::Integer(i) => Value::fixnum(i),
+            Real::Float(f) => Value::flonum(f),
+        }
+    }
+}
+
+impl std::ops::Add for Real {
+    type Output = Real;
+    fn add(self, other: Real) -> Real {
+        match (self, other) {
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1 + i2),
+            (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 + f2),
+            (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 + i2 as f64),
+            (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 + f2),
+        }
+    }
+}
+
+impl std::ops::Sub for Real {
+    type Output = Real;
+    fn sub(self, other: Real) -> Real {
+        match (self, other) {
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1 - i2),
+            (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 - f2),
+            (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 - i2 as f64),
+            (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 - f2),
+        }
+    }
+}
+
+impl std::ops::Mul for Real {
+    type Output = Real;
+    fn mul(self, other: Real) -> Real {
+        match (self, other) {
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1 * i2),
+            (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 * f2),
+            (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 * i2 as f64),
+            (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 * f2),
         }
     }
 }

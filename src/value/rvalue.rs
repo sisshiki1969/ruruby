@@ -14,6 +14,7 @@ pub enum ObjKind {
     Ordinary,
     Integer(i64),
     Float(f64),
+    Complex { r: Value, i: Value },
     Class(ClassRef),
     Module(ClassRef),
     String(RString),
@@ -36,6 +37,7 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::String(rs) => write!(f, r#""{:?}""#, rs),
             ObjKind::Integer(i) => write!(f, "{}", *i),
             ObjKind::Float(i) => write!(f, "{}", *i),
+            ObjKind::Complex { r, i } => write!(f, "({:?}+{:?}i)", *r, *i),
             ObjKind::Class(cref) => match cref.name {
                 Some(id) => write!(f, "{:?}", id),
                 None => write!(f, "#<Class:0x{:x}>", cref.id()),
@@ -100,6 +102,10 @@ impl GC for RValue {
                 "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
                 self as *const RValue, self
             ),
+            ObjKind::Complex { r, i } => {
+                r.mark(alloc);
+                i.mark(alloc);
+            }
             ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
             ObjKind::Array(aref) => aref.mark(alloc),
             ObjKind::Hash(href) => href.mark(alloc),
@@ -129,6 +135,7 @@ impl RValue {
             ObjKind::Ordinary => {}
             ObjKind::Integer(_) => {}
             ObjKind::Float(_) => {}
+            ObjKind::Complex { .. } => {}
             ObjKind::String(_) => {}
             ObjKind::Array(_) => {}
             ObjKind::Range(_) => {}
@@ -158,6 +165,10 @@ impl RValue {
             var_table: self.var_table.clone(),
             kind: match &self.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
+                ObjKind::Complex { r, i } => ObjKind::Complex {
+                    r: r.dup(),
+                    i: i.dup(),
+                },
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
                 ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
                 ObjKind::Enumerator(_eref) => ObjKind::Ordinary,
@@ -229,6 +240,14 @@ impl RValue {
             class: Value::nil(),
             var_table: None,
             kind: ObjKind::Float(f),
+        }
+    }
+
+    pub fn new_complex(globals: &Globals, r: Value, i: Value) -> Self {
+        RValue {
+            class: globals.builtins.complex,
+            var_table: None,
+            kind: ObjKind::Complex { r, i },
         }
     }
 

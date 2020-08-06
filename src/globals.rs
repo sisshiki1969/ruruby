@@ -33,6 +33,7 @@ pub type GlobalsRef = Ref<Globals>;
 pub struct BuiltinClass {
     pub integer: Value,
     pub float: Value,
+    pub complex: Value,
     pub array: Value,
     pub class: Value,
     pub module: Value,
@@ -53,6 +54,7 @@ impl BuiltinClass {
         BuiltinClass {
             integer: nil,
             float: nil,
+            complex: nil,
             array: nil,
             class,
             module,
@@ -167,6 +169,7 @@ impl Globals {
         class::init(&mut globals);
         globals.builtins.integer = integer::init(&mut globals);
         globals.builtins.float = float::init(&mut globals);
+        globals.builtins.complex = complex::init(&mut globals);
         globals.builtins.array = array::init_array(&mut globals);
         globals.builtins.procobj = procobj::init_proc(&mut globals);
         globals.builtins.method = method::init_method(&mut globals);
@@ -202,6 +205,7 @@ impl Globals {
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
         set_builtin_class!("Integer", integer);
+        set_builtin_class!("Complex", complex);
         set_builtin_class!("Float", float);
         set_builtin_class!("Array", array);
         set_builtin_class!("Proc", procobj);
@@ -287,6 +291,7 @@ impl Globals {
                 ObjKind::Ordinary => oref.class_name().to_string(),
                 ObjKind::Integer(_) => "Integer".to_string(),
                 ObjKind::Float(_) => "Float".to_string(),
+                ObjKind::Complex { .. } => "Complex".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),
                 ObjKind::Enumerator(_) => "Enumerator".to_string(),
             },

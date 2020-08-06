@@ -1,5 +1,6 @@
 pub mod array;
 pub mod class;
+pub mod complex;
 pub mod enumerator;
 pub mod errorobj;
 pub mod fiber;
