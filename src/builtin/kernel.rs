@@ -22,6 +22,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(kernel_class, "rand", rand);
     globals.add_builtin_instance_method(kernel_class, "loop", loop_);
     globals.add_builtin_instance_method(kernel_class, "exit", exit);
+    globals.add_builtin_instance_method(kernel_class, "Complex", kernel_complex);
     let kernel = Value::class(globals, kernel_class);
     return kernel;
 
@@ -291,6 +292,25 @@ pub fn init(globals: &mut Globals) -> Value {
         };
         std::process::exit(code as i32);
     }
+
+    fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+        vm.check_args_range(args.len(), 1, 3)?;
+        let (r, i, ex) = match args.len() {
+            1 => (args[0], Value::fixnum(0), true),
+            2 => (args[0], args[1], true),
+            3 => (args[0], args[1], args[2].to_bool()),
+            _ => unreachable!(),
+        };
+        if !r.is_real() || !i.is_real() {
+            if ex {
+                return Err(vm.error_argument("Not a real."));
+            } else {
+                return Ok(Value::nil());
+            }
+        }
+
+        Ok(Value::complex(&vm.globals, r, i))
+    }
 }
 
 #[cfg(test)]
@@ -388,6 +408,14 @@ mod test {
       res = []
       e.each { |x| res << x }
       assert(["Yet", "Another", "Ruby", "Hacker"], res)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_complex() {
+        let program = r#"
+        assert(Complex.rect(5.2, -99), Complex(5.2, -99))
         "#;
         assert_script(program);
     }

@@ -1576,12 +1576,7 @@ macro_rules! eval_op_i {
         } else if $lhs.is_packed_num() {
             return Ok(Value::flonum($lhs.as_packed_flonum().$op($i as f64)));
         }
-        let val = match $lhs.unpack() {
-            RV::Integer(lhs) => Value::fixnum(lhs.$op($i as i64)),
-            RV::Float(lhs) => Value::flonum(lhs.$op($i as f64)),
-            _ => return $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64)),
-        };
-        return Ok(val);
+        return $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64));
     };
 }
 
@@ -1606,16 +1601,7 @@ macro_rules! eval_op {
                 return Ok(Value::flonum(lhs.$op(rhs)));
             }
         }
-        let val = match ($lhs.unpack(), $rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Value::fixnum(lhs.$op(rhs)),
-            (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum((lhs as f64).$op(rhs)),
-            (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(lhs.$op(rhs as f64)),
-            (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(lhs.$op(rhs)),
-            _ => {
-                return $vm.fallback_cache_for_binop($lhs, $rhs, $id, $cache);
-            }
-        };
-        return Ok(val);
+        return $vm.fallback_cache_for_binop($lhs, $rhs, $id, $cache);
     };
 }
 

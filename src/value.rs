@@ -8,5 +8,5 @@ mod hash;
 pub use hash::*;
 mod fiber;
 pub use fiber::*;
-mod real;
+pub mod real;
 pub use real::*;

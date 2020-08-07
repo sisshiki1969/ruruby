@@ -3,6 +3,9 @@ use crate::*;
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Float");
     let class = ClassRef::from(id, globals.builtins.object);
+    globals.add_builtin_instance_method(class, "+", add);
+    globals.add_builtin_instance_method(class, "-", sub);
+    globals.add_builtin_instance_method(class, "*", mul);
     globals.add_builtin_instance_method(class, "<=>", cmp);
     globals.add_builtin_instance_method(class, "floor", floor);
     Value::class(globals, class)
@@ -11,6 +14,33 @@ pub fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 // Instance methods
+
+fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let lhs = self_val.to_real().unwrap();
+    let rhs = args[0]
+        .to_real()
+        .ok_or(vm.error_undefined_op("+", args[0], self_val))?;
+    Ok((lhs + rhs).to_val())
+}
+
+fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let lhs = self_val.to_real().unwrap();
+    let rhs = args[0]
+        .to_real()
+        .ok_or(vm.error_undefined_op("-", args[0], self_val))?;
+    Ok((lhs - rhs).to_val())
+}
+
+fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let lhs = self_val.to_real().unwrap();
+    let rhs = args[0]
+        .to_real()
+        .ok_or(vm.error_undefined_op("*", args[0], self_val))?;
+    Ok((lhs * rhs).to_val())
+}
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;

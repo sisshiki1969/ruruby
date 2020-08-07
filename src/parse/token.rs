@@ -1,5 +1,6 @@
 use crate::parse::node::BinOp;
 use crate::util::*;
+use crate::value::real::Real;
 
 pub type Token = Annot<TokenKind>;
 
@@ -42,6 +43,7 @@ pub enum TokenKind {
     Const(String, bool, bool),
     IntegerLit(i64),
     FloatLit(f64),
+    ImaginaryLit(Real),
     StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
@@ -183,6 +185,10 @@ impl Token {
 
     pub fn new_floatlit(num: f64, loc: Loc) -> Self {
         Annot::new(TokenKind::FloatLit(num), loc)
+    }
+
+    pub fn new_imaginarylit(num: Real, loc: Loc) -> Self {
+        Annot::new(TokenKind::ImaginaryLit(num), loc)
     }
 
     pub fn new_stringlit(string: impl Into<String>, loc: Loc) -> Self {
