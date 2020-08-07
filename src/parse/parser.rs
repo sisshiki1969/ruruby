@@ -1079,6 +1079,11 @@ impl Parser {
             let lhs = self.parse_unary()?;
             let lhs = Node::new_unop(UnOp::Not, lhs, loc);
             Ok(lhs)
+        } else if self.consume_punct(Punct::Plus)? {
+            let loc = self.prev_loc();
+            let lhs = self.parse_unary()?;
+            let lhs = Node::new_unop(UnOp::Pos, lhs, loc);
+            Ok(lhs)
         } else {
             let lhs = self.parse_function()?;
             Ok(lhs)
@@ -1815,7 +1820,7 @@ impl Parser {
             match kind {
                 'w' => {
                     let ary = content
-                        .split(' ')
+                        .split(|c| c == ' ' || c == '\n')
                         .map(|x| Node::new_string(x.to_string(), loc))
                         .rev()
                         .collect();
@@ -1823,7 +1828,7 @@ impl Parser {
                 }
                 'i' => {
                     let ary = content
-                        .split(' ')
+                        .split(|c| c == ' ' || c == '\n')
                         .map(|x| Node::new_symbol(IdentId::get_id(x), loc))
                         .rev()
                         .collect();

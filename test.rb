@@ -1,3 +1,3 @@
-puts 'aaa
-bbb
-ccc'
+puts %w[aa a
+        b bb
+        cc c]

@@ -1308,6 +1308,9 @@ impl Codegen {
                         self.save_loc(iseq, node.loc());
                         iseq.push(Inst::NOT);
                     }
+                    UnOp::Pos => {
+                        self.gen(globals, iseq, lhs, true)?;
+                    }
                 }
                 if !use_value {
                     self.gen_pop(iseq)

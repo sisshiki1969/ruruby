@@ -179,6 +179,7 @@ impl BinOp {
 pub enum UnOp {
     BitNot,
     Not,
+    Pos,
 }
 
 impl Node {
