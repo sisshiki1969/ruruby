@@ -4,23 +4,6 @@
 #  contributed by Karl von Laudermann
 #  modified by Jeremy Echols
 
-class Complex_
-  attr_accessor :r, :i
-  def initialize(r,i)
-    @r=r
-    @i=i
-  end
-  def *(other)
-    Complex_.new(@r*other.r - @i*other.i, @r*other.i + @i*other.r)
-  end
-  def +(other)
-    Complex_.new(@r + other.r, @i + other.i)
-  end
-  def abs2
-    @r*@r + @i*@i
-  end
-end
-
 size = 400 # ARGV[0].to_i
 
 puts "P4\n#{size} #{size}"
@@ -39,8 +22,8 @@ bit_num = 0
 # For..in loops are faster than .upto, .downto, .times, etc.
 size.times do |y|
   size.times do |x|
-    z = Complex_.new(0.0, 0.0)
-    c = Complex_.new(2.0*x/size-1.5, 2.0*y/size-1.0)
+    z = Complex(0.0, 0.0)
+    c = Complex(2.0*x/size-1.5, 2.0*y/size-1.0)
     # To make use of the for..in code, we use a dummy variable,
     # like one would in C
 
