@@ -1,6 +1,7 @@
 use super::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::util::*;
+use crate::value::real::Real;
 use fxhash::FxHashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -555,15 +556,23 @@ impl Lexer {
             }
             decimal_flag = true;
         }
-        if decimal_flag {
+        let number = if decimal_flag {
             match s.parse::<f64>() {
-                Ok(f) => Ok(self.new_floatlit(f)),
-                Err(err) => Err(self.error_parse(&format!("{:?}", err), self.pos)),
+                Ok(f) => Real::Float(f),
+                Err(err) => return Err(self.error_parse(&format!("{:?}", err), self.pos)),
             }
         } else {
             match s.parse::<i64>() {
-                Ok(i) => Ok(self.new_numlit(i)),
-                Err(err) => Err(self.error_parse(&format!("{:?}", err), self.pos)),
+                Ok(i) => Real::Integer(i),
+                Err(err) => return Err(self.error_parse(&format!("{:?}", err), self.pos)),
+            }
+        };
+        if self.consume('i') {
+            Ok(self.new_imaginarylit(number))
+        } else {
+            match number {
+                Real::Integer(i) => Ok(self.new_numlit(i)),
+                Real::Float(f) => Ok(self.new_floatlit(f)),
             }
         }
     }
@@ -1020,6 +1029,10 @@ impl Lexer {
 
     fn new_floatlit(&self, num: f64) -> Token {
         Token::new_floatlit(num, self.cur_loc())
+    }
+
+    fn new_imaginarylit(&self, num: Real) -> Token {
+        Token::new_imaginarylit(num, self.cur_loc())
     }
 
     fn new_stringlit(&self, string: impl Into<String>) -> Token {

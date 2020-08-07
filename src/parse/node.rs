@@ -1,6 +1,7 @@
 use super::parser::LvarCollector;
 use crate::id_table::IdentId;
 use crate::util::{Annot, Loc};
+use crate::value::real::Real;
 
 pub type Node = Annot<NodeKind>;
 
@@ -10,6 +11,7 @@ pub enum NodeKind {
     Nil,
     Integer(i64),
     Float(f64),
+    Imaginary(Real),
     Bool(bool),
     String(String),
     InterporatedString(Vec<Node>),
@@ -216,6 +218,10 @@ impl Node {
 
     pub fn new_float(num: f64, loc: Loc) -> Self {
         Node::new(NodeKind::Float(num), loc)
+    }
+
+    pub fn new_imaginary(num: Real, loc: Loc) -> Self {
+        Node::new(NodeKind::Imaginary(num), loc)
     }
 
     pub fn new_string(s: String, loc: Loc) -> Self {

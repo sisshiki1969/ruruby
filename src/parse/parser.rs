@@ -1427,6 +1427,7 @@ impl Parser {
             }
             TokenKind::IntegerLit(num) => Ok(Node::new_integer(*num, loc)),
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
+            TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
             TokenKind::OpenString(s, _) => Ok(self.parse_interporated_string_literal(s)?),
             TokenKind::Punct(punct) => match punct {

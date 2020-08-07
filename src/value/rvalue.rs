@@ -37,7 +37,14 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::String(rs) => write!(f, r#""{:?}""#, rs),
             ObjKind::Integer(i) => write!(f, "{}", *i),
             ObjKind::Float(i) => write!(f, "{}", *i),
-            ObjKind::Complex { r, i } => write!(f, "({:?}+{:?}i)", *r, *i),
+            ObjKind::Complex { r, i } => {
+                let (r, i) = (r.to_real().unwrap(), i.to_real().unwrap());
+                if !i.is_negative() {
+                    write!(f, "({:?}+{:?}i)", r, i)
+                } else {
+                    write!(f, "({:?}{:?}i)", r, i)
+                }
+            }
             ObjKind::Class(cref) => match cref.name {
                 Some(id) => write!(f, "{:?}", id),
                 None => write!(f, "#<Class:0x{:x}>", cref.id()),

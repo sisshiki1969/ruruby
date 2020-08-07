@@ -62,6 +62,17 @@ fn int4() {
 }
 
 #[test]
+fn imaginary() {
+    let program = r##"
+    assert(3+5.44i, Complex(3, 5.44))
+    assert(3-5.44i, Complex(3, -5.44))
+    assert(5+44i, Complex(5, 44))
+    assert(5-44i, Complex(5, -44))
+    "##;
+    assert_script(program);
+}
+
+#[test]
 fn string_lit1() {
     let program = r##"assert("open "  "windows", "open windows")"##;
     assert_script(program);

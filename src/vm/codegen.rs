@@ -314,6 +314,12 @@ impl Codegen {
         self.gen_const_val(iseq, id);
     }
 
+    fn gen_imaginary(&mut self, globals: &mut Globals, iseq: &mut ISeq, i: Real) {
+        let val = Value::complex(&globals, Value::fixnum(0), i.to_val());
+        let id = globals.const_values.insert(val);
+        self.gen_const_val(iseq, id);
+    }
+
     fn gen_symbol(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::PUSH_SYMBOL);
         Codegen::push32(iseq, id.into());
@@ -955,6 +961,7 @@ impl Codegen {
                 | NodeKind::Bool(_)
                 | NodeKind::Integer(_)
                 | NodeKind::Float(_)
+                | NodeKind::Imaginary(_)
                 | NodeKind::String(_)
                 | NodeKind::Symbol(_)
                 | NodeKind::SelfValue => return Ok(()),
@@ -976,6 +983,9 @@ impl Codegen {
             NodeKind::Float(num) => {
                 iseq.push(Inst::PUSH_FLONUM);
                 Codegen::push64(iseq, f64::to_bits(*num));
+            }
+            NodeKind::Imaginary(r) => {
+                self.gen_imaginary(globals, iseq, *r);
             }
             NodeKind::String(s) => {
                 self.gen_string(globals, iseq, s);

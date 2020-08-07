@@ -30,19 +30,33 @@ pub fn init(globals: &mut Globals) -> Value {
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
-    let rhs = args[0]
-        .to_real()
-        .ok_or(vm.error_undefined_op("+", args[0], self_val))?;
-    Ok((lhs + rhs).to_val())
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs + rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let r = lhs + r;
+                let i = i;
+                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+            }
+            None => Err(vm.error_undefined_op("+", args[0], self_val)),
+        },
+    }
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
-    let rhs = args[0]
-        .to_real()
-        .ok_or(vm.error_undefined_op("-", args[0], self_val))?;
-    Ok((lhs - rhs).to_val())
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs - rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let r = lhs - r;
+                let i = -i;
+                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+            }
+            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+        },
+    }
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
