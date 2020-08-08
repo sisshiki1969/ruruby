@@ -667,6 +667,7 @@ impl Parser {
         for lhs in &mlhs {
             self.check_lhs(lhs)?;
         }
+
         return Ok(Node::new_mul_assign(mlhs, mrhs));
     }
 
@@ -804,6 +805,40 @@ impl Parser {
         }
         if self.consume_punct_no_term(Punct::Assign)? {
             let mrhs = self.parse_arg_list(None)?;
+
+            if mrhs.len() == 1 {
+                match &lhs.kind {
+                    NodeKind::BinOp(op, box op_lhs, box op_rhs) => {
+                        if op_rhs.is_variable() {
+                            self.check_lhs(&op_rhs)?;
+                            let assign = Node::new_mul_assign(vec![op_rhs.clone()], mrhs);
+                            return Ok(Node::new_binop(*op, op_lhs.clone(), assign));
+                        }
+                    }
+                    NodeKind::UnOp(op, box node) => {
+                        if node.is_variable() {
+                            self.check_lhs(node)?;
+                            let loc = lhs.loc();
+                            let assign = Node::new_mul_assign(vec![node.clone()], mrhs);
+                            return Ok(Node::new_unop(*op, assign, loc));
+                        }
+                    }
+                    NodeKind::Range {
+                        start: box start,
+                        end: box end,
+                        exclude_end,
+                    } => {
+                        if end.is_variable() {
+                            self.check_lhs(end)?;
+                            let loc = lhs.loc();
+                            let assign = Node::new_mul_assign(vec![end.clone()], mrhs);
+                            return Ok(Node::new_range(start.clone(), assign, *exclude_end, loc));
+                        }
+                    }
+                    _ => {}
+                }
+            };
+
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
         } else if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_term()?.kind {
@@ -1068,7 +1103,6 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Result<Node, RubyError> {
-        // TODO: Support unary '+'.
         if self.consume_punct(Punct::BitNot)? {
             let loc = self.prev_loc();
             let lhs = self.parse_unary()?;

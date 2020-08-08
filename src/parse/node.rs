@@ -175,7 +175,7 @@ impl BinOp {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnOp {
     BitNot,
     Not,
@@ -201,6 +201,17 @@ impl Node {
             | NodeKind::Hash(_, true)
             | NodeKind::RegExp(_, true)
             | NodeKind::Array(_, true) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_variable(&self) -> bool {
+        match &self.kind {
+            NodeKind::Ident(_)
+            | NodeKind::LocalVar(_)
+            | NodeKind::Const { .. }
+            | NodeKind::InstanceVar(_)
+            | NodeKind::GlobalVar(_) => true,
             _ => false,
         }
     }
