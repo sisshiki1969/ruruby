@@ -82,6 +82,7 @@ impl Inst {
     pub const BNOT: u8 = 138;
     pub const POW: u8 = 139;
     pub const CMP: u8 = 140;
+    pub const NEG: u8 = 141;
 
     pub const ADDI: u8 = 150;
     pub const SUBI: u8 = 151;
@@ -247,6 +248,7 @@ impl Inst {
             | Inst::CMP
             | Inst::NOT
             | Inst::SHR
+            | Inst::NEG
             | Inst::BOR
             | Inst::BAND
             | Inst::BXOR

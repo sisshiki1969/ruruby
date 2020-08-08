@@ -697,7 +697,11 @@ impl Codegen {
                 self.save_loc(iseq, lhs.loc());
                 self.gen_set_array_elem(iseq, index.len());
             }
-            _ => return Err(self.error_syntax(format!("Unimplemented LHS form."), lhs.loc())),
+            _ => {
+                return Err(
+                    self.error_syntax(format!("Unimplemented LHS form. {:?}", lhs), lhs.loc())
+                )
+            }
         }
         Ok(())
     }
@@ -1307,6 +1311,11 @@ impl Codegen {
                         self.gen(globals, iseq, lhs, true)?;
                         self.save_loc(iseq, node.loc());
                         iseq.push(Inst::NOT);
+                    }
+                    UnOp::Neg => {
+                        self.gen(globals, iseq, lhs, true)?;
+                        self.save_loc(iseq, node.loc());
+                        iseq.push(Inst::NEG);
                     }
                     UnOp::Pos => {
                         self.gen(globals, iseq, lhs, true)?;

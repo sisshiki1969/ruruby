@@ -180,6 +180,7 @@ pub enum UnOp {
     BitNot,
     Not,
     Pos,
+    Neg,
 }
 
 impl Node {

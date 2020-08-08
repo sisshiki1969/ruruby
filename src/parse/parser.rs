@@ -1083,7 +1083,7 @@ impl Parser {
             };
             let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
-            let lhs = Node::new_binop(BinOp::Mul, lhs, Node::new_integer(-1, loc));
+            let lhs = Node::new_unop(UnOp::Neg, lhs, loc);
             Ok(lhs)
         } else {
             self.discard_state();

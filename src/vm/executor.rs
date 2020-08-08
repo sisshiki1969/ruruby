@@ -630,6 +630,12 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
+                Inst::NEG => {
+                    let lhs = self.stack_pop();
+                    let val = self.eval_neg(lhs)?;
+                    self.stack_push(val);
+                    self.pc += 1;
+                }
                 Inst::BAND => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
@@ -1672,6 +1678,15 @@ impl VM {
             _ => {
                 return self.fallback_for_binop(IdentId::_POW, lhs, rhs);
             }
+        };
+        Ok(val)
+    }
+
+    fn eval_neg(&mut self, lhs: Value) -> VMResult {
+        let val = match lhs.unpack() {
+            RV::Integer(i) => Value::fixnum(-i),
+            RV::Float(f) => Value::flonum(-f),
+            _ => return self.fallback(IdentId::get_id("-@"), lhs, &Args::new0()),
         };
         Ok(val)
     }

@@ -224,6 +224,19 @@ fn op10() {
 }
 
 #[test]
+fn op_negate() {
+    let program = "
+    a = 3.5
+    assert(-3.5, -a)
+    a = 3
+    assert(-3, -a)
+    assert(-5, -a=5)
+    assert(5, a)
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn index_op() {
     let program = "
         assert_error{ :a[3] }
@@ -815,6 +828,20 @@ fn mul_assign7() {
         assert([c,d,e,f,g,h],[5,1,2,3,5,nil])
         a = *[1,2,3]
         assert(a,[1,2,3])
+        ";
+    assert_script(program);
+}
+
+#[test]
+fn assign1() {
+    let program = "
+        assert(13, 5+a=8)
+        assert(8, a)
+        assert(-1, 5-a=6)
+        assert(6, a)
+        assert(20, 4*a=5)
+        assert(5, a)
+        assert(4..7, 4..a=7)
         ";
     assert_script(program);
 }
