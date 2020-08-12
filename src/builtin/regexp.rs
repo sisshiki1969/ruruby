@@ -400,6 +400,14 @@ mod test {
     }
 
     #[test]
+    fn regexp2() {
+        let program = r#"
+        assert 3, "aaazzz" =~ /\172+/
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn regexp_error() {
         assert_error(r#"/+/"#);
         assert_error(r#"Regexp.new("+")"#);

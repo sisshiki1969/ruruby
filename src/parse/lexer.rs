@@ -161,7 +161,7 @@ impl Lexer {
     pub fn get_token(&mut self) -> Result<Token, RubyError> {
         self.buf = None;
         self.buf_skip_lt = None;
-        let tok = self.fetch_token()?;
+        let tok = self.read_token()?;
         match tok.kind {
             TokenKind::Punct(Punct::LBrace) => {
                 self.quote_state.push(QuoteState::Brace);
@@ -185,7 +185,7 @@ impl Lexer {
             return Ok(tok.clone());
         };
         self.save_state();
-        let tok = self.fetch_token()?;
+        let tok = self.read_token()?;
         self.restore_state();
         self.buf = Some(tok.clone());
         Ok(tok)
@@ -198,7 +198,7 @@ impl Lexer {
         let state_save = (self.pos, self.token_start_pos);
         let mut tok;
         loop {
-            tok = self.fetch_token()?;
+            tok = self.read_token()?;
             if tok.is_eof() || !tok.is_line_term() {
                 break;
             }
@@ -207,6 +207,17 @@ impl Lexer {
         self.token_start_pos = state_save.1;
         self.buf_skip_lt = Some(tok.clone());
         Ok(tok)
+    }
+
+    /// Get token as a regular expression.
+    pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
+        match self.read_regexp_sub()? {
+            (s, true) => return Ok(self.new_stringlit(s)),
+            (s, false) => {
+                self.quote_state.push(QuoteState::RegEx);
+                return Ok(self.new_open_reg(s));
+            }
+        }
     }
 
     pub fn save_state(&mut self) {
@@ -222,8 +233,11 @@ impl Lexer {
     pub fn discard_state(&mut self) {
         self.state_save.pop().unwrap();
     }
+}
 
-    fn fetch_token(&mut self) -> Result<Token, RubyError> {
+impl Lexer {
+    /// Read token.
+    fn read_token(&mut self) -> Result<Token, RubyError> {
         loop {
             self.token_start_pos = self.pos;
             if let Some(tok) = self.skip_whitespace() {
@@ -239,14 +253,14 @@ impl Lexer {
             };
 
             if ch.is_ascii_alphabetic() || ch == '_' {
-                return self.lex_identifier(ch, VarKind::Identifier);
+                return self.read_identifier(ch, VarKind::Identifier);
             } else if ch.is_numeric() {
-                return self.lex_number_literal(ch);
+                return self.read_number_literal(ch);
             } else if ch.is_ascii_punctuation() {
                 match ch {
                     '#' => self.goto_eol(),
-                    '"' => return self.lex_string_literal_double(None, '\"'),
-                    '\'' => return self.lex_string_literal_single(None, '\''),
+                    '"' => return self.read_string_literal_double(None, '\"'),
+                    '\'' => return self.read_string_literal_single(None, '\''),
                     ';' => return Ok(self.new_punct(Punct::Semi)),
                     ':' => {
                         if self.consume(':') {
@@ -310,9 +324,9 @@ impl Lexer {
                     '{' => return Ok(self.new_punct(Punct::LBrace)),
                     '}' => match self.quote_state.last().cloned() {
                         Some(QuoteState::DoubleQuote(delimiter)) => {
-                            return self.lex_interpolate_string(delimiter)
+                            return self.read_interpolate_string(delimiter)
                         }
-                        Some(QuoteState::RegEx) => return self.lex_interpolate_regexp(),
+                        Some(QuoteState::RegEx) => return self.read_interpolate_regexp(),
                         Some(QuoteState::Brace) => return Ok(self.new_punct(Punct::RBrace)),
                         _ => return Err(self.error_unexpected(pos)),
                     },
@@ -406,24 +420,25 @@ impl Lexer {
                         }
                     }
                     '@' => {
-                        return self.lex_identifier(None, VarKind::InstanceVar);
+                        return self.read_identifier(None, VarKind::InstanceVar);
                     }
                     '$' => {
                         if self.consume('>') {
                             return Ok(self.new_global_var("$>"));
                         } else {
-                            return self.lex_identifier(None, VarKind::GlobalVar);
+                            return self.read_identifier(None, VarKind::GlobalVar);
                         }
                     }
                     _ => return Err(self.error_unexpected(pos)),
                 }
             } else {
-                return self.lex_identifier(ch, VarKind::Identifier);
+                return self.read_identifier(ch, VarKind::Identifier);
             };
         }
     }
 
-    fn lex_identifier(
+    /// Read identifier. ('@@xx', '$x', '@x')
+    fn read_identifier(
         &mut self,
         ch: impl Into<Option<char>>,
         var_kind: VarKind,
@@ -507,13 +522,13 @@ impl Lexer {
         }
     }
 
-    /// Read number literal
-    fn lex_number_literal(&mut self, ch: char) -> Result<Token, RubyError> {
+    /// Read number literal.
+    fn read_number_literal(&mut self, ch: char) -> Result<Token, RubyError> {
         if ch == '0' {
             if self.consume('x') {
-                return self.lex_hex_number();
+                return self.read_hex_number();
             } else if self.consume('b') {
-                return self.lex_bin_number();
+                return self.read_bin_number();
             }
         };
         let mut s = ch.to_string();
@@ -577,7 +592,8 @@ impl Lexer {
         }
     }
 
-    fn lex_hex_number(&mut self) -> Result<Token, RubyError> {
+    /// Read hexadecimal number.
+    fn read_hex_number(&mut self) -> Result<Token, RubyError> {
         let mut val = match self.get() {
             Ok(ch @ '0'..='9') => (ch as u64 - '0' as u64),
             Ok(ch @ 'a'..='f') => (ch as u64 - 'a' as u64 + 10),
@@ -604,7 +620,8 @@ impl Lexer {
         Ok(self.new_numlit(val as i64))
     }
 
-    fn lex_bin_number(&mut self) -> Result<Token, RubyError> {
+    /// Read binary number.
+    fn read_bin_number(&mut self) -> Result<Token, RubyError> {
         let mut val = match self.get() {
             Ok(ch @ '0'..='1') => (ch as u64 - '0' as u64),
             Ok(_) => {
@@ -628,7 +645,7 @@ impl Lexer {
     }
 
     /// Read string literal ("..", %Q{..}, %{..})
-    fn lex_string_literal_double(
+    fn read_string_literal_double(
         &mut self,
         open: Option<char>,
         term: char,
@@ -663,7 +680,7 @@ impl Lexer {
     }
 
     /// Read string literal '..' or %q{..}
-    fn lex_string_literal_single(
+    fn read_string_literal_single(
         &mut self,
         open: Option<char>,
         term: char,
@@ -698,7 +715,8 @@ impl Lexer {
         }
     }
 
-    pub fn lex_char_literal(&mut self) -> Result<Token, RubyError> {
+    /// Read char literal.
+    pub fn read_char_literal(&mut self) -> Result<Token, RubyError> {
         let c = self.get()?;
         self.buf = None;
         if c == '\\' {
@@ -709,7 +727,8 @@ impl Lexer {
         }
     }
 
-    fn lex_interpolate_string(&mut self, delimiter: char) -> Result<Token, RubyError> {
+    /// Read interpolating literal. (#{ expr })
+    fn read_interpolate_string(&mut self, delimiter: char) -> Result<Token, RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -727,6 +746,7 @@ impl Lexer {
         }
     }
 
+    /// Convert postfix of regular expression.
     fn check_postfix(&mut self, s: &mut String) {
         if self.consume('i') {
             s.push('i');
@@ -741,48 +761,40 @@ impl Lexer {
         };
     }
 
-    pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
-        let mut s = "".to_string();
-        loop {
-            match self.get()? {
-                '/' => {
-                    self.check_postfix(&mut s);
-                    return Ok(self.new_stringlit(s));
-                }
-                '\\' => {
-                    s.push('\\');
-                    s.push(self.get()?);
-                }
-                '#' => {
-                    if self.consume('{') {
-                        self.quote_state.push(QuoteState::RegEx);
-                        return Ok(self.new_open_reg(s));
-                    } else {
-                        s.push('#');
-                    }
-                }
-                c => {
-                    s.push(c);
-                }
-            }
+    fn read_interpolate_regexp(&mut self) -> Result<Token, RubyError> {
+        match self.read_regexp_sub()? {
+            (s, true) => return Ok(self.new_close_dq(s)),
+            (s, false) => return Ok(self.new_inter_dq(s)),
         }
     }
 
-    fn lex_interpolate_regexp(&mut self) -> Result<Token, RubyError> {
+    /// Scan as regular expression.
+    /// return (s:String, flag:bool)
+    /// flag: false -> start new interpolation.
+    ///       true -> terminated.
+    fn read_regexp_sub(&mut self) -> Result<(String, bool), RubyError> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
                 '/' => {
                     self.check_postfix(&mut s);
-                    return Ok(self.new_close_dq(s));
+                    return Ok((s, true));
                 }
                 '\\' => {
                     s.push('\\');
-                    s.push(self.get()?);
+                    if let Some(num) = self.consume_tri_octal() {
+                        let hex = format!("x{:02x}", num);
+                        eprintln!("{}", hex);
+                        for ch in hex.chars() {
+                            s.push(ch);
+                        }
+                    } else {
+                        s.push(self.get()?);
+                    }
                 }
                 '#' => {
                     if self.consume('{') {
-                        return Ok(self.new_inter_dq(s));
+                        return Ok((s, false));
                     } else {
                         s.push('#');
                     }
@@ -821,8 +833,8 @@ impl Lexer {
         };
 
         match kind {
-            Some('q') => Ok(self.lex_string_literal_single(open, term)?),
-            Some('Q') | None => Ok(self.lex_string_literal_double(open, term)?),
+            Some('q') => Ok(self.read_string_literal_single(open, term)?),
+            Some('Q') | None => Ok(self.read_string_literal_double(open, term)?),
             Some(kind) => {
                 let mut s = String::new();
                 let mut level = 0;
@@ -895,6 +907,7 @@ impl Lexer {
     }
 }
 
+// Low level API
 impl Lexer {
     /// Get one char and move to the next.
     /// Returns Ok(char) or RubyError if the cursor reached EOF.
@@ -955,6 +968,25 @@ impl Lexer {
         }
     }
 
+    fn consume_tri_octal(&mut self) -> Option<u8> {
+        fn is_octal(c: char) -> bool {
+            '0' <= c && c <= '7'
+        }
+        let code = &self.source_info.code;
+        let pos = self.pos as usize;
+        if pos + 2 >= self.len {
+            return None;
+        };
+        if is_octal(code[pos]) && is_octal(code[pos + 1]) && is_octal(code[pos + 2]) {
+            let res = ((code[pos] as u8 - '0' as u8) as u16) * 64
+                + ((code[pos + 1] as u8 - '0' as u8) as u16) * 8
+                + (code[pos + 2] as u8 - '0' as u8) as u16;
+            self.pos += 3;
+            Some(res as u8)
+        } else {
+            None
+        }
+    }
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&mut self) -> Result<char, RubyError> {

@@ -1300,7 +1300,12 @@ impl Parser {
                 let mut args = self.parse_arg_list(Punct::RBracket)?;
                 let member_loc = member_loc.merge(self.prev_loc());
                 args.reverse();
-                Node::new_array_member(node, args, member_loc)
+                let idx = Node::new_array_member(node, args, member_loc);
+                if self.consume_punct_no_term(Punct::Assign)? {
+                    let rhs = self.parse_arg()?;
+                    return Ok(Node::new_mul_assign(vec![idx], vec![rhs]));
+                };
+                idx
             } else {
                 return Ok(node);
             };
@@ -1772,7 +1777,7 @@ impl Parser {
 
     fn parse_char_literal(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
-        match self.lexer.lex_char_literal()?.kind {
+        match self.lexer.read_char_literal()?.kind {
             TokenKind::StringLit(s) => Ok(Node::new_string(s, loc.merge(self.prev_loc))),
             _ => unreachable!(),
         }
