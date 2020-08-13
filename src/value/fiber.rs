@@ -95,8 +95,8 @@ impl FiberInfo {
                     let _ = self.tx.send(FiberMsg::Terminate);
                 }
                 h.join().unwrap();
-                #[cfg(debug_assertions)]
-                eprintln!("fiber disposed {:?}", _id);
+                //#[cfg(debug_assertions)]
+                //eprintln!("fiber disposed {:?}", _id);
             }
             // FiberState::Created
             None => {}
@@ -144,8 +144,8 @@ impl FiberInfo {
                 //let builder = thread::Builder::new().stack_size(1024 * 1024);
                 let join = thread::spawn(move || {
                     fiber_vm.fiberstate_running();
-                    #[cfg(debug_assertions)]
-                    eprintln!("running {:?}", std::thread::current().id());
+                    //#[cfg(debug_assertions)]
+                    //eprintln!("running {:?}", std::thread::current().id());
                     fiber_vm.set_allocator();
                     let res = match fiber_kind {
                         FiberKind::Fiber(context) => fiber_vm.run_context(context),
@@ -153,8 +153,8 @@ impl FiberInfo {
                             Self::enumerator_fiber(&mut fiber_vm, receiver, method_id, &args)
                         }
                     };
-                    #[cfg(debug_assertions)]
-                    eprintln!("finished {:?} {:?}", std::thread::current().id(), res);
+                    //#[cfg(debug_assertions)]
+                    //eprintln!("finished {:?} {:?}", std::thread::current().id(), res);
                     // If the fiber was finished, the fiber becomes DEAD.
                     // Return a value on the stack top to the parent fiber.
                     #[cfg(feature = "trace")]
@@ -172,8 +172,8 @@ impl FiberInfo {
                                     }
                                     None => {}
                                 };
-                                #[cfg(debug_assertions)]
-                                eprintln!("killed {:?}", std::thread::current().id());
+                                //#[cfg(debug_assertions)]
+                                //eprintln!("killed {:?}", std::thread::current().id());
                                 fiber_vm.fiberstate_dead();
                                 return;
                             }
@@ -195,8 +195,8 @@ impl FiberInfo {
                         }
                         None => {}
                     };
-                    #[cfg(debug_assertions)]
-                    eprintln!("dead {:?}", std::thread::current().id());
+                    //#[cfg(debug_assertions)]
+                    //eprintln!("dead {:?}", std::thread::current().id());
                 });
                 // Wait for Fiber.yield.
                 let res = self.rec.recv().unwrap();

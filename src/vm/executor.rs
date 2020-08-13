@@ -1523,12 +1523,13 @@ impl VM {
         {
             Some(method) => Ok(method),
             _ => {
+                /*
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "cache miss {} {:?}",
                     IdentId::get_ident_name(method_id),
                     rec_class
-                );
+                );*/
                 let method = self.get_instance_method(rec_class, method_id)?;
                 self.globals
                     .set_inline_cache_entry(cache_id, rec_class, method);

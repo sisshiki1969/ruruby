@@ -413,6 +413,18 @@ mod test {
     }
 
     #[test]
+    fn kernel_eval() {
+        let program = r#"
+        n = 2
+        assert("n", %w{n}*"")
+        assert(2, eval(%w{n}*""))
+        assert("eval(%w{n}*\"\")", %q{eval(%w{n}*"")})
+        #assert(2, eval(%q{eval(%w{n}*"")}))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn kernel_complex() {
         let program = r#"
         assert(Complex.rect(5.2, -99), Complex(5.2, -99))

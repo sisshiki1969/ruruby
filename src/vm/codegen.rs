@@ -699,7 +699,7 @@ impl Codegen {
             }
             _ => {
                 return Err(
-                    self.error_syntax(format!("Unimplemented LHS form. {:?}", lhs), lhs.loc())
+                    self.error_syntax(format!("Unimplemented LHS form. {:#?}", lhs), lhs.loc())
                 )
             }
         }

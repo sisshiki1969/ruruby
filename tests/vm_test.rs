@@ -842,6 +842,11 @@ fn assign1() {
         assert(20, 4*a=5)
         assert(5, a)
         assert(4..7, 4..a=7)
+        assert(7, 4+3*n=1)
+        a,b = c = 1,2
+        assert(1, a)
+        assert(2, b)
+        assert(1, c)
         ";
     assert_script(program);
 }

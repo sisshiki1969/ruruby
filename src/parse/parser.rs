@@ -10,6 +10,8 @@ pub struct Parser {
     pub lexer: Lexer,
     prev_loc: Loc,
     context_stack: Vec<Context>,
+    mul_assign_lhs: bool,
+    mul_assign_rhs: bool,
     //pub ident_table: IdentifierTable,
 }
 
@@ -191,7 +193,8 @@ impl Parser {
             lexer,
             prev_loc: Loc(0, 0),
             context_stack: vec![],
-            //ident_table: IdentifierTable::new(),
+            mul_assign_lhs: false,
+            mul_assign_rhs: false,
         }
     }
 
@@ -330,6 +333,14 @@ impl Parser {
             Ok(true)
         } else {
             Ok(false)
+        }
+    }
+
+    fn consume_assign_op_no_term(&mut self) -> Result<Option<BinOp>, RubyError> {
+        if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_term()?.kind {
+            Ok(Some(op))
+        } else {
+            Ok(None)
         }
     }
 
@@ -647,6 +658,7 @@ impl Parser {
     fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
         // EXPR : MLHS `=' MRHS
         let mut mlhs = vec![node];
+        self.mul_assign_lhs = true;
         loop {
             if self.peek_no_term()?.kind == TokenKind::Punct(Punct::Assign) {
                 break;
@@ -657,18 +669,29 @@ impl Parser {
                 break;
             }
         }
-
+        self.mul_assign_lhs = false;
         if !self.consume_punct_no_term(Punct::Assign)? {
             let loc = self.loc();
             return Err(self.error_unexpected(loc, "Expected '='."));
         }
 
-        let mrhs = self.parse_arg_list(None)?;
+        let mrhs = self.parse_mul_assign_rhs()?;
         for lhs in &mlhs {
             self.check_lhs(lhs)?;
         }
 
         return Ok(Node::new_mul_assign(mlhs, mrhs));
+    }
+
+    fn parse_mul_assign_rhs(&mut self) -> Result<Vec<Node>, RubyError> {
+        if self.mul_assign_rhs {
+            Ok(vec![self.parse_arg()?])
+        } else {
+            self.mul_assign_rhs = true;
+            let mrhs = self.parse_arg_list(None)?;
+            self.mul_assign_rhs = false;
+            Ok(mrhs)
+        }
     }
 
     fn parse_arg_list(&mut self, punct: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
@@ -799,7 +822,7 @@ impl Parser {
     }
 
     fn parse_arg_assign(&mut self) -> Result<Node, RubyError> {
-        let mut lhs = self.parse_arg_ternary()?;
+        let lhs = self.parse_arg_ternary()?;
         if self.is_line_term()? {
             return Ok(lhs);
         }
@@ -841,34 +864,41 @@ impl Parser {
 
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
-        } else if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_term()?.kind {
-            match op {
-                BinOp::LOr => {
-                    self.get()?;
-                    let rhs = self.parse_arg()?;
-                    self.check_lhs(&lhs)?;
-                    if let NodeKind::Ident(id) = lhs.kind {
-                        lhs = Node::new_lvar(id, lhs.loc());
-                    };
-                    let node = Node::new_binop(
-                        BinOp::LOr,
-                        lhs.clone(),
-                        Node::new_mul_assign(vec![lhs.clone()], vec![rhs]),
-                    );
-                    Ok(node)
-                }
-                _ => {
-                    self.get()?;
-                    let rhs = self.parse_arg()?;
-                    self.check_lhs(&lhs)?;
-                    Ok(Node::new_mul_assign(
-                        vec![lhs.clone()],
-                        vec![Node::new_binop(op, lhs, rhs)],
-                    ))
-                }
-            }
+        } else if let Some(op) = self.consume_assign_op_no_term()? {
+            // <lhs> <assign_op> <arg>
+            self.parse_assign_op(lhs, op)
         } else {
             Ok(lhs)
+        }
+    }
+
+    /// Parse assign-op.
+    /// <lhs> <assign_op> <arg>
+    fn parse_assign_op(&mut self, mut lhs: Node, op: BinOp) -> Result<Node, RubyError> {
+        match op {
+            BinOp::LOr => {
+                self.get()?;
+                let rhs = self.parse_arg()?;
+                self.check_lhs(&lhs)?;
+                if let NodeKind::Ident(id) = lhs.kind {
+                    lhs = Node::new_lvar(id, lhs.loc());
+                };
+                let node = Node::new_binop(
+                    BinOp::LOr,
+                    lhs.clone(),
+                    Node::new_mul_assign(vec![lhs], vec![rhs]),
+                );
+                Ok(node)
+            }
+            _ => {
+                self.get()?;
+                let rhs = self.parse_arg()?;
+                self.check_lhs(&lhs)?;
+                Ok(Node::new_mul_assign(
+                    vec![lhs.clone()],
+                    vec![Node::new_binop(op, lhs, rhs)],
+                ))
+            }
         }
     }
 
@@ -1433,14 +1463,22 @@ impl Parser {
                 } else {
                     // FUNCTION or COMMAND or LHS for assignment
                     let node = Node::new_identifier(id, loc);
+                    if !self.mul_assign_lhs {
+                        if self.consume_punct_no_term(Punct::Assign)? {
+                            let mrhs = self.parse_mul_assign_rhs()?;
+                            self.check_lhs(&node)?;
+                            return Ok(Node::new_mul_assign(vec![node], mrhs));
+                        } else if let Some(op) = self.consume_assign_op_no_term()? {
+                            return self.parse_assign_op(node, op);
+                        }
+                    };
                     match self.peek_no_term()?.kind {
-                        // Assignment
-                        TokenKind::Punct(Punct::AssignOp(_))
-                        | TokenKind::Punct(Punct::Assign)
                         // Multiple assignment
-                        | TokenKind::Punct(Punct::Comma) => return Ok(node),
-                        TokenKind::Punct(Punct::LBrace)
-                        | TokenKind::Reserved(Reserved::Do) => return Ok(self.parse_function_args(node)?),
+                        TokenKind::Punct(Punct::Comma) => return Ok(node),
+                        // Method call with block and no args
+                        TokenKind::Punct(Punct::LBrace) | TokenKind::Reserved(Reserved::Do) => {
+                            return Ok(self.parse_function_args(node)?)
+                        }
                         _ => {}
                     };
                     if *trailing_space && self.is_command_()? {
