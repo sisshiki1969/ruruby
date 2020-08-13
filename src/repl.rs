@@ -25,7 +25,6 @@ pub fn repl_vm() {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.new_vm();
     let mut level = parser.get_context_depth();
-    let mut lvar_collector = LvarCollector::new();
     let method = MethodRef::new(MethodInfo::default());
     let info = ISeqInfo::default(method);
     let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None, None);
@@ -61,13 +60,12 @@ pub fn repl_vm() {
         match parser.clone().parse_program_repl(
             std::path::PathBuf::from("REPL"),
             &program,
-            Some(lvar_collector.clone()),
+            Some(context),
         ) {
             Ok(parse_result) => {
                 match vm.run_repl(&parse_result, context) {
                     Ok(result) => {
                         parser.lexer.source_info = parse_result.source_info;
-                        lvar_collector = parse_result.lvar_collector;
                         println!("=> {}", vm.val_inspect(result));
                     }
                     Err(err) => {

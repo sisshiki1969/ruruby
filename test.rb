@@ -1,3 +1,3 @@
-puts %w[aa a
-        b bb
-        cc c]
+a = 3
+
+puts(eval("a"))

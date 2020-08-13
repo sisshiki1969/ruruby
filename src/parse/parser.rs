@@ -2,7 +2,7 @@ use super::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::id_table::IdentId;
 use crate::util::*;
-use crate::vm::context::ContextRef;
+use crate::vm::context::{ContextRef, ISeqKind};
 use fxhash::FxHashMap;
 use std::path::PathBuf;
 
@@ -213,11 +213,7 @@ impl Parser {
     pub fn get_context_depth(&self) -> usize {
         self.context_stack.len()
     }
-    /*
-        fn context(&self) -> &Context {
-            self.context_stack.last().unwrap()
-        }
-    */
+
     fn context_mut(&mut self) -> &mut ParseContext {
         self.context_stack.last_mut().unwrap()
     }
@@ -263,8 +259,6 @@ impl Parser {
                 return false;
             }
         }
-        return false;
-        /*
         let mut ctx = match self.extern_context {
             None => return false,
             Some(ctx) => ctx,
@@ -273,12 +267,14 @@ impl Parser {
             if ctx.iseq_ref.unwrap().lvar.table.contains_key(&id) {
                 return true;
             };
+            if let ISeqKind::Method(_) = ctx.kind {
+                return false;
+            }
             match ctx.outer {
                 Some(outer) => ctx = outer,
                 None => return false,
             }
         }
-        */
     }
 
     fn get_ident_id(&self, method: impl Into<String>) -> IdentId {
@@ -492,9 +488,9 @@ impl Parser {
         mut self,
         path: PathBuf,
         program: &str,
-        lvar_collector: Option<LvarCollector>,
+        extern_context: Option<ContextRef>,
     ) -> Result<ParseResult, RubyError> {
-        let (node, lvar) = match self.parse_program_core(path, program, lvar_collector) {
+        let (node, lvar) = match self.parse_program_core(path, program, extern_context) {
             Ok((node, lvar)) => (node, lvar),
             Err(mut err) => {
                 err.set_level(self.context_stack.len() - 1);
@@ -517,10 +513,15 @@ impl Parser {
         &mut self,
         path: PathBuf,
         program: &str,
-        lvar: Option<LvarCollector>,
+        extern_context: Option<ContextRef>,
     ) -> Result<(Node, LvarCollector), RubyError> {
         self.lexer.init(path, program);
-        self.context_stack.push(ParseContext::new_class(lvar));
+        self.extern_context = extern_context;
+        self.context_stack
+            .push(ParseContext::new_class(match extern_context {
+                Some(ctx) => Some(ctx.iseq_ref.unwrap().lvar.clone()),
+                None => None,
+            }));
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         Ok((node, lvar))
@@ -530,16 +531,13 @@ impl Parser {
         mut self,
         path: PathBuf,
         program: &str,
-        ext_lvar: LvarCollector,
+        extern_context: Option<ContextRef>,
     ) -> Result<ParseResult, RubyError> {
         self.lexer.init(path, program);
-        self.context_stack
-            .push(ParseContext::new_class(Some(ext_lvar)));
+        self.extern_context = extern_context;
         self.context_stack.push(ParseContext::new_block());
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        self.context_stack.pop().unwrap();
-
         let tok = self.peek()?;
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar, self.lexer.source_info);
@@ -849,40 +847,6 @@ impl Parser {
         }
         if self.consume_punct_no_term(Punct::Assign)? {
             let mrhs = self.parse_arg_list(None)?;
-
-            if mrhs.len() == 1 {
-                match &lhs.kind {
-                    NodeKind::BinOp(op, box op_lhs, box op_rhs) => {
-                        if op_rhs.is_variable() {
-                            self.check_lhs(&op_rhs)?;
-                            let assign = Node::new_mul_assign(vec![op_rhs.clone()], mrhs);
-                            return Ok(Node::new_binop(*op, op_lhs.clone(), assign));
-                        }
-                    }
-                    NodeKind::UnOp(op, box node) => {
-                        if node.is_variable() {
-                            self.check_lhs(node)?;
-                            let loc = lhs.loc();
-                            let assign = Node::new_mul_assign(vec![node.clone()], mrhs);
-                            return Ok(Node::new_unop(*op, assign, loc));
-                        }
-                    }
-                    NodeKind::Range {
-                        start: box start,
-                        end: box end,
-                        exclude_end,
-                    } => {
-                        if end.is_variable() {
-                            self.check_lhs(end)?;
-                            let loc = lhs.loc();
-                            let assign = Node::new_mul_assign(vec![end.clone()], mrhs);
-                            return Ok(Node::new_range(start.clone(), assign, *exclude_end, loc));
-                        }
-                    }
-                    _ => {}
-                }
-            };
-
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
         } else if let Some(op) = self.consume_assign_op_no_term()? {
@@ -1123,7 +1087,7 @@ impl Parser {
 
     fn parse_unary_minus(&mut self) -> Result<Node, RubyError> {
         self.save_state();
-        if self.consume_punct(Punct::Minus)? {
+        let lhs = if self.consume_punct(Punct::Minus)? {
             let loc = self.prev_loc();
             match self.peek()?.kind {
                 TokenKind::IntegerLit(_) | TokenKind::FloatLit(_) => {
@@ -1135,12 +1099,14 @@ impl Parser {
             };
             let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
-            let lhs = Node::new_unop(UnOp::Neg, lhs, loc);
-            Ok(lhs)
+            Node::new_unop(UnOp::Neg, lhs, loc)
         } else {
             self.discard_state();
-            let lhs = self.parse_exponent()?;
-            Ok(lhs)
+            self.parse_exponent()?
+        };
+        match self.parse_accesory_assign(&lhs)? {
+            Some(node) => Ok(node),
+            None => Ok(lhs),
         }
     }
 
@@ -1348,21 +1314,24 @@ impl Parser {
                 let mut args = self.parse_arg_list(Punct::RBracket)?;
                 let member_loc = member_loc.merge(self.prev_loc());
                 args.reverse();
-                let idx = Node::new_array_member(node, args, member_loc);
-                if !self.mul_assign_lhs {
-                    if self.consume_punct_no_term(Punct::Assign)? {
-                        let mrhs = self.parse_mul_assign_rhs()?;
-                        self.check_lhs(&idx)?;
-                        return Ok(Node::new_mul_assign(vec![idx], mrhs));
-                    } else if let Some(op) = self.consume_assign_op_no_term()? {
-                        return self.parse_assign_op(idx, op);
-                    }
-                };
-                idx
+                Node::new_array_member(node, args, member_loc)
             } else {
                 return Ok(node);
             };
         }
+    }
+
+    fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, RubyError> {
+        if !self.mul_assign_lhs {
+            if self.consume_punct_no_term(Punct::Assign)? {
+                let mrhs = self.parse_mul_assign_rhs()?;
+                self.check_lhs(&lhs)?;
+                return Ok(Some(Node::new_mul_assign(vec![lhs.clone()], mrhs)));
+            } else if let Some(op) = self.consume_assign_op_no_term()? {
+                return Ok(Some(self.parse_assign_op(lhs.clone(), op)?));
+            }
+        };
+        Ok(None)
     }
 
     /// Parse argument list.
@@ -1486,15 +1455,6 @@ impl Parser {
                 } else {
                     // FUNCTION or COMMAND or LHS for assignment
                     let node = Node::new_identifier(id, loc);
-                    if !self.mul_assign_lhs {
-                        if self.consume_punct_no_term(Punct::Assign)? {
-                            let mrhs = self.parse_mul_assign_rhs()?;
-                            self.check_lhs(&node)?;
-                            return Ok(Node::new_mul_assign(vec![node], mrhs));
-                        } else if let Some(op) = self.consume_assign_op_no_term()? {
-                            return self.parse_assign_op(node, op);
-                        }
-                    };
                     match self.peek_no_term()?.kind {
                         // Multiple assignment
                         TokenKind::Punct(Punct::Comma) => return Ok(node),

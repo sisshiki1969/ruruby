@@ -291,14 +291,14 @@ impl VM {
         program: &str,
     ) -> Result<MethodRef, RubyError> {
         let parser = Parser::new();
-        let ext_lvar = self.current_context().iseq_ref.unwrap().lvar.clone();
-        let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
+        let extern_context = self.current_context();
+        let result = parser.parse_program_eval(path, program, Some(extern_context))?;
 
         #[cfg(feature = "perf")]
         self.perf.set_prev_inst(Perf::INVALID);
 
         let mut codegen = Codegen::new(result.source_info);
-        codegen.context_push(ext_lvar);
+        codegen.set_external_context(extern_context);
         let method = codegen.gen_iseq(
             &mut self.globals,
             &vec![],

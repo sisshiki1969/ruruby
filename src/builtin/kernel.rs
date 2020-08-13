@@ -419,7 +419,7 @@ mod test {
         assert("n", %w{n}*"")
         assert(2, eval(%w{n}*""))
         assert("eval(%w{n}*\"\")", %q{eval(%w{n}*"")})
-        #assert(2, eval(%q{eval(%w{n}*"")}))
+        assert(2, eval(%q{eval(%w{n}*"")}))
         "#;
         assert_script(program);
     }

@@ -10,6 +10,7 @@ pub struct Codegen {
     method_stack: Vec<MethodRef>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
+    extern_context: Option<ContextRef>,
     pub loc: Loc,
     pub source_info: SourceInfoRef,
 }
@@ -219,6 +220,7 @@ impl Codegen {
         Codegen {
             method_stack: vec![],
             context_stack: vec![Context::new()],
+            extern_context: None,
             loop_stack: vec![LoopInfo::new_top()],
             loc: Loc(0, 0),
             source_info,
@@ -252,9 +254,8 @@ impl Codegen {
         self.save_loc(iseq, self.loc)
     }
 
-    pub fn context_push(&mut self, lvar: LvarCollector) {
-        self.context_stack
-            .push(Context::from(lvar.clone_table(), ContextKind::Method));
+    pub fn set_external_context(&mut self, context: ContextRef) {
+        self.extern_context = Some(context);
     }
 }
 
@@ -510,16 +511,31 @@ impl Codegen {
     }
 
     fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
+        let mut idx = 0u32;
         for (i, context) in self.context_stack.iter().rev().enumerate() {
             match context.lvar_info.get(&id) {
                 Some(id) => return Some((i as u32, id.clone())),
-                None => {}
+                None => idx = i as u32,
             };
             if context.kind == ContextKind::Method {
                 return None;
             }
         }
-        None
+        let mut ctx = match self.extern_context {
+            Some(ctx) => ctx,
+            None => return None,
+        };
+        loop {
+            match ctx.iseq_ref.unwrap().lvar.get(&id) {
+                Some(id) => return Some((idx as u32, id.clone())),
+                None => {}
+            };
+            ctx = match ctx.outer {
+                Some(ctx) => ctx,
+                None => return None,
+            };
+            idx += 1;
+        }
     }
 
     fn gen_get_instance_var(&mut self, iseq: &mut ISeq, id: IdentId) {

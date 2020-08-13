@@ -306,6 +306,7 @@ impl ContextRef {
     pub fn adjust_lvar_size(&mut self) {
         let len = self.iseq_ref.unwrap().lvars;
         if LVAR_ARRAY_SIZE < len {
+            panic!();
             for _ in 0..len - LVAR_ARRAY_SIZE {
                 self.lvar_vec.push(Value::nil());
             }
