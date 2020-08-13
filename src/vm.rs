@@ -1,7 +1,7 @@
 mod args;
 mod class;
 mod codegen;
-mod context;
+pub mod context;
 mod executor;
 mod method;
 #[cfg(feature = "perf")]

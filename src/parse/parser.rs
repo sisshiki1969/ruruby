@@ -2,6 +2,7 @@ use super::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::id_table::IdentId;
 use crate::util::*;
+use crate::vm::context::ContextRef;
 use fxhash::FxHashMap;
 use std::path::PathBuf;
 
@@ -9,16 +10,15 @@ use std::path::PathBuf;
 pub struct Parser {
     pub lexer: Lexer,
     prev_loc: Loc,
-    context_stack: Vec<Context>,
+    context_stack: Vec<ParseContext>,
+    extern_context: Option<ContextRef>,
     mul_assign_lhs: bool,
     mul_assign_rhs: bool,
-    //pub ident_table: IdentifierTable,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseResult {
     pub node: Node,
-    //pub ident_table: IdentifierTable,
     pub lvar_collector: LvarCollector,
     pub source_info: SourceInfoRef,
 }
@@ -27,7 +27,6 @@ impl ParseResult {
     pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
         ParseResult {
             node,
-            //ident_table,
             lvar_collector,
             source_info,
         }
@@ -146,26 +145,26 @@ impl LvarCollector {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Context {
+struct ParseContext {
     lvar: LvarCollector,
     kind: ContextKind,
 }
 
-impl Context {
+impl ParseContext {
     fn new_method() -> Self {
-        Context {
+        ParseContext {
             lvar: LvarCollector::new(),
             kind: ContextKind::Method,
         }
     }
     fn new_class(lvar_collector: Option<LvarCollector>) -> Self {
-        Context {
+        ParseContext {
             lvar: lvar_collector.unwrap_or(LvarCollector::new()),
             kind: ContextKind::Class,
         }
     }
     fn new_block() -> Self {
-        Context {
+        ParseContext {
             lvar: LvarCollector::new(),
             kind: ContextKind::Block,
         }
@@ -193,6 +192,7 @@ impl Parser {
             lexer,
             prev_loc: Loc(0, 0),
             context_stack: vec![],
+            extern_context: None,
             mul_assign_lhs: false,
             mul_assign_rhs: false,
         }
@@ -218,7 +218,7 @@ impl Parser {
             self.context_stack.last().unwrap()
         }
     */
-    fn context_mut(&mut self) -> &mut Context {
+    fn context_mut(&mut self) -> &mut ParseContext {
         self.context_stack.last_mut().unwrap()
     }
 
@@ -264,6 +264,21 @@ impl Parser {
             }
         }
         return false;
+        /*
+        let mut ctx = match self.extern_context {
+            None => return false,
+            Some(ctx) => ctx,
+        };
+        loop {
+            if ctx.iseq_ref.unwrap().lvar.table.contains_key(&id) {
+                return true;
+            };
+            match ctx.outer {
+                Some(outer) => ctx = outer,
+                None => return false,
+            }
+        }
+        */
     }
 
     fn get_ident_id(&self, method: impl Into<String>) -> IdentId {
@@ -505,7 +520,7 @@ impl Parser {
         lvar: Option<LvarCollector>,
     ) -> Result<(Node, LvarCollector), RubyError> {
         self.lexer.init(path, program);
-        self.context_stack.push(Context::new_class(lvar));
+        self.context_stack.push(ParseContext::new_class(lvar));
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         Ok((node, lvar))
@@ -518,8 +533,9 @@ impl Parser {
         ext_lvar: LvarCollector,
     ) -> Result<ParseResult, RubyError> {
         self.lexer.init(path, program);
-        self.context_stack.push(Context::new_class(Some(ext_lvar)));
-        self.context_stack.push(Context::new_block());
+        self.context_stack
+            .push(ParseContext::new_class(Some(ext_lvar)));
+        self.context_stack.push(ParseContext::new_block());
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         self.context_stack.pop().unwrap();
@@ -1333,9 +1349,14 @@ impl Parser {
                 let member_loc = member_loc.merge(self.prev_loc());
                 args.reverse();
                 let idx = Node::new_array_member(node, args, member_loc);
-                if self.consume_punct_no_term(Punct::Assign)? {
-                    let rhs = self.parse_arg()?;
-                    return Ok(Node::new_mul_assign(vec![idx], vec![rhs]));
+                if !self.mul_assign_lhs {
+                    if self.consume_punct_no_term(Punct::Assign)? {
+                        let mrhs = self.parse_mul_assign_rhs()?;
+                        self.check_lhs(&idx)?;
+                        return Ok(Node::new_mul_assign(vec![idx], mrhs));
+                    } else if let Some(op) = self.consume_assign_op_no_term()? {
+                        return self.parse_assign_op(idx, op);
+                    }
                 };
                 idx
             } else {
@@ -1421,7 +1442,7 @@ impl Parser {
         };
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();
-        self.context_stack.push(Context::new_block());
+        self.context_stack.push(ParseContext::new_block());
 
         let params = if self.consume_punct(Punct::BitOr)? {
             if self.consume_punct(Punct::BitOr)? {
@@ -1560,7 +1581,7 @@ impl Parser {
                 Punct::Arrow => {
                     // Lambda literal
                     let mut params = vec![];
-                    self.context_stack.push(Context::new_block());
+                    self.context_stack.push(ParseContext::new_block());
                     if self.consume_punct(Punct::LParen)? {
                         if !self.consume_punct(Punct::RParen)? {
                             loop {
@@ -2069,7 +2090,7 @@ impl Parser {
                 return Err(self.error_unexpected(loc, "Expected identifier or operator."));
             }
         };
-        self.context_stack.push(Context::new_method());
+        self.context_stack.push(ParseContext::new_method());
         let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
@@ -2235,7 +2256,7 @@ impl Parser {
         let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
         let id = self.get_ident_id(&name);
-        self.context_stack.push(Context::new_class(None));
+        self.context_stack.push(ParseContext::new_class(None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]

@@ -833,6 +833,19 @@ fn mul_assign7() {
 }
 
 #[test]
+fn mul_assign8() {
+    let program = "
+        a,b = 1,2
+        assert(1, a)
+        assert(2, b)
+        a = [1,2]
+        a[0], a[1] = a[1], a[0]
+        assert([2,1], a)
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn assign1() {
     let program = "
         assert(13, 5+a=8)
