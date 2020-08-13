@@ -33,27 +33,27 @@ pub fn init_hash(globals: &mut Globals) -> Value {
 }
 
 fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let s = hash.to_s(vm);
     Ok(Value::string(&vm.globals.builtins, s))
 }
 
 fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_mut_hash().unwrap();
     hash.clear();
     Ok(self_val)
 }
 
 fn clone(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::hash_from(&vm.globals, (*hash).clone()))
 }
 
 fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let mut hash = self_val.expect_hash(vm, "Receiver")?.clone();
     match hash {
         HashInfo::Map(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
@@ -63,7 +63,7 @@ fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn delete(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let hash = self_val.as_mut_hash().unwrap();
     let res = match hash.remove(args[0]) {
         Some(v) => v,
@@ -73,7 +73,7 @@ fn delete(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn empty(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::bool(hash.len() == 0))
 }
@@ -95,40 +95,40 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn has_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let hash = self_val.as_hash().unwrap();
     let res = hash.contains_key(args[0]);
     Ok(Value::bool(res))
 }
 
 fn has_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let hash = self_val.as_hash().unwrap();
     let res = hash.iter().find(|(_, v)| *v == args[0]).is_some();
     Ok(Value::bool(res))
 }
 
 fn length(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let len = hash.len();
     Ok(Value::fixnum(len as i64))
 }
 
 fn keys(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::array_from(&vm.globals, hash.keys()))
 }
 
 fn values(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::array_from(&vm.globals, hash.values()))
 }
 
 fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let method = vm.expect_block(args.block)?;
     let mut arg = Args::new1(Value::nil());
@@ -141,7 +141,7 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let method = vm.expect_block(args.block)?;
     let mut arg = Args::new1(Value::nil());
@@ -155,7 +155,7 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let method = vm.expect_block(args.block)?;
     let mut arg = Args::new2(Value::nil(), Value::nil());
@@ -208,7 +208,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn compare_by_identity(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_mut_hash().unwrap();
     match hash {
         HashInfo::Map(map) => {
@@ -221,7 +221,7 @@ fn compare_by_identity(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResul
 }
 
 fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let mut vec = vec![];
     for (k, v) in hash.iter() {
@@ -233,7 +233,7 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let mut new_hash = FxHashMap::default();
     for (k, v) in hash.iter() {

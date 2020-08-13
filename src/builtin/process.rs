@@ -12,8 +12,8 @@ pub fn init_process(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn clock_gettime(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn clock_gettime(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
     let duration = vm.globals.instant.elapsed();
     Ok(Value::flonum(duration.as_secs_f64()))
 }

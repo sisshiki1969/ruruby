@@ -56,18 +56,18 @@ fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let val = self_val.dup();
     Ok(val)
 }
 
 fn eql(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     Ok(Value::bool(self_val == args[0]))
 }
 
 fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    //vm.check_args_num(args.len(), 1, 1)?;
+    //vm.check_args_num(self_val,args.len(), 1, 1)?;
     let self_ = self_val;
     let num = match &self_.as_rvalue() {
         Some(info) => match &info.kind {
@@ -91,7 +91,7 @@ fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2)?;
+    vm.check_args_num(self_val, args.len(), 2)?;
     let name = args[0];
     let val = args[1];
     let var_id = match name.as_symbol() {
@@ -107,7 +107,7 @@ fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 }
 
 fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let name = args[0];
     let var_id = match name.as_symbol() {
         Some(symbol) => symbol,
@@ -125,7 +125,7 @@ fn instance_variable_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult 
 }
 
 fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let receiver = self_val.rvalue();
     let res = match receiver.var_table() {
         Some(table) => table
@@ -139,12 +139,12 @@ fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     Ok(self_val)
 }
 
 fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let context = vm.current_context();
     let iseq = context.iseq_ref.unwrap();
     if let ISeqKind::Method(m) = context.kind {
@@ -179,7 +179,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn equal(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     Ok(Value::bool(self_val.id() == args[0].id()))
 }
 

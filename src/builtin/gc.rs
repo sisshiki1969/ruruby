@@ -14,21 +14,21 @@ pub fn init_gc(globals: &mut Globals) -> Value {
     obj
 }
 
-fn count(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
     let count = vm.globals.allocator.count();
     Ok(Value::fixnum(count as i64))
 }
 
-fn enable(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn enable(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
     let last_state = vm.globals.gc_enabled;
     vm.globals.gc_enabled = true;
     Ok(Value::bool(last_state))
 }
 
-fn disable(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn disable(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
     let last_state = vm.globals.gc_enabled;
     vm.globals.gc_enabled = false;
     Ok(Value::bool(last_state))

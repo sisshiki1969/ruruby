@@ -16,7 +16,7 @@ pub fn init(globals: &mut Globals) -> Value {
 // Instance methods
 
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
     let rhs = args[0]
         .to_real()
@@ -25,7 +25,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
     let rhs = args[0]
         .to_real()
@@ -34,7 +34,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
     let rhs = args[0]
         .to_real()
@@ -44,7 +44,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.as_flonum().unwrap();
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&(rhs as f64)),
@@ -58,7 +58,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let lhs = self_val.as_flonum().unwrap();
     Ok(Value::fixnum(lhs.floor() as i64))
 }

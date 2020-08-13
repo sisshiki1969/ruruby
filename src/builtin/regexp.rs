@@ -58,16 +58,16 @@ pub fn init_regexp(globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn regexp_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
     let mut arg0 = args[0];
     let string = arg0.expect_string(vm, "1st arg")?;
     let val = vm.create_regexp_from_string(string)?;
     Ok(val)
 }
 
-fn regexp_escape(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn regexp_escape(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
     let mut arg0 = args[0];
     let string = arg0.expect_string(vm, "1st arg")?;
     let res = regex::escape(string);

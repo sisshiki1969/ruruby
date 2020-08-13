@@ -70,8 +70,8 @@ pub fn init(globals: &mut Globals) -> Value {
     }
 
     /// Built-in function "assert".
-    fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 2)?;
+    fn assert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 2)?;
         if !vm.eval_eq(args[0], args[1]) {
             let res = format!(
                 "Assertion error: Expected: {:?} Actual: {:?}",
@@ -84,8 +84,8 @@ pub fn init(globals: &mut Globals) -> Value {
         }
     }
 
-    fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 0)?;
+    fn assert_error(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 0)?;
         let method = match args.block {
             Some(block) => block,
             None => return Err(vm.error_argument("assert_error(): Block not given.")),
@@ -104,8 +104,8 @@ pub fn init(globals: &mut Globals) -> Value {
         }
     }
 
-    fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 1)?;
+    fn require(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 1)?;
         let file_name = match args[0].as_string() {
             Some(string) => string,
             None => return Err(vm.error_argument("file name must be a string.")),
@@ -116,8 +116,8 @@ pub fn init(globals: &mut Globals) -> Value {
         Ok(Value::bool(true))
     }
 
-    fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 1)?;
+    fn require_relative(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 1)?;
         let context = vm.current_context();
         let mut path = std::path::PathBuf::from(context.iseq_ref.unwrap().source_info.path.clone());
 
@@ -157,7 +157,7 @@ pub fn init(globals: &mut Globals) -> Value {
     }
 
     fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 1)?;
+        vm.check_args_num(self_val, args.len(), 1)?;
         let name = match args[0].as_symbol() {
             Some(id) => id,
             None => return Err(vm.error_type("An argument must be a Symbol.")),
@@ -168,7 +168,7 @@ pub fn init(globals: &mut Globals) -> Value {
     }
 
     fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 1)?;
+        vm.check_args_num(self_val, args.len(), 1)?;
         let mut recv_class = self_val.get_class_object(&vm.globals);
         loop {
             if recv_class.id() == args[0].id() {
@@ -181,8 +181,8 @@ pub fn init(globals: &mut Globals) -> Value {
         }
     }
 
-    fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 1)?;
+    fn integer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 1)?;
         let val = match args[0].unpack() {
             RV::Integer(num) => num,
             RV::Float(num) => num as i64,
@@ -209,8 +209,8 @@ pub fn init(globals: &mut Globals) -> Value {
         Ok(Value::fixnum(val))
     }
 
-    fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 0)?;
+    fn dir(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 0)?;
         let mut path = match vm.root_path.last() {
             Some(path) => path,
             None => return Ok(Value::nil()),
@@ -223,8 +223,8 @@ pub fn init(globals: &mut Globals) -> Value {
         ))
     }
 
-    fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_num(args.len(), 0)?;
+    fn file_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        vm.check_args_num(self_val, args.len(), 0)?;
         let path = vm
             .current_context()
             .iseq_ref

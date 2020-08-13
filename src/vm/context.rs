@@ -184,15 +184,15 @@ impl Context {
 
     pub fn from_args_opt(
         vm: &mut VM,
-        self_value: Value,
+        self_val: Value,
         iseq: ISeqRef,
         args: &Args,
         outer: Option<ContextRef>,
         caller: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
-        let mut context = Context::new(self_value, args.block, iseq, outer, caller);
+        let mut context = Context::new(self_val, args.block, iseq, outer, caller);
         let req_len = iseq.params.req_params;
-        vm.check_args_num(args.len(), req_len)?;
+        vm.check_args_num(self_val, args.len(), req_len)?;
 
         for i in 0..req_len {
             context[i] = args[i];
@@ -305,11 +305,8 @@ impl ContextRef {
 
     pub fn adjust_lvar_size(&mut self) {
         let len = self.iseq_ref.unwrap().lvars;
-        if LVAR_ARRAY_SIZE < len {
+        if LVAR_ARRAY_SIZE != len {
             panic!();
-            for _ in 0..len - LVAR_ARRAY_SIZE {
-                self.lvar_vec.push(Value::nil());
-            }
         }
     }
 }

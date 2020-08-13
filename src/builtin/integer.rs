@@ -28,7 +28,7 @@ pub fn init(globals: &mut Globals) -> Value {
 // Instance methods
 
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs + rhs).to_val()),
@@ -44,7 +44,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs - rhs).to_val()),
@@ -60,7 +60,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
     let rhs = args[0]
         .to_real()
@@ -69,7 +69,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = vm.expect_integer(self_val, "Receiver")?;
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs == rhs)),
@@ -79,7 +79,7 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn neq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = vm.expect_integer(self_val, "Receiver")?;
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs != rhs)),
@@ -90,7 +90,7 @@ fn neq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 macro_rules! define_cmp {
     ($vm:ident, $self_val:ident, $args:ident, $op:ident) => {
-        $vm.check_args_num($args.len(), 1)?;
+        $vm.check_args_num($self_val, $args.len(), 1)?;
         let lhs = $vm.expect_integer($self_val, "Receiver")?;
         match $args[0].unpack() {
             RV::Integer(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
@@ -123,7 +123,7 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = vm.expect_integer(self_val, "Receiver")?;
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&rhs),
@@ -137,7 +137,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     let method = match args.block {
         Some(method) => method,
         None => {
@@ -204,7 +204,7 @@ fn chr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    vm.check_args_num(self_val, args.len(), 0)?;
     self_val.as_fixnum().unwrap();
     Ok(self_val)
 }
