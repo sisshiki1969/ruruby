@@ -466,6 +466,16 @@ impl Value {
         }
     }
 
+    pub fn as_mut_string(&mut self) -> Option<&mut String> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::String(RString::Str(s)) => Some(s),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn expect_string(&mut self, vm: &mut VM, msg: &str) -> Result<&String, RubyError> {
         let val = self.clone();
         let rstring = self.as_mut_rstring().ok_or_else(|| {

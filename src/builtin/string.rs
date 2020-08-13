@@ -154,6 +154,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "*", mul);
     globals.add_builtin_instance_method(class, "%", rem);
     globals.add_builtin_instance_method(class, "[]", index);
+    globals.add_builtin_instance_method(class, "[]=", index_assign);
     globals.add_builtin_instance_method(class, "<=>", cmp);
     globals.add_builtin_instance_method(class, "start_with?", start_with);
     globals.add_builtin_instance_method(class, "to_sym", to_sym);
@@ -176,6 +177,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "to_i", toi);
     globals.add_builtin_instance_method(class, "<", lt);
     globals.add_builtin_instance_method(class, ">", gt);
+    globals.add_builtin_instance_method(class, "center", center);
 
     Value::class(globals, class)
 }
@@ -195,9 +197,9 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
-    let rhs = args[0]
-        .as_rstring()
-        .ok_or_else(|| vm.error_argument("1st arg must be String."))?;
+    let rhs = args[0].as_rstring().ok_or_else(|| {
+        vm.error_argument(format!("1st arg must be String. (given:{:?})", args[0]))
+    })?;
     match (lhs, rhs) {
         (RString::Str(lhs), RString::Str(rhs)) => {
             let res = format!("{}{}", lhs, rhs);
@@ -251,7 +253,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             }
         }
     }
-    vm.check_args_num(self_val, args.len(), 2)?;
+    vm.check_args_range(args.len(), 1, 2)?;
     let lhs = self_val.expect_string(vm, "Receiver")?;
     match args[0].unpack() {
         RV::Integer(i) => {
@@ -259,9 +261,21 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 Some(i) => i,
                 None => return Ok(Value::nil()),
             };
-            match lhs.chars().nth(index) {
-                Some(ch) => Ok(Value::string(&vm.globals.builtins, ch.to_string())),
-                None => Ok(Value::nil()),
+            let len = if args.len() == 2 {
+                match args[1].expect_integer(vm, "1st arg")? {
+                    0 => return Ok(Value::string(&vm.globals.builtins, "".to_string())),
+                    i if i < 0 => return Ok(Value::nil()),
+                    i => i as usize,
+                }
+            } else {
+                1usize
+            };
+            let ch: String = lhs.chars().skip(index).take(len).collect();
+            eprintln!("{}", ch);
+            if ch.len() != 0 {
+                Ok(Value::string(&vm.globals.builtins, ch))
+            } else {
+                Ok(Value::nil())
             }
         }
         RV::Object(oref) => match &oref.kind {
@@ -286,6 +300,23 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         },
         _ => return Err(vm.error_argument("Bad type for index.")),
     }
+}
+
+fn index_assign(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 2, 3)?;
+    let string = self_val.as_mut_string().unwrap();
+    let pos = args[0].expect_integer(vm, "1st arg")? as usize;
+    let (len, mut subst_val) = match args.len() {
+        2 => (0, args[1]),
+        3 => (args[1].expect_integer(vm, "2nd arg")? as usize - 1, args[2]),
+        _ => unreachable!(),
+    };
+    let (start, end) = (
+        string.char_indices().nth(pos).unwrap().0,
+        string.char_indices().nth(pos + len).unwrap().0,
+    );
+    string.replace_range(start..=end, subst_val.expect_string(vm, "Value")?);
+    Ok(Value::nil())
 }
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -707,6 +738,23 @@ fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let lhs = self_val.as_string().unwrap();
+    let width = args[0].expect_integer(vm, "1st arg")?;
+    let padding = " ";
+    let str_len = lhs.chars().count();
+    if width <= 0 || width as usize <= str_len {
+        return Ok(Value::string(&vm.globals.builtins, lhs.clone()));
+    }
+    let head = (width as usize - str_len) / 2;
+    let tail = width as usize - str_len - head;
+    return Ok(Value::string(
+        &vm.globals.builtins,
+        format!("{}{}{}", padding.repeat(head), lhs, padding.repeat(tail)),
+    ));
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -753,7 +801,18 @@ mod test {
         assert "rubyruby"[3], "y" 
         assert "rubyruby"[0..2], "rub" 
         assert "rubyruby"[0..-2], "rubyrub" 
-        assert "rubyruby"[2..-7], "" 
+        assert "rubyruby"[2..-7], ""
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_index2() {
+        let program = r#"
+        a = "qwertyuiop"
+        a[9] = "P"
+        a[3,6] = "/"
+        assert("qwe/P", a) 
         "#;
         assert_script(program);
     }
@@ -795,6 +854,20 @@ mod test {
         let program = r#"
         assert :ruby, "ruby".to_sym
         assert :rust, "rust".to_sym
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_center() {
+        let program = r#"
+        assert("foo", "foo".center(1))
+        assert("foo", "foo".center(2))
+        assert("foo", "foo".center(3))
+        assert("  foo  ", "foo".center(7))
+        assert("  foo   ", "foo".center(8))
+        assert("   foo   ", "foo".center(9))
+        assert("   foo    ", "foo".center(10))
         "#;
         assert_script(program);
     }

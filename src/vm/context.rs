@@ -306,7 +306,7 @@ impl ContextRef {
     pub fn adjust_lvar_size(&mut self) {
         let len = self.iseq_ref.unwrap().lvars;
         if LVAR_ARRAY_SIZE != len {
-            panic!();
+            //panic!();
         }
     }
 }

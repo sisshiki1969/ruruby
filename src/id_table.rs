@@ -108,7 +108,7 @@ impl IdentifierTable {
         let mut table = IdentifierTable {
             table: FxHashMap::default(),
             table_rev: FxHashMap::default(),
-            ident_id: 20,
+            ident_id: 40,
         };
         table.set_ident_id("<null>", IdentId::from(0));
         table.set_ident_id("initialize", IdentId::INITIALIZE);

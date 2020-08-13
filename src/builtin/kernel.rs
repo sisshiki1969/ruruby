@@ -38,6 +38,9 @@ pub fn init(globals: &mut Globals) -> Value {
                 }
             }
         }
+        if args.len() == 0 {
+            println!();
+        }
         for arg in args.iter() {
             flatten(vm, *arg);
         }

@@ -1949,10 +1949,16 @@ impl VM {
                         aref.set_elem(self, &args)?;
                     }
                     ObjKind::Hash(ref mut href) => href.insert(args[0], val),
-                    _ => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
+                    _ => {
+                        args.push(val);
+                        self.fallback(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                    }
                 };
             }
-            None => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
+            None => {
+                args.push(val);
+                self.fallback(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+            }
         }
         Ok(())
     }
@@ -1967,10 +1973,22 @@ impl VM {
                         aref.set_elem_imm(idx, val);
                     }
                     ObjKind::Hash(ref mut href) => href.insert(Value::fixnum(idx as i64), val),
-                    _ => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
+                    _ => {
+                        self.fallback(
+                            IdentId::_INDEX_ASSIGN,
+                            receiver,
+                            &Args::new2(Value::fixnum(idx as i64), val),
+                        )?;
+                    }
                 };
             }
-            None => return Err(self.error_undefined_method(IdentId::_INDEX_ASSIGN, receiver)),
+            None => {
+                self.fallback(
+                    IdentId::_INDEX_ASSIGN,
+                    receiver,
+                    &Args::new2(Value::fixnum(idx as i64), val),
+                )?;
+            }
         }
         Ok(())
     }
