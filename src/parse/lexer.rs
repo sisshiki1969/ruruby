@@ -771,7 +771,7 @@ impl Lexer {
     /// Scan as regular expression.
     /// return (s:String, flag:bool)
     /// flag: false -> start new interpolation.
-    ///       true -> terminated.
+    ///       true  -> terminated.
     fn read_regexp_sub(&mut self) -> Result<(String, bool), RubyError> {
         let mut s = "".to_string();
         loop {
@@ -782,9 +782,10 @@ impl Lexer {
                 }
                 '\\' => {
                     s.push('\\');
+                    // TODO: '\nnn' (n=0-7) is parsed as tri-octal char literal.
+                    // This may cause problems.
                     if let Some(num) = self.consume_tri_octal() {
                         let hex = format!("x{:02x}", num);
-                        eprintln!("{}", hex);
                         for ch in hex.chars() {
                             s.push(ch);
                         }

@@ -847,6 +847,9 @@ fn assign1() {
         assert(1, a)
         assert(2, b)
         assert(1, c)
+        a = []
+        assert(19, 4+5*a[0]=3)
+        assert(3, a[0])
         ";
     assert_script(program);
 }

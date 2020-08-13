@@ -683,6 +683,8 @@ impl Parser {
         return Ok(Node::new_mul_assign(mlhs, mrhs));
     }
 
+    /// Parse rhs of multiple assignment.
+    /// If Parser.mul_assign_rhs is true, only a single assignment is allowed.
     fn parse_mul_assign_rhs(&mut self) -> Result<Vec<Node>, RubyError> {
         if self.mul_assign_rhs {
             Ok(vec![self.parse_arg()?])
@@ -694,16 +696,18 @@ impl Parser {
         }
     }
 
-    fn parse_arg_list(&mut self, punct: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
-        let (flag, punct) = match punct.into() {
-            Some(punct) => (true, punct),
-            None => (false, Punct::Arrow /* dummy */),
-        };
+    fn parse_arg_list(&mut self, term: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
+        let term = term.into();
         let mut args = vec![];
         loop {
-            if flag && self.consume_punct(punct)? {
-                return Ok(args);
-            }
+            match term {
+                Some(term) => {
+                    if self.consume_punct(term)? {
+                        return Ok(args);
+                    }
+                }
+                None => {}
+            };
             if self.consume_punct(Punct::Mul)? {
                 // splat argument
                 let loc = self.prev_loc();
@@ -717,8 +721,9 @@ impl Parser {
                 break;
             }
         }
-        if flag {
-            self.expect_punct(punct)?
+        match term {
+            Some(term) => self.expect_punct(term)?,
+            None => {}
         };
         Ok(args)
     }
@@ -902,6 +907,7 @@ impl Parser {
         }
     }
 
+    /// Check whether `lhs` is a local variable or not.
     fn check_lhs(&mut self, lhs: &Node) -> Result<(), RubyError> {
         if let NodeKind::Ident(id) = lhs.kind {
             self.add_local_var_if_new(id);
@@ -1311,11 +1317,7 @@ impl Parser {
         // <一次式メソッド呼び出し>
         let mut node = self.parse_primary()?;
         let loc = node.loc();
-        /*if node.is_operation() {
-            node = self.parse_function_args(node)?;
-        }*/
         loop {
-            //let tok = self.peek()?;
             node = if self.consume_punct(Punct::Dot)? {
                 self.parse_primary_method(node, false, loc)?
             } else if self.consume_punct_no_term(Punct::SafeNav)? {

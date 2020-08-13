@@ -291,10 +291,8 @@ impl VM {
         program: &str,
     ) -> Result<MethodRef, RubyError> {
         let parser = Parser::new();
-        //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let ext_lvar = self.current_context().iseq_ref.unwrap().lvar.clone();
         let result = parser.parse_program_eval(path, program, ext_lvar.clone())?;
-        //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
         self.perf.set_prev_inst(Perf::INVALID);
