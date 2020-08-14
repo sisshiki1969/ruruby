@@ -95,7 +95,7 @@ impl PartialEq for Value {
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
                 *r1 == *r2 && *i1 == *i2
             }
-            (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
+            (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
                 lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
@@ -870,7 +870,7 @@ impl Value {
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
                 r1 == r2 && i1 == i2
             }
-            (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
+            (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,

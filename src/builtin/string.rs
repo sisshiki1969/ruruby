@@ -178,6 +178,8 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "<", lt);
     globals.add_builtin_instance_method(class, ">", gt);
     globals.add_builtin_instance_method(class, "center", center);
+    globals.add_builtin_instance_method(class, "next", next);
+    globals.add_builtin_instance_method(class, "succ", next);
 
     Value::class(globals, class)
 }
@@ -755,6 +757,51 @@ fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     ));
 }
 
+fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let self_val = self_val.as_bytes().unwrap();
+    let mut buf = vec![];
+    let mut carry_flag = true;
+    if self_val.len() == 0 {
+        return Ok(Value::string(&vm.globals.builtins, "".to_string()));
+    }
+    for b in self_val.iter().rev() {
+        if carry_flag {
+            let c = *b as char;
+            if '0' <= c && c <= '8' || 'a' <= c && c <= 'y' || 'A' <= c && c <= 'Y' {
+                carry_flag = false;
+                buf.push(*b + 1);
+            } else if c == '9' {
+                buf.push('0' as u8);
+            } else if c == 'z' {
+                buf.push('a' as u8);
+            } else if c == 'Z' {
+                buf.push('A' as u8);
+            } else {
+                carry_flag = false;
+                buf.push(*b + 1);
+            }
+        } else {
+            buf.push(*b);
+        }
+    }
+    if carry_flag {
+        let b = buf.last().unwrap();
+        let c = *b as char;
+        if c == '0' {
+            buf.push('1' as u8);
+        } else if c == 'a' {
+            buf.push('a' as u8);
+        } else if c == 'A' {
+            buf.push('A' as u8);
+        }
+    }
+    buf.reverse();
+    let val = Value::bytes(&vm.globals, buf);
+    let _ = val.as_string();
+    Ok(val)
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -975,6 +1022,38 @@ mod test {
         [49, 53, 55, 56].map{ |elem| a += elem.chr }
         assert 1578, a.to_i
         assert 0, "k".to_i
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_succ() {
+        let program = r#"
+        assert "aa".succ, "ab"
+        assert "88".succ.succ, "90"
+        assert "99".succ, "100"
+        assert "ZZ".succ, "AAA"
+        assert "a9".succ, "b0"
+        #assert "-9".succ, "-10"
+        #assert ".".succ, "/"
+        assert "aa".succ, "ab"
+        
+        # 繰り上がり
+        assert "99".succ, "100"
+        assert "a9".succ, "b0"
+        assert "Az".succ, "Ba"
+        assert "zz".succ, "aaa"
+        #assert "-9".succ, "-10"
+        assert "9".succ, "10"
+        assert "09".succ, "10"
+        
+        # アルファベット・数字とそれ以外の混在
+        #assert "1.9.9".succ, "2.0.0"
+        
+        # アルファベット・数字以外のみ
+        assert ".".succ, "/"
+        #assert "\0".succ, "\001"
+        #assert "\377".succ, "\001\000"
         "#;
         assert_script(program);
     }
