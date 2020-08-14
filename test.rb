@@ -1,3 +1,2 @@
-a = 3
-
-puts(eval("a"))
+$s=100
+puts "#$s"

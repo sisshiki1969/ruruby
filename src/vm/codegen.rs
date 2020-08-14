@@ -1028,6 +1028,11 @@ impl Codegen {
                             iseq.push(Inst::TO_S);
                             c += 1;
                         }
+                        NodeKind::GlobalVar(id) => {
+                            self.gen_get_global_var(iseq, *id);
+                            iseq.push(Inst::TO_S);
+                            c += 1;
+                        }
                         _ => unimplemented!("Illegal arguments in Nodekind::InterporatedString."),
                     }
                 }

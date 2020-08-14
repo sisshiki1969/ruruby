@@ -1524,13 +1524,13 @@ impl Parser {
                             let ident = self.token_as_symbol(&token);
                             self.get_ident_id(ident)
                         }
+                        TokenKind::OpenString(s, _) => {
+                            let node = self.parse_interporated_string_literal(&s)?;
+                            let method = self.get_ident_id("to_sym");
+                            let loc = symbol_loc.merge(node.loc());
+                            return Ok(Node::new_send_noarg(node, method, true, false, loc));
+                        }
                         _ => {
-                            if let TokenKind::OpenString(s, _) = token.kind {
-                                let node = self.parse_interporated_string_literal(&s)?;
-                                let method = self.get_ident_id("to_sym");
-                                let loc = symbol_loc.merge(node.loc());
-                                return Ok(Node::new_send_noarg(node, method, true, false, loc));
-                            }
                             return Err(
                                 self.error_unexpected(symbol_loc, "Expect identifier or string.")
                             );
@@ -1587,174 +1587,185 @@ impl Parser {
                     )
                 }
             },
-            TokenKind::Reserved(Reserved::If) => {
-                let node = self.parse_if_then()?;
-                self.expect_reserved(Reserved::End)?;
-                Ok(node)
-            }
-            TokenKind::Reserved(Reserved::Unless) => {
-                let node = self.parse_unless()?;
-                self.expect_reserved(Reserved::End)?;
-                Ok(node)
-            }
-            TokenKind::Reserved(Reserved::For) => {
-                let loc = self.prev_loc();
-                let var_id = self.expect_ident()?;
-                let var = Node::new_lvar(var_id, self.prev_loc());
-                self.add_local_var_if_new(var_id);
-                self.expect_reserved(Reserved::In)?;
-                let iter = self.parse_expr()?;
-                self.parse_do()?;
-                let body = self.parse_comp_stmt()?;
-                self.expect_reserved(Reserved::End)?;
-                let node = Node::new(
-                    NodeKind::For {
-                        param: Box::new(var),
-                        iter: Box::new(iter),
-                        body: Box::new(body),
-                    },
-                    loc.merge(self.prev_loc()),
-                );
-                Ok(node)
-            }
-            TokenKind::Reserved(Reserved::While) => {
-                let loc = self.prev_loc();
-                let cond = self.parse_expr()?;
-                self.parse_do()?;
-                let body = self.parse_comp_stmt()?;
-                self.expect_reserved(Reserved::End)?;
-                let loc = loc.merge(self.prev_loc());
-                Ok(Node::new_while(cond, body, true, loc))
-            }
-            TokenKind::Reserved(Reserved::Until) => {
-                let loc = self.prev_loc();
-                let cond = self.parse_expr()?;
-                self.parse_do()?;
-                let body = self.parse_comp_stmt()?;
-                self.expect_reserved(Reserved::End)?;
-                let loc = loc.merge(self.prev_loc());
-                Ok(Node::new_while(cond, body, false, loc))
-            }
-            TokenKind::Reserved(Reserved::Case) => {
-                let loc = self.prev_loc();
-                let cond = if self.peek()?.kind != TokenKind::Reserved(Reserved::When) {
-                    Some(self.parse_expr()?)
-                } else {
-                    None
-                };
-                self.consume_term()?;
-                let mut when_ = vec![];
-                while self.consume_reserved(Reserved::When)? {
-                    let arg = self.parse_arg_list(None)?;
-                    self.parse_then()?;
-                    let body = self.parse_comp_stmt()?;
-                    when_.push(CaseBranch::new(arg, body));
-                }
-                let else_ = if self.consume_reserved(Reserved::Else)? {
-                    self.parse_comp_stmt()?
-                } else {
-                    Node::new_comp_stmt(vec![], self.loc())
-                };
-                self.expect_reserved(Reserved::End)?;
-                Ok(Node::new_case(cond, when_, else_, loc))
-            }
-            TokenKind::Reserved(Reserved::Def) => Ok(self.parse_def()?),
-            TokenKind::Reserved(Reserved::Class) => {
-                if self.context_stack.last().unwrap().kind == ContextKind::Method {
-                    return Err(
-                        self.error_unexpected(loc, "SyntaxError: class definition in method body.")
-                    );
-                }
-                Ok(self.parse_class(false)?)
-            }
-            TokenKind::Reserved(Reserved::Module) => {
-                if self.context_stack.last().unwrap().kind == ContextKind::Method {
-                    return Err(
-                        self.error_unexpected(loc, "SyntaxError: class definition in method body.")
-                    );
-                }
-                Ok(self.parse_class(true)?)
-            }
-            TokenKind::Reserved(Reserved::Return) => {
-                let tok = self.peek_no_term()?;
-                // TODO: This is not correct.
-                if tok.is_term()
-                    || tok.kind == TokenKind::Reserved(Reserved::Unless)
-                    || tok.kind == TokenKind::Reserved(Reserved::If)
-                    || tok.check_stmt_end()
-                {
-                    let val = Node::new_nil(loc);
-                    return Ok(Node::new_return(val, loc));
-                };
-                let val = self.parse_arg()?;
-                let ret_loc = val.loc();
-                if self.consume_punct_no_term(Punct::Comma)? {
-                    let mut vec = vec![val, self.parse_arg()?];
-                    while self.consume_punct_no_term(Punct::Comma)? {
-                        vec.push(self.parse_arg()?);
+            TokenKind::Reserved(reserved) => {
+                match reserved {
+                    Reserved::If => {
+                        let node = self.parse_if_then()?;
+                        self.expect_reserved(Reserved::End)?;
+                        Ok(node)
                     }
-                    vec.reverse();
-                    let val = Node::new_array(vec, ret_loc);
-                    Ok(Node::new_return(val, loc))
-                } else {
-                    Ok(Node::new_return(val, loc))
-                }
-            }
-            TokenKind::Reserved(Reserved::Break) => {
-                let tok = self.peek_no_term()?;
-                // TODO: This is not correct.
-                if tok.is_term()
-                    || tok.kind == TokenKind::Reserved(Reserved::Unless)
-                    || tok.kind == TokenKind::Reserved(Reserved::If)
-                    || tok.check_stmt_end()
-                {
-                    let val = Node::new_nil(loc);
-                    return Ok(Node::new_break(val, loc));
-                };
-                let val = self.parse_arg()?;
-                let ret_loc = val.loc();
-                if self.consume_punct_no_term(Punct::Comma)? {
-                    let mut vec = vec![val, self.parse_arg()?];
-                    while self.consume_punct_no_term(Punct::Comma)? {
-                        vec.push(self.parse_arg()?);
+                    Reserved::Unless => {
+                        let node = self.parse_unless()?;
+                        self.expect_reserved(Reserved::End)?;
+                        Ok(node)
                     }
-                    vec.reverse();
-                    let val = Node::new_array(vec, ret_loc);
-                    Ok(Node::new_break(val, loc))
-                } else {
-                    Ok(Node::new_break(val, loc))
-                }
-            }
-            TokenKind::Reserved(Reserved::Next) => {
-                let tok = self.peek_no_term()?;
-                // TODO: This is not correct.
-                if tok.is_term()
-                    || tok.kind == TokenKind::Reserved(Reserved::Unless)
-                    || tok.kind == TokenKind::Reserved(Reserved::If)
-                    || tok.check_stmt_end()
-                {
-                    let val = Node::new_nil(loc);
-                    return Ok(Node::new_next(val, loc));
-                };
-                let val = self.parse_arg()?;
-                let ret_loc = val.loc();
-                if self.consume_punct_no_term(Punct::Comma)? {
-                    let mut vec = vec![val, self.parse_arg()?];
-                    while self.consume_punct_no_term(Punct::Comma)? {
-                        vec.push(self.parse_arg()?);
+                    Reserved::For => {
+                        let loc = self.prev_loc();
+                        let var_id = self.expect_ident()?;
+                        let var = Node::new_lvar(var_id, self.prev_loc());
+                        self.add_local_var_if_new(var_id);
+                        self.expect_reserved(Reserved::In)?;
+                        let iter = self.parse_expr()?;
+                        self.parse_do()?;
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_reserved(Reserved::End)?;
+                        let node = Node::new(
+                            NodeKind::For {
+                                param: Box::new(var),
+                                iter: Box::new(iter),
+                                body: Box::new(body),
+                            },
+                            loc.merge(self.prev_loc()),
+                        );
+                        Ok(node)
                     }
-                    vec.reverse();
-                    let val = Node::new_array(vec, ret_loc);
-                    Ok(Node::new_next(val, loc))
-                } else {
-                    Ok(Node::new_next(val, loc))
+                    Reserved::While => {
+                        let loc = self.prev_loc();
+                        let cond = self.parse_expr()?;
+                        self.parse_do()?;
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_reserved(Reserved::End)?;
+                        let loc = loc.merge(self.prev_loc());
+                        Ok(Node::new_while(cond, body, true, loc))
+                    }
+                    Reserved::Until => {
+                        let loc = self.prev_loc();
+                        let cond = self.parse_expr()?;
+                        self.parse_do()?;
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_reserved(Reserved::End)?;
+                        let loc = loc.merge(self.prev_loc());
+                        Ok(Node::new_while(cond, body, false, loc))
+                    }
+                    Reserved::Case => {
+                        let loc = self.prev_loc();
+                        let cond = if self.peek()?.kind != TokenKind::Reserved(Reserved::When) {
+                            Some(self.parse_expr()?)
+                        } else {
+                            None
+                        };
+                        self.consume_term()?;
+                        let mut when_ = vec![];
+                        while self.consume_reserved(Reserved::When)? {
+                            let arg = self.parse_arg_list(None)?;
+                            self.parse_then()?;
+                            let body = self.parse_comp_stmt()?;
+                            when_.push(CaseBranch::new(arg, body));
+                        }
+                        let else_ = if self.consume_reserved(Reserved::Else)? {
+                            self.parse_comp_stmt()?
+                        } else {
+                            Node::new_comp_stmt(vec![], self.loc())
+                        };
+                        self.expect_reserved(Reserved::End)?;
+                        Ok(Node::new_case(cond, when_, else_, loc))
+                    }
+                    Reserved::Def => Ok(self.parse_def()?),
+                    Reserved::Class => {
+                        if self.context_stack.last().unwrap().kind == ContextKind::Method {
+                            return Err(self.error_unexpected(
+                                loc,
+                                "SyntaxError: class definition in method body.",
+                            ));
+                        }
+                        Ok(self.parse_class(false)?)
+                    }
+                    Reserved::Module => {
+                        if self.context_stack.last().unwrap().kind == ContextKind::Method {
+                            return Err(self.error_unexpected(
+                                loc,
+                                "SyntaxError: class definition in method body.",
+                            ));
+                        }
+                        Ok(self.parse_class(true)?)
+                    }
+                    Reserved::Return => {
+                        let tok = self.peek_no_term()?;
+                        // TODO: This is not correct.
+                        if tok.is_term()
+                            || tok.kind == TokenKind::Reserved(Reserved::Unless)
+                            || tok.kind == TokenKind::Reserved(Reserved::If)
+                            || tok.check_stmt_end()
+                        {
+                            let val = Node::new_nil(loc);
+                            return Ok(Node::new_return(val, loc));
+                        };
+                        let val = self.parse_arg()?;
+                        let ret_loc = val.loc();
+                        if self.consume_punct_no_term(Punct::Comma)? {
+                            let mut vec = vec![val, self.parse_arg()?];
+                            while self.consume_punct_no_term(Punct::Comma)? {
+                                vec.push(self.parse_arg()?);
+                            }
+                            vec.reverse();
+                            let val = Node::new_array(vec, ret_loc);
+                            Ok(Node::new_return(val, loc))
+                        } else {
+                            Ok(Node::new_return(val, loc))
+                        }
+                    }
+                    Reserved::Break => {
+                        let tok = self.peek_no_term()?;
+                        // TODO: This is not correct.
+                        if tok.is_term()
+                            || tok.kind == TokenKind::Reserved(Reserved::Unless)
+                            || tok.kind == TokenKind::Reserved(Reserved::If)
+                            || tok.check_stmt_end()
+                        {
+                            let val = Node::new_nil(loc);
+                            return Ok(Node::new_break(val, loc));
+                        };
+                        let val = self.parse_arg()?;
+                        let ret_loc = val.loc();
+                        if self.consume_punct_no_term(Punct::Comma)? {
+                            let mut vec = vec![val, self.parse_arg()?];
+                            while self.consume_punct_no_term(Punct::Comma)? {
+                                vec.push(self.parse_arg()?);
+                            }
+                            vec.reverse();
+                            let val = Node::new_array(vec, ret_loc);
+                            Ok(Node::new_break(val, loc))
+                        } else {
+                            Ok(Node::new_break(val, loc))
+                        }
+                    }
+                    Reserved::Next => {
+                        let tok = self.peek_no_term()?;
+                        // TODO: This is not correct.
+                        if tok.is_term()
+                            || tok.kind == TokenKind::Reserved(Reserved::Unless)
+                            || tok.kind == TokenKind::Reserved(Reserved::If)
+                            || tok.check_stmt_end()
+                        {
+                            let val = Node::new_nil(loc);
+                            return Ok(Node::new_next(val, loc));
+                        };
+                        let val = self.parse_arg()?;
+                        let ret_loc = val.loc();
+                        if self.consume_punct_no_term(Punct::Comma)? {
+                            let mut vec = vec![val, self.parse_arg()?];
+                            while self.consume_punct_no_term(Punct::Comma)? {
+                                vec.push(self.parse_arg()?);
+                            }
+                            vec.reverse();
+                            let val = Node::new_array(vec, ret_loc);
+                            Ok(Node::new_next(val, loc))
+                        } else {
+                            Ok(Node::new_next(val, loc))
+                        }
+                    }
+                    Reserved::True => Ok(Node::new_bool(true, loc)),
+                    Reserved::False => Ok(Node::new_bool(false, loc)),
+                    Reserved::Nil => Ok(Node::new_nil(loc)),
+                    Reserved::Self_ => Ok(Node::new_self(loc)),
+                    Reserved::Begin => Ok(self.parse_begin()?),
+                    _ => {
+                        return Err(
+                            self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
+                        )
+                    }
                 }
             }
-            TokenKind::Reserved(Reserved::True) => Ok(Node::new_bool(true, loc)),
-            TokenKind::Reserved(Reserved::False) => Ok(Node::new_bool(false, loc)),
-            TokenKind::Reserved(Reserved::Nil) => Ok(Node::new_nil(loc)),
-            TokenKind::Reserved(Reserved::Self_) => Ok(Node::new_self(loc)),
-            TokenKind::Reserved(Reserved::Begin) => Ok(self.parse_begin()?),
             TokenKind::EOF => return Err(self.error_eof(loc)),
             _ => {
                 return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
@@ -1830,6 +1841,18 @@ impl Parser {
                 TokenKind::EOF => {
                     let loc = self.loc();
                     return Err(self.error_eof(loc));
+                }
+                TokenKind::VarInterpolate(s, tok, _term) => {
+                    let loc = self.loc();
+                    self.get()?;
+                    nodes.push(Node::new_string(s.clone(), loc));
+                    match *tok {
+                        TokenKind::GlobalVar(s) => {
+                            let id = IdentId::get_id(s);
+                            nodes.push(Node::new_global_var(id, loc))
+                        }
+                        _ => todo!(),
+                    }
                 }
                 _ => {
                     nodes.push(self.parse_comp_stmt()?);

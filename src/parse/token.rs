@@ -50,6 +50,7 @@ pub enum TokenKind {
     OpenString(String, char), // (content, delimiter)
     InterString(String),
     CloseString(String),
+    VarInterpolate(String, Box<TokenKind>, char), // (leading string, var token, delimiter)
     OpenRegex(String),
     PercentNotation(char, String),
     Space,
@@ -173,6 +174,13 @@ impl Token {
 
     pub fn new_global_var(ident: impl Into<String>, loc: Loc) -> Self {
         Annot::new(TokenKind::GlobalVar(ident.into()), loc)
+    }
+
+    pub fn new_var_interpolate(s: String, var: Token, delimiter: char) -> Self {
+        Annot::new(
+            TokenKind::VarInterpolate(s, Box::new(var.kind), delimiter),
+            var.loc,
+        )
     }
 
     pub fn new_reserved(ident: Reserved, loc: Loc) -> Self {
