@@ -405,7 +405,10 @@ impl Parser {
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), RubyError> {
         match &self.get()?.kind {
             TokenKind::Reserved(reserved) if *reserved == expect => Ok(()),
-            _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect {:?}", expect))),
+            t => {
+                Err(self
+                    .error_unexpected(self.prev_loc(), format!("Expect {:?} Got {:?}", expect, t)))
+            }
         }
     }
 
@@ -414,7 +417,10 @@ impl Parser {
     fn expect_punct(&mut self, expect: Punct) -> Result<(), RubyError> {
         match &self.get()?.kind {
             TokenKind::Punct(punct) if *punct == expect => Ok(()),
-            _ => Err(self.error_unexpected(self.prev_loc(), format!("Expect '{:?}'", expect))),
+            t => {
+                Err(self
+                    .error_unexpected(self.prev_loc(), format!("Expect {:?} Got {:?}", expect, t)))
+            }
         }
     }
 
@@ -815,7 +821,7 @@ impl Parser {
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
-            | TokenKind::OpenString(_, _) => Ok(true),
+            | TokenKind::OpenString(_, _, _) => Ok(true),
             TokenKind::Punct(p) => match p {
                 Punct::LParen
                 | Punct::LBracket
@@ -1494,7 +1500,9 @@ impl Parser {
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
-            TokenKind::OpenString(s, _) => Ok(self.parse_interporated_string_literal(s)?),
+            TokenKind::OpenString(s, term, level) => {
+                Ok(self.parse_interporated_string_literal(s, *term, *level)?)
+            }
             TokenKind::Punct(punct) => match punct {
                 Punct::Minus => match self.get()?.kind {
                     TokenKind::IntegerLit(num) => Ok(Node::new_integer(-num, loc)),
@@ -1524,8 +1532,8 @@ impl Parser {
                             let ident = self.token_as_symbol(&token);
                             self.get_ident_id(ident)
                         }
-                        TokenKind::OpenString(s, _) => {
-                            let node = self.parse_interporated_string_literal(&s)?;
+                        TokenKind::OpenString(s, term, level) => {
+                            let node = self.parse_interporated_string_literal(&s, *term, *level)?;
                             let method = self.get_ident_id("to_sym");
                             let loc = symbol_loc.merge(node.loc());
                             return Ok(Node::new_send_noarg(node, method, true, false, loc));
@@ -1782,7 +1790,7 @@ impl Parser {
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
-            | TokenKind::OpenString(_, _) => Ok(true),
+            | TokenKind::OpenString(_, _, _) => Ok(true),
             TokenKind::Punct(p) => match p {
                 Punct::LParen | Punct::LBracket | Punct::Colon | Punct::Scope | Punct::Arrow => {
                     Ok(true)
@@ -1797,6 +1805,7 @@ impl Parser {
         }
     }
 
+    /// Parse string literals. Adjacent string literals are to be combined.
     fn parse_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
         let mut s = s.to_string();
@@ -1815,53 +1824,62 @@ impl Parser {
         }
     }
 
-    fn parse_interporated_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
+    /// Parse template (#{..}, #$s, #@a).
+    fn parse_template(&mut self, nodes: &mut Vec<Node>) -> Result<(), RubyError> {
+        if self.consume_punct(Punct::LBrace)? {
+            nodes.push(self.parse_comp_stmt()?);
+            if !self.consume_punct(Punct::RBrace)? {
+                let loc = self.prev_loc();
+                return Err(self.error_unexpected(loc, "Expect '}'"));
+            }
+        } else {
+            let tok = self.get()?;
+            let loc = tok.loc();
+            let node = match tok.kind {
+                TokenKind::GlobalVar(s) => {
+                    let id = IdentId::get_id(s);
+                    Node::new_global_var(id, loc)
+                }
+                TokenKind::InstanceVar(s) => {
+                    let id = IdentId::get_id(s);
+                    Node::new_instance_var(id, loc)
+                }
+                _ => unreachable!(format!("{:?}", tok)),
+            };
+            nodes.push(node);
+        };
+        Ok(())
+    }
+
+    fn parse_interporated_string_literal(
+        &mut self,
+        s: &str,
+        delimiter: char,
+        level: usize,
+    ) -> Result<Node, RubyError> {
         let start_loc = self.prev_loc();
         let mut nodes = vec![Node::new_string(s.to_string(), start_loc)];
         loop {
-            match self.peek()?.kind {
-                TokenKind::CloseString(s) => {
-                    let end_loc = self.loc();
-                    nodes.push(Node::new_string(s.clone(), end_loc));
-                    self.get()?;
-                    return Ok(Node::new_interporated_string(
-                        nodes,
-                        start_loc.merge(end_loc),
-                    ));
-                }
-                TokenKind::InterString(s) => {
-                    nodes.push(Node::new_string(s.clone(), self.loc()));
-                    self.get()?;
-                }
-                TokenKind::OpenString(s, _) => {
-                    let s = s.clone();
-                    self.get()?;
-                    self.parse_interporated_string_literal(&s)?;
-                }
-                TokenKind::EOF => {
-                    let loc = self.loc();
-                    return Err(self.error_eof(loc));
-                }
-                TokenKind::VarInterpolate(s, tok, _term) => {
-                    let loc = self.loc();
-                    self.get()?;
+            self.parse_template(&mut nodes)?;
+            let tok = self
+                .lexer
+                .read_string_literal_double(None, delimiter, level)?;
+            let loc = tok.loc();
+            match tok.kind {
+                TokenKind::StringLit(s) => {
                     nodes.push(Node::new_string(s.clone(), loc));
-                    match *tok {
-                        TokenKind::GlobalVar(s) => {
-                            let id = IdentId::get_id(s);
-                            nodes.push(Node::new_global_var(id, loc))
-                        }
-                        _ => todo!(),
-                    }
+                    return Ok(Node::new_interporated_string(nodes, start_loc.merge(loc)));
                 }
-                _ => {
-                    nodes.push(self.parse_comp_stmt()?);
+                TokenKind::OpenString(s, _, _) => {
+                    nodes.push(Node::new_string(s.clone(), loc));
                 }
+                _ => unreachable!(format!("{:?}", tok)),
             }
         }
     }
 
     fn parse_regexp(&mut self) -> Result<Node, RubyError> {
+        let start_loc = self.prev_loc();
         let tok = self.lexer.get_regexp()?;
         let mut nodes = match tok.kind {
             TokenKind::StringLit(s) => {
@@ -1871,27 +1889,21 @@ impl Parser {
                 ));
             }
             TokenKind::OpenRegex(s) => vec![Node::new_string(s, tok.loc)],
-            _ => panic!(),
+            _ => unreachable!(),
         };
         loop {
-            match self.peek()?.kind {
-                TokenKind::CloseString(s) => {
-                    self.get()?;
-                    let end_loc = self.prev_loc();
-                    nodes.push(Node::new_string(s, end_loc));
-                    return Ok(Node::new_regexp(nodes, tok.loc.merge(end_loc)));
+            self.parse_template(&mut nodes)?;
+            let tok = self.lexer.get_regexp()?;
+            let loc = tok.loc();
+            match tok.kind {
+                TokenKind::StringLit(s) => {
+                    nodes.push(Node::new_string(s, loc));
+                    return Ok(Node::new_regexp(nodes, start_loc.merge(loc)));
                 }
-                TokenKind::InterString(s) => {
-                    self.get()?;
-                    nodes.push(Node::new_string(s, self.prev_loc()));
+                TokenKind::OpenRegex(s) => {
+                    nodes.push(Node::new_string(s, loc));
                 }
-                TokenKind::EOF => {
-                    let loc = self.loc();
-                    return Err(self.error_eof(loc));
-                }
-                _ => {
-                    nodes.push(self.parse_comp_stmt()?);
-                }
+                _ => unreachable!(),
             }
         }
     }
@@ -1921,11 +1933,11 @@ impl Parser {
             }
         } else if let TokenKind::StringLit(s) = tok.kind {
             return Ok(Node::new_string(s, loc));
-        //} else if let TokenKind::OpenString(s) = tok.kind {
-        //    panic!();
-        //let node = self.parse_interporated_string_literal(&s)?;
+        } else if let TokenKind::OpenString(s, term, level) = tok.kind {
+            let node = self.parse_interporated_string_literal(&s, term, level)?;
+            return Ok(node);
         } else {
-            panic!();
+            panic!(format!("{:?}", tok.kind));
         }
     }
 

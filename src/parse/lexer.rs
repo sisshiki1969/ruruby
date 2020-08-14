@@ -13,15 +13,8 @@ pub struct Lexer {
     buf_skip_lt: Option<Token>,
     reserved: FxHashMap<String, Reserved>,
     reserved_rev: FxHashMap<Reserved, String>,
-    quote_state: Vec<QuoteState>,
     pub source_info: SourceInfoRef,
     state_save: Vec<(u32, u32)>, // (token_start_pos, pos)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum QuoteState {
-    Quote(char), // delimiter
-    RegEx,
 }
 
 #[derive(Debug, Clone)]
@@ -40,8 +33,7 @@ pub enum VarKind {
 #[derive(Debug, Clone, PartialEq)]
 enum InterpolateState {
     Finished(String),
-    NewInterpolation(String),
-    NewVar(String, Token),
+    NewInterpolation(String, usize), // (string, paren_level)
 }
 
 impl Lexer {
@@ -97,7 +89,6 @@ impl Lexer {
             buf_skip_lt: None,
             reserved,
             reserved_rev,
-            quote_state: vec![],
             source_info: SourceInfoRef::new(SourceInfo::new(std::path::PathBuf::default())),
             state_save: vec![],
         }
@@ -166,18 +157,6 @@ impl Lexer {
         self.buf = None;
         self.buf_skip_lt = None;
         let tok = self.read_token()?;
-        match tok.kind {
-            TokenKind::OpenString(_, delimiter) => {
-                self.quote_state.push(QuoteState::Quote(delimiter));
-            }
-            TokenKind::CloseString(_) => {
-                self.quote_state.pop().unwrap();
-            }
-            TokenKind::VarInterpolate(_, _, delimiter) => {
-                self.quote_state.push(QuoteState::Quote(delimiter));
-            }
-            _ => {}
-        };
         Ok(tok)
     }
 
@@ -214,11 +193,7 @@ impl Lexer {
     pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
         match self.read_regexp_sub()? {
             InterpolateState::Finished(s) => Ok(self.new_stringlit(s)),
-            InterpolateState::NewInterpolation(s) => {
-                self.quote_state.push(QuoteState::RegEx);
-                Ok(self.new_open_reg(s))
-            }
-            InterpolateState::NewVar(s, t) => Ok(self.new_var_interpolation(s, t, '/')),
+            InterpolateState::NewInterpolation(s, _) => Ok(self.new_open_reg(s)),
         }
     }
 
@@ -261,7 +236,7 @@ impl Lexer {
             } else if ch.is_ascii_punctuation() {
                 match ch {
                     '#' => self.goto_eol(),
-                    '"' => return self.read_string_literal_double(None, '\"'),
+                    '"' => return self.read_string_literal_double(None, '\"', 0),
                     '\'' => {
                         let s = self.read_string_literal_single(None, '\'')?;
                         return Ok(self.new_stringlit(s));
@@ -327,13 +302,7 @@ impl Lexer {
                     '[' => return Ok(self.new_punct(Punct::LBracket)),
                     ']' => return Ok(self.new_punct(Punct::RBracket)),
                     '{' => return Ok(self.new_punct(Punct::LBrace)),
-                    '}' => match self.quote_state.last().cloned() {
-                        Some(QuoteState::Quote(delimiter)) => {
-                            return self.read_interpolate_string(delimiter)
-                        }
-                        Some(QuoteState::RegEx) => return self.read_interpolate_regexp(),
-                        _ => return Ok(self.new_punct(Punct::RBrace)),
-                    },
+                    '}' => return Ok(self.new_punct(Punct::RBrace)),
                     '.' => {
                         if self.consume('.') {
                             if self.consume('.') {
@@ -650,32 +619,15 @@ impl Lexer {
     }
 
     /// Read string literal ("..", %Q{..}, %{..})
-    fn read_string_literal_double(
+    pub fn read_string_literal_double(
         &mut self,
         open: Option<char>,
         term: char,
+        level: usize,
     ) -> Result<Token, RubyError> {
-        match self.read_interpolate(open, term)? {
+        match self.read_interpolate(open, term, level)? {
             InterpolateState::Finished(s) => Ok(self.new_stringlit(s)),
-            InterpolateState::NewInterpolation(s) => Ok(self.new_open_dq(s, term)),
-            InterpolateState::NewVar(s, t) => Ok(self.new_var_interpolation(s, t, term)),
-        }
-    }
-
-    /// Read interpolating literal. (#{ expr })
-    fn read_interpolate_string(&mut self, delimiter: char) -> Result<Token, RubyError> {
-        match self.read_interpolate(None, delimiter)? {
-            InterpolateState::Finished(s) => Ok(self.new_close_dq(s)),
-            InterpolateState::NewInterpolation(s) => Ok(self.new_inter_dq(s)),
-            InterpolateState::NewVar(s, t) => Ok(self.new_var_interpolation(s, t, delimiter)),
-        }
-    }
-
-    fn read_interpolate_regexp(&mut self) -> Result<Token, RubyError> {
-        match self.read_regexp_sub()? {
-            InterpolateState::Finished(s) => return Ok(self.new_close_dq(s)),
-            InterpolateState::NewInterpolation(s) => return Ok(self.new_inter_dq(s)),
-            InterpolateState::NewVar(s, t) => Ok(self.new_var_interpolation(s, t, '/')),
+            InterpolateState::NewInterpolation(s, level) => Ok(self.new_open_dq(s, term, level)),
         }
     }
 
@@ -684,9 +636,9 @@ impl Lexer {
         &mut self,
         open: Option<char>,
         term: char,
+        mut level: usize,
     ) -> Result<InterpolateState, RubyError> {
         let mut s = "".to_string();
-        let mut level = 0;
         loop {
             match self.get()? {
                 c if open == Some(c) => {
@@ -703,16 +655,10 @@ impl Lexer {
                 }
                 '\\' => s.push(self.read_escaped_char()?),
 
-                '#' => {
-                    if self.consume('{') {
-                        return Ok(InterpolateState::NewInterpolation(s));
-                    } else if self.consume('$') {
-                        let tok = self.read_global_var()?;
-                        return Ok(InterpolateState::NewVar(s, tok));
-                    } else {
-                        s.push('#');
-                    }
-                }
+                '#' => match self.peek()? {
+                    '{' | '$' | '@' => return Ok(InterpolateState::NewInterpolation(s, level)),
+                    _ => s.push('#'),
+                },
                 c => s.push(c),
             }
         }
@@ -782,9 +728,6 @@ impl Lexer {
     }
 
     /// Scan as regular expression.
-    /// return (s:String, flag:bool)
-    /// flag: false -> start new interpolation.
-    ///       true  -> terminated.
     fn read_regexp_sub(&mut self) -> Result<InterpolateState, RubyError> {
         let mut s = "".to_string();
         loop {
@@ -807,13 +750,10 @@ impl Lexer {
                         s.push(ch);
                     }
                 }
-                '#' => {
-                    if self.consume('{') {
-                        return Ok(InterpolateState::NewInterpolation(s));
-                    } else {
-                        s.push('#');
-                    }
-                }
+                '#' => match self.peek()? {
+                    '{' | '$' | '@' => return Ok(InterpolateState::NewInterpolation(s, 0)),
+                    _ => s.push('#'),
+                },
                 c => s.push(c),
             }
         }
@@ -842,7 +782,7 @@ impl Lexer {
                 Some('i') | Some('I') | Some('w') | Some('W') => {
                     return Err(self.error_unexpected(self.pos - 1))
                 }
-                _ => (Some(delimiter), delimiter),
+                _ => (None, delimiter),
             },
             ch => (None, ch),
         };
@@ -852,7 +792,7 @@ impl Lexer {
                 let s = self.read_string_literal_single(open, term)?;
                 Ok(self.new_stringlit(s))
             }
-            Some('Q') | None => Ok(self.read_string_literal_double(open, term)?),
+            Some('Q') | None => Ok(self.read_string_literal_double(open, term, 0)?),
             Some(kind) => {
                 let s = self.read_string_literal_single(open, term)?;
                 Ok(self.new_percent(kind, s))
@@ -936,7 +876,7 @@ impl Lexer {
 
     /// Consume the next char, if the char is equal to the given one.
     /// Return true if the token was consumed.
-    fn consume(&mut self, ch: char) -> bool {
+    pub fn consume(&mut self, ch: char) -> bool {
         if self.pos as usize >= self.len {
             false
         } else if ch == self.source_info.code[self.pos as usize] {
@@ -1083,20 +1023,8 @@ impl Lexer {
         Annot::new(TokenKind::Punct(punc), self.cur_loc())
     }
 
-    fn new_open_dq(&self, s: String, delimiter: char) -> Token {
-        Token::new_open_dq(s, delimiter, self.cur_loc())
-    }
-
-    fn new_inter_dq(&self, s: String) -> Token {
-        Token::new_inter_dq(s, self.cur_loc())
-    }
-
-    fn new_close_dq(&self, s: String) -> Token {
-        Token::new_close_dq(s, self.cur_loc())
-    }
-
-    fn new_var_interpolation(&self, s: String, var: Token, delimiter: char) -> Token {
-        Token::new_var_interpolate(s, var, delimiter)
+    fn new_open_dq(&self, s: String, delimiter: char, level: usize) -> Token {
+        Token::new_open_dq(s, delimiter, level, self.cur_loc())
     }
 
     fn new_open_reg(&self, s: String) -> Token {
@@ -1213,20 +1141,6 @@ mod test {
     fn string_literal2() {
         let program = r#""flower""#;
         let ans = vec![Token![StringLit("flower"), 0, 7], Token![EOF, 8]];
-        assert_tokens(program, ans);
-    }
-
-    #[test]
-    fn string_literal3() {
-        let program = r#""this is #{item1} and #{item2}. ""#;
-        let ans = vec![
-            Token![OpenString("this is ", '\"'), 0, 10],
-            Token![Ident("item1", false, false), 11, 15],
-            Token![InterString(" and "), 16, 23],
-            Token![Ident("item2", false, false), 24, 28],
-            Token![CloseString(". "), 29, 32],
-            Token![EOF, 33],
-        ];
         assert_tokens(program, ans);
     }
 

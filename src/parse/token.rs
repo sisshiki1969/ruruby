@@ -47,10 +47,7 @@ pub enum TokenKind {
     StringLit(String),
     Reserved(Reserved),
     Punct(Punct),
-    OpenString(String, char), // (content, delimiter)
-    InterString(String),
-    CloseString(String),
-    VarInterpolate(String, Box<TokenKind>, char), // (leading string, var token, delimiter)
+    OpenString(String, char, usize), // (content, delimiter, paren_level)
     OpenRegex(String),
     PercentNotation(char, String),
     Space,
@@ -176,13 +173,6 @@ impl Token {
         Annot::new(TokenKind::GlobalVar(ident.into()), loc)
     }
 
-    pub fn new_var_interpolate(s: String, var: Token, delimiter: char) -> Self {
-        Annot::new(
-            TokenKind::VarInterpolate(s, Box::new(var.kind), delimiter),
-            var.loc,
-        )
-    }
-
     pub fn new_reserved(ident: Reserved, loc: Loc) -> Self {
         Annot::new(TokenKind::Reserved(ident), loc)
     }
@@ -203,16 +193,8 @@ impl Token {
         Annot::new(TokenKind::StringLit(string.into()), loc)
     }
 
-    pub fn new_open_dq(s: impl Into<String>, delimiter: char, loc: Loc) -> Self {
-        Annot::new(TokenKind::OpenString(s.into(), delimiter), loc)
-    }
-
-    pub fn new_inter_dq(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::InterString(s.into()), loc)
-    }
-
-    pub fn new_close_dq(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::CloseString(s.into()), loc)
+    pub fn new_open_dq(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
+        Annot::new(TokenKind::OpenString(s.into(), delimiter, level), loc)
     }
 
     pub fn new_open_reg(s: impl Into<String>, loc: Loc) -> Self {
@@ -276,7 +258,7 @@ impl Token {
 
     pub fn check_stmt_end(&self) -> bool {
         match self.kind {
-            TokenKind::EOF | TokenKind::InterString(_) | TokenKind::CloseString(_) => true,
+            TokenKind::EOF => true,
             TokenKind::Reserved(reserved) => match reserved {
                 Reserved::Else
                 | Reserved::Elsif
