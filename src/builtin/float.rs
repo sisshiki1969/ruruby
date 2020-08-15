@@ -6,6 +6,8 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "+", add);
     globals.add_builtin_instance_method(class, "-", sub);
     globals.add_builtin_instance_method(class, "*", mul);
+    //globals.add_builtin_instance_method(class, "/", div);
+    globals.add_builtin_instance_method(class, "div", quotient);
     globals.add_builtin_instance_method(class, "<=>", cmp);
     globals.add_builtin_instance_method(class, "floor", floor);
     Value::class(globals, class)
@@ -18,28 +20,58 @@ pub fn init(globals: &mut Globals) -> Value {
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
-    let rhs = args[0]
-        .to_real()
-        .ok_or(vm.error_undefined_op("+", args[0], self_val))?;
-    Ok((lhs + rhs).to_val())
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs + rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let r = lhs + r;
+                let i = i;
+                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+            }
+            None => Err(vm.error_undefined_op("+", args[0], self_val)),
+        },
+    }
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
-    let rhs = args[0]
-        .to_real()
-        .ok_or(vm.error_undefined_op("-", args[0], self_val))?;
-    Ok((lhs - rhs).to_val())
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs - rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let r = lhs - r;
+                let i = -i;
+                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+            }
+            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+        },
+    }
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.to_real().unwrap();
-    let rhs = args[0]
-        .to_real()
-        .ok_or(vm.error_undefined_op("*", args[0], self_val))?;
-    Ok((lhs * rhs).to_val())
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs * rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let r = lhs * r;
+                let i = lhs * i;
+                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+            }
+            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+        },
+    }
+}
+
+fn quotient(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
+        None => Err(vm.error_undefined_op("div", args[0], self_val)),
+    }
 }
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -76,6 +108,17 @@ mod tests {
         assert(nil, 1.3<=>:foo)
         assert(1, 1.3.floor)
         assert(-2, (-1.3).floor)
+    ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn float_quotient() {
+        let program = "
+        assert(1, 3.0.div(2)) 
+        assert(1, 3.0.div(2.0)) 
+        assert(-2, (-3.0).div(2.0)) 
+        assert(-2, (-3.0).div(2)) 
     ";
         assert_script(program);
     }

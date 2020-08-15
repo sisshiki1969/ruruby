@@ -7,7 +7,7 @@ n=2; eval $s=%q{Z=?\s;eval"$><<S=Z*4"+(%w{+"n=#{-~n%3};eval$s=%q{#$s}#YE";$>.isa
 RKO>==QMQVR    'b`&DK>BS<XE$T>T33DDDUM<V@@E(((TCT0A<0A"')5CXPcQa54X@@Y#KcK--S;; /GOT<Q`$)T)T
 :a4A%%#X   VS6a   '   b`&DK>BS<T7**]  ^^b6+++]~;   P=Str    uct.new(:x,:d,:p,:v );M=(-5**7..
 b=0).m   ap{[]};A=s  =[];t=10000000;q=?y.succ;(    s=S     .scan(/.+/ );M[0]<<P [25i-b%3*5i-
-9,0,0  ,2+1  i] ;6  0.t   ime  s  {  |i    |j=  i  %2  0  ;i<  40 ?    [    M[j -1],m=M[j],M
+9,0,0  ,2+1  i] ;6  0.t   ime  s  {  |i    |j=  i  %2  0  ;i<  40 ?    [    M[j -1],(m=M[j]),M
 [j+1  ]].  ea  ch  {|  n|  m.   ea  ch  {|  p| n. ea ch  {|  q|  d=p .x  -q  .x ;w=d.abs-4;w
 <0&   &(  i<2 0?  p.  d+=  w  *w:  p.     p+=  w    *(   d  *(3 -p. d-     q.d) +(p.v-q.v)*4
 )/p   .d  )}  }   }   :M  .  shif  t   .ea c  h{   |p|  y,  x=  (   p.  x+= p.v +=p.p/10).re

@@ -2520,7 +2520,7 @@ impl VM {
         if index < 0 {
             let i = len as i64 + index;
             if i < 0 {
-                return Err(self.error_unimplemented("Index out of range."));
+                return Err(self.error_unimplemented("Index too small for array."));
             };
             Ok(i as usize)
         } else {

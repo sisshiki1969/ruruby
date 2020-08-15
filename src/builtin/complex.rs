@@ -6,8 +6,11 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(classref, "+", add);
     globals.add_builtin_instance_method(classref, "-", sub);
     globals.add_builtin_instance_method(classref, "*", mul);
+    globals.add_builtin_instance_method(classref, "/", div);
     globals.add_builtin_instance_method(classref, "==", eq);
     globals.add_builtin_instance_method(classref, "abs2", abs2);
+    globals.add_builtin_instance_method(classref, "abs", abs);
+    globals.add_builtin_instance_method(classref, "rect", rect);
     let class = Value::class(globals, classref);
     globals.add_builtin_class_method(class, "rect", complex_rect);
     globals.add_builtin_class_method(class, "rectangular", complex_rect);
@@ -73,6 +76,19 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
 }
 
+fn div(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let (r1, i1) = self_val.to_complex().unwrap();
+    let (r2, i2) = match args[0].to_complex() {
+        Some(t) => t,
+        None => return Err(vm.error_type("Not a real.")),
+    };
+    let abs2 = r2 * r2 + i2 * i2;
+    let r = (r2 * r1 + i2 * i1) / abs2;
+    let i = (r2 * i1 + r1 * i2) / abs2;
+    Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+}
+
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
@@ -90,6 +106,18 @@ fn abs2(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok((r * r + i * i).to_val())
 }
 
+fn abs(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let (r, i) = self_val.to_complex().unwrap();
+    Ok((r * r + i * i).sqrt().to_val())
+}
+
+fn rect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let (r, i) = self_val.to_complex().unwrap();
+    Ok(Value::array_from(&vm.globals, vec![r.to_val(), i.to_val()]))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -105,6 +133,18 @@ mod tests {
         assert(Complex.rect(3, 19), Complex.rect(5, 7) * Complex.rect(2, 1))
         assert(17, Complex.rect(1, -4).abs2)
         assert(20.53, Complex.rect(1.7, -4.2).abs2)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn complex2() {
+        let program = r#"
+        assert(17, (1-4i).abs2)
+        assert(20.53, (1.7-4.2i).abs2)
+        assert(2.23606797749979, (1+2i).abs)
+        assert(5.0, (3+4i).abs)
+        assert(0.7071067811865476, (0.5+0.5i).abs)
         "#;
         assert_script(program);
     }

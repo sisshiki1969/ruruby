@@ -12,8 +12,8 @@ pub struct Parser {
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
     extern_context: Option<ContextRef>,
-    mul_assign_lhs: bool,
-    mul_assign_rhs: bool,
+    mul_assign_lhs: bool, // this flag suppress accesory assignment.
+    mul_assign_rhs: bool, // this flag suppress accesory multiple assignment.
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -717,12 +717,16 @@ impl Parser {
     }
 
     fn parse_arg_list(&mut self, term: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
+        let old = self.mul_assign_rhs;
+        // multiple assignment must be suppressed in parsing arg list.
+        self.mul_assign_rhs = true;
         let term = term.into();
         let mut args = vec![];
         loop {
             match term {
                 Some(term) => {
                     if self.consume_punct(term)? {
+                        self.mul_assign_rhs = old;
                         return Ok(args);
                     }
                 }
@@ -741,6 +745,7 @@ impl Parser {
                 break;
             }
         }
+        self.mul_assign_rhs = old;
         match term {
             Some(term) => self.expect_punct(term)?,
             None => {}

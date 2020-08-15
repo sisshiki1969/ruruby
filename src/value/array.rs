@@ -20,9 +20,10 @@ impl ArrayInfo {
         let arg_num = args.len();
         vm.check_args_range(arg_num, 1, 2)?;
         let index = args[0].expect_integer(&vm, "Index")?;
-        let index = vm.get_array_index(index, self.elements.len())?;
+        let self_len = self.elements.len();
+        let index = vm.get_array_index(index, self_len).unwrap_or(self_len);
         let val = if arg_num == 1 {
-            if index >= self.elements.len() {
+            if index >= self_len {
                 Value::nil()
             } else {
                 self.elements[index]
@@ -31,11 +32,11 @@ impl ArrayInfo {
             let len = args[1].expect_integer(&vm, "Index")?;
             if len < 0 {
                 Value::nil()
-            } else if index >= self.elements.len() {
+            } else if index >= self_len {
                 Value::array_from(&vm.globals, vec![])
             } else {
                 let len = len as usize;
-                let end = std::cmp::min(self.elements.len(), index + len);
+                let end = std::cmp::min(self_len, index + len);
                 let ary = (&self.elements[index..end]).to_vec();
                 Value::array_from(&vm.globals, ary)
             }

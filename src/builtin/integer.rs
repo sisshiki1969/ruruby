@@ -6,6 +6,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "+", add);
     globals.add_builtin_instance_method(class, "-", sub);
     globals.add_builtin_instance_method(class, "*", mul);
+    globals.add_builtin_instance_method(class, "div", quotient);
     globals.add_builtin_instance_method(class, "==", eq);
     globals.add_builtin_instance_method(class, "!=", neq);
     globals.add_builtin_instance_method(class, ">=", ge);
@@ -72,6 +73,15 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             None => Err(vm.error_undefined_op("-", args[0], self_val)),
         },
+    }
+}
+
+fn quotient(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
+        None => Err(vm.error_undefined_op("div", args[0], self_val)),
     }
 }
 
@@ -331,6 +341,17 @@ mod tests {
         res = 0
         4.step(20, 3){|x| res += x}
         assert(69, res)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_quotient() {
+        let program = r#"
+        assert(1, 3.div(2))
+        assert(1, 3.div(2.0))
+        assert(-2, (-3).div(2))
+        assert(-2, (-3).div(2.0))
         "#;
         assert_script(program);
     }
