@@ -1856,7 +1856,7 @@ macro_rules! eval_cmp_i {
 
 impl VM {
     pub fn eval_eq(&self, rhs: Value, lhs: Value) -> bool {
-        lhs.equal(rhs)
+        lhs == rhs
     }
 
     pub fn eval_eqi(&self, lhs: Value, i: i32) -> bool {

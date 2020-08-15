@@ -180,8 +180,6 @@ impl Globals {
         globals.builtins.fiber = fiber::init_fiber(&mut globals);
         globals.builtins.enumerator = enumerator::init_enumerator(&mut globals);
         object::init(&mut globals);
-        let kernel = kernel::init(&mut globals);
-        object_class.include.push(kernel);
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
@@ -190,14 +188,6 @@ impl Globals {
                     .builtins
                     .object
                     .set_var(id, globals.builtins.$class_object);
-            };
-        }
-
-        macro_rules! set_class {
-            ($name:expr, $class_object:expr) => {
-                let id = IdentId::get_id($name);
-                let object = $class_object;
-                globals.builtins.object.set_var(id, object);
             };
         }
 
@@ -217,21 +207,29 @@ impl Globals {
         set_builtin_class!("Fiber", fiber);
         set_builtin_class!("Enumerator", enumerator);
 
-        set_class!("Kernel", kernel);
-        set_class!("Math", math::init_math(&mut globals));
-        set_class!("File", file::init_file(&mut globals));
-        set_class!("Process", process::init_process(&mut globals));
-        set_class!("GC", gc::init_gc(&mut globals));
-        set_class!("Struct", structobj::init_struct(&mut globals));
-        set_class!("StandardError", Value::class(&globals, globals.class_class));
+        let kernel = kernel::init(&mut globals);
+        object_class.include.push(kernel);
+        globals.set_class("Kernel", kernel);
+        let math = math::init_math(&mut globals);
+        globals.set_class("Math", math);
+        let file = file::init_file(&mut globals);
+        globals.set_class("File", file);
+        let process = process::init_process(&mut globals);
+        globals.set_class("Process", process);
+        let gc = gc::init_gc(&mut globals);
+        globals.set_class("GC", gc);
+        let structobj = structobj::init_struct(&mut globals);
+        globals.set_class("Struct", structobj);
+        let time = time::init_time(&mut globals);
+        globals.set_class("Time", time);
+        globals.set_class("StandardError", Value::class(&globals, globals.class_class));
         let id = IdentId::get_id("StopIteration");
         let class = ClassRef::from(id, globals.builtins.object);
-        set_class!("StopIteration", Value::class(&globals, class));
-        set_class!("RuntimeError", errorobj::init_error(&mut globals));
-        set_class!("IO", io::init_io(&mut globals));
-
-        //let vm = Ref::from_ref(&globals).new_vm();
-        //vm.exec_file("test.rb");
+        globals.set_class("StopIteration", Value::class(&globals, class));
+        let errorobj = errorobj::init_error(&mut globals);
+        globals.set_class("RuntimeError", errorobj);
+        let io = io::init_io(&mut globals);
+        globals.set_class("IO", io);
 
         globals
     }
@@ -244,6 +242,12 @@ impl Globals {
     #[cfg(feature = "gc-debug")]
     pub fn print_mark(&self) {
         self.allocator.print_mark();
+    }
+
+    /// Bind `class_object` to the constant `class_name` of the root object.
+    fn set_class(&mut self, class_name: &str, class_object: Value) {
+        let id = IdentId::get_id(class_name);
+        self.builtins.object.set_var(id, class_object);
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {

@@ -71,6 +71,7 @@ impl std::hash::Hash for Value {
 }
 
 impl PartialEq for Value {
+    /// Equality by value. 3.0 == 3.
     fn eq(&self, other: &Self) -> bool {
         if self.id() == other.id() {
             return true;
@@ -90,6 +91,8 @@ impl PartialEq for Value {
             return false;
         };
         match (&self.rvalue().kind, &other.rvalue().kind) {
+            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
@@ -97,14 +100,9 @@ impl PartialEq for Value {
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
-                lhs.start == rhs.start && lhs.end == rhs.end && lhs.exclude == rhs.exclude
-            }
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => match (&**lhs, &**rhs) {
-                (HashInfo::Map(lhs), HashInfo::Map(rhs)) => *lhs == *rhs,
-                (HashInfo::IdentMap(lhs), HashInfo::IdentMap(rhs)) => *lhs == *rhs,
-                _ => false,
-            },
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
+            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Invalid, _) => {
                 panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
@@ -841,48 +839,6 @@ impl Value {
 impl Value {
     pub fn to_bool(&self) -> bool {
         !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
-    }
-
-    // ==
-    pub fn equal(self, other: Value) -> bool {
-        if self.id() == other.id() {
-            return true;
-        };
-        if self.is_packed_value() || other.is_packed_value() {
-            if self.is_packed_num() && other.is_packed_num() {
-                match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
-                    (true, false) => {
-                        return self.as_packed_fixnum() as f64 == other.as_packed_flonum()
-                    }
-                    (false, true) => {
-                        return self.as_packed_flonum() == other.as_packed_fixnum() as f64
-                    }
-                    _ => return false,
-                }
-            }
-            return false;
-        };
-        match (&self.rvalue().kind, &other.rvalue().kind) {
-            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
-            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
-            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
-            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
-            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                r1 == r2 && i1 == i2
-            }
-            (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
-            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
-            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
-            (ObjKind::Invalid, _) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
-            }
-            (_, ObjKind::Invalid) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
-            }
-            (_, _) => false,
-        }
     }
 
     pub fn equal_i(self, other: i32) -> bool {

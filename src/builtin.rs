@@ -21,3 +21,4 @@ pub mod range;
 pub mod regexp;
 pub mod string;
 pub mod structobj;
+pub mod time;
