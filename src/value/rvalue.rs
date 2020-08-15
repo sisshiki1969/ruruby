@@ -27,6 +27,7 @@ pub enum ObjKind {
     Method(MethodObjInfo),
     Fiber(Box<FiberInfo>),
     Enumerator(Box<FiberInfo>),
+    Time(TimeInfo),
 }
 
 impl std::fmt::Debug for ObjKind {
@@ -93,6 +94,7 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::Method(_) => write!(f, "Method"),
             ObjKind::Enumerator(_) => write!(f, "Enumerator"),
             ObjKind::Fiber(_) => write!(f, "Fiber"),
+            ObjKind::Time(time) => write!(f, "{:?}", time),
         }
     }
 }
@@ -151,6 +153,7 @@ impl RValue {
             ObjKind::Proc(_) => {}
             ObjKind::Regexp(_) => {}
             ObjKind::Method(_) => {}
+            ObjKind::Time(_) => {}
         }
         std::mem::take(&mut self.var_table);
         true
@@ -191,6 +194,7 @@ impl RValue {
                 ObjKind::Regexp(rref) => ObjKind::Regexp(rref.clone()),
                 ObjKind::Splat(v) => ObjKind::Splat(*v),
                 ObjKind::String(rstr) => ObjKind::String(rstr.clone()),
+                ObjKind::Time(time) => ObjKind::Time(time.clone()),
             },
         }
     }
@@ -374,6 +378,14 @@ impl RValue {
             class: globals.builtins.enumerator,
             var_table: None,
             kind: ObjKind::Enumerator(Box::new(fiber)),
+        }
+    }
+
+    pub fn new_time(time_class: Value, time: TimeInfo) -> Self {
+        RValue {
+            class: time_class,
+            var_table: None,
+            kind: ObjKind::Time(time),
         }
     }
 }

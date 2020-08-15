@@ -834,6 +834,10 @@ impl Value {
     pub fn enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
         RValue::new_enumerator(globals, fiber).pack()
     }
+
+    pub fn time(time_class: Value, time: TimeInfo) -> Self {
+        RValue::new_time(time_class, time).pack()
+    }
 }
 
 impl Value {

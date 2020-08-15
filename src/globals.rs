@@ -298,6 +298,7 @@ impl Globals {
                 ObjKind::Complex { .. } => "Complex".to_string(),
                 ObjKind::Fiber(_) => "Fiber".to_string(),
                 ObjKind::Enumerator(_) => "Enumerator".to_string(),
+                ObjKind::Time(_) => "Time".to_string(),
             },
         }
     }

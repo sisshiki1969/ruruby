@@ -23,6 +23,7 @@ pub use crate::builtin::procobj::*;
 pub use crate::builtin::range::*;
 pub use crate::builtin::regexp::*;
 pub use crate::builtin::string::RString;
+pub use crate::builtin::time::*;
 pub use crate::error::*;
 pub use crate::globals::*;
 pub use crate::id_table::*;
