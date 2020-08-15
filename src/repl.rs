@@ -69,7 +69,9 @@ pub fn repl_vm() {
                         println!("=> {}", vm.val_inspect(result));
                     }
                     Err(err) => {
-                        err.show_loc(0);
+                        for (info, loc) in &err.info {
+                            info.show_loc(loc);
+                        }
                         err.show_err();
                         vm.clear();
                     }

@@ -115,4 +115,8 @@ impl ArrayInfo {
             }
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.elements.len()
+    }
 }

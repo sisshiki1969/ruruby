@@ -758,46 +758,56 @@ fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    fn char_forward(ch: char, vm: &mut VM) -> Result<char, RubyError> {
+        std::char::from_u32((ch as u32) + 1)
+            .ok_or_else(|| vm.error_argument("Error occurs in String#succ."))
+    }
     vm.check_args_num(self_val, args.len(), 0)?;
-    let self_val = self_val.as_bytes().unwrap();
-    let mut buf = vec![];
-    let mut carry_flag = true;
-    if self_val.len() == 0 {
+    let self_ = self_val.as_string().unwrap();
+    if self_.len() == 0 {
         return Ok(Value::string(&vm.globals.builtins, "".to_string()));
     }
-    for b in self_val.iter().rev() {
+    let chars = self_.chars();
+    let mut buf: Vec<char> = vec![];
+    let mut carry_flag = true;
+    for c in chars.rev() {
         if carry_flag {
-            let c = *b as char;
-            if '0' <= c && c <= '8' || 'a' <= c && c <= 'y' || 'A' <= c && c <= 'Y' {
+            if '0' <= c && c <= '8'
+                || 'a' <= c && c <= 'y'
+                || 'A' <= c && c <= 'Y'
+                || '０' <= c && c <= '８'
+            {
                 carry_flag = false;
-                buf.push(*b + 1);
+                buf.push(char_forward(c, vm)?);
             } else if c == '9' {
-                buf.push('0' as u8);
+                buf.push('0');
+            } else if c == '９' {
+                buf.push('０');
             } else if c == 'z' {
-                buf.push('a' as u8);
+                buf.push('a');
             } else if c == 'Z' {
-                buf.push('A' as u8);
+                buf.push('A');
             } else {
                 carry_flag = false;
-                buf.push(*b + 1);
+                buf.push(char_forward(c, vm)?);
             }
         } else {
-            buf.push(*b);
+            buf.push(c);
         }
     }
     if carry_flag {
-        let b = buf.last().unwrap();
-        let c = *b as char;
+        let c = buf.last().unwrap().clone();
         if c == '0' {
-            buf.push('1' as u8);
+            buf.push('1');
+        } else if c == '０' {
+            buf.push('１');
         } else if c == 'a' {
-            buf.push('a' as u8);
+            buf.push('a');
         } else if c == 'A' {
-            buf.push('A' as u8);
+            buf.push('A');
         }
     }
-    buf.reverse();
-    let val = Value::bytes(&vm.globals, buf);
+    let val = Value::string(&vm.globals.builtins, buf.iter().rev().collect());
     let _ = val.as_string();
     Ok(val)
 }
@@ -901,20 +911,6 @@ mod test {
         let program = r#"
         assert :ruby, "ruby".to_sym
         assert :rust, "rust".to_sym
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn string_center() {
-        let program = r#"
-        assert("foo", "foo".center(1))
-        assert("foo", "foo".center(2))
-        assert("foo", "foo".center(3))
-        assert("  foo  ", "foo".center(7))
-        assert("  foo   ", "foo".center(8))
-        assert("   foo   ", "foo".center(9))
-        assert("   foo    ", "foo".center(10))
         "#;
         assert_script(program);
     }
@@ -1027,6 +1023,20 @@ mod test {
     }
 
     #[test]
+    fn string_center() {
+        let program = r#"
+        assert("foo", "foo".center(1))
+        assert("foo", "foo".center(2))
+        assert("foo", "foo".center(3))
+        assert("  foo  ", "foo".center(7))
+        assert("  foo   ", "foo".center(8))
+        assert("   foo   ", "foo".center(9))
+        assert("   foo    ", "foo".center(10))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn string_succ() {
         let program = r#"
         assert "aa".succ, "ab"
@@ -1035,7 +1045,7 @@ mod test {
         assert "ZZ".succ, "AAA"
         assert "a9".succ, "b0"
         #assert "-9".succ, "-10"
-        #assert ".".succ, "/"
+        assert ".".succ, "/"
         assert "aa".succ, "ab"
         
         # 繰り上がり
@@ -1046,6 +1056,8 @@ mod test {
         #assert "-9".succ, "-10"
         assert "9".succ, "10"
         assert "09".succ, "10"
+        assert "０".succ, "１"
+        assert "９".succ, "１０"
         
         # アルファベット・数字とそれ以外の混在
         #assert "1.9.9".succ, "2.0.0"

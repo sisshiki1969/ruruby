@@ -103,6 +103,7 @@ impl PartialEq for Value {
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
+            (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
             (ObjKind::Invalid, _) => {
                 panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }

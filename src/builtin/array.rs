@@ -50,6 +50,7 @@ pub fn init_array(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "zip", zip);
     globals.add_builtin_instance_method(class, "grep", grep);
     globals.add_builtin_instance_method(class, "sort", sort);
+    globals.add_builtin_instance_method(class, "count", count);
     globals.add_builtin_class_method(obj, "new", array_new);
     obj
 }
@@ -721,6 +722,31 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(&vm.globals, v))
 }
 
+fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
+    if args.block.is_some() {
+        return Err(vm.error_argument("Currently, block is not supported."));
+    }
+    let ary = self_val.expect_array(vm, "").unwrap();
+    match args.len() {
+        0 => {
+            let len = ary.len() as i64;
+            Ok(Value::fixnum(len))
+        }
+        1 => {
+            let other = args[0];
+            let mut count = 0;
+            for elem in &ary.elements {
+                if vm.eval_eq(*elem, other) {
+                    count += 1;
+                }
+            }
+            Ok(Value::fixnum(count))
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1004,6 +1030,17 @@ mod tests {
         assert [1,2,3,4,3,2,1,0,3.0], a
 
         assert [1,2,3,3.0], a.uniq! {|x| x % 3 }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn count() {
+        let program = r#"
+        a = [1, "1", 1.0, :one, 1, :one, 53.7, [1]]
+        assert 8, a.count
+        assert 3, a.count(1)
+        assert 2, a.count(:one)
         "#;
         assert_script(program);
     }
