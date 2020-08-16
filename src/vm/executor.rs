@@ -2274,12 +2274,7 @@ impl VM {
         let cache_slot = iseq.read32(self.pc + 7);
         let rec_class = receiver.get_class_object_for_method(&self.globals);
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
-        //let args = self.pop_args_to_ary(args_num as usize);
-        let mut args = Args::new(0);
-        for _ in 0..args_num {
-            let val = self.stack_pop();
-            args.push(val);
-        }
+        let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
     }
@@ -2540,8 +2535,10 @@ impl VM {
 
     fn pop_args_to_ary(&mut self, arg_num: usize) -> Args {
         let mut args = Args::new(0);
-        for _ in 0..arg_num {
-            let val = self.stack_pop();
+        let len = self.exec_stack.len();
+        let iter = self.exec_stack.drain(len - arg_num..);
+
+        for val in iter {
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),

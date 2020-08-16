@@ -42,9 +42,8 @@ pub enum NodeKind {
         index: Vec<Node>,
     },
     Splat(Box<Node>),
-    Assign(Box<Node>, Box<Node>),
     AssignOp(BinOp, Box<Node>, Box<Node>),
-    MulAssign(Vec<Node>, Vec<Node>),
+    MulAssign(Vec<Node>, Vec<Node>), // mlhs, mrhs
 
     CompStmt(Vec<Node>),
     If {
@@ -372,9 +371,16 @@ impl Node {
         Node::new(NodeKind::Scope(Box::new(parent), id), loc)
     }
 
-    pub fn new_mul_assign(lhs: Vec<Node>, rhs: Vec<Node>) -> Self {
-        let loc = lhs[0].loc().merge(rhs[rhs.len() - 1].loc());
-        Node::new(NodeKind::MulAssign(lhs, rhs), loc)
+    pub fn new_mul_assign(mlhs: Vec<Node>, mrhs: Vec<Node>) -> Self {
+        let splat_flag = mrhs.iter().find(|n| n.is_splat()).is_some();
+        let mrhs = if splat_flag || mlhs.len() == 1 && mrhs.len() != 1 {
+            let loc = mrhs[0].loc();
+            vec![Node::new_array(mrhs, loc)]
+        } else {
+            mrhs
+        };
+        let loc = mlhs[0].loc().merge(mrhs.last().unwrap().loc());
+        Node::new(NodeKind::MulAssign(mlhs, mrhs), loc)
     }
 
     pub fn new_method_decl(
@@ -423,7 +429,7 @@ impl Node {
     pub fn new_send(
         receiver: Node,
         method: IdentId,
-        mut send_args: SendArgs,
+        send_args: SendArgs,
         completed: bool,
         safe_nav: bool,
         loc: Loc,
@@ -432,7 +438,6 @@ impl Node {
             (Some(arg), _) => loc.merge(arg.loc),
             _ => loc,
         };
-        send_args.args.reverse();
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
@@ -538,8 +543,7 @@ impl Node {
         Node::new(NodeKind::Return(Box::new(val)), loc)
     }
 
-    pub fn new_yield(mut args: SendArgs, loc: Loc) -> Self {
-        args.args.reverse();
+    pub fn new_yield(args: SendArgs, loc: Loc) -> Self {
         Node::new(NodeKind::Yield(args), loc)
     }
 
@@ -565,6 +569,13 @@ impl Node {
     pub fn is_lvar(&self) -> bool {
         match self.kind {
             NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_splat(&self) -> bool {
+        match self.kind {
+            NodeKind::Splat(_) => true,
             _ => false,
         }
     }

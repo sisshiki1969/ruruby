@@ -1606,91 +1606,54 @@ impl Codegen {
             }
             NodeKind::MulAssign(mlhs, mrhs) => {
                 let lhs_len = mlhs.len();
-                let rhs_len = mrhs.len();
-                let splat_flag = mrhs.iter().any(|x| {
-                    if let NodeKind::Splat(_) = x.kind {
-                        true
-                    } else {
-                        false
-                    }
-                });
-                if lhs_len == rhs_len && !splat_flag {
-                    if lhs_len == 1 {
-                        match (&mlhs[0].kind, &mrhs[0].kind) {
-                            (
-                                NodeKind::InstanceVar(id1),
-                                NodeKind::BinOp(
-                                    BinOp::Add,
-                                    box Node {
-                                        kind: NodeKind::InstanceVar(id2),
-                                        ..
-                                    },
-                                    box Node {
-                                        kind: NodeKind::Integer(i),
-                                        ..
-                                    },
-                                ),
-                            ) if *id1 == *id2 && *i as i32 as i64 == *i => {
-                                let loc = mlhs[0].loc.merge(mrhs[0].loc);
-                                self.save_loc(iseq, loc);
-                                self.gen_ivar_addi(iseq, *id1, *i as i32 as u32, use_value);
-                            }
-                            (
-                                NodeKind::LocalVar(id1),
-                                NodeKind::BinOp(
-                                    BinOp::Add,
-                                    box Node {
-                                        kind: NodeKind::LocalVar(id2),
-                                        ..
-                                    },
-                                    box Node {
-                                        kind: NodeKind::Integer(i),
-                                        ..
-                                    },
-                                ),
-                            ) if *id1 == *id2 && *i as i32 as i64 == *i => {
-                                let loc = mlhs[0].loc.merge(mrhs[0].loc);
-                                self.save_loc(iseq, loc);
-                                self.gen_lvar_addi(iseq, *id1, *i as i32, use_value)?;
-                            }
-                            _ => {
-                                self.gen(globals, iseq, &mrhs[0], true)?;
-                                if use_value {
-                                    self.gen_dup(iseq, 1);
-                                };
-                                self.gen_assign(globals, iseq, &mlhs[0])?;
-                            }
+                if lhs_len == 1 && mrhs.len() == 1 {
+                    match (&mlhs[0].kind, &mrhs[0].kind) {
+                        (
+                            NodeKind::InstanceVar(id1),
+                            NodeKind::BinOp(
+                                BinOp::Add,
+                                box Node {
+                                    kind: NodeKind::InstanceVar(id2),
+                                    ..
+                                },
+                                box Node {
+                                    kind: NodeKind::Integer(i),
+                                    ..
+                                },
+                            ),
+                        ) if *id1 == *id2 && *i as i32 as i64 == *i => {
+                            let loc = mlhs[0].loc.merge(mrhs[0].loc);
+                            self.save_loc(iseq, loc);
+                            self.gen_ivar_addi(iseq, *id1, *i as i32 as u32, use_value);
                         }
-                    } else {
-                        for rhs in mrhs.iter().rev() {
-                            self.gen(globals, iseq, rhs, true)?;
+                        (
+                            NodeKind::LocalVar(id1),
+                            NodeKind::BinOp(
+                                BinOp::Add,
+                                box Node {
+                                    kind: NodeKind::LocalVar(id2),
+                                    ..
+                                },
+                                box Node {
+                                    kind: NodeKind::Integer(i),
+                                    ..
+                                },
+                            ),
+                        ) if *id1 == *id2 && *i as i32 as i64 == *i => {
+                            let loc = mlhs[0].loc.merge(mrhs[0].loc);
+                            self.save_loc(iseq, loc);
+                            self.gen_lvar_addi(iseq, *id1, *i as i32, use_value)?;
                         }
-                        if use_value {
-                            self.gen_dup(iseq, rhs_len);
+                        _ => {
+                            self.gen(globals, iseq, &mrhs[0], true)?;
+                            if use_value {
+                                self.gen_dup(iseq, 1);
+                            };
+                            self.gen_assign(globals, iseq, &mlhs[0])?;
                         }
-                        for lhs in mlhs {
-                            self.gen_assign(globals, iseq, lhs)?;
-                        }
-                        if use_value && rhs_len != 1 {
-                            self.gen_create_array(iseq, rhs_len);
-                        };
                     }
-                } else if lhs_len == 1 {
-                    for rhs in mrhs.iter().rev() {
-                        self.gen(globals, iseq, rhs, true)?;
-                    }
-                    self.gen_create_array(iseq, rhs_len);
-                    if use_value {
-                        self.gen_dup(iseq, 1);
-                    };
-                    self.gen_assign(globals, iseq, &mlhs[0])?;
-                } else {
-                    for rhs in mrhs.iter().rev() {
-                        self.gen(globals, iseq, rhs, true)?;
-                    }
-                    if splat_flag || rhs_len != 1 {
-                        self.gen_create_array(iseq, rhs_len);
-                    }
+                } else if mrhs.len() == 1 {
+                    self.gen(globals, iseq, &mrhs[0], true)?;
                     if use_value {
                         self.gen_dup(iseq, 1);
                     };
@@ -1698,6 +1661,37 @@ impl Codegen {
 
                     for lhs in mlhs.iter().rev() {
                         self.gen_assign(globals, iseq, lhs)?;
+                    }
+                } else {
+                    // no splat. mlhs.len != 1
+                    if !use_value {
+                        for (i, node) in mrhs.iter().enumerate() {
+                            self.gen(globals, iseq, node, i < mlhs.len())?;
+                        }
+                        if mlhs.len() > mrhs.len() {
+                            for _ in 0..(mlhs.len() - mrhs.len()) {
+                                self.gen_push_nil(iseq);
+                            }
+                        }
+                        for lhs in mlhs.iter().rev() {
+                            self.gen_assign(globals, iseq, lhs)?;
+                        }
+                    } else {
+                        let len = std::cmp::max(mlhs.len(), mrhs.len());
+                        for rhs in mrhs {
+                            self.gen(globals, iseq, rhs, true)?;
+                        }
+                        for _ in 0..(len - mrhs.len()) {
+                            self.gen_push_nil(iseq);
+                        }
+                        self.gen_dup(iseq, len);
+                        for _ in 0..(len - mlhs.len()) {
+                            self.gen_pop(iseq);
+                        }
+                        for lhs in mlhs.iter().rev() {
+                            self.gen_assign(globals, iseq, lhs)?;
+                        }
+                        self.gen_create_array(iseq, len);
                     }
                 }
             }
@@ -2008,11 +2002,7 @@ impl Codegen {
                 Value::hash_from_map(globals, map)
             }
             NodeKind::Array(nodes, true) => {
-                let ary: Vec<Value> = nodes
-                    .iter()
-                    .rev()
-                    .map(|n| self.const_expr(globals, n))
-                    .collect();
+                let ary: Vec<Value> = nodes.iter().map(|n| self.const_expr(globals, n)).collect();
                 Value::array_from(globals, ary)
             }
             _ => unreachable!(),

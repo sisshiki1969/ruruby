@@ -1322,9 +1322,8 @@ impl Parser {
                 return Ok(node);
             } else if self.consume_punct_no_term(Punct::LBracket)? {
                 let member_loc = self.prev_loc();
-                let mut args = self.parse_arg_list(Punct::RBracket)?;
+                let args = self.parse_arg_list(Punct::RBracket)?;
                 let member_loc = member_loc.merge(self.prev_loc());
-                args.reverse();
                 Node::new_array_member(node, args, member_loc)
             } else {
                 return Ok(node);
@@ -1521,8 +1520,7 @@ impl Parser {
                 }
                 Punct::LBracket => {
                     // Array literal
-                    let mut nodes = self.parse_arg_list(Punct::RBracket)?;
-                    nodes.reverse();
+                    let nodes = self.parse_arg_list(Punct::RBracket)?;
                     let loc = loc.merge(self.prev_loc());
                     Ok(Node::new_array(nodes, loc))
                 }
@@ -1710,7 +1708,6 @@ impl Parser {
                             while self.consume_punct_no_term(Punct::Comma)? {
                                 vec.push(self.parse_arg()?);
                             }
-                            vec.reverse();
                             let val = Node::new_array(vec, ret_loc);
                             Ok(Node::new_return(val, loc))
                         } else {
@@ -1735,7 +1732,6 @@ impl Parser {
                             while self.consume_punct_no_term(Punct::Comma)? {
                                 vec.push(self.parse_arg()?);
                             }
-                            vec.reverse();
                             let val = Node::new_array(vec, ret_loc);
                             Ok(Node::new_break(val, loc))
                         } else {
@@ -1760,7 +1756,6 @@ impl Parser {
                             while self.consume_punct_no_term(Punct::Comma)? {
                                 vec.push(self.parse_arg()?);
                             }
-                            vec.reverse();
                             let val = Node::new_array(vec, ret_loc);
                             Ok(Node::new_next(val, loc))
                         } else {
@@ -1922,7 +1917,6 @@ impl Parser {
                     let ary = content
                         .split(|c| c == ' ' || c == '\n')
                         .map(|x| Node::new_string(x.to_string(), loc))
-                        .rev()
                         .collect();
                     Ok(Node::new_array(ary, tok.loc))
                 }
@@ -1930,7 +1924,6 @@ impl Parser {
                     let ary = content
                         .split(|c| c == ' ' || c == '\n')
                         .map(|x| Node::new_symbol(IdentId::get_id(x), loc))
-                        .rev()
                         .collect();
                     Ok(Node::new_array(ary, tok.loc))
                 }
