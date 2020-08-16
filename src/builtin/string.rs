@@ -167,6 +167,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "=~", rmatch);
     globals.add_builtin_instance_method(class, "tr", tr);
     globals.add_builtin_instance_method(class, "size", size);
+    globals.add_builtin_instance_method(class, "length", size);
     globals.add_builtin_instance_method(class, "bytes", bytes);
     globals.add_builtin_instance_method(class, "each_byte", each_byte);
     globals.add_builtin_instance_method(class, "chars", chars);
@@ -180,6 +181,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "center", center);
     globals.add_builtin_instance_method(class, "next", next);
     globals.add_builtin_instance_method(class, "succ", next);
+    globals.add_builtin_instance_method(class, "count", count);
 
     Value::class(globals, class)
 }
@@ -812,6 +814,18 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let mut args = args.clone();
+    let target = self_val.as_string().unwrap();
+    let mut c = 0;
+    let iter = args[0].expect_string(vm, "Args")?.chars();
+    for ch in iter {
+        c += target.rmatches(|x| ch == x).count();
+    }
+    Ok(Value::fixnum(c as i64))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -1066,6 +1080,16 @@ mod test {
         assert ".".succ, "/"
         #assert "\0".succ, "\001"
         #assert "\377".succ, "\001\000"
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_count() {
+        let program = r#"
+        assert 1, 'abcdefg'.count('c')
+        assert 4, '123456789'.count('2378')
+        #assert 4, '123456789'.count('2-8', '^4-6')
         "#;
         assert_script(program);
     }
