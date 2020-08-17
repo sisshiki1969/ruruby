@@ -699,6 +699,7 @@ impl Codegen {
                 if index.len() == 1 {
                     match index[0].is_imm_u32() {
                         Some(u) => {
+                            self.gen_topn(iseq, 1);
                             self.save_loc(iseq, lhs.loc());
                             iseq.push(Inst::OPT_SET_INDEX);
                             Codegen::push32(iseq, u);
@@ -709,6 +710,99 @@ impl Codegen {
                 }
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
+                }
+                self.gen_topn(iseq, index.len());
+                self.save_loc(iseq, lhs.loc());
+                self.gen_set_array_elem(iseq, index.len());
+            }
+            _ => {
+                return Err(
+                    self.error_syntax(format!("Unimplemented LHS form. {:#?}", lhs), lhs.loc())
+                )
+            }
+        }
+        Ok(())
+    }
+
+    fn gen_assign_val(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        rhs: &Node,
+        use_value: bool,
+    ) -> Result<(), RubyError> {
+        self.gen(globals, iseq, rhs, true)?;
+        if use_value {
+            self.gen_dup(iseq, 1);
+        };
+        Ok(())
+    }
+
+    fn gen_assign2(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        lhs: &Node,
+        rhs: &Node,
+        use_value: bool,
+    ) -> Result<(), RubyError> {
+        match &lhs.kind {
+            NodeKind::Ident(id) | NodeKind::LocalVar(id) => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen_set_local(iseq, *id);
+            }
+            NodeKind::Const { id, toplevel: _ } => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen_push_nil(iseq);
+                self.gen_set_const(iseq, *id);
+            }
+            NodeKind::InstanceVar(id) => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen_set_instance_var(iseq, *id)
+            }
+            NodeKind::GlobalVar(id) => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen_set_global_var(iseq, *id);
+            }
+            NodeKind::Scope(parent, id) => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen(globals, iseq, parent, true)?;
+                self.gen_set_const(iseq, *id);
+            }
+            NodeKind::Send {
+                receiver, method, ..
+            } => {
+                let name = format!("{:?}=", method);
+                let assign_id = IdentId::get_id(name);
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen(globals, iseq, &receiver, true)?;
+                self.loc = lhs.loc();
+                self.gen_opt_send(globals, iseq, assign_id, 1);
+                self.gen_pop(iseq);
+            }
+            NodeKind::Index { base, index } => {
+                self.gen(globals, iseq, base, true)?;
+                if index.len() == 1 {
+                    match index[0].is_imm_u32() {
+                        Some(u) => {
+                            self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                            if use_value {
+                                self.gen_sinkn(iseq, 2);
+                            }
+                            self.save_loc(iseq, lhs.loc());
+                            iseq.push(Inst::OPT_SET_INDEX);
+                            Codegen::push32(iseq, u);
+                            return Ok(());
+                        }
+                        None => {}
+                    }
+                }
+                for i in index {
+                    self.gen(globals, iseq, i, true)?;
+                }
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                if use_value {
+                    self.gen_sinkn(iseq, index.len() + 2);
                 }
                 self.save_loc(iseq, lhs.loc());
                 self.gen_set_array_elem(iseq, index.len());
@@ -728,6 +822,16 @@ impl Codegen {
 
     fn gen_dup(&mut self, iseq: &mut ISeq, len: usize) {
         iseq.push(Inst::DUP);
+        Codegen::push32(iseq, len as u32);
+    }
+
+    fn gen_sinkn(&mut self, iseq: &mut ISeq, len: usize) {
+        iseq.push(Inst::SINKN);
+        Codegen::push32(iseq, len as u32);
+    }
+
+    fn gen_topn(&mut self, iseq: &mut ISeq, len: usize) {
+        iseq.push(Inst::TOPN);
         Codegen::push32(iseq, len as u32);
     }
 
@@ -1645,11 +1749,7 @@ impl Codegen {
                             self.gen_lvar_addi(iseq, *id1, *i as i32, use_value)?;
                         }
                         _ => {
-                            self.gen(globals, iseq, &mrhs[0], true)?;
-                            if use_value {
-                                self.gen_dup(iseq, 1);
-                            };
-                            self.gen_assign(globals, iseq, &mlhs[0])?;
+                            self.gen_assign2(globals, iseq, &mlhs[0], &mrhs[0], use_value)?;
                         }
                     }
                 } else if mrhs.len() == 1 {

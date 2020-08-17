@@ -29,6 +29,91 @@ impl RegexpInfo {
     }
 }
 
+impl RegexpInfo {
+    /// Replace all matches for `self` in `given` string with `replace`.
+    /// return: (replaced:String, is_replaced?:bool)
+    pub fn replace_repeat(
+        &self,
+        vm: &mut VM,
+        given: &str,
+        replace: &str,
+    ) -> Result<(String, bool), RubyError> {
+        let mut range = vec![];
+        let mut i = 0;
+        loop {
+            if i >= given.len() {
+                break;
+            }
+            match self.captures_from_pos(given, i) {
+                Ok(None) => break,
+                Ok(Some(captures)) => {
+                    let m = captures.get(0).unwrap();
+                    // the length of matched string can be 0.
+                    // this is neccesary to avoid infinite loop.
+                    i = if m.end() == m.start() {
+                        m.end() + 1
+                    } else {
+                        m.end()
+                    };
+                    range.push((m.start(), m.end()));
+                    //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
+                    RegexpInfo::get_captures(vm, &captures, given);
+                }
+                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+            };
+        }
+        let mut res = given.to_string();
+        for (start, end) in range.iter().rev() {
+            res.replace_range(start..end, replace);
+        }
+        Ok((res, range.len() != 0))
+    }
+
+    /// Replaces the leftmost-first match for `self` in `given` string with `replace`.
+    /// return: replaced:String
+    pub fn replace_once<'a>(
+        &'a self,
+        vm: &mut VM,
+        given: &'a str,
+        replace: &str,
+    ) -> Result<(String, Option<Captures>), RubyError> {
+        match self.captures(given) {
+            Ok(None) => Ok((given.to_string(), None)),
+            Ok(Some(captures)) => {
+                let mut res = given.to_string();
+                let m = captures.get(0).unwrap();
+                RegexpInfo::get_captures(vm, &captures, given);
+                let mut rep = "".to_string();
+                let mut escape = false;
+                for ch in replace.chars() {
+                    if escape {
+                        match ch {
+                            '0'..='9' => {
+                                let i = ch as usize - '0' as usize;
+                                match captures.get(i) {
+                                    Some(m) => rep += m.as_str(),
+                                    None => {}
+                                };
+                            }
+                            _ => rep.push(ch),
+                        };
+                        escape = false;
+                    } else {
+                        if ch != '\\' {
+                            rep.push(ch);
+                        } else {
+                            escape = true;
+                        };
+                    }
+                }
+                res.replace_range(m.start()..m.end(), &rep);
+                Ok((res, Some(captures)))
+            }
+            Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+        }
+    }
+}
+
 impl PartialEq for RegexpInfo {
     fn eq(&self, other: &Self) -> bool {
         if Rc::ptr_eq(&self.0, &other.0) {
@@ -124,53 +209,11 @@ impl RegexpInfo {
         given: &str,
         replace: &str,
     ) -> Result<String, RubyError> {
-        fn replace_(
-            vm: &mut VM,
-            re: &RegexpInfo,
-            given: &str,
-            replace: &str,
-        ) -> Result<String, RubyError> {
-            match re.captures(given) {
-                Ok(None) => Ok(given.to_string()),
-                Ok(Some(captures)) => {
-                    let mut res = given.to_string();
-                    let m = captures.get(0).unwrap();
-                    RegexpInfo::get_captures(vm, &captures, given);
-                    let mut rep = "".to_string();
-                    let mut escape = false;
-                    for ch in replace.chars() {
-                        if escape {
-                            match ch {
-                                '0'..='9' => {
-                                    let i = ch as usize - '0' as usize;
-                                    match captures.get(i) {
-                                        Some(m) => rep += m.as_str(),
-                                        None => {}
-                                    };
-                                }
-                                _ => rep.push(ch),
-                            };
-                            escape = false;
-                        } else {
-                            if ch != '\\' {
-                                rep.push(ch);
-                            } else {
-                                escape = true;
-                            };
-                        }
-                    }
-                    res.replace_range(m.start()..m.end(), &rep);
-                    Ok(res)
-                }
-                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
-            }
-        }
-
         if let Some(s) = re_val.as_string() {
             let re = vm.regexp_from_string(&s)?;
-            return replace_(vm, &re, given, replace);
+            return re.replace_once(vm, given, replace).map(|x| x.0);
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re, given, replace);
+            return re.replace_once(vm, given, replace).map(|x| x.0);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };
@@ -219,52 +262,15 @@ impl RegexpInfo {
     /// Replaces all non-overlapping matches in `given` string with `replace`.
     pub fn replace_all(
         vm: &mut VM,
-        re_val: Value,
+        regexp: Value,
         given: &str,
         replace: &str,
     ) -> Result<(String, bool), RubyError> {
-        fn replace_(
-            vm: &mut VM,
-            re: &RegexpInfo,
-            given: &str,
-            replace: &str,
-        ) -> Result<(String, bool), RubyError> {
-            let mut range = vec![];
-            let mut i = 0;
-            loop {
-                if i >= given.len() {
-                    break;
-                }
-                match re.captures_from_pos(given, i) {
-                    Ok(None) => break,
-                    Ok(Some(captures)) => {
-                        let m = captures.get(0).unwrap();
-                        // the length of matched string can be 0.
-                        // this is neccesary to avoid infinite loop.
-                        i = if m.end() == m.start() {
-                            m.end() + 1
-                        } else {
-                            m.end()
-                        };
-                        range.push((m.start(), m.end()));
-                        //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
-                        RegexpInfo::get_captures(vm, &captures, given);
-                    }
-                    Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
-                };
-            }
-            let mut res = given.to_string();
-            for (start, end) in range.iter().rev() {
-                res.replace_range(start..end, replace);
-            }
-            Ok((res, range.len() != 0))
-        }
-
-        if let Some(s) = re_val.as_string() {
+        if let Some(s) = regexp.as_string() {
             let re = vm.regexp_from_string(&s)?;
-            return replace_(vm, &re, given, replace);
-        } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re, given, replace);
+            return re.replace_repeat(vm, given, replace);
+        } else if let Some(re) = regexp.as_regexp() {
+            return re.replace_repeat(vm, given, replace);
         } else {
             return Err(vm.error_argument("1st arg must be RegExp or String."));
         };

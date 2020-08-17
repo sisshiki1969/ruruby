@@ -1181,6 +1181,19 @@ impl VM {
                     }
                     self.pc += 5;
                 }
+                Inst::SINKN => {
+                    let len = iseq.read_usize(self.pc + 1);
+                    let val = self.stack_pop();
+                    let stack_len = self.exec_stack.len();
+                    self.exec_stack.insert(stack_len - len, val);
+                    self.pc += 5;
+                }
+                Inst::TOPN => {
+                    let len = iseq.read_usize(self.pc + 1);
+                    let val = self.exec_stack.remove(self.exec_stack.len() - 1 - len);
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
                 Inst::TAKE => {
                     let len = iseq.read_usize(self.pc + 1);
                     let val = self.stack_pop();
@@ -1938,9 +1951,9 @@ impl VM {
     }
 
     fn set_index(&mut self, arg_num: usize) -> Result<(), RubyError> {
+        let val = self.stack_pop();
         let mut args = self.pop_args_to_ary(arg_num);
         let mut receiver = self.stack_pop();
-        let val = self.stack_pop();
         match receiver.as_mut_rvalue() {
             Some(oref) => {
                 match oref.kind {
@@ -1964,8 +1977,8 @@ impl VM {
     }
 
     fn opt_set_index(&mut self, idx: u32) -> Result<(), RubyError> {
-        let mut receiver = self.stack_pop();
         let val = self.stack_pop();
+        let mut receiver = self.stack_pop();
         match receiver.as_mut_rvalue() {
             Some(oref) => {
                 match oref.kind {

@@ -164,6 +164,7 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "gsub", gsub);
     globals.add_builtin_instance_method(class, "gsub!", gsub_);
     globals.add_builtin_instance_method(class, "scan", scan);
+    globals.add_builtin_instance_method(class, "slice!", slice_);
     globals.add_builtin_instance_method(class, "=~", rmatch);
     globals.add_builtin_instance_method(class, "tr", tr);
     globals.add_builtin_instance_method(class, "size", size);
@@ -605,6 +606,91 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    fn calc_idx(target: &String, i: i64) -> Option<usize> {
+        if i >= 0 {
+            Some(i as usize)
+        } else {
+            match target.chars().count() as i64 + i {
+                idx if idx < 0 => None,
+                idx => Some(idx as usize),
+            }
+        }
+    }
+    let mut self_val2 = self_val;
+    vm.check_args_range(args.len(), 1, 2)?;
+    let target = self_val2.as_mut_string().unwrap();
+    let arg0 = args[0].clone();
+    match arg0.unpack() {
+        RV::Integer(i) => {
+            if args.len() == 1 {
+                let idx = match calc_idx(target, i) {
+                    Some(i) => i,
+                    None => return Ok(Value::nil()),
+                };
+                let (pos, ch) = match target.char_indices().nth(idx) {
+                    Some((pos, ch)) => (pos, ch),
+                    None => return Ok(Value::nil()),
+                };
+                target.remove(pos);
+                return Ok(Value::string(&vm.globals.builtins, ch.to_string()));
+            } else {
+                let len = args[1].expect_integer(vm, "2nd arg")?;
+                let len = if len < 0 {
+                    return Ok(Value::nil());
+                } else {
+                    len as usize
+                };
+                let start = match calc_idx(target, i) {
+                    Some(i) => i,
+                    None => return Ok(Value::nil()),
+                };
+                let mut iter = target.char_indices().skip(start);
+                let mut take = iter.by_ref().take(len).peekable();
+                let start_pos = match take.peek().cloned() {
+                    Some((pos, _)) => pos,
+                    None => return Ok(Value::nil()),
+                };
+                let take: String = take.map(|(_, ch)| ch).collect();
+
+                match iter.next() {
+                    Some((end_pos, _)) => {
+                        target.replace_range(start_pos..end_pos, "");
+                    }
+                    None => {}
+                }
+
+                Ok(Value::string(&vm.globals.builtins, take))
+            }
+        }
+        RV::Object(_rvalue) => match &mut args[0].clone().rvalue_mut().kind {
+            ObjKind::String(rs) => {
+                vm.check_args_num(self_val, args.len(), 1)?;
+                let given = rs.as_string(vm)?;
+                *target = target.replacen(given, "", usize::MAX);
+                Ok(Value::string(&vm.globals.builtins, given.clone()))
+            }
+            ObjKind::Regexp(regexp) => {
+                let given = target.clone();
+                let (res, cap) = regexp.replace_once(vm, &given, "")?;
+                *target = res;
+                let ret = match cap {
+                    Some(cap) => Value::string(
+                        &vm.globals.builtins,
+                        cap.get(0).unwrap().as_str().to_string(),
+                    ),
+                    None => Value::nil(),
+                };
+                Ok(ret)
+            }
+            _ => {
+                return Err(vm.error_argument("First arg must be Integer, String, Regexp or Range."))
+            }
+        },
+        _ => return Err(vm.error_argument("First arg must be Integer, String, Regexp or Range.")),
+    }
+}
+
 fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
@@ -998,6 +1084,30 @@ mod test {
         assert [["f"], ["o"], ["o"], ["b"], ["a"], ["r"]], "foobar".scan(/(.)/)
         assert [["ba", "r", ""], ["ba", "z", ""], ["ba", "r", ""], ["ba", "z", ""]], "foobarbazfoobarbaz".scan(/(ba)(.)()/)
         "foobarbazfoobarbaz".scan(/ba./) {|x| puts x}
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_slice_() {
+        let program = r#"
+        a = ["私の名前は一色です"] * 20
+        assert "は", a[0].slice!(4)
+        assert "私の名前一色です", a[0]
+        assert "色", a[0].slice!(-3)
+        assert "私の名前一です", a[0]
+        assert nil, a[0].slice!(-9)
+        assert "私の名前一です", a[0]
+        assert "名前は一色", a[1].slice!(2,5)
+        assert "私のです", a[1]
+        assert nil, a[2].slice!(10,5)
+        assert "色です", a[3].slice!(-3,5)
+        assert nil, a[3].slice!(-10,5)
+
+        a = "abc agc afc"
+        assert "abc", a.slice!(/a.c/)
+        assert " agc afc", a
+
         "#;
         assert_script(program);
     }

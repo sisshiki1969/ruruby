@@ -22,6 +22,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(kernel_class, "rand", rand);
     globals.add_builtin_instance_method(kernel_class, "loop", loop_);
     globals.add_builtin_instance_method(kernel_class, "exit", exit);
+    globals.add_builtin_instance_method(kernel_class, "sleep", sleep);
     globals.add_builtin_instance_method(kernel_class, "Complex", kernel_complex);
     let kernel = Value::class(globals, kernel_class);
     return kernel;
@@ -296,6 +297,27 @@ pub fn init(globals: &mut Globals) -> Value {
         std::process::exit(code as i32);
     }
 
+    fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+        vm.check_args_range(args.len(), 0, 1)?;
+        let secs = if args.len() == 0 {
+            0.0
+        } else {
+            let secs = match args[0].unpack() {
+                RV::Integer(i) => i as f64,
+                RV::Float(f) => f,
+                _ => return Err(vm.error_argument("Arg must be Integer or Float.")),
+            };
+            if secs < 0.0 {
+                return Err(vm.error_argument("Negative number."));
+            }
+            secs
+        };
+        let start = std::time::Instant::now();
+        std::thread::sleep(std::time::Duration::from_secs_f64(secs));
+        let duration = start.elapsed().as_secs() as u64 as i64;
+        Ok(Value::fixnum(duration))
+    }
+
     fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_range(args.len(), 1, 3)?;
         let (r, i, ex) = match args.len() {
@@ -377,6 +399,7 @@ mod test {
         require_relative "../../tests/kernel_test.rb"
         assert_error { require_relative "kernel_test.rb" }
         assert_error { assert rand. rand }
+        sleep(0.1)
         "#;
         assert_script(program);
     }

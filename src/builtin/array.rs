@@ -216,8 +216,10 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 //println!("dest:{:?} src:{:?}", aref.elements, src);
                 let mut i = 0;
                 for _ in 0..num {
-                    v[i..i + len].copy_from_slice(src);
-                    i += len;
+                    for src_val in src[0..len].iter() {
+                        v[i] = src_val.dup();
+                        i += 1;
+                    }
                 }
                 v
             }
@@ -864,6 +866,10 @@ mod tests {
         assert [1,2,3,1,2,3,1,2,3], [1,2,3] * 3 
         assert "1,2,3", [1,2,3] * ","
         assert "Ruby", ["Ruby"] * ","
+        a = ["Ruby"] * 5
+        assert ["Ruby", "Ruby", "Ruby", "Ruby", "Ruby"], a
+        a[2] = "mruby"
+        assert ["Ruby", "Ruby", "mruby", "Ruby", "Ruby"], a
         "#;
         assert_script(program);
     }

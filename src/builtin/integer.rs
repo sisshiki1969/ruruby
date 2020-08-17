@@ -16,6 +16,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "<=>", cmp);
 
     globals.add_builtin_instance_method(class, "times", times);
+    globals.add_builtin_instance_method(class, "upto", upto);
     globals.add_builtin_instance_method(class, "step", step);
     globals.add_builtin_instance_method(class, "chr", chr);
     globals.add_builtin_instance_method(class, "to_f", tof);
@@ -175,6 +176,28 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let method = match args.block {
+        Some(method) => method,
+        None => {
+            let id = IdentId::get_id("upto");
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            return Ok(val);
+        }
+    };
+    let num = self_val.as_fixnum().unwrap();
+    let max = vm.expect_integer(args[0], "Arg")?;
+    if num <= max {
+        let mut arg = Args::new1(Value::nil());
+        for i in num..max + 1 {
+            arg[0] = Value::fixnum(i);
+            vm.eval_block(method, &arg)?;
+        }
+    }
+    Ok(self_val)
+}
+
 fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
     let method = match args.block {
@@ -328,6 +351,21 @@ mod tests {
         res = []
         assert 0, 0.times {|x| res[x] = x * x}
         assert [], res
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_upto() {
+        let program = r#"
+        res = []
+        assert 5, 5.upto(8) {|x| res << x * x}
+        assert [25, 36, 49, 64], res
+        res = []
+        assert 5, 5.upto(4) {|x| res << x * x}
+        assert [], res
+        enum = 5.upto(8)
+        assert [10, 12, 14, 16], enum.map{|x| x * 2}
         "#;
         assert_script(program);
     }

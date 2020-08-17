@@ -846,6 +846,23 @@ fn mul_assign8() {
 }
 
 #[test]
+fn mul_assign9() {
+    let program = "
+        def f(val)
+            @r << val
+            val
+        end
+        @r = []; a = {}
+        assert 1, a[f 0] = (f 1)
+        assert [0, 1], @r
+        @r = []; a = {}
+        assert [1, 2], a[f 0] = (f 1), (f 2)
+        assert [0, 1, 2], @r
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn assign1() {
     let program = "
         assert(13, 5+a=8)

@@ -47,6 +47,8 @@ impl Inst {
     pub const SPLAT: u8 = 83;
     pub const CONCAT_STRING: u8 = 84;
     pub const TO_S: u8 = 85;
+    pub const SINKN: u8 = 86;
+    pub const TOPN: u8 = 87;
 
     pub const DEF_CLASS: u8 = 90;
     pub const DEF_METHOD: u8 = 91;
@@ -211,6 +213,8 @@ impl Inst {
             Inst::SPLAT => "SPLAT".to_string(),
             Inst::CONCAT_STRING => "CONCAT_STR".to_string(),
             Inst::TO_S => "TO_S".to_string(),
+            Inst::SINKN => "SINKN".to_string(),
+            Inst::TOPN => "TOPN".to_string(),
 
             Inst::DEF_CLASS => "DEF_CLASS".to_string(),
             Inst::DEF_METHOD => "DEF_METHOD".to_string(),
@@ -292,6 +296,8 @@ impl Inst {
             | Inst::DUP                 // number of items: u32
             | Inst::TAKE                // number of items: u32
             | Inst::CONCAT_STRING       // number of items: u32
+            | Inst::SINKN               // number of items: u32
+            | Inst::TOPN                // number of items: u32
             | Inst::ADD                 // inline cache: u32
             | Inst::SUB                 // inline cache: u32
             | Inst::MUL                 // inline cache: u32
@@ -471,6 +477,8 @@ impl Inst {
             | Inst::CREATE_HASH
             | Inst::DUP
             | Inst::TAKE
+            | Inst::SINKN
+            | Inst::TOPN
             | Inst::CONCAT_STRING => format!(
                 "{} {} items",
                 Inst::inst_name(iseq[pc]),
