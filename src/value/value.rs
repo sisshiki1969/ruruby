@@ -757,7 +757,10 @@ impl Value {
     }
 
     pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {
-        RValue::new_bytes(globals, bytes).pack()
+        match String::from_utf8(bytes.clone()) {
+            Ok(s) => RValue::new_string(&globals.builtins, s).pack(),
+            Err(_) => RValue::new_bytes(globals, bytes).pack(),
+        }
     }
 
     pub fn symbol(id: IdentId) -> Self {

@@ -88,7 +88,7 @@ fn quotient(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
-    let lhs = vm.expect_integer(self_val, "Receiver")?;
+    let lhs = self_val.expect_integer(vm, "Receiver")?;
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs == rhs)),
         RV::Float(rhs) => Ok(Value::bool(lhs as f64 == rhs)),
@@ -98,7 +98,7 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn neq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
-    let lhs = vm.expect_integer(self_val, "Receiver")?;
+    let lhs = self_val.expect_integer(vm, "Receiver")?;
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs != rhs)),
         RV::Float(rhs) => Ok(Value::bool(lhs as f64 != rhs)),
@@ -109,7 +109,7 @@ fn neq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 macro_rules! define_cmp {
     ($vm:ident, $self_val:ident, $args:ident, $op:ident) => {
         $vm.check_args_num($self_val, $args.len(), 1)?;
-        let lhs = $vm.expect_integer($self_val, "Receiver")?;
+        let lhs = $self_val.expect_integer($vm, "Receiver")?;
         match $args[0].unpack() {
             RV::Integer(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
             RV::Float(rhs) => return Ok(Value::bool((lhs as f64).$op(&rhs))),
@@ -142,7 +142,7 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     vm.check_args_num(self_val, args.len(), 1)?;
-    let lhs = vm.expect_integer(self_val, "Receiver")?;
+    let lhs = self_val.expect_integer(vm, "Receiver")?;
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&rhs),
         RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
@@ -164,7 +164,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(val);
         }
     };
-    let num = vm.expect_integer(self_val, "Receiver")?;
+    let num = self_val.expect_integer(vm, "Receiver")?;
     if num < 1 {
         return Ok(self_val);
     };
@@ -187,7 +187,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
     let num = self_val.as_fixnum().unwrap();
-    let max = vm.expect_integer(args[0], "Arg")?;
+    let max = args[0].expect_integer(vm, "Arg")?;
     if num <= max {
         let mut arg = Args::new1(Value::nil());
         for i in num..max + 1 {
@@ -208,10 +208,10 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(val);
         }
     };
-    let start = vm.expect_integer(self_val, "Start")?;
-    let limit = vm.expect_integer(args[0], "Limit")?;
+    let start = self_val.expect_integer(vm, "Start")?;
+    let limit = args[0].expect_integer(vm, "Limit")?;
     let step = if args.len() == 2 {
-        let step = vm.expect_integer(args[1], "Step")?;
+        let step = args[1].expect_integer(vm, "Step")?;
         if step == 0 {
             return Err(vm.error_argument("Step can not be 0."));
         }

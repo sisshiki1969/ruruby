@@ -49,14 +49,6 @@ impl fmt::Display for RString {
 use std::cmp::Ordering;
 use std::str::FromStr;
 impl RString {
-    pub fn new_string(string: String) -> Self {
-        RString::Str(string)
-    }
-
-    pub fn new_bytes(bytes: Vec<u8>) -> Self {
-        RString::Bytes(bytes)
-    }
-
     /// Try to take reference of String from RString.
     /// If byte sequence is invalid as UTF-8, return Err.
     /// When valid, convert the byte sequence to UTF-8 string.
@@ -156,6 +148,8 @@ pub fn init_string(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "[]", index);
     globals.add_builtin_instance_method(class, "[]=", index_assign);
     globals.add_builtin_instance_method(class, "<=>", cmp);
+    globals.add_builtin_instance_method(class, "<<", concat);
+    globals.add_builtin_instance_method(class, "concat", concat);
     globals.add_builtin_instance_method(class, "start_with?", start_with);
     globals.add_builtin_instance_method(class, "to_sym", to_sym);
     globals.add_builtin_instance_method(class, "intern", to_sym);
@@ -276,7 +270,6 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 1usize
             };
             let ch: String = lhs.chars().skip(index).take(len).collect();
-            eprintln!("{}", ch);
             if ch.len() != 0 {
                 Ok(Value::string(&vm.globals.builtins, ch))
             } else {
@@ -331,6 +324,22 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(ord) => Ok(Value::fixnum(ord as i64)),
         None => Ok(Value::nil()),
     }
+}
+
+fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let lhs = self_val.as_mut_string().unwrap();
+    let rhs = match args[0].as_rstring().cloned() {
+        Some(rhs) => rhs.clone().as_string(vm)?.to_string(),
+        None => match args[0].as_fixnum() {
+            Some(i) => RString::Bytes(vec![i as i8 as u8])
+                .as_string(vm)?
+                .to_string(),
+            None => return Err(vm.error_argument("Arg must be String or Integer.")),
+        },
+    };
+    *lhs = format!("{}{}", lhs, rhs);
+    Ok(self_val)
 }
 
 fn expect_char(vm: &mut VM, chars: &mut std::str::Chars) -> Result<char, RubyError> {
@@ -434,7 +443,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'X' => {
-                let val = vm.expect_integer(val, "Value for the placeholder")?;
+                let val = val.expect_integer(vm, "Value for the placeholder")?;
                 if zero_flag {
                     format!("{:0w$X}", val, w = width)
                 } else {
@@ -948,6 +957,18 @@ mod test {
         let program = r#"
         assert "rubyrubyrubyruby", "ruby" * 4
         assert "", "ruby" * 0
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_concat() {
+        let program = r#"
+        a = "Ruby"
+        assert "Ruby is easy", a << " is easy"
+        assert "Ruby is easy", a
+        a << 33
+        assert "Ruby is easy!", a
         "#;
         assert_script(program);
     }

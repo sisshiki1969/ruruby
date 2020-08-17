@@ -1396,13 +1396,6 @@ impl VM {
         }
     }
 
-    pub fn expect_integer(&mut self, val: Value, msg: &str) -> Result<i64, RubyError> {
-        val.as_fixnum().ok_or_else(|| {
-            let inspect = self.val_inspect(val);
-            self.error_type(format!("{} must be Integer. (given:{})", msg, inspect))
-        })
-    }
-
     pub fn expect_flonum(&mut self, val: Value, msg: &str) -> Result<f64, RubyError> {
         val.as_flonum().ok_or_else(|| {
             let inspect = self.val_inspect(val);
