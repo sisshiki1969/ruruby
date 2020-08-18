@@ -201,9 +201,7 @@ impl SourceInfo {
             eprintln!("(internal)");
             return;
         }
-        let term_width = term_size::dimensions_stderr()
-            .unwrap_or_else(|| panic!("failed to get console width."))
-            .0 as u32;
+        let term_width = term_size::dimensions_stderr().unwrap_or((80, 25)).0 as u32;
         let mut line_top: u32 = 0;
         let mut lines: Vec<Line> = self
             .code
