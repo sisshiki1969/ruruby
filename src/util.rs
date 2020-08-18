@@ -1,5 +1,7 @@
+use console;
 use core::ptr::NonNull;
 use std::path::PathBuf;
+use term_size;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annot<T> {
@@ -128,6 +130,53 @@ pub struct SourceInfo {
     pub code: Vec<char>,
 }
 
+use std::ops::{Index, Range, RangeInclusive};
+
+impl Index<u32> for SourceInfo {
+    type Output = char;
+
+    fn index(&self, index: u32) -> &Self::Output {
+        &self.code[index as usize]
+    }
+}
+
+impl Index<Range<u32>> for SourceInfo {
+    type Output = [char];
+
+    fn index(&self, index: Range<u32>) -> &Self::Output {
+        &self.code[index.start as usize..index.end as usize]
+    }
+}
+
+impl Index<RangeInclusive<u32>> for SourceInfo {
+    type Output = [char];
+
+    fn index(&self, index: RangeInclusive<u32>) -> &Self::Output {
+        &self.code[*index.start() as usize..=*index.end() as usize]
+    }
+}
+
+/// This struct holds infomation of a certain line in the code.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Line {
+    /// line number. (the first line is 1)
+    pub no: u32,
+    /// an index of the line top in Vec<char>.
+    pub top: u32,
+    /// an index of the line end in Vec<char>.
+    pub end: u32,
+}
+
+impl Line {
+    fn new(line_no: u32, top_pos: u32, end_pos: u32) -> Self {
+        Line {
+            no: line_no,
+            top: top_pos,
+            end: end_pos,
+        }
+    }
+}
+
 impl SourceInfoRef {
     pub fn empty() -> Self {
         SourceInfoRef::new(SourceInfo::new(PathBuf::default()))
@@ -146,93 +195,95 @@ impl SourceInfo {
         eprintln!("{}", self.path.to_string_lossy());
     }
 
-    /// Show the location of the Loc in the source code using '^^^'.
+    /// Show the location of `loc` in the source code using '^^^'.
     pub fn show_loc(&self, loc: &Loc) {
         if self.code.len() == 0 {
             eprintln!("(internal)");
             return;
         }
-        let mut line: u32 = 1;
-        let mut line_top_pos: u32 = 0;
-        let mut line_pos = vec![];
-        for (pos, ch) in self.code.iter().enumerate() {
-            if *ch == '\n' {
-                line_pos.push((line, line_top_pos, pos as u32));
-                line += 1;
-                line_top_pos = pos as u32 + 1;
-            }
-        }
-        if line_top_pos as usize <= self.code.len() - 1 {
-            line_pos.push((line, line_top_pos, self.code.len() as u32 - 1));
+        let term_width = term_size::dimensions_stderr()
+            .unwrap_or_else(|| panic!("failed to get console width."))
+            .0 as u32;
+        let mut line_top: u32 = 0;
+        let mut lines: Vec<Line> = self
+            .code
+            .iter()
+            .enumerate()
+            .filter(|(_, ch)| **ch == '\n')
+            .map(|(pos, _)| pos)
+            .enumerate()
+            .map(|(idx, pos)| {
+                let top = line_top;
+                line_top = pos as u32 + 1;
+                Line::new((idx + 1) as u32, top, pos as u32)
+            })
+            .collect();
+        if line_top <= (self.code.len() - 1) as u32 {
+            let line_no = lines.len() as u32;
+            lines.push(Line::new(line_no, line_top, (self.code.len() - 1) as u32));
         }
 
         let mut found = false;
-        for line in &line_pos {
-            if line.2 < loc.0 || line.1 > loc.1 {
-                continue;
-            }
+        for line in lines
+            .iter()
+            .filter(|line| line.end >= loc.0 && line.top <= loc.1)
+        {
             if !found {
-                eprintln!("{}:{}", self.path.to_string_lossy(), line.0);
+                eprintln!("{}:{}", self.path.to_string_lossy(), line.no);
+                found = true;
             };
-            found = true;
-            let start = line.1 as usize;
-            let mut end = line.2 as usize;
-            if self.code[end] == '\n' && end > 0 {
+
+            let mut start = line.top;
+            let mut end = line.end;
+            if self[end] == '\n' && end > 0 {
                 end -= 1
             }
-            eprintln!("{}", self.code[start..=end].iter().collect::<String>());
+            start += (loc.0 - start) / term_width * term_width;
+            if calc_width(&self[start..=end]) >= term_width as usize {
+                for e in loc.1..=end {
+                    if calc_width(&self[start..=e]) < term_width as usize {
+                        end = e;
+                    } else {
+                        break;
+                    }
+                }
+            }
+            eprintln!("{}", self[start..=end].iter().collect::<String>());
             use std::cmp::*;
-            let read = if loc.0 <= line.1 {
-                0
+            let lead = if loc.0 <= line.top {
+                0usize
             } else {
-                self.code[(line.1 as usize)..(loc.0 as usize)]
-                    .iter()
-                    .map(|x| calc_width(x))
-                    .sum()
+                calc_width(&self[start..loc.0])
             };
-            let length: usize = self.code[max(loc.0, line.1) as usize..min(loc.1, line.2) as usize]
-                .iter()
-                .map(|x| calc_width(x))
-                .sum();
-            eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
+            let range_start = max(loc.0, line.top);
+            let range_end = min(loc.1, line.end);
+            let length: usize = calc_width(&self[range_start..range_end]);
+            eprintln!("{}{}", " ".repeat(lead), "^".repeat(length + 1));
         }
 
         if !found {
-            let line = match line_pos.last() {
-                Some(line) => (line.0 + 1, line.2 + 1, loc.1),
+            let line = match lines.last() {
+                Some(line) => (line.no + 1, line.end + 1, loc.1),
                 None => (1, 0, loc.1),
             };
-            let read = self.code[(line.1 as usize)..(loc.0 as usize)]
-                .iter()
-                .map(|x| calc_width(x))
-                .sum();
-            let length: usize = self.code[loc.0 as usize..loc.1 as usize]
-                .iter()
-                .map(|x| calc_width(x))
-                .sum();
-            let is_cr = loc.1 as usize >= self.code.len() || self.code[loc.1 as usize] == '\n';
+            let lead = calc_width(&self[line.1..loc.0]);
+            let length = calc_width(&self[loc.0..loc.1]);
+            let is_cr = loc.1 as usize >= self.code.len() || self[loc.1] == '\n';
             eprintln!("{}:{}", self.path.to_string_lossy(), line.0);
             eprintln!(
                 "{}",
                 if !is_cr {
-                    self.code[(line.1 as usize)..=(loc.1 as usize)]
-                        .iter()
-                        .collect::<String>()
+                    self[line.1..=loc.1].iter().collect::<String>()
                 } else {
-                    self.code[(line.1 as usize)..(loc.1 as usize)]
-                        .iter()
-                        .collect::<String>()
+                    self[line.1..loc.1].iter().collect::<String>()
                 }
             );
-            eprintln!("{}{}", " ".repeat(read), "^".repeat(length + 1));
+            eprintln!("{}{}", " ".repeat(lead), "^".repeat(length + 1));
         }
 
-        fn calc_width(ch: &char) -> usize {
-            if ch.is_ascii() {
-                1
-            } else {
-                2
-            }
+        fn calc_width(chars: &[char]) -> usize {
+            let str: String = chars.iter().collect();
+            console::measure_text_width(&str)
         }
     }
 }
