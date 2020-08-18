@@ -405,26 +405,6 @@ impl VM {
         self.globals.gc();
     }
 
-    fn unwind_context(&mut self, err: &mut RubyError) {
-        self.context_pop().unwrap();
-        if self.latest_context().is_some() {
-            err.info.push((self.source_info(), self.get_loc()));
-        };
-    }
-
-    fn handle_error(&mut self, mut err: RubyError) -> VMResult {
-        let res = match err.kind {
-            RubyErrorKind::BlockReturn(val) => Ok(val),
-            RubyErrorKind::MethodReturn(val) if self.is_method() => Ok(val),
-            _ => {
-                //self.dump_context();
-                self.unwind_context(&mut err);
-                Err(err)
-            }
-        };
-        return res;
-    }
-
     fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: usize, dest_offset: usize) {
         if cond {
             self.pc += inst_offset;
@@ -476,9 +456,23 @@ impl VM {
             ($eval:expr) => {
                 match $eval {
                     Ok(val) => self.stack_push(val),
-                    Err(err) => match err.kind {
+                    Err(mut err) => match err.kind {
                         RubyErrorKind::BlockReturn(val) => self.stack_push(val),
-                        _ => return self.handle_error(err),
+                        _ => {
+                            let res = match err.kind {
+                                RubyErrorKind::BlockReturn(val) => Ok(val),
+                                RubyErrorKind::MethodReturn(val) if self.is_method() => Ok(val),
+                                _ => {
+                                    //self.dump_context();
+                                    self.context_pop().unwrap();
+                                    if self.latest_context().is_some() {
+                                        err.info.push((self.source_info(), self.get_loc()));
+                                    };
+                                    Err(err)
+                                }
+                            };
+                            return res;
+                        }
                     },
                 };
             };

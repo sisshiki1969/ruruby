@@ -10,7 +10,6 @@ pub struct Context {
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
     pub iseq_ref: Option<ISeqRef>,
-    //pub pc: usize,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
     /// Context of caller.

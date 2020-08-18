@@ -733,12 +733,27 @@ fn size(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
-    let bytes = self_val.expect_bytes(vm, "Receiver")?;
-    let mut ary = vec![];
-    for b in bytes {
-        ary.push(Value::fixnum(*b as i64));
+    match args.block {
+        Some(block) => {
+            let rstr = match self_val.as_rstring() {
+                Some(rstr) => rstr,
+                None => return Err(vm.error_argument("Receiver must be String.")),
+            };
+            for b in rstr.as_bytes() {
+                let byte = Value::fixnum(*b as i64);
+                vm.eval_block(block, &Args::new1(byte))?;
+            }
+            Ok(self_val)
+        }
+        None => {
+            let bytes = self_val.expect_bytes(vm, "Receiver")?;
+            let mut ary = vec![];
+            for b in bytes {
+                ary.push(Value::fixnum(*b as i64));
+            }
+            Ok(Value::array_from(&vm.globals, ary))
+        }
     }
-    Ok(Value::array_from(&vm.globals, ary))
 }
 
 fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
