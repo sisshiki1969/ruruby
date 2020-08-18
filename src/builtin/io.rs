@@ -16,6 +16,8 @@ pub fn init_io(globals: &mut Globals) -> Value {
     obj
 }
 
+use std::io::{self, Write};
+
 fn output(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let s = match args[0].as_string() {
@@ -23,6 +25,7 @@ fn output(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => vm.val_to_s(args[0]),
     };
     print!("{}", s);
+    io::stdout().flush().unwrap();
     Ok(self_val)
 }
 
