@@ -154,7 +154,7 @@ impl GC for ClassList {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ISeqKind {
     Other,           // eval or unnamed method
     Method(IdentId), // method or lambda

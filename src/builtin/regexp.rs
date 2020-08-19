@@ -194,14 +194,14 @@ impl RegexpInfo {
     }
 
     fn set_special_global(vm: &mut VM, i: usize, given: &str, start: usize, end: usize) {
-        let id = IdentId::get_id(format!("${}", i));
+        let id = IdentId::get_id(&format!("${}", i));
         let val = Value::string(given[start..end].to_string());
         //eprintln!("${}: {}", i, given[start..end].to_string());
         vm.set_global_var(id, val);
     }
 
     fn set_special_global_nil(vm: &mut VM, i: usize) {
-        let id = IdentId::get_id(format!("${}", i));
+        let id = IdentId::get_id(&format!("${}", i));
         vm.set_global_var(id, Value::nil());
     }
 

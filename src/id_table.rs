@@ -74,7 +74,7 @@ impl IdentId {
 }
 
 impl IdentId {
-    pub fn get_id(name: impl Into<String>) -> Self {
+    pub fn get_id(name: &str) -> Self {
         ID.write().unwrap().get_ident_id(name)
     }
 
@@ -92,7 +92,7 @@ impl IdentId {
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
         let new_name = format!("{:?}{}", id, postfix);
-        IdentId::get_id(new_name)
+        IdentId::get_id(&new_name)
     }
 }
 
@@ -140,14 +140,13 @@ impl IdentifierTable {
         self.table_rev.insert(id.into(), name);
     }
 
-    fn get_ident_id(&mut self, name: impl Into<String>) -> IdentId {
-        let name = name.into();
-        match self.table.get(&name) {
+    fn get_ident_id(&mut self, name: &str) -> IdentId {
+        match self.table.get(name) {
             Some(id) => IdentId::from(*id),
             None => {
                 let id = self.ident_id;
-                self.table.insert(name.clone(), id);
-                self.table_rev.insert(id, name.clone());
+                self.table.insert(name.to_string(), id);
+                self.table_rev.insert(id, name.to_string());
                 self.ident_id += 1;
                 IdentId::from(id)
             }

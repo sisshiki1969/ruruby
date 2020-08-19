@@ -514,7 +514,7 @@ impl Codegen {
         let mut idx = 0u32;
         for (i, context) in self.context_stack.iter().rev().enumerate() {
             match context.lvar_info.get(&id) {
-                Some(id) => return Some((i as u32, id.clone())),
+                Some(id) => return Some((i as u32, *id)),
                 None => idx = i as u32,
             };
             if context.kind == ContextKind::Method {
@@ -527,7 +527,7 @@ impl Codegen {
         };
         loop {
             match ctx.iseq_ref.unwrap().lvar.get(&id) {
-                Some(id) => return Some((idx as u32, id.clone())),
+                Some(id) => return Some((idx as u32, *id)),
                 None => {}
             };
             ctx = match ctx.outer {
@@ -688,7 +688,7 @@ impl Codegen {
                 receiver, method, ..
             } => {
                 let name = format!("{:?}=", method);
-                let assign_id = IdentId::get_id(name);
+                let assign_id = IdentId::get_id(&name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
                 self.gen_opt_send(globals, iseq, assign_id, 1);
@@ -773,7 +773,7 @@ impl Codegen {
                 receiver, method, ..
             } => {
                 let name = format!("{:?}=", method);
-                let assign_id = IdentId::get_id(name);
+                let assign_id = IdentId::get_id(&name);
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();

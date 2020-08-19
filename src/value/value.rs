@@ -525,7 +525,7 @@ impl Value {
 
     pub fn expect_bytes(&self, vm: &mut VM, msg: &str) -> Result<&[u8], RubyError> {
         let rstring = self.as_rstring().ok_or_else(|| {
-            let inspect = vm.val_inspect(self.clone());
+            let inspect = vm.val_inspect(*self);
             vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
         })?;
         Ok(rstring.as_bytes())
@@ -552,7 +552,7 @@ impl Value {
     }
 
     pub fn expect_string(&mut self, vm: &mut VM, msg: &str) -> Result<&String, RubyError> {
-        let val = self.clone();
+        let val = *self;
         let rstring = self.as_mut_rstring().ok_or_else(|| {
             let inspect = vm.val_inspect(val);
             vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
@@ -618,7 +618,7 @@ impl Value {
     }
 
     pub fn expect_array(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
-        let val = self.clone();
+        let val = *self;
         match self.as_mut_array() {
             Some(ary) => Ok(ary),
             None => Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val))),
@@ -666,7 +666,7 @@ impl Value {
     }
 
     pub fn expect_hash(&self, vm: &mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
-        let val = self.clone();
+        let val = *self;
         self.as_hash().ok_or_else(|| {
             let inspect = vm.val_inspect(val);
             vm.error_type(format!("{} must be Hash. (given:{})", msg, inspect))

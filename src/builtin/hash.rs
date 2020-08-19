@@ -49,7 +49,7 @@ fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn clone(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::hash_from((*hash).clone()))
+    Ok(Value::hash_from(hash.clone()))
 }
 
 fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

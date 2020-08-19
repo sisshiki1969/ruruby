@@ -277,7 +277,7 @@ impl Parser {
         }
     }
 
-    fn get_ident_id(&self, method: impl Into<String>) -> IdentId {
+    fn get_ident_id(&self, method: &str) -> IdentId {
         IdentId::get_id(method)
     }
 
@@ -428,13 +428,12 @@ impl Parser {
     /// Return IdentId of the Ident.
     /// If not, return RubyError.
     fn expect_ident(&mut self) -> Result<IdentId, RubyError> {
-        let name = match &self.get()?.kind {
-            TokenKind::Ident(s, _, _) => s.clone(),
+        match &self.get()?.kind {
+            TokenKind::Ident(s, _, _) => Ok(self.get_ident_id(s)),
             _ => {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
             }
-        };
-        Ok(self.get_ident_id(name))
+        }
     }
 
     /// Get the next token and examine whether it is Const.
@@ -447,7 +446,7 @@ impl Parser {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
             }
         };
-        Ok(self.get_ident_id(name))
+        Ok(self.get_ident_id(&name))
     }
 
     fn token_as_symbol(&self, token: &Token) -> String {
@@ -660,7 +659,7 @@ impl Parser {
                     ..
                 },
             loc,
-        } = node.clone()
+        } = node
         {
             if self.is_command()? {
                 send_args = self.parse_arglist()?;
@@ -1227,15 +1226,15 @@ impl Parser {
                     //} else if self.consume_punct_no_term(Punct::Not)? {
                     //    s.clone() + "!"
                     //} else {
-                    s.clone()
+                    s
                 //}
                 } else {
-                    s.clone()
+                    s
                 };
                 self.get_ident_id(name)
             }
             TokenKind::Reserved(r) => {
-                let string = self.lexer.get_string_from_reserved(*r).to_owned();
+                let string = self.lexer.get_string_from_reserved(*r);
                 self.get_ident_id(string)
             }
             TokenKind::Punct(p) => self.parse_op_definable(p)?,
@@ -1533,7 +1532,7 @@ impl Parser {
                         TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
                         _ if token.can_be_symbol() => {
                             let ident = self.token_as_symbol(&token);
-                            self.get_ident_id(ident)
+                            self.get_ident_id(&ident)
                         }
                         TokenKind::OpenString(s, term, level) => {
                             let node = self.parse_interporated_string_literal(&s, *term, *level)?;
@@ -1837,11 +1836,11 @@ impl Parser {
             let loc = tok.loc();
             let node = match tok.kind {
                 TokenKind::GlobalVar(s) => {
-                    let id = IdentId::get_id(s);
+                    let id = IdentId::get_id(&s);
                     Node::new_global_var(id, loc)
                 }
                 TokenKind::InstanceVar(s) => {
-                    let id = IdentId::get_id(s);
+                    let id = IdentId::get_id(&s);
                     Node::new_instance_var(id, loc)
                 }
                 _ => unreachable!(format!("{:?}", tok)),
@@ -1954,7 +1953,7 @@ impl Parser {
                 let ident = self.token_as_symbol(&token);
                 if self.consume_punct(Punct::Colon)? {
                     self.discard_state();
-                    let id = self.get_ident_id(ident);
+                    let id = self.get_ident_id(&ident);
                     symbol_flag = true;
                     Node::new_symbol(id, ident_loc)
                 } else {
@@ -2047,7 +2046,7 @@ impl Parser {
                 self.expect_ident()?
             }
             TokenKind::Reserved(r) => {
-                let string = self.lexer.get_string_from_reserved(r).to_owned();
+                let string = self.lexer.get_string_from_reserved(r);
                 self.get_ident_id(string)
             }
             TokenKind::Ident(name, has_suffix, _) => {
@@ -2055,12 +2054,12 @@ impl Parser {
                     match self.peek_no_term()?.kind {
                         TokenKind::Punct(Punct::Assign) => {
                             self.get()?;
-                            self.get_ident_id(name + "=")
+                            self.get_ident_id(&(name + "="))
                         }
-                        _ => self.get_ident_id(name),
+                        _ => self.get_ident_id(&name),
                     }
                 } else {
-                    self.get_ident_id(name)
+                    self.get_ident_id(&name)
                 }
             }
             TokenKind::Punct(Punct::Plus) => self.get_ident_id("+"),

@@ -329,16 +329,17 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.as_mut_string().unwrap();
-    let rhs = match args[0].as_rstring().cloned() {
-        Some(rhs) => rhs.clone().as_string(vm)?.to_string(),
-        None => match args[0].as_integer() {
-            Some(i) => RString::Bytes(vec![i as i8 as u8])
-                .as_string(vm)?
-                .to_string(),
+    let mut arg0 = args[0];
+    *lhs = match arg0.as_mut_rstring() {
+        Some(rhs) => format!("{}{}", lhs, rhs.as_string(vm)?),
+        None => match arg0.as_integer() {
+            Some(i) => {
+                let mut rhs = RString::Bytes(vec![i as i8 as u8]);
+                format!("{}{}", lhs, rhs.as_string(vm)?)
+            }
             None => return Err(vm.error_argument("Arg must be String or Integer.")),
         },
     };
-    *lhs = format!("{}{}", lhs, rhs);
     Ok(self_val)
 }
 
@@ -904,14 +905,14 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     }
     if carry_flag {
-        let c = buf.last().unwrap().clone();
-        if c == '0' {
+        let c = buf.last().unwrap();
+        if *c == '0' {
             buf.push('1');
-        } else if c == '０' {
+        } else if *c == '０' {
             buf.push('１');
-        } else if c == 'a' {
+        } else if *c == 'a' {
             buf.push('a');
-        } else if c == 'A' {
+        } else if *c == 'A' {
             buf.push('A');
         }
     }
@@ -922,10 +923,10 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
-    let mut args = args.clone();
+    let mut arg0 = args[0];
     let target = self_val.as_string().unwrap();
     let mut c = 0;
-    let iter = args[0].expect_string(vm, "Args")?.chars();
+    let iter = arg0.expect_string(vm, "Args")?.chars();
     for ch in iter {
         c += target.rmatches(|x| ch == x).count();
     }

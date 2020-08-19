@@ -106,7 +106,7 @@ impl Context {
             caller,
             on_stack: true,
             //stack_len: 0,
-            kind: iseq_ref.kind.clone(),
+            kind: iseq_ref.kind,
         }
     }
 

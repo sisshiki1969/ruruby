@@ -124,10 +124,10 @@ impl VM {
     /// This method should be called in the thread where `self` is to be run.
     pub fn set_allocator(&self) {
         ALLOC.with(|a| {
-            *a.borrow_mut() = Some(self.globals.allocator.clone());
+            *a.borrow_mut() = Some(self.globals.allocator);
         });
         BUILTINS.with(|b| {
-            *b.borrow_mut() = Some(self.globals.builtins.clone());
+            *b.borrow_mut() = Some(self.globals.builtins);
         });
     }
 
@@ -892,7 +892,7 @@ impl VM {
                 Inst::GET_IVAR => {
                     let var_id = iseq.read_id(self.pc + 1);
                     let val = match self_oref.get_var(var_id) {
-                        Some(val) => val.clone(),
+                        Some(val) => val,
                         None => Value::nil(),
                     };
                     self.stack_push(val);
@@ -1498,7 +1498,7 @@ impl VM {
 
     pub fn get_global_var(&self, id: IdentId) -> Value {
         match self.globals.global_var.get(&id) {
-            Some(val) => val.clone(),
+            Some(val) => *val,
             None => Value::nil(),
         }
     }
@@ -1525,16 +1525,13 @@ impl VM {
         {
             Some(method) => Ok(method),
             _ => {
-                /*
-                #[cfg(debug_assertions)]
-                eprintln!(
+                /*eprintln!(
                     "cache miss {} {:?}",
                     IdentId::get_ident_name(method_id),
                     rec_class
                 );*/
                 let method = self.get_instance_method(rec_class, method_id)?;
-                self.globals
-                    .set_inline_cache_entry(cache_id, rec_class, method);
+                self.globals.set_inline_cache(cache_id, rec_class, method);
                 Ok(method)
             }
         }
@@ -2676,7 +2673,7 @@ impl VM {
         file_name: String,
     ) -> Result<(std::path::PathBuf, String), RubyError> {
         use crate::loader::*;
-        match crate::loader::load_file(file_name.clone()) {
+        match crate::loader::load_file(&file_name) {
             Ok((path, program)) => Ok((path, program)),
             Err(err) => {
                 let err_str = match err {
@@ -2693,10 +2690,9 @@ impl VM {
         }
     }
 
-    pub fn exec_file(&mut self, file_name: impl Into<String>) {
+    pub fn exec_file(&mut self, file_name: &str) {
         use crate::loader::*;
-        let file_name = file_name.into();
-        let (absolute_path, program) = match crate::loader::load_file(file_name.clone()) {
+        let (absolute_path, program) = match crate::loader::load_file(file_name) {
             Ok((path, program)) => (path, program),
             Err(err) => {
                 match err {

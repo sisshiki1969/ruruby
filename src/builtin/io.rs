@@ -20,11 +20,13 @@ use std::io::{self, Write};
 
 fn output(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
-    let s = match args[0].as_string() {
-        Some(s) => s.clone(),
-        None => vm.val_to_s(args[0]),
+    match args[0].as_string() {
+        Some(s) => print!("{}", s),
+        None => {
+            let s = vm.val_to_s(args[0]);
+            print!("{}", s)
+        }
     };
-    print!("{}", s);
     io::stdout().flush().unwrap();
     Ok(self_val)
 }

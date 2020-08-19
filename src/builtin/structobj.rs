@@ -19,7 +19,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 _ => return Err(vm.error_name(format!("Identifier `{}` needs to be constant.", s))),
             };
             i = 1;
-            let s = IdentId::get_id(format!("Struct:{}", s));
+            let s = IdentId::get_id(&format!("Struct:{}", s));
             Some(s)
         }
     };
@@ -67,7 +67,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     for (i, arg) in args.iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
         let var = format!("@{:?}", id);
-        self_val.set_var(IdentId::get_id(var), *arg);
+        self_val.set_var(IdentId::get_id(&var), *arg);
     }
     Ok(Value::nil())
 }
@@ -87,7 +87,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         .map(|x| {
             let id = x.as_symbol().unwrap();
             let name = format!("@{:?}", id);
-            IdentId::get_id(name)
+            IdentId::get_id(&name)
         })
         .collect();
     let mut attr_str = String::new();
