@@ -25,7 +25,7 @@ fn complex_rect(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         return Err(vm.error_type("Not a real."));
     }
     let i = if args.len() == 1 {
-        Value::fixnum(0)
+        Value::integer(0)
     } else if args[1].is_real() {
         args[1]
     } else {

@@ -62,7 +62,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let class = self_val.get_class_object();
+    let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("_members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
@@ -77,9 +77,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let mut name = self_val
-        .get_class_object()
-        .get_var(IdentId::get_id("_members"));
+    let mut name = self_val.get_class().get_var(IdentId::get_id("_members"));
     let members = match name {
         Some(ref mut v) => match v.as_array() {
             Some(aref) => aref,
@@ -104,7 +102,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         };
         attr_str = format!("{} {:?}={}", attr_str, id, val);
     }
-    let class_name = match self_val.get_class_object().as_class().name {
+    let class_name = match self_val.get_class().as_class().name {
         Some(id) => IdentId::get_ident_name(id),
         None => "".to_string(),
     };

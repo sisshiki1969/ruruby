@@ -9,8 +9,8 @@ pub enum Real {
 impl Real {
     pub fn to_val(self) -> Value {
         match self {
-            Real::Integer(i) => Value::fixnum(i),
-            Real::Float(f) => Value::flonum(f),
+            Real::Integer(i) => Value::integer(i),
+            Real::Float(f) => Value::float(f),
         }
     }
     pub fn is_negative(self) -> bool {

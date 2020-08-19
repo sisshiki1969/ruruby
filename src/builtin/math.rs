@@ -25,7 +25,7 @@ fn sqrt(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = Value::flonum(num.sqrt());
+    let res = Value::float(num.sqrt());
     Ok(res)
 }
 
@@ -40,7 +40,7 @@ fn cos(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = Value::flonum(num.cos());
+    let res = Value::float(num.cos());
     Ok(res)
 }
 
@@ -55,7 +55,7 @@ fn sin(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         return Err(vm.error_type("Must be a number."));
     };
-    let res = Value::flonum(num.sin());
+    let res = Value::float(num.sin());
     Ok(res)
 }
 

@@ -125,7 +125,7 @@ fn write(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             )))
         }
     };
-    Ok(Value::fixnum(contents.len() as i64))
+    Ok(Value::integer(contents.len() as i64))
 }
 
 #[cfg(test)]

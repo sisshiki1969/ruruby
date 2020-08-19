@@ -235,7 +235,7 @@ impl VM {
     pub fn classref(&self) -> ClassRef {
         let (class, _) = self.class_context.last().unwrap();
         if class.is_nil() {
-            self.globals.object_class
+            self.globals.builtins.object.as_class()
         } else {
             class.as_module().unwrap()
         }
@@ -538,12 +538,12 @@ impl VM {
                 Inst::PUSH_FIXNUM => {
                     let num = iseq.read64(self.pc + 1);
                     self.pc += 9;
-                    self.stack_push(Value::fixnum(num as i64));
+                    self.stack_push(Value::integer(num as i64));
                 }
                 Inst::PUSH_FLONUM => {
                     let num = f64::from_bits(iseq.read64(self.pc + 1));
                     self.pc += 9;
-                    self.stack_push(Value::flonum(num));
+                    self.stack_push(Value::float(num));
                 }
                 Inst::PUSH_SYMBOL => {
                     let id = iseq.read_id(self.pc + 1);
@@ -1354,7 +1354,7 @@ impl VM {
         if len == num {
             Ok(())
         } else {
-            let class = self_val.get_class_object();
+            let class = self_val.get_class();
             Err(self.error_argument(format!(
                 "Wrong number of arguments. (given {}, expected {}) self:{:?}",
                 len, num, class
@@ -1394,7 +1394,7 @@ impl VM {
     }
 
     pub fn expect_flonum(&mut self, val: Value, msg: &str) -> Result<f64, RubyError> {
-        val.as_flonum().ok_or_else(|| {
+        val.as_float().ok_or_else(|| {
             let inspect = self.val_inspect(val);
             self.error_type(format!("{} must be Float. (given:{})", msg, inspect))
         })
@@ -1571,7 +1571,7 @@ impl VM {
         method: IdentId,
         cache: u32,
     ) -> VMResult {
-        let rec_class = lhs.get_class_object_for_method();
+        let rec_class = lhs.get_class_for_method();
         let methodref = self.get_method_from_cache(cache, rec_class, method)?;
         let arg = Args::new1(rhs);
         self.eval_send(methodref, lhs, &arg)
@@ -1581,11 +1581,11 @@ impl VM {
 macro_rules! eval_op_i {
     ($vm:ident, $iseq:ident, $lhs:expr, $i:ident, $op:ident, $id:expr) => {
         if $lhs.is_packed_fixnum() {
-            return Ok(Value::fixnum($lhs.as_packed_fixnum().$op($i as i64)));
+            return Ok(Value::integer($lhs.as_packed_fixnum().$op($i as i64)));
         } else if $lhs.is_packed_num() {
-            return Ok(Value::flonum($lhs.as_packed_flonum().$op($i as f64)));
+            return Ok(Value::float($lhs.as_packed_flonum().$op($i as f64)));
         }
-        return $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64));
+        return $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64));
     };
 }
 
@@ -1595,19 +1595,19 @@ macro_rules! eval_op {
             let lhs = $lhs.as_packed_fixnum();
             if $rhs.is_packed_fixnum() {
                 let rhs = $rhs.as_packed_fixnum();
-                return Ok(Value::fixnum(lhs.$op(rhs)));
+                return Ok(Value::integer(lhs.$op(rhs)));
             } else if $rhs.is_packed_num() {
                 let rhs = $rhs.as_packed_flonum();
-                return Ok(Value::flonum((lhs as f64).$op(rhs)));
+                return Ok(Value::float((lhs as f64).$op(rhs)));
             }
         } else if $lhs.is_packed_num() {
             let lhs = $lhs.as_packed_flonum();
             if $rhs.is_packed_fixnum() {
                 let rhs = $rhs.as_packed_fixnum();
-                return Ok(Value::flonum(lhs.$op(rhs as f64)));
+                return Ok(Value::float(lhs.$op(rhs as f64)));
             } else if $rhs.is_packed_num() {
                 let rhs = $rhs.as_packed_flonum();
-                return Ok(Value::flonum(lhs.$op(rhs)));
+                return Ok(Value::float(lhs.$op(rhs)));
             }
         }
         return $vm.fallback_cache_for_binop($lhs, $rhs, $id, $cache);
@@ -1657,10 +1657,10 @@ impl VM {
         }
         use divrem::*;
         let val = match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Value::fixnum(lhs.rem_floor(rhs)),
-            (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum(rem_floorf64(lhs as f64, rhs)),
-            (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(rem_floorf64(lhs, rhs as f64)),
-            (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(rem_floorf64(lhs, rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs.rem_floor(rhs)),
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs as f64, rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::float(rem_floorf64(lhs, rhs as f64)),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs, rhs)),
             (_, _) => return self.fallback_for_binop(IdentId::_REM, lhs, rhs),
         };
         Ok(val)
@@ -1670,14 +1670,14 @@ impl VM {
         let val = match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => {
                 if 0 <= rhs && rhs <= std::u32::MAX as i64 {
-                    Value::fixnum(lhs.pow(rhs as u32))
+                    Value::integer(lhs.pow(rhs as u32))
                 } else {
-                    Value::flonum((lhs as f64).powf(rhs as f64))
+                    Value::float((lhs as f64).powf(rhs as f64))
                 }
             }
-            (RV::Integer(lhs), RV::Float(rhs)) => Value::flonum((lhs as f64).powf(rhs)),
-            (RV::Float(lhs), RV::Integer(rhs)) => Value::flonum(lhs.powf(rhs as f64)),
-            (RV::Float(lhs), RV::Float(rhs)) => Value::flonum(lhs.powf(rhs)),
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::float((lhs as f64).powf(rhs)),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::float(lhs.powf(rhs as f64)),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::float(lhs.powf(rhs)),
             _ => {
                 return self.fallback_for_binop(IdentId::_POW, lhs, rhs);
             }
@@ -1687,8 +1687,8 @@ impl VM {
 
     fn eval_neg(&mut self, lhs: Value) -> VMResult {
         let val = match lhs.unpack() {
-            RV::Integer(i) => Value::fixnum(-i),
-            RV::Float(f) => Value::flonum(-f),
+            RV::Integer(i) => Value::integer(-i),
+            RV::Float(f) => Value::float(-f),
             _ => return self.fallback(IdentId::get_id("-@"), lhs, &Args::new0()),
         };
         Ok(val)
@@ -1696,15 +1696,15 @@ impl VM {
 
     fn eval_shl(&mut self, rhs: Value, mut lhs: Value, cache: u32) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(
+            return Ok(Value::integer(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
         match lhs.as_mut_rvalue() {
             None => match lhs.unpack() {
                 RV::Integer(lhs) => {
-                    match rhs.as_fixnum() {
-                        Some(rhs) => return Ok(Value::fixnum(lhs << rhs)),
+                    match rhs.as_integer() {
+                        Some(rhs) => return Ok(Value::integer(lhs << rhs)),
                         _ => {}
                     };
                 }
@@ -1724,24 +1724,24 @@ impl VM {
 
     fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(
+            return Ok(Value::integer(
                 lhs.as_packed_fixnum() >> rhs.as_packed_fixnum(),
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs >> rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs >> rhs)),
             (_, _) => return Err(self.error_undefined_op(">>", rhs, lhs)),
         }
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(
+            return Ok(Value::integer(
                 lhs.as_packed_fixnum() & rhs.as_packed_fixnum(),
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs & rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs & rhs)),
             (_, _) => return Err(self.error_undefined_op("&", rhs, lhs)),
         }
     }
@@ -1749,22 +1749,22 @@ impl VM {
     fn eval_bitandi(&mut self, lhs: Value, i: i32) -> VMResult {
         let i = i as i64;
         if lhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(lhs.as_packed_fixnum() & i));
+            return Ok(Value::integer(lhs.as_packed_fixnum() & i));
         }
         match lhs.unpack() {
-            RV::Integer(lhs) => Ok(Value::fixnum(lhs & i)),
-            _ => return Err(self.error_undefined_op("&", Value::fixnum(i), lhs)),
+            RV::Integer(lhs) => Ok(Value::integer(lhs & i)),
+            _ => return Err(self.error_undefined_op("&", Value::integer(i), lhs)),
         }
     }
 
     fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(
+            return Ok(Value::integer(
                 lhs.as_packed_fixnum() | rhs.as_packed_fixnum(),
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs | rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs | rhs)),
             (_, _) => return Err(self.error_undefined_op("|", rhs, lhs)),
         }
     }
@@ -1772,29 +1772,29 @@ impl VM {
     fn eval_bitori(&mut self, lhs: Value, i: i32) -> VMResult {
         let i = i as i64;
         if lhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(lhs.as_packed_fixnum() | i));
+            return Ok(Value::integer(lhs.as_packed_fixnum() | i));
         }
         match lhs.unpack() {
-            RV::Integer(lhs) => Ok(Value::fixnum(lhs | i)),
-            _ => return Err(self.error_undefined_op("|", Value::fixnum(i), lhs)),
+            RV::Integer(lhs) => Ok(Value::integer(lhs | i)),
+            _ => return Err(self.error_undefined_op("|", Value::integer(i), lhs)),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::fixnum(
+            return Ok(Value::integer(
                 lhs.as_packed_fixnum() ^ rhs.as_packed_fixnum(),
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::fixnum(lhs ^ rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
             (_, _) => return Err(self.error_undefined_op("^", rhs, lhs)),
         }
     }
 
     fn eval_bitnot(&mut self, lhs: Value) -> VMResult {
         match lhs.unpack() {
-            RV::Integer(lhs) => Ok(Value::fixnum(!lhs)),
+            RV::Integer(lhs) => Ok(Value::integer(!lhs)),
             _ => Err(self.error_nomethod("NoMethodError: '~'")),
         }
     }
@@ -1849,7 +1849,7 @@ macro_rules! eval_cmp_i {
                 RV::Integer(lhs) => Ok(lhs.$op(&($i as i64))),
                 RV::Float(lhs) => Ok(lhs.$op(&($i as f64))),
                 _ => {
-                    let res = $vm.fallback_for_binop($id, $lhs, Value::fixnum($i as i64));
+                    let res = $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64));
                     res.map(|x| x.to_bool())
                 }
             }
@@ -1870,7 +1870,7 @@ impl VM {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Class(_) => {
-                    let res = rhs.get_class_object().id() == lhs.id();
+                    let res = rhs.get_class().id() == lhs.id();
                     Ok(res)
                 }
                 ObjKind::Regexp(re) => {
@@ -1935,7 +1935,7 @@ impl VM {
             }
         };
         match res {
-            Some(ord) => Ok(Value::fixnum(ord as i64)),
+            Some(ord) => Ok(Value::integer(ord as i64)),
             None => Ok(Value::nil()),
         }
     }
@@ -1975,12 +1975,12 @@ impl VM {
                     ObjKind::Array(ref mut aref) => {
                         aref.set_elem_imm(idx, val);
                     }
-                    ObjKind::Hash(ref mut href) => href.insert(Value::fixnum(idx as i64), val),
+                    ObjKind::Hash(ref mut href) => href.insert(Value::integer(idx as i64), val),
                     _ => {
                         self.fallback(
                             IdentId::_INDEX_ASSIGN,
                             receiver,
-                            &Args::new2(Value::fixnum(idx as i64), val),
+                            &Args::new2(Value::integer(idx as i64), val),
                         )?;
                     }
                 };
@@ -1989,7 +1989,7 @@ impl VM {
                 self.fallback(
                     IdentId::_INDEX_ASSIGN,
                     receiver,
-                    &Args::new2(Value::fixnum(idx as i64), val),
+                    &Args::new2(Value::integer(idx as i64), val),
                 )?;
             }
         }
@@ -2022,7 +2022,7 @@ impl VM {
                 } else {
                     (i >> index) & 1
                 };
-                Value::fixnum(val)
+                Value::integer(val)
             }
             _ => return Err(self.error_undefined_method(IdentId::_INDEX, receiver)),
         };
@@ -2035,23 +2035,23 @@ impl VM {
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.get_elem_imm(idx),
-                ObjKind::Hash(href) => match href.get(&Value::fixnum(idx as i64)) {
+                ObjKind::Hash(href) => match href.get(&Value::integer(idx as i64)) {
                     Some(val) => *val,
                     None => Value::nil(),
                 },
                 ObjKind::Method(mref) => {
-                    let args = Args::new1(Value::fixnum(idx as i64));
+                    let args = Args::new1(Value::integer(idx as i64));
                     self.eval_send(mref.method, mref.receiver, &args)?
                 }
                 _ => {
-                    let args = Args::new1(Value::fixnum(idx as i64));
+                    let args = Args::new1(Value::integer(idx as i64));
                     self.fallback(IdentId::_INDEX, receiver, &args)?
                 }
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
                 let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
-                Value::fixnum(val)
+                Value::integer(val)
             }
             _ => return Err(self.error_undefined_method(IdentId::_INDEX, receiver)),
         };
@@ -2236,7 +2236,7 @@ impl VM {
         let flag = iseq.read16(self.pc + 7);
         let cache_slot = iseq.read32(self.pc + 9);
         let block = iseq.read64(self.pc + 13);
-        let rec_class = receiver.get_class_object_for_method();
+        let rec_class = receiver.get_class_for_method();
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
 
         let keyword = if flag & 0b01 == 1 {
@@ -2275,7 +2275,7 @@ impl VM {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let cache_slot = iseq.read32(self.pc + 7);
-        let rec_class = receiver.get_class_object_for_method();
+        let rec_class = receiver.get_class_for_method();
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
         let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
@@ -2383,7 +2383,7 @@ impl VM {
     pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
         let mut class = match target_obj.as_module() {
             Some(mref) => mref,
-            None => target_obj.get_class_object().as_module().unwrap(),
+            None => target_obj.get_class().as_module().unwrap(),
         };
         class.add_method(&mut self.globals, id, method);
     }
@@ -2408,7 +2408,7 @@ impl VM {
         receiver: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_object_for_method();
+        let rec_class = receiver.get_class_for_method();
         let method = self.get_instance_method(rec_class, method_id)?;
         Ok(method)
     }
@@ -2560,7 +2560,7 @@ impl VM {
                                 unimplemented!("Range end not fixnum.")
                             } + if rref.exclude { 0 } else { 1 };
                             for i in start..end {
-                                args.push(Value::fixnum(i));
+                                args.push(Value::integer(i));
                             }
                         }
                         _ => args.push(inner),

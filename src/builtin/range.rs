@@ -82,8 +82,8 @@ fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let start = range.start.as_fixnum().unwrap();
-    let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
+    let start = range.start.as_integer().unwrap();
+    let mut end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.start);
     };
@@ -96,15 +96,15 @@ fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         end = start + arg - 1;
     };
     for i in start..=end {
-        v.push(Value::fixnum(i));
+        v.push(Value::integer(i));
     }
     Ok(Value::array_from(v))
 }
 
 fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let mut start = range.start.as_fixnum().unwrap();
-    let end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
+    let mut start = range.start.as_integer().unwrap();
+    let end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.end);
     };
@@ -117,7 +117,7 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         start = end - arg + 1;
     };
     for i in start..=end {
-        v.push(Value::fixnum(i));
+        v.push(Value::integer(i));
     }
     Ok(Value::array_from(v))
 }
@@ -130,7 +130,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut arg = Args::new1(Value::nil());
     let mut res = vec![];
     for i in start..end {
-        arg[0] = Value::fixnum(i);
+        arg[0] = Value::integer(i);
         let val = vm.eval_block(method, &arg)?;
         vm.temp_push(val);
         res.push(val);
@@ -147,7 +147,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut arg = Args::new1(Value::nil());
     let mut res = vec![];
     for i in start..end {
-        arg[0] = Value::fixnum(i);
+        arg[0] = Value::integer(i);
         let val = vm.eval_block(method, &arg)?;
         vm.temp_push(val);
         match val.as_array() {
@@ -176,7 +176,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(Value::fixnum(i));
+        let arg = Args::new1(Value::integer(i));
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
@@ -188,7 +188,7 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(Value::fixnum(i));
+        let arg = Args::new1(Value::integer(i));
         let res = vm.eval_block(method, &arg)?;
         if !res.to_bool() {
             return Ok(Value::false_val());
@@ -204,11 +204,11 @@ fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v = vec![];
     if range.exclude {
         for i in start..end {
-            v.push(Value::fixnum(i));
+            v.push(Value::integer(i));
         }
     } else {
         for i in start..=end {
-            v.push(Value::fixnum(i));
+            v.push(Value::integer(i));
         }
     }
     Ok(Value::array_from(v))

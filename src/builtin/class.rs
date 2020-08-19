@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let class = globals.class_class;
+    let class = globals.builtins.class.as_class();
     globals.add_builtin_instance_method(class, "new", new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
     globals.add_builtin_instance_method(class, "inspect", inspect);

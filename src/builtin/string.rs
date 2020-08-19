@@ -279,7 +279,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         RV::Object(oref) => match &oref.kind {
             ObjKind::Range(info) => {
                 let len = lhs.chars().count();
-                let (start, end) = match (info.start.as_fixnum(), info.end.as_fixnum()) {
+                let (start, end) = match (info.start.as_integer(), info.end.as_integer()) {
                     (Some(start), Some(end)) => {
                         match (conv_index(start, len), conv_index(end, len)) {
                             (Some(start), Some(end)) if start > end => {
@@ -321,7 +321,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
-        Some(ord) => Ok(Value::fixnum(ord as i64)),
+        Some(ord) => Ok(Value::integer(ord as i64)),
         None => Ok(Value::nil()),
     }
 }
@@ -331,7 +331,7 @@ fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.as_mut_string().unwrap();
     let rhs = match args[0].as_rstring().cloned() {
         Some(rhs) => rhs.clone().as_string(vm)?.to_string(),
-        None => match args[0].as_fixnum() {
+        None => match args[0].as_integer() {
             Some(i) => RString::Bytes(vec![i as i8 as u8])
                 .as_string(vm)?
                 .to_string(),
@@ -699,7 +699,7 @@ fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let given = self_val.expect_string(vm, "Receiver")?;
     if let Some(re) = args[0].as_regexp() {
         let res = match RegexpInfo::find_one(vm, &*re, given).unwrap() {
-            Some(mat) => Value::fixnum(mat.start() as i64),
+            Some(mat) => Value::integer(mat.start() as i64),
             None => Value::nil(),
         };
         return Ok(res);
@@ -722,7 +722,7 @@ fn tr(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn size(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let rec = self_val.expect_string(vm, "Receiver")?;
-    Ok(Value::fixnum(rec.chars().count() as i64))
+    Ok(Value::integer(rec.chars().count() as i64))
 }
 
 fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -734,7 +734,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 None => return Err(vm.error_argument("Receiver must be String.")),
             };
             for b in rstr.as_bytes() {
-                let byte = Value::fixnum(*b as i64);
+                let byte = Value::integer(*b as i64);
                 vm.eval_block(block, &Args::new1(byte))?;
             }
             Ok(self_val)
@@ -743,7 +743,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let bytes = self_val.expect_bytes(vm, "Receiver")?;
             let mut ary = vec![];
             for b in bytes {
-                ary.push(Value::fixnum(*b as i64));
+                ary.push(Value::integer(*b as i64));
             }
             Ok(Value::array_from(ary))
         }
@@ -761,7 +761,7 @@ fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => return Err(vm.error_argument("Receiver must be String.")),
     };
     for b in rstr.as_bytes() {
-        let byte = Value::fixnum(*b as i64);
+        let byte = Value::integer(*b as i64);
         vm.eval_block(block, &Args::new1(byte))?;
     }
     Ok(self_val)
@@ -798,7 +798,7 @@ fn sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for b in bytes {
         sum += *b as u64;
     }
-    Ok(Value::fixnum((sum & ((1 << 16) - 1)) as i64))
+    Ok(Value::integer((sum & ((1 << 16) - 1)) as i64))
 }
 
 fn upcase(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -819,13 +819,13 @@ fn toi(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let self_ = match self_val.expect_string(vm, "Receiver") {
         Ok(s) => s,
-        Err(_) => return Ok(Value::fixnum(0)),
+        Err(_) => return Ok(Value::integer(0)),
     };
     let i: i64 = match self_.parse() {
         Ok(i) => i,
         Err(_) => 0,
     };
-    Ok(Value::fixnum(i))
+    Ok(Value::integer(i))
 }
 
 fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -929,7 +929,7 @@ fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for ch in iter {
         c += target.rmatches(|x| ch == x).count();
     }
-    Ok(Value::fixnum(c as i64))
+    Ok(Value::integer(c as i64))
 }
 
 #[cfg(test)]

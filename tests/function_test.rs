@@ -13,7 +13,7 @@ fn func1() {
         end
 
         func(1,2,3)";
-    let expected = Value::fixnum(6);
+    let expected = Value::integer(6);
     eval_script(program, expected);
 }
 
@@ -30,7 +30,7 @@ fn func2() {
         end
 
         fact(5)";
-    let expected = Value::fixnum(120);
+    let expected = Value::integer(120);
     eval_script(program, expected);
 }
 

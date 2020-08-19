@@ -112,7 +112,7 @@ fn length(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let len = hash.len();
-    Ok(Value::fixnum(len as i64))
+    Ok(Value::integer(len as i64))
 }
 
 fn keys(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

@@ -19,9 +19,6 @@ pub struct Globals {
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
     pub main_object: Value,
-    pub class_class: ClassRef,
-    pub module_class: ClassRef,
-    pub object_class: ClassRef,
     pub gc_enabled: bool,
 
     pub fibers: Vec<VMRef>,
@@ -57,14 +54,28 @@ type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
     fn new() -> Self {
+        let object_id = IdentId::OBJECT;
+        let module_id = IdentId::get_id("Module");
+        let class_id = IdentId::get_id("Class");
+        let object_class = ClassRef::from(object_id, None);
+        let mut object = Value::bootstrap_class(object_class);
+        let module_class = ClassRef::from(module_id, object);
+        let mut module = Value::bootstrap_class(module_class);
+        let class_class = ClassRef::from(class_id, module);
+        let mut class = Value::bootstrap_class(class_class);
+
+        object.set_class(class);
+        module.set_class(class);
+        class.set_class(class);
+
         let nil = Value::nil();
         BuiltinClass {
             integer: nil,
             float: nil,
             complex: nil,
             array: nil,
-            class: nil,
-            module: nil,
+            class,
+            module,
             procobj: nil,
             method: nil,
             range: nil,
@@ -73,7 +84,7 @@ impl BuiltinClass {
             string: nil,
             fiber: nil,
             enumerator: nil,
-            object: nil,
+            object,
         }
     }
 
@@ -158,24 +169,9 @@ impl Globals {
         ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
         let mut builtins = BuiltinRef::new(BuiltinClass::new());
         BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
-        let object_id = IdentId::OBJECT;
-        let module_id = IdentId::get_id("Module");
-        let class_id = IdentId::get_id("Class");
-        let mut object_class = ClassRef::from(object_id, None);
-        let mut object = Value::bootstrap_class(object_class);
-        let module_class = ClassRef::from(module_id, object);
-        let module = Value::bootstrap_class(module_class);
-        let class_class = ClassRef::from(class_id, module);
-        let class = Value::bootstrap_class(class_class);
-
-        object.rvalue_mut().set_class(class);
-        module.rvalue_mut().set_class(class);
-        class.rvalue_mut().set_class(class);
-
-        builtins.object = object;
-        builtins.class = class;
-        builtins.module = module;
-
+        let mut object = builtins.object;
+        let module = builtins.module;
+        let class = builtins.class;
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
             builtins,
@@ -188,9 +184,6 @@ impl Globals {
             instant: std::time::Instant::now(),
             class_version: 0,
             main_object,
-            object_class,
-            module_class,
-            class_class,
             case_dispatch: CaseDispatchMap::new(),
             gc_enabled: true,
             fibers: vec![],
@@ -248,7 +241,7 @@ impl Globals {
         init_builtin_class!("Enumerator", enumerator);
 
         let kernel = kernel::init(&mut globals);
-        object_class.include.push(kernel);
+        object.as_class().include.push(kernel);
         BuiltinClass::set_class("Kernel", kernel);
 
         init_class!("Math", math);
@@ -259,7 +252,7 @@ impl Globals {
         init_class!("Time", time);
         init_class!("IO", io);
 
-        BuiltinClass::set_class("StandardError", Value::class(globals.class_class));
+        BuiltinClass::set_class("StandardError", Value::class(class.as_class()));
         let id = IdentId::get_id("StopIteration");
         let class = ClassRef::from(id, object);
         BuiltinClass::set_class("StopIteration", Value::class(class));
@@ -279,7 +272,11 @@ impl Globals {
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.object_class.method_table.insert(id, info);
+        self.builtins
+            .object
+            .as_class()
+            .method_table
+            .insert(id, info);
     }
 
     pub fn add_builtin_class_method(&mut self, mut obj: Value, name: &str, func: BuiltinFunc) {

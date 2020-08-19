@@ -2,7 +2,7 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let class = globals.module_class;
+    let class = globals.builtins.module.as_class();
     globals.add_builtin_instance_method(class, "constants", constants);
     globals.add_builtin_instance_method(class, "instance_methods", instance_methods);
     globals.add_builtin_instance_method(class, "attr_accessor", attr_accessor);

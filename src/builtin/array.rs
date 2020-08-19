@@ -71,7 +71,7 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         },
         2 => {
             let arg_num = args[0]
-                .as_fixnum()
+                .as_integer()
                 .ok_or(vm.error_argument("Invalid arguments"))?;
             vec![args[1]; arg_num as usize]
         }
@@ -105,26 +105,26 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     .elements);
     if lhs.len() >= rhs.len() {
         for (i, rhs_v) in rhs.iter().enumerate() {
-            match vm.eval_compare(*rhs_v, lhs[i])?.as_fixnum() {
+            match vm.eval_compare(*rhs_v, lhs[i])?.as_integer() {
                 Some(0) => {}
-                Some(ord) => return Ok(Value::fixnum(ord)),
+                Some(ord) => return Ok(Value::integer(ord)),
                 None => return Ok(Value::nil()),
             }
         }
         if lhs.len() == rhs.len() {
-            Ok(Value::fixnum(0))
+            Ok(Value::integer(0))
         } else {
-            Ok(Value::fixnum(1))
+            Ok(Value::integer(1))
         }
     } else {
         for (i, lhs_v) in lhs.iter().enumerate() {
-            match vm.eval_compare(rhs[i], *lhs_v)?.as_fixnum() {
+            match vm.eval_compare(rhs[i], *lhs_v)?.as_integer() {
                 Some(0) => {}
-                Some(ord) => return Ok(Value::fixnum(ord)),
+                Some(ord) => return Ok(Value::integer(ord)),
                 None => return Ok(Value::nil()),
             }
         }
-        Ok(Value::fixnum(-1))
+        Ok(Value::integer(-1))
     }
 }
 
@@ -191,7 +191,7 @@ fn unshift(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn length(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
-    let res = Value::fixnum(aref.elements.len() as i64);
+    let res = Value::integer(aref.elements.len() as i64);
     Ok(res)
 }
 
@@ -204,7 +204,7 @@ fn empty(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 1)?;
     let aref = self_val.as_array().unwrap();
-    if let Some(num) = args[0].as_fixnum() {
+    if let Some(num) = args[0].as_integer() {
         let v = match num {
             i if i < 0 => return Err(vm.error_argument("Negative argument.")),
             0 => vec![],
@@ -412,7 +412,7 @@ fn rotate_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let i = if args.len() == 0 {
         1
     } else {
-        match args[0].as_fixnum() {
+        match args[0].as_integer() {
             Some(i) => i,
             None => return Err(vm.error_argument("Must be Integer.")),
         }
@@ -602,7 +602,7 @@ fn pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let mut v = vec![];
     for elem in &aref.elements {
-        let i = match elem.as_fixnum() {
+        let i = match elem.as_integer() {
             Some(i) => i as i8 as u8,
             None => return Err(vm.error_argument("Must be Array of Integer.")),
         };
@@ -733,7 +733,7 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     match args.len() {
         0 => {
             let len = ary.len() as i64;
-            Ok(Value::fixnum(len))
+            Ok(Value::integer(len))
         }
         1 => {
             let other = args[0];
@@ -743,7 +743,7 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     count += 1;
                 }
             }
-            Ok(Value::fixnum(count))
+            Ok(Value::integer(count))
         }
         _ => unreachable!(),
     }

@@ -173,7 +173,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vm.check_args_num(self_val, args.len(), 1)?;
-        let mut recv_class = self_val.get_class_object();
+        let mut recv_class = self_val.get_class();
         loop {
             if recv_class.id() == args[0].id() {
                 return Ok(Value::true_val());
@@ -210,7 +210,7 @@ pub fn init(globals: &mut Globals) -> Value {
                 return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
             }
         };
-        Ok(Value::fixnum(val))
+        Ok(Value::integer(val))
     }
 
     fn dir(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -257,7 +257,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     fn rand(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
         let num = rand::random();
-        Ok(Value::flonum(num))
+        Ok(Value::float(num))
     }
 
     fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -309,13 +309,13 @@ pub fn init(globals: &mut Globals) -> Value {
         let start = std::time::Instant::now();
         std::thread::sleep(std::time::Duration::from_secs_f64(secs));
         let duration = start.elapsed().as_secs() as u64 as i64;
-        Ok(Value::fixnum(duration))
+        Ok(Value::integer(duration))
     }
 
     fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         vm.check_args_range(args.len(), 1, 3)?;
         let (r, i, ex) = match args.len() {
-            1 => (args[0], Value::fixnum(0), true),
+            1 => (args[0], Value::integer(0), true),
             2 => (args[0], args[1], true),
             3 => (args[0], args[1], args[2].to_bool()),
             _ => unreachable!(),

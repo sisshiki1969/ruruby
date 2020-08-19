@@ -232,10 +232,10 @@ mod tests {
     fn args() {
         let mut args = Args::new(0);
         for i in 0..20 {
-            args.push(Value::fixnum(i as i64));
+            args.push(Value::integer(i as i64));
         }
         for i in 0..20 {
-            assert_eq!(i as i64, args[i].as_fixnum().unwrap());
+            assert_eq!(i as i64, args[i].as_integer().unwrap());
         }
         args[3] = Value::false_val();
         args[17] = Value::true_val();
@@ -245,22 +245,27 @@ mod tests {
 
     #[test]
     fn args1() {
-        let args = Args::new1(Value::fixnum(0));
-        assert_eq!(0, args[0].as_fixnum().unwrap());
+        let args = Args::new1(Value::integer(0));
+        assert_eq!(0, args[0].as_integer().unwrap());
     }
 
     #[test]
     fn args2() {
-        let args = Args::new2(Value::fixnum(0), Value::fixnum(1));
-        assert_eq!(0, args[0].as_fixnum().unwrap());
-        assert_eq!(1, args[1].as_fixnum().unwrap());
+        let args = Args::new2(Value::integer(0), Value::integer(1));
+        assert_eq!(0, args[0].as_integer().unwrap());
+        assert_eq!(1, args[1].as_integer().unwrap());
     }
 
     #[test]
     fn args3() {
-        let args = Args::new3(None, Value::fixnum(0), Value::fixnum(1), Value::fixnum(2));
-        assert_eq!(0, args[0].as_fixnum().unwrap());
-        assert_eq!(1, args[1].as_fixnum().unwrap());
-        assert_eq!(2, args[2].as_fixnum().unwrap());
+        let args = Args::new3(
+            None,
+            Value::integer(0),
+            Value::integer(1),
+            Value::integer(2),
+        );
+        assert_eq!(0, args[0].as_integer().unwrap());
+        assert_eq!(1, args[1].as_integer().unwrap());
+        assert_eq!(2, args[2].as_integer().unwrap());
     }
 }

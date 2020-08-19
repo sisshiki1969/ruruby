@@ -316,7 +316,7 @@ impl Codegen {
     }
 
     fn gen_imaginary(&mut self, globals: &mut Globals, iseq: &mut ISeq, i: Real) {
-        let val = Value::complex(Value::fixnum(0), i.to_val());
+        let val = Value::complex(Value::integer(0), i.to_val());
         let id = globals.const_values.insert(val);
         self.gen_const_val(iseq, id);
     }
@@ -1635,7 +1635,7 @@ impl Codegen {
                                 let disp = start.disp(Codegen::current(iseq)) as i32;
                                 for elem in &branch.when {
                                     let k = match &elem.kind {
-                                        NodeKind::Integer(i) => Value::fixnum(*i),
+                                        NodeKind::Integer(i) => Value::integer(*i),
                                         NodeKind::Symbol(sym) => Value::symbol(*sym),
                                         NodeKind::String(str) => Value::string(str.to_string()),
                                         _ => unreachable!(),
@@ -2084,8 +2084,8 @@ impl Codegen {
     fn const_expr(&self, globals: &Globals, node: &Node) -> Value {
         match &node.kind {
             NodeKind::Bool(b) => Value::bool(*b),
-            NodeKind::Integer(i) => Value::fixnum(*i),
-            NodeKind::Float(f) => Value::flonum(*f),
+            NodeKind::Integer(i) => Value::integer(*i),
+            NodeKind::Float(f) => Value::float(*f),
             NodeKind::Nil => Value::nil(),
             NodeKind::Symbol(s) => Value::symbol(*s),
             NodeKind::String(s) => Value::string(s.to_owned()),

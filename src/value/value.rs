@@ -1,4 +1,5 @@
 use crate::*;
+use std::sync::mpsc::{Receiver, SyncSender};
 
 const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
@@ -28,8 +29,8 @@ impl<'a> RV<'a> {
             RV::Nil => Value::nil(),
             RV::Bool(true) => Value::true_val(),
             RV::Bool(false) => Value::false_val(),
-            RV::Integer(num) => Value::fixnum(*num),
-            RV::Float(num) => Value::flonum(*num),
+            RV::Integer(num) => Value::integer(*num),
+            RV::Float(num) => Value::float(*num),
             RV::Symbol(id) => Value::symbol(*id),
             RV::Object(info) => Value(info.id()),
         }
@@ -251,7 +252,21 @@ impl Value {
         unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
     }
 
-    pub fn get_class_object_for_method(&self) -> Value {
+    /// Change class of `self`.
+    ///
+    /// ### panic
+    /// panic if `self` was a primitive type (integer, float, etc.).
+    pub fn set_class(&mut self, class: Value) {
+        match self.as_mut_rvalue() {
+            Some(rvalue) => rvalue.set_class(class),
+            None => unreachable!(
+                "set_class(): can not change class of primitive type. {:?}",
+                self.get_class()
+            ),
+        }
+    }
+
+    pub fn get_class_for_method(&self) -> Value {
         match self.as_rvalue() {
             None => {
                 if self.is_packed_fixnum() {
@@ -273,7 +288,7 @@ impl Value {
         }
     }
 
-    pub fn get_class_object(&self) -> Value {
+    pub fn get_class(&self) -> Value {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
@@ -282,6 +297,9 @@ impl Value {
         }
     }
 
+    /// Get superclass of `self`.
+    ///
+    /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
     pub fn superclass(&self) -> Option<Value> {
         match self.as_module() {
             Some(class) => {
@@ -368,7 +386,7 @@ impl Value {
         self.0 & 0b0111 != 0 || self.0 <= 0x20
     }
 
-    pub fn as_fixnum(&self) -> Option<i64> {
+    pub fn as_integer(&self) -> Option<i64> {
         if self.is_packed_fixnum() {
             Some(self.as_packed_fixnum())
         } else {
@@ -383,7 +401,7 @@ impl Value {
     }
 
     pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
-        match self.as_fixnum() {
+        match self.as_integer() {
             Some(i) => Ok(i),
             None => {
                 let val = vm.globals.get_class_name(*self);
@@ -392,7 +410,7 @@ impl Value {
         }
     }
 
-    pub fn as_flonum(&self) -> Option<f64> {
+    pub fn as_float(&self) -> Option<f64> {
         if self.is_packed_flonum() {
             Some(self.as_packed_flonum())
         } else {
@@ -726,16 +744,16 @@ impl Value {
         }
     }
 
-    pub fn fixnum(num: i64) -> Self {
+    pub fn integer(num: i64) -> Self {
         let top = (num as u64) >> 62 ^ (num as u64) >> 63;
         if top & 0b1 == 0 {
             Value((num << 1) as u64 | 0b1)
         } else {
-            RValue::new_fixnum(num).pack()
+            RValue::new_integer(num).pack()
         }
     }
 
-    pub fn flonum(num: f64) -> Self {
+    pub fn float(num: f64) -> Self {
         if num == 0.0 {
             return Value(ZERO);
         }
@@ -744,7 +762,7 @@ impl Value {
         if exp == 4 || exp == 3 {
             Value((unum & MASK1 | MASK2).rotate_left(3))
         } else {
-            RValue::new_flonum(num).pack()
+            RValue::new_float(num).pack()
         }
     }
 
@@ -827,8 +845,8 @@ impl Value {
     pub fn fiber(
         vm: VM,
         context: ContextRef,
-        rec: std::sync::mpsc::Receiver<VMResult>,
-        tx: std::sync::mpsc::SyncSender<FiberMsg>,
+        rec: Receiver<VMResult>,
+        tx: SyncSender<FiberMsg>,
     ) -> Self {
         RValue::new_fiber(vm, context, rec, tx).pack()
     }
@@ -843,10 +861,6 @@ impl Value {
 }
 
 impl Value {
-    pub fn to_bool(&self) -> bool {
-        !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
-    }
-
     pub fn equal_i(self, other: i32) -> bool {
         if self.is_packed_fixnum() {
             self.as_packed_fixnum() == other as i64
@@ -859,7 +873,7 @@ impl Value {
 
     pub fn to_ordering(&self) -> std::cmp::Ordering {
         use std::cmp::Ordering;
-        match self.as_fixnum() {
+        match self.as_integer() {
             Some(1) => Ordering::Greater,
             Some(0) => Ordering::Equal,
             Some(-1) => Ordering::Less,
@@ -871,9 +885,9 @@ impl Value {
 impl Value {
     /// Get singleton class object of `self`.
     ///
-    /// When `self` already has a singleton class, simply return it.
-    /// If not, generate a new singleton class object.
-    /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, ..).
+    /// When `self` already has a singleton class, simply return it.  
+    /// If not, generate a new singleton class object.  
+    /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, ..) which can not have a singleton class.
     pub fn get_singleton_class(&mut self, globals: &Globals) -> Result<Value, ()> {
         match self.as_mut_rvalue() {
             Some(oref) => {
@@ -908,6 +922,13 @@ impl Value {
 }
 
 impl Value {
+    /// Convert `self` to boolean value.
+    pub fn to_bool(&self) -> bool {
+        !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
+    }
+
+    /// Convert `self` to `Option<Real>`.
+    /// If `self` was not a integer nor a float, return `None`.
     pub fn to_real(&self) -> Option<Real> {
         match self.unpack() {
             RV::Integer(i) => Some(Real::Integer(i)),
@@ -916,6 +937,8 @@ impl Value {
         }
     }
 
+    /// Convert `self` to `Option<(real:Real, imaginary:Real)>`.
+    /// If `self` was not a integer nor a float nor a complex, return `None`.
     pub fn to_complex(&self) -> Option<(Real, Real)> {
         match self.unpack() {
             RV::Integer(i) => Some((Real::Integer(i), Real::Integer(0))),
@@ -999,7 +1022,7 @@ mod tests {
             0x7fff_ffff_ffff_ffff as u64 as i64,
         ];
         for expect in expect_ary.iter() {
-            let got = match RV::Integer(*expect).pack().as_fixnum() {
+            let got = match RV::Integer(*expect).pack().as_integer() {
                 Some(int) => int,
                 None => panic!("Expect:{:?} Got:Invalid RValue"),
             };

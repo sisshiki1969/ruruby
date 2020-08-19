@@ -17,7 +17,7 @@ pub fn init(globals: &mut Globals) -> Value {
 fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let count = vm.globals.allocator.count();
-    Ok(Value::fixnum(count as i64))
+    Ok(Value::integer(count as i64))
 }
 
 fn enable(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -45,7 +45,7 @@ fn stat(vm: &mut VM, _: Value, _: &Args) -> VMResult {
     macro_rules! stat_insert {
         ( $($symbol:ident, $num:expr);* ) => {$(
             let id = IdentId::get_id(stringify!($symbol));
-            hash.insert(HashKey(Value::symbol(id)), Value::fixnum($num as i64));
+            hash.insert(HashKey(Value::symbol(id)), Value::integer($num as i64));
         )*};
     }
     stat_insert!(count, alloc.count());

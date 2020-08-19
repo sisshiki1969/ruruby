@@ -40,18 +40,18 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args[0].unpack() {
         RV::Integer(i) => {
             let res = time - Duration::seconds(i);
-            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
+            Ok(Value::time(self_val.get_class(), TimeInfo(res)))
         }
         RV::Float(f) => {
             let offset = (f * 1000.0 * 1000.0 * 1000.0) as i64;
             let res = time - Duration::nanoseconds(offset);
-            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
+            Ok(Value::time(self_val.get_class(), TimeInfo(res)))
         }
         RV::Object(rv) => match &rv.kind {
             ObjKind::Time(t) => {
                 let res = time - t.0;
                 let offset = (res.num_nanoseconds().unwrap() as f64) / 1000.0 / 1000.0 / 1000.0;
-                Ok(Value::flonum(offset))
+                Ok(Value::float(offset))
             }
             _ => return Err(vm.error_undefined_op("-", args[0], self_val)),
         },
@@ -68,12 +68,12 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args[0].unpack() {
         RV::Integer(i) => {
             let res = time + Duration::seconds(i);
-            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
+            Ok(Value::time(self_val.get_class(), TimeInfo(res)))
         }
         RV::Float(f) => {
             let offset = (f * 1000.0 * 1000.0 * 1000.0) as i64;
             let res = time + Duration::nanoseconds(offset);
-            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
+            Ok(Value::time(self_val.get_class(), TimeInfo(res)))
         }
         _ => return Err(vm.error_undefined_op("+", args[0], self_val)),
     }

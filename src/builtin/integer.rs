@@ -149,7 +149,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         _ => return Ok(Value::nil()),
     };
     match res {
-        Some(ord) => Ok(Value::fixnum(ord as i64)),
+        Some(ord) => Ok(Value::integer(ord as i64)),
         None => Ok(Value::nil()),
     }
 }
@@ -170,7 +170,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let mut arg = Args::new1(Value::nil());
     for i in 0..num {
-        arg[0] = Value::fixnum(i);
+        arg[0] = Value::integer(i);
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
@@ -186,12 +186,12 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(val);
         }
     };
-    let num = self_val.as_fixnum().unwrap();
+    let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer(vm, "Arg")?;
     if num <= max {
         let mut arg = Args::new1(Value::nil());
         for i in num..max + 1 {
-            arg[0] = Value::fixnum(i);
+            arg[0] = Value::integer(i);
             vm.eval_block(method, &arg)?;
         }
     }
@@ -226,7 +226,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         if step > 0 && i > limit || step < 0 && limit > i {
             break;
         }
-        arg[0] = Value::fixnum(i);
+        arg[0] = Value::integer(i);
         vm.eval_block(method, &arg)?;
         i += step;
     }
@@ -236,7 +236,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Built-in function "chr".
 fn chr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let num = self_val.as_fixnum().unwrap();
+    let num = self_val.as_integer().unwrap();
     if 0 > num || num > 255 {
         return Err(vm.error_unimplemented("Currently, receiver must be 0..255."));
     };
@@ -245,17 +245,17 @@ fn chr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
-    self_val.as_fixnum().unwrap();
+    self_val.as_integer().unwrap();
     Ok(self_val)
 }
 
 fn tof(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let num = self_val.as_fixnum().unwrap();
-    Ok(Value::flonum(num as f64))
+    let num = self_val.as_integer().unwrap();
+    Ok(Value::float(num as f64))
 }
 
 fn even(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let num = self_val.as_fixnum().unwrap();
+    let num = self_val.as_integer().unwrap();
     Ok(Value::bool(num % 2 == 0))
 }
 

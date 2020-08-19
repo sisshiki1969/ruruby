@@ -238,7 +238,7 @@ impl RValue {
         }
     }
 
-    pub fn new_fixnum(i: i64) -> Self {
+    pub fn new_integer(i: i64) -> Self {
         RValue {
             class: Value::nil(),
             var_table: None,
@@ -246,7 +246,7 @@ impl RValue {
         }
     }
 
-    pub fn new_flonum(f: f64) -> Self {
+    pub fn new_float(f: f64) -> Self {
         RValue {
             class: Value::nil(),
             var_table: None,

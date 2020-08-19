@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let object = globals.object_class;
+    let object = globals.builtins.object.as_class();
     globals.add_builtin_instance_method(object, "class", class);
     globals.add_builtin_instance_method(object, "object_id", object_id);
     globals.add_builtin_instance_method(object, "to_s", to_s);
@@ -24,13 +24,13 @@ pub fn init(globals: &mut Globals) {
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let class = self_val.get_class_object();
+    let class = self_val.get_class();
     Ok(class)
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let id = self_val.id();
-    Ok(Value::fixnum(id as i64))
+    Ok(Value::integer(id as i64))
 }
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -87,7 +87,7 @@ fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
             }
         }
     };
-    Ok(Value::fixnum(num))
+    Ok(Value::integer(num))
 }
 
 fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

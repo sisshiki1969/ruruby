@@ -185,7 +185,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             }
         };
         args[0] = val;
-        args[1] = Value::fixnum(c);
+        args[1] = Value::integer(c);
         let res = vm.eval_block(block, &args)?;
         vm.temp_push(res);
         ary.push(res);
