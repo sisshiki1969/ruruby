@@ -4,17 +4,17 @@ use std::path::*;
 //#[macro_use]
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("File");
     let class = ClassRef::from(id, BuiltinClass::object());
-    let obj = Value::class(class);
-    globals.add_builtin_class_method(obj, "join", join);
-    globals.add_builtin_class_method(obj, "basename", basename);
-    globals.add_builtin_class_method(obj, "extname", extname);
-    globals.add_builtin_class_method(obj, "binread", binread);
-    globals.add_builtin_class_method(obj, "read", read);
-    globals.add_builtin_class_method(obj, "write", write);
-    obj
+    let mut class_val = Value::class(class);
+    class_val.add_builtin_class_method("join", join);
+    class_val.add_builtin_class_method("basename", basename);
+    class_val.add_builtin_class_method("extname", extname);
+    class_val.add_builtin_class_method("binread", binread);
+    class_val.add_builtin_class_method("read", read);
+    class_val.add_builtin_class_method("write", write);
+    class_val
 }
 
 // Utils

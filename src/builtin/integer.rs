@@ -1,27 +1,27 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Integer");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    globals.add_builtin_instance_method(class, "+", add);
-    globals.add_builtin_instance_method(class, "-", sub);
-    globals.add_builtin_instance_method(class, "*", mul);
-    globals.add_builtin_instance_method(class, "div", quotient);
-    globals.add_builtin_instance_method(class, "==", eq);
-    globals.add_builtin_instance_method(class, "!=", neq);
-    globals.add_builtin_instance_method(class, ">=", ge);
-    globals.add_builtin_instance_method(class, ">", gt);
-    globals.add_builtin_instance_method(class, "<=", le);
-    globals.add_builtin_instance_method(class, "<", lt);
-    globals.add_builtin_instance_method(class, "<=>", cmp);
+    let mut class = ClassRef::from(id, BuiltinClass::object());
+    class.add_builtin_instance_method("+", add);
+    class.add_builtin_instance_method("-", sub);
+    class.add_builtin_instance_method("*", mul);
+    class.add_builtin_instance_method("div", quotient);
+    class.add_builtin_instance_method("==", eq);
+    class.add_builtin_instance_method("!=", neq);
+    class.add_builtin_instance_method(">=", ge);
+    class.add_builtin_instance_method(">", gt);
+    class.add_builtin_instance_method("<=", le);
+    class.add_builtin_instance_method("<", lt);
+    class.add_builtin_instance_method("<=>", cmp);
 
-    globals.add_builtin_instance_method(class, "times", times);
-    globals.add_builtin_instance_method(class, "upto", upto);
-    globals.add_builtin_instance_method(class, "step", step);
-    globals.add_builtin_instance_method(class, "chr", chr);
-    globals.add_builtin_instance_method(class, "to_f", tof);
-    globals.add_builtin_instance_method(class, "floor", floor);
-    globals.add_builtin_instance_method(class, "even?", even);
+    class.add_builtin_instance_method("times", times);
+    class.add_builtin_instance_method("upto", upto);
+    class.add_builtin_instance_method("step", step);
+    class.add_builtin_instance_method("chr", chr);
+    class.add_builtin_instance_method("to_f", tof);
+    class.add_builtin_instance_method("floor", floor);
+    class.add_builtin_instance_method("even?", even);
     Value::class(class)
 }
 
@@ -116,7 +116,7 @@ macro_rules! define_cmp {
             _ => {
                 return Err($vm.error_argument(format!(
                     "Comparison of Integer with {} failed.",
-                    $vm.globals.get_class_name($args[0])
+                    $args[0].get_class_name()
                 )))
             }
         }

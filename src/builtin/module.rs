@@ -2,21 +2,21 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let class = globals.builtins.module.as_class();
-    globals.add_builtin_instance_method(class, "constants", constants);
-    globals.add_builtin_instance_method(class, "instance_methods", instance_methods);
-    globals.add_builtin_instance_method(class, "attr_accessor", attr_accessor);
-    globals.add_builtin_instance_method(class, "attr", attr_reader);
-    globals.add_builtin_instance_method(class, "attr_reader", attr_reader);
-    globals.add_builtin_instance_method(class, "attr_writer", attr_writer);
-    globals.add_builtin_instance_method(class, "module_function", module_function);
-    globals.add_builtin_instance_method(class, "singleton_class?", singleton_class);
-    globals.add_builtin_instance_method(class, "const_get", const_get);
-    globals.add_builtin_instance_method(class, "include", include);
-    globals.add_builtin_instance_method(class, "included_modules", included_modules);
-    globals.add_builtin_instance_method(class, "ancestors", ancestors);
-    globals.add_builtin_instance_method(class, "module_eval", module_eval);
-    globals.add_builtin_instance_method(class, "class_eval", module_eval);
+    let mut module_class = globals.builtins.module.as_class();
+    module_class.add_builtin_instance_method("constants", constants);
+    module_class.add_builtin_instance_method("instance_methods", instance_methods);
+    module_class.add_builtin_instance_method("attr_accessor", attr_accessor);
+    module_class.add_builtin_instance_method("attr", attr_reader);
+    module_class.add_builtin_instance_method("attr_reader", attr_reader);
+    module_class.add_builtin_instance_method("attr_writer", attr_writer);
+    module_class.add_builtin_instance_method("module_function", module_function);
+    module_class.add_builtin_instance_method("singleton_class?", singleton_class);
+    module_class.add_builtin_instance_method("const_get", const_get);
+    module_class.add_builtin_instance_method("include", include);
+    module_class.add_builtin_instance_method("included_modules", included_modules);
+    module_class.add_builtin_instance_method("ancestors", ancestors);
+    module_class.add_builtin_instance_method("module_eval", module_eval);
+    module_class.add_builtin_instance_method("class_eval", module_eval);
 }
 
 fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

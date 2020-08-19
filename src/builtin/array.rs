@@ -1,58 +1,58 @@
 use crate::error::RubyError;
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let array_id = IdentId::get_id("Array");
-    let class = ClassRef::from(array_id, BuiltinClass::object());
-    let obj = Value::class(class);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "to_s", inspect);
-    globals.add_builtin_instance_method(class, "length", length);
-    globals.add_builtin_instance_method(class, "size", length);
-    globals.add_builtin_instance_method(class, "empty?", empty);
-    globals.add_builtin_instance_method(class, "[]=", set_elem);
-    globals.add_builtin_instance_method(class, "push", push);
-    globals.add_builtin_instance_method(class, "<<", push);
-    globals.add_builtin_instance_method(class, "pop", pop);
-    globals.add_builtin_instance_method(class, "*", mul);
-    globals.add_builtin_instance_method(class, "+", add);
-    globals.add_builtin_instance_method(class, "-", sub);
-    globals.add_builtin_instance_method(class, "<=>", cmp);
+    let mut class = ClassRef::from(array_id, BuiltinClass::object());
+    let mut class_obj = Value::class(class);
+    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_instance_method("to_s", inspect);
+    class.add_builtin_instance_method("length", length);
+    class.add_builtin_instance_method("size", length);
+    class.add_builtin_instance_method("empty?", empty);
+    class.add_builtin_instance_method("[]=", set_elem);
+    class.add_builtin_instance_method("push", push);
+    class.add_builtin_instance_method("<<", push);
+    class.add_builtin_instance_method("pop", pop);
+    class.add_builtin_instance_method("*", mul);
+    class.add_builtin_instance_method("+", add);
+    class.add_builtin_instance_method("-", sub);
+    class.add_builtin_instance_method("<=>", cmp);
 
-    globals.add_builtin_instance_method(class, "shift", shift);
-    globals.add_builtin_instance_method(class, "unshift", unshift);
+    class.add_builtin_instance_method("shift", shift);
+    class.add_builtin_instance_method("unshift", unshift);
 
-    globals.add_builtin_instance_method(class, "concat", concat);
-    globals.add_builtin_instance_method(class, "map", map);
-    globals.add_builtin_instance_method(class, "flat_map", flat_map);
-    globals.add_builtin_instance_method(class, "each", each);
+    class.add_builtin_instance_method("concat", concat);
+    class.add_builtin_instance_method("map", map);
+    class.add_builtin_instance_method("flat_map", flat_map);
+    class.add_builtin_instance_method("each", each);
 
-    globals.add_builtin_instance_method(class, "include?", include);
-    globals.add_builtin_instance_method(class, "reverse", reverse);
-    globals.add_builtin_instance_method(class, "reverse!", reverse_);
-    globals.add_builtin_instance_method(class, "rotate!", rotate_);
+    class.add_builtin_instance_method("include?", include);
+    class.add_builtin_instance_method("reverse", reverse);
+    class.add_builtin_instance_method("reverse!", reverse_);
+    class.add_builtin_instance_method("rotate!", rotate_);
 
-    globals.add_builtin_instance_method(class, "transpose", transpose);
-    globals.add_builtin_instance_method(class, "min", min);
-    globals.add_builtin_instance_method(class, "fill", fill);
-    globals.add_builtin_instance_method(class, "clear", clear);
-    globals.add_builtin_instance_method(class, "uniq!", uniq_);
-    globals.add_builtin_instance_method(class, "uniq", uniq);
-    globals.add_builtin_instance_method(class, "slice!", slice_);
-    globals.add_builtin_instance_method(class, "max", max);
-    globals.add_builtin_instance_method(class, "first", first);
-    globals.add_builtin_instance_method(class, "last", last);
-    globals.add_builtin_instance_method(class, "dup", dup);
-    globals.add_builtin_instance_method(class, "clone", dup);
-    globals.add_builtin_instance_method(class, "pack", pack);
-    globals.add_builtin_instance_method(class, "join", join);
-    globals.add_builtin_instance_method(class, "drop", drop);
-    globals.add_builtin_instance_method(class, "zip", zip);
-    globals.add_builtin_instance_method(class, "grep", grep);
-    globals.add_builtin_instance_method(class, "sort", sort);
-    globals.add_builtin_instance_method(class, "count", count);
-    globals.add_builtin_class_method(obj, "new", array_new);
-    obj
+    class.add_builtin_instance_method("transpose", transpose);
+    class.add_builtin_instance_method("min", min);
+    class.add_builtin_instance_method("fill", fill);
+    class.add_builtin_instance_method("clear", clear);
+    class.add_builtin_instance_method("uniq!", uniq_);
+    class.add_builtin_instance_method("uniq", uniq);
+    class.add_builtin_instance_method("slice!", slice_);
+    class.add_builtin_instance_method("max", max);
+    class.add_builtin_instance_method("first", first);
+    class.add_builtin_instance_method("last", last);
+    class.add_builtin_instance_method("dup", dup);
+    class.add_builtin_instance_method("clone", dup);
+    class.add_builtin_instance_method("pack", pack);
+    class.add_builtin_instance_method("join", join);
+    class.add_builtin_instance_method("drop", drop);
+    class.add_builtin_instance_method("zip", zip);
+    class.add_builtin_instance_method("grep", grep);
+    class.add_builtin_instance_method("sort", sort);
+    class.add_builtin_instance_method("count", count);
+    class_obj.add_builtin_class_method("new", array_new);
+    class_obj
 }
 
 // Class methods

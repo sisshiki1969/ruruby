@@ -31,23 +31,23 @@ impl RangeInfo {
     }
 }
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Range");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    let obj = Value::class(class);
-    globals.add_builtin_instance_method(class, "to_s", to_s);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "map", map);
-    globals.add_builtin_instance_method(class, "flat_map", flat_map);
-    globals.add_builtin_instance_method(class, "each", each);
-    globals.add_builtin_instance_method(class, "all?", all);
-    globals.add_builtin_instance_method(class, "begin", begin);
-    globals.add_builtin_instance_method(class, "first", first);
-    globals.add_builtin_instance_method(class, "end", end);
-    globals.add_builtin_instance_method(class, "last", last);
-    globals.add_builtin_instance_method(class, "to_a", to_a);
-    globals.add_builtin_class_method(obj, "new", range_new);
-    obj
+    let mut class = ClassRef::from(id, BuiltinClass::object());
+    let mut class_val = Value::class(class);
+    class.add_builtin_instance_method("to_s", to_s);
+    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_instance_method("map", map);
+    class.add_builtin_instance_method("flat_map", flat_map);
+    class.add_builtin_instance_method("each", each);
+    class.add_builtin_instance_method("all?", all);
+    class.add_builtin_instance_method("begin", begin);
+    class.add_builtin_instance_method("first", first);
+    class.add_builtin_instance_method("end", end);
+    class.add_builtin_instance_method("last", last);
+    class.add_builtin_instance_method("to_a", to_a);
+    class_val.add_builtin_class_method("new", range_new);
+    class_val
 }
 
 fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {

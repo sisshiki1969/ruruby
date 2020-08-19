@@ -1,19 +1,19 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Complex");
-    let classref = ClassRef::from(id, BuiltinClass::object());
-    globals.add_builtin_instance_method(classref, "+", add);
-    globals.add_builtin_instance_method(classref, "-", sub);
-    globals.add_builtin_instance_method(classref, "*", mul);
-    globals.add_builtin_instance_method(classref, "/", div);
-    globals.add_builtin_instance_method(classref, "==", eq);
-    globals.add_builtin_instance_method(classref, "abs2", abs2);
-    globals.add_builtin_instance_method(classref, "abs", abs);
-    globals.add_builtin_instance_method(classref, "rect", rect);
-    let class = Value::class(classref);
-    globals.add_builtin_class_method(class, "rect", complex_rect);
-    globals.add_builtin_class_method(class, "rectangular", complex_rect);
+    let mut classref = ClassRef::from(id, BuiltinClass::object());
+    classref.add_builtin_instance_method("+", add);
+    classref.add_builtin_instance_method("-", sub);
+    classref.add_builtin_instance_method("*", mul);
+    classref.add_builtin_instance_method("/", div);
+    classref.add_builtin_instance_method("==", eq);
+    classref.add_builtin_instance_method("abs2", abs2);
+    classref.add_builtin_instance_method("abs", abs);
+    classref.add_builtin_instance_method("rect", rect);
+    let mut class = Value::class(classref);
+    class.add_builtin_class_method("rect", complex_rect);
+    class.add_builtin_class_method("rectangular", complex_rect);
     class
 }
 

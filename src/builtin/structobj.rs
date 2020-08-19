@@ -1,11 +1,11 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Struct");
     let class = ClassRef::from(id, BuiltinClass::object());
-    let class = Value::class(class);
-    globals.add_builtin_class_method(class, "new", struct_new);
-    class
+    let mut class_val = Value::class(class);
+    class_val.add_builtin_class_method("new", struct_new);
+    class_val
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -24,16 +24,12 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let mut val = Value::class_from(name, self_val);
-    let class = val.as_class();
-    vm.globals
-        .add_builtin_instance_method(class, "initialize", initialize);
-    vm.globals
-        .add_builtin_instance_method(class, "inspect", inspect);
-    vm.globals
-        .add_builtin_class_method(val, "[]", builtin::class::new);
-    vm.globals
-        .add_builtin_class_method(val, "new", builtin::class::new);
+    let mut class_val = Value::class_from(name, self_val);
+    let mut class = class_val.as_class();
+    class.add_builtin_instance_method("initialize", initialize);
+    class.add_builtin_instance_method("inspect", inspect);
+    class_val.add_builtin_class_method("[]", builtin::class::new);
+    class_val.add_builtin_class_method("new", builtin::class::new);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
@@ -46,19 +42,19 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vec.push(v);
         attr_args[index - i] = v;
     }
-    val.set_var(IdentId::get_id("_members"), Value::array_from(vec));
-    builtin::module::attr_accessor(vm, val, &attr_args)?;
+    class_val.set_var(IdentId::get_id("_members"), Value::array_from(vec));
+    builtin::module::attr_accessor(vm, class_val, &attr_args)?;
 
     match args.block {
         Some(method) => {
-            vm.class_push(val);
-            let arg = Args::new1(val);
-            vm.eval_method(method, val, Some(vm.current_context()), &arg)?;
+            vm.class_push(class_val);
+            let arg = Args::new1(class_val);
+            vm.eval_method(method, class_val, Some(vm.current_context()), &arg)?;
             vm.class_pop();
         }
         None => {}
     };
-    Ok(val)
+    Ok(class_val)
 }
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

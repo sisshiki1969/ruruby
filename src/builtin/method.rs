@@ -1,9 +1,9 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Method");
-    let class = ClassRef::from(proc_id, BuiltinClass::object());
-    globals.add_builtin_instance_method(class, "call", method_call);
+    let mut class = ClassRef::from(proc_id, BuiltinClass::object());
+    class.add_builtin_instance_method("call", method_call);
     Value::class(class)
 }
 

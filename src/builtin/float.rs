@@ -1,15 +1,14 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Float");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    globals.add_builtin_instance_method(class, "+", add);
-    globals.add_builtin_instance_method(class, "-", sub);
-    globals.add_builtin_instance_method(class, "*", mul);
-    //globals.add_builtin_instance_method(class, "/", div);
-    globals.add_builtin_instance_method(class, "div", quotient);
-    globals.add_builtin_instance_method(class, "<=>", cmp);
-    globals.add_builtin_instance_method(class, "floor", floor);
+    let mut class = ClassRef::from(id, BuiltinClass::object());
+    class.add_builtin_instance_method("+", add);
+    class.add_builtin_instance_method("-", sub);
+    class.add_builtin_instance_method("*", mul);
+    class.add_builtin_instance_method("div", quotient);
+    class.add_builtin_instance_method("<=>", cmp);
+    class.add_builtin_instance_method("floor", floor);
     Value::class(class)
 }
 

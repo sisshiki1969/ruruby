@@ -1,34 +1,34 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Hash");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    globals.add_builtin_instance_method(class, "to_s", inspect);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "clear", clear);
-    globals.add_builtin_instance_method(class, "clone", clone);
-    globals.add_builtin_instance_method(class, "dup", clone);
-    globals.add_builtin_instance_method(class, "compact", compact);
-    globals.add_builtin_instance_method(class, "delete", delete);
-    globals.add_builtin_instance_method(class, "empty?", empty);
-    globals.add_builtin_instance_method(class, "select", select);
-    globals.add_builtin_instance_method(class, "has_key?", has_key);
-    globals.add_builtin_instance_method(class, "key?", has_key);
-    globals.add_builtin_instance_method(class, "include?", has_key);
-    globals.add_builtin_instance_method(class, "member?", has_key);
-    globals.add_builtin_instance_method(class, "has_value?", has_value);
-    globals.add_builtin_instance_method(class, "keys", keys);
-    globals.add_builtin_instance_method(class, "length", length);
-    globals.add_builtin_instance_method(class, "size", length);
-    globals.add_builtin_instance_method(class, "values", values);
-    globals.add_builtin_instance_method(class, "each_value", each_value);
-    globals.add_builtin_instance_method(class, "each_key", each_key);
-    globals.add_builtin_instance_method(class, "each", each);
-    globals.add_builtin_instance_method(class, "merge", merge);
-    globals.add_builtin_instance_method(class, "fetch", fetch);
-    globals.add_builtin_instance_method(class, "compare_by_identity", compare_by_identity);
-    globals.add_builtin_instance_method(class, "sort", sort);
-    globals.add_builtin_instance_method(class, "invert", invert);
+    let mut class = ClassRef::from(id, BuiltinClass::object());
+    class.add_builtin_instance_method("to_s", inspect);
+    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_instance_method("clear", clear);
+    class.add_builtin_instance_method("clone", clone);
+    class.add_builtin_instance_method("dup", clone);
+    class.add_builtin_instance_method("compact", compact);
+    class.add_builtin_instance_method("delete", delete);
+    class.add_builtin_instance_method("empty?", empty);
+    class.add_builtin_instance_method("select", select);
+    class.add_builtin_instance_method("has_key?", has_key);
+    class.add_builtin_instance_method("key?", has_key);
+    class.add_builtin_instance_method("include?", has_key);
+    class.add_builtin_instance_method("member?", has_key);
+    class.add_builtin_instance_method("has_value?", has_value);
+    class.add_builtin_instance_method("keys", keys);
+    class.add_builtin_instance_method("length", length);
+    class.add_builtin_instance_method("size", length);
+    class.add_builtin_instance_method("values", values);
+    class.add_builtin_instance_method("each_value", each_value);
+    class.add_builtin_instance_method("each_key", each_key);
+    class.add_builtin_instance_method("each", each);
+    class.add_builtin_instance_method("merge", merge);
+    class.add_builtin_instance_method("fetch", fetch);
+    class.add_builtin_instance_method("compare_by_identity", compare_by_identity);
+    class.add_builtin_instance_method("sort", sort);
+    class.add_builtin_instance_method("invert", invert);
     Value::class(class)
 }
 

@@ -72,7 +72,13 @@ impl std::hash::Hash for Value {
 }
 
 impl PartialEq for Value {
-    /// Equality by value. 3.0 == 3.
+    /// Equality by value.
+    ///
+    /// This kind of equality is used for `==` operator of Ruby.
+    /// Generally, two objects which all of properties are `eq` are defined as `eq`.  
+    /// Some classes have original difinitions of `eq`.
+    ///
+    /// ex. 3.0 == 3.
     fn eq(&self, other: &Self) -> bool {
         if self.id() == other.id() {
             return true;
@@ -157,6 +163,11 @@ impl GC for Value {
 }
 
 impl Value {
+    /// Convert `self` to `RV`.
+    ///
+    /// `RV` is a struct for convenience in handling `Value`.
+    /// Both of packed integer and ObjKind::Integer are converted to RV::Integer.
+    /// Packed float and ObjKind::Float are converted to RV::Float.
     pub fn unpack(&self) -> RV {
         if !self.is_packed_value() {
             let info = self.rvalue();
@@ -220,8 +231,9 @@ impl Value {
         }
     }
 
-    /// Get reference of RValue from Value.
-    /// This method works only if `self` is not a packed value.
+    /// Get reference of RValue from `self`.
+    ///
+    /// return None if `self` was not a packed value.
     pub fn as_rvalue(&self) -> Option<&RValue> {
         if self.is_packed_value() {
             None
@@ -230,8 +242,9 @@ impl Value {
         }
     }
 
-    /// Get mutable reference of RValue from Value.
-    /// This method works only if `self` is not a packed value.
+    /// Get mutable reference of RValue from `self`.
+    ///
+    /// Return None if `self` was not a packed value.
     pub fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
         if self.is_packed_value() {
             None
@@ -266,6 +279,11 @@ impl Value {
         }
     }
 
+    /// Get class of `self` for method exploration.
+    /// If a direct class of `self` was a singleton class, returns the singleton class.
+    ///
+    /// ### panic
+    /// panic if `self` was Invalid.
     pub fn get_class_for_method(&self) -> Value {
         match self.as_rvalue() {
             None => {
@@ -288,12 +306,46 @@ impl Value {
         }
     }
 
+    /// Get class of `self`.
+    /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
     pub fn get_class(&self) -> Value {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
             RV::Object(info) => info.search_class(),
             _ => BuiltinClass::object(),
+        }
+    }
+
+    pub fn get_class_name(&self) -> String {
+        match self.unpack() {
+            RV::Uninitialized => "[Uninitialized]".to_string(),
+            RV::Nil => "NilClass".to_string(),
+            RV::Bool(true) => "TrueClass".to_string(),
+            RV::Bool(false) => "FalseClass".to_string(),
+            RV::Integer(_) => "Integer".to_string(),
+            RV::Float(_) => "Float".to_string(),
+            RV::Symbol(_) => "Symbol".to_string(),
+            RV::Object(oref) => match oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+                ObjKind::String(_) => "String".to_string(),
+                ObjKind::Array(_) => "Array".to_string(),
+                ObjKind::Range(_) => "Range".to_string(),
+                ObjKind::Splat(_) => "[Splat]".to_string(),
+                ObjKind::Hash(_) => "Hash".to_string(),
+                ObjKind::Regexp(_) => "Regexp".to_string(),
+                ObjKind::Class(_) => "Class".to_string(),
+                ObjKind::Module(_) => "Module".to_string(),
+                ObjKind::Proc(_) => "Proc".to_string(),
+                ObjKind::Method(_) => "Method".to_string(),
+                ObjKind::Ordinary => oref.class_name().to_string(),
+                ObjKind::Integer(_) => "Integer".to_string(),
+                ObjKind::Float(_) => "Float".to_string(),
+                ObjKind::Complex { .. } => "Complex".to_string(),
+                ObjKind::Fiber(_) => "Fiber".to_string(),
+                ObjKind::Enumerator(_) => "Enumerator".to_string(),
+                ObjKind::Time(_) => "Time".to_string(),
+            },
         }
     }
 
@@ -346,6 +398,11 @@ impl Value {
                 None
             }
         }
+    }
+
+    pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
+        let mut classref = self.get_singleton_class().unwrap().as_class();
+        classref.add_builtin_instance_method(name, func);
     }
 }
 
@@ -403,10 +460,11 @@ impl Value {
     pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.as_integer() {
             Some(i) => Ok(i),
-            None => {
-                let val = vm.globals.get_class_name(*self);
-                Err(vm.error_argument(format!("{} must be an Integer. {}", msg.into(), val)))
-            }
+            None => Err(vm.error_argument(format!(
+                "{} must be an Integer. {}",
+                msg.into(),
+                self.get_class_name()
+            ))),
         }
     }
 
@@ -888,7 +946,7 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, ..) which can not have a singleton class.
-    pub fn get_singleton_class(&mut self, globals: &Globals) -> Result<Value, ()> {
+    pub fn get_singleton_class(&mut self) -> Result<Value, ()> {
         match self.as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
@@ -901,7 +959,7 @@ impl Value {
                             if superclass.is_nil() {
                                 ClassRef::from(None, None)
                             } else {
-                                ClassRef::from(None, superclass.get_singleton_class(globals)?)
+                                ClassRef::from(None, superclass.get_singleton_class()?)
                             }
                         }
                         ObjKind::Invalid => {

@@ -19,24 +19,12 @@ impl ClassInfo {
             is_singleton: false,
         }
     }
-}
 
-impl GC for ClassInfo {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.superclass.mark(alloc);
-        self.include.iter().for_each(|v| v.mark(alloc));
-    }
-}
-
-pub type ClassRef = Ref<ClassInfo>;
-
-impl ClassRef {
-    pub fn from(id: impl Into<Option<IdentId>>, superclass: impl Into<Option<Value>>) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
-        ClassRef::new(ClassInfo::new(id, superclass))
+    pub fn add_builtin_instance_method(&mut self, name: &str, func: BuiltinFunc) {
+        let name = IdentId::get_id(name);
+        let info = MethodInfo::BuiltinFunc { name, func };
+        let methodref = MethodRef::new(info);
+        self.method_table.insert(name, methodref);
     }
 
     pub fn superclass(&self) -> Option<ClassRef> {
@@ -55,5 +43,24 @@ impl ClassRef {
     ) -> Option<MethodRef> {
         globals.class_version += 1;
         self.method_table.insert(id, info)
+    }
+}
+
+impl GC for ClassInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.superclass.mark(alloc);
+        self.include.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
+pub type ClassRef = Ref<ClassInfo>;
+
+impl ClassRef {
+    pub fn from(id: impl Into<Option<IdentId>>, superclass: impl Into<Option<Value>>) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => Value::nil(),
+        };
+        ClassRef::new(ClassInfo::new(id, superclass))
     }
 }

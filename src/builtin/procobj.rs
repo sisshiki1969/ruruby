@@ -11,13 +11,13 @@ impl ProcInfo {
     }
 }
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Proc");
-    let class = ClassRef::from(proc_id, BuiltinClass::object());
-    let obj = Value::class(class);
-    globals.add_builtin_instance_method(class, "call", proc_call);
-    globals.add_builtin_class_method(obj, "new", proc_new);
-    obj
+    let mut proc_class = ClassRef::from(proc_id, BuiltinClass::object());
+    let mut class_val = Value::class(proc_class);
+    proc_class.add_builtin_instance_method("call", proc_call);
+    class_val.add_builtin_class_method("new", proc_new);
+    class_val
 }
 
 // Class methods

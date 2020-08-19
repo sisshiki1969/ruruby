@@ -31,7 +31,9 @@ impl RegexpInfo {
 
 impl RegexpInfo {
     /// Replace all matches for `self` in `given` string with `replace`.
-    /// return: (replaced:String, is_replaced?:bool)
+    ///
+    /// ### return
+    /// (replaced:String, is_replaced?:bool)
     pub fn replace_repeat(
         &self,
         vm: &mut VM,
@@ -70,7 +72,9 @@ impl RegexpInfo {
     }
 
     /// Replaces the leftmost-first match for `self` in `given` string with `replace`.
-    /// return: replaced:String
+    ///
+    /// ### return
+    /// replaced:String
     pub fn replace_once<'a>(
         &'a self,
         vm: &mut VM,
@@ -132,13 +136,13 @@ impl std::ops::Deref for RegexpInfo {
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Regexp");
-    let classref = ClassRef::from(id, BuiltinClass::object());
-    let regexp = Value::class(classref);
-    globals.add_builtin_class_method(regexp, "new", regexp_new);
-    globals.add_builtin_class_method(regexp, "compile", regexp_new);
-    globals.add_builtin_class_method(regexp, "escape", regexp_escape);
-    globals.add_builtin_class_method(regexp, "quote", regexp_escape);
-    regexp
+    let class = ClassRef::from(id, globals.builtins.object);
+    let mut class_val = Value::class(class);
+    class_val.add_builtin_class_method("new", regexp_new);
+    class_val.add_builtin_class_method("compile", regexp_new);
+    class_val.add_builtin_class_method("escape", regexp_escape);
+    class_val.add_builtin_class_method("quote", regexp_escape);
+    class_val
 }
 
 // Class methods

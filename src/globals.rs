@@ -193,7 +193,7 @@ impl Globals {
         let mut singleton_class = ClassRef::from(None, class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(singleton_class);
-        object.rvalue_mut().set_class(singleton_obj);
+        object.set_class(singleton_obj);
 
         module::init(&mut globals);
         class::init(&mut globals);
@@ -270,63 +270,6 @@ impl Globals {
     pub fn print_mark(&self) {
         self.allocator.print_mark();
     }
-
-    pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {
-        self.builtins
-            .object
-            .as_class()
-            .method_table
-            .insert(id, info);
-    }
-
-    pub fn add_builtin_class_method(&mut self, mut obj: Value, name: &str, func: BuiltinFunc) {
-        let classref = obj.get_singleton_class(self).unwrap().as_class();
-        self.add_builtin_instance_method(classref, name, func);
-    }
-
-    pub fn add_builtin_instance_method(
-        &mut self,
-        mut classref: ClassRef,
-        name: &str,
-        func: BuiltinFunc,
-    ) {
-        let name = IdentId::get_id(name);
-        let info = MethodInfo::BuiltinFunc { name, func };
-        let methodref = MethodRef::new(info);
-        classref.method_table.insert(name, methodref);
-    }
-
-    pub fn get_class_name(&self, val: Value) -> String {
-        match val.unpack() {
-            RV::Uninitialized => "[Uninitialized]".to_string(),
-            RV::Nil => "NilClass".to_string(),
-            RV::Bool(true) => "TrueClass".to_string(),
-            RV::Bool(false) => "FalseClass".to_string(),
-            RV::Integer(_) => "Integer".to_string(),
-            RV::Float(_) => "Float".to_string(),
-            RV::Symbol(_) => "Symbol".to_string(),
-            RV::Object(oref) => match oref.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-                ObjKind::String(_) => "String".to_string(),
-                ObjKind::Array(_) => "Array".to_string(),
-                ObjKind::Range(_) => "Range".to_string(),
-                ObjKind::Splat(_) => "[Splat]".to_string(),
-                ObjKind::Hash(_) => "Hash".to_string(),
-                ObjKind::Regexp(_) => "Regexp".to_string(),
-                ObjKind::Class(_) => "Class".to_string(),
-                ObjKind::Module(_) => "Module".to_string(),
-                ObjKind::Proc(_) => "Proc".to_string(),
-                ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => oref.class_name().to_string(),
-                ObjKind::Integer(_) => "Integer".to_string(),
-                ObjKind::Float(_) => "Float".to_string(),
-                ObjKind::Complex { .. } => "Complex".to_string(),
-                ObjKind::Fiber(_) => "Fiber".to_string(),
-                ObjKind::Enumerator(_) => "Enumerator".to_string(),
-                ObjKind::Time(_) => "Time".to_string(),
-            },
-        }
-    }
 }
 
 impl Globals {
@@ -383,13 +326,12 @@ impl Globals {
     }
 }
 */
-//-------------------------------------------------------------------------------------------------------------
-//
-//  Contant value
-//
-//
-//-------------------------------------------------------------------------------------------------------------
 
+///
+/// Contant value
+///
+/// A table which holds constant values.
+///
 #[derive(Debug, Clone)]
 pub struct ConstantValues {
     table: Vec<Value>,
@@ -417,13 +359,11 @@ impl GC for ConstantValues {
     }
 }
 
-//-------------------------------------------------------------------------------------------------------------
-//
-//  Global method cache
-//  This module supports global method cache.
-//
-//-------------------------------------------------------------------------------------------------------------
-
+///
+/// Global method cache
+///
+/// This module supports global method cache.
+///
 #[derive(Debug, Clone)]
 pub struct MethodCache(FxHashMap<(Value, IdentId), MethodCacheEntry>);
 
@@ -448,13 +388,11 @@ impl MethodCache {
     }
 }
 
-//-------------------------------------------------------------------------------------------------------------
-//
-//  Inline method cache
-//  This module supports inline method cache which is embedded in the instruction sequence directly.
-//
-//-------------------------------------------------------------------------------------------------------------
-
+///
+///  Inline method cache
+///
+///  This module supports inline method cache which is embedded in the instruction sequence directly.
+///
 #[derive(Debug, Clone)]
 pub struct InlineCache {
     table: Vec<[Option<InlineCacheEntry>; 2]>,
@@ -499,13 +437,11 @@ impl InlineCache {
     }
 }
 
-//-------------------------------------------------------------------------------------------------------------
-//
-//  Case dispatch map
-//  This module supports optimization for case syntax when all of the when-conditions were integer literals.
-//
-//-------------------------------------------------------------------------------------------------------------
-
+///
+/// Case dispatch map.
+///
+/// This module supports optimization for case-when syntax when all of the when-conditions were integer literals.
+///
 #[derive(Debug, Clone)]
 pub struct CaseDispatchMap {
     table: Vec<FxHashMap<Value, i32>>,

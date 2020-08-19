@@ -1,26 +1,26 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let object = globals.builtins.object.as_class();
-    globals.add_builtin_instance_method(object, "class", class);
-    globals.add_builtin_instance_method(object, "object_id", object_id);
-    globals.add_builtin_instance_method(object, "to_s", to_s);
-    globals.add_builtin_instance_method(object, "inspect", inspect);
-    globals.add_builtin_instance_method(object, "singleton_class", singleton_class);
-    globals.add_builtin_instance_method(object, "clone", dup);
-    globals.add_builtin_instance_method(object, "dup", dup);
-    globals.add_builtin_instance_method(object, "eql?", eql);
-    globals.add_builtin_instance_method(object, "to_i", toi);
-    globals.add_builtin_instance_method(object, "instance_variable_set", instance_variable_set);
-    globals.add_builtin_instance_method(object, "instance_variable_get", instance_variable_get);
-    globals.add_builtin_instance_method(object, "instance_variables", instance_variables);
-    globals.add_builtin_instance_method(object, "freeze", freeze);
-    globals.add_builtin_instance_method(object, "super", super_);
-    globals.add_builtin_instance_method(object, "equal?", equal);
-    globals.add_builtin_instance_method(object, "send", send);
-    globals.add_builtin_instance_method(object, "eval", eval);
-    globals.add_builtin_instance_method(object, "to_enum", to_enum);
-    globals.add_builtin_instance_method(object, "enum_for", to_enum);
+    let mut object_class = globals.builtins.object.as_class();
+    object_class.add_builtin_instance_method("class", class);
+    object_class.add_builtin_instance_method("object_id", object_id);
+    object_class.add_builtin_instance_method("to_s", to_s);
+    object_class.add_builtin_instance_method("inspect", inspect);
+    object_class.add_builtin_instance_method("singleton_class", singleton_class);
+    object_class.add_builtin_instance_method("clone", dup);
+    object_class.add_builtin_instance_method("dup", dup);
+    object_class.add_builtin_instance_method("eql?", eql);
+    object_class.add_builtin_instance_method("to_i", toi);
+    object_class.add_builtin_instance_method("instance_variable_set", instance_variable_set);
+    object_class.add_builtin_instance_method("instance_variable_get", instance_variable_get);
+    object_class.add_builtin_instance_method("instance_variables", instance_variables);
+    object_class.add_builtin_instance_method("freeze", freeze);
+    object_class.add_builtin_instance_method("super", super_);
+    object_class.add_builtin_instance_method("equal?", equal);
+    object_class.add_builtin_instance_method("send", send);
+    object_class.add_builtin_instance_method("eval", eval);
+    object_class.add_builtin_instance_method("to_enum", to_enum);
+    object_class.add_builtin_instance_method("enum_for", to_enum);
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

@@ -137,48 +137,48 @@ impl std::hash::Hash for RString {
     }
 }
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("String");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    globals.add_builtin_instance_method(class, "to_s", to_s);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "+", add);
-    globals.add_builtin_instance_method(class, "*", mul);
-    globals.add_builtin_instance_method(class, "%", rem);
-    globals.add_builtin_instance_method(class, "[]", index);
-    globals.add_builtin_instance_method(class, "[]=", index_assign);
-    globals.add_builtin_instance_method(class, "<=>", cmp);
-    globals.add_builtin_instance_method(class, "<<", concat);
-    globals.add_builtin_instance_method(class, "concat", concat);
-    globals.add_builtin_instance_method(class, "start_with?", start_with);
-    globals.add_builtin_instance_method(class, "to_sym", to_sym);
-    globals.add_builtin_instance_method(class, "intern", to_sym);
-    globals.add_builtin_instance_method(class, "split", split);
-    globals.add_builtin_instance_method(class, "sub", sub);
-    globals.add_builtin_instance_method(class, "gsub", gsub);
-    globals.add_builtin_instance_method(class, "gsub!", gsub_);
-    globals.add_builtin_instance_method(class, "scan", scan);
-    globals.add_builtin_instance_method(class, "slice!", slice_);
-    globals.add_builtin_instance_method(class, "=~", rmatch);
-    globals.add_builtin_instance_method(class, "tr", tr);
-    globals.add_builtin_instance_method(class, "size", size);
-    globals.add_builtin_instance_method(class, "length", size);
-    globals.add_builtin_instance_method(class, "bytes", bytes);
-    globals.add_builtin_instance_method(class, "each_byte", each_byte);
-    globals.add_builtin_instance_method(class, "chars", chars);
-    globals.add_builtin_instance_method(class, "each_char", each_char);
-    globals.add_builtin_instance_method(class, "sum", sum);
-    globals.add_builtin_instance_method(class, "upcase", upcase);
-    globals.add_builtin_instance_method(class, "chomp", chomp);
-    globals.add_builtin_instance_method(class, "to_i", toi);
-    globals.add_builtin_instance_method(class, "<", lt);
-    globals.add_builtin_instance_method(class, ">", gt);
-    globals.add_builtin_instance_method(class, "center", center);
-    globals.add_builtin_instance_method(class, "next", next);
-    globals.add_builtin_instance_method(class, "succ", next);
-    globals.add_builtin_instance_method(class, "count", count);
+    let mut string_class = ClassRef::from(id, BuiltinClass::object());
+    string_class.add_builtin_instance_method("to_s", to_s);
+    string_class.add_builtin_instance_method("inspect", inspect);
+    string_class.add_builtin_instance_method("+", add);
+    string_class.add_builtin_instance_method("*", mul);
+    string_class.add_builtin_instance_method("%", rem);
+    string_class.add_builtin_instance_method("[]", index);
+    string_class.add_builtin_instance_method("[]=", index_assign);
+    string_class.add_builtin_instance_method("<=>", cmp);
+    string_class.add_builtin_instance_method("<<", concat);
+    string_class.add_builtin_instance_method("concat", concat);
+    string_class.add_builtin_instance_method("start_with?", start_with);
+    string_class.add_builtin_instance_method("to_sym", to_sym);
+    string_class.add_builtin_instance_method("intern", to_sym);
+    string_class.add_builtin_instance_method("split", split);
+    string_class.add_builtin_instance_method("sub", sub);
+    string_class.add_builtin_instance_method("gsub", gsub);
+    string_class.add_builtin_instance_method("gsub!", gsub_);
+    string_class.add_builtin_instance_method("scan", scan);
+    string_class.add_builtin_instance_method("slice!", slice_);
+    string_class.add_builtin_instance_method("=~", rmatch);
+    string_class.add_builtin_instance_method("tr", tr);
+    string_class.add_builtin_instance_method("size", size);
+    string_class.add_builtin_instance_method("length", size);
+    string_class.add_builtin_instance_method("bytes", bytes);
+    string_class.add_builtin_instance_method("each_byte", each_byte);
+    string_class.add_builtin_instance_method("chars", chars);
+    string_class.add_builtin_instance_method("each_char", each_char);
+    string_class.add_builtin_instance_method("sum", sum);
+    string_class.add_builtin_instance_method("upcase", upcase);
+    string_class.add_builtin_instance_method("chomp", chomp);
+    string_class.add_builtin_instance_method("to_i", toi);
+    string_class.add_builtin_instance_method("<", lt);
+    string_class.add_builtin_instance_method(">", gt);
+    string_class.add_builtin_instance_method("center", center);
+    string_class.add_builtin_instance_method("next", next);
+    string_class.add_builtin_instance_method("succ", next);
+    string_class.add_builtin_instance_method("count", count);
 
-    Value::class(class)
+    Value::class(string_class)
 }
 
 fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

@@ -4,15 +4,15 @@ use chrono::{DateTime, Duration, FixedOffset, Utc};
 #[derive(Clone, Debug, PartialEq)]
 pub struct TimeInfo(DateTime<FixedOffset>);
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let time_id = IdentId::get_id("Time");
-    let class = ClassRef::from(time_id, BuiltinClass::object());
-    let class_obj = Value::class(class);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "-", sub);
-    globals.add_builtin_instance_method(class, "+", add);
-    globals.add_builtin_class_method(class_obj, "now", time_now);
-    class_obj
+    let mut class = ClassRef::from(time_id, BuiltinClass::object());
+    let mut class_val = Value::class(class);
+    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_instance_method("-", sub);
+    class.add_builtin_instance_method("+", add);
+    class_val.add_builtin_class_method("now", time_now);
+    class_val
 }
 
 fn time_now(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

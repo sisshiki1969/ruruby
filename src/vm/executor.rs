@@ -1247,8 +1247,8 @@ impl VM {
         self.error_nomethod(format!(
             "undefined method `{}' {} for {}",
             method_name.into(),
-            self.globals.get_class_name(rhs),
-            self.globals.get_class_name(lhs)
+            rhs.get_class_name(),
+            lhs.get_class_name()
         ))
     }
 
@@ -1256,7 +1256,7 @@ impl VM {
         self.error_nomethod(format!(
             "undefined method `{:?}' for {}",
             method,
-            self.globals.get_class_name(receiver)
+            receiver.get_class_name()
         ))
     }
 
@@ -2103,8 +2103,8 @@ impl VM {
             for i in 1..vec.len() {
                 match self.eval_compare(vec[i], val)? {
                     v if v.is_nil() => {
-                        let lhs = self.globals.get_class_name(val);
-                        let rhs = self.globals.get_class_name(vec[i]);
+                        let lhs = val.get_class_name();
+                        let rhs = vec[i].get_class_name();
                         return Err(self.error_argument(format!(
                             "Comparison of {} with {} failed.",
                             lhs, rhs
@@ -2460,7 +2460,7 @@ impl VM {
     }
 
     pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {
-        obj.get_singleton_class(&self.globals)
+        obj.get_singleton_class()
             .map_err(|_| self.error_type("Can not define singleton."))
     }
 }

@@ -1,14 +1,14 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Fiber");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    let val = Value::class(class);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_instance_method(class, "resume", resume);
-    globals.add_builtin_class_method(val, "new", new);
-    globals.add_builtin_class_method(val, "yield", yield_);
-    val
+    let mut class = ClassRef::from(id, BuiltinClass::object());
+    let mut class_val = Value::class(class);
+    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_instance_method("resume", resume);
+    class_val.add_builtin_class_method("new", new);
+    class_val.add_builtin_class_method("yield", yield_);
+    class_val
 }
 
 // Class methods

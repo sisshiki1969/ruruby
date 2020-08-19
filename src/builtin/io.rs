@@ -2,11 +2,11 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let io_id = IdentId::get_id("IO");
-    let class = ClassRef::from(io_id, BuiltinClass::object());
+    let mut class = ClassRef::from(io_id, BuiltinClass::object());
     let obj = Value::class(class);
-    globals.add_builtin_instance_method(class, "<<", output);
-    globals.add_builtin_instance_method(class, "isatty", isatty);
-    globals.add_builtin_instance_method(class, "tty?", isatty);
+    class.add_builtin_instance_method("<<", output);
+    class.add_builtin_instance_method("isatty", isatty);
+    class.add_builtin_instance_method("tty?", isatty);
     let stdout = Value::ordinary_object(obj);
     let stdout_id = IdentId::get_id("STDOUT");
     BuiltinClass::object().set_var(stdout_id, stdout);

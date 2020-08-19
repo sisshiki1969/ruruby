@@ -2,334 +2,331 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Kernel");
-    let kernel_class = ClassRef::from(id, None);
-    globals.add_builtin_instance_method(kernel_class, "puts", puts);
-    globals.add_builtin_instance_method(kernel_class, "p", p);
-    globals.add_builtin_instance_method(kernel_class, "print", print);
-    globals.add_builtin_instance_method(kernel_class, "assert", assert);
-    globals.add_builtin_instance_method(kernel_class, "assert_error", assert_error);
-    globals.add_builtin_instance_method(kernel_class, "require", require);
-    globals.add_builtin_instance_method(kernel_class, "require_relative", require_relative);
-    globals.add_builtin_instance_method(kernel_class, "block_given?", block_given);
-    globals.add_builtin_instance_method(kernel_class, "method", method);
-    globals.add_builtin_instance_method(kernel_class, "is_a?", isa);
-    globals.add_builtin_instance_method(kernel_class, "Integer", integer);
-    globals.add_builtin_instance_method(kernel_class, "__dir__", dir);
-    globals.add_builtin_instance_method(kernel_class, "__FILE__", file_);
-    globals.add_builtin_instance_method(kernel_class, "raise", raise);
-    globals.add_builtin_instance_method(kernel_class, "rand", rand);
-    globals.add_builtin_instance_method(kernel_class, "loop", loop_);
-    globals.add_builtin_instance_method(kernel_class, "exit", exit);
-    globals.add_builtin_instance_method(kernel_class, "sleep", sleep);
-    globals.add_builtin_instance_method(kernel_class, "Complex", kernel_complex);
+    let mut kernel_class = ClassRef::from(id, None);
+    kernel_class.add_builtin_instance_method("puts", puts);
+    kernel_class.add_builtin_instance_method("p", p);
+    kernel_class.add_builtin_instance_method("print", print);
+    kernel_class.add_builtin_instance_method("assert", assert);
+    kernel_class.add_builtin_instance_method("assert_error", assert_error);
+    kernel_class.add_builtin_instance_method("require", require);
+    kernel_class.add_builtin_instance_method("require_relative", require_relative);
+    kernel_class.add_builtin_instance_method("block_given?", block_given);
+    kernel_class.add_builtin_instance_method("method", method);
+    kernel_class.add_builtin_instance_method("is_a?", isa);
+    kernel_class.add_builtin_instance_method("Integer", integer);
+    kernel_class.add_builtin_instance_method("__dir__", dir);
+    kernel_class.add_builtin_instance_method("__FILE__", file_);
+    kernel_class.add_builtin_instance_method("raise", raise);
+    kernel_class.add_builtin_instance_method("rand", rand_);
+    kernel_class.add_builtin_instance_method("loop", loop_);
+    kernel_class.add_builtin_instance_method("exit", exit);
+    kernel_class.add_builtin_instance_method("sleep", sleep);
+    kernel_class.add_builtin_instance_method("Complex", kernel_complex);
     let kernel = Value::class(kernel_class);
     return kernel;
-
-    /// Built-in function "puts".
-    fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        fn flatten(vm: &mut VM, val: Value) {
-            match val.as_array() {
-                None => println!("{}", vm.val_to_s(val)),
-                Some(aref) => {
-                    for val in &aref.elements {
-                        flatten(vm, val.clone());
-                    }
+}
+/// Built-in function "puts".
+fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    fn flatten(vm: &mut VM, val: Value) {
+        match val.as_array() {
+            None => println!("{}", vm.val_to_s(val)),
+            Some(aref) => {
+                for val in &aref.elements {
+                    flatten(vm, val.clone());
                 }
             }
         }
-        if args.len() == 0 {
-            println!();
-        }
-        for arg in args.iter() {
-            flatten(vm, *arg);
-        }
-        Ok(Value::nil())
     }
-
-    fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        for arg in args.iter() {
-            println!("{}", vm.val_inspect(*arg));
-        }
-        if args.len() == 1 {
-            Ok(args[0])
-        } else {
-            Ok(Value::array_from(args.to_vec()))
-        }
+    if args.len() == 0 {
+        println!();
     }
+    for arg in args.iter() {
+        flatten(vm, *arg);
+    }
+    Ok(Value::nil())
+}
 
-    /// Built-in function "print".
-    fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        for arg in args.iter() {
-            match arg.as_bytes() {
-                Some(bytes) => {
-                    use std::io::{self, Write};
-                    io::stdout().write(bytes).unwrap();
-                }
-                None => print!("{}", vm.val_to_s(*arg)),
+fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    for arg in args.iter() {
+        println!("{}", vm.val_inspect(*arg));
+    }
+    if args.len() == 1 {
+        Ok(args[0])
+    } else {
+        Ok(Value::array_from(args.to_vec()))
+    }
+}
+
+/// Built-in function "print".
+fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    for arg in args.iter() {
+        match arg.as_bytes() {
+            Some(bytes) => {
+                use std::io::{self, Write};
+                io::stdout().write(bytes).unwrap();
             }
+            None => print!("{}", vm.val_to_s(*arg)),
         }
+    }
+    Ok(Value::nil())
+}
+
+/// Built-in function "assert".
+fn assert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 2)?;
+    if !vm.eval_eq(args[0], args[1]) {
+        let res = format!(
+            "Assertion error: Expected: {:?} Actual: {:?}",
+            args[0], args[1],
+        );
+        Err(vm.error_argument(res))
+    } else {
+        println!("Assert OK: {:?}", args[0]);
         Ok(Value::nil())
     }
+}
 
-    /// Built-in function "assert".
-    fn assert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 2)?;
-        if !vm.eval_eq(args[0], args[1]) {
-            let res = format!(
-                "Assertion error: Expected: {:?} Actual: {:?}",
-                args[0], args[1],
-            );
-            Err(vm.error_argument(res))
-        } else {
-            println!("Assert OK: {:?}", args[0]);
+fn assert_error(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let method = match args.block {
+        Some(block) => block,
+        None => return Err(vm.error_argument("assert_error(): Block not given.")),
+    };
+    match vm.eval_block(method, &Args::new0()) {
+        Ok(val) => Err(vm.error_argument(format!(
+            "Assertion error: No error occured. returned {:?}",
+            val
+        ))),
+        Err(err) => {
+            println!("Assert_error OK:");
+            err.show_err();
+            err.show_loc(0);
             Ok(Value::nil())
         }
     }
+}
 
-    fn assert_error(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 0)?;
-        let method = match args.block {
-            Some(block) => block,
-            None => return Err(vm.error_argument("assert_error(): Block not given.")),
-        };
-        match vm.eval_block(method, &Args::new0()) {
-            Ok(val) => Err(vm.error_argument(format!(
-                "Assertion error: No error occured. returned {:?}",
-                val
-            ))),
-            Err(err) => {
-                println!("Assert_error OK:");
-                err.show_err();
-                err.show_loc(0);
-                Ok(Value::nil())
-            }
+fn require(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let file_name = match args[0].as_string() {
+        Some(string) => string,
+        None => return Err(vm.error_argument("file name must be a string.")),
+    };
+    let mut path = std::env::current_dir().unwrap();
+    path.push(file_name);
+    require_main(vm, path)?;
+    Ok(Value::bool(true))
+}
+
+fn require_relative(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let context = vm.current_context();
+    let mut path = std::path::PathBuf::from(context.iseq_ref.unwrap().source_info.path.clone());
+
+    let file_name = match args[0].as_string() {
+        Some(string) => PathBuf::from(string),
+        None => return Err(vm.error_argument("file name must be a string.")),
+    };
+    path.pop();
+    for p in file_name.iter() {
+        if p == ".." {
+            path.pop();
+        } else {
+            path.push(p);
         }
     }
+    path.set_extension("rb");
+    require_main(vm, path)?;
+    Ok(Value::bool(true))
+}
 
-    fn require(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 1)?;
-        let file_name = match args[0].as_string() {
-            Some(string) => string,
-            None => return Err(vm.error_argument("file name must be a string.")),
-        };
-        let mut path = std::env::current_dir().unwrap();
-        path.push(file_name);
-        require_main(vm, path)?;
-        Ok(Value::bool(true))
-    }
+fn require_main(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
+    let file_name = path.to_string_lossy().to_string();
+    let (absolute_path, program) = vm.load_file(file_name)?;
+    #[cfg(feature = "verbose")]
+    eprintln!("reading:{}", absolute_path.to_string_lossy());
+    vm.root_path.push(path);
+    vm.class_push(BuiltinClass::object());
+    vm.run(absolute_path, &program)?;
+    vm.class_pop();
+    vm.root_path.pop().unwrap();
+    Ok(())
+}
 
-    fn require_relative(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 1)?;
-        let context = vm.current_context();
-        let mut path = std::path::PathBuf::from(context.iseq_ref.unwrap().source_info.path.clone());
+/// Built-in function "block_given?".
+fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+    Ok(Value::bool(vm.current_context().block.is_some()))
+}
 
-        let file_name = match args[0].as_string() {
-            Some(string) => PathBuf::from(string),
-            None => return Err(vm.error_argument("file name must be a string.")),
-        };
-        path.pop();
-        for p in file_name.iter() {
-            if p == ".." {
-                path.pop();
-            } else {
-                path.push(p);
-            }
+fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let name = match args[0].as_symbol() {
+        Some(id) => id,
+        None => return Err(vm.error_type("An argument must be a Symbol.")),
+    };
+    let method = vm.get_method(self_val, name)?;
+    let val = Value::method(name, self_val, method);
+    Ok(val)
+}
+
+fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let mut recv_class = self_val.get_class();
+    loop {
+        if recv_class.id() == args[0].id() {
+            return Ok(Value::true_val());
         }
-        path.set_extension("rb");
-        require_main(vm, path)?;
-        Ok(Value::bool(true))
-    }
-
-    fn require_main(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
-        let file_name = path.to_string_lossy().to_string();
-        let (absolute_path, program) = vm.load_file(file_name)?;
-        #[cfg(feature = "verbose")]
-        eprintln!("reading:{}", absolute_path.to_string_lossy());
-        vm.root_path.push(path);
-        vm.class_push(BuiltinClass::object());
-        vm.run(absolute_path, &program)?;
-        vm.class_pop();
-        vm.root_path.pop().unwrap();
-        Ok(())
-    }
-
-    /// Built-in function "block_given?".
-    fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
-        Ok(Value::bool(vm.current_context().block.is_some()))
-    }
-
-    fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 1)?;
-        let name = match args[0].as_symbol() {
-            Some(id) => id,
-            None => return Err(vm.error_type("An argument must be a Symbol.")),
-        };
-        let method = vm.get_method(self_val, name)?;
-        let val = Value::method(name, self_val, method);
-        Ok(val)
-    }
-
-    fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 1)?;
-        let mut recv_class = self_val.get_class();
-        loop {
-            if recv_class.id() == args[0].id() {
-                return Ok(Value::true_val());
-            }
-            recv_class = recv_class.as_class().superclass;
-            if recv_class.is_nil() {
-                return Ok(Value::false_val());
-            }
+        recv_class = recv_class.as_class().superclass;
+        if recv_class.is_nil() {
+            return Ok(Value::false_val());
         }
     }
+}
 
-    fn integer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 1)?;
-        let val = match args[0].unpack() {
-            RV::Integer(num) => num,
-            RV::Float(num) => num as i64,
-            RV::Object(obj) => match &obj.kind {
-                ObjKind::String(s) => match s.parse::<i64>() {
-                    Some(num) => num,
-                    None => {
-                        let inspect = vm.val_inspect(args[0]);
-                        return Err(
-                            vm.error_type(format!("Invalid value for Integer(): {}", inspect))
-                        );
-                    }
-                },
-                _ => {
+fn integer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 1)?;
+    let val = match args[0].unpack() {
+        RV::Integer(num) => num,
+        RV::Float(num) => num as i64,
+        RV::Object(obj) => match &obj.kind {
+            ObjKind::String(s) => match s.parse::<i64>() {
+                Some(num) => num,
+                None => {
                     let inspect = vm.val_inspect(args[0]);
-                    return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
+                    return Err(vm.error_type(format!("Invalid value for Integer(): {}", inspect)));
                 }
             },
             _ => {
                 let inspect = vm.val_inspect(args[0]);
                 return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
             }
-        };
-        Ok(Value::integer(val))
-    }
-
-    fn dir(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 0)?;
-        let mut path = match vm.root_path.last() {
-            Some(path) => path,
-            None => return Ok(Value::nil()),
+        },
+        _ => {
+            let inspect = vm.val_inspect(args[0]);
+            return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
         }
+    };
+    Ok(Value::integer(val))
+}
+
+fn dir(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let mut path = match vm.root_path.last() {
+        Some(path) => path,
+        None => return Ok(Value::nil()),
+    }
+    .clone();
+    path.pop();
+    Ok(Value::string(path.to_string_lossy().to_string()))
+}
+
+fn file_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let path = vm
+        .current_context()
+        .iseq_ref
+        .unwrap()
+        .source_info
+        .path
         .clone();
-        path.pop();
-        Ok(Value::string(path.to_string_lossy().to_string()))
+    Ok(Value::string(path.to_string_lossy().to_string()))
+}
+
+/// raise -> ()
+/// fail -> ()
+/// raise(message, cause: $!) -> ()
+/// fail(message, cause: $!) -> ()
+/// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
+/// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
+fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 2)?;
+    /*for arg in args.iter() {
+        eprintln!("{}", vm.val_inspect(*arg));
+    }*/
+    if args.len() == 1 && args[0].is_class().is_some() {
+        if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name {
+            return Err(vm.error_stop_iteration(""));
+        };
     }
+    Err(vm.error_unimplemented("error"))
+}
 
-    fn file_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        vm.check_args_num(self_val, args.len(), 0)?;
-        let path = vm
-            .current_context()
-            .iseq_ref
-            .unwrap()
-            .source_info
-            .path
-            .clone();
-        Ok(Value::string(path.to_string_lossy().to_string()))
-    }
+fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+    let num = rand::random();
+    Ok(Value::float(num))
+}
 
-    /// raise -> ()
-    /// fail -> ()
-    /// raise(message, cause: $!) -> ()
-    /// fail(message, cause: $!) -> ()
-    /// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
-    /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
-    fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_range(args.len(), 0, 2)?;
-        /*for arg in args.iter() {
-            eprintln!("{}", vm.val_inspect(*arg));
-        }*/
-        if args.len() == 1 && args[0].is_class().is_some() {
-            if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name {
-                return Err(vm.error_stop_iteration(""));
-            };
-        }
-        Err(vm.error_unimplemented("error"))
-    }
+fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    let method = vm.expect_block(args.block)?;
+    let arg = Args::new0();
+    loop {
+        let res = vm.eval_block(method, &arg);
+        match res {
+            Ok(_) => {}
+            Err(err) => match &err.kind {
+                RubyErrorKind::RuntimeErr {
+                    kind: RuntimeErrKind::StopIteration,
+                    ..
+                } => {
+                    return Ok(Value::nil());
+                }
 
-    fn rand(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
-        let num = rand::random();
-        Ok(Value::float(num))
-    }
-
-    fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        let method = vm.expect_block(args.block)?;
-        let arg = Args::new0();
-        loop {
-            let res = vm.eval_block(method, &arg);
-            match res {
-                Ok(_) => {}
-                Err(err) => match &err.kind {
-                    RubyErrorKind::RuntimeErr {
-                        kind: RuntimeErrKind::StopIteration,
-                        ..
-                    } => {
-                        return Ok(Value::nil());
-                    }
-
-                    _ => return Err(err),
-                },
-            }
+                _ => return Err(err),
+            },
         }
     }
+}
 
-    fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_range(args.len(), 0, 1)?;
-        let code = if args.len() == 0 {
-            0
+fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
+    let code = if args.len() == 0 {
+        0
+    } else {
+        args[0].expect_integer(vm, "Expect Integer.")?
+    };
+    std::process::exit(code as i32);
+}
+
+fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
+    let secs = if args.len() == 0 {
+        0.0
+    } else {
+        let secs = match args[0].unpack() {
+            RV::Integer(i) => i as f64,
+            RV::Float(f) => f,
+            _ => return Err(vm.error_argument("Arg must be Integer or Float.")),
+        };
+        if secs < 0.0 {
+            return Err(vm.error_argument("Negative number."));
+        }
+        secs
+    };
+    let start = std::time::Instant::now();
+    std::thread::sleep(std::time::Duration::from_secs_f64(secs));
+    let duration = start.elapsed().as_secs() as u64 as i64;
+    Ok(Value::integer(duration))
+}
+
+fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 3)?;
+    let (r, i, ex) = match args.len() {
+        1 => (args[0], Value::integer(0), true),
+        2 => (args[0], args[1], true),
+        3 => (args[0], args[1], args[2].to_bool()),
+        _ => unreachable!(),
+    };
+    if !r.is_real() || !i.is_real() {
+        if ex {
+            return Err(vm.error_argument("Not a real."));
         } else {
-            args[0].expect_integer(vm, "Expect Integer.")?
-        };
-        std::process::exit(code as i32);
-    }
-
-    fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_range(args.len(), 0, 1)?;
-        let secs = if args.len() == 0 {
-            0.0
-        } else {
-            let secs = match args[0].unpack() {
-                RV::Integer(i) => i as f64,
-                RV::Float(f) => f,
-                _ => return Err(vm.error_argument("Arg must be Integer or Float.")),
-            };
-            if secs < 0.0 {
-                return Err(vm.error_argument("Negative number."));
-            }
-            secs
-        };
-        let start = std::time::Instant::now();
-        std::thread::sleep(std::time::Duration::from_secs_f64(secs));
-        let duration = start.elapsed().as_secs() as u64 as i64;
-        Ok(Value::integer(duration))
-    }
-
-    fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-        vm.check_args_range(args.len(), 1, 3)?;
-        let (r, i, ex) = match args.len() {
-            1 => (args[0], Value::integer(0), true),
-            2 => (args[0], args[1], true),
-            3 => (args[0], args[1], args[2].to_bool()),
-            _ => unreachable!(),
-        };
-        if !r.is_real() || !i.is_real() {
-            if ex {
-                return Err(vm.error_argument("Not a real."));
-            } else {
-                return Ok(Value::nil());
-            }
+            return Ok(Value::nil());
         }
-
-        Ok(Value::complex(r, i))
     }
+
+    Ok(Value::complex(r, i))
 }
 
 #[cfg(test)]

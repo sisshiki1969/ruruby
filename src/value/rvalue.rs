@@ -403,6 +403,7 @@ pub type ObjectRef = Ref<RValue>;
 
 impl RValue {
     /// Pack `self` into `Value`(64-bit data representation).
+    ///
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
@@ -413,7 +414,9 @@ impl RValue {
         })
     }
 
-    /// Return a class of the object. If the objetct has a sigleton class, return the singleton class.
+    /// Return a class of the object.
+    ///
+    /// If the objetct has a sigleton class, return the singleton class.
     pub fn class(&self) -> Value {
         self.class
     }

@@ -1,16 +1,16 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Enumerator");
-    let class = ClassRef::from(id, BuiltinClass::object());
-    globals.add_builtin_instance_method(class, "next", next);
-    globals.add_builtin_instance_method(class, "each", each);
-    globals.add_builtin_instance_method(class, "map", map);
-    globals.add_builtin_instance_method(class, "collect", map);
-    globals.add_builtin_instance_method(class, "with_index", with_index);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    let class = Value::class(class);
-    globals.add_builtin_class_method(class, "new", enum_new);
+    let mut class = ClassRef::from(id, BuiltinClass::object());
+    class.add_builtin_instance_method("next", next);
+    class.add_builtin_instance_method("each", each);
+    class.add_builtin_instance_method("map", map);
+    class.add_builtin_instance_method("collect", map);
+    class.add_builtin_instance_method("with_index", with_index);
+    class.add_builtin_instance_method("inspect", inspect);
+    let mut class = Value::class(class);
+    class.add_builtin_class_method("new", enum_new);
     class
 }
 

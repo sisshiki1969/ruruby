@@ -1,5 +1,6 @@
 use crate::*;
 
+/// This module represents real values and their basic calculations.
 #[derive(Clone, Copy)]
 pub enum Real {
     Integer(i64),

@@ -1,13 +1,13 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Math");
     let class = ClassRef::from(id, BuiltinClass::object());
-    let obj = Value::class(class);
-    globals.add_builtin_class_method(obj, "sqrt", sqrt);
-    globals.add_builtin_class_method(obj, "cos", cos);
-    globals.add_builtin_class_method(obj, "sin", sin);
-    obj
+    let mut class_val = Value::class(class);
+    class_val.add_builtin_class_method("sqrt", sqrt);
+    class_val.add_builtin_class_method("cos", cos);
+    class_val.add_builtin_class_method("sin", sin);
+    class_val
 }
 
 // Class methods

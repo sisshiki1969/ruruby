@@ -1,11 +1,12 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let class = globals.builtins.class.as_class();
-    globals.add_builtin_instance_method(class, "new", new);
-    globals.add_builtin_instance_method(class, "superclass", superclass);
-    globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_class_method(BuiltinClass::class(), "new", class_new);
+    let mut class_obj = globals.builtins.class;
+    let mut class = class_obj.as_class();
+    class.add_builtin_instance_method("new", new);
+    class.add_builtin_instance_method("superclass", superclass);
+    class.add_builtin_instance_method("inspect", inspect);
+    class_obj.add_builtin_class_method("new", class_new);
 }
 
 // Class methods

@@ -1,17 +1,17 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("GC");
     let class = ClassRef::from(id, BuiltinClass::object());
-    let obj = Value::module(class);
-    //globals.add_builtin_instance_method(class, "to_s", to_s);
-    globals.add_builtin_class_method(obj, "count", count);
-    globals.add_builtin_class_method(obj, "enable", enable);
-    globals.add_builtin_class_method(obj, "disable", disable);
-    globals.add_builtin_class_method(obj, "start", start);
-    globals.add_builtin_class_method(obj, "stat", stat);
-    globals.add_builtin_class_method(obj, "print_mark", print_mark);
-    obj
+    let mut class_val = Value::module(class);
+    //class.add_builtin_instance_method( "to_s", to_s);
+    class_val.add_builtin_class_method("count", count);
+    class_val.add_builtin_class_method("enable", enable);
+    class_val.add_builtin_class_method("disable", disable);
+    class_val.add_builtin_class_method("start", start);
+    class_val.add_builtin_class_method("stat", stat);
+    class_val.add_builtin_class_method("print_mark", print_mark);
+    class_val
 }
 
 fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
