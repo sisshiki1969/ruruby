@@ -1,7 +1,7 @@
 use crate::error::RubyError;
 use crate::*;
 
-pub fn init_array(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let array_id = IdentId::get_id("Array");
     let class = ClassRef::from(array_id, globals.builtins.object);
     let obj = Value::class(globals, class);

@@ -48,6 +48,12 @@ pub struct BuiltinClass {
     pub enumerator: Value,
 }
 
+use std::sync::RwLock;
+
+lazy_static! {
+    pub static ref BUILTINS: RwLock<Option<BuiltinClass>> = RwLock::new(None);
+}
+
 impl BuiltinClass {
     fn new(object: Value, module: Value, class: Value) -> Self {
         let nil = Value::nil();
@@ -119,12 +125,11 @@ impl Globals {
         use builtin::*;
         let allocator = AllocatorRef::new(Allocator::new());
         ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
-        //let mut ident_table = IdentifierTable::new();
         let object_id = IdentId::OBJECT;
         let module_id = IdentId::get_id("Module");
         let class_id = IdentId::get_id("Class");
         let mut object_class = ClassRef::from(object_id, None);
-        let object = Value::bootstrap_class(object_class);
+        let mut object = Value::bootstrap_class(object_class);
         let module_class = ClassRef::from(module_id, object);
         let module = Value::bootstrap_class(module_class);
         let class_class = ClassRef::from(class_id, module);
@@ -159,77 +164,70 @@ impl Globals {
         let mut singleton_class = ClassRef::from(None, globals.builtins.class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(&globals, singleton_class);
-        globals
-            .builtins
-            .object
-            .rvalue_mut()
-            .set_class(singleton_obj);
+        object.rvalue_mut().set_class(singleton_obj);
 
         module::init(&mut globals);
         class::init(&mut globals);
-        globals.builtins.integer = integer::init(&mut globals);
-        globals.builtins.float = float::init(&mut globals);
-        globals.builtins.complex = complex::init(&mut globals);
-        globals.builtins.array = array::init_array(&mut globals);
-        globals.builtins.procobj = procobj::init_proc(&mut globals);
-        globals.builtins.method = method::init_method(&mut globals);
-        globals.builtins.range = range::init_range(&mut globals);
-        globals.builtins.string = string::init_string(&mut globals);
-        globals.builtins.hash = hash::init_hash(&mut globals);
-        globals.builtins.regexp = regexp::init_regexp(&mut globals);
-        globals.builtins.fiber = fiber::init_fiber(&mut globals);
-        globals.builtins.enumerator = enumerator::init_enumerator(&mut globals);
         object::init(&mut globals);
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
                 let id = IdentId::get_id($name);
-                globals
-                    .builtins
-                    .object
-                    .set_var(id, globals.builtins.$class_object);
+                object.set_var(id, globals.builtins.$class_object);
+            };
+        }
+
+        macro_rules! init_builtin_class {
+            ($name:expr, $module_name:ident) => {
+                let class_obj = $module_name::init(&mut globals);
+                globals.builtins.$module_name = class_obj;
+                let id = IdentId::get_id($name);
+                object.set_var(id, class_obj);
+            };
+        }
+
+        macro_rules! init_class {
+            ($name:expr, $module_name:ident) => {
+                let class_obj = $module_name::init(&mut globals);
+                let id = IdentId::get_id($name);
+                object.set_var(id, class_obj);
             };
         }
 
         set_builtin_class!("Object", object);
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
-        set_builtin_class!("Integer", integer);
-        set_builtin_class!("Complex", complex);
-        set_builtin_class!("Float", float);
-        set_builtin_class!("Array", array);
-        set_builtin_class!("Proc", procobj);
-        set_builtin_class!("Range", range);
-        set_builtin_class!("String", string);
-        set_builtin_class!("Hash", hash);
-        set_builtin_class!("Method", method);
-        set_builtin_class!("Regexp", regexp);
-        set_builtin_class!("Fiber", fiber);
-        set_builtin_class!("Enumerator", enumerator);
+        init_builtin_class!("Integer", integer);
+        init_builtin_class!("Complex", complex);
+        init_builtin_class!("Float", float);
+        init_builtin_class!("Array", array);
+        init_builtin_class!("Proc", procobj);
+        init_builtin_class!("Range", range);
+        init_builtin_class!("String", string);
+        init_builtin_class!("Hash", hash);
+        init_builtin_class!("Method", method);
+        init_builtin_class!("Regexp", regexp);
+        init_builtin_class!("Fiber", fiber);
+        init_builtin_class!("Enumerator", enumerator);
 
         let kernel = kernel::init(&mut globals);
         object_class.include.push(kernel);
         globals.set_class("Kernel", kernel);
-        let math = math::init_math(&mut globals);
-        globals.set_class("Math", math);
-        let file = file::init_file(&mut globals);
-        globals.set_class("File", file);
-        let process = process::init_process(&mut globals);
-        globals.set_class("Process", process);
-        let gc = gc::init_gc(&mut globals);
-        globals.set_class("GC", gc);
-        let structobj = structobj::init_struct(&mut globals);
-        globals.set_class("Struct", structobj);
-        let time = time::init_time(&mut globals);
-        globals.set_class("Time", time);
+
+        init_class!("Math", math);
+        init_class!("File", file);
+        init_class!("Process", process);
+        init_class!("GC", gc);
+        init_class!("Struct", structobj);
+        init_class!("Time", time);
+        init_class!("IO", io);
+
         globals.set_class("StandardError", Value::class(&globals, globals.class_class));
         let id = IdentId::get_id("StopIteration");
         let class = ClassRef::from(id, globals.builtins.object);
         globals.set_class("StopIteration", Value::class(&globals, class));
         let errorobj = errorobj::init_error(&mut globals);
         globals.set_class("RuntimeError", errorobj);
-        let io = io::init_io(&mut globals);
-        globals.set_class("IO", io);
 
         globals
     }

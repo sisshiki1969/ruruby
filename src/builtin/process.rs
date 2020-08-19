@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_process(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Process");
     let class = ClassRef::from(id, globals.builtins.object);
     let mut obj = Value::class(globals, class);

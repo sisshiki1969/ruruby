@@ -11,7 +11,7 @@ impl ProcInfo {
     }
 }
 
-pub fn init_proc(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Proc");
     let class = ClassRef::from(proc_id, globals.builtins.object);
     let obj = Value::class(globals, class);

@@ -4,7 +4,7 @@ use std::path::*;
 //#[macro_use]
 use crate::*;
 
-pub fn init_file(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("File");
     let class = ClassRef::from(id, globals.builtins.object);
     let obj = Value::class(globals, class);

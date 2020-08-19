@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_io(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let io_id = IdentId::get_id("IO");
     let class = ClassRef::from(io_id, globals.builtins.object);
     let obj = Value::class(globals, class);

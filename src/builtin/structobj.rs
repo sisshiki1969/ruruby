@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_struct(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Struct");
     let class = ClassRef::from(id, globals.builtins.object);
     let class = Value::class(globals, class);

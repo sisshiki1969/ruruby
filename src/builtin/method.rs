@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_method(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Method");
     let class = ClassRef::from(proc_id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "call", method_call);

@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_hash(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Hash");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "to_s", inspect);

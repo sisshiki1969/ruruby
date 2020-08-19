@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init_enumerator(globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Enumerator");
     let class = ClassRef::from(id, globals.builtins.object);
     globals.add_builtin_instance_method(class, "next", next);
