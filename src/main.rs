@@ -41,10 +41,10 @@ fn main() {
     let id = IdentId::get_id("ARGV");
     let res: Vec<Value> = args[1..]
         .iter()
-        .map(|x| Value::string(&vm.globals.builtins, x.to_string()))
+        .map(|x| Value::string(x.to_string()))
         .collect();
     //res.remove(0);
-    let argv = Value::array_from(&vm.globals, res);
-    vm.globals.builtins.object.set_var(id, argv);
+    let argv = Value::array_from(res);
+    BuiltinClass::object().set_var(id, argv);
     vm.exec_file(args[0]);
 }

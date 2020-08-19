@@ -125,7 +125,10 @@ impl VM {
     pub fn set_allocator(&self) {
         ALLOC.with(|a| {
             *a.borrow_mut() = Some(self.globals.allocator.clone());
-        })
+        });
+        BUILTINS.with(|b| {
+            *b.borrow_mut() = Some(self.globals.builtins.clone());
+        });
     }
 
     pub fn current_context(&self) -> ContextRef {
@@ -241,7 +244,7 @@ impl VM {
     pub fn class(&self) -> Value {
         let (class, _) = self.class_context.last().unwrap();
         if class.is_nil() {
-            self.globals.builtins.object
+            BuiltinClass::object()
         } else {
             *class
         }
@@ -777,7 +780,7 @@ impl VM {
                 }
                 Inst::CONCAT_STRING => {
                     let val = match iseq.read32(self.pc + 1) as usize {
-                        0 => Value::string(&self.globals.builtins, "".to_string()),
+                        0 => Value::string("".to_string()),
                         i => {
                             let mut res = match self.stack_pop().as_string() {
                                 Some(s) => s.to_owned(),
@@ -789,7 +792,7 @@ impl VM {
                                     None => unreachable!("Illegal CONCAT_STRING arguments."),
                                 };
                             }
-                            Value::string(&self.globals.builtins, res)
+                            Value::string(res)
                         }
                     };
 
@@ -868,7 +871,7 @@ impl VM {
                 }
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
-                    let class = self.globals.builtins.object;
+                    let class = BuiltinClass::object();
                     let val = self.get_super_const(class, id)?;
                     self.stack_push(val);
                     self.pc += 5;
@@ -942,7 +945,7 @@ impl VM {
                 }
                 Inst::SPLAT => {
                     let val = self.stack_pop();
-                    let res = Value::splat(&self.globals, val);
+                    let res = Value::splat(val);
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -960,14 +963,14 @@ impl VM {
                     };
                     let exclude_val = self.stack_pop();
                     let exclude_end = exclude_val.to_bool();
-                    let range = Value::range(&self.globals, start, end, exclude_end);
+                    let range = Value::range(start, end, exclude_end);
                     self.stack_push(range);
                     self.pc += 1;
                 }
                 Inst::CREATE_ARRAY => {
                     let arg_num = iseq.read_usize(self.pc + 1);
                     let elems = self.pop_args_to_ary(arg_num).into_vec();
-                    let array = Value::array_from(&self.globals, elems);
+                    let array = Value::array_from(elems);
                     self.stack_push(array);
                     self.pc += 5;
                 }
@@ -980,7 +983,7 @@ impl VM {
                 Inst::CREATE_HASH => {
                     let arg_num = iseq.read_usize(self.pc + 1);
                     let key_value = self.pop_key_value_pair(arg_num);
-                    let hash = Value::hash_from_map(&self.globals, key_value);
+                    let hash = Value::hash_from_map(key_value);
                     self.stack_push(hash);
                     self.pc += 5;
                 }
@@ -1158,7 +1161,7 @@ impl VM {
                 Inst::TO_S => {
                     let val = self.stack_pop();
                     let s = self.val_to_s(val);
-                    let res = Value::string(&self.globals.builtins, s);
+                    let res = Value::string(s);
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -1351,7 +1354,7 @@ impl VM {
         if len == num {
             Ok(())
         } else {
-            let class = self_val.get_class_object(&self.globals);
+            let class = self_val.get_class_object();
             Err(self.error_argument(format!(
                 "Wrong number of arguments. (given {}, expected {}) self:{:?}",
                 len, num, class
@@ -1568,7 +1571,7 @@ impl VM {
         method: IdentId,
         cache: u32,
     ) -> VMResult {
-        let rec_class = lhs.get_class_object_for_method(&self.globals);
+        let rec_class = lhs.get_class_object_for_method();
         let methodref = self.get_method_from_cache(cache, rec_class, method)?;
         let arg = Args::new1(rhs);
         self.eval_send(methodref, lhs, &arg)
@@ -1867,7 +1870,7 @@ impl VM {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Class(_) => {
-                    let res = rhs.get_class_object(&self.globals).id() == lhs.id();
+                    let res = rhs.get_class_object().id() == lhs.id();
                     Ok(res)
                 }
                 ObjKind::Regexp(re) => {
@@ -2057,7 +2060,7 @@ impl VM {
     }
 
     fn define_class(&mut self, id: IdentId, is_module: bool, super_val: Value) -> VMResult {
-        let val = match self.globals.builtins.object.get_var(id) {
+        let val = match BuiltinClass::object().get_var(id) {
             Some(val) => {
                 if val.is_module().is_some() != is_module {
                     return Err(self.error_type(format!(
@@ -2076,16 +2079,16 @@ impl VM {
             }
             None => {
                 let super_val = if super_val.is_nil() {
-                    self.globals.builtins.object
+                    BuiltinClass::object()
                 } else {
                     self.expect_class(super_val, "Superclass")?;
                     super_val
                 };
                 let classref = ClassRef::from(id, super_val);
                 let val = if is_module {
-                    Value::module(&mut self.globals, classref)
+                    Value::module(classref)
                 } else {
-                    Value::class(&mut self.globals, classref)
+                    Value::class(classref)
                 };
                 self.class().set_var(id, val);
                 val
@@ -2233,7 +2236,7 @@ impl VM {
         let flag = iseq.read16(self.pc + 7);
         let cache_slot = iseq.read32(self.pc + 9);
         let block = iseq.read64(self.pc + 13);
-        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let rec_class = receiver.get_class_object_for_method();
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
 
         let keyword = if flag & 0b01 == 1 {
@@ -2272,7 +2275,7 @@ impl VM {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let cache_slot = iseq.read32(self.pc + 7);
-        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let rec_class = receiver.get_class_object_for_method();
         let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
         let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
@@ -2380,10 +2383,7 @@ impl VM {
     pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
         let mut class = match target_obj.as_module() {
             Some(mref) => mref,
-            None => target_obj
-                .get_class_object(&self.globals)
-                .as_module()
-                .unwrap(),
+            None => target_obj.get_class_object().as_module().unwrap(),
         };
         class.add_method(&mut self.globals, id, method);
     }
@@ -2408,7 +2408,7 @@ impl VM {
         receiver: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_object_for_method(&self.globals);
+        let rec_class = receiver.get_class_object_for_method();
         let method = self.get_instance_method(rec_class, method_id)?;
         Ok(method)
     }
@@ -2471,7 +2471,7 @@ impl VM {
         let val = match args.len() {
             0 => Value::nil(),
             1 => args[0],
-            _ => Value::array_from(&self.globals, args.to_vec()),
+            _ => Value::array_from(args.to_vec()),
         };
         match &self.parent_fiber {
             None => return Err(self.error_fiber("Can not yield from main fiber.")),
@@ -2577,7 +2577,7 @@ impl VM {
     pub fn create_proc(&mut self, method: MethodRef) -> VMResult {
         self.move_outer_to_heap();
         let context = self.create_block_context(method)?;
-        Ok(Value::procobj(&self.globals, context))
+        Ok(Value::procobj(context))
     }
 
     pub fn create_enum_info(
@@ -2610,7 +2610,7 @@ impl VM {
         args: Args,
     ) -> VMResult {
         let fiber = self.create_enum_info(method_id, receiver, args);
-        Ok(Value::enumerator(&self.globals, fiber))
+        Ok(Value::enumerator(fiber))
     }
 
     /// Move outer execution contexts on the stack to the heap.
@@ -2658,7 +2658,7 @@ impl VM {
     pub fn create_regexp_from_string(&mut self, string: &str) -> VMResult {
         let re = RegexpInfo::from_string(&mut self.globals, string)
             .map_err(|err| self.error_regexp(err))?;
-        let regexp = Value::regexp(&self.globals, re);
+        let regexp = Value::regexp(re);
         Ok(regexp)
     }
 

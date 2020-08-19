@@ -153,7 +153,7 @@ impl Context {
                 vm.check_args_range(len, min, min + params.opt_params)?;
             }
         }
-        context.set_arguments(&vm.globals, args, kw);
+        context.set_arguments(args, kw);
         match args.kw_arg {
             Some(kw_arg) if kw.is_none() => {
                 let keyword = kw_arg.as_hash().unwrap();
@@ -173,7 +173,7 @@ impl Context {
             context[id] = match args.block {
                 Some(block) => {
                     let proc_context = vm.create_block_context(block)?;
-                    Value::procobj(&vm.globals, proc_context)
+                    Value::procobj(proc_context)
                 }
                 None => Value::nil(),
             }
@@ -203,7 +203,7 @@ impl Context {
         Ok(context)
     }
 
-    fn set_arguments(&mut self, globals: &Globals, args: &Args, kw_arg: Option<Value>) {
+    fn set_arguments(&mut self, args: &Args, kw_arg: Option<Value>) {
         let iseq = self.iseq_ref.unwrap();
         let req_len = iseq.params.req_params;
         let post_len = iseq.params.post_params;
@@ -212,7 +212,7 @@ impl Context {
                 match args[0].as_array() {
                     Some(ary) => {
                         let args = &ary.elements;
-                        self.fill_arguments(globals, args, args.len(), iseq, kw_arg);
+                        self.fill_arguments(args, args.len(), iseq, kw_arg);
                         return;
                     }
                     _ => {}
@@ -221,12 +221,11 @@ impl Context {
             _ => {}
         }
 
-        self.fill_arguments(globals, args, args.len(), iseq, kw_arg);
+        self.fill_arguments(args, args.len(), iseq, kw_arg);
     }
 
     fn fill_arguments(
         &mut self,
-        globals: &Globals,
         args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
         args_len: usize,
         iseq: ISeqRef,
@@ -279,7 +278,7 @@ impl Context {
                 }
                 v
             };
-            let val = Value::array_from(globals, ary);
+            let val = Value::array_from(ary);
             self[req_len + opt_len] = val;
         }
     }

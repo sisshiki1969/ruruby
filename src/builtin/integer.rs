@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Integer");
-    let class = ClassRef::from(id, globals.builtins.object);
+    let class = ClassRef::from(id, BuiltinClass::object());
     globals.add_builtin_instance_method(class, "+", add);
     globals.add_builtin_instance_method(class, "-", sub);
     globals.add_builtin_instance_method(class, "*", mul);
@@ -22,7 +22,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "to_f", tof);
     globals.add_builtin_instance_method(class, "floor", floor);
     globals.add_builtin_instance_method(class, "even?", even);
-    Value::class(globals, class)
+    Value::class(class)
 }
 
 // Class methods
@@ -38,7 +38,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs + r;
                 let i = i;
-                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+                Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(vm.error_undefined_op("+", args[0], self_val)),
         },
@@ -54,7 +54,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs - r;
                 let i = -i;
-                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+                Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(vm.error_undefined_op("-", args[0], self_val)),
         },
@@ -70,7 +70,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs * r;
                 let i = lhs * i;
-                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+                Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(vm.error_undefined_op("-", args[0], self_val)),
         },
@@ -240,7 +240,7 @@ fn chr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     if 0 > num || num > 255 {
         return Err(vm.error_unimplemented("Currently, receiver must be 0..255."));
     };
-    Ok(Value::bytes(&vm.globals, vec![num as u8]))
+    Ok(Value::bytes(vec![num as u8]))
 }
 
 fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

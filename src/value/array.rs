@@ -33,12 +33,12 @@ impl ArrayInfo {
             if len < 0 {
                 Value::nil()
             } else if index >= self_len {
-                Value::array_from(&vm.globals, vec![])
+                Value::array_from(vec![])
             } else {
                 let len = len as usize;
                 let end = std::cmp::min(self_len, index + len);
                 let ary = (&self.elements[index..end]).to_vec();
-                Value::array_from(&vm.globals, ary)
+                Value::array_from(ary)
             }
         };
         Ok(val)

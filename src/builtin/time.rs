@@ -6,8 +6,8 @@ pub struct TimeInfo(DateTime<FixedOffset>);
 
 pub fn init(globals: &mut Globals) -> Value {
     let time_id = IdentId::get_id("Time");
-    let class = ClassRef::from(time_id, globals.builtins.object);
-    let class_obj = Value::class(globals, class);
+    let class = ClassRef::from(time_id, BuiltinClass::object());
+    let class_obj = Value::class(class);
     globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "-", sub);
     globals.add_builtin_instance_method(class, "+", add);
@@ -28,7 +28,7 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
     };
-    Ok(Value::string(&vm.globals.builtins, format!("{}", time)))
+    Ok(Value::string(format!("{}", time)))
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -40,18 +40,12 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args[0].unpack() {
         RV::Integer(i) => {
             let res = time - Duration::seconds(i);
-            Ok(Value::time(
-                self_val.get_class_object(&vm.globals),
-                TimeInfo(res),
-            ))
+            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
         }
         RV::Float(f) => {
             let offset = (f * 1000.0 * 1000.0 * 1000.0) as i64;
             let res = time - Duration::nanoseconds(offset);
-            Ok(Value::time(
-                self_val.get_class_object(&vm.globals),
-                TimeInfo(res),
-            ))
+            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
         }
         RV::Object(rv) => match &rv.kind {
             ObjKind::Time(t) => {
@@ -74,18 +68,12 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args[0].unpack() {
         RV::Integer(i) => {
             let res = time + Duration::seconds(i);
-            Ok(Value::time(
-                self_val.get_class_object(&vm.globals),
-                TimeInfo(res),
-            ))
+            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
         }
         RV::Float(f) => {
             let offset = (f * 1000.0 * 1000.0 * 1000.0) as i64;
             let res = time + Duration::nanoseconds(offset);
-            Ok(Value::time(
-                self_val.get_class_object(&vm.globals),
-                TimeInfo(res),
-            ))
+            Ok(Value::time(self_val.get_class_object(), TimeInfo(res)))
         }
         _ => return Err(vm.error_undefined_op("+", args[0], self_val)),
     }

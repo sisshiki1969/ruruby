@@ -2,8 +2,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Struct");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let class = Value::class(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let class = Value::class(class);
     globals.add_builtin_class_method(class, "new", struct_new);
     class
 }
@@ -24,7 +24,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
 
-    let mut val = Value::class_from(&mut vm.globals, name, self_val);
+    let mut val = Value::class_from(name, self_val);
     let class = val.as_class();
     vm.globals
         .add_builtin_instance_method(class, "initialize", initialize);
@@ -46,10 +46,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vec.push(v);
         attr_args[index - i] = v;
     }
-    val.set_var(
-        IdentId::get_id("_members"),
-        Value::array_from(&vm.globals, vec),
-    );
+    val.set_var(IdentId::get_id("_members"), Value::array_from(vec));
     builtin::module::attr_accessor(vm, val, &attr_args)?;
 
     match args.block {
@@ -65,7 +62,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let class = self_val.get_class_object(&vm.globals);
+    let class = self_val.get_class_object();
     let name = class.get_var(IdentId::get_id("_members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
@@ -81,7 +78,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut name = self_val
-        .get_class_object(&vm.globals)
+        .get_class_object()
         .get_var(IdentId::get_id("_members"));
     let members = match name {
         Some(ref mut v) => match v.as_array() {
@@ -107,12 +104,12 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         };
         attr_str = format!("{} {:?}={}", attr_str, id, val);
     }
-    let class_name = match self_val.get_class_object(&vm.globals).as_class().name {
+    let class_name = match self_val.get_class_object().as_class().name {
         Some(id) => IdentId::get_ident_name(id),
         None => "".to_string(),
     };
     let inspect = format!("#<struct: {}{}>", class_name, attr_str);
-    Ok(Value::string(&vm.globals.builtins, inspect))
+    Ok(Value::string(inspect))
 }
 
 #[cfg(test)]

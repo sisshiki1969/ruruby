@@ -310,13 +310,13 @@ impl Codegen {
     }
 
     fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
-        let val = Value::string(&globals.builtins, s.to_string());
+        let val = Value::string(s.to_string());
         let id = globals.const_values.insert(val);
         self.gen_const_val(iseq, id);
     }
 
     fn gen_imaginary(&mut self, globals: &mut Globals, iseq: &mut ISeq, i: Real) {
-        let val = Value::complex(&globals, Value::fixnum(0), i.to_val());
+        let val = Value::complex(Value::fixnum(0), i.to_val());
         let id = globals.const_values.insert(val);
         self.gen_const_val(iseq, id);
     }
@@ -1175,7 +1175,7 @@ impl Codegen {
                                 ))
                             }
                         };
-                        let val = Value::regexp(globals, re);
+                        let val = Value::regexp(re);
                         let id = globals.const_values.insert(val);
                         self.gen_const_val(iseq, id);
                     }
@@ -1637,9 +1637,7 @@ impl Codegen {
                                     let k = match &elem.kind {
                                         NodeKind::Integer(i) => Value::fixnum(*i),
                                         NodeKind::Symbol(sym) => Value::symbol(*sym),
-                                        NodeKind::String(str) => {
-                                            Value::string(&globals.builtins, str.to_string())
-                                        }
+                                        NodeKind::String(str) => Value::string(str.to_string()),
                                         _ => unreachable!(),
                                     };
                                     map.insert(k, disp);
@@ -2090,7 +2088,7 @@ impl Codegen {
             NodeKind::Float(f) => Value::flonum(*f),
             NodeKind::Nil => Value::nil(),
             NodeKind::Symbol(s) => Value::symbol(*s),
-            NodeKind::String(s) => Value::string(&globals.builtins, s.to_owned()),
+            NodeKind::String(s) => Value::string(s.to_owned()),
             NodeKind::Hash(key_value, true) => {
                 let mut map = FxHashMap::default();
                 for (k, v) in key_value {
@@ -2099,11 +2097,11 @@ impl Codegen {
                         self.const_expr(globals, v),
                     );
                 }
-                Value::hash_from_map(globals, map)
+                Value::hash_from_map(map)
             }
             NodeKind::Array(nodes, true) => {
                 let ary: Vec<Value> = nodes.iter().map(|n| self.const_expr(globals, n)).collect();
-                Value::array_from(globals, ary)
+                Value::array_from(ary)
             }
             _ => unreachable!(),
         }

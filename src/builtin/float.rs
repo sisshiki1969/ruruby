@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Float");
-    let class = ClassRef::from(id, globals.builtins.object);
+    let class = ClassRef::from(id, BuiltinClass::object());
     globals.add_builtin_instance_method(class, "+", add);
     globals.add_builtin_instance_method(class, "-", sub);
     globals.add_builtin_instance_method(class, "*", mul);
@@ -10,7 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "div", quotient);
     globals.add_builtin_instance_method(class, "<=>", cmp);
     globals.add_builtin_instance_method(class, "floor", floor);
-    Value::class(globals, class)
+    Value::class(class)
 }
 
 // Class methods
@@ -26,7 +26,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs + r;
                 let i = i;
-                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+                Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(vm.error_undefined_op("+", args[0], self_val)),
         },
@@ -42,7 +42,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs - r;
                 let i = -i;
-                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+                Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(vm.error_undefined_op("-", args[0], self_val)),
         },
@@ -58,7 +58,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs * r;
                 let i = lhs * i;
-                Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+                Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(vm.error_undefined_op("-", args[0], self_val)),
         },

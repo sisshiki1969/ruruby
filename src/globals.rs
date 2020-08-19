@@ -1,11 +1,13 @@
 use crate::*;
 use fancy_regex::Regex;
+use std::cell::RefCell;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
     pub allocator: AllocatorRef,
+    pub builtins: BuiltinRef,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
     inline_cache: InlineCache,
@@ -17,7 +19,6 @@ pub struct Globals {
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: usize,
     pub main_object: Value,
-    pub builtins: BuiltinClass,
     pub class_class: ClassRef,
     pub module_class: ClassRef,
     pub object_class: ClassRef,
@@ -28,6 +29,10 @@ pub struct Globals {
 }
 
 pub type GlobalsRef = Ref<Globals>;
+
+thread_local!(
+    pub static BUILTINS: RefCell<Option<BuiltinRef>> = RefCell::new(None);
+);
 
 #[derive(Debug, Clone)]
 pub struct BuiltinClass {
@@ -48,22 +53,18 @@ pub struct BuiltinClass {
     pub enumerator: Value,
 }
 
-use std::sync::RwLock;
-
-lazy_static! {
-    pub static ref BUILTINS: RwLock<Option<BuiltinClass>> = RwLock::new(None);
-}
+type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
-    fn new(object: Value, module: Value, class: Value) -> Self {
+    fn new() -> Self {
         let nil = Value::nil();
         BuiltinClass {
             integer: nil,
             float: nil,
             complex: nil,
             array: nil,
-            class,
-            module,
+            class: nil,
+            module: nil,
             procobj: nil,
             method: nil,
             range: nil,
@@ -72,8 +73,38 @@ impl BuiltinClass {
             string: nil,
             fiber: nil,
             enumerator: nil,
-            object,
+            object: nil,
         }
+    }
+
+    pub fn object() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().object)
+    }
+
+    pub fn class() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().class)
+    }
+
+    pub fn module() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().module)
+    }
+
+    pub fn string() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().string)
+    }
+
+    pub fn integer() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().integer)
+    }
+
+    pub fn float() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().float)
+    }
+
+    /// Bind `class_object` to the constant `class_name` of the root object.
+    fn set_class(class_name: &str, class_object: Value) {
+        let id = IdentId::get_id(class_name);
+        Self::object().set_var(id, class_object);
     }
 }
 
@@ -125,6 +156,8 @@ impl Globals {
         use builtin::*;
         let allocator = AllocatorRef::new(Allocator::new());
         ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
+        let mut builtins = BuiltinRef::new(BuiltinClass::new());
+        BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
         let object_id = IdentId::OBJECT;
         let module_id = IdentId::get_id("Module");
         let class_id = IdentId::get_id("Class");
@@ -138,10 +171,14 @@ impl Globals {
         object.rvalue_mut().set_class(class);
         module.rvalue_mut().set_class(class);
         class.rvalue_mut().set_class(class);
-        let builtins = BuiltinClass::new(object, module, class);
+
+        builtins.object = object;
+        builtins.class = class;
+        builtins.module = module;
 
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
+            builtins,
             allocator,
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
@@ -154,16 +191,15 @@ impl Globals {
             object_class,
             module_class,
             class_class,
-            builtins,
             case_dispatch: CaseDispatchMap::new(),
             gc_enabled: true,
             fibers: vec![],
             regexp_cache: FxHashMap::default(),
         };
         // Generate singleton class for Object
-        let mut singleton_class = ClassRef::from(None, globals.builtins.class);
+        let mut singleton_class = ClassRef::from(None, class);
         singleton_class.is_singleton = true;
-        let singleton_obj = Value::class(&globals, singleton_class);
+        let singleton_obj = Value::class(singleton_class);
         object.rvalue_mut().set_class(singleton_obj);
 
         module::init(&mut globals);
@@ -173,14 +209,14 @@ impl Globals {
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
                 let id = IdentId::get_id($name);
-                object.set_var(id, globals.builtins.$class_object);
+                object.set_var(id, $class_object);
             };
         }
 
         macro_rules! init_builtin_class {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
-                globals.builtins.$module_name = class_obj;
+                builtins.$module_name = class_obj;
                 let id = IdentId::get_id($name);
                 object.set_var(id, class_obj);
             };
@@ -197,6 +233,7 @@ impl Globals {
         set_builtin_class!("Object", object);
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
+
         init_builtin_class!("Integer", integer);
         init_builtin_class!("Complex", complex);
         init_builtin_class!("Float", float);
@@ -212,7 +249,7 @@ impl Globals {
 
         let kernel = kernel::init(&mut globals);
         object_class.include.push(kernel);
-        globals.set_class("Kernel", kernel);
+        BuiltinClass::set_class("Kernel", kernel);
 
         init_class!("Math", math);
         init_class!("File", file);
@@ -222,13 +259,12 @@ impl Globals {
         init_class!("Time", time);
         init_class!("IO", io);
 
-        globals.set_class("StandardError", Value::class(&globals, globals.class_class));
+        BuiltinClass::set_class("StandardError", Value::class(globals.class_class));
         let id = IdentId::get_id("StopIteration");
-        let class = ClassRef::from(id, globals.builtins.object);
-        globals.set_class("StopIteration", Value::class(&globals, class));
-        let errorobj = errorobj::init_error(&mut globals);
-        globals.set_class("RuntimeError", errorobj);
-
+        let class = ClassRef::from(id, object);
+        BuiltinClass::set_class("StopIteration", Value::class(class));
+        let errorobj = errorobj::init();
+        BuiltinClass::set_class("RuntimeError", errorobj);
         globals
     }
 
@@ -240,12 +276,6 @@ impl Globals {
     #[cfg(feature = "gc-debug")]
     pub fn print_mark(&self) {
         self.allocator.print_mark();
-    }
-
-    /// Bind `class_object` to the constant `class_name` of the root object.
-    fn set_class(&mut self, class_name: &str, class_object: Value) {
-        let id = IdentId::get_id(class_name);
-        self.builtins.object.set_var(id, class_object);
     }
 
     pub fn add_object_method(&mut self, id: IdentId, info: MethodRef) {

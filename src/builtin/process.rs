@@ -2,8 +2,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Process");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let mut obj = Value::class(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let mut obj = Value::class(class);
     globals.add_builtin_class_method(obj, "clock_gettime", clock_gettime);
     let id = IdentId::get_id("CLOCK_MONOTONIC");
     obj.set_var(id, Value::fixnum(0));

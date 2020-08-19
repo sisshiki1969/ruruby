@@ -33,8 +33,8 @@ impl RangeInfo {
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Range");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let obj = Value::class(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let obj = Value::class(class);
     globals.add_builtin_instance_method(class, "to_s", to_s);
     globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "map", map);
@@ -55,19 +55,19 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(len, 2, 3)?;
     let (start, end) = (args[0], args[1]);
     let exclude_end = if len == 2 { false } else { args[2].to_bool() };
-    Ok(Value::range(&vm.globals, start, end, exclude_end))
+    Ok(Value::range(start, end, exclude_end))
 }
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.to_s(vm);
-    Ok(Value::string(&vm.globals.builtins, res))
+    Ok(Value::string(res))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.inspect(vm);
-    Ok(Value::string(&vm.globals.builtins, res))
+    Ok(Value::string(res))
 }
 
 fn begin(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -98,7 +98,7 @@ fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in start..=end {
         v.push(Value::fixnum(i));
     }
-    Ok(Value::array_from(&vm.globals, v))
+    Ok(Value::array_from(v))
 }
 
 fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -119,7 +119,7 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in start..=end {
         v.push(Value::fixnum(i));
     }
-    Ok(Value::array_from(&vm.globals, v))
+    Ok(Value::array_from(v))
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -135,7 +135,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vm.temp_push(val);
         res.push(val);
     }
-    let res = Value::array_from(&vm.globals, res);
+    let res = Value::array_from(res);
     Ok(res)
 }
 
@@ -158,7 +158,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             None => res.push(val),
         };
     }
-    let res = Value::array_from(&vm.globals, res);
+    let res = Value::array_from(res);
     Ok(res)
 }
 
@@ -211,7 +211,7 @@ fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
             v.push(Value::fixnum(i));
         }
     }
-    Ok(Value::array_from(&vm.globals, v))
+    Ok(Value::array_from(v))
 }
 
 #[cfg(test)]

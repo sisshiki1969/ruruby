@@ -2,14 +2,14 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Enumerator");
-    let class = ClassRef::from(id, globals.builtins.object);
+    let class = ClassRef::from(id, BuiltinClass::object());
     globals.add_builtin_instance_method(class, "next", next);
     globals.add_builtin_instance_method(class, "each", each);
     globals.add_builtin_instance_method(class, "map", map);
     globals.add_builtin_instance_method(class, "collect", map);
     globals.add_builtin_instance_method(class, "with_index", with_index);
     globals.add_builtin_instance_method(class, "inspect", inspect);
-    let class = Value::class(globals, class);
+    let class = Value::class(class);
     globals.add_builtin_class_method(class, "new", enum_new);
     class
 }
@@ -75,7 +75,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         "#<Enumerator: {}:{:?}{}>",
         receiver_string, method, arg_string
     );
-    Ok(Value::string(&vm.globals.builtins, inspect))
+    Ok(Value::string(inspect))
 }
 
 fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -152,7 +152,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         vm.temp_push(res);
     }
     info.free();
-    Ok(Value::array_from(&vm.globals, ary))
+    Ok(Value::array_from(ary))
 }
 
 fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -192,7 +192,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         c += 1;
     }
     info.free();
-    Ok(Value::array_from(&vm.globals, ary))
+    Ok(Value::array_from(ary))
 }
 
 #[cfg(test)]

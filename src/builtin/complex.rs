@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Complex");
-    let classref = ClassRef::from(id, globals.builtins.object);
+    let classref = ClassRef::from(id, BuiltinClass::object());
     globals.add_builtin_instance_method(classref, "+", add);
     globals.add_builtin_instance_method(classref, "-", sub);
     globals.add_builtin_instance_method(classref, "*", mul);
@@ -11,7 +11,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(classref, "abs2", abs2);
     globals.add_builtin_instance_method(classref, "abs", abs);
     globals.add_builtin_instance_method(classref, "rect", rect);
-    let class = Value::class(globals, classref);
+    let class = Value::class(classref);
     globals.add_builtin_class_method(class, "rect", complex_rect);
     globals.add_builtin_class_method(class, "rectangular", complex_rect);
     class
@@ -31,7 +31,7 @@ fn complex_rect(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         return Err(vm.error_type("Not a real."));
     };
-    Ok(Value::complex(&vm.globals, args[0], i))
+    Ok(Value::complex(args[0], i))
 }
 
 // Instance methods
@@ -43,11 +43,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(t) => t,
         None => return Err(vm.error_type("Not a real.")),
     };
-    Ok(Value::complex(
-        &vm.globals,
-        (r1 + r2).to_val(),
-        (i1 + i2).to_val(),
-    ))
+    Ok(Value::complex((r1 + r2).to_val(), (i1 + i2).to_val()))
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -57,11 +53,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(t) => t,
         None => return Err(vm.error_type("Not a real.")),
     };
-    Ok(Value::complex(
-        &vm.globals,
-        (r1 - r2).to_val(),
-        (i1 - i2).to_val(),
-    ))
+    Ok(Value::complex((r1 - r2).to_val(), (i1 - i2).to_val()))
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -73,7 +65,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let r = r1 * r2 - i1 * i2;
     let i = i1 * r2 + i2 * r1;
-    Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+    Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
 fn div(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -86,7 +78,7 @@ fn div(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let abs2 = r2 * r2 + i2 * i2;
     let r = (r2 * r1 + i2 * i1) / abs2;
     let i = (r2 * i1 + r1 * i2) / abs2;
-    Ok(Value::complex(&vm.globals, r.to_val(), i.to_val()))
+    Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -115,7 +107,7 @@ fn abs(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn rect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let (r, i) = self_val.to_complex().unwrap();
-    Ok(Value::array_from(&vm.globals, vec![r.to_val(), i.to_val()]))
+    Ok(Value::array_from(vec![r.to_val(), i.to_val()]))
 }
 
 #[cfg(test)]

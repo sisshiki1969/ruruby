@@ -2,8 +2,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("GC");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let obj = Value::module(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let obj = Value::module(class);
     //globals.add_builtin_instance_method(class, "to_s", to_s);
     globals.add_builtin_class_method(obj, "count", count);
     globals.add_builtin_class_method(obj, "enable", enable);
@@ -53,7 +53,7 @@ fn stat(vm: &mut VM, _: Value, _: &Args) -> VMResult {
     stat_insert!(heap_free_slots, alloc.free_count());
     stat_insert!(heap_live_slots, alloc.live_count());
     stat_insert!(total_allocated_objects, alloc.total_allocated());
-    let res = Value::hash_from_map(&vm.globals, hash);
+    let res = Value::hash_from_map(hash);
     Ok(res)
 }
 

@@ -23,8 +23,8 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(object, "enum_for", to_enum);
 }
 
-fn class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let class = self_val.get_class_object(&vm.globals);
+fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    let class = self_val.get_class_object();
     Ok(class)
 }
 
@@ -35,18 +35,18 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let s = vm.val_to_s(self_val);
-    Ok(Value::string(&vm.globals.builtins, s))
+    Ok(Value::string(s))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.inspect(vm);
-            Ok(Value::string(&vm.globals.builtins, s))
+            Ok(Value::string(s))
         }
         None => {
             let s = vm.val_inspect(self_val);
-            Ok(Value::string(&vm.globals.builtins, s))
+            Ok(Value::string(s))
         }
     }
 }
@@ -135,7 +135,7 @@ fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             .collect(),
         None => vec![],
     };
-    Ok(Value::array_from(&vm.globals, res))
+    Ok(Value::array_from(res))
 }
 
 fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

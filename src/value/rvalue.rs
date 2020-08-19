@@ -254,25 +254,26 @@ impl RValue {
         }
     }
 
-    pub fn new_complex(globals: &Globals, r: Value, i: Value) -> Self {
+    pub fn new_complex(r: Value, i: Value) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().complex);
         RValue {
-            class: globals.builtins.complex,
+            class,
             var_table: None,
             kind: ObjKind::Complex { r, i },
         }
     }
 
-    pub fn new_string(builtins: &BuiltinClass, s: String) -> Self {
+    pub fn new_string(s: String) -> Self {
         RValue {
-            class: builtins.string,
+            class: BuiltinClass::string(),
             var_table: None,
             kind: ObjKind::String(RString::Str(s)),
         }
     }
 
-    pub fn new_bytes(globals: &Globals, b: Vec<u8>) -> Self {
+    pub fn new_bytes(b: Vec<u8>) -> Self {
         RValue {
-            class: globals.builtins.string,
+            class: BuiltinClass::string(),
             var_table: None,
             kind: ObjKind::String(RString::Bytes(b)),
         }
@@ -286,96 +287,104 @@ impl RValue {
         }
     }
 
-    pub fn new_class(globals: &Globals, classref: ClassRef) -> Self {
+    pub fn new_class(classref: ClassRef) -> Self {
         RValue {
-            class: globals.builtins.class,
+            class: BuiltinClass::class(),
             var_table: None,
             kind: ObjKind::Class(classref),
         }
     }
 
-    pub fn new_module(globals: &Globals, classref: ClassRef) -> Self {
+    pub fn new_module(classref: ClassRef) -> Self {
         RValue {
-            class: globals.builtins.module,
+            class: BuiltinClass::module(),
             var_table: None,
             kind: ObjKind::Module(classref),
         }
     }
 
-    pub fn new_array(globals: &Globals, array_info: ArrayInfo) -> Self {
+    pub fn new_array(array_info: ArrayInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().array);
         RValue {
-            class: globals.builtins.array,
+            class,
             var_table: None,
             kind: ObjKind::Array(array_info),
         }
     }
 
-    pub fn new_range(globals: &Globals, range: RangeInfo) -> Self {
+    pub fn new_range(range: RangeInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().range);
         RValue {
-            class: globals.builtins.range,
+            class,
             var_table: None,
             kind: ObjKind::Range(range),
         }
     }
 
-    pub fn new_splat(globals: &Globals, val: Value) -> Self {
+    pub fn new_splat(val: Value) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().array);
         RValue {
-            class: globals.builtins.array,
+            class,
             var_table: None,
             kind: ObjKind::Splat(val),
         }
     }
 
-    pub fn new_hash(globals: &Globals, hash: HashInfo) -> Self {
+    pub fn new_hash(hash: HashInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().hash);
         RValue {
-            class: globals.builtins.hash,
+            class,
             var_table: None,
             kind: ObjKind::Hash(Box::new(hash)),
         }
     }
 
-    pub fn new_regexp(globals: &Globals, regexp: RegexpInfo) -> Self {
+    pub fn new_regexp(regexp: RegexpInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().regexp);
         RValue {
-            class: globals.builtins.regexp,
+            class,
             var_table: None,
             kind: ObjKind::Regexp(regexp),
         }
     }
 
-    pub fn new_proc(globals: &Globals, proc_info: ProcInfo) -> Self {
+    pub fn new_proc(proc_info: ProcInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().procobj);
         RValue {
-            class: globals.builtins.procobj,
+            class,
             var_table: None,
             kind: ObjKind::Proc(proc_info),
         }
     }
 
-    pub fn new_method(globals: &Globals, method_info: MethodObjInfo) -> Self {
+    pub fn new_method(method_info: MethodObjInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().method);
         RValue {
-            class: globals.builtins.method,
+            class,
             var_table: None,
             kind: ObjKind::Method(method_info),
         }
     }
 
     pub fn new_fiber(
-        globals: &Globals,
         vm: VM,
         context: ContextRef,
         rec: std::sync::mpsc::Receiver<VMResult>,
         tx: std::sync::mpsc::SyncSender<FiberMsg>,
     ) -> Self {
         let fiber = FiberInfo::new(vm, context, rec, tx);
+        let class = BUILTINS.with(|b| b.borrow().unwrap().fiber);
         RValue {
-            class: globals.builtins.fiber,
+            class,
             var_table: None,
             kind: ObjKind::Fiber(Box::new(fiber)),
         }
     }
 
-    pub fn new_enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
+    pub fn new_enumerator(fiber: FiberInfo) -> Self {
+        let class = BUILTINS.with(|b| b.borrow().unwrap().enumerator);
         RValue {
-            class: globals.builtins.enumerator,
+            class,
             var_table: None,
             kind: ObjKind::Enumerator(Box::new(fiber)),
         }

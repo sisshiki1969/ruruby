@@ -3,8 +3,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let array_id = IdentId::get_id("Array");
-    let class = ClassRef::from(array_id, globals.builtins.object);
-    let obj = Value::class(globals, class);
+    let class = ClassRef::from(array_id, BuiltinClass::object());
+    let obj = Value::class(class);
     globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "to_s", inspect);
     globals.add_builtin_instance_method(class, "length", length);
@@ -77,7 +77,7 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
         _ => unreachable!(),
     };
-    let array = Value::array_from(&vm.globals, array_vec);
+    let array = Value::array_from(array_vec);
     Ok(array)
 }
 
@@ -86,7 +86,7 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let s = aref.to_s(vm);
-    Ok(Value::string(&vm.globals.builtins, s))
+    Ok(Value::string(s))
 }
 
 fn set_elem(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -160,12 +160,12 @@ fn shift(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut aref = self_val.as_mut_array().unwrap();
     if array_flag {
         if aref.elements.len() < num {
-            return Ok(Value::array_from(&vm.globals, vec![]));
+            return Ok(Value::array_from(vec![]));
         }
         let new = aref.elements.split_off(num);
         let res = aref.elements[0..num].to_vec();
         aref.elements = new;
-        Ok(Value::array_from(&vm.globals, res))
+        Ok(Value::array_from(res))
     } else {
         if aref.elements.len() == 0 {
             return Ok(Value::nil());
@@ -224,21 +224,21 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 v
             }
         };
-        let res = Value::array_from(&vm.globals, v);
+        let res = Value::array_from(v);
         Ok(res)
     } else if let Some(s) = args[0].as_string() {
         match aref.elements.len() {
-            0 => return Ok(Value::string(&vm.globals.builtins, "".to_string())),
+            0 => return Ok(Value::string("".to_string())),
             1 => {
                 let res = vm.val_to_s(aref.elements[0]);
-                return Ok(Value::string(&vm.globals.builtins, res));
+                return Ok(Value::string(res));
             }
             _ => {
                 let mut res = vm.val_to_s(aref.elements[0]);
                 for i in 1..aref.elements.len() {
                     res = format!("{}{}{}", res, s, vm.val_to_s(aref.elements[i]));
                 }
-                return Ok(Value::string(&vm.globals.builtins, res));
+                return Ok(Value::string(res));
             }
         };
     } else {
@@ -251,7 +251,7 @@ fn add(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array(vm, "Argument")?.elements.clone();
     lhs.append(&mut rhs);
-    Ok(Value::array_from(&vm.globals, lhs))
+    Ok(Value::array_from(lhs))
 }
 
 fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -279,7 +279,7 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             v.push(*lhs)
         }
     }
-    Ok(Value::array_from(&vm.globals, v))
+    Ok(Value::array_from(v))
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -304,7 +304,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         res.push(val);
     }
 
-    let res = Value::array_from(&vm.globals, res);
+    let res = Value::array_from(res);
     Ok(res)
 }
 
@@ -339,7 +339,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             None => res.push(ary),
         }
     }
-    let res = Value::array_from(&vm.globals, res);
+    let res = Value::array_from(res);
     Ok(res)
 }
 
@@ -397,7 +397,7 @@ fn reverse(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let mut res = aref.elements.clone();
     res.reverse();
-    Ok(Value::array_from(&vm.globals, res))
+    Ok(Value::array_from(res))
 }
 
 fn reverse_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -442,7 +442,7 @@ fn transpose(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let aref = self_val.as_mut_array().unwrap();
     if aref.elements.len() == 0 {
-        return Ok(Value::array_from(&vm.globals, vec![]));
+        return Ok(Value::array_from(vec![]));
     }
     let mut vec = vec![];
     for elem in &mut aref.elements {
@@ -463,11 +463,11 @@ fn transpose(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             }
             temp.push(v[i]);
         }
-        let ary = Value::array_from(&vm.globals, temp);
+        let ary = Value::array_from(temp);
         trans.push(ary);
     }
     //aref.elements.reverse();
-    let res = Value::array_from(&vm.globals, trans);
+    let res = Value::array_from(trans);
     Ok(res)
 }
 
@@ -568,7 +568,7 @@ fn slice_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let len = len as usize;
     let aref = self_val.as_mut_array().unwrap();
     let new = aref.elements.drain(start..start + len).collect();
-    Ok(Value::array_from(&vm.globals, new))
+    Ok(Value::array_from(new))
 }
 
 fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -594,7 +594,7 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
-    Ok(Value::array_from(&vm.globals, aref.elements.clone()))
+    Ok(Value::array_from(aref.elements.clone()))
 }
 
 fn pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -608,7 +608,7 @@ fn pack(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         };
         v.push(i);
     }
-    Ok(Value::bytes(&vm.globals, v))
+    Ok(Value::bytes(v))
 }
 
 fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -631,7 +631,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             res = res + sep + s.as_str();
         }
     }
-    Ok(Value::string(&vm.globals.builtins, res))
+    Ok(Value::string(res))
 }
 
 fn drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -639,7 +639,7 @@ fn drop(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let num = args[0].expect_integer(vm, "An argument must be Integer.")? as usize;
     let ary = &aref.elements[num..aref.elements.len()];
-    Ok(Value::array_from(&vm.globals, ary.to_vec()))
+    Ok(Value::array_from(ary.to_vec()))
 }
 
 fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -658,7 +658,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 vec.push(Value::nil());
             }
         }
-        let zip = Value::array_from(&vm.globals, vec);
+        let zip = Value::array_from(vec);
         ary.push(zip);
     }
     match args.block {
@@ -671,7 +671,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             Ok(Value::nil())
         }
-        None => Ok(Value::array_from(&vm.globals, ary)),
+        None => Ok(Value::array_from(ary)),
     }
 }
 
@@ -689,7 +689,7 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             .collect(),
         Some(_block) => vec![],
     };
-    Ok(Value::array_from(&vm.globals, ary))
+    Ok(Value::array_from(ary))
 }
 
 fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -702,7 +702,7 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
         Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
     };
-    Ok(Value::array_from(&vm.globals, ary))
+    Ok(Value::array_from(ary))
 }
 
 use std::collections::HashSet;
@@ -721,7 +721,7 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(_block) => return Err(vm.error_argument("Currently, can not use block.")),
     };
-    Ok(Value::array_from(&vm.globals, v))
+    Ok(Value::array_from(v))
 }
 
 fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

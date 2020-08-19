@@ -2,8 +2,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Math");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let obj = Value::class(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let obj = Value::class(class);
     globals.add_builtin_class_method(obj, "sqrt", sqrt);
     globals.add_builtin_class_method(obj, "cos", cos);
     globals.add_builtin_class_method(obj, "sin", sin);

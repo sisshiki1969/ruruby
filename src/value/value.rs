@@ -251,34 +251,34 @@ impl Value {
         unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
     }
 
-    pub fn get_class_object_for_method(&self, globals: &Globals) -> Value {
+    pub fn get_class_object_for_method(&self) -> Value {
         match self.as_rvalue() {
             None => {
                 if self.is_packed_fixnum() {
-                    globals.builtins.integer
+                    BuiltinClass::integer()
                 } else if self.is_packed_num() {
-                    globals.builtins.float
+                    BuiltinClass::float()
                 } else if self.is_packed_symbol() {
-                    globals.builtins.object
+                    BuiltinClass::object()
                 } else {
-                    globals.builtins.object
+                    BuiltinClass::object()
                 }
             }
             Some(info) => match &info.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", info),
-                ObjKind::Integer(_) => globals.builtins.integer,
-                ObjKind::Float(_) => globals.builtins.float,
+                ObjKind::Integer(_) => BuiltinClass::integer(),
+                ObjKind::Float(_) => BuiltinClass::float(),
                 _ => info.class(),
             },
         }
     }
 
-    pub fn get_class_object(&self, globals: &Globals) -> Value {
+    pub fn get_class_object(&self) -> Value {
         match self.unpack() {
-            RV::Integer(_) => globals.builtins.integer,
-            RV::Float(_) => globals.builtins.float,
+            RV::Integer(_) => BuiltinClass::integer(),
+            RV::Float(_) => BuiltinClass::float(),
             RV::Object(info) => info.search_class(),
-            _ => globals.builtins.object,
+            _ => BuiltinClass::object(),
         }
     }
 
@@ -748,18 +748,18 @@ impl Value {
         }
     }
 
-    pub fn complex(globals: &Globals, r: Value, i: Value) -> Self {
-        RValue::new_complex(globals, r, i).pack()
+    pub fn complex(r: Value, i: Value) -> Self {
+        RValue::new_complex(r, i).pack()
     }
 
-    pub fn string(builtins: &BuiltinClass, string: String) -> Self {
-        RValue::new_string(builtins, string).pack()
+    pub fn string(string: String) -> Self {
+        RValue::new_string(string).pack()
     }
 
-    pub fn bytes(globals: &Globals, bytes: Vec<u8>) -> Self {
+    pub fn bytes(bytes: Vec<u8>) -> Self {
         match String::from_utf8(bytes.clone()) {
-            Ok(s) => RValue::new_string(&globals.builtins, s).pack(),
-            Err(_) => RValue::new_bytes(globals, bytes).pack(),
+            Ok(s) => RValue::new_string(s).pack(),
+            Err(_) => RValue::new_bytes(bytes).pack(),
         }
     }
 
@@ -768,9 +768,9 @@ impl Value {
         Value((id as u64) << 32 | TAG_SYMBOL)
     }
 
-    pub fn range(globals: &Globals, start: Value, end: Value, exclude: bool) -> Self {
+    pub fn range(start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
-        RValue::new_range(globals, info).pack()
+        RValue::new_range(info).pack()
     }
 
     pub fn bootstrap_class(classref: ClassRef) -> Self {
@@ -781,62 +781,60 @@ impl Value {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn class(globals: &Globals, class_ref: ClassRef) -> Self {
-        RValue::new_class(globals, class_ref).pack()
+    pub fn class(class_ref: ClassRef) -> Self {
+        RValue::new_class(class_ref).pack()
     }
 
     pub fn class_from(
-        globals: &Globals,
         id: impl Into<Option<IdentId>>,
         superclass: impl Into<Option<Value>>,
     ) -> Self {
-        RValue::new_class(globals, ClassRef::from(id, superclass)).pack()
+        RValue::new_class(ClassRef::from(id, superclass)).pack()
     }
 
-    pub fn module(globals: &Globals, class_ref: ClassRef) -> Self {
-        RValue::new_module(globals, class_ref).pack()
+    pub fn module(class_ref: ClassRef) -> Self {
+        RValue::new_module(class_ref).pack()
     }
 
-    pub fn array_from(globals: &Globals, ary: Vec<Value>) -> Self {
-        RValue::new_array(globals, ArrayInfo::new(ary)).pack()
+    pub fn array_from(ary: Vec<Value>) -> Self {
+        RValue::new_array(ArrayInfo::new(ary)).pack()
     }
 
-    pub fn splat(globals: &Globals, val: Value) -> Self {
-        RValue::new_splat(globals, val).pack()
+    pub fn splat(val: Value) -> Self {
+        RValue::new_splat(val).pack()
     }
 
-    pub fn hash_from(globals: &Globals, hash: HashInfo) -> Self {
-        RValue::new_hash(globals, hash).pack()
+    pub fn hash_from(hash: HashInfo) -> Self {
+        RValue::new_hash(hash).pack()
     }
 
-    pub fn hash_from_map(globals: &Globals, hash: FxHashMap<HashKey, Value>) -> Self {
-        RValue::new_hash(globals, HashInfo::new(hash)).pack()
+    pub fn hash_from_map(hash: FxHashMap<HashKey, Value>) -> Self {
+        RValue::new_hash(HashInfo::new(hash)).pack()
     }
 
-    pub fn regexp(globals: &Globals, regexp: RegexpInfo) -> Self {
-        RValue::new_regexp(globals, regexp).pack()
+    pub fn regexp(regexp: RegexpInfo) -> Self {
+        RValue::new_regexp(regexp).pack()
     }
 
-    pub fn procobj(globals: &Globals, context: ContextRef) -> Self {
-        RValue::new_proc(globals, ProcInfo::new(context)).pack()
+    pub fn procobj(context: ContextRef) -> Self {
+        RValue::new_proc(ProcInfo::new(context)).pack()
     }
 
-    pub fn method(globals: &Globals, name: IdentId, receiver: Value, method: MethodRef) -> Self {
-        RValue::new_method(globals, MethodObjInfo::new(name, receiver, method)).pack()
+    pub fn method(name: IdentId, receiver: Value, method: MethodRef) -> Self {
+        RValue::new_method(MethodObjInfo::new(name, receiver, method)).pack()
     }
 
     pub fn fiber(
-        globals: &Globals,
         vm: VM,
         context: ContextRef,
         rec: std::sync::mpsc::Receiver<VMResult>,
         tx: std::sync::mpsc::SyncSender<FiberMsg>,
     ) -> Self {
-        RValue::new_fiber(globals, vm, context, rec, tx).pack()
+        RValue::new_fiber(vm, context, rec, tx).pack()
     }
 
-    pub fn enumerator(globals: &Globals, fiber: FiberInfo) -> Self {
-        RValue::new_enumerator(globals, fiber).pack()
+    pub fn enumerator(fiber: FiberInfo) -> Self {
+        RValue::new_enumerator(fiber).pack()
     }
 
     pub fn time(time_class: Value, time: TimeInfo) -> Self {
@@ -898,7 +896,7 @@ impl Value {
                         _ => ClassRef::from(None, None),
                     };
                     singleton_class.is_singleton = true;
-                    let singleton_obj = Value::class(globals, singleton_class);
+                    let singleton_obj = Value::class(singleton_class);
                     singleton_obj.rvalue_mut().set_class(class);
                     oref.set_class(singleton_obj);
                     Ok(singleton_obj)
@@ -1101,10 +1099,10 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        let globals = GlobalsRef::new_globals();
+        GlobalsRef::new_globals();
         let from = RV::Integer(7).pack();
         let to = RV::Integer(36).pack();
-        let expect = Value::range(&globals, from, to, true);
+        let expect = Value::range(from, to, true);
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -1113,8 +1111,8 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        let globals = GlobalsRef::new_globals();
-        let expect = Value::class(&globals, ClassRef::from(IdentId::from(1), None));
+        GlobalsRef::new_globals();
+        let expect = Value::class(ClassRef::from(IdentId::from(1), None));
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -1123,9 +1121,8 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        let globals = GlobalsRef::new_globals();
-        let class = Value::class_from(&globals, IdentId::from(1), None);
-        let expect = Value::ordinary_object(class);
+        GlobalsRef::new_globals();
+        let expect = Value::ordinary_object(BuiltinClass::class());
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
@@ -1134,7 +1131,7 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        let _globals = GlobalsRef::new_globals();
+        GlobalsRef::new_globals();
         let expect = RV::Symbol(IdentId::from(12345));
         let packed = expect.pack();
         let got = packed.unpack();

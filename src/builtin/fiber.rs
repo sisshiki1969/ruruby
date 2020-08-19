@@ -2,8 +2,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Fiber");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let val = Value::class(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let val = Value::class(class);
     globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "resume", resume);
     globals.add_builtin_class_method(val, "new", new);
@@ -21,7 +21,7 @@ fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
     let new_fiber = vm.create_fiber(tx0, rx1);
     //vm.globals.fibers.push(VMRef::from_ref(&new_fiber));
-    let val = Value::fiber(&vm.globals, new_fiber, context, rx0, tx1);
+    let val = Value::fiber(new_fiber, context, rx0, tx1);
     Ok(val)
 }
 
@@ -38,7 +38,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         fref as *mut FiberInfo as u64,
         fref.vm.fiberstate(),
     );
-    Ok(Value::string(&vm.globals.builtins, inspect))
+    Ok(Value::string(inspect))
 }
 
 fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

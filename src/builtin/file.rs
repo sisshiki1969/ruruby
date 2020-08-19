@@ -6,8 +6,8 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("File");
-    let class = ClassRef::from(id, globals.builtins.object);
-    let obj = Value::class(globals, class);
+    let class = ClassRef::from(id, BuiltinClass::object());
+    let obj = Value::class(class);
     globals.add_builtin_class_method(obj, "join", join);
     globals.add_builtin_class_method(obj, "basename", basename);
     globals.add_builtin_class_method(obj, "extname", extname);
@@ -38,10 +38,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             path.push(p);
         }
     }
-    Ok(Value::string(
-        &vm.globals.builtins,
-        path.to_string_lossy().to_string(),
-    ))
+    Ok(Value::string(path.to_string_lossy().to_string()))
 }
 
 fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -49,7 +46,7 @@ fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(len, 1, 1)?;
     let filename = string_to_path(vm, args[0])?;
     let basename = match filename.file_name() {
-        Some(ostr) => Value::string(&vm.globals.builtins, ostr.to_string_lossy().into_owned()),
+        Some(ostr) => Value::string(ostr.to_string_lossy().into_owned()),
         None => Value::nil(),
     };
     Ok(basename)
@@ -63,7 +60,7 @@ fn extname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(ostr) => format!(".{}", ostr.to_string_lossy().into_owned()),
         None => "".to_string(),
     };
-    Ok(Value::string(&vm.globals.builtins, extname))
+    Ok(Value::string(extname))
 }
 
 fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -85,7 +82,7 @@ fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
-    Ok(Value::bytes(&vm.globals, contents))
+    Ok(Value::bytes(contents))
 }
 
 /// IO.read(path)
@@ -108,7 +105,7 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(vm.error_internal("Could not read the file.")),
     };
-    Ok(Value::string(&vm.globals.builtins, contents))
+    Ok(Value::string(contents))
 }
 
 /// IO.write(path, string)

@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Hash");
-    let class = ClassRef::from(id, globals.builtins.object);
+    let class = ClassRef::from(id, BuiltinClass::object());
     globals.add_builtin_instance_method(class, "to_s", inspect);
     globals.add_builtin_instance_method(class, "inspect", inspect);
     globals.add_builtin_instance_method(class, "clear", clear);
@@ -29,14 +29,14 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(class, "compare_by_identity", compare_by_identity);
     globals.add_builtin_instance_method(class, "sort", sort);
     globals.add_builtin_instance_method(class, "invert", invert);
-    Value::class(globals, class)
+    Value::class(class)
 }
 
 fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
     let s = hash.to_s(vm);
-    Ok(Value::string(&vm.globals.builtins, s))
+    Ok(Value::string(s))
 }
 
 fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -49,7 +49,7 @@ fn clear(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn clone(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::hash_from(&vm.globals, (*hash).clone()))
+    Ok(Value::hash_from((*hash).clone()))
 }
 
 fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -59,7 +59,7 @@ fn compact(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         HashInfo::Map(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
         HashInfo::IdentMap(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
     };
-    Ok(Value::hash_from(&vm.globals, hash))
+    Ok(Value::hash_from(hash))
 }
 
 fn delete(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -91,7 +91,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         };
     }
 
-    Ok(Value::hash_from_map(&vm.globals, res))
+    Ok(Value::hash_from_map(res))
 }
 
 fn has_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -118,13 +118,13 @@ fn length(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn keys(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::array_from(&vm.globals, hash.keys()))
+    Ok(Value::array_from(hash.keys()))
 }
 
 fn values(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    Ok(Value::array_from(&vm.globals, hash.values()))
+    Ok(Value::array_from(hash.values()))
 }
 
 fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -178,7 +178,7 @@ fn merge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     }
 
-    Ok(Value::hash_from(&vm.globals, new))
+    Ok(Value::hash_from(new))
 }
 
 fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -226,10 +226,10 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut vec = vec![];
     for (k, v) in hash.iter() {
         let ary = vec![k, v];
-        vec.push(Value::array_from(&vm.globals, ary));
+        vec.push(Value::array_from(ary));
     }
     vm.sort_array(&mut vec)?;
-    Ok(Value::array_from(&vm.globals, vec))
+    Ok(Value::array_from(vec))
 }
 
 fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -239,7 +239,7 @@ fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for (k, v) in hash.iter() {
         new_hash.insert(HashKey(v), k);
     }
-    Ok(Value::hash_from_map(&vm.globals, new_hash))
+    Ok(Value::hash_from_map(new_hash))
 }
 
 #[cfg(test)]

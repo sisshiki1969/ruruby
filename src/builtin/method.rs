@@ -2,9 +2,9 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Method");
-    let class = ClassRef::from(proc_id, globals.builtins.object);
+    let class = ClassRef::from(proc_id, BuiltinClass::object());
     globals.add_builtin_instance_method(class, "call", method_call);
-    Value::class(globals, class)
+    Value::class(class)
 }
 
 pub fn method_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

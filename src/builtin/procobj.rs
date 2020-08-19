@@ -13,8 +13,8 @@ impl ProcInfo {
 
 pub fn init(globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Proc");
-    let class = ClassRef::from(proc_id, globals.builtins.object);
-    let obj = Value::class(globals, class);
+    let class = ClassRef::from(proc_id, BuiltinClass::object());
+    let obj = Value::class(class);
     globals.add_builtin_instance_method(class, "call", proc_call);
     globals.add_builtin_class_method(obj, "new", proc_new);
     obj

@@ -19,7 +19,7 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "class_eval", module_eval);
 }
 
-fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
     loop {
@@ -41,7 +41,7 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
         };
         match class.superclass() {
             Some(superclass) => {
-                if superclass == vm.globals.builtins.object {
+                if superclass == BuiltinClass::object() {
                     break;
                 } else {
                     class = superclass
@@ -50,7 +50,7 @@ fn constants(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
             None => break,
         }
     }
-    Ok(Value::array_from(&vm.globals, v))
+    Ok(Value::array_from(v))
 }
 
 fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -74,7 +74,7 @@ fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 .keys()
                 .map(|k| Value::symbol(*k))
                 .collect();
-            Ok(Value::array_from(&vm.globals, v))
+            Ok(Value::array_from(v))
         }
         true => {
             let mut v = std::collections::HashSet::new();
@@ -94,7 +94,7 @@ fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     None => break,
                 };
             }
-            Ok(Value::array_from(&vm.globals, v.iter().cloned().collect()))
+            Ok(Value::array_from(v.iter().cloned().collect()))
         }
     }
 }
@@ -207,7 +207,7 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
     }
-    Ok(Value::array_from(&vm.globals, ary))
+    Ok(Value::array_from(ary))
 }
 
 fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -234,7 +234,7 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
     }
-    Ok(Value::array_from(&vm.globals, ary))
+    Ok(Value::array_from(ary))
 }
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

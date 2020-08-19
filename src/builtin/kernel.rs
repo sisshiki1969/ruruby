@@ -24,7 +24,7 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.add_builtin_instance_method(kernel_class, "exit", exit);
     globals.add_builtin_instance_method(kernel_class, "sleep", sleep);
     globals.add_builtin_instance_method(kernel_class, "Complex", kernel_complex);
-    let kernel = Value::class(globals, kernel_class);
+    let kernel = Value::class(kernel_class);
     return kernel;
 
     /// Built-in function "puts".
@@ -55,7 +55,7 @@ pub fn init(globals: &mut Globals) -> Value {
         if args.len() == 1 {
             Ok(args[0])
         } else {
-            Ok(Value::array_from(&vm.globals, args.to_vec()))
+            Ok(Value::array_from(args.to_vec()))
         }
     }
 
@@ -148,7 +148,7 @@ pub fn init(globals: &mut Globals) -> Value {
         #[cfg(feature = "verbose")]
         eprintln!("reading:{}", absolute_path.to_string_lossy());
         vm.root_path.push(path);
-        vm.class_push(vm.globals.builtins.object);
+        vm.class_push(BuiltinClass::object());
         vm.run(absolute_path, &program)?;
         vm.class_pop();
         vm.root_path.pop().unwrap();
@@ -167,13 +167,13 @@ pub fn init(globals: &mut Globals) -> Value {
             None => return Err(vm.error_type("An argument must be a Symbol.")),
         };
         let method = vm.get_method(self_val, name)?;
-        let val = Value::method(&vm.globals, name, self_val, method);
+        let val = Value::method(name, self_val, method);
         Ok(val)
     }
 
     fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vm.check_args_num(self_val, args.len(), 1)?;
-        let mut recv_class = self_val.get_class_object(&vm.globals);
+        let mut recv_class = self_val.get_class_object();
         loop {
             if recv_class.id() == args[0].id() {
                 return Ok(Value::true_val());
@@ -221,10 +221,7 @@ pub fn init(globals: &mut Globals) -> Value {
         }
         .clone();
         path.pop();
-        Ok(Value::string(
-            &vm.globals.builtins,
-            path.to_string_lossy().to_string(),
-        ))
+        Ok(Value::string(path.to_string_lossy().to_string()))
     }
 
     fn file_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -236,10 +233,7 @@ pub fn init(globals: &mut Globals) -> Value {
             .source_info
             .path
             .clone();
-        Ok(Value::string(
-            &vm.globals.builtins,
-            path.to_string_lossy().to_string(),
-        ))
+        Ok(Value::string(path.to_string_lossy().to_string()))
     }
 
     /// raise -> ()
@@ -334,7 +328,7 @@ pub fn init(globals: &mut Globals) -> Value {
             }
         }
 
-        Ok(Value::complex(&vm.globals, r, i))
+        Ok(Value::complex(r, i))
     }
 }
 

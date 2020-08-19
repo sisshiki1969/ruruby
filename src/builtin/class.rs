@@ -5,7 +5,7 @@ pub fn init(globals: &mut Globals) {
     globals.add_builtin_instance_method(class, "new", new);
     globals.add_builtin_instance_method(class, "superclass", superclass);
     globals.add_builtin_instance_method(class, "inspect", inspect);
-    globals.add_builtin_class_method(globals.builtins.class, "new", class_new);
+    globals.add_builtin_class_method(BuiltinClass::class(), "new", class_new);
 }
 
 // Class methods
@@ -16,11 +16,11 @@ pub fn init(globals: &mut Globals) {
 fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
     let superclass = if args.len() == 0 {
-        vm.globals.builtins.object
+        BuiltinClass::object()
     } else {
         args[0]
     };
-    let val = Value::class_from(&mut vm.globals, None, superclass);
+    let val = Value::class_from(None, superclass);
 
     match args.block {
         Some(method) => {
@@ -56,7 +56,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         Some(id) => format! {"{:?}", id},
         None => format! {"#<Class:0x{:x}>", cref.id()},
     };
-    Ok(Value::string(&vm.globals.builtins, s))
+    Ok(Value::string(s))
 }
 
 #[cfg(test)]
