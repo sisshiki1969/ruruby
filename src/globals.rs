@@ -3,6 +3,8 @@ use fancy_regex::Regex;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+const INLINE_SIZE: usize = 1;
+
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
@@ -265,14 +267,13 @@ impl Globals {
 impl Globals {
     pub fn set_inline_cache(&mut self, id: u32, class: Value, method: MethodRef) {
         let entry = &mut self.inline_cache.table[id as usize];
-        let new_entry = Some((class, method));
-        if entry.entries[0].is_none() {
-            entry.entries[0] = new_entry
-        } else if entry.entries[1].is_none() {
-            entry.entries[1] = new_entry
-        } else {
-            entry.entries[2] = new_entry
+        for e in entry.entries.iter_mut() {
+            if e.is_none() {
+                *e = Some((class, method));
+                return;
+            }
         }
+        entry.entries[INLINE_SIZE - 1] = Some((class, method));
     }
 
     pub fn add_inline_cache_entry(&mut self) -> u32 {
@@ -392,14 +393,14 @@ pub struct InlineCacheEntry {
     //class: Value,
     version: usize,
     //method: MethodRef,
-    entries: [Option<(Value, MethodRef)>; 3],
+    entries: [Option<(Value, MethodRef)>; INLINE_SIZE],
 }
 
 impl InlineCacheEntry {
     fn new() -> Self {
         InlineCacheEntry {
             version: 0,
-            entries: [None; 3],
+            entries: [None; INLINE_SIZE],
         }
     }
 }
@@ -422,9 +423,7 @@ impl InlineCache {
         if entry.version != version {
             //eprintln!("version up");
             entry.version = version;
-            entry.entries[0] = None;
-            entry.entries[1] = None;
-            entry.entries[2] = None;
+            entry.entries.iter_mut().for_each(|x| *x = None);
             return None;
         }
         for e in &entry.entries {

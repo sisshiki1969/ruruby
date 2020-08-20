@@ -126,10 +126,10 @@ end
 
 def perf(app_name)
   puts "benchmark: #{app_name}"
-  command = "#{@time_command} ruby tests/#{app_name} > /dev/null"
+  command = "#{@time_command} ruby ../tests/#{app_name} > /dev/null"
   real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(command)
 
-  command = "#{@time_command} ./target/release/ruruby tests/#{app_name} > /dev/null"
+  command = "#{@time_command} ../target/release/ruruby ../tests/#{app_name} > /dev/null"
   real_ruruby, user_ruruby, sys_ruruby, rss_ruruby = get_results(command)
 
   # `convert mandel.ppm mandel.jpg`
@@ -171,7 +171,7 @@ end
 
 def perf_optcarrot(option = "")
   fps_ruby, rss_ruby = optcarrot('ruby', option)
-  fps_ruruby, rss_ruruby = optcarrot('target/release/ruruby', option)
+  fps_ruruby, rss_ruruby = optcarrot('../target/release/ruruby', option)
 
   puts "benchmark: optcarrot #{option}"
   puts format("\t%10s  %10s", 'ruby', 'ruruby')
@@ -194,7 +194,7 @@ end
  'app_fibo.rb',
  'app_aobench.rb'].each { |x| perf x }
 
-@optcarrot = "../optcarrot/bin/optcarrot -b ../optcarrot/examples/Lan_Master.nes"
+@optcarrot = "../../optcarrot/bin/optcarrot -b ../../optcarrot/examples/Lan_Master.nes"
 perf_optcarrot
 
 perf_optcarrot("--opt")
