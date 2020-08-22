@@ -116,8 +116,7 @@ impl BuiltinClass {
 
     /// Bind `class_object` to the constant `class_name` of the root object.
     fn set_class(class_name: &str, class_object: Value) {
-        let id = IdentId::get_id(class_name);
-        Self::object().set_var(id, class_object);
+        Self::object().set_var_by_str(class_name, class_object);
     }
 }
 

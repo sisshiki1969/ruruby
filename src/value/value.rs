@@ -370,6 +370,11 @@ impl Value {
         self.rvalue_mut().set_var(id, val);
     }
 
+    pub fn set_var_by_str(&mut self, name: &str, val: Value) {
+        let id = IdentId::get_id(name);
+        self.rvalue_mut().set_var(id, val);
+    }
+
     pub fn get_var(&self, id: IdentId) -> Option<Value> {
         self.rvalue().get_var(id)
     }

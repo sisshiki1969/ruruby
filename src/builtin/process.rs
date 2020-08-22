@@ -5,8 +5,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     let class = ClassRef::from(id, BuiltinClass::object());
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("clock_gettime", clock_gettime);
-    let id = IdentId::get_id("CLOCK_MONOTONIC");
-    class_val.set_var(id, Value::integer(0));
+    class_val.set_var_by_str("CLOCK_MONOTONIC", Value::integer(0));
     class_val
 }
 

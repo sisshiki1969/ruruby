@@ -8,8 +8,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_instance_method("isatty", isatty);
     class.add_builtin_instance_method("tty?", isatty);
     let stdout = Value::ordinary_object(obj);
-    let stdout_id = IdentId::get_id("STDOUT");
-    BuiltinClass::object().set_var(stdout_id, stdout);
+    BuiltinClass::object().set_var_by_str("STDOUT", stdout);
     let id = IdentId::get_id("$>");
     globals.global_var.insert(id, stdout);
 

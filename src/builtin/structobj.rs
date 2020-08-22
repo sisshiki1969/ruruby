@@ -42,7 +42,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vec.push(v);
         attr_args[index - i] = v;
     }
-    class_val.set_var(IdentId::get_id("_members"), Value::array_from(vec));
+    class_val.set_var_by_str("_members", Value::array_from(vec));
     builtin::module::attr_accessor(vm, class_val, &attr_args)?;
 
     match args.block {
@@ -67,7 +67,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     for (i, arg) in args.iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
         let var = format!("@{:?}", id);
-        self_val.set_var(IdentId::get_id(&var), *arg);
+        self_val.set_var_by_str(&var, *arg);
     }
     Ok(Value::nil())
 }

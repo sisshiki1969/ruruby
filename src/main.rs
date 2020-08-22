@@ -38,13 +38,14 @@ fn main() {
     };
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.new_vm();
-    let id = IdentId::get_id("ARGV");
     let res: Vec<Value> = args[1..]
         .iter()
         .map(|x| Value::string(x.to_string()))
         .collect();
     //res.remove(0);
     let argv = Value::array_from(res);
-    BuiltinClass::object().set_var(id, argv);
+    BuiltinClass::object().set_var_by_str("ARGV", argv);
+    let env = Value::hash_from_map(FxHashMap::default());
+    BuiltinClass::object().set_var_by_str("ENV", env);
     vm.exec_file(args[0]);
 }
