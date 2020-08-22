@@ -158,7 +158,15 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
         let method = match class.superclass() {
-            Some(class) => vm.get_instance_method(class, m)?,
+            Some(class) => match vm.get_instance_method(class, m) {
+                Some(m) => m,
+                None => {
+                    return Err(vm.error_nomethod(format!(
+                        "no superclass method `{:?}' for {:?}",
+                        m, self_val
+                    )));
+                }
+            },
             None => {
                 let inspect = vm.val_inspect(self_val);
                 return Err(

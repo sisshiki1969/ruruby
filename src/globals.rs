@@ -192,8 +192,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                let id = IdentId::get_id($name);
-                object.set_var(id, $class_object);
+                object.set_var_by_str($name, $class_object);
             };
         }
 
@@ -201,16 +200,14 @@ impl Globals {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
                 builtins.$module_name = class_obj;
-                let id = IdentId::get_id($name);
-                object.set_var(id, class_obj);
+                object.set_var_by_str($name, class_obj);
             };
         }
 
         macro_rules! init_class {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
-                let id = IdentId::get_id($name);
-                object.set_var(id, class_obj);
+                object.set_var_by_str($name, class_obj);
             };
         }
 
@@ -249,6 +246,11 @@ impl Globals {
         BuiltinClass::set_class("StopIteration", Value::class(class));
         let errorobj = errorobj::init();
         BuiltinClass::set_class("RuntimeError", errorobj);
+
+        globals
+            .global_var
+            .insert(IdentId::get_id("$:"), Value::array_from(vec![]));
+
         globals
     }
 

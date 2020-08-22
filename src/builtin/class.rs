@@ -6,6 +6,7 @@ pub fn init(globals: &mut Globals) {
     class.add_builtin_instance_method("new", new);
     class.add_builtin_instance_method("superclass", superclass);
     class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_instance_method("name", name);
     class_obj.add_builtin_class_method("new", class_new);
 }
 
@@ -60,6 +61,15 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
+fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let cref = self_val.as_class();
+    let val = match cref.name {
+        Some(id) => Value::string(format! {"{:?}", id}),
+        None => Value::nil(),
+    };
+    Ok(val)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -75,6 +85,21 @@ mod tests {
         }
         assert(100, A.new.a)
         assert("A", A.inspect)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn class_name() {
+        let program = r#"
+        assert("Integer", Integer.name)
+        class A
+        end
+        assert("A", A.name)
+        a = Class.new()
+        assert(nil, a.name)
+        B = a
+        assert("B", a.name)
         "#;
         assert_script(program);
     }

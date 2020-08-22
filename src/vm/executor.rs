@@ -1518,33 +1518,32 @@ impl VM {
         cache_id: u32,
         rec_class: Value,
         method_id: IdentId,
-    ) -> Result<MethodRef, RubyError> {
+    ) -> Option<MethodRef> {
         match self
             .globals
             .get_method_from_inline_cache(cache_id, rec_class)
         {
-            Some(method) => Ok(method),
+            Some(method) => Some(method),
             _ => {
                 /*eprintln!(
                     "cache miss {} {:?}",
                     IdentId::get_ident_name(method_id),
                     rec_class
                 );*/
-                let method = self.get_instance_method(rec_class, method_id)?;
+                let method = match self.get_instance_method(rec_class, method_id) {
+                    Some(m) => m,
+                    None => return None,
+                };
                 self.globals.set_inline_cache(cache_id, rec_class, method);
-                Ok(method)
+                Some(method)
             }
         }
     }
 
     fn fallback(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
-        match self.get_method(receiver, method_id) {
-            Ok(mref) => {
-                let val = self.eval_send(mref, receiver, args)?;
-                Ok(val)
-            }
-            Err(_) => Err(self.error_undefined_method(method_id, receiver)),
-        }
+        let mref = self.get_method(receiver, method_id)?;
+        let val = self.eval_send(mref, receiver, args)?;
+        Ok(val)
     }
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
@@ -1569,7 +1568,12 @@ impl VM {
         cache: u32,
     ) -> VMResult {
         let rec_class = lhs.get_class_for_method();
-        let methodref = self.get_method_from_cache(cache, rec_class, method)?;
+        let methodref = match self.get_method_from_cache(cache, rec_class, method) {
+            Some(m) => m,
+            None => {
+                return Err(self.error_undefined_op(IdentId::get_ident_name(method), rhs, lhs));
+            }
+        };
         let arg = Args::new1(rhs);
         self.eval_send(methodref, lhs, &arg)
     }
@@ -2234,7 +2238,15 @@ impl VM {
         let cache_slot = iseq.read32(self.pc + 9);
         let block = iseq.read64(self.pc + 13);
         let rec_class = receiver.get_class_for_method();
-        let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
+        let methodref = match self.get_method_from_cache(cache_slot, rec_class, method_id) {
+            Some(m) => m,
+            None => {
+                return Err(self.error_nomethod(format!(
+                    "no method `{:?}' found for {:?}",
+                    method_id, receiver
+                )));
+            }
+        };
 
         let keyword = if flag & 0b01 == 1 {
             let val = self.stack_pop();
@@ -2273,7 +2285,15 @@ impl VM {
         let args_num = iseq.read16(self.pc + 5);
         let cache_slot = iseq.read32(self.pc + 7);
         let rec_class = receiver.get_class_for_method();
-        let methodref = self.get_method_from_cache(cache_slot, rec_class, method_id)?;
+        let methodref = match self.get_method_from_cache(cache_slot, rec_class, method_id) {
+            Some(m) => m,
+            None => {
+                return Err(self.error_nomethod(format!(
+                    "no method `{:?}' found for {:?}",
+                    method_id, receiver
+                )));
+            }
+        };
         let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
@@ -2406,8 +2426,13 @@ impl VM {
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
-        let method = self.get_instance_method(rec_class, method_id)?;
-        Ok(method)
+        match self.get_instance_method(rec_class, method_id) {
+            Some(m) => Ok(m),
+            None => Err(self.error_nomethod(format!(
+                "no method `{:?}' found for {:?}",
+                method_id, receiver
+            ))),
+        }
     }
 
     /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
@@ -2416,15 +2441,11 @@ impl VM {
     /// return MethodRef of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
-    pub fn get_instance_method(
-        &mut self,
-        class: Value,
-        method: IdentId,
-    ) -> Result<MethodRef, RubyError> {
+    pub fn get_instance_method(&mut self, class: Value, method: IdentId) -> Option<MethodRef> {
         match self.globals.get_method_cache_entry(class, method) {
             Some(MethodCacheEntry { version, method }) => {
                 if *version == self.globals.class_version {
-                    return Ok(*method);
+                    return Some(*method);
                 }
             }
             None => {}
@@ -2436,7 +2457,7 @@ impl VM {
                 Some(methodref) => {
                     self.globals
                         .add_method_cache_entry(class, method, methodref);
-                    return Ok(methodref);
+                    return Some(methodref);
                 }
                 None => match temp_class.superclass() {
                     Some(superclass) => temp_class = superclass,
@@ -2445,10 +2466,7 @@ impl VM {
                             singleton_flag = false;
                             temp_class = class.rvalue().class();
                         } else {
-                            return Err(self.error_nomethod(format!(
-                                "no method `{:?}' found for {:?}",
-                                method, class
-                            )));
+                            return None;
                         }
                     }
                 },

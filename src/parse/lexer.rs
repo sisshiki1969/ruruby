@@ -403,8 +403,9 @@ impl Lexer {
     }
 
     fn read_global_var(&mut self) -> Result<Token, RubyError> {
-        let tok = if self.consume('>') {
-            self.new_global_var("$>")
+        let tok = if self.peek()?.is_ascii_punctuation() {
+            let ch = self.get()?;
+            self.new_global_var(format!("${}", ch))
         } else {
             self.read_identifier(None, VarKind::GlobalVar)?
         };

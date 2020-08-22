@@ -44,6 +44,10 @@ impl ClassInfo {
         globals.class_version += 1;
         self.method_table.insert(id, info)
     }
+
+    pub fn name(&self) -> String {
+        IdentId::get_ident_name(self.name)
+    }
 }
 
 impl GC for ClassInfo {
