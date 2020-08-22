@@ -1228,3 +1228,20 @@ fn singleton() {
         ";
     assert_script(program);
 }
+
+//#[test]
+fn singleton2() {
+    let program = "
+    class Foo
+    end
+
+    class Bar
+        def Foo.f
+            100
+        end
+    end
+
+    assert(100, Foo.f)
+        ";
+    assert_script(program);
+}

@@ -1929,7 +1929,7 @@ impl Codegen {
                     self.gen_symbol(iseq, *id);
                 };
             }
-            NodeKind::SingletonMethodDef(id, params, body, lvar) => {
+            NodeKind::SingletonMethodDef(singleton, id, params, body, lvar) => {
                 let methodref = self.gen_iseq(
                     globals,
                     params,
@@ -1939,7 +1939,7 @@ impl Codegen {
                     ContextKind::Method,
                     Some(*id),
                 )?;
-                //self.gen(globals, iseq, singleton, true)?;
+                self.gen(globals, iseq, singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
                 Codegen::push32(iseq, (*id).into());
                 Codegen::push64(iseq, methodref.id());

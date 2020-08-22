@@ -218,6 +218,10 @@ impl Parser {
         self.context_stack.last_mut().unwrap()
     }
 
+    fn is_method_context(&self) -> bool {
+        self.context_stack.last().unwrap().kind == ContextKind::Method
+    }
+
     // If the identifier(IdentId) does not exist in the current scope,
     // add the identifier as a local variable in the current context.
     fn add_local_var_if_new(&mut self, id: IdentId) {
@@ -289,6 +293,14 @@ impl Parser {
     /// Peek next token (no skipping line terminators).
     fn peek_no_term(&mut self) -> Result<Token, RubyError> {
         self.lexer.peek_token()
+    }
+
+    /// Peek next token (no skipping line terminators), and check whether the token is `punct` or not.
+    fn peek_punct_no_term(&mut self, punct: Punct) -> bool {
+        match self.lexer.peek_token() {
+            Ok(tok) => tok.kind == TokenKind::Punct(punct),
+            Err(_) => false,
+        }
     }
 
     /// Examine the next token, and return true if it is a line terminator.
@@ -679,7 +691,7 @@ impl Parser {
         let mut mlhs = vec![node];
         self.mul_assign_lhs = true;
         loop {
-            if self.peek_no_term()?.kind == TokenKind::Punct(Punct::Assign) {
+            if self.peek_punct_no_term(Punct::Assign) {
                 break;
             }
             let node = self.parse_function()?;
@@ -1454,7 +1466,7 @@ impl Parser {
             TokenKind::Ident(name, has_suffix, trailing_space) => {
                 let id = self.get_ident_id(name);
                 if *has_suffix {
-                    if self.peek_no_term()?.kind == TokenKind::Punct(Punct::LParen) {
+                    if self.peek_punct_no_term(Punct::LParen) {
                         let node = Node::new_identifier(id, loc);
                         return Ok(self.parse_function_args(node)?);
                     }
@@ -1491,7 +1503,7 @@ impl Parser {
             TokenKind::Const(name, has_suffix, _) => {
                 let id = self.get_ident_id(name);
                 if *has_suffix {
-                    if self.peek_no_term()?.kind == TokenKind::Punct(Punct::LParen) {
+                    if self.peek_punct_no_term(Punct::LParen) {
                         let node = Node::new_identifier(id, loc);
                         return Ok(self.parse_function_args(node)?);
                         //return Ok(Node::new_identifier(id, loc));
@@ -1672,7 +1684,7 @@ impl Parser {
                     }
                     Reserved::Def => Ok(self.parse_def()?),
                     Reserved::Class => {
-                        if self.context_stack.last().unwrap().kind == ContextKind::Method {
+                        if self.is_method_context() {
                             return Err(self.error_unexpected(
                                 loc,
                                 "SyntaxError: class definition in method body.",
@@ -1681,7 +1693,7 @@ impl Parser {
                         Ok(self.parse_class(false)?)
                     }
                     Reserved::Module => {
-                        if self.context_stack.last().unwrap().kind == ContextKind::Method {
+                        if self.is_method_context() {
                             return Err(self.error_unexpected(
                                 loc,
                                 "SyntaxError: class definition in method body.",
@@ -2030,21 +2042,21 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_def(&mut self) -> Result<Node, RubyError> {
-        //  def FNAME ARGDECL
-        //      COMPSTMT
-        //      [rescue [ARGS] [`=>' LHS] THEN COMPSTMT]+
-        //      [else COMPSTMT]
-        //      [ensure COMPSTMT]
-        //  end
-        let mut is_singleton_method = false;
+    fn parse_varref(&mut self) -> Result<Node, RubyError> {
+        let mut node = self.parse_primary()?;
+        loop {
+            node = if self.consume_punct_no_term(Punct::Scope)? {
+                let id = self.expect_const()?;
+                Node::new_scope(node, id, self.prev_loc())
+            } else {
+                return Ok(node);
+            };
+        }
+    }
+
+    fn parse_fname(&mut self) -> Result<IdentId, RubyError> {
         let tok = self.get()?;
         let id = match tok.kind {
-            TokenKind::Reserved(Reserved::Self_) => {
-                is_singleton_method = true;
-                self.expect_punct(Punct::Dot)?;
-                self.expect_ident()?
-            }
             TokenKind::Reserved(r) => {
                 let string = self.lexer.get_string_from_reserved(r);
                 self.get_ident_id(string)
@@ -2082,14 +2094,39 @@ impl Parser {
                 return Err(self.error_unexpected(loc, "Expected identifier or operator."));
             }
         };
+        Ok(id)
+    }
+
+    fn parse_def(&mut self) -> Result<Node, RubyError> {
+        //  def FNAME ARGDECL
+        //      COMPSTMT
+        //      [rescue [ARGS] [`=>' LHS] THEN COMPSTMT]+
+        //      [else COMPSTMT]
+        //      [ensure COMPSTMT]
+        //  end
+
+        //  def SINGLETON ARGDECL
+        //      COMPSTMT
+        //      [rescue [ARGS] [`=>' LHS] THEN COMPSTMT]+
+        //      [else COMPSTMT]
+        //      [ensure COMPSTMT]
+        //  end
+        let singleton = if self.peek_no_term()?.kind == TokenKind::Reserved(Reserved::Self_) {
+            let node = self.parse_varref()?;
+            self.consume_punct_no_term(Punct::Dot)?;
+            Some(node)
+        } else {
+            None
+        };
+
+        let id = self.parse_fname()?;
         self.context_stack.push(ParseContext::new_method());
         let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        if is_singleton_method {
-            Ok(Node::new_singleton_method_decl(id, args, body, lvar))
-        } else {
-            Ok(Node::new_method_decl(id, args, body, lvar))
+        match singleton {
+            Some(_) => Ok(Node::new_singleton_method_decl(id, args, body, lvar)),
+            None => Ok(Node::new_method_decl(id, args, body, lvar)),
         }
     }
 

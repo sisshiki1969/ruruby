@@ -1151,10 +1151,10 @@ impl VM {
                     let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(None);
-                    //let _singleton = self.stack_pop();
-                    self.define_singleton_method(self_value, id, method)?;
+                    let singleton = self.stack_pop();
+                    self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
-                        self.define_method(self_value, id, method);
+                        self.define_method(singleton, id, method);
                     };
                     self.pc += 13;
                 }
