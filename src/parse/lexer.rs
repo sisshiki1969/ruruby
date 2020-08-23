@@ -487,7 +487,7 @@ impl Lexer {
                         _ => {}
                     };
                     let (has_suffix, trailing_space) = match self.peek() {
-                        Ok(ch) if ch == ':' || ch == '=' || ch == '(' => (true, false),
+                        Ok(ch) if ch == ':' || ch == '=' || ch == '(' || ch == '[' => (true, false),
                         Ok(ch) if ch.is_ascii_whitespace() => (false, true),
                         _ => (false, false),
                     };
@@ -986,22 +986,23 @@ impl Lexer {
     }
 
     fn new_instance_var(&self, ident: impl Into<String>) -> Token {
-        Annot::new(TokenKind::InstanceVar(ident.into()), self.cur_loc())
+        Annot::new(TokenKind::InstanceVar(ident.into()), false, self.cur_loc())
     }
 
     fn new_global_var(&self, ident: impl Into<String>) -> Token {
-        Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
+        Annot::new(TokenKind::GlobalVar(ident.into()), false, self.cur_loc())
     }
 
     fn new_const(&self, ident: impl Into<String>, has_suffix: bool, trailing_space: bool) -> Token {
         Annot::new(
             TokenKind::Const(ident.into(), has_suffix, trailing_space),
+            false,
             self.cur_loc(),
         )
     }
 
     fn new_reserved(&self, ident: Reserved) -> Token {
-        Annot::new(TokenKind::Reserved(ident), self.cur_loc())
+        Annot::new(TokenKind::Reserved(ident), false, self.cur_loc())
     }
 
     fn new_numlit(&self, num: i64) -> Token {
@@ -1017,11 +1018,19 @@ impl Lexer {
     }
 
     fn new_stringlit(&self, string: impl Into<String>) -> Token {
-        Annot::new(TokenKind::StringLit(string.into()), self.cur_loc())
+        Annot::new(TokenKind::StringLit(string.into()), false, self.cur_loc())
     }
 
     fn new_punct(&self, punc: Punct) -> Token {
-        Annot::new(TokenKind::Punct(punc), self.cur_loc())
+        let flag = if self.pos as usize >= self.len {
+            false
+        } else {
+            match self.source_info.code[self.pos as usize] {
+                ' ' | '\t' => true,
+                _ => false,
+            }
+        };
+        Annot::new(TokenKind::Punct(punc), flag, self.cur_loc())
     }
 
     fn new_open_dq(&self, s: String, delimiter: char, level: usize) -> Token {
@@ -1037,15 +1046,15 @@ impl Lexer {
     }
 
     fn new_space(&self) -> Token {
-        Annot::new(TokenKind::Space, self.cur_loc())
+        Annot::new(TokenKind::Space, false, self.cur_loc())
     }
 
     fn new_line_term(&self) -> Token {
-        Annot::new(TokenKind::LineTerm, self.cur_loc())
+        Annot::new(TokenKind::LineTerm, false, self.cur_loc())
     }
 
     fn new_eof(&self, pos: u32) -> Token {
-        Annot::new(TokenKind::EOF, Loc(pos, pos))
+        Annot::new(TokenKind::EOF, false, Loc(pos, pos))
     }
 }
 

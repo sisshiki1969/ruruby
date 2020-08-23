@@ -671,6 +671,7 @@ impl Parser {
                     ..
                 },
             loc,
+            ..
         } = node
         {
             if self.is_command()? {
@@ -1230,8 +1231,8 @@ impl Parser {
         loc: Loc,
     ) -> Result<Node, RubyError> {
         let tok = self.get()?;
-        let id = match &tok.kind {
-            TokenKind::Ident(s, has_suffix, _) => {
+        let (trailing_space, id) = match &tok.kind {
+            TokenKind::Ident(s, has_suffix, trailing_space) => {
                 let name = if *has_suffix {
                     //if self.consume_punct_no_term(Punct::Question)? {
                     //    s.clone() + "?"
@@ -1243,13 +1244,13 @@ impl Parser {
                 } else {
                     s
                 };
-                self.get_ident_id(name)
+                (*trailing_space, self.get_ident_id(name))
             }
             TokenKind::Reserved(r) => {
                 let string = self.lexer.get_string_from_reserved(*r);
-                self.get_ident_id(string)
+                (false, self.get_ident_id(string))
             }
-            TokenKind::Punct(p) => self.parse_op_definable(p)?,
+            TokenKind::Punct(p) => (false, self.parse_op_definable(p)?),
             _ => return Err(self.error_unexpected(tok.loc(), "method name must be an identifier.")),
         };
         let mut args = vec![];
@@ -1262,7 +1263,13 @@ impl Parser {
             kw_args = res.kw_args;
             block = res.block;
             completed = true;
-        }
+        } else {
+            if trailing_space && self.is_command_()? {
+                eprintln!("command:{:?}", id);
+                let send_args = self.parse_arglist()?;
+                return Ok(Node::new_send(node, id, send_args, true, false, loc));
+            }
+        };
         match self.parse_block()? {
             Some(actual_block) => {
                 if block.is_some() {
@@ -1329,8 +1336,8 @@ impl Parser {
             } else if self.consume_punct_no_term(Punct::Scope)? {
                 let id = self.expect_const()?;
                 Node::new_scope(node, id, self.prev_loc())
-            } else if node.is_operation() {
-                return Ok(node);
+            //} else if node.is_operation() {
+            //    return Ok(node);
             } else if self.consume_punct_no_term(Punct::LBracket)? {
                 let member_loc = self.prev_loc();
                 let args = self.parse_arg_list(Punct::RBracket)?;
@@ -1637,6 +1644,7 @@ impl Parser {
                                 iter: Box::new(iter),
                                 body: Box::new(body),
                             },
+                            false,
                             loc.merge(self.prev_loc()),
                         );
                         Ok(node)
@@ -1797,15 +1805,16 @@ impl Parser {
         match tok.kind {
             TokenKind::Ident(_, _, _)
             | TokenKind::InstanceVar(_)
+            | TokenKind::GlobalVar(_)
             | TokenKind::Const(_, _, _)
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
+            | TokenKind::ImaginaryLit(_)
             | TokenKind::StringLit(_)
             | TokenKind::OpenString(_, _, _) => Ok(true),
             TokenKind::Punct(p) => match p {
-                Punct::LParen | Punct::LBracket | Punct::Colon | Punct::Scope | Punct::Arrow => {
-                    Ok(true)
-                }
+                Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => Ok(true),
+                Punct::Colon => Ok(!tok.flag),
                 _ => Ok(false),
             },
             TokenKind::Reserved(r) => match r {
@@ -2074,9 +2083,10 @@ impl Parser {
                     self.get_ident_id(&name)
                 }
             }
-            TokenKind::Punct(Punct::Plus) => self.get_ident_id("+"),
-            TokenKind::Punct(Punct::Minus) => self.get_ident_id("-"),
-            TokenKind::Punct(Punct::Mul) => self.get_ident_id("*"),
+            TokenKind::Punct(Punct::Plus) => IdentId::_ADD,
+            TokenKind::Punct(Punct::Minus) => IdentId::_SUB,
+            TokenKind::Punct(Punct::Mul) => IdentId::_MUL,
+            TokenKind::Punct(Punct::Cmp) => self.get_ident_id("<=>"),
             TokenKind::Punct(Punct::LBracket) => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {
@@ -2085,12 +2095,12 @@ impl Parser {
                         IdentId::_INDEX
                     }
                 } else {
-                    let loc = self.loc();
+                    let loc = self.prev_loc();
                     return Err(self.error_unexpected(loc, "Expected `]'"));
                 }
             }
             _ => {
-                let loc = self.loc();
+                let loc = self.prev_loc();
                 return Err(self.error_unexpected(loc, "Expected identifier or operator."));
             }
         };

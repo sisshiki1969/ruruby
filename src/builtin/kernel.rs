@@ -52,10 +52,10 @@ fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
         println!("{}", vm.val_inspect(*arg));
     }
-    if args.len() == 1 {
-        Ok(args[0])
-    } else {
-        Ok(Value::array_from(args.to_vec()))
+    match args.len() {
+        0 => Ok(Value::nil()),
+        1 => Ok(args[0]),
+        _ => Ok(Value::array_from(args.to_vec())),
     }
 }
 
@@ -114,10 +114,29 @@ fn require(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(string) => string,
         None => return Err(vm.error_argument("file name must be a string.")),
     };
-    let mut path = std::env::current_dir().unwrap();
-    path.push(file_name);
-    require_main(vm, path)?;
-    Ok(Value::bool(true))
+    let mut load_path = match vm.globals.global_var.get(&IdentId::get_id("$:")) {
+        Some(path) => *path,
+        None => return Ok(Value::false_val()),
+    };
+    let mut load_ary = load_path
+        .expect_array(vm, "LOAD_PATH($:)")?
+        .elements
+        .clone();
+    for path in load_ary.iter_mut() {
+        let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
+        base_path.push(file_name);
+        base_path.set_extension("rb");
+        //eprintln!("search: {:?}", base_path);
+        match base_path.canonicalize() {
+            Ok(path) => {
+                //eprintln!("found: {:?}", path);
+                require_main(vm, path)?;
+                return Ok(Value::bool(true));
+            }
+            _ => {}
+        }
+    }
+    Ok(Value::false_val())
 }
 
 fn require_relative(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
