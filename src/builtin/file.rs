@@ -201,6 +201,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn file_expand_path() {
         let program = r###"
             assert("#{ENV["HOME"]}/ruruby", File.expand_path("."))
