@@ -247,6 +247,15 @@ impl Globals {
         let errorobj = errorobj::init();
         BuiltinClass::set_class("RuntimeError", errorobj);
 
+        let mut env_map = HashInfo::new(FxHashMap::default());
+        let home_dir = dirs::home_dir()
+            .unwrap_or(std::path::PathBuf::new())
+            .to_string_lossy()
+            .to_string();
+        env_map.insert(Value::string("HOME".to_string()), Value::string(home_dir));
+        let env = Value::hash_from(env_map);
+        object.set_var_by_str("ENV", env);
+
         globals
             .global_var
             .insert(IdentId::get_id("$:"), Value::array_from(vec![]));

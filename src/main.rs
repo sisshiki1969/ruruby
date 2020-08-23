@@ -1,6 +1,7 @@
 #![feature(test)]
 extern crate ansi_term;
 extern crate clap;
+extern crate dirs;
 extern crate ruruby;
 extern crate rustyline;
 
@@ -42,10 +43,8 @@ fn main() {
         .iter()
         .map(|x| Value::string(x.to_string()))
         .collect();
-    //res.remove(0);
     let argv = Value::array_from(res);
     BuiltinClass::object().set_var_by_str("ARGV", argv);
-    let env = Value::hash_from_map(FxHashMap::default());
-    BuiltinClass::object().set_var_by_str("ENV", env);
+
     vm.exec_file(args[0]);
 }

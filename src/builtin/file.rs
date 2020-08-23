@@ -202,21 +202,21 @@ mod tests {
 
     #[test]
     fn file_expand_path() {
-        let program = r#"
-            assert("/home/monochrome/ruruby", File.expand_path("."))
-            assert("/home/monochrome/ruruby", File.expand_path("", "."))
-            assert("/home/monochrome", File.expand_path(".."))
-            assert("/home/monochrome", File.expand_path("..", "."))
+        let program = r###"
+            assert("#{ENV["HOME"]}/ruruby", File.expand_path("."))
+            assert("#{ENV["HOME"]}/ruruby", File.expand_path("", "."))
+            assert("#{ENV["HOME"]}", File.expand_path(".."))
+            assert("#{ENV["HOME"]}", File.expand_path("..", "."))
             assert("/home", File.expand_path("../.."))
             assert("/home", File.expand_path("../..", "."))
             assert("/home", File.expand_path("../../", "."))
             assert("/", File.expand_path("/"))
-            assert("/home/monochrome/ruruby", File.expand_path("../", "tests"))
+            assert("#{ENV["HOME"]}/ruruby", File.expand_path("../", "tests"))
             assert("/home", File.expand_path("home", "/"))
-            assert("/home/monochrome", File.expand_path("home/monochrome", "/"))
-            assert("/home/monochrome/ruruby", File.expand_path("home/monochrome/ruruby", "/"))
-            assert("/home/monochrome", File.expand_path("~"))
-        "#;
+            assert("#{ENV["HOME"]}", File.expand_path("#{ENV["HOME"]}", "/"))
+            assert("#{ENV["HOME"]}/ruruby", File.expand_path("#{ENV["HOME"]}/ruruby", "/"))
+            assert("#{ENV["HOME"]}", File.expand_path("~"))
+        "###;
         assert_script(program);
     }
 }
