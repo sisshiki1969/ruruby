@@ -1245,7 +1245,7 @@ impl VM {
         lhs: Value,
     ) -> RubyError {
         self.error_nomethod(format!(
-            "undefined method `{}' {} for {}",
+            "no method `{}' {} for {}",
             method_name.into(),
             rhs.get_class_name(),
             lhs.get_class_name()
@@ -1254,7 +1254,7 @@ impl VM {
 
     pub fn error_undefined_method(&self, method: IdentId, receiver: Value) -> RubyError {
         self.error_nomethod(format!(
-            "undefined method `{:?}' for {}",
+            "no method `{:?}' for {}",
             method,
             receiver.get_class_name()
         ))
@@ -1796,7 +1796,7 @@ impl VM {
     fn eval_bitnot(&mut self, lhs: Value) -> VMResult {
         match lhs.unpack() {
             RV::Integer(lhs) => Ok(Value::integer(!lhs)),
-            _ => Err(self.error_nomethod("NoMethodError: '~'")),
+            _ => Err(self.error_undefined_method(IdentId::get_id("~"), lhs)),
         }
     }
 }
@@ -2241,10 +2241,7 @@ impl VM {
         let methodref = match self.get_method_from_cache(cache_slot, rec_class, method_id) {
             Some(m) => m,
             None => {
-                return Err(self.error_nomethod(format!(
-                    "no method `{:?}' found for {:?}",
-                    method_id, receiver
-                )));
+                return Err(self.error_undefined_method(method_id, receiver));
             }
         };
 
@@ -2288,10 +2285,7 @@ impl VM {
         let methodref = match self.get_method_from_cache(cache_slot, rec_class, method_id) {
             Some(m) => m,
             None => {
-                return Err(self.error_nomethod(format!(
-                    "no method `{:?}' found for {:?}",
-                    method_id, receiver
-                )));
+                return Err(self.error_undefined_method(method_id, receiver));
             }
         };
         let args = self.pop_args_to_ary(args_num as usize);
@@ -2428,10 +2422,7 @@ impl VM {
         let rec_class = receiver.get_class_for_method();
         match self.get_instance_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(self.error_nomethod(format!(
-                "no method `{:?}' found for {:?}",
-                method_id, receiver
-            ))),
+            None => Err(self.error_undefined_method(method_id, receiver)),
         }
     }
 
