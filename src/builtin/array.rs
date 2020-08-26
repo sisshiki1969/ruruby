@@ -38,6 +38,9 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_instance_method("clear", clear);
     class.add_builtin_instance_method("uniq!", uniq_);
     class.add_builtin_instance_method("uniq", uniq);
+    class.add_builtin_instance_method("any?", any_);
+    class.add_builtin_instance_method("all?", all_);
+
     class.add_builtin_instance_method("slice!", slice_);
     class.add_builtin_instance_method("max", max);
     class.add_builtin_instance_method("first", first);
@@ -51,6 +54,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_instance_method("grep", grep);
     class.add_builtin_instance_method("sort", sort);
     class.add_builtin_instance_method("count", count);
+
     class_obj.add_builtin_class_method("new", array_new);
     class_obj
 }
@@ -724,6 +728,72 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
+fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let aref = self_val.as_array().unwrap();
+    if args.len() == 1 {
+        if args.block.is_some() {
+            eprintln!("warning: given block not used");
+        }
+        for v in aref.elements.iter() {
+            if vm.eval_teq(*v, args[0])? {
+                return Ok(Value::true_val());
+            };
+        }
+        return Ok(Value::false_val());
+    }
+    vm.check_args_num(self_val, args.len(), 0)?;
+
+    if let Some(method) = args.block {
+        let mut args = Args::new1(Value::nil());
+        for v in aref.elements.iter() {
+            args[0] = *v;
+            if vm.eval_block(method, &args)?.to_bool() {
+                return Ok(Value::true_val());
+            };
+        }
+    } else {
+        for v in aref.elements.iter() {
+            if v.to_bool() {
+                return Ok(Value::true_val());
+            };
+        }
+    }
+    Ok(Value::false_val())
+}
+
+fn all_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let aref = self_val.as_array().unwrap();
+    if args.len() == 1 {
+        if args.block.is_some() {
+            eprintln!("warning: given block not used");
+        }
+        for v in aref.elements.iter() {
+            if !vm.eval_teq(*v, args[0])? {
+                return Ok(Value::false_val());
+            };
+        }
+        return Ok(Value::true_val());
+    }
+    vm.check_args_num(self_val, args.len(), 0)?;
+
+    if let Some(method) = args.block {
+        let mut args = Args::new1(Value::nil());
+        for v in aref.elements.iter() {
+            args[0] = *v;
+            if !vm.eval_block(method, &args)?.to_bool() {
+                return Ok(Value::false_val());
+            };
+        }
+    } else {
+        for v in aref.elements.iter() {
+            if !v.to_bool() {
+                return Ok(Value::false_val());
+            };
+        }
+    }
+    Ok(Value::true_val())
+}
+
 fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
     if args.block.is_some() {
@@ -1047,6 +1117,37 @@ mod tests {
         assert 8, a.count
         assert 3, a.count(1)
         assert 2, a.count(:one)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn any_() {
+        let program = r#"
+        assert false, [1, 2, 3].any? {|v| v > 3 }
+        assert true, [1, 2, 3].any? {|v| v > 1 }
+        assert false, [].any? {|v| v > 0 }
+        assert false, %w[ant bear cat].any?(/d/)
+        assert true, %w[ant bear cat].any?(/ear/)
+        assert true, [nil, true, 99].any?(Integer)
+        assert false, [nil, true, 99].any?(String)
+        assert false, [nil, false, nil].any?
+        assert true, [nil, true, 99].any?
+        assert false, [].any?
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn all_() {
+        let program = r#"
+        assert true, [5, 6, 7].all? {|v| v > 0 }
+        assert false, [5, -1, 7].all? {|v| v > 0 }
+        assert true, [].all? {|v| v > 0 }
+        assert true, [-50, 77, 99].all?(Integer)
+        assert false, [3, 111, :d].all?(Integer)
+        assert false, %w[ant bear cat].all?(/t/)
+        assert true, %w[ant bear cat].all?(/a/)
         "#;
         assert_script(program);
     }
