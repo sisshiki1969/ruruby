@@ -1224,26 +1224,12 @@ impl Parser {
     /// | PRIMARY . FNAME BLOCK => completed: true
     /// | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
     /// | PRIMARY . FNAME => completed: false
-    fn parse_primary_method(
-        &mut self,
-        node: Node,
-        safe_nav: bool,
-        loc: Loc,
-    ) -> Result<Node, RubyError> {
+    fn parse_primary_method(&mut self, node: Node, safe_nav: bool) -> Result<Node, RubyError> {
         let tok = self.get()?;
+        let loc = tok.loc();
         let (trailing_space, id) = match &tok.kind {
             TokenKind::Ident(s, has_suffix, trailing_space) => {
-                let name = if *has_suffix {
-                    //if self.consume_punct_no_term(Punct::Question)? {
-                    //    s.clone() + "?"
-                    //} else if self.consume_punct_no_term(Punct::Not)? {
-                    //    s.clone() + "!"
-                    //} else {
-                    s
-                //}
-                } else {
-                    s
-                };
+                let name = if *has_suffix { s } else { s };
                 (*trailing_space, self.get_ident_id(name))
             }
             TokenKind::Reserved(r) => {
@@ -1265,7 +1251,7 @@ impl Parser {
             completed = true;
         } else {
             if trailing_space && self.is_command_()? {
-                eprintln!("command:{:?}", id);
+                //eprintln!("command:{:?}", id);
                 let send_args = self.parse_arglist()?;
                 return Ok(Node::new_send(node, id, send_args, true, false, loc));
             }
@@ -1295,12 +1281,7 @@ impl Parser {
             block,
         };
         Ok(Node::new_send(
-            node,
-            id,
-            send_args,
-            completed,
-            safe_nav,
-            loc.merge(self.prev_loc()),
+            node, id, send_args, completed, safe_nav, loc,
         ))
     }
 
@@ -1327,12 +1308,11 @@ impl Parser {
         }
         // <一次式メソッド呼び出し>
         let mut node = self.parse_primary()?;
-        let loc = node.loc();
         loop {
             node = if self.consume_punct(Punct::Dot)? {
-                self.parse_primary_method(node, false, loc)?
+                self.parse_primary_method(node, false)?
             } else if self.consume_punct_no_term(Punct::SafeNav)? {
-                self.parse_primary_method(node, true, loc)?
+                self.parse_primary_method(node, true)?
             } else if self.consume_punct_no_term(Punct::Scope)? {
                 let id = self.expect_const()?;
                 Node::new_scope(node, id, self.prev_loc())

@@ -177,6 +177,8 @@ pub fn init(_globals: &mut Globals) -> Value {
     string_class.add_builtin_instance_method("next", next);
     string_class.add_builtin_instance_method("succ", next);
     string_class.add_builtin_instance_method("count", count);
+    string_class.add_builtin_instance_method("rstrip", rstrip);
+    string_class.add_builtin_instance_method("ord", ord);
 
     Value::class(string_class)
 }
@@ -452,12 +454,18 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'f' => {
-                let val = vm.expect_flonum(val, "Value for the placeholder")?;
+                let val = val.expect_flonum(vm, "Value for the placeholder")?;
                 if zero_flag {
                     format!("{:0w$.p$}", val, w = width, p = precision)
                 } else {
                     format!("{:w$.p$}", val, w = width, p = precision)
                 }
+            }
+            'c' => {
+                let val = val.expect_integer(vm, "Value for the placeholder")?;
+                let ch = char::from_u32(val as u32)
+                    .ok_or_else(|| vm.error_argument("Invalid value for placeholder."))?;
+                format!("{}", ch)
             }
             _ => return Err(vm.error_argument("Invalid format character.")),
         };
@@ -933,6 +941,23 @@ fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::integer(c as i64))
 }
 
+fn rstrip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let string = self_val.as_string().unwrap();
+    let trim: &[_] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
+    let res = string.trim_end_matches(trim);
+    Ok(Value::string(res.to_owned()))
+}
+
+fn ord(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(self_val, args.len(), 0)?;
+    let ch = match self_val.as_string().unwrap().chars().next() {
+        Some(ch) => ch,
+        None => return Err(vm.error_argument("Empty string.")),
+    };
+    Ok(Value::integer(ch as u32 as i64))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -1233,6 +1258,25 @@ mod test {
         assert 1, 'abcdefg'.count('c')
         assert 4, '123456789'.count('2378')
         #assert 4, '123456789'.count('2-8', '^4-6')
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_rstrip() {
+        let program = r#"
+        assert "   abc", "   abc\n".rstrip
+        assert "   abc", "   abc \t\n\x00".rstrip
+        assert "   abc", "   abc".rstrip
+        assert "   abc", "   abc\x00".rstrip
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_ord() {
+        let program = r#"
+        assert 97, 'abcdefg'.ord
         "#;
         assert_script(program);
     }

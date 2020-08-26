@@ -447,10 +447,6 @@ impl Node {
         safe_nav: bool,
         loc: Loc,
     ) -> Self {
-        let loc = match (send_args.args.last(), &send_args.block) {
-            (Some(arg), _) => loc.merge(arg.loc),
-            _ => loc,
-        };
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),

@@ -437,9 +437,12 @@ impl VM {
                 println!("<--- Ok({:?})", val);
                 Ok(val)
             }
-            Err(err) => {
+            Err(mut err) => {
                 self.exec_stack.truncate(stack_len);
                 self.pc = pc;
+                if self.latest_context().is_some() {
+                    err.info.push((self.source_info(), self.get_loc()));
+                };
                 #[cfg(feature = "trace")]
                 println!("<--- Err({:?})", err.kind);
                 Err(err)
@@ -459,7 +462,7 @@ impl VM {
             ($eval:expr) => {
                 match $eval {
                     Ok(val) => self.stack_push(val),
-                    Err(mut err) => match err.kind {
+                    Err(err) => match err.kind {
                         RubyErrorKind::BlockReturn(val) => self.stack_push(val),
                         _ => {
                             let res = match err.kind {
@@ -468,9 +471,6 @@ impl VM {
                                 _ => {
                                     //self.dump_context();
                                     self.context_pop().unwrap();
-                                    if self.latest_context().is_some() {
-                                        err.info.push((self.source_info(), self.get_loc()));
-                                    };
                                     Err(err)
                                 }
                             };
@@ -1391,13 +1391,6 @@ impl VM {
             Some(method) => Ok(method),
             None => return Err(self.error_argument("Currently, needs block.")),
         }
-    }
-
-    pub fn expect_flonum(&mut self, val: Value, msg: &str) -> Result<f64, RubyError> {
-        val.as_float().ok_or_else(|| {
-            let inspect = self.val_inspect(val);
-            self.error_type(format!("{} must be Float. (given:{})", msg, inspect))
-        })
     }
 
     /// Returns `ClassRef` if `self` is a Class.

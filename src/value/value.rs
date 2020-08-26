@@ -466,8 +466,19 @@ impl Value {
         match self.as_integer() {
             Some(i) => Ok(i),
             None => Err(vm.error_argument(format!(
-                "{} must be an Integer. {}",
+                "{} must be an Integer. (given:{})",
                 msg.into(),
+                self.get_class_name()
+            ))),
+        }
+    }
+
+    pub fn expect_flonum(&self, vm: &VM, msg: &str) -> Result<f64, RubyError> {
+        match self.as_float() {
+            Some(f) => Ok(f),
+            None => Err(vm.error_argument(format!(
+                "{} must be Float. (given:{})",
+                msg,
                 self.get_class_name()
             ))),
         }
