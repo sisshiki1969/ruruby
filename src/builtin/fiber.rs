@@ -103,7 +103,11 @@ mod test {
         "#;
         assert_script(program);
     }
+}
 
+#[cfg(test)]
+#[cfg(not(feature = "trace"))]
+mod test {
     #[test]
     fn fiber_gc_test1() {
         let program = r#"
