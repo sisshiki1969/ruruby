@@ -506,7 +506,6 @@ impl Allocator {
 }
 
 #[cfg(test)]
-#[cfg(not(feature = "trace"))]
 mod tests {
     use crate::test::*;
 

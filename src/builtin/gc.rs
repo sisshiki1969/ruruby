@@ -64,7 +64,6 @@ fn print_mark(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 }
 
 #[cfg(test)]
-#[cfg(not(feature = "trace"))]
 mod tests {
     use crate::test::*;
 

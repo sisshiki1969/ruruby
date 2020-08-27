@@ -106,7 +106,6 @@ mod test1 {
 }
 
 #[cfg(test)]
-#[cfg(not(feature = "trace"))]
 mod test2 {
     use crate::test::*;
     #[test]

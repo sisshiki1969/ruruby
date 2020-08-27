@@ -23,10 +23,7 @@ jobs:
       - name: Build
         run: cargo build --verbose
       - name: Run tests
-        run: cargo tarpaulin -v --out Xml
-      - name: Run tests
         run: cargo tarpaulin -v --out Xml --all-features
-
       - name: Codecov
         uses: codecov/codecov-action@v1.0.7
         with:
