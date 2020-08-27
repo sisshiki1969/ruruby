@@ -672,7 +672,9 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     Some((end_pos, _)) => {
                         target.replace_range(start_pos..end_pos, "");
                     }
-                    None => {}
+                    None => {
+                        target.replace_range(start_pos.., "");
+                    }
                 }
 
                 Ok(Value::string(take))
@@ -1161,6 +1163,9 @@ mod test {
         assert nil, a[2].slice!(10,5)
         assert "色です", a[3].slice!(-3,5)
         assert nil, a[3].slice!(-10,5)
+        a = "a"
+        assert "a", a.slice!(0,1)
+        assert "", a
 
         a = "abc agc afc"
         assert "abc", a.slice!(/a.c/)
