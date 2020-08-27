@@ -77,7 +77,7 @@ fn div(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let abs2 = r2 * r2 + i2 * i2;
     let r = (r2 * r1 + i2 * i1) / abs2;
-    let i = (r2 * i1 + r1 * i2) / abs2;
+    let i = (r2 * i1 - r1 * i2) / abs2;
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
@@ -123,12 +123,28 @@ mod tests {
         assert(Complex.rect(3, 6.0), Complex.rect(1, 4.5) + Complex.rect(2, 1.5))
         assert(Complex.rect(3, 6.0), Complex.rect(5, 7.5) - Complex.rect(2, 1.5))
         assert(Complex.rect(3, 19), Complex.rect(5, 7) * Complex.rect(2, 1))
+        assert(1-4i, (14-5i)/(2+3i))
+        assert(2.3000000000000007+4i, (-10.2+16.51i)/(2+3.7i))
+        assert(true, 4+5i == 4+5i)
+        assert(false, 4+5i == 4+7i)
+        assert(false, 4+5i == :dee)
         assert(17, Complex.rect(1, -4).abs2)
         assert(20.53, Complex.rect(1.7, -4.2).abs2)
+        assert([4,-3], (4-3i).rect)
         "#;
         assert_script(program);
     }
 
+    #[test]
+    fn complex_error() {
+        let program = r#"
+        assert_error { 4+3i+:ee }
+        assert_error { 4+3i-:ee }
+        assert_error { 4+3i*:ee }
+        assert_error { 4+3i/:ee }
+        "#;
+        assert_script(program);
+    }
     #[test]
     fn complex2() {
         let program = r#"
