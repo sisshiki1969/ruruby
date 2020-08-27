@@ -82,7 +82,7 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
-        return Err(vm.error_argument("Block in not allowed."));
+        return Err(vm.error_argument("Block is not allowed."));
     };
     if eref.vm.is_dead() {
         return Err(vm.error_stop_iteration("Iteration reached an end."));
@@ -201,7 +201,7 @@ mod test {
 
     #[test]
     fn enumerator_next_each() {
-        let program = r#"
+        let program = r###"
         e = Enumerator.new(1..3)
         assert(1, e.next)
         assert(2, e.next)
@@ -212,7 +212,15 @@ mod test {
         assert([1,2,3], a)
         assert(3, e.next)
         assert_error { e.next }
-        "#;
+
+        e = Enumerator.new([1,2,3], :each)
+        assert("#<Enumerator: [1, 2, 3]:each>", e.inspect)
+        assert(1, e.next)
+        assert(2, e.next)
+        assert(3, e.next)
+        assert_error { e.next }
+
+        "###;
         assert_script(program);
     }
 

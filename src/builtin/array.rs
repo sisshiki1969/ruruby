@@ -349,7 +349,6 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(self_val, args.len(), 0)?;
-
     let method = match args.block {
         Some(method) => method,
         None => {
@@ -360,26 +359,8 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
 
     let aref = self_val.as_mut_array().unwrap();
-    let mut arg = Args::new(vm.get_iseq(method)?.params.req_params);
     for i in &mut aref.elements {
-        match i.as_array() {
-            Some(aref) if arg.len() != 1 => {
-                for j in 0..arg.len() {
-                    arg[j] = if j < aref.elements.len() {
-                        aref.elements[j]
-                    } else {
-                        Value::nil()
-                    };
-                }
-            }
-            _ => {
-                arg[0] = *i;
-                for j in 1..arg.len() {
-                    arg[j] = Value::nil();
-                }
-            }
-        };
-
+        let arg = Args::new1(*i);
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
@@ -990,6 +971,11 @@ mod tests {
         assert(a, [1,2,3])
         b = [1, [2, 3], 4, [5, 6, 7]]
         assert [2, 2, 3, 2, 3, 8, 5, 6, 7, 5, 6, 7], b.flat_map{|x| x * 2}
+        e = [1,2,3].map
+        assert 1, e.next
+        assert 2, e.next
+        assert 3, e.next
+        assert_error { e.next }
         ";
         assert_script(program);
     }
