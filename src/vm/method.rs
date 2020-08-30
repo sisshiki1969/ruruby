@@ -7,26 +7,6 @@ pub type MethodTable = FxHashMap<IdentId, MethodRef>;
 //#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub type MethodRef = Ref<MethodInfo>;
 
-/*
-impl std::hash::Hash for MethodRef {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl Into<u32> for MethodRef {
-    fn into(self) -> u32 {
-        self.0
-    }
-}
-
-impl From<u32> for MethodRef {
-    fn from(id: u32) -> Self {
-        MethodRef(id)
-    }
-}
-*/
-
 lazy_static! {
     pub static ref METHODREF_ENUM: MethodRef = {
         MethodRef::new(MethodInfo::BuiltinFunc {

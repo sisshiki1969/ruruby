@@ -452,7 +452,7 @@ impl VM {
 
     /// Main routine for VM execution.
     fn run_context_main(&mut self, context: ContextRef) -> VMResult {
-        let iseq = &context.iseq_ref.unwrap().iseq;
+        let iseq = &mut context.iseq_ref.unwrap().iseq;
         let self_value = context.self_value;
         let self_oref = self_value.rvalue_mut();
         self.gc();
@@ -1108,12 +1108,12 @@ impl VM {
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
-                    try_push!(self.vm_opt_send(iseq, receiver));
-                    self.pc += 11;
+                    try_push!(self.vm_opt_send_cache(iseq, receiver));
+                    self.pc += 27;
                 }
                 Inst::OPT_SEND_SELF => {
-                    try_push!(self.vm_opt_send(iseq, self_value));
-                    self.pc += 11;
+                    try_push!(self.vm_opt_send_cache(iseq, self_value));
+                    self.pc += 27;
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
@@ -2269,18 +2269,12 @@ impl VM {
         Ok(val)
     }
 
-    fn vm_opt_send(&mut self, iseq: &ISeq, receiver: Value) -> VMResult {
+    fn vm_opt_send_cache(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
         // No block nor keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
-        let cache_slot = iseq.read32(self.pc + 7);
-        let rec_class = receiver.get_class_for_method();
-        let methodref = match self.get_method_from_cache(cache_slot, rec_class, method_id) {
-            Some(m) => m,
-            None => {
-                return Err(self.error_undefined_method(method_id, receiver));
-            }
-        };
+        let methodref =
+            self.get_instance_method_from_icache(iseq, self.pc + 7, receiver, method_id)?;
         let args = self.pop_args_to_ary(args_num as usize);
         let val = self.eval_send(methodref, receiver, &args)?;
         Ok(val)
@@ -2419,14 +2413,39 @@ impl VM {
         }
     }
 
+    fn get_instance_method_from_icache(
+        &mut self,
+        iseq: &mut ISeq,
+        pc: usize,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
+        let rec_class = receiver.get_class_for_method();
+        let cache_class = iseq.read64(pc);
+        if rec_class.id() == cache_class && self.globals.class_version == iseq.read32(pc + 8) {
+            Ok(MethodRef::from_u64(iseq.read64(pc + 12)))
+        } else {
+            match self.get_instance_method(rec_class, method_id) {
+                Some(m) => {
+                    //eprintln!("miss");
+                    iseq.write64(pc, rec_class.id());
+                    iseq.write32(pc + 8, self.globals.class_version);
+                    iseq.write64(pc + 12, m.id());
+                    Ok(m)
+                }
+                None => return Err(self.error_undefined_method(method_id, receiver)),
+            }
+        }
+    }
+
     /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
     ///
     /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
     /// return MethodRef of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
-    pub fn get_instance_method(&mut self, class: Value, method: IdentId) -> Option<MethodRef> {
-        match self.globals.get_method_cache_entry(class, method) {
+    pub fn get_instance_method(&mut self, rec_class: Value, method: IdentId) -> Option<MethodRef> {
+        match self.globals.get_method_cache_entry(rec_class, method) {
             Some(MethodCacheEntry { version, method }) => {
                 if *version == self.globals.class_version {
                     return Some(*method);
@@ -2434,13 +2453,13 @@ impl VM {
             }
             None => {}
         };
-        let mut temp_class = class;
-        let mut singleton_flag = class.as_class().is_singleton;
+        let mut temp_class = rec_class;
+        let mut singleton_flag = rec_class.as_class().is_singleton;
         loop {
             match temp_class.get_instance_method(method) {
                 Some(methodref) => {
                     self.globals
-                        .add_method_cache_entry(class, method, methodref);
+                        .add_method_cache_entry(rec_class, method, methodref);
                     return Some(methodref);
                 }
                 None => match temp_class.superclass() {
@@ -2448,7 +2467,7 @@ impl VM {
                     None => {
                         if singleton_flag {
                             singleton_flag = false;
-                            temp_class = class.rvalue().class();
+                            temp_class = rec_class.rvalue().class();
                         } else {
                             return None;
                         }

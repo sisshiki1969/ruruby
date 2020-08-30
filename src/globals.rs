@@ -3,8 +3,6 @@ use fancy_regex::Regex;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-const INLINE_SIZE: usize = 1;
-
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
@@ -19,7 +17,7 @@ pub struct Globals {
     main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
-    pub class_version: usize,
+    pub class_version: u32,
     pub main_object: Value,
     pub gc_enabled: bool,
 
@@ -277,13 +275,7 @@ impl Globals {
 impl Globals {
     pub fn set_inline_cache(&mut self, id: u32, class: Value, method: MethodRef) {
         let entry = &mut self.inline_cache.table[id as usize];
-        for e in entry.entries.iter_mut() {
-            if e.is_none() {
-                *e = Some((class, method));
-                return;
-            }
-        }
-        entry.entries[INLINE_SIZE - 1] = Some((class, method));
+        entry.entries = Some((class, method));
     }
 
     pub fn add_inline_cache_entry(&mut self) -> u32 {
@@ -369,7 +361,7 @@ pub struct MethodCache(FxHashMap<(Value, IdentId), MethodCacheEntry>);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
     pub method: MethodRef,
-    pub version: usize,
+    pub version: u32,
 }
 
 impl MethodCache {
@@ -377,7 +369,7 @@ impl MethodCache {
         MethodCache(FxHashMap::default())
     }
 
-    fn add_entry(&mut self, class: Value, id: IdentId, version: usize, method: MethodRef) {
+    fn add_entry(&mut self, class: Value, id: IdentId, version: u32, method: MethodRef) {
         self.0
             .insert((class, id), MethodCacheEntry { method, version });
     }
@@ -401,16 +393,16 @@ pub struct InlineCache {
 #[derive(Debug, Clone)]
 pub struct InlineCacheEntry {
     //class: Value,
-    version: usize,
+    version: u32,
     //method: MethodRef,
-    entries: [Option<(Value, MethodRef)>; INLINE_SIZE],
+    entries: Option<(Value, MethodRef)>,
 }
 
 impl InlineCacheEntry {
     fn new() -> Self {
         InlineCacheEntry {
             version: 0,
-            entries: [None; INLINE_SIZE],
+            entries: None,
         }
     }
 }
@@ -428,19 +420,17 @@ impl InlineCache {
         self.id - 1
     }
 
-    fn get_method(&mut self, id: u32, class: Value, version: usize) -> Option<MethodRef> {
+    fn get_method(&mut self, id: u32, class: Value, version: u32) -> Option<MethodRef> {
         let entry = &mut self.table[id as usize];
         if entry.version != version {
             //eprintln!("version up");
             entry.version = version;
-            entry.entries.iter_mut().for_each(|x| *x = None);
+            entry.entries = None;
             return None;
         }
-        for e in &entry.entries {
-            if let Some((cache_class, method)) = e {
-                if cache_class.id() == class.id() {
-                    return Some(*method);
-                }
+        if let Some((cache_class, method)) = entry.entries {
+            if cache_class.id() == class.id() {
+                return Some(method);
             }
         }
         //eprintln!("not found");

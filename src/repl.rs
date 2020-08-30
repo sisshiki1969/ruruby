@@ -9,16 +9,23 @@ pub fn repl_vm() {
     println!("RV: {}", std::mem::size_of::<RV>());
     assert_eq!(8, std::mem::size_of::<Value>());
     assert_eq!(56, std::mem::size_of::<RValue>());
-    println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
-    println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
-    println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
-    println!("RString: {}", std::mem::size_of::<RString>());
-    println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-    println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
-    println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
-    println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
-    println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
-    println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
+    #[cfg(debug_assertions)]
+    {
+        println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
+        println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
+        println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
+        println!("RString: {}", std::mem::size_of::<RString>());
+        println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
+        println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
+        println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
+        println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
+        println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
+        println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
+        println!(
+            "Option<MethodRef>: {}",
+            std::mem::size_of::<Option<MethodRef>>()
+        );
+    }
     let mut rl = Editor::<()>::new();
     let mut program = String::new();
     let mut parser = Parser::new();
