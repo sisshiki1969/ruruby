@@ -339,8 +339,8 @@ impl Inst {
             Inst::DEF_CLASS => 14,      // is_module: u8 / method_id: u32 / block: u64
             Inst::OPT_SEND | Inst::OPT_SEND_SELF => 27,
                                 // method_id: u32 / number of args: u16 / class: u64 / version: u32 / methodref: u64 
-            Inst::SEND | Inst::SEND_SELF => 21,
-                                // method_id: u32 / number of args: u16 / flag: u16 / cache_id: u32 / block: u64
+            Inst::SEND | Inst::SEND_SELF => 37,
+                                // method_id: u32 / number of args: u16 / flag: u16 / block: u64 / class: u64 / version: u32 / methodref: u64 
             _ => panic!(),
         }
     }

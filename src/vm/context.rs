@@ -142,10 +142,10 @@ impl Context {
         let kw = if params.keyword_params.is_empty() {
             args.kw_arg
         } else {
-            None
+            Value::nil()
         };
         if !iseq.is_block() {
-            let len = args.len() + if kw.is_some() { 1 } else { 0 };
+            let len = args.len() + if kw.is_nil() { 0 } else { 1 };
             let min = params.req_params + params.post_params;
             if params.rest_param {
                 vm.check_args_min(len, min)?;
@@ -154,20 +154,17 @@ impl Context {
             }
         }
         context.set_arguments(args, kw);
-        match args.kw_arg {
-            Some(kw_arg) if kw.is_none() => {
-                let keyword = kw_arg.as_hash().unwrap();
-                for (k, v) in keyword.iter() {
-                    let id = k.as_symbol().unwrap();
-                    match params.keyword_params.get(&id) {
-                        Some(lvar) => {
-                            context[*lvar] = v;
-                        }
-                        None => return Err(vm.error_argument("Undefined keyword.")),
-                    };
-                }
+        if !args.kw_arg.is_nil() && kw.is_nil() {
+            let keyword = args.kw_arg.as_hash().unwrap();
+            for (k, v) in keyword.iter() {
+                let id = k.as_symbol().unwrap();
+                match params.keyword_params.get(&id) {
+                    Some(lvar) => {
+                        context[*lvar] = v;
+                    }
+                    None => return Err(vm.error_argument("Undefined keyword.")),
+                };
             }
-            _ => {}
         };
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match args.block {
@@ -197,28 +194,25 @@ impl Context {
             context[i] = args[i];
         }
 
-        if args.kw_arg.is_some() {
+        if !args.kw_arg.is_nil() {
             return Err(vm.error_argument("Undefined keyword."));
         };
         Ok(context)
     }
 
-    fn set_arguments(&mut self, args: &Args, kw_arg: Option<Value>) {
+    fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
         let iseq = self.iseq_ref.unwrap();
         let req_len = iseq.params.req_params;
         let post_len = iseq.params.post_params;
-        match self.kind {
-            ISeqKind::Block if args.len() == 1 && req_len + post_len > 1 => {
-                match args[0].as_array() {
-                    Some(ary) => {
-                        let args = &ary.elements;
-                        self.fill_arguments(args, args.len(), iseq, kw_arg);
-                        return;
-                    }
-                    _ => {}
+        if iseq.is_block() && args.len() == 1 && req_len + post_len > 1 {
+            match args[0].as_array() {
+                Some(ary) => {
+                    let args = &ary.elements;
+                    self.fill_arguments(args, args.len(), iseq, kw_arg);
+                    return;
                 }
+                _ => {}
             }
-            _ => {}
         }
 
         self.fill_arguments(args, args.len(), iseq, kw_arg);
@@ -229,24 +223,24 @@ impl Context {
         args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
         args_len: usize,
         iseq: ISeqRef,
-        kw_arg: Option<Value>,
+        kw_arg: Value,
     ) {
         let params = &iseq.params;
-        let mut kw_len = if kw_arg.is_some() { 1 } else { 0 };
+        let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req_params;
         let opt_len = params.opt_params;
         let rest_len = if params.rest_param { 1 } else { 0 };
         let post_len = params.post_params;
-        let post_pos = req_len + opt_len + rest_len;
         let arg_len = args_len + kw_len;
         if post_len != 0 {
             // fill post_req params.
+            let post_pos = req_len + opt_len + rest_len;
             for i in 0..post_len - kw_len {
                 self[post_pos + i] = args[arg_len - post_len + i];
             }
             if kw_len == 1 {
                 // fill keyword params as a hash.
-                self[post_pos + post_len - 1] = kw_arg.unwrap();
+                self[post_pos + post_len - 1] = kw_arg;
                 kw_len = 0;
             }
         }
@@ -258,7 +252,7 @@ impl Context {
             }
             if kw_len == 1 {
                 // fill keyword params as a hash.
-                self[req_opt - 1] = kw_arg.unwrap();
+                self[req_opt - 1] = kw_arg;
                 kw_len = 0;
             }
             if req_opt < req_len {
@@ -274,7 +268,7 @@ impl Context {
             } else {
                 let mut v = args[req_len + opt_len..arg_len - post_len - kw_len].to_vec();
                 if kw_len == 1 {
-                    v.push(kw_arg.unwrap());
+                    v.push(kw_arg);
                 }
                 v
             };

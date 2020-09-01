@@ -282,6 +282,44 @@ impl Globals {
         self.inline_cache.add_entry()
     }
 
+    /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
+    ///
+    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
+    /// return MethodRef of the entry.
+    /// If not, search `method` by scanning a class chain.
+    /// `class` must be a Class.
+    pub fn get_method(&mut self, rec_class: Value, method: IdentId) -> Option<MethodRef> {
+        match self.get_method_cache_entry(rec_class, method) {
+            Some(MethodCacheEntry { version, method }) => {
+                if *version == self.class_version {
+                    return Some(*method);
+                }
+            }
+            None => {}
+        };
+        let mut temp_class = rec_class;
+        let mut singleton_flag = rec_class.as_class().is_singleton;
+        loop {
+            match temp_class.get_instance_method(method) {
+                Some(methodref) => {
+                    self.add_method_cache_entry(rec_class, method, methodref);
+                    return Some(methodref);
+                }
+                None => match temp_class.superclass() {
+                    Some(superclass) => temp_class = superclass,
+                    None => {
+                        if singleton_flag {
+                            singleton_flag = false;
+                            temp_class = rec_class.rvalue().class();
+                        } else {
+                            return None;
+                        }
+                    }
+                },
+            };
+        }
+    }
+
     pub fn get_method_from_inline_cache(
         &mut self,
         cache_id: u32,

@@ -158,7 +158,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
         let method = match class.superclass() {
-            Some(class) => match vm.get_instance_method(class, m) {
+            Some(class) => match vm.globals.get_method(class, m) {
                 Some(m) => m,
                 None => {
                     return Err(vm.error_nomethod(format!(

@@ -240,7 +240,7 @@ impl RValue {
 
     pub fn new_integer(i: i64) -> Self {
         RValue {
-            class: Value::nil(),
+            class: BuiltinClass::integer(),
             var_table: None,
             kind: ObjKind::Integer(i),
         }
@@ -248,7 +248,7 @@ impl RValue {
 
     pub fn new_float(f: f64) -> Self {
         RValue {
-            class: Value::nil(),
+            class: BuiltinClass::float(),
             var_table: None,
             kind: ObjKind::Float(f),
         }

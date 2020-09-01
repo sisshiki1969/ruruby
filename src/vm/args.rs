@@ -7,7 +7,7 @@ const ARG_ARRAY_SIZE: usize = 8;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Args {
     pub block: Option<MethodRef>,
-    pub kw_arg: Option<Value>,
+    pub kw_arg: Value,
     elems: ArgsArray,
 }
 
@@ -15,7 +15,7 @@ impl Args {
     pub fn new(len: usize) -> Self {
         Args {
             block: None,
-            kw_arg: None,
+            kw_arg: Value::nil(),
             elems: ArgsArray::new(len),
         }
     }
@@ -24,10 +24,18 @@ impl Args {
         self.elems.push(val);
     }
 
+    pub fn from_slice(data: &[Value]) -> Self {
+        Args {
+            block: None,
+            kw_arg: Value::nil(),
+            elems: ArgsArray::from_slice(data),
+        }
+    }
+
     pub fn new0() -> Self {
         Args {
             block: None,
-            kw_arg: None,
+            kw_arg: Value::nil(),
             elems: ArgsArray::new0(),
         }
     }
@@ -35,7 +43,7 @@ impl Args {
     pub fn new1(arg: Value) -> Self {
         Args {
             block: None,
-            kw_arg: None,
+            kw_arg: Value::nil(),
             elems: ArgsArray::new1(arg),
         }
     }
@@ -43,7 +51,7 @@ impl Args {
     pub fn new2(arg0: Value, arg1: Value) -> Self {
         Args {
             block: None,
-            kw_arg: None,
+            kw_arg: Value::nil(),
             elems: ArgsArray::new2(arg0, arg1),
         }
     }
@@ -56,7 +64,7 @@ impl Args {
     ) -> Self {
         Args {
             block: block.into(),
-            kw_arg: None,
+            kw_arg: Value::nil(),
             elems: ArgsArray::new3(arg0, arg1, arg2),
         }
     }
@@ -120,6 +128,19 @@ impl ArgsArray {
             }
         } else {
             ArgsArray::Vec(vec![Value::uninitialized(); len])
+        }
+    }
+
+    fn from_slice(data: &[Value]) -> Self {
+        let len = data.len();
+        if len <= ARG_ARRAY_SIZE {
+            let mut ary = [Value::uninitialized(); ARG_ARRAY_SIZE];
+            for i in 0..len {
+                ary[i] = data[i];
+            }
+            ArgsArray::Array { len, ary }
+        } else {
+            ArgsArray::Vec(data.to_vec())
         }
     }
 

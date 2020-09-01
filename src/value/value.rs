@@ -297,23 +297,26 @@ impl Value {
                     BuiltinClass::object()
                 }
             }
-            Some(info) => match &info.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", info),
-                ObjKind::Integer(_) => BuiltinClass::integer(),
-                ObjKind::Float(_) => BuiltinClass::float(),
-                _ => info.class(),
-            },
+            Some(info) => info.class(),
         }
     }
 
     /// Get class of `self`.
     /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
     pub fn get_class(&self) -> Value {
-        match self.unpack() {
-            RV::Integer(_) => BuiltinClass::integer(),
-            RV::Float(_) => BuiltinClass::float(),
-            RV::Object(info) => info.search_class(),
-            _ => BuiltinClass::object(),
+        match self.as_rvalue() {
+            None => {
+                if self.is_packed_fixnum() {
+                    BuiltinClass::integer()
+                } else if self.is_packed_num() {
+                    BuiltinClass::float()
+                } else if self.is_packed_symbol() {
+                    BuiltinClass::object()
+                } else {
+                    BuiltinClass::object()
+                }
+            }
+            Some(info) => info.search_class(),
         }
     }
 
@@ -794,19 +797,19 @@ impl Value {
         IdentId::from((self.0 >> 32) as u32)
     }
 
-    pub fn uninitialized() -> Self {
+    pub const fn uninitialized() -> Self {
         Value(UNINITIALIZED)
     }
 
-    pub fn nil() -> Self {
+    pub const fn nil() -> Self {
         Value(NIL_VALUE)
     }
 
-    pub fn true_val() -> Self {
+    pub const fn true_val() -> Self {
         Value(TRUE_VALUE)
     }
 
-    pub fn false_val() -> Self {
+    pub const fn false_val() -> Self {
         Value(FALSE_VALUE)
     }
 
