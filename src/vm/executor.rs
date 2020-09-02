@@ -1095,20 +1095,20 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_send(iseq, receiver));
-                    self.pc += 37;
+                    self.pc += 21;
                 }
                 Inst::SEND_SELF => {
                     try_push!(self.vm_send(iseq, self_value));
-                    self.pc += 37;
+                    self.pc += 21;
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_opt_send(iseq, receiver));
-                    self.pc += 27;
+                    self.pc += 11;
                 }
                 Inst::OPT_SEND_SELF => {
                     try_push!(self.vm_opt_send(iseq, self_value));
-                    self.pc += 27;
+                    self.pc += 11;
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
@@ -2177,7 +2177,8 @@ impl VM {
         let args_num = iseq.read16(self.pc + 5);
         let flag = iseq.read16(self.pc + 7);
         let block = iseq.read64(self.pc + 9);
-        let methodref = self.get_method_from_icache(iseq, self.pc + 17, receiver, method_id)?;
+        let cache = iseq.read32(self.pc + 17);
+        let methodref = self.get_method_from_icache(cache, receiver, method_id)?;
 
         let keyword = if flag & 0b01 == 1 {
             self.stack_pop()
@@ -2213,7 +2214,8 @@ impl VM {
         // No block nor keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
-        let methodref = self.get_method_from_icache(iseq, self.pc + 7, receiver, method_id)?;
+        let cache = iseq.read32(self.pc + 7);
+        let methodref = self.get_method_from_icache(cache, receiver, method_id)?;
 
         let len = self.exec_stack.len();
         let args = Args::from_slice(&self.exec_stack[len - args_num..]);
@@ -2349,7 +2351,12 @@ impl VM {
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
-        match self.globals.get_method(rec_class, method_id) {
+        let class_version = self.globals.class_version;
+        match self
+            .globals
+            .method_cache
+            .get_method(class_version, rec_class, method_id)
+        {
             Some(m) => Ok(m),
             None => Err(self.error_undefined_method(method_id, receiver)),
         }
@@ -2357,26 +2364,32 @@ impl VM {
 
     fn get_method_from_icache(
         &mut self,
-        iseq: &mut ISeq,
-        pc: usize,
+        cache: u32,
         receiver: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
-        let cache_class = iseq.read64(pc);
-        if rec_class.id() == cache_class && self.globals.class_version == iseq.read32(pc + 8) {
-            Ok(iseq.read_methodref(pc + 12))
-        } else {
-            match self.globals.get_method(rec_class, method_id) {
-                Some(m) => {
-                    //eprintln!("miss");
-                    iseq.write64(pc, rec_class.id());
-                    iseq.write32(pc + 8, self.globals.class_version);
-                    iseq.write64(pc + 12, m.id());
-                    Ok(m)
-                }
-                None => return Err(self.error_undefined_method(method_id, receiver)),
+        let version = self.globals.class_version;
+        let icache = self.globals.inline_cache.get_entry(cache);
+        if icache.version == version {
+            match icache.entries {
+                Some((class, method)) if class.id() == rec_class.id() => return Ok(method),
+                _ => {}
             }
+        };
+        match self
+            .globals
+            .method_cache
+            .get_method(version, rec_class, method_id)
+        {
+            Some(m) => {
+                //eprintln!("miss");
+                let icache = self.globals.inline_cache.get_entry(cache);
+                icache.version = version;
+                icache.entries = Some((rec_class, m));
+                Ok(m)
+            }
+            None => return Err(self.error_undefined_method(method_id, receiver)),
         }
     }
 

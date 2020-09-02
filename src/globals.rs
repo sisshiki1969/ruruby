@@ -10,7 +10,8 @@ pub struct Globals {
     pub builtins: BuiltinRef,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
-    method_cache: MethodCache,
+    pub method_cache: MethodCache,
+    pub inline_cache: InlineCache,
     pub case_dispatch: CaseDispatchMap,
 
     main_fiber: Option<VMRef>,
@@ -167,6 +168,7 @@ impl Globals {
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
             method_cache: MethodCache::new(),
+            inline_cache: InlineCache::new(),
             main_fiber: None,
             instant: std::time::Instant::now(),
             class_version: 0,
@@ -270,56 +272,6 @@ impl Globals {
     }
 }
 
-impl Globals {
-    /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
-    ///
-    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
-    /// return MethodRef of the entry.
-    /// If not, search `method` by scanning a class chain.
-    /// `class` must be a Class.
-    pub fn get_method(&mut self, rec_class: Value, method: IdentId) -> Option<MethodRef> {
-        match self.get_method_cache_entry(rec_class, method) {
-            Some(MethodCacheEntry { version, method }) => {
-                if *version == self.class_version {
-                    return Some(*method);
-                }
-            }
-            None => {}
-        };
-        let mut temp_class = rec_class;
-        let mut singleton_flag = rec_class.as_class().is_singleton;
-        loop {
-            match temp_class.get_instance_method(method) {
-                Some(methodref) => {
-                    self.add_method_cache_entry(rec_class, method, methodref);
-                    return Some(methodref);
-                }
-                None => match temp_class.superclass() {
-                    Some(superclass) => temp_class = superclass,
-                    None => {
-                        if singleton_flag {
-                            singleton_flag = false;
-                            temp_class = rec_class.rvalue().class();
-                        } else {
-                            return None;
-                        }
-                    }
-                },
-            };
-        }
-    }
-}
-
-impl Globals {
-    pub fn add_method_cache_entry(&mut self, class: Value, id: IdentId, method: MethodRef) {
-        self.method_cache
-            .add_entry(class, id, self.class_version, method);
-    }
-
-    pub fn get_method_cache_entry(&self, class: Value, id: IdentId) -> Option<&MethodCacheEntry> {
-        self.method_cache.get_entry(class, id)
-    }
-}
 /*
 impl Globals {
     pub fn new_case_dispatch_map(&mut self) -> u32 {
@@ -394,6 +346,91 @@ impl MethodCache {
 
     fn get_entry(&self, class: Value, id: IdentId) -> Option<&MethodCacheEntry> {
         self.0.get(&(class, id))
+    }
+
+    /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
+    ///
+    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
+    /// return MethodRef of the entry.
+    /// If not, search `method` by scanning a class chain.
+    /// `class` must be a Class.
+    pub fn get_method(
+        &mut self,
+        class_version: u32,
+        rec_class: Value,
+        method: IdentId,
+    ) -> Option<MethodRef> {
+        //let class_version = self.class_version;
+        if let Some(MethodCacheEntry { version, method }) = self.get_entry(rec_class, method) {
+            if *version == class_version {
+                return Some(*method);
+            }
+        };
+        let mut temp_class = rec_class;
+        let mut singleton_flag = rec_class.as_class().is_singleton;
+        loop {
+            match temp_class.get_instance_method(method) {
+                Some(methodref) => {
+                    self.add_entry(rec_class, method, class_version, methodref);
+                    return Some(methodref);
+                }
+                None => match temp_class.superclass() {
+                    Some(superclass) => temp_class = superclass,
+                    None => {
+                        if singleton_flag {
+                            singleton_flag = false;
+                            temp_class = rec_class.rvalue().class();
+                        } else {
+                            return None;
+                        }
+                    }
+                },
+            };
+        }
+    }
+}
+
+///
+///  Inline method cache
+///
+///  This module supports inline method cache which is embedded in the instruction sequence directly.
+///
+#[derive(Debug, Clone)]
+pub struct InlineCache {
+    table: Vec<InlineCacheEntry>,
+    id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct InlineCacheEntry {
+    pub version: u32,
+    pub entries: Option<(Value, MethodRef)>,
+}
+
+impl InlineCacheEntry {
+    fn new() -> Self {
+        InlineCacheEntry {
+            version: 0,
+            entries: None,
+        }
+    }
+}
+
+impl InlineCache {
+    fn new() -> Self {
+        InlineCache {
+            table: vec![],
+            id: 0,
+        }
+    }
+    pub fn add_entry(&mut self) -> u32 {
+        self.id += 1;
+        self.table.push(InlineCacheEntry::new());
+        self.id - 1
+    }
+
+    pub fn get_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
+        &mut self.table[id as usize]
     }
 }
 
