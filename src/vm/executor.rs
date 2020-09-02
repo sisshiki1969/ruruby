@@ -553,10 +553,9 @@ impl VM {
                 Inst::ADD => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = iseq.read32(self.pc + 1);
-                    let val = self.eval_add(lhs, rhs, cache)?;
+                    let val = self.eval_add(lhs, rhs)?;
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 1;
                 }
                 Inst::ADDI => {
                     let lhs = self.stack_pop();
@@ -568,10 +567,9 @@ impl VM {
                 Inst::SUB => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = iseq.read32(self.pc + 1);
-                    let val = self.eval_sub(lhs, rhs, cache)?;
+                    let val = self.eval_sub(lhs, rhs)?;
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 1;
                 }
                 Inst::SUBI => {
                     let lhs = self.stack_pop();
@@ -583,10 +581,9 @@ impl VM {
                 Inst::MUL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = iseq.read32(self.pc + 1);
-                    let val = self.eval_mul(lhs, rhs, cache)?;
+                    let val = self.eval_mul(lhs, rhs)?;
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 1;
                 }
                 Inst::POW => {
                     let lhs = self.stack_pop();
@@ -598,10 +595,9 @@ impl VM {
                 Inst::DIV => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = iseq.read32(self.pc + 1);
-                    let val = self.eval_div(lhs, rhs, cache)?;
+                    let val = self.eval_div(lhs, rhs)?;
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 1;
                 }
                 Inst::REM => {
                     let lhs = self.stack_pop();
@@ -620,10 +616,9 @@ impl VM {
                 Inst::SHL => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let cache = iseq.read32(self.pc + 1);
-                    let val = self.eval_shl(lhs, rhs, cache)?;
+                    let val = self.eval_shl(lhs, rhs)?;
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 1;
                 }
                 Inst::NEG => {
                     let lhs = self.stack_pop();
@@ -1504,35 +1499,6 @@ impl VM {
 // Utilities for method call
 
 impl VM {
-    /// Get a method from the method cache if saved in it.
-    /// Otherwise, search a class chain for the method.
-    fn get_method_from_cache(
-        &mut self,
-        cache_id: u32,
-        rec_class: Value,
-        method_id: IdentId,
-    ) -> Option<MethodRef> {
-        match self
-            .globals
-            .get_method_from_inline_cache(cache_id, rec_class)
-        {
-            Some(method) => Some(method),
-            _ => {
-                /*eprintln!(
-                    "cache miss {} {:?}",
-                    IdentId::get_ident_name(method_id),
-                    rec_class
-                );*/
-                let method = match self.globals.get_method(rec_class, method_id) {
-                    Some(m) => m,
-                    None => return None,
-                };
-                self.globals.set_inline_cache(cache_id, rec_class, method);
-                Some(method)
-            }
-        }
-    }
-
     fn fallback(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
         let mref = self.get_method(receiver, method_id)?;
         let val = self.eval_send(mref, receiver, args)?;
@@ -1552,24 +1518,6 @@ impl VM {
             }
         }
     }
-
-    fn fallback_cache_for_binop(
-        &mut self,
-        lhs: Value,
-        rhs: Value,
-        method: IdentId,
-        cache: u32,
-    ) -> VMResult {
-        let rec_class = lhs.get_class_for_method();
-        let methodref = match self.get_method_from_cache(cache, rec_class, method) {
-            Some(m) => m,
-            None => {
-                return Err(self.error_undefined_op(IdentId::get_ident_name(method), rhs, lhs));
-            }
-        };
-        let arg = Args::new1(rhs);
-        self.eval_send(methodref, lhs, &arg)
-    }
 }
 
 macro_rules! eval_op_i {
@@ -1584,7 +1532,7 @@ macro_rules! eval_op_i {
 }
 
 macro_rules! eval_op {
-    ($vm:ident, $cache:expr, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         if $lhs.is_packed_fixnum() {
             let lhs = $lhs.as_packed_fixnum();
             if $rhs.is_packed_fixnum() {
@@ -1604,24 +1552,24 @@ macro_rules! eval_op {
                 return Ok(Value::float(lhs.$op(rhs)));
             }
         }
-        return $vm.fallback_cache_for_binop($lhs, $rhs, $id, $cache);
+        return $vm.fallback_for_binop($id, $lhs, $rhs);
     };
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
+    fn eval_add(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Add;
-        eval_op!(self, cache, rhs, lhs, add, IdentId::_ADD);
+        eval_op!(self, rhs, lhs, add, IdentId::_ADD);
     }
 
-    fn eval_sub(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
+    fn eval_sub(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Sub;
-        eval_op!(self, cache, rhs, lhs, sub, IdentId::_SUB);
+        eval_op!(self, rhs, lhs, sub, IdentId::_SUB);
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
+    fn eval_mul(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Mul;
-        eval_op!(self, cache, rhs, lhs, mul, IdentId::_MUL);
+        eval_op!(self, rhs, lhs, mul, IdentId::_MUL);
     }
 
     fn eval_addi(&mut self, lhs: Value, i: i32) -> VMResult {
@@ -1634,9 +1582,9 @@ impl VM {
         eval_op_i!(self, iseq, lhs, i, sub, IdentId::_SUB);
     }
 
-    fn eval_div(&mut self, rhs: Value, lhs: Value, cache: u32) -> VMResult {
+    fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Div;
-        eval_op!(self, cache, rhs, lhs, div, IdentId::_DIV);
+        eval_op!(self, rhs, lhs, div, IdentId::_DIV);
     }
 
     fn eval_rem(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -1688,7 +1636,7 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, mut lhs: Value, cache: u32) -> VMResult {
+    fn eval_shl(&mut self, rhs: Value, mut lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::integer(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
@@ -1712,7 +1660,7 @@ impl VM {
                 _ => {}
             },
         };
-        let val = self.fallback_cache_for_binop(lhs, rhs, IdentId::_SHL, cache)?;
+        let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
         Ok(val)
     }
 
@@ -2266,7 +2214,6 @@ impl VM {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
         let methodref = self.get_method_from_icache(iseq, self.pc + 7, receiver, method_id)?;
-        //let args = self.pop_args_to_ary(args_num as usize);
 
         let len = self.exec_stack.len();
         let args = Args::from_slice(&self.exec_stack[len - args_num..]);
@@ -2510,9 +2457,8 @@ impl VM {
     fn pop_args_to_ary(&mut self, arg_num: usize) -> Args {
         let mut args = Args::new(0);
         let len = self.exec_stack.len();
-        let iter = self.exec_stack.drain(len - arg_num..);
 
-        for val in iter {
+        for val in self.exec_stack[len - arg_num..].iter() {
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),
@@ -2540,9 +2486,10 @@ impl VM {
                         _ => args.push(inner),
                     },
                 },
-                None => args.push(val),
+                None => args.push(*val),
             };
         }
+        self.exec_stack.truncate(len - arg_num);
         args
     }
 

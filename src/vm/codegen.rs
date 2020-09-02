@@ -341,11 +341,6 @@ impl Codegen {
         Codegen::push32(iseq, i as u32);
     }
 
-    fn gen_sub(&mut self, iseq: &mut ISeq, globals: &mut Globals) {
-        iseq.push(Inst::SUB);
-        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
-    }
-
     fn gen_subi(&mut self, iseq: &mut ISeq, i: i32) {
         iseq.push(Inst::SUBI);
         Codegen::push32(iseq, i as u32);
@@ -1350,7 +1345,6 @@ impl Codegen {
                             self.gen(globals, iseq, rhs, true)?;
                             self.save_loc(iseq, loc);
                             iseq.push(Inst::ADD);
-                            Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                         }
                     },
                     BinOp::Sub => match rhs.kind {
@@ -1363,7 +1357,7 @@ impl Codegen {
                             self.gen(globals, iseq, lhs, true)?;
                             self.gen(globals, iseq, rhs, true)?;
                             self.save_loc(iseq, loc);
-                            self.gen_sub(iseq, globals);
+                            iseq.push(Inst::SUB);
                         }
                     },
                     BinOp::Mul => {
@@ -1371,25 +1365,17 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::MUL);
-                        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::Div => {
                         self.gen(globals, iseq, lhs, true)?;
                         self.gen(globals, iseq, rhs, true)?;
                         self.save_loc(iseq, loc);
                         iseq.push(Inst::DIV);
-                        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
                     }
                     BinOp::Exp => binop!(Inst::POW),
                     BinOp::Rem => binop!(Inst::REM),
                     BinOp::Shr => binop!(Inst::SHR),
-                    BinOp::Shl => {
-                        self.gen(globals, iseq, lhs, true)?;
-                        self.gen(globals, iseq, rhs, true)?;
-                        self.save_loc(iseq, loc);
-                        iseq.push(Inst::SHL);
-                        Codegen::push32(iseq, globals.add_inline_cache_entry() as u32);
-                    }
+                    BinOp::Shl => binop!(Inst::SHL),
                     BinOp::BitOr => binop_imm!(Inst::BOR, Inst::B_ORI),
                     BinOp::BitAnd => binop_imm!(Inst::BAND, Inst::B_ANDI),
                     BinOp::BitXor => binop!(Inst::BXOR),

@@ -168,10 +168,7 @@ impl ISeqInfo {
             param_ident,
             keyword_params,
         };
-        let opt_flag = match kind {
-            ISeqKind::Block => false,
-            _ => params.is_opt(),
-        };
+        let opt_flag = params.is_opt();
         ISeqInfo {
             method,
             name,

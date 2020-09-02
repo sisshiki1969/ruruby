@@ -240,6 +240,10 @@ impl Inst {
             | Inst::PUSH_TRUE
             | Inst::PUSH_FALSE
             | Inst::PUSH_SELF
+            | Inst::ADD                 
+            | Inst::SUB                 
+            | Inst::MUL                 
+            | Inst::DIV                 
             | Inst::REM
             | Inst::POW
             | Inst::TEQ
@@ -251,6 +255,7 @@ impl Inst {
             | Inst::LE
             | Inst::CMP
             | Inst::NOT
+            | Inst::SHL
             | Inst::SHR
             | Inst::NEG
             | Inst::BOR
@@ -298,10 +303,6 @@ impl Inst {
             | Inst::CONCAT_STRING       // number of items: u32
             | Inst::SINKN               // number of items: u32
             | Inst::TOPN                // number of items: u32
-            | Inst::ADD                 // inline cache: u32
-            | Inst::SUB                 // inline cache: u32
-            | Inst::MUL                 // inline cache: u32
-            | Inst::DIV                 // inline cache: u32
             | Inst::ADDI                // immediate: i32
             | Inst::SUBI                // immediate: i32
             | Inst::B_ANDI              // immediate: i32
@@ -312,7 +313,6 @@ impl Inst {
             | Inst::GEI                 // immediate: i32
             | Inst::LTI                 // immediate: i32
             | Inst::LEI                 // immediate: i32
-            | Inst::SHL                 // inline cache: u32
             | Inst::CREATE_HASH         // number of items: u32
             | Inst::YIELD               // number of items: u32
             => 5,

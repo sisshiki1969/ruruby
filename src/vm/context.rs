@@ -135,7 +135,14 @@ impl Context {
         caller: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
-            return Context::from_args_opt(vm, self_value, iseq, args, outer, caller);
+            if !args.kw_arg.is_nil() {
+                return Err(vm.error_argument("Undefined keyword."));
+            };
+            if iseq.is_block() {
+                return Context::from_args_opt_block(self_value, iseq, args, outer, caller);
+            } else {
+                return Context::from_args_opt_method(vm, self_value, iseq, args, outer, caller);
+            }
         }
         let mut context = Context::new(self_value, args.block, iseq, outer, caller);
         let params = &iseq.params;
@@ -178,7 +185,7 @@ impl Context {
         Ok(context)
     }
 
-    pub fn from_args_opt(
+    fn from_args_opt_method(
         vm: &mut VM,
         self_val: Value,
         iseq: ISeqRef,
@@ -189,15 +196,63 @@ impl Context {
         let mut context = Context::new(self_val, args.block, iseq, outer, caller);
         let req_len = iseq.params.req_params;
         vm.check_args_num(self_val, args.len(), req_len)?;
-
         for i in 0..req_len {
             context[i] = args[i];
         }
-
-        if !args.kw_arg.is_nil() {
-            return Err(vm.error_argument("Undefined keyword."));
-        };
         Ok(context)
+    }
+
+    fn from_args_opt_block(
+        self_val: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+        caller: Option<ContextRef>,
+    ) -> Result<Self, RubyError> {
+        let mut context = Context::new(self_val, args.block, iseq, outer, caller);
+        let req_len = iseq.params.req_params;
+        if req_len != 0 {
+            context.set_arguments_opt(args, req_len);
+        }
+        Ok(context)
+    }
+
+    fn set_arguments_opt(&mut self, args: &Args, req_len: usize) {
+        if args.len() == 1 && req_len > 1 {
+            match args[0].as_array() {
+                Some(ary) => {
+                    let args = &ary.elements;
+                    self.fill_arguments_opt(args, args.len(), req_len);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        self.fill_arguments_opt(args, args.len(), req_len);
+    }
+
+    fn fill_arguments_opt(
+        &mut self,
+        args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
+        args_len: usize,
+        req_len: usize,
+    ) {
+        if req_len <= args_len {
+            // fill req params.
+            for i in 0..req_len {
+                self[i] = args[i];
+            }
+        } else {
+            // fill req params.
+            for i in 0..args_len {
+                self[i] = args[i];
+            }
+            // fill rest req params with nil.
+            for i in args_len..req_len {
+                self[i] = Value::nil();
+            }
+        }
     }
 
     fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
@@ -272,8 +327,7 @@ impl Context {
                 }
                 v
             };
-            let val = Value::array_from(ary);
-            self[req_len + opt_len] = val;
+            self[req_len + opt_len] = Value::array_from(ary);
         }
     }
 }

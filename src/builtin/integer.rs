@@ -164,7 +164,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(val);
         }
     };
-    let num = self_val.expect_integer(vm, "Receiver")?;
+    let num = self_val.as_integer().unwrap();
     if num < 1 {
         return Ok(self_val);
     };

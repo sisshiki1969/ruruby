@@ -10,7 +10,6 @@ pub struct Globals {
     pub builtins: BuiltinRef,
     pub const_values: ConstantValues,
     pub global_var: ValueTable,
-    inline_cache: InlineCache,
     method_cache: MethodCache,
     pub case_dispatch: CaseDispatchMap,
 
@@ -167,7 +166,6 @@ impl Globals {
             allocator,
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
-            inline_cache: InlineCache::new(),
             method_cache: MethodCache::new(),
             main_fiber: None,
             instant: std::time::Instant::now(),
@@ -273,15 +271,6 @@ impl Globals {
 }
 
 impl Globals {
-    pub fn set_inline_cache(&mut self, id: u32, class: Value, method: MethodRef) {
-        let entry = &mut self.inline_cache.table[id as usize];
-        entry.entries = Some((class, method));
-    }
-
-    pub fn add_inline_cache_entry(&mut self) -> u32 {
-        self.inline_cache.add_entry()
-    }
-
     /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
     ///
     /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
@@ -318,15 +307,6 @@ impl Globals {
                 },
             };
         }
-    }
-
-    pub fn get_method_from_inline_cache(
-        &mut self,
-        cache_id: u32,
-        rec_class: Value,
-    ) -> Option<MethodRef> {
-        self.inline_cache
-            .get_method(cache_id, rec_class, self.class_version)
     }
 }
 
@@ -414,65 +394,6 @@ impl MethodCache {
 
     fn get_entry(&self, class: Value, id: IdentId) -> Option<&MethodCacheEntry> {
         self.0.get(&(class, id))
-    }
-}
-
-///
-///  Inline method cache
-///
-///  This module supports inline method cache which is embedded in the instruction sequence directly.
-///
-#[derive(Debug, Clone)]
-pub struct InlineCache {
-    table: Vec<InlineCacheEntry>,
-    id: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct InlineCacheEntry {
-    //class: Value,
-    version: u32,
-    //method: MethodRef,
-    entries: Option<(Value, MethodRef)>,
-}
-
-impl InlineCacheEntry {
-    fn new() -> Self {
-        InlineCacheEntry {
-            version: 0,
-            entries: None,
-        }
-    }
-}
-
-impl InlineCache {
-    fn new() -> Self {
-        InlineCache {
-            table: vec![],
-            id: 0,
-        }
-    }
-    fn add_entry(&mut self) -> u32 {
-        self.id += 1;
-        self.table.push(InlineCacheEntry::new());
-        self.id - 1
-    }
-
-    fn get_method(&mut self, id: u32, class: Value, version: u32) -> Option<MethodRef> {
-        let entry = &mut self.table[id as usize];
-        if entry.version != version {
-            //eprintln!("version up");
-            entry.version = version;
-            entry.entries = None;
-            return None;
-        }
-        if let Some((cache_class, method)) = entry.entries {
-            if cache_class.id() == class.id() {
-                return Some(method);
-            }
-        }
-        //eprintln!("not found");
-        None
     }
 }
 
