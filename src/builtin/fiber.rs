@@ -13,8 +13,8 @@ pub fn init(_globals: &mut Globals) -> Value {
 
 // Class methods
 
-fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let method = vm.expect_block(args.block)?;
     let context = vm.create_block_context(method)?;
     let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
@@ -42,7 +42,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let fiber = self_val.expect_fiber(vm, "")?;
     fiber.resume(vm)
 }

@@ -37,7 +37,7 @@ fn complex_rect(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 // Instance methods
 
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
@@ -47,7 +47,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
@@ -57,7 +57,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
@@ -69,7 +69,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn div(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
@@ -82,7 +82,7 @@ fn div(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
@@ -93,19 +93,19 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn abs2(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok((r * r + i * i).to_val())
 }
 
 fn abs(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok((r * r + i * i).sqrt().to_val())
 }
 
 fn rect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok(Value::array_from(vec![r.to_val(), i.to_val()]))
 }

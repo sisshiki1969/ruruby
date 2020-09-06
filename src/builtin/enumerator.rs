@@ -79,7 +79,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
         return Err(vm.error_argument("Block is not allowed."));
@@ -97,7 +97,7 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
     let mut info = vm.dup_enum(eref);
@@ -126,7 +126,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     let block = match args.block {
@@ -156,7 +156,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     //let fref = &mut eref.fiber;

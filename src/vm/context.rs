@@ -1,7 +1,7 @@
 pub use crate::*;
 use std::ops::{Index, IndexMut, Range};
 
-const LVAR_ARRAY_SIZE: usize = 32;
+const LVAR_ARRAY_SIZE: usize = 4;
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -138,11 +138,17 @@ impl Context {
             if !args.kw_arg.is_nil() {
                 return Err(vm.error_argument("Undefined keyword."));
             };
+            let mut context = Context::new(self_value, args.block, iseq, outer, caller);
             if iseq.is_block() {
-                return Context::from_args_opt_block(self_value, iseq, args, outer, caller);
+                context.from_args_opt_block(iseq, args)?;
             } else {
-                return Context::from_args_opt_method(vm, self_value, iseq, args, outer, caller);
+                let req_len = iseq.params.req_params;
+                vm.check_args_num(args.len(), req_len)?;
+                for i in 0..req_len {
+                    context[i] = args[i];
+                }
             }
+            return Ok(context);
         }
         let mut context = Context::new(self_value, args.block, iseq, outer, caller);
         let params = &iseq.params;
@@ -185,53 +191,27 @@ impl Context {
         Ok(context)
     }
 
-    fn from_args_opt_method(
-        vm: &mut VM,
-        self_val: Value,
-        iseq: ISeqRef,
-        args: &Args,
-        outer: Option<ContextRef>,
-        caller: Option<ContextRef>,
-    ) -> Result<Self, RubyError> {
-        let mut context = Context::new(self_val, args.block, iseq, outer, caller);
+    fn from_args_opt_block(&mut self, iseq: ISeqRef, args: &Args) -> Result<(), RubyError> {
+        //let mut context = Context::new(self_val, args.block, iseq, outer, caller);
+        let args_len = args.len();
         let req_len = iseq.params.req_params;
-        vm.check_args_num(self_val, args.len(), req_len)?;
-        for i in 0..req_len {
-            context[i] = args[i];
-        }
-        Ok(context)
-    }
 
-    fn from_args_opt_block(
-        self_val: Value,
-        iseq: ISeqRef,
-        args: &Args,
-        outer: Option<ContextRef>,
-        caller: Option<ContextRef>,
-    ) -> Result<Self, RubyError> {
-        let mut context = Context::new(self_val, args.block, iseq, outer, caller);
-        let req_len = iseq.params.req_params;
-        if req_len != 0 {
-            context.set_arguments_opt(args, req_len);
-        }
-        Ok(context)
-    }
-
-    fn set_arguments_opt(&mut self, args: &Args, req_len: usize) {
-        if args.len() == 1 && req_len > 1 {
+        if args_len == 1 && req_len > 1 {
             match args[0].as_array() {
                 Some(ary) => {
                     let args = &ary.elements;
                     self.fill_arguments_opt(args, args.len(), req_len);
-                    return;
+                    return Ok(());
                 }
                 _ => {}
             }
         }
 
-        self.fill_arguments_opt(args, args.len(), req_len);
+        self.fill_arguments_opt(args, args_len, req_len);
+        Ok(())
     }
 
+    #[inline]
     fn fill_arguments_opt(
         &mut self,
         args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),

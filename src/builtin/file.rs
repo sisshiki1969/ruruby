@@ -39,8 +39,8 @@ fn string_to_canonicalized_path(
 
 // Class methods
 
-fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 2)?;
+fn join(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 2)?;
     let mut path = string_to_path(vm, args[0], "1st agr")?;
     let arg = string_to_path(vm, args[1], "2nd arg")?;
 
@@ -121,9 +121,9 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 /// IO.write(path, string)
-fn write(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn write(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_num(self_val, len, 2)?;
+    vm.check_args_num(len, 2)?;
     let mut arg0 = args[0];
     let mut arg1 = args[1];
     let filename = arg0.expect_string(vm, "1st arg")?;
