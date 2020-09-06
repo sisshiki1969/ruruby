@@ -54,7 +54,7 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(vm.error_type("1st arg must be Symbol.")),
@@ -166,8 +166,8 @@ fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
     IdentId::get_id(&format!("@{:?}", id))
 }
 
-fn module_function(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     vm.module_function(true);
     Ok(Value::nil())
 }
@@ -178,7 +178,7 @@ fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let mut class = vm.expect_module(self_val)?;
     let module = args[0];
     class.include.push(module);
@@ -186,7 +186,7 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let mut class = self_val;
     let mut ary = vec![];
     loop {
@@ -211,7 +211,7 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let mut superclass = self_val;
     let mut ary = vec![];
     loop {
@@ -241,13 +241,13 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = vm.current_context();
     match args.block {
         Some(method) => {
-            vm.check_args_num(self_val, args.len(), 0)?;
+            vm.check_args_num(args.len(), 0)?;
             let args = Args::new0();
             let res = vm.eval_method(method, self_val, Some(context), &args);
             res
         }
         None => {
-            vm.check_args_num(self_val, args.len(), 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string(vm, "1st arg")?;
             let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;

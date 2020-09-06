@@ -16,14 +16,14 @@ pub fn init(_globals: &mut Globals) -> Value {
 }
 
 fn time_now(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let time_info = TimeInfo(Utc::now().with_timezone(&FixedOffset::east(9 * 3600)));
     let new_obj = Value::time(self_val, time_info);
     Ok(new_obj)
 }
 
 fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
@@ -32,7 +32,7 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
@@ -60,7 +60,7 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),

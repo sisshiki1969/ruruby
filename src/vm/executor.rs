@@ -1338,14 +1338,13 @@ impl VM {
         RubyError::new_block_return(val, self.source_info(), loc)
     }
 
-    pub fn check_args_num(&self, self_val: Value, len: usize, num: usize) -> Result<(), RubyError> {
+    pub fn check_args_num(&self, len: usize, num: usize) -> Result<(), RubyError> {
         if len == num {
             Ok(())
         } else {
-            let class = self_val.get_class();
             Err(self.error_argument(format!(
-                "Wrong number of arguments. (given {}, expected {}) self:{:?}",
-                len, num, class
+                "Wrong number of arguments. (given {}, expected {})",
+                len, num
             )))
         }
     }

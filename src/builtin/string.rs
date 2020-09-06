@@ -184,19 +184,19 @@ pub fn init(_globals: &mut Globals) -> Value {
 }
 
 fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.as_rstring().unwrap();
     Ok(Value::string(self_.to_s()))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.as_rstring().unwrap();
     Ok(Value::string(self_.inspect()))
 }
 
 fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     let rhs = args[0].as_rstring().ok_or_else(|| {
         vm.error_argument(format!("1st arg must be String. (given:{:?})", args[0]))
@@ -225,7 +225,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     let rhs = match args[0].expect_integer(vm, "1st arg must be Integer.")? {
         i if i < 0 => return Err(vm.error_argument("Negative argument.")),
@@ -320,7 +320,7 @@ fn index_assign(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::integer(ord as i64)),
@@ -329,7 +329,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_mut_string().unwrap();
     let mut arg0 = args[0];
     *lhs = match arg0.as_mut_rstring() {
@@ -363,7 +363,7 @@ macro_rules! next_char {
 }
 
 fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let arguments = match args[0].as_array() {
         Some(ary) => ary.elements.clone(),
         None => vec![args[0]],
@@ -478,7 +478,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn start_with(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let mut arg0 = args[0];
     let arg = arg0.expect_string(vm, "1st arg")?;
@@ -487,7 +487,7 @@ fn start_with(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn to_sym(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let id = IdentId::get_id(string);
     Ok(Value::symbol(id))
@@ -571,12 +571,12 @@ fn gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, bool), RubyError> {
     match args.block {
         Some(block) => {
-            vm.check_args_num(self_val, args.len(), 1)?;
+            vm.check_args_num(args.len(), 1)?;
             let given = self_val.expect_string(vm, "Receiver")?;
             RegexpInfo::replace_all_block(vm, args[0], given, block)
         }
         None => {
-            vm.check_args_num(self_val, args.len(), 2)?;
+            vm.check_args_num(args.len(), 2)?;
             let given = self_val.expect_string(vm, "Receiver")?;
             let mut arg1 = args[1];
             let replace = arg1.expect_string(vm, "2nd arg")?;
@@ -586,7 +586,7 @@ fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, b
 }
 
 fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     let vec = if let Some(s) = args[0].as_string() {
         let re = vm.regexp_from_string(&s)?;
@@ -682,7 +682,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         RV::Object(_rvalue) => match &mut args[0].clone().rvalue_mut().kind {
             ObjKind::String(rs) => {
-                vm.check_args_num(self_val, args.len(), 1)?;
+                vm.check_args_num(args.len(), 1)?;
                 let given = rs.as_string(vm)?;
                 *target = target.replacen(given, "", usize::MAX);
                 Ok(Value::string(given.clone()))
@@ -706,7 +706,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let given = self_val.expect_string(vm, "Receiver")?;
     if let Some(re) = args[0].as_regexp() {
         let res = match RegexpInfo::find_one(vm, &*re, given).unwrap() {
@@ -720,7 +720,7 @@ fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn tr(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 2)?;
+    vm.check_args_num(args.len(), 2)?;
     let rec = self_val.expect_string(vm, "Receiver")?;
     let mut arg0 = args[0];
     let mut arg1 = args[1];
@@ -731,13 +731,13 @@ fn tr(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn size(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let rec = self_val.expect_string(vm, "Receiver")?;
     Ok(Value::integer(rec.chars().count() as i64))
 }
 
 fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     match args.block {
         Some(block) => {
             let rstr = match self_val.as_rstring() {
@@ -762,7 +762,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let block = match args.block {
         Some(block) => block,
         None => return Err(vm.error_argument("Block is neccessary.")),
@@ -779,7 +779,7 @@ fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn chars(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let string = self_val.expect_string(vm, "Receiver")?;
     let ary: Vec<Value> = string
         .chars()
@@ -789,7 +789,7 @@ fn chars(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let block = match args.block {
         Some(block) => block,
         None => return Err(vm.error_argument("Block is neccessary.")),
@@ -803,7 +803,7 @@ fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let bytes = self_val.as_bytes().unwrap();
     let mut sum = 0;
     for b in bytes {
@@ -813,21 +813,21 @@ fn sum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn upcase(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.expect_string(vm, "Receiver")?;
     let res = self_.to_uppercase();
     Ok(Value::string(res))
 }
 
 fn chomp(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.expect_string(vm, "Receiver")?;
     let res = self_.trim_end_matches('\n').to_string();
     Ok(Value::string(res))
 }
 
 fn toi(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let self_ = match self_val.expect_string(vm, "Receiver") {
         Ok(s) => s,
         Err(_) => return Ok(Value::integer(0)),
@@ -840,7 +840,7 @@ fn toi(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::bool(ord == Ordering::Less)),
@@ -849,7 +849,7 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::bool(ord == Ordering::Greater)),
@@ -858,7 +858,7 @@ fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_string().unwrap();
     let width = args[0].expect_integer(vm, "1st arg")?;
     let padding = " ";
@@ -881,7 +881,7 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         std::char::from_u32((ch as u32) + 1)
             .ok_or_else(|| vm.error_argument("Error occurs in String#succ."))
     }
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let self_ = self_val.as_string().unwrap();
     if self_.len() == 0 {
         return Ok(Value::string("".to_string()));
@@ -932,7 +932,7 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 1)?;
+    vm.check_args_num(args.len(), 1)?;
     let mut arg0 = args[0];
     let target = self_val.as_string().unwrap();
     let mut c = 0;
@@ -944,7 +944,7 @@ fn count(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn rstrip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let string = self_val.as_string().unwrap();
     let trim: &[_] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
     let res = string.trim_end_matches(trim);
@@ -952,7 +952,7 @@ fn rstrip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn ord(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(self_val, args.len(), 0)?;
+    vm.check_args_num(args.len(), 0)?;
     let ch = match self_val.as_string().unwrap().chars().next() {
         Some(ch) => ch,
         None => return Err(vm.error_argument("Empty string.")),
