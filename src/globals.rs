@@ -312,6 +312,12 @@ impl ConstantValues {
     pub fn get(&self, id: usize) -> Value {
         self.table[id].dup()
     }
+
+    pub fn dump(&self) {
+        for (i, val) in self.table.iter().enumerate() {
+            eprintln!("{}:{:?}", i, val);
+        }
+    }
 }
 
 impl GC for ConstantValues {

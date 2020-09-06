@@ -1,7 +1,7 @@
 pub use crate::*;
 use std::ops::{Index, IndexMut, Range};
 
-const LVAR_ARRAY_SIZE: usize = 32;
+const LVAR_ARRAY_SIZE: usize = 4;
 
 #[derive(Debug, Clone)]
 pub struct Context {

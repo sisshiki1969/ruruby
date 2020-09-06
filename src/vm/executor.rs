@@ -774,23 +774,14 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::CONCAT_STRING => {
-                    let val = match iseq.read32(self.pc + 1) as usize {
-                        0 => Value::string("".to_string()),
-                        i => {
-                            let mut res = match self.stack_pop().as_string() {
-                                Some(s) => s.to_owned(),
-                                None => unreachable!("Illegal CONCAT_STRING arguments."),
-                            };
-                            for _ in 0..i - 1 {
-                                res = match self.stack_pop().as_string() {
-                                    Some(lhs) => format!("{}{}", lhs, res),
-                                    None => unreachable!("Illegal CONCAT_STRING arguments."),
-                                };
-                            }
-                            Value::string(res)
-                        }
-                    };
+                    let num = iseq.read32(self.pc + 1) as usize;
+                    let stack_len = self.exec_stack.len();
+                    let mut res = String::new();
+                    for v in self.exec_stack.drain(stack_len - num..stack_len) {
+                        res += v.as_string().unwrap();
+                    }
 
+                    let val = Value::string(res);
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -964,7 +955,7 @@ impl VM {
                 }
                 Inst::CREATE_ARRAY => {
                     let arg_num = iseq.read_usize(self.pc + 1);
-                    let elems = self.pop_args_to_ary(arg_num).into_vec();
+                    let elems = self.pop_args_to_args(arg_num).into_vec();
                     let array = Value::array_from(elems);
                     self.stack_push(array);
                     self.pc += 5;
@@ -990,9 +981,11 @@ impl VM {
                 }
                 Inst::JMP => {
                     let disp = iseq.read_disp(self.pc + 1);
-                    if 0 < disp {
-                        self.gc();
-                    }
+                    self.jump_pc(5, disp);
+                }
+                Inst::JMP_BACK => {
+                    let disp = iseq.read_disp(self.pc + 1);
+                    self.gc();
                     self.jump_pc(5, disp);
                 }
                 Inst::JMP_F => {
@@ -1112,7 +1105,7 @@ impl VM {
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
-                    let args = self.pop_args_to_ary(args_num);
+                    let args = self.pop_args_to_args(args_num);
                     try_push!(self.eval_yield(&args));
                     self.pc += 5;
                 }
@@ -1884,7 +1877,7 @@ impl VM {
 
     fn set_index(&mut self, arg_num: usize) -> Result<(), RubyError> {
         let val = self.stack_pop();
-        let mut args = self.pop_args_to_ary(arg_num);
+        let mut args = self.pop_args_to_args(arg_num);
         let mut receiver = self.stack_pop();
         match receiver.as_mut_rvalue() {
             Some(oref) => {
@@ -1939,7 +1932,7 @@ impl VM {
     }
 
     fn get_index(&mut self, arg_num: usize) -> VMResult {
-        let args = self.pop_args_to_ary(arg_num);
+        let args = self.pop_args_to_args(arg_num);
         let arg_num = args.len();
         let receiver = self.stack_top();
         let val = match receiver.as_rvalue() {
@@ -2203,7 +2196,7 @@ impl VM {
         } else {
             None
         };
-        let mut args = self.pop_args_to_ary(args_num as usize);
+        let mut args = self.pop_args_to_args(args_num as usize);
         args.block = block;
         args.kw_arg = keyword;
         let val = self.eval_send(methodref, receiver, &args)?;
@@ -2467,7 +2460,7 @@ impl VM {
         hash
     }
 
-    fn pop_args_to_ary(&mut self, arg_num: usize) -> Args {
+    fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
         let mut args = Args::new(0);
         let len = self.exec_stack.len();
 
@@ -2646,6 +2639,10 @@ impl VM {
         self.root_path.push(root_path);
         self.exec_program(absolute_path, program);
         self.root_path.pop();
+        #[cfg(feature = "emit-iseq")]
+        {
+            self.globals.const_values.dump();
+        }
     }
 
     pub fn exec_program(&mut self, absolute_path: PathBuf, program: String) {

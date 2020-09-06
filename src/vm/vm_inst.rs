@@ -55,13 +55,14 @@ impl Inst {
     pub const DEF_SMETHOD: u8 = 92;
 
     pub const JMP: u8 = 100;
-    pub const JMP_F: u8 = 101;
-    pub const JMP_T: u8 = 102;
-    pub const RETURN: u8 = 103;
-    pub const BREAK: u8 = 104;
-    pub const OPT_CASE: u8 = 105;
-    pub const MRETURN: u8 = 106;
-    pub const YIELD: u8 = 107;
+    pub const JMP_BACK: u8 = 101;
+    pub const JMP_F: u8 = 102;
+    pub const JMP_T: u8 = 103;
+    pub const RETURN: u8 = 104;
+    pub const BREAK: u8 = 105;
+    pub const OPT_CASE: u8 = 106;
+    pub const MRETURN: u8 = 107;
+    pub const YIELD: u8 = 108;
 
     pub const ADD: u8 = 120;
     pub const SUB: u8 = 121;
@@ -221,6 +222,7 @@ impl Inst {
             Inst::DEF_SMETHOD => "DEF_CMETHOD".to_string(),
 
             Inst::JMP => "JMP".to_string(),
+            Inst::JMP_BACK => "JMP_BACK".to_string(),
             Inst::JMP_F => "JMP_IF_F".to_string(),
             Inst::JMP_T => "JMP_IF_T".to_string(),
             Inst::RETURN => "RETURN".to_string(),
@@ -288,6 +290,7 @@ impl Inst {
             | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CONST_VAL           // ConstId: u32
             | Inst::JMP                 // disp: i32
+            | Inst::JMP_BACK            // disp: i32
             | Inst::JMP_F               // disp: i32
             | Inst::JMP_T               // disp: i32
 
@@ -386,6 +389,7 @@ impl Inst {
             Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", f64::from_bits(iseq.read64(pc + 1))),
 
             Inst::JMP
+            | Inst::JMP_BACK
             | Inst::JMP_F
             | Inst::JMP_T
             | Inst::JMP_F_EQ

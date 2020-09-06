@@ -396,7 +396,7 @@ impl Codegen {
 
     fn gen_jmp_back(&mut self, iseq: &mut ISeq, pos: ISeqPos) {
         let disp = Codegen::current(iseq).disp(pos) - 5;
-        iseq.push(Inst::JMP);
+        iseq.push(Inst::JMP_BACK);
         Codegen::push32(iseq, disp as u32);
     }
 
