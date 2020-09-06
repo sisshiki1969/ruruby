@@ -1,12 +1,9 @@
-class A
-  def fn
-    f
-  end
-  def gn
-    fn
-  end
-end
+a = Fiber.new {
+  1000_000.times {|x|
+    Fiber.yield x
+  }
+}
 
-d = A.new
-
-d.gn
+1000_000.times {
+  a.resume
+}
