@@ -384,6 +384,11 @@ impl Node {
         Node::new(NodeKind::MulAssign(mlhs, mrhs), false, loc)
     }
 
+    pub fn new_single_assign(lhs: Node, rhs: Node) -> Self {
+        let loc = lhs.loc().merge(rhs.loc());
+        Node::new(NodeKind::MulAssign(vec![lhs], vec![rhs]), false, loc)
+    }
+
     pub fn new_method_decl(
         id: IdentId,
         params: Vec<Node>,

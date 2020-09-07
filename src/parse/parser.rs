@@ -95,19 +95,22 @@ impl LvarCollector {
         }
     }
 
-    fn insert_new(&mut self, val: IdentId) -> Result<LvarId, ()> {
+    fn insert_new(&mut self, val: IdentId) -> Option<LvarId> {
         let id = self.id;
         if self.table.insert(val, LvarId(id)).is_some() {
-            return Err(());
+            return None;
         };
         self.id += 1;
-        Ok(LvarId(id))
+        Some(LvarId(id))
     }
 
-    fn insert_block_param(&mut self, val: IdentId) -> Result<LvarId, ()> {
-        let lvar = self.insert_new(val)?;
+    fn insert_block_param(&mut self, val: IdentId) -> Option<LvarId> {
+        let lvar = match self.insert_new(val) {
+            Some(lvar) => lvar,
+            None => return None,
+        };
         self.block = Some(lvar);
-        Ok(lvar)
+        Some(lvar)
     }
 
     pub fn get(&self, val: &IdentId) -> Option<&LvarId> {
@@ -233,8 +236,7 @@ impl Parser {
     // Add the identifier(IdentId) as a new parameter in the current context.
     // If a parameter with the same name already exists, return error.
     fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
-        let res = self.context_mut().lvar.insert_new(id);
-        if res.is_err() {
+        if self.context_mut().lvar.insert_new(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
@@ -243,8 +245,7 @@ impl Parser {
     // Add the identifier(IdentId) as a new block parameter in the current context.
     // If a parameter with the same name already exists, return error.
     fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
-        let res = self.context_mut().lvar.insert_block_param(id);
-        if res.is_err() {
+        if self.context_mut().lvar.insert_block_param(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
@@ -1609,14 +1610,45 @@ impl Parser {
                         Ok(node)
                     }
                     Reserved::For => {
-                        let loc = self.prev_loc();
+                        // for <ident> in <iter>
+                        //   COMP_STMT
+                        // end
+                        //
+                        // for <ident> in <iter> do
+                        //   COMP_STMT
+                        // end
+                        //let loc = self.prev_loc();
                         let var_id = self.expect_ident()?;
                         let var = Node::new_lvar(var_id, self.prev_loc());
                         self.add_local_var_if_new(var_id);
                         self.expect_reserved(Reserved::In)?;
                         let iter = self.parse_expr()?;
+
                         self.parse_do()?;
-                        let body = self.parse_comp_stmt()?;
+                        let loc = self.prev_loc();
+                        self.context_stack.push(ParseContext::new_block());
+                        let mut body = match self.parse_comp_stmt()?.kind {
+                            NodeKind::CompStmt(nodes) => nodes,
+                            _ => unimplemented!(),
+                        };
+                        let dummy_var = IdentId::get_id("_0");
+                        self.add_local_var_if_new(dummy_var);
+                        let prolog = Node::new_single_assign(
+                            Node::new_lvar(var_id, loc),
+                            Node::new_lvar(dummy_var, loc),
+                        );
+                        let mut new_body = vec![prolog];
+                        new_body.append(&mut body);
+                        let lvar = self.context_stack.pop().unwrap().lvar;
+
+                        let loc = loc.merge(self.prev_loc());
+                        let body = Node::new_proc(
+                            vec![Node::new_param(IdentId::get_id("_0"), loc)],
+                            Node::new_comp_stmt(new_body, loc),
+                            lvar,
+                            loc,
+                        );
+
                         self.expect_reserved(Reserved::End)?;
                         let node = Node::new(
                             NodeKind::For {

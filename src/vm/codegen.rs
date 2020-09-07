@@ -336,11 +336,6 @@ impl Codegen {
         Codegen::push32(iseq, id.into());
     }
 
-    fn gen_addi(&mut self, iseq: &mut ISeq, i: i32) {
-        iseq.push(Inst::ADDI);
-        Codegen::push32(iseq, i as u32);
-    }
-
     fn gen_subi(&mut self, iseq: &mut ISeq, i: i32) {
         iseq.push(Inst::SUBI);
         Codegen::push32(iseq, i as u32);
@@ -1501,53 +1496,34 @@ impl Codegen {
                 }
             }
             NodeKind::For { param, iter, body } => {
-                let id = match param.kind {
+                let _id = match param.kind {
                     NodeKind::Ident(id) | NodeKind::LocalVar(id) => id,
                     _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
                 };
-                self.loop_stack.push(LoopInfo::new_loop());
-                let loop_continue;
-                match &iter.kind {
-                    NodeKind::Range {
-                        start,
-                        end,
-                        exclude_end,
-                    } => {
-                        self.gen(globals, iseq, start, true)?;
-                        self.gen_set_local(iseq, id);
-                        let loop_start = Codegen::current(iseq);
-                        self.gen(globals, iseq, end, true)?;
-                        self.gen_get_local(iseq, id)?;
-                        iseq.push(if *exclude_end { Inst::GT } else { Inst::GE });
-                        let src = self.gen_jmp_if_f(iseq);
-                        self.gen(globals, iseq, body, false)?;
-                        loop_continue = Codegen::current(iseq);
-                        self.gen_get_local(iseq, id)?;
-                        self.gen_addi(iseq, 1);
-                        self.gen_set_local(iseq, id);
-                        self.gen_jmp_back(iseq, loop_start);
-                        Codegen::write_disp_from_cur(iseq, src);
+
+                let block = match &body.kind {
+                    NodeKind::Proc { params, body, lvar } => {
+                        self.loop_stack.push(LoopInfo::new_top());
+                        let methodref = self.gen_iseq(
+                            globals,
+                            params,
+                            body,
+                            lvar,
+                            true,
+                            ContextKind::Block,
+                            None,
+                        )?;
+                        self.loop_stack.pop().unwrap();
+                        methodref
                     }
-                    _ => return Err(self.error_syntax("Expected Range.", iter.loc())),
+                    // Block parameter (&block)
+                    _ => unreachable!(),
                 };
-
-                if use_value {
-                    self.gen(globals, iseq, iter, true)?;
-                }
-                let src = Codegen::gen_jmp(iseq);
-                for p in self.loop_stack.pop().unwrap().escape {
-                    match p.kind {
-                        EscapeKind::Break => {
-                            Codegen::write_disp_from_cur(iseq, p.pos);
-                        }
-                        EscapeKind::Next => Codegen::write_disp(iseq, p.pos, loop_continue),
-                    }
-                }
+                self.gen(globals, iseq, iter, true)?;
+                self.gen_send(globals, iseq, IdentId::get_id("each"), 0, 0, Some(block));
                 if !use_value {
-                    self.gen_pop(iseq);
-                }
-
-                Codegen::write_disp_from_cur(iseq, src);
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::While {
                 cond,
