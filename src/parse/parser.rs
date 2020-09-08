@@ -75,6 +75,7 @@ pub struct LvarCollector {
 }
 
 impl LvarCollector {
+    /// Create new `LvarCollector`.
     pub fn new() -> Self {
         LvarCollector {
             id: 0,
@@ -83,6 +84,8 @@ impl LvarCollector {
         }
     }
 
+    /// Check whether `val` exists in `LvarCollector` or not, and return `LvarId` if exists.
+    /// If not, add new variable `val` to the `LvarCollector`.
     fn insert(&mut self, val: IdentId) -> LvarId {
         match self.table.get(&val) {
             Some(id) => *id,
@@ -95,6 +98,8 @@ impl LvarCollector {
         }
     }
 
+    /// Add a new variable `val` to the `LvarCollector`.
+    /// Return None if `val` already exists.
     fn insert_new(&mut self, val: IdentId) -> Option<LvarId> {
         let id = self.id;
         if self.table.insert(val, LvarId(id)).is_some() {
@@ -172,6 +177,12 @@ impl ParseContext {
             kind: ContextKind::Block,
         }
     }
+    fn new_for() -> Self {
+        ParseContext {
+            lvar: LvarCollector::new(),
+            kind: ContextKind::For,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -179,6 +190,7 @@ enum ContextKind {
     Class,
     Method,
     Block,
+    For,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,16 +237,23 @@ impl Parser {
         self.context_stack.last().unwrap().kind == ContextKind::Method
     }
 
-    // If the identifier(IdentId) does not exist in the current scope,
-    // add the identifier as a local variable in the current context.
+    /// If the `id` does not exist in the scope chain,
+    /// add `id` as a local variable in the current context.
     fn add_local_var_if_new(&mut self, id: IdentId) {
         if !self.is_local_var(id) {
-            self.context_mut().lvar.insert(id);
+            for c in self.context_stack.iter_mut().rev() {
+                match c.kind {
+                    ContextKind::For => {}
+                    _ => {
+                        c.lvar.insert(id);
+                    }
+                };
+            }
         }
     }
 
-    // Add the identifier(IdentId) as a new parameter in the current context.
-    // If a parameter with the same name already exists, return error.
+    /// Add the `id` as a new parameter in the current context.
+    /// If a parameter with the same name already exists, return error.
     fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
         if self.context_mut().lvar.insert_new(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
@@ -242,8 +261,8 @@ impl Parser {
         Ok(())
     }
 
-    // Add the identifier(IdentId) as a new block parameter in the current context.
-    // If a parameter with the same name already exists, return error.
+    /// Add the `id` as a new block parameter in the current context.
+    /// If a parameter with the same name already exists, return error.
     fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
         if self.context_mut().lvar.insert_block_param(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
@@ -251,17 +270,16 @@ impl Parser {
         Ok(())
     }
 
-    // Examine whether the identifier(IdentId) exists in the current scope.
-    // If exiets, return true.
+    /// Examine whether `id` exists in the scope chain.
+    /// If exiets, return true.
     fn is_local_var(&mut self, id: IdentId) -> bool {
-        let len = self.context_stack.len();
-        for i in 0..len {
-            let context = &self.context_stack[len - 1 - i];
-            if context.lvar.table.contains_key(&id) {
+        for c in self.context_stack.iter().rev() {
+            if c.lvar.table.contains_key(&id) {
                 return true;
             }
-            if context.kind != ContextKind::Block {
-                return false;
+            match c.kind {
+                ContextKind::Block | ContextKind::For => {}
+                _ => return false,
             }
         }
         let mut ctx = match self.extern_context {
@@ -922,7 +940,7 @@ impl Parser {
                     ContextKind::Method => {
                         return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment."))
                     }
-                    ContextKind::Block => {}
+                    _ => {}
                 }
             }
         };
@@ -1619,20 +1637,20 @@ impl Parser {
                         // end
                         //let loc = self.prev_loc();
                         let var_id = self.expect_ident()?;
-                        let var = Node::new_lvar(var_id, self.prev_loc());
                         self.add_local_var_if_new(var_id);
+                        let var = Node::new_lvar(var_id, self.prev_loc());
                         self.expect_reserved(Reserved::In)?;
                         let iter = self.parse_expr()?;
 
                         self.parse_do()?;
                         let loc = self.prev_loc();
-                        self.context_stack.push(ParseContext::new_block());
+                        self.context_stack.push(ParseContext::new_for());
                         let mut body = match self.parse_comp_stmt()?.kind {
                             NodeKind::CompStmt(nodes) => nodes,
                             _ => unimplemented!(),
                         };
                         let dummy_var = IdentId::get_id("_0");
-                        self.add_local_var_if_new(dummy_var);
+                        self.new_param(dummy_var, loc)?;
                         let prolog = Node::new_single_assign(
                             Node::new_lvar(var_id, loc),
                             Node::new_lvar(dummy_var, loc),

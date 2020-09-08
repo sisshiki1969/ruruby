@@ -26,6 +26,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_instance_method("map", map);
     class.add_builtin_instance_method("flat_map", flat_map);
     class.add_builtin_instance_method("each", each);
+    class.add_builtin_instance_method("each_with_index", each_with_index);
 
     class.add_builtin_instance_method("include?", include);
     class.add_builtin_instance_method("reverse", reverse);
@@ -359,8 +360,30 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
 
     let aref = self_val.as_mut_array().unwrap();
-    for i in &mut aref.elements {
-        let arg = Args::new1(*i);
+    let mut arg = Args::new1(Value::nil());
+    for i in &aref.elements {
+        arg[0] = *i;
+        vm.eval_block(method, &arg)?;
+    }
+    Ok(self_val)
+}
+
+fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let method = match args.block {
+        Some(method) => method,
+        None => {
+            let id = IdentId::get_id("each_with_index");
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            return Ok(val);
+        }
+    };
+
+    let aref = self_val.as_mut_array().unwrap();
+    let mut arg = Args::new(2);
+    for (i, v) in aref.elements.iter().enumerate() {
+        arg[0] = *v;
+        arg[1] = Value::integer(i as i64);
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
@@ -987,6 +1010,11 @@ mod tests {
         b = 0
         assert([1,2,3], a.each {|x| b+=x })
         assert(6, b)
+
+        a = [1,2,3]
+        b = []
+        assert([1,2,3], a.each_with_index {|x, i| b << [x,i] })
+        assert([[1, 0], [2, 1], [3, 2]], b)
     ";
         assert_script(program);
     }

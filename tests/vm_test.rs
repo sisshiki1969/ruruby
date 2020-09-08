@@ -452,7 +452,7 @@ fn for1() {
     let program = "
             y = 0
             for x in 0..9
-            y=y+x
+                y=y+x
             end
             y";
     let expected = Value::integer(45);
@@ -464,7 +464,7 @@ fn for2() {
     let program = "
             y = 0
             for x in 0...9
-            y=y+x
+                y=y+x
             end
             y";
     let expected = Value::integer(36);
