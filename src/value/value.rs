@@ -420,7 +420,7 @@ impl Value {
     }
 
     pub fn is_packed_flonum(&self) -> bool {
-        self.0 & 0b10 == 2
+        self.0 & 0b11 == 2
     }
 
     pub fn is_packed_num(&self) -> bool {
