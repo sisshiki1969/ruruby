@@ -454,7 +454,10 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'f' => {
-                let val = val.expect_flonum(vm, "Value for the placeholder")?;
+                let val = match val.as_float() {
+                    Some(f) => f,
+                    None => val.expect_integer(vm, "Value for the placeholder")? as f64,
+                };
                 if zero_flag {
                     format!("{:0w$.p$}", val, w = width, p = precision)
                 } else {
