@@ -135,9 +135,10 @@ impl ArgsArray {
         let len = data.len();
         if len <= ARG_ARRAY_SIZE {
             let mut ary = [Value::uninitialized(); ARG_ARRAY_SIZE];
-            for i in 0..len {
-                ary[i] = data[i];
-            }
+            ary[0..len].copy_from_slice(&data);
+            //for i in 0..len {
+            //    ary[i] = data[i];
+            //}
             ArgsArray::Array { len, ary }
         } else {
             ArgsArray::Vec(data.to_vec())

@@ -1,9 +1,13 @@
-a = Fiber.new {
-  1000_000.times {|x|
-    Fiber.yield x
-  }
-}
+    fib = Fiber.new do
+        Fiber.yield a=b=1
+        loop { 
+            a,b=b,a+b
+            Fiber.yield a
+        }
+    end
 
-1000_000.times {
-  a.resume
-}
+    res = *(0..7).map {
+        fib.resume
+    }
+
+    p res

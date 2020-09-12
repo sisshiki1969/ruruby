@@ -103,6 +103,26 @@ mod test1 {
         "#;
         assert_script(program);
     }
+
+    #[test]
+    fn fiber_test4() {
+        let program = r#"
+    fib = Fiber.new do
+        Fiber.yield a=b=1
+        loop { 
+            a,b=b,a+b
+            Fiber.yield a
+        }
+    end
+
+    res = *(0..7).map {
+        fib.resume
+    }
+
+    assert([1,1,2,3,5,8,13,21], res)
+"#;
+        assert_script(program);
+    }
 }
 
 #[cfg(test)]

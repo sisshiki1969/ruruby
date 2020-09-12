@@ -12,8 +12,10 @@ pub struct Parser {
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
     extern_context: Option<ContextRef>,
-    mul_assign_lhs: bool, // this flag suppress accesory assignment.
-    mul_assign_rhs: bool, // this flag suppress accesory multiple assignment.
+    /// this flag suppress accesory assignment. e.g. x=3
+    supress_acc_assign: bool,
+    /// this flag suppress accesory multiple assignment. e.g. x = 2,3
+    supress_mul_assign: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -208,8 +210,8 @@ impl Parser {
             prev_loc: Loc(0, 0),
             context_stack: vec![],
             extern_context: None,
-            mul_assign_lhs: false,
-            mul_assign_rhs: false,
+            supress_acc_assign: false,
+            supress_mul_assign: false,
         }
     }
 
@@ -667,9 +669,7 @@ impl Parser {
         // COMMAND-WITH-DO-BLOCK : FNAME ARGS DO-BLOCK
         // | PRIMARY . FNAME ARGS DO-BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
         let node = self.parse_arg()?;
-        if self.consume_punct_no_term(Punct::Comma)?
-        /*&& node.is_lvar()*/
-        {
+        if self.consume_punct_no_term(Punct::Comma)? {
             // EXPR : MLHS `=' MRHS
             return Ok(self.parse_mul_assign(node)?);
         }
@@ -709,7 +709,8 @@ impl Parser {
     fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
         // EXPR : MLHS `=' MRHS
         let mut mlhs = vec![node];
-        self.mul_assign_lhs = true;
+        let old = self.supress_acc_assign;
+        self.supress_acc_assign = true;
         loop {
             if self.peek_punct_no_term(Punct::Assign) {
                 break;
@@ -720,7 +721,7 @@ impl Parser {
                 break;
             }
         }
-        self.mul_assign_lhs = false;
+        self.supress_acc_assign = old;
         if !self.consume_punct_no_term(Punct::Assign)? {
             let loc = self.loc();
             return Err(self.error_unexpected(loc, "Expected '='."));
@@ -737,31 +738,28 @@ impl Parser {
     /// Parse rhs of multiple assignment.
     /// If Parser.mul_assign_rhs is true, only a single assignment is allowed.
     fn parse_mul_assign_rhs(&mut self) -> Result<Vec<Node>, RubyError> {
-        if self.mul_assign_rhs {
-            Ok(vec![self.parse_arg()?])
+        if self.supress_mul_assign {
+            let node = vec![self.parse_arg()?];
+            Ok(node)
         } else {
-            self.mul_assign_rhs = true;
             let mrhs = self.parse_arg_list(None)?;
-            self.mul_assign_rhs = false;
             Ok(mrhs)
         }
     }
 
     fn parse_arg_list(&mut self, term: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
-        let old = self.mul_assign_rhs;
-        // multiple assignment must be suppressed in parsing arg list.
-        self.mul_assign_rhs = true;
         let term = term.into();
+        let old = self.supress_mul_assign;
+        // multiple assignment must be suppressed in parsing arg list.
+        self.supress_mul_assign = true;
+
         let mut args = vec![];
         loop {
-            match term {
-                Some(term) => {
-                    if self.consume_punct(term)? {
-                        self.mul_assign_rhs = old;
-                        return Ok(args);
-                    }
+            if let Some(term) = term {
+                if self.consume_punct(term)? {
+                    self.supress_mul_assign = old;
+                    return Ok(args);
                 }
-                None => {}
             };
             if self.consume_punct(Punct::Mul)? {
                 // splat argument
@@ -776,7 +774,7 @@ impl Parser {
                 break;
             }
         }
-        self.mul_assign_rhs = old;
+        self.supress_mul_assign = old;
         match term {
             Some(term) => self.expect_punct(term)?,
             None => {}
@@ -1349,7 +1347,7 @@ impl Parser {
     }
 
     fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, RubyError> {
-        if !self.mul_assign_lhs {
+        if !self.supress_acc_assign {
             if self.consume_punct_no_term(Punct::Assign)? {
                 let mrhs = self.parse_mul_assign_rhs()?;
                 self.check_lhs(&lhs)?;
@@ -1427,12 +1425,15 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
+        let old = self.supress_mul_assign;
+        self.supress_mul_assign = false;
         let do_flag = if self.consume_reserved_no_skip_line_term(Reserved::Do)? {
             true
         } else {
             if self.consume_punct_no_term(Punct::LBrace)? {
                 false
             } else {
+                self.supress_mul_assign = old;
                 return Ok(None);
             }
         };
@@ -1462,6 +1463,7 @@ impl Parser {
         let lvar = self.context_stack.pop().unwrap().lvar;
         let loc = loc.merge(self.prev_loc());
         let node = Node::new_proc(params, body, lvar, loc);
+        self.supress_mul_assign = old;
         Ok(Some(Box::new(node)))
     }
 

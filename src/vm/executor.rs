@@ -2219,11 +2219,13 @@ impl VM {
 
 impl VM {
     /// Evaluate method with given `self_val`, `args` and no outer context.
+    #[inline]
     pub fn eval_send(&mut self, methodref: MethodRef, self_val: Value, args: &Args) -> VMResult {
         self.eval_method(methodref, self_val, None, args)
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
+    #[inline]
     pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> VMResult {
         let context = self.current_context();
         self.eval_method(methodref, context.self_value, Some(context), args)
