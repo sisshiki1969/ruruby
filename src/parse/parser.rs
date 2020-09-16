@@ -612,6 +612,25 @@ impl Parser {
     }
 
     fn parse_stmt(&mut self) -> Result<Node, RubyError> {
+        // STMT : EXPR
+        // | ALIAS-STMT
+        // | UNDEF-STMT
+        // | STMT [no-term] if EXPR
+        // | STMT [no-term] unless EXPR
+        // | STMT [no-term] while EXPR
+        // | STMT [no-term] until EXPR
+        // | STMT [no-term] rescie EXPR
+        // | STMT - NORET-STMT [no-term] rescie EXPR
+        // | VAR [no term] = UNPARENTHESIZED-METHOD-CALL
+        // | PRIMARY :: CONST [no term] = UNPARENTHESIZED-METHOD-CALL
+        // | :: CONST [no term] = UNPARENTHESIZED-METHOD-CALL
+        // | PRIMARY [no term] (.|::) LOCAL-VAR [no term] = UNPARENTHESIZED-METHOD-CALL
+        // | PRIMARY [no term] . CONST [no term] = UNPARENTHESIZED-METHOD-CALL
+        // | VAR [no term] <assign-op> UNPARENTHESIZED-METHOD-CALL
+        // | PRIMARY [no term] [INDEX-LIST] [no term] <assign-op> UNPARENTHESIZED-METHOD-CALL
+        // | LHS [no term] = MRHS
+        // | * LHS [no term] = (UNPARENTHESIZED-METHOD-CALL | ARG)
+        // | MLHS [no term] = MRHS
         let mut node = self.parse_expr()?;
         loop {
             if self.consume_reserved_no_skip_line_term(Reserved::If)? {
@@ -646,12 +665,25 @@ impl Parser {
 
     fn parse_expr(&mut self) -> Result<Node, RubyError> {
         // EXPR : NOT
-        // | KEYWORD-AND
-        // | KEYWORD-OR
+        // | EXPR [no term] and NOT
+        // | EXPR [no term] or NOT
+        let lhs = self.parse_not()?;
+        if self.consume_reserved_no_skip_line_term(Reserved::And)? {
+            let rhs = self.parse_not()?;
+            Ok(Node::new_binop(BinOp::LAnd, lhs, rhs))
+        } else if self.consume_reserved_no_skip_line_term(Reserved::Or)? {
+            let rhs = self.parse_not()?;
+            Ok(Node::new_binop(BinOp::LOr, lhs, rhs))
+        } else {
+            Ok(lhs)
+        }
+    }
+
+    fn parse_not(&mut self) -> Result<Node, RubyError> {
         // NOT : ARG
         // | UNPARENTHESIZED-METHOD
         // | ! UNPARENTHESIZED-METHOD
-        // | KEYWORD-NOT
+        // | not NOT
         // UNPARENTHESIZED-METHOD :
         // | FNAME ARGS
         // | PRIMARY . FNAME ARGS
@@ -1245,13 +1277,30 @@ impl Parser {
         let tok = self.get()?;
         let loc = tok.loc();
         let (trailing_space, id) = match &tok.kind {
-            TokenKind::Ident(s, has_suffix, trailing_space) => {
-                let name = if *has_suffix { s } else { s };
-                (*trailing_space, self.get_ident_id(name))
+            TokenKind::Ident(s, _has_suffix, trailing_space) => {
+                let id = if !trailing_space {
+                    if self.consume_punct_no_term(Punct::Question)? {
+                        self.get_ident_id(&format!("{}?", s))
+                    } else {
+                        self.get_ident_id(s)
+                    }
+                } else {
+                    self.get_ident_id(s)
+                };
+                (*trailing_space, id)
             }
             TokenKind::Reserved(r) => {
-                let string = self.lexer.get_string_from_reserved(*r);
-                (false, self.get_ident_id(string))
+                let s = self.lexer.get_string_from_reserved(*r).to_owned();
+                let id = if !tok.flag {
+                    if self.consume_punct_no_term(Punct::Question)? {
+                        self.get_ident_id(&format!("{}?", s))
+                    } else {
+                        self.get_ident_id(&s)
+                    }
+                } else {
+                    self.get_ident_id(&s)
+                };
+                (false, id)
             }
             TokenKind::Punct(p) => (false, self.parse_op_definable(p)?),
             _ => return Err(self.error_unexpected(tok.loc(), "method name must be an identifier.")),

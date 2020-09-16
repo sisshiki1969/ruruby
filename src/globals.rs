@@ -237,6 +237,7 @@ impl Globals {
         init_class!("Struct", structobj);
         init_class!("Time", time);
         init_class!("IO", io);
+        init_class!("Comparable", comparable);
 
         BuiltinClass::set_class("StandardError", Value::class(class.as_class()));
         let id = IdentId::get_id("StopIteration");

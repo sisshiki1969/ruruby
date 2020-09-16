@@ -212,6 +212,15 @@ fn op9() {
         assert(nil, 4 && nil)
         assert(nil, nil && 5)
         assert(nil, nil && false)
+
+        assert(4, (4 or 5))
+        assert(4, (4 or nil))
+        assert(5, (nil or 5))
+        assert(false, (nil or false))
+        assert(5, (4 and 5))
+        assert(nil, (4 and nil))
+        assert(nil, (nil and 5))
+        assert(nil, (nil and false))
         ";
     assert_script(program);
 }

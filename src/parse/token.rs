@@ -56,6 +56,7 @@ pub enum TokenKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Reserved {
+    And,
     BEGIN,
     END,
     Alias,
@@ -77,6 +78,7 @@ pub enum Reserved {
     Module,
     Next,
     Nil,
+    Or,
     Return,
     Rescue,
     Self_,

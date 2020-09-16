@@ -49,6 +49,7 @@ impl Lexer {
             };
         }
         reg_reserved! {
+            "and" => Reserved::And,
             "BEGIN" => Reserved::BEGIN,
             "END" => Reserved::END,
             "alias" => Reserved::Alias,
@@ -70,6 +71,7 @@ impl Lexer {
             "module" => Reserved::Module,
             "next" => Reserved::Next,
             "nil" => Reserved::Nil,
+            "or" => Reserved::Or,
             "return" => Reserved::Return,
             "rescue" => Reserved::Rescue,
             "self" => Reserved::Self_,

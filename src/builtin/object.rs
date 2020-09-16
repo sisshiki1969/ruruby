@@ -10,6 +10,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_instance_method("clone", dup);
     object_class.add_builtin_instance_method("dup", dup);
     object_class.add_builtin_instance_method("eql?", eql);
+    object_class.add_builtin_instance_method("nil?", nil);
     object_class.add_builtin_instance_method("to_i", toi);
     object_class.add_builtin_instance_method("instance_variable_set", instance_variable_set);
     object_class.add_builtin_instance_method("instance_variable_get", instance_variable_get);
@@ -64,6 +65,11 @@ fn dup(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn eql(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     Ok(Value::bool(self_val == args[0]))
+}
+
+fn nil(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    Ok(Value::bool(self_val.is_nil()))
 }
 
 fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -276,6 +282,16 @@ mod test {
         assert(155, obj.instance_variable_get(:@foo))
         assert(555, obj2.instance_variable_get(:@foo))
         assert(false, obj.eql?(obj2))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn nil() {
+        let program = r#"
+        assert(true, nil.nil?)
+        assert(false, 4.nil?)
+        assert(false, "nil".nil?)
         "#;
         assert_script(program);
     }

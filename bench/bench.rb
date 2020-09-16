@@ -163,9 +163,9 @@ def optcarrot(program, option = "")
     o.match(/checksum: (\d*)/)
     checksum = Regexp.last_match(1).to_i
     if checksum == 59662
-      puts "optcarrot checksum ok: #{command}"
+      puts "optcarrot checksum ok:"
     else
-      puts "checksum invalid: #{checksum} #{command}"
+      puts "checksum invalid: #{checksum}"
     end
     e.match(/(\d*)maxresident/)
     rss << Regexp.last_match(1).to_i * 1000
@@ -196,7 +196,8 @@ end
  'so_mandelbrot.rb',
  'app_mandelbrot.rb',
  'app_fibo.rb',
- 'app_aobench.rb'].each { |x| perf x }
+ 'app_aobench.rb',
+ 'nbody.rb'].each { |x| perf x }
 
 @optcarrot = [@optcarrot_dir + "/bin/optcarrot", "-b", @optcarrot_dir + "/examples/Lan_Master.nes"].join(" ")
 

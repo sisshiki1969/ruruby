@@ -7,6 +7,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class_val.add_builtin_class_method("sqrt", sqrt);
     class_val.add_builtin_class_method("cos", cos);
     class_val.add_builtin_class_method("sin", sin);
+    class_val.set_var_by_str("PI", Value::float(std::f64::consts::PI));
     class_val
 }
 
