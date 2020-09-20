@@ -5,6 +5,7 @@
 *.png
 *.txt
 .*
+/.private
 /bench.md
 /cobertura.xml
 !.rubocop*

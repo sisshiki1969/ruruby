@@ -6,7 +6,6 @@ use term_size;
 #[derive(Debug, Clone)]
 pub struct Annot<T> {
     pub kind: T,
-    pub flag: bool,
     pub loc: Loc,
 }
 
@@ -17,8 +16,8 @@ impl<T: PartialEq> std::cmp::PartialEq for Annot<T> {
 }
 
 impl<T> Annot<T> {
-    pub fn new(kind: T, flag: bool, loc: Loc) -> Self {
-        Annot { kind, flag, loc }
+    pub fn new(kind: T, loc: Loc) -> Self {
+        Annot { kind, loc }
     }
 
     pub fn loc(&self) -> Loc {

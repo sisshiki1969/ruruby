@@ -37,10 +37,10 @@ impl std::fmt::Display for Token {
 pub enum TokenKind {
     Nop,
     EOF,
-    Ident(String, bool, bool),
+    Ident(String),
     InstanceVar(String),
     GlobalVar(String),
-    Const(String, bool, bool),
+    Const(String),
     IntegerLit(i64),
     FloatLit(f64),
     ImaginaryLit(Real),
@@ -143,94 +143,72 @@ pub enum Punct {
 
 #[allow(unused)]
 impl Token {
-    pub fn new_ident(
-        ident: impl Into<String>,
-        has_suffix: bool,
-        trailing_space: bool,
-        loc: Loc,
-    ) -> Self {
-        Annot::new(
-            TokenKind::Ident(ident.into(), has_suffix, trailing_space),
-            trailing_space,
-            loc,
-        )
+    pub fn new_ident(ident: impl Into<String>, loc: Loc) -> Self {
+        Annot::new(TokenKind::Ident(ident.into()), loc)
     }
 
     pub fn new_instance_var(ident: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::InstanceVar(ident.into()), false, loc)
+        Annot::new(TokenKind::InstanceVar(ident.into()), loc)
     }
 
-    pub fn new_const(
-        ident: impl Into<String>,
-        has_suffix: bool,
-        trailing_space: bool,
-        loc: Loc,
-    ) -> Self {
-        Annot::new(
-            TokenKind::Const(ident.into(), has_suffix, trailing_space),
-            trailing_space,
-            loc,
-        )
+    pub fn new_const(ident: impl Into<String>, has_suffix: bool, loc: Loc) -> Self {
+        Annot::new(TokenKind::Const(ident.into()), loc)
     }
 
     pub fn new_global_var(ident: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::GlobalVar(ident.into()), false, loc)
+        Annot::new(TokenKind::GlobalVar(ident.into()), loc)
     }
 
     pub fn new_reserved(ident: Reserved, loc: Loc) -> Self {
-        Annot::new(TokenKind::Reserved(ident), false, loc)
+        Annot::new(TokenKind::Reserved(ident), loc)
     }
 
     pub fn new_numlit(num: i64, loc: Loc) -> Self {
-        Annot::new(TokenKind::IntegerLit(num), false, loc)
+        Annot::new(TokenKind::IntegerLit(num), loc)
     }
 
     pub fn new_floatlit(num: f64, loc: Loc) -> Self {
-        Annot::new(TokenKind::FloatLit(num), false, loc)
+        Annot::new(TokenKind::FloatLit(num), loc)
     }
 
     pub fn new_imaginarylit(num: Real, loc: Loc) -> Self {
-        Annot::new(TokenKind::ImaginaryLit(num), false, loc)
+        Annot::new(TokenKind::ImaginaryLit(num), loc)
     }
 
     pub fn new_stringlit(string: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::StringLit(string.into()), false, loc)
+        Annot::new(TokenKind::StringLit(string.into()), loc)
     }
 
     pub fn new_open_dq(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
-        Annot::new(
-            TokenKind::OpenString(s.into(), delimiter, level),
-            false,
-            loc,
-        )
+        Annot::new(TokenKind::OpenString(s.into(), delimiter, level), loc)
     }
 
     pub fn new_open_reg(s: impl Into<String>, loc: Loc) -> Self {
-        Annot::new(TokenKind::OpenRegex(s.into()), false, loc)
+        Annot::new(TokenKind::OpenRegex(s.into()), loc)
     }
 
     pub fn new_percent(kind: char, content: String, loc: Loc) -> Self {
-        Annot::new(TokenKind::PercentNotation(kind, content), false, loc)
+        Annot::new(TokenKind::PercentNotation(kind, content), loc)
     }
 
     pub fn new_punct(punct: Punct, loc: Loc) -> Self {
-        Annot::new(TokenKind::Punct(punct), false, loc)
+        Annot::new(TokenKind::Punct(punct), loc)
     }
 
     pub fn new_space(loc: Loc) -> Self {
-        Annot::new(TokenKind::Space, false, loc)
+        Annot::new(TokenKind::Space, loc)
     }
 
     pub fn new_line_term(loc: Loc) -> Self {
-        Annot::new(TokenKind::LineTerm, false, loc)
+        Annot::new(TokenKind::LineTerm, loc)
     }
 
     pub fn new_eof(pos: u32) -> Self {
-        Annot::new(TokenKind::EOF, false, Loc(pos, pos))
+        Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 
     pub fn new_nop() -> Self {
-        Annot::new(TokenKind::Nop, false, Loc(0, 0))
+        Annot::new(TokenKind::Nop, Loc(0, 0))
     }
 }
 
@@ -255,8 +233,8 @@ impl Token {
 
     pub fn can_be_symbol(&self) -> bool {
         match self.kind {
-            TokenKind::Const(_, _, _)
-            | TokenKind::Ident(_, _, _)
+            TokenKind::Const(_)
+            | TokenKind::Ident(_)
             | TokenKind::InstanceVar(_)
             | TokenKind::Reserved(_)
             | TokenKind::StringLit(_) => true,

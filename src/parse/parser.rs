@@ -402,7 +402,7 @@ impl Parser {
 
     fn consume_const(&mut self) -> Result<bool, RubyError> {
         match self.peek()?.kind {
-            TokenKind::Const(_, _, _) => {
+            TokenKind::Const(_) => {
                 self.get()?;
                 Ok(true)
             }
@@ -462,7 +462,7 @@ impl Parser {
     /// If not, return RubyError.
     fn expect_ident(&mut self) -> Result<IdentId, RubyError> {
         match &self.get()?.kind {
-            TokenKind::Ident(s, _, _) => Ok(self.get_ident_id(s)),
+            TokenKind::Ident(s) => Ok(self.get_ident_id(s)),
             _ => {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
             }
@@ -474,7 +474,7 @@ impl Parser {
     /// If not, return RubyError.
     fn expect_const(&mut self) -> Result<IdentId, RubyError> {
         let name = match self.get()?.kind {
-            TokenKind::Const(s, _, _) => s,
+            TokenKind::Const(s) => s,
             _ => {
                 return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
             }
@@ -484,8 +484,8 @@ impl Parser {
 
     fn token_as_symbol(&self, token: &Token) -> String {
         match token.kind.clone() {
-            TokenKind::Ident(ident, _, _) => ident,
-            TokenKind::Const(ident, _, _) => ident,
+            TokenKind::Ident(ident) => ident,
+            TokenKind::Const(ident) => ident,
             TokenKind::InstanceVar(ident) => ident,
             TokenKind::StringLit(ident) => ident,
             TokenKind::Reserved(reserved) => {
@@ -880,10 +880,10 @@ impl Parser {
     fn is_command(&mut self) -> Result<bool, RubyError> {
         let tok = self.peek_no_term()?;
         match tok.kind {
-            TokenKind::Ident(_, _, _)
+            TokenKind::Ident(_)
             | TokenKind::InstanceVar(_)
             | TokenKind::GlobalVar(_)
-            | TokenKind::Const(_, _, _)
+            | TokenKind::Const(_)
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::StringLit(_)
@@ -1269,42 +1269,42 @@ impl Parser {
         }
     }
 
+    fn parse_method_ext(&mut self, s: &str) -> Result<IdentId, RubyError> {
+        let id = if !self.lexer.trailing_space() {
+            if self.consume_punct_no_term(Punct::Question)? {
+                self.get_ident_id(&format!("{}?", s))
+            } else if self.consume_punct_no_term(Punct::Not)? {
+                self.get_ident_id(&format!("{}!", s))
+            } else {
+                self.get_ident_id(s)
+            }
+        } else {
+            self.get_ident_id(s)
+        };
+        Ok(id)
+    }
+
     /// PRIMARY-METHOD :
     /// | PRIMARY . FNAME BLOCK => completed: true
     /// | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
     /// | PRIMARY . FNAME => completed: false
-    fn parse_primary_method(&mut self, node: Node, safe_nav: bool) -> Result<Node, RubyError> {
+    fn parse_primary_method(&mut self, receiver: Node, safe_nav: bool) -> Result<Node, RubyError> {
         let tok = self.get()?;
         let loc = tok.loc();
-        let (trailing_space, id) = match &tok.kind {
-            TokenKind::Ident(s, _has_suffix, trailing_space) => {
-                let id = if !trailing_space {
-                    if self.consume_punct_no_term(Punct::Question)? {
-                        self.get_ident_id(&format!("{}?", s))
-                    } else {
-                        self.get_ident_id(s)
-                    }
-                } else {
-                    self.get_ident_id(s)
-                };
-                (*trailing_space, id)
+        let id = match &tok.kind {
+            TokenKind::Ident(s) => {
+                let id = self.parse_method_ext(s)?;
+                id
             }
             TokenKind::Reserved(r) => {
                 let s = self.lexer.get_string_from_reserved(*r).to_owned();
-                let id = if !tok.flag {
-                    if self.consume_punct_no_term(Punct::Question)? {
-                        self.get_ident_id(&format!("{}?", s))
-                    } else {
-                        self.get_ident_id(&s)
-                    }
-                } else {
-                    self.get_ident_id(&s)
-                };
-                (false, id)
+                let id = self.parse_method_ext(&s)?;
+                id
             }
-            TokenKind::Punct(p) => (false, self.parse_op_definable(p)?),
+            TokenKind::Punct(p) => self.parse_op_definable(p)?,
             _ => return Err(self.error_unexpected(tok.loc(), "method name must be an identifier.")),
         };
+        let trailing_space = self.lexer.trailing_space();
         let mut args = vec![];
         let mut kw_args = vec![];
         let mut block = None;
@@ -1319,7 +1319,7 @@ impl Parser {
             if trailing_space && self.is_command_()? {
                 //eprintln!("command:{:?}", id);
                 let send_args = self.parse_arglist()?;
-                return Ok(Node::new_send(node, id, send_args, true, false, loc));
+                return Ok(Node::new_send(receiver, id, send_args, true, false, loc));
             }
         };
         match self.parse_block()? {
@@ -1337,9 +1337,9 @@ impl Parser {
         if block.is_some() {
             completed = true;
         };
-        let node = match node.kind {
+        let node = match receiver.kind {
             NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, true, false, loc),
-            _ => node,
+            _ => receiver,
         };
         let send_args = SendArgs {
             args,
@@ -1382,8 +1382,6 @@ impl Parser {
             } else if self.consume_punct_no_term(Punct::Scope)? {
                 let id = self.expect_const()?;
                 Node::new_scope(node, id, self.prev_loc())
-            //} else if node.is_operation() {
-            //    return Ok(node);
             } else if self.consume_punct_no_term(Punct::LBracket)? {
                 let member_loc = self.prev_loc();
                 let args = self.parse_arg_list(Punct::RBracket)?;
@@ -1520,13 +1518,11 @@ impl Parser {
         let tok = self.get()?;
         let loc = tok.loc();
         match &tok.kind {
-            TokenKind::Ident(name, has_suffix, trailing_space) => {
+            TokenKind::Ident(name) => {
                 let id = self.get_ident_id(name);
-                if *has_suffix {
-                    if self.peek_punct_no_term(Punct::LParen) {
-                        let node = Node::new_identifier(id, loc);
-                        return Ok(self.parse_function_args(node)?);
-                    }
+                if !self.lexer.trailing_space() && self.peek_punct_no_term(Punct::LParen) {
+                    let node = Node::new_identifier(id, loc);
+                    return Ok(self.parse_function_args(node)?);
                 };
                 if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
@@ -1542,7 +1538,7 @@ impl Parser {
                         }
                         _ => {}
                     };
-                    if *trailing_space && self.is_command_()? {
+                    if self.lexer.trailing_space() && self.is_command_()? {
                         Ok(self.parse_command(id, loc)?)
                     } else {
                         Ok(node)
@@ -1557,14 +1553,11 @@ impl Parser {
                 let id = self.get_ident_id(name);
                 return Ok(Node::new_global_var(id, loc));
             }
-            TokenKind::Const(name, has_suffix, _) => {
+            TokenKind::Const(name) => {
                 let id = self.get_ident_id(name);
-                if *has_suffix {
-                    if self.peek_punct_no_term(Punct::LParen) {
-                        let node = Node::new_identifier(id, loc);
-                        return Ok(self.parse_function_args(node)?);
-                        //return Ok(Node::new_identifier(id, loc));
-                    }
+                if !self.lexer.trailing_space() && self.peek_punct_no_term(Punct::LParen) {
+                    let node = Node::new_identifier(id, loc);
+                    return Ok(self.parse_function_args(node)?);
                 };
                 Ok(Node::new_const(id, false, loc))
             }
@@ -1633,7 +1626,7 @@ impl Parser {
                             }
                             self.expect_punct(Punct::RParen)?;
                         }
-                    } else if let TokenKind::Ident(_, _, _) = self.peek()?.kind {
+                    } else if let TokenKind::Ident(_) = self.peek()?.kind {
                         let id = self.expect_ident()?;
                         self.new_param(id, self.prev_loc())?;
                         params.push(Node::new_param(id, self.prev_loc()));
@@ -1725,7 +1718,6 @@ impl Parser {
                                 iter: Box::new(iter),
                                 body: Box::new(body),
                             },
-                            false,
                             loc.merge(self.prev_loc()),
                         );
                         Ok(node)
@@ -1884,10 +1876,10 @@ impl Parser {
     fn is_command_(&mut self) -> Result<bool, RubyError> {
         let tok = self.peek_no_term()?;
         match tok.kind {
-            TokenKind::Ident(_, _, _)
+            TokenKind::Ident(_)
             | TokenKind::InstanceVar(_)
             | TokenKind::GlobalVar(_)
-            | TokenKind::Const(_, _, _)
+            | TokenKind::Const(_)
             | TokenKind::IntegerLit(_)
             | TokenKind::FloatLit(_)
             | TokenKind::ImaginaryLit(_)
@@ -1895,7 +1887,7 @@ impl Parser {
             | TokenKind::OpenString(_, _, _) => Ok(true),
             TokenKind::Punct(p) => match p {
                 Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => Ok(true),
-                Punct::Colon => Ok(!tok.flag),
+                Punct::Colon => Ok(!self.lexer.trailing_space()),
                 _ => Ok(false),
             },
             TokenKind::Reserved(r) => match r {
@@ -2144,15 +2136,29 @@ impl Parser {
         }
     }
 
-    fn parse_fname(&mut self) -> Result<IdentId, RubyError> {
+    /// Parse method definition name.
+    fn parse_method_def_name(&mut self) -> Result<IdentId, RubyError> {
+        // メソッド定義
+        // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
+        // メソッド名 : 局所変数識別子
+        //      | 定数識別子
+        //      | ( 定数識別子 | 局所変数識別子 ) ( "!" | "?" )
+        //      | 演算子メソッド名
+        //      | キーワード
+        // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
+        //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
+        //
+        // 特異メソッド定義
+        // ( 変数参照 | "(" 式 ")" ) ( "." | "::" ) メソッド定義名
+        // 変数参照 : 定数識別子 | 大域変数識別子 | クラス変数識別子 | インスタンス変数識別子 | 局所変数識別子 | 擬似変数
         let tok = self.get()?;
         let id = match tok.kind {
             TokenKind::Reserved(r) => {
                 let string = self.lexer.get_string_from_reserved(r);
                 self.get_ident_id(string)
             }
-            TokenKind::Ident(name, has_suffix, _) => {
-                if has_suffix {
+            TokenKind::Ident(name) => {
+                if !self.lexer.trailing_space() {
                     match self.peek_no_term()?.kind {
                         TokenKind::Punct(Punct::Assign) => {
                             self.get()?;
@@ -2210,13 +2216,15 @@ impl Parser {
             None
         };
 
-        let id = self.parse_fname()?;
+        let id = self.parse_method_def_name()?;
         self.context_stack.push(ParseContext::new_method());
         let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         match singleton {
-            Some(_) => Ok(Node::new_singleton_method_decl(id, args, body, lvar)),
+            Some(singleton) => Ok(Node::new_singleton_method_decl(
+                singleton, id, args, body, lvar,
+            )),
             None => Ok(Node::new_method_decl(id, args, body, lvar)),
         }
     }
@@ -2361,7 +2369,7 @@ impl Parser {
         //  end
         let loc = self.prev_loc();
         let name = match &self.get()?.kind {
-            TokenKind::Const(s, _, _) => s.clone(),
+            TokenKind::Const(s) => s.clone(),
             _ => return Err(self.error_unexpected(loc, "Class/Module name must be CONSTANT.")),
         };
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
@@ -2394,6 +2402,8 @@ impl Parser {
         match punct {
             Punct::Plus => Ok(IdentId::_ADD),
             Punct::Minus => Ok(IdentId::_SUB),
+            Punct::Mul => Ok(IdentId::_MUL),
+            Punct::Cmp => Ok(self.get_ident_id("<=>")),
             Punct::LBracket => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {

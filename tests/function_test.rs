@@ -174,3 +174,15 @@ fn safe_navigation() {
     "#;
     assert_script(program);
 }
+
+#[test]
+fn paren() {
+    let program = r#"
+        assert_error { eval("p (7, 8)") }
+        assert(7, p(7))
+        assert(7, p (7))
+        assert([7, 8], p 7, 8)
+        assert([7, 8], p(7, 8))
+    "#;
+    assert_script(program);
+}

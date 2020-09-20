@@ -217,27 +217,27 @@ impl Node {
     }
 
     pub fn new_nil(loc: Loc) -> Self {
-        Node::new(NodeKind::Nil, false, loc)
+        Node::new(NodeKind::Nil, loc)
     }
 
     pub fn new_integer(num: i64, loc: Loc) -> Self {
-        Node::new(NodeKind::Integer(num), false, loc)
+        Node::new(NodeKind::Integer(num), loc)
     }
 
     pub fn new_bool(b: bool, loc: Loc) -> Self {
-        Node::new(NodeKind::Bool(b), false, loc)
+        Node::new(NodeKind::Bool(b), loc)
     }
 
     pub fn new_float(num: f64, loc: Loc) -> Self {
-        Node::new(NodeKind::Float(num), false, loc)
+        Node::new(NodeKind::Float(num), loc)
     }
 
     pub fn new_imaginary(num: Real, loc: Loc) -> Self {
-        Node::new(NodeKind::Imaginary(num), false, loc)
+        Node::new(NodeKind::Imaginary(num), loc)
     }
 
     pub fn new_string(s: String, loc: Loc) -> Self {
-        Node::new(NodeKind::String(s), false, loc)
+        Node::new(NodeKind::String(s), loc)
     }
 
     pub fn new_array(nodes: Vec<Node>, loc: Loc) -> Self {
@@ -246,7 +246,7 @@ impl Node {
             None => loc,
         };
         let is_const = nodes.iter().all(|n| n.is_const_expr());
-        Node::new(NodeKind::Array(nodes, is_const), false, loc)
+        Node::new(NodeKind::Array(nodes, is_const), loc)
     }
 
     pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
@@ -256,7 +256,6 @@ impl Node {
                 end: Box::new(end),
                 exclude_end,
             },
-            false,
             loc,
         )
     }
@@ -265,20 +264,20 @@ impl Node {
         let is_const = key_value
             .iter()
             .all(|(k, v)| k.is_const_expr() && v.is_const_expr());
-        Node::new(NodeKind::Hash(key_value, is_const), false, loc)
+        Node::new(NodeKind::Hash(key_value, is_const), loc)
     }
 
     pub fn new_regexp(regex: Vec<Node>, loc: Loc) -> Self {
         let is_const = regex.iter().all(|n| n.is_const_expr());
-        Node::new(NodeKind::RegExp(regex, is_const), false, loc)
+        Node::new(NodeKind::RegExp(regex, is_const), loc)
     }
 
     pub fn new_self(loc: Loc) -> Self {
-        Node::new(NodeKind::SelfValue, false, loc)
+        Node::new(NodeKind::SelfValue, loc)
     }
 
     pub fn new_interporated_string(nodes: Vec<Node>, loc: Loc) -> Self {
-        Node::new(NodeKind::InterporatedString(nodes), false, loc)
+        Node::new(NodeKind::InterporatedString(nodes), loc)
     }
 
     pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {
@@ -288,23 +287,23 @@ impl Node {
         if let Some(node) = nodes.last() {
             loc = loc.merge(node.loc());
         };
-        Node::new(NodeKind::CompStmt(nodes), false, loc)
+        Node::new(NodeKind::CompStmt(nodes), loc)
     }
 
     pub fn new_nop(loc: Loc) -> Self {
-        Node::new(NodeKind::CompStmt(vec![]), false, loc)
+        Node::new(NodeKind::CompStmt(vec![]), loc)
     }
 
     pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
         let loc = (lhs.loc()).merge(rhs.loc());
         let kind = NodeKind::BinOp(op, Box::new(lhs), Box::new(rhs));
-        Node::new(kind, false, loc)
+        Node::new(kind, loc)
     }
 
     pub fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
         let loc = loc.merge(lhs.loc());
         let kind = NodeKind::UnOp(op, Box::new(lhs));
-        Node::new(kind, false, loc)
+        Node::new(kind, loc)
     }
 
     pub fn new_array_member(array: Node, index: Vec<Node>, loc: Loc) -> Self {
@@ -312,64 +311,64 @@ impl Node {
             base: Box::new(array),
             index,
         };
-        Node::new(kind, false, loc)
+        Node::new(kind, loc)
     }
 
     pub fn new_splat(array: Node, loc: Loc) -> Self {
         let loc = loc.merge(array.loc());
-        Node::new(NodeKind::Splat(Box::new(array)), false, loc)
+        Node::new(NodeKind::Splat(Box::new(array)), loc)
     }
 
     pub fn new_lvar(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::LocalVar(id), false, loc)
+        Node::new(NodeKind::LocalVar(id), loc)
     }
 
     pub fn new_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Param(id), false, loc)
+        Node::new(NodeKind::Param(id), loc)
     }
 
     pub fn new_optional_param(id: IdentId, default: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::OptionalParam(id, Box::new(default)), false, loc)
+        Node::new(NodeKind::OptionalParam(id, Box::new(default)), loc)
     }
 
     pub fn new_splat_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::RestParam(id), false, loc)
+        Node::new(NodeKind::RestParam(id), loc)
     }
 
     pub fn new_post_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::PostParam(id), false, loc)
+        Node::new(NodeKind::PostParam(id), loc)
     }
 
     pub fn new_keyword_param(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
-        Node::new(NodeKind::KeywordParam(id, Box::new(default)), false, loc)
+        Node::new(NodeKind::KeywordParam(id, Box::new(default)), loc)
     }
 
     pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::BlockParam(id), false, loc)
+        Node::new(NodeKind::BlockParam(id), loc)
     }
 
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Ident(id), false, loc)
+        Node::new(NodeKind::Ident(id), loc)
     }
 
     pub fn new_symbol(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Symbol(id), false, loc)
+        Node::new(NodeKind::Symbol(id), loc)
     }
 
     pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::InstanceVar(id), false, loc)
+        Node::new(NodeKind::InstanceVar(id), loc)
     }
 
     pub fn new_global_var(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::GlobalVar(id), false, loc)
+        Node::new(NodeKind::GlobalVar(id), loc)
     }
 
     pub fn new_const(id: IdentId, toplevel: bool, loc: Loc) -> Self {
-        Node::new(NodeKind::Const { toplevel, id }, false, loc)
+        Node::new(NodeKind::Const { toplevel, id }, loc)
     }
 
     pub fn new_scope(parent: Node, id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Scope(Box::new(parent), id), false, loc)
+        Node::new(NodeKind::Scope(Box::new(parent), id), loc)
     }
 
     pub fn new_mul_assign(mlhs: Vec<Node>, mrhs: Vec<Node>) -> Self {
@@ -381,12 +380,12 @@ impl Node {
             mrhs
         };
         let loc = mlhs[0].loc().merge(mrhs.last().unwrap().loc());
-        Node::new(NodeKind::MulAssign(mlhs, mrhs), false, loc)
+        Node::new(NodeKind::MulAssign(mlhs, mrhs), loc)
     }
 
     pub fn new_single_assign(lhs: Node, rhs: Node) -> Self {
         let loc = lhs.loc().merge(rhs.loc());
-        Node::new(NodeKind::MulAssign(vec![lhs], vec![rhs]), false, loc)
+        Node::new(NodeKind::MulAssign(vec![lhs], vec![rhs]), loc)
     }
 
     pub fn new_method_decl(
@@ -396,14 +395,11 @@ impl Node {
         lvar: LvarCollector,
     ) -> Self {
         let loc = body.loc();
-        Node::new(
-            NodeKind::MethodDef(id, params, Box::new(body), lvar),
-            false,
-            loc,
-        )
+        Node::new(NodeKind::MethodDef(id, params, Box::new(body), lvar), loc)
     }
 
     pub fn new_singleton_method_decl(
+        singleton: Node,
         id: IdentId,
         params: Vec<Node>,
         body: Node,
@@ -411,14 +407,7 @@ impl Node {
     ) -> Self {
         let loc = body.loc();
         Node::new(
-            NodeKind::SingletonMethodDef(
-                Box::new(Self::new_self(loc)),
-                id,
-                params,
-                Box::new(body),
-                lvar,
-            ),
-            false,
+            NodeKind::SingletonMethodDef(Box::new(singleton), id, params, Box::new(body), lvar),
             loc,
         )
     }
@@ -439,7 +428,6 @@ impl Node {
                 is_module,
                 lvar,
             },
-            false,
             loc,
         )
     }
@@ -460,7 +448,6 @@ impl Node {
                 completed,
                 safe_nav,
             },
-            false,
             loc,
         )
     }
@@ -485,7 +472,6 @@ impl Node {
                 completed,
                 safe_nav,
             },
-            false,
             loc,
         )
     }
@@ -498,7 +484,6 @@ impl Node {
                 then_: Box::new(then_),
                 else_: Box::new(else_),
             },
-            false,
             loc,
         )
     }
@@ -511,7 +496,6 @@ impl Node {
                 body: Box::new(body),
                 cond_op,
             },
-            false,
             loc,
         )
     }
@@ -527,7 +511,6 @@ impl Node {
                 when_,
                 else_: Box::new(else_),
             },
-            false,
             loc,
         )
     }
@@ -546,25 +529,24 @@ impl Node {
                 else_: Box::new(else_),
                 ensure: Box::new(ensure),
             },
-            false,
             loc,
         )
     }
 
     pub fn new_break(val: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::Break(Box::new(val)), false, loc)
+        Node::new(NodeKind::Break(Box::new(val)), loc)
     }
 
     pub fn new_next(val: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::Next(Box::new(val)), false, loc)
+        Node::new(NodeKind::Next(Box::new(val)), loc)
     }
 
     pub fn new_return(val: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::Return(Box::new(val)), false, loc)
+        Node::new(NodeKind::Return(Box::new(val)), loc)
     }
 
     pub fn new_yield(args: SendArgs, loc: Loc) -> Self {
-        Node::new(NodeKind::Yield(args), false, loc)
+        Node::new(NodeKind::Yield(args), loc)
     }
 
     pub fn new_proc(params: Vec<Node>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
@@ -575,7 +557,6 @@ impl Node {
                 body: Box::new(body),
                 lvar,
             },
-            false,
             loc,
         )
     }

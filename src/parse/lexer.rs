@@ -191,6 +191,14 @@ impl Lexer {
         Ok(tok)
     }
 
+    /// Examine if the next char is a whitespace or not.
+    pub fn trailing_space(&self) -> bool {
+        match self.peek() {
+            Ok(ch) => ch.is_ascii_whitespace(),
+            Err(_) => false,
+        }
+    }
+
     /// Get token as a regular expression.
     pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
         match self.read_regexp_sub()? {
@@ -475,12 +483,7 @@ impl Lexer {
             Some(reserved) => Ok(self.new_reserved(*reserved)),
             None => {
                 if is_const {
-                    let (has_suffix, trailing_space) = match self.peek() {
-                        Ok(ch) if ch == ':' || ch == '=' || ch == '(' => (true, false),
-                        Ok(ch) if ch.is_ascii_whitespace() => (false, true),
-                        _ => (false, false),
-                    };
-                    Ok(self.new_const(tok, has_suffix, trailing_space))
+                    Ok(self.new_const(tok))
                 } else {
                     match self.peek() {
                         Ok(ch) if ch == '!' || ch == '?' => {
@@ -488,12 +491,7 @@ impl Lexer {
                         }
                         _ => {}
                     };
-                    let (has_suffix, trailing_space) = match self.peek() {
-                        Ok(ch) if ch == ':' || ch == '=' || ch == '(' || ch == '[' => (true, false),
-                        Ok(ch) if ch.is_ascii_whitespace() => (false, true),
-                        _ => (false, false),
-                    };
-                    Ok(self.new_ident(tok, has_suffix, trailing_space))
+                    Ok(self.new_ident(tok))
                 }
             }
         }
@@ -879,7 +877,7 @@ impl Lexer {
 
     /// Consume the next char, if the char is equal to the given one.
     /// Return true if the token was consumed.
-    pub fn consume(&mut self, ch: char) -> bool {
+    fn consume(&mut self, ch: char) -> bool {
         if self.pos as usize >= self.len {
             false
         } else if ch == self.source_info.code[self.pos as usize] {
@@ -940,7 +938,7 @@ impl Lexer {
     }
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
-    fn peek(&mut self) -> Result<char, RubyError> {
+    fn peek(&self) -> Result<char, RubyError> {
         if self.pos as usize >= self.len {
             Err(self.error_eof(self.pos))
         } else {
@@ -983,28 +981,24 @@ impl Lexer {
 }
 
 impl Lexer {
-    fn new_ident(&self, ident: impl Into<String>, has_suffix: bool, trailing_space: bool) -> Token {
-        Token::new_ident(ident.into(), has_suffix, trailing_space, self.cur_loc())
+    fn new_ident(&self, ident: impl Into<String>) -> Token {
+        Token::new_ident(ident.into(), self.cur_loc())
     }
 
     fn new_instance_var(&self, ident: impl Into<String>) -> Token {
-        Annot::new(TokenKind::InstanceVar(ident.into()), false, self.cur_loc())
+        Annot::new(TokenKind::InstanceVar(ident.into()), self.cur_loc())
     }
 
     fn new_global_var(&self, ident: impl Into<String>) -> Token {
-        Annot::new(TokenKind::GlobalVar(ident.into()), false, self.cur_loc())
+        Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
     }
 
-    fn new_const(&self, ident: impl Into<String>, has_suffix: bool, trailing_space: bool) -> Token {
-        Annot::new(
-            TokenKind::Const(ident.into(), has_suffix, trailing_space),
-            false,
-            self.cur_loc(),
-        )
+    fn new_const(&self, ident: impl Into<String>) -> Token {
+        Annot::new(TokenKind::Const(ident.into()), self.cur_loc())
     }
 
     fn new_reserved(&self, ident: Reserved) -> Token {
-        Annot::new(TokenKind::Reserved(ident), false, self.cur_loc())
+        Annot::new(TokenKind::Reserved(ident), self.cur_loc())
     }
 
     fn new_numlit(&self, num: i64) -> Token {
@@ -1020,19 +1014,11 @@ impl Lexer {
     }
 
     fn new_stringlit(&self, string: impl Into<String>) -> Token {
-        Annot::new(TokenKind::StringLit(string.into()), false, self.cur_loc())
+        Annot::new(TokenKind::StringLit(string.into()), self.cur_loc())
     }
 
     fn new_punct(&self, punc: Punct) -> Token {
-        let flag = if self.pos as usize >= self.len {
-            false
-        } else {
-            match self.source_info.code[self.pos as usize] {
-                ' ' | '\t' => true,
-                _ => false,
-            }
-        };
-        Annot::new(TokenKind::Punct(punc), flag, self.cur_loc())
+        Annot::new(TokenKind::Punct(punc), self.cur_loc())
     }
 
     fn new_open_dq(&self, s: String, delimiter: char, level: usize) -> Token {
@@ -1048,15 +1034,15 @@ impl Lexer {
     }
 
     fn new_space(&self) -> Token {
-        Annot::new(TokenKind::Space, false, self.cur_loc())
+        Annot::new(TokenKind::Space, self.cur_loc())
     }
 
     fn new_line_term(&self) -> Token {
-        Annot::new(TokenKind::LineTerm, false, self.cur_loc())
+        Annot::new(TokenKind::LineTerm, self.cur_loc())
     }
 
     fn new_eof(&self, pos: u32) -> Token {
-        Annot::new(TokenKind::EOF, false, Loc(pos, pos))
+        Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 }
 
@@ -1101,8 +1087,8 @@ mod test {
     }
 
     macro_rules! Token (
-        (Ident($item:expr, $flag:expr, $space:expr), $loc_0:expr, $loc_1:expr) => {
-            Token::new_ident($item, $flag, $space, Loc($loc_0, $loc_1))
+        (Ident($item:expr), $loc_0:expr, $loc_1:expr) => {
+            Token::new_ident($item, Loc($loc_0, $loc_1))
         };
         (InstanceVar($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_instance_var($item, Loc($loc_0, $loc_1))
@@ -1159,7 +1145,7 @@ mod test {
     #[test]
     fn identifier1() {
         let program = "amber";
-        let ans = vec![Token![Ident("amber", false, false), 0, 4], Token![EOF, 5]];
+        let ans = vec![Token![Ident("amber"), 0, 4], Token![EOF, 5]];
         assert_tokens(program, ans);
     }
 
@@ -1253,12 +1239,12 @@ mod test {
     fn lexer_test1() {
         let program = "a = 1\n if a==5 then 5 else 8";
         let ans = vec![
-            Token![Ident("a", false, true), 0, 0],
+            Token![Ident("a"), 0, 0],
             Token![Punct(Punct::Assign), 2, 2],
             Token![NumLit(1), 4, 4],
             Token![LineTerm, 5, 5],
             Token![Reserved(Reserved::If), 7, 8],
-            Token![Ident("a", true, false), 10, 10],
+            Token![Ident("a"), 10, 10],
             Token![Punct(Punct::Eq), 11, 12],
             Token![NumLit(5), 13, 13],
             Token![Reserved(Reserved::Then), 15, 18],
@@ -1280,13 +1266,13 @@ mod test {
             10 # also a comment";
         let ans = vec![
             Token![LineTerm, 0, 0],
-            Token![Ident("a", false, true), 9, 9],
+            Token![Ident("a"), 9, 9],
             Token![Punct(Punct::Assign), 11, 11],
             Token![NumLit(0), 13, 13],
             Token![Punct(Punct::Semi), 14, 14],
             Token![LineTerm, 15, 15],
             Token![Reserved(Reserved::If), 24, 25],
-            Token![Ident("a", false, true), 27, 27],
+            Token![Ident("a"), 27, 27],
             Token![Punct(Punct::Eq), 29, 30],
             Token![NumLit(1000), 32, 36],
             Token![Reserved(Reserved::Then), 38, 41],
