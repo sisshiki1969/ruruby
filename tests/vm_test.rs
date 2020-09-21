@@ -1055,6 +1055,30 @@ fn class3() {
 }
 
 #[test]
+fn class4() {
+    let program = "
+        class C
+          class << self
+            def foo
+              77
+            end
+          end
+        end
+        assert 77, C.foo
+
+        class D
+        end
+        class << D
+          def boo
+            99
+          end
+        end
+        assert 99, D.boo
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn initialize() {
     let program = "
     class Vec

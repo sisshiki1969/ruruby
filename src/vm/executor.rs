@@ -1123,6 +1123,18 @@ impl VM {
                     self.pc += 14;
                     self.class_pop();
                 }
+                Inst::DEF_SCLASS => {
+                    let method = iseq.read_methodref(self.pc + 1);
+                    let base = self.stack_pop();
+                    let singleton = self.get_singleton_class(base)?;
+                    self.class_push(singleton);
+                    let mut iseq = self.get_iseq(method)?;
+                    iseq.class_defined = self.get_class_defined(singleton);
+                    let arg = Args::new0();
+                    try_push!(self.eval_send(method, singleton, &arg));
+                    self.pc += 9;
+                    self.class_pop();
+                }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);

@@ -1895,6 +1895,12 @@ impl Parser {
             Punct::Minus => Ok(IdentId::_SUB),
             Punct::Mul => Ok(IdentId::_MUL),
             Punct::Cmp => Ok(self.get_ident_id("<=>")),
+            Punct::Eq => Ok(IdentId::_EQ),
+            Punct::Ne => Ok(IdentId::_NEQ),
+            Punct::Lt => Ok(IdentId::_LT),
+            Punct::Le => Ok(IdentId::_LE),
+            Punct::Gt => Ok(IdentId::_GT),
+            Punct::Ge => Ok(IdentId::_GE),
             Punct::LBracket => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {

@@ -177,7 +177,7 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
             _ => {}
         };
     }
-    eprintln!("{:?}", res_path);
+    //eprintln!("{:?}", res_path);
 
     return Ok(Value::string(res_path.to_string_lossy().to_string()));
 }
