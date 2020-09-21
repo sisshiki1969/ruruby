@@ -3,25 +3,25 @@ use crate::*;
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Integer");
     let mut class = ClassRef::from(id, BuiltinClass::object());
-    class.add_builtin_instance_method("+", add);
-    class.add_builtin_instance_method("-", sub);
-    class.add_builtin_instance_method("*", mul);
-    class.add_builtin_instance_method("div", quotient);
-    class.add_builtin_instance_method("==", eq);
-    class.add_builtin_instance_method("!=", neq);
-    class.add_builtin_instance_method(">=", ge);
-    class.add_builtin_instance_method(">", gt);
-    class.add_builtin_instance_method("<=", le);
-    class.add_builtin_instance_method("<", lt);
-    class.add_builtin_instance_method("<=>", cmp);
+    class.add_builtin_method_by_str("+", add);
+    class.add_builtin_method_by_str("-", sub);
+    class.add_builtin_method_by_str("*", mul);
+    class.add_builtin_method_by_str("div", quotient);
+    class.add_builtin_method_by_str("==", eq);
+    class.add_builtin_method_by_str("!=", neq);
+    class.add_builtin_method_by_str(">=", ge);
+    class.add_builtin_method_by_str(">", gt);
+    class.add_builtin_method_by_str("<=", le);
+    class.add_builtin_method_by_str("<", lt);
+    class.add_builtin_method_by_str("<=>", cmp);
 
-    class.add_builtin_instance_method("times", times);
-    class.add_builtin_instance_method("upto", upto);
-    class.add_builtin_instance_method("step", step);
-    class.add_builtin_instance_method("chr", chr);
-    class.add_builtin_instance_method("to_f", tof);
-    class.add_builtin_instance_method("floor", floor);
-    class.add_builtin_instance_method("even?", even);
+    class.add_builtin_method_by_str("times", times);
+    class.add_builtin_method_by_str("upto", upto);
+    class.add_builtin_method_by_str("step", step);
+    class.add_builtin_method_by_str("chr", chr);
+    class.add_builtin_method_by_str("to_f", tof);
+    class.add_builtin_method_by_str("floor", floor);
+    class.add_builtin_method_by_str("even?", even);
     Value::class(class)
 }
 

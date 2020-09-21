@@ -1260,6 +1260,14 @@ impl VM {
         ))
     }
 
+    pub fn error_undefined_method_for_class(&self, method: IdentId, class: Value) -> RubyError {
+        self.error_nomethod(format!(
+            "no method `{:?}' for {}",
+            method,
+            class.as_class().name()
+        ))
+    }
+
     pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
@@ -1504,13 +1512,13 @@ impl VM {
 
 impl VM {
     fn fallback(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
-        let mref = self.get_method(receiver, method_id)?;
+        let mref = self.get_method_from_receiver(receiver, method_id)?;
         let val = self.eval_send(mref, receiver, args)?;
         Ok(val)
     }
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
-        match self.get_method(lhs, method) {
+        match self.get_method_from_receiver(lhs, method) {
             Ok(mref) => {
                 let arg = Args::new1(rhs);
                 let val = self.eval_send(mref, lhs, &arg)?;
@@ -2168,7 +2176,7 @@ impl VM {
     }
 
     pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> VMResult {
-        let method = self.get_method(receiver, method_id)?;
+        let method = self.get_method_from_receiver(receiver, method_id)?;
         let args = Args::new0();
         let val = self.eval_send(method, receiver, &args)?;
         Ok(val)
@@ -2351,12 +2359,21 @@ impl VM {
     }
 
     /// Get method(MethodRef) for receiver.
-    pub fn get_method(
+    pub fn get_method_from_receiver(
         &mut self,
         receiver: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
+        self.get_method(rec_class, method_id)
+    }
+
+    /// Get method(MethodRef) for class.
+    pub fn get_method(
+        &mut self,
+        rec_class: Value,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
         let class_version = self.globals.class_version;
         match self
             .globals
@@ -2364,7 +2381,7 @@ impl VM {
             .get_method(class_version, rec_class, method_id)
         {
             Some(m) => Ok(m),
-            None => Err(self.error_undefined_method(method_id, receiver)),
+            None => Err(self.error_undefined_method_for_class(method_id, rec_class)),
         }
     }
 

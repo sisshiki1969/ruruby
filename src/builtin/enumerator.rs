@@ -3,12 +3,12 @@ use crate::*;
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Enumerator");
     let mut class = ClassRef::from(id, BuiltinClass::object());
-    class.add_builtin_instance_method("next", next);
-    class.add_builtin_instance_method("each", each);
-    class.add_builtin_instance_method("map", map);
-    class.add_builtin_instance_method("collect", map);
-    class.add_builtin_instance_method("with_index", with_index);
-    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_method_by_str("next", next);
+    class.add_builtin_method_by_str("each", each);
+    class.add_builtin_method_by_str("map", map);
+    class.add_builtin_method_by_str("collect", map);
+    class.add_builtin_method_by_str("with_index", with_index);
+    class.add_builtin_method_by_str("inspect", inspect);
     let mut class = Value::class(class);
     class.add_builtin_class_method("new", enum_new);
     class

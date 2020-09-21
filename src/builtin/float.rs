@@ -3,12 +3,12 @@ use crate::*;
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Float");
     let mut class = ClassRef::from(id, BuiltinClass::object());
-    class.add_builtin_instance_method("+", add);
-    class.add_builtin_instance_method("-", sub);
-    class.add_builtin_instance_method("*", mul);
-    class.add_builtin_instance_method("div", quotient);
-    class.add_builtin_instance_method("<=>", cmp);
-    class.add_builtin_instance_method("floor", floor);
+    class.add_builtin_method_by_str("+", add);
+    class.add_builtin_method_by_str("-", sub);
+    class.add_builtin_method_by_str("*", mul);
+    class.add_builtin_method_by_str("div", quotient);
+    class.add_builtin_method_by_str("<=>", cmp);
+    class.add_builtin_method_by_str("floor", floor);
     Value::class(class)
 }
 

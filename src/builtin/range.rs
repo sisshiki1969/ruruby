@@ -35,17 +35,17 @@ pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Range");
     let mut class = ClassRef::from(id, BuiltinClass::object());
     let mut class_val = Value::class(class);
-    class.add_builtin_instance_method("to_s", to_s);
-    class.add_builtin_instance_method("inspect", inspect);
-    class.add_builtin_instance_method("map", map);
-    class.add_builtin_instance_method("flat_map", flat_map);
-    class.add_builtin_instance_method("each", each);
-    class.add_builtin_instance_method("all?", all);
-    class.add_builtin_instance_method("begin", begin);
-    class.add_builtin_instance_method("first", first);
-    class.add_builtin_instance_method("end", end);
-    class.add_builtin_instance_method("last", last);
-    class.add_builtin_instance_method("to_a", to_a);
+    class.add_builtin_method_by_str("to_s", to_s);
+    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("map", map);
+    class.add_builtin_method_by_str("flat_map", flat_map);
+    class.add_builtin_method_by_str("each", each);
+    class.add_builtin_method_by_str("all?", all);
+    class.add_builtin_method_by_str("begin", begin);
+    class.add_builtin_method_by_str("first", first);
+    class.add_builtin_method_by_str("end", end);
+    class.add_builtin_method_by_str("last", last);
+    class.add_builtin_method_by_str("to_a", to_a);
     class_val.add_builtin_class_method("new", range_new);
     class_val
 }

@@ -4,8 +4,8 @@ pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Fiber");
     let mut class = ClassRef::from(id, BuiltinClass::object());
     let mut class_val = Value::class(class);
-    class.add_builtin_instance_method("inspect", inspect);
-    class.add_builtin_instance_method("resume", resume);
+    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("resume", resume);
     class_val.add_builtin_class_method("new", new);
     class_val.add_builtin_class_method("yield", yield_);
     class_val

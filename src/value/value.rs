@@ -410,7 +410,7 @@ impl Value {
 
     pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
         let mut classref = self.get_singleton_class().unwrap().as_class();
-        classref.add_builtin_instance_method(name, func);
+        classref.add_builtin_method_by_str(name, func);
     }
 }
 
@@ -577,6 +577,27 @@ impl Value {
             vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
         })?;
         rstring.as_string(vm)
+    }
+
+    pub fn expect_string_or_symbol(
+        &mut self,
+        vm: &mut VM,
+        msg: &str,
+    ) -> Result<IdentId, RubyError> {
+        let val = *self;
+        if let Some(id) = val.as_symbol() {
+            return Ok(id);
+        };
+        let str = self
+            .as_mut_rstring()
+            .ok_or_else(|| {
+                vm.error_type(format!(
+                    "{} must be String or Symbol. (given:{:?})",
+                    msg, val
+                ))
+            })?
+            .as_string(vm)?;
+        Ok(IdentId::get_id(str))
     }
 
     pub fn as_class(&self) -> ClassRef {

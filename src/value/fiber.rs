@@ -112,7 +112,7 @@ impl FiberInfo {
         method_id: IdentId,
         args: &Args,
     ) -> VMResult {
-        let method = vm.get_method(receiver, method_id)?;
+        let method = vm.get_method_from_receiver(receiver, method_id)?;
         let mut args = args.clone();
         args.block = Some(*METHODREF_ENUM);
         let context = Context::new_noiseq();

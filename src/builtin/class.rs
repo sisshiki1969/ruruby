@@ -3,10 +3,10 @@ use crate::*;
 pub fn init(globals: &mut Globals) {
     let mut class_obj = globals.builtins.class;
     let mut class = class_obj.as_class();
-    class.add_builtin_instance_method("new", new);
-    class.add_builtin_instance_method("superclass", superclass);
-    class.add_builtin_instance_method("inspect", inspect);
-    class.add_builtin_instance_method("name", name);
+    class.add_builtin_method_by_str("new", new);
+    class.add_builtin_method_by_str("superclass", superclass);
+    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("name", name);
     class_obj.add_builtin_class_method("new", class_new);
 }
 

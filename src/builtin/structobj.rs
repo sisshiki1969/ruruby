@@ -26,8 +26,8 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let mut class_val = Value::class_from(name, self_val);
     let mut class = class_val.as_class();
-    class.add_builtin_instance_method("initialize", initialize);
-    class.add_builtin_instance_method("inspect", inspect);
+    class.add_builtin_method_by_str("initialize", initialize);
+    class.add_builtin_method_by_str("inspect", inspect);
     class_val.add_builtin_class_method("[]", builtin::class::new);
     class_val.add_builtin_class_method("new", builtin::class::new);
 

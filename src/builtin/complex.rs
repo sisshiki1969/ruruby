@@ -2,14 +2,14 @@ use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
     let mut classref = ClassRef::from_str("Complex", BuiltinClass::object());
-    classref.add_builtin_instance_method("+", add);
-    classref.add_builtin_instance_method("-", sub);
-    classref.add_builtin_instance_method("*", mul);
-    classref.add_builtin_instance_method("/", div);
-    classref.add_builtin_instance_method("==", eq);
-    classref.add_builtin_instance_method("abs2", abs2);
-    classref.add_builtin_instance_method("abs", abs);
-    classref.add_builtin_instance_method("rect", rect);
+    classref.add_builtin_method_by_str("+", add);
+    classref.add_builtin_method_by_str("-", sub);
+    classref.add_builtin_method_by_str("*", mul);
+    classref.add_builtin_method_by_str("/", div);
+    classref.add_builtin_method_by_str("==", eq);
+    classref.add_builtin_method_by_str("abs2", abs2);
+    classref.add_builtin_method_by_str("abs", abs);
+    classref.add_builtin_method_by_str("rect", rect);
     let mut class = Value::class(classref);
     class.add_builtin_class_method("rect", complex_rect);
     class.add_builtin_class_method("rectangular", complex_rect);

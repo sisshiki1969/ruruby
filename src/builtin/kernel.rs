@@ -5,25 +5,25 @@ use std::path::PathBuf;
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Kernel");
     let mut kernel_class = ClassRef::from(id, None);
-    kernel_class.add_builtin_instance_method("puts", puts);
-    kernel_class.add_builtin_instance_method("p", p);
-    kernel_class.add_builtin_instance_method("print", print);
-    kernel_class.add_builtin_instance_method("assert", assert);
-    kernel_class.add_builtin_instance_method("assert_error", assert_error);
-    kernel_class.add_builtin_instance_method("require", require);
-    kernel_class.add_builtin_instance_method("require_relative", require_relative);
-    kernel_class.add_builtin_instance_method("block_given?", block_given);
-    kernel_class.add_builtin_instance_method("method", method);
-    kernel_class.add_builtin_instance_method("is_a?", isa);
-    kernel_class.add_builtin_instance_method("Integer", integer);
-    kernel_class.add_builtin_instance_method("__dir__", dir);
-    kernel_class.add_builtin_instance_method("__FILE__", file_);
-    kernel_class.add_builtin_instance_method("raise", raise);
-    kernel_class.add_builtin_instance_method("rand", rand_);
-    kernel_class.add_builtin_instance_method("loop", loop_);
-    kernel_class.add_builtin_instance_method("exit", exit);
-    kernel_class.add_builtin_instance_method("sleep", sleep);
-    kernel_class.add_builtin_instance_method("Complex", kernel_complex);
+    kernel_class.add_builtin_method_by_str("puts", puts);
+    kernel_class.add_builtin_method_by_str("p", p);
+    kernel_class.add_builtin_method_by_str("print", print);
+    kernel_class.add_builtin_method_by_str("assert", assert);
+    kernel_class.add_builtin_method_by_str("assert_error", assert_error);
+    kernel_class.add_builtin_method_by_str("require", require);
+    kernel_class.add_builtin_method_by_str("require_relative", require_relative);
+    kernel_class.add_builtin_method_by_str("block_given?", block_given);
+    kernel_class.add_builtin_method_by_str("method", method);
+    kernel_class.add_builtin_method_by_str("is_a?", isa);
+    kernel_class.add_builtin_method_by_str("Integer", integer);
+    kernel_class.add_builtin_method_by_str("__dir__", dir);
+    kernel_class.add_builtin_method_by_str("__FILE__", file_);
+    kernel_class.add_builtin_method_by_str("raise", raise);
+    kernel_class.add_builtin_method_by_str("rand", rand_);
+    kernel_class.add_builtin_method_by_str("loop", loop_);
+    kernel_class.add_builtin_method_by_str("exit", exit);
+    kernel_class.add_builtin_method_by_str("sleep", sleep);
+    kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
     let kernel = Value::class(kernel_class);
     return kernel;
 }
@@ -185,7 +185,7 @@ fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(id) => id,
         None => return Err(vm.error_type("An argument must be a Symbol.")),
     };
-    let method = vm.get_method(self_val, name)?;
+    let method = vm.get_method_from_receiver(self_val, name)?;
     let val = Value::method(name, self_val, method);
     Ok(val)
 }

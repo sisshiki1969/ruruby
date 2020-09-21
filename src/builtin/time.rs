@@ -8,9 +8,9 @@ pub fn init(_globals: &mut Globals) -> Value {
     let time_id = IdentId::get_id("Time");
     let mut class = ClassRef::from(time_id, BuiltinClass::object());
     let mut class_val = Value::class(class);
-    class.add_builtin_instance_method("inspect", inspect);
-    class.add_builtin_instance_method("-", sub);
-    class.add_builtin_instance_method("+", add);
+    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("-", sub);
+    class.add_builtin_method_by_str("+", add);
     class_val.add_builtin_class_method("now", time_now);
     class_val
 }

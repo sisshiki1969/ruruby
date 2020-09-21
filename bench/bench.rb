@@ -191,13 +191,14 @@ def perf_optcarrot(option = "")
   @md3 += "| x #{'%.2f' % rss_mul} |\n"
 end
 
-['block.rb',
- 'for_loop.rb',
+['loop_times.rb',
+ 'loop_for.rb',
+ 'loop_whileloop.rb',
  'so_mandelbrot.rb',
  'app_mandelbrot.rb',
  'app_fibo.rb',
  'app_aobench.rb',
- 'nbody.rb'].each { |x| perf x }
+ 'so_nbody.rb'].each { |x| perf x }
 
 @optcarrot = [@optcarrot_dir + "/bin/optcarrot", "-b", @optcarrot_dir + "/examples/Lan_Master.nes"].join(" ")
 

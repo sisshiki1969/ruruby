@@ -3,20 +3,21 @@ use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
     let mut module_class = globals.builtins.module.as_class();
-    module_class.add_builtin_instance_method("constants", constants);
-    module_class.add_builtin_instance_method("instance_methods", instance_methods);
-    module_class.add_builtin_instance_method("attr_accessor", attr_accessor);
-    module_class.add_builtin_instance_method("attr", attr_reader);
-    module_class.add_builtin_instance_method("attr_reader", attr_reader);
-    module_class.add_builtin_instance_method("attr_writer", attr_writer);
-    module_class.add_builtin_instance_method("module_function", module_function);
-    module_class.add_builtin_instance_method("singleton_class?", singleton_class);
-    module_class.add_builtin_instance_method("const_get", const_get);
-    module_class.add_builtin_instance_method("include", include);
-    module_class.add_builtin_instance_method("included_modules", included_modules);
-    module_class.add_builtin_instance_method("ancestors", ancestors);
-    module_class.add_builtin_instance_method("module_eval", module_eval);
-    module_class.add_builtin_instance_method("class_eval", module_eval);
+    module_class.add_builtin_method_by_str("constants", constants);
+    module_class.add_builtin_method_by_str("instance_methods", instance_methods);
+    module_class.add_builtin_method_by_str("attr_accessor", attr_accessor);
+    module_class.add_builtin_method_by_str("attr", attr_reader);
+    module_class.add_builtin_method_by_str("attr_reader", attr_reader);
+    module_class.add_builtin_method_by_str("attr_writer", attr_writer);
+    module_class.add_builtin_method_by_str("module_function", module_function);
+    module_class.add_builtin_method_by_str("singleton_class?", singleton_class);
+    module_class.add_builtin_method_by_str("const_get", const_get);
+    module_class.add_builtin_method_by_str("include", include);
+    module_class.add_builtin_method_by_str("included_modules", included_modules);
+    module_class.add_builtin_method_by_str("ancestors", ancestors);
+    module_class.add_builtin_method_by_str("module_eval", module_eval);
+    module_class.add_builtin_method_by_str("class_eval", module_eval);
+    module_class.add_builtin_method_by_str("alias_method", module_alias_method);
 }
 
 fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -260,6 +261,18 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 2)?;
+    let new = args[0].clone().expect_string_or_symbol(vm, "1st arg")?;
+    let org = args[1].clone().expect_string_or_symbol(vm, "2nd arg")?;
+    let method = vm.get_method(self_val, org)?;
+    self_val
+        //.get_class()
+        .as_class()
+        .add_method(&mut vm.globals, new, method);
+    Ok(self_val)
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -299,6 +312,7 @@ mod test {
 
     assert(100, Foo.const_get(:Bar))
     assert(100, Bar.const_get(:Bar))
+    assert_error { Bar.const_get([]) }
     assert(true, ary_cmp(Foo.constants, [:Bar, :Ker]))
     assert(true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker]))
     "#;
@@ -312,6 +326,9 @@ mod test {
         attr_accessor :car, :cdr
         attr_reader :bar
         attr_writer :boo
+        assert_error { attr_accessor 100 }
+        assert_error { attr_reader 100 }
+        assert_error { attr_writer 100 }
         def set_bar(x)
             @bar = x
         end
@@ -358,6 +375,7 @@ mod test {
     end
     assert(true, ary_cmp(A.constants, [:Bar, :Foo]))
     assert(true, ary_cmp(A.instance_methods - Class.instance_methods, [:fn, :fo]))
+    assert(true, ary_cmp(A.instance_methods(false), [:fn, :fo]))
     "#;
         assert_script(program);
     }
@@ -391,6 +409,29 @@ mod test {
         assert("mew", C.new.bar)
         assert("view", x)
         assert(111, C.module_eval { D })
+        "##;
+        assert_script(program);
+    }
+
+    #[test]
+    fn alias_method() {
+        let program = r##"
+        class Foo
+          def foo
+            55
+          end
+          alias_method :bar1, :foo
+          alias_method "bar2", :foo
+          alias_method :bar3, "foo"
+          alias_method "bar4", "foo"
+          assert_error { alias_method 124, :foo }
+          assert_error { alias_method :bar5, [] }
+        end
+        f = Foo.new
+        assert(55, f.bar1)
+        assert(55, f.bar2)
+        assert(55, f.bar3)
+        assert(55, f.bar4)
         "##;
         assert_script(program);
     }

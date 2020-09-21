@@ -1,12 +1,9 @@
 #![feature(test)]
 #![allow(unused_imports, dead_code)]
 extern crate ruruby;
-extern crate test;
 use ruruby::parse::Lexer;
-//use ruruby::parser::{LvarCollector, Parser};
 use ruruby::test::*;
 use ruruby::*;
-use test::Bencher;
 
 #[test]
 fn expr1() {

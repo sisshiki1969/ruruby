@@ -20,11 +20,15 @@ impl ClassInfo {
         }
     }
 
-    pub fn add_builtin_instance_method(&mut self, name: &str, func: BuiltinFunc) {
-        let name = IdentId::get_id(name);
-        let info = MethodInfo::BuiltinFunc { name, func };
+    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
+        let info = MethodInfo::BuiltinFunc { name: id, func };
         let methodref = MethodRef::new(info);
-        self.method_table.insert(name, methodref);
+        self.method_table.insert(id, methodref);
+    }
+
+    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+        let name = IdentId::get_id(name);
+        self.add_builtin_method(name, func);
     }
 
     pub fn superclass(&self) -> Option<ClassRef> {

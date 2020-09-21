@@ -2,26 +2,26 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) {
     let mut object_class = globals.builtins.object.as_class();
-    object_class.add_builtin_instance_method("class", class);
-    object_class.add_builtin_instance_method("object_id", object_id);
-    object_class.add_builtin_instance_method("to_s", to_s);
-    object_class.add_builtin_instance_method("inspect", inspect);
-    object_class.add_builtin_instance_method("singleton_class", singleton_class);
-    object_class.add_builtin_instance_method("clone", dup);
-    object_class.add_builtin_instance_method("dup", dup);
-    object_class.add_builtin_instance_method("eql?", eql);
-    object_class.add_builtin_instance_method("nil?", nil);
-    object_class.add_builtin_instance_method("to_i", toi);
-    object_class.add_builtin_instance_method("instance_variable_set", instance_variable_set);
-    object_class.add_builtin_instance_method("instance_variable_get", instance_variable_get);
-    object_class.add_builtin_instance_method("instance_variables", instance_variables);
-    object_class.add_builtin_instance_method("freeze", freeze);
-    object_class.add_builtin_instance_method("super", super_);
-    object_class.add_builtin_instance_method("equal?", equal);
-    object_class.add_builtin_instance_method("send", send);
-    object_class.add_builtin_instance_method("eval", eval);
-    object_class.add_builtin_instance_method("to_enum", to_enum);
-    object_class.add_builtin_instance_method("enum_for", to_enum);
+    object_class.add_builtin_method_by_str("class", class);
+    object_class.add_builtin_method_by_str("object_id", object_id);
+    object_class.add_builtin_method_by_str("to_s", to_s);
+    object_class.add_builtin_method_by_str("inspect", inspect);
+    object_class.add_builtin_method_by_str("singleton_class", singleton_class);
+    object_class.add_builtin_method_by_str("clone", dup);
+    object_class.add_builtin_method_by_str("dup", dup);
+    object_class.add_builtin_method_by_str("eql?", eql);
+    object_class.add_builtin_method_by_str("nil?", nil);
+    object_class.add_builtin_method_by_str("to_i", toi);
+    object_class.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
+    object_class.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
+    object_class.add_builtin_method_by_str("instance_variables", instance_variables);
+    object_class.add_builtin_method_by_str("freeze", freeze);
+    object_class.add_builtin_method_by_str("super", super_);
+    object_class.add_builtin_method_by_str("equal?", equal);
+    object_class.add_builtin_method_by_str("send", send);
+    object_class.add_builtin_method_by_str("eval", eval);
+    object_class.add_builtin_method_by_str("to_enum", to_enum);
+    object_class.add_builtin_method_by_str("enum_for", to_enum);
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -207,7 +207,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(vm.error_argument("Must be a symbol.")),
     };
-    let method = vm.get_method(receiver, method_id)?;
+    let method = vm.get_method_from_receiver(receiver, method_id)?;
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {
