@@ -1148,34 +1148,7 @@ impl Codegen {
             NodeKind::RegExp(nodes, is_const) => {
                 if *is_const {
                     if use_value {
-                        let mut string = String::new();
-                        for node in nodes {
-                            match &node.kind {
-                                NodeKind::String(s) => string += s,
-                                _ => unreachable!(),
-                            }
-                        }
-                        match string.pop().unwrap() {
-                            'i' => string.insert_str(0, "(?mi)"),
-                            'm' => string.insert_str(0, "(?ms)"),
-                            'x' => string.insert_str(0, "(?mx)"),
-                            'o' => string.insert_str(0, "(?mo)"),
-                            '-' => string.insert_str(0, "(?m)"),
-                            _ => {
-                                return Err(self
-                                    .error_syntax("Illegal internal regexp expression.", node.loc))
-                            }
-                        };
-                        let re = match RegexpInfo::from_string(globals, &string) {
-                            Ok(re) => re,
-                            Err(_) => {
-                                return Err(self.error_syntax(
-                                    format!("Invalid string for a regular expression. {}", string),
-                                    node.loc,
-                                ))
-                            }
-                        };
-                        let val = Value::regexp(re);
+                        let val = self.const_expr(globals, node)?;
                         let id = globals.const_values.insert(val);
                         self.gen_const_val(iseq, id);
                     }
@@ -1228,8 +1201,7 @@ impl Codegen {
             NodeKind::Array(nodes, is_const) => {
                 if *is_const {
                     if use_value {
-                        let val = self.const_expr(globals, node);
-                        //eprintln!("const: {:?}", val);
+                        let val = self.const_expr(globals, node)?;
                         let id = globals.const_values.insert(val);
                         self.gen_const_val(iseq, id);
                     }
@@ -1247,8 +1219,7 @@ impl Codegen {
             NodeKind::Hash(key_value, is_const) => {
                 if *is_const {
                     if use_value {
-                        let val = self.const_expr(globals, node);
-                        //eprintln!("const: {:?}", val);
+                        let val = self.const_expr(globals, node)?;
                         let id = globals.const_values.insert(val);
                         self.gen_const_val(iseq, id);
                     }
@@ -1946,6 +1917,29 @@ impl Codegen {
                     self.gen_pop(iseq);
                 };
             }
+            NodeKind::SingletonClassDef {
+                singleton,
+                body,
+                lvar,
+            } => {
+                let loc = node.loc();
+                let methodref = self.gen_iseq(
+                    globals,
+                    &vec![],
+                    body,
+                    lvar,
+                    true,
+                    ContextKind::Method,
+                    None,
+                )?;
+                self.gen(globals, iseq, singleton, true)?;
+                self.save_loc(iseq, loc);
+                iseq.push(Inst::DEF_SCLASS);
+                Codegen::push64(iseq, methodref.id());
+                if !use_value {
+                    self.gen_pop(iseq);
+                };
+            }
             NodeKind::Return(val) => {
                 self.gen(globals, iseq, val, true)?;
                 // Call ensure clauses.
@@ -2053,29 +2047,63 @@ impl Codegen {
 
 impl Codegen {
     /// Construct and return value of constant expression.
-    fn const_expr(&self, globals: &Globals, node: &Node) -> Value {
+    fn const_expr(&self, globals: &mut Globals, node: &Node) -> Result<Value, RubyError> {
         match &node.kind {
-            NodeKind::Bool(b) => Value::bool(*b),
-            NodeKind::Integer(i) => Value::integer(*i),
-            NodeKind::Float(f) => Value::float(*f),
-            NodeKind::Nil => Value::nil(),
-            NodeKind::Symbol(s) => Value::symbol(*s),
-            NodeKind::String(s) => Value::string(s.to_owned()),
+            NodeKind::Bool(b) => Ok(Value::bool(*b)),
+            NodeKind::Integer(i) => Ok(Value::integer(*i)),
+            NodeKind::Float(f) => Ok(Value::float(*f)),
+            NodeKind::Nil => Ok(Value::nil()),
+            NodeKind::Symbol(s) => Ok(Value::symbol(*s)),
+            NodeKind::String(s) => Ok(Value::string(s.to_owned())),
             NodeKind::Hash(key_value, true) => {
                 let mut map = FxHashMap::default();
                 for (k, v) in key_value {
                     map.insert(
-                        HashKey(self.const_expr(globals, k)),
-                        self.const_expr(globals, v),
+                        HashKey(self.const_expr(globals, k)?),
+                        self.const_expr(globals, v)?,
                     );
                 }
-                Value::hash_from_map(map)
+                Ok(Value::hash_from_map(map))
             }
             NodeKind::Array(nodes, true) => {
-                let ary: Vec<Value> = nodes.iter().map(|n| self.const_expr(globals, n)).collect();
-                Value::array_from(ary)
+                let mut ary = vec![];
+                for n in nodes {
+                    ary.push(self.const_expr(globals, n)?)
+                }
+                Ok(Value::array_from(ary))
             }
-            _ => unreachable!(),
+            NodeKind::RegExp(nodes, true) => {
+                let mut string = String::new();
+                for node in nodes {
+                    match &node.kind {
+                        NodeKind::String(s) => string += s,
+                        _ => unreachable!(),
+                    }
+                }
+                match string.pop().unwrap() {
+                    'i' => string.insert_str(0, "(?mi)"),
+                    'm' => string.insert_str(0, "(?ms)"),
+                    'x' => string.insert_str(0, "(?mx)"),
+                    'o' => string.insert_str(0, "(?mo)"),
+                    '-' => string.insert_str(0, "(?m)"),
+                    _ => {
+                        return Err(
+                            self.error_syntax("Illegal internal regexp expression.", node.loc)
+                        )
+                    }
+                };
+                let re = match RegexpInfo::from_string(globals, &string) {
+                    Ok(re) => re,
+                    Err(_) => {
+                        return Err(self.error_syntax(
+                            format!("Invalid string for a regular expression. {}", string),
+                            node.loc,
+                        ))
+                    }
+                };
+                Ok(Value::regexp(re))
+            }
+            _ => unreachable!("const_expr(): not supported. {:?}", node.kind),
         }
     }
 }

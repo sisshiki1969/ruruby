@@ -51,8 +51,9 @@ impl Inst {
     pub const TOPN: u8 = 87;
 
     pub const DEF_CLASS: u8 = 90;
-    pub const DEF_METHOD: u8 = 91;
-    pub const DEF_SMETHOD: u8 = 92;
+    pub const DEF_SCLASS: u8 = 91;
+    pub const DEF_METHOD: u8 = 92;
+    pub const DEF_SMETHOD: u8 = 93;
 
     pub const JMP: u8 = 100;
     pub const JMP_BACK: u8 = 101;
@@ -218,6 +219,7 @@ impl Inst {
             Inst::TOPN => "TOPN".to_string(),
 
             Inst::DEF_CLASS => "DEF_CLASS".to_string(),
+            Inst::DEF_SCLASS => "DEF_SCLASS".to_string(),
             Inst::DEF_METHOD => "DEF_METHOD".to_string(),
             Inst::DEF_SMETHOD => "DEF_CMETHOD".to_string(),
 
@@ -335,6 +337,7 @@ impl Inst {
             | Inst::JMP_F_LTI           // immediate: i32 / disp: i32
             | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
             | Inst::CREATE_PROC         // block: u64
+            | Inst::DEF_SCLASS          // block: u64
             => 9,
             Inst::DEF_METHOD            // method_id: u32 / method: u64
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u64
@@ -502,6 +505,7 @@ impl Inst {
                 iseq.ident_name(pc + 2),
                 iseq.read32(pc + 6)
             ),
+            Inst::DEF_SCLASS => format!("DEF_SCLASS"),
             Inst::DEF_METHOD => format!("DEF_METHOD '{}'", iseq.ident_name(pc + 1)),
             Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", iseq.ident_name(pc + 1)),
             _ => format!("{}", Inst::inst_name(iseq[pc])),

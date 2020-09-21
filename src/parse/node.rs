@@ -98,6 +98,11 @@ pub enum NodeKind {
         lvar: LvarCollector,
         is_module: bool,
     },
+    SingletonClassDef {
+        singleton: Box<Node>,
+        body: Box<Node>,
+        lvar: LvarCollector,
+    },
     Send {
         receiver: Box<Node>,
         method: IdentId,
@@ -426,6 +431,22 @@ impl Node {
                 superclass: Box::new(superclass),
                 body: Box::new(body),
                 is_module,
+                lvar,
+            },
+            loc,
+        )
+    }
+
+    pub fn new_singleton_class_decl(
+        singleton: Node,
+        body: Node,
+        lvar: LvarCollector,
+        loc: Loc,
+    ) -> Self {
+        Node::new(
+            NodeKind::SingletonClassDef {
+                singleton: Box::new(singleton),
+                body: Box::new(body),
                 lvar,
             },
             loc,

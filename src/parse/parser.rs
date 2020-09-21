@@ -1753,13 +1753,18 @@ impl Parser {
                                 "SyntaxError: class definition in method body.",
                             ));
                         }
-                        Ok(self.parse_class(false)?)
+                        let loc = self.prev_loc();
+                        if self.consume_punct(Punct::Shl)? {
+                            Ok(self.parse_singleton_class(loc)?)
+                        } else {
+                            Ok(self.parse_class(false)?)
+                        }
                     }
                     Reserved::Module => {
                         if self.is_method_context() {
                             return Err(self.error_unexpected(
                                 loc,
-                                "SyntaxError: class definition in method body.",
+                                "SyntaxError: module definition in method body.",
                             ));
                         }
                         Ok(self.parse_class(true)?)
@@ -1854,7 +1859,9 @@ impl Parser {
             }
         }
     }
+}
 
+impl Parser {
     fn is_command_(&mut self) -> Result<bool, RubyError> {
         let tok = self.peek_no_term()?;
         match tok.kind {
@@ -1880,7 +1887,32 @@ impl Parser {
         }
     }
 
-    /// Parse string literals. Adjacent string literals are to be combined.
+    /// Parse operator which can be defined as a method.
+    /// Return IdentId of the operator.
+    fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, RubyError> {
+        match punct {
+            Punct::Plus => Ok(IdentId::_ADD),
+            Punct::Minus => Ok(IdentId::_SUB),
+            Punct::Mul => Ok(IdentId::_MUL),
+            Punct::Cmp => Ok(self.get_ident_id("<=>")),
+            Punct::LBracket => {
+                if self.consume_punct_no_term(Punct::RBracket)? {
+                    if self.consume_punct_no_term(Punct::Assign)? {
+                        Ok(IdentId::_INDEX_ASSIGN)
+                    } else {
+                        Ok(IdentId::_INDEX)
+                    }
+                } else {
+                    let loc = self.loc();
+                    Err(self.error_unexpected(loc, "Invalid operator."))
+                }
+            }
+            _ => Err(self.error_unexpected(self.prev_loc(), "Invalid operator.")),
+        }
+    }
+
+    /// Parse string literals.
+    /// Adjacent string literals are to be combined.
     fn parse_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
         let mut s = s.to_string();
@@ -1891,6 +1923,7 @@ impl Parser {
         Ok(Node::new_string(s, loc))
     }
 
+    /// Parse char literals.
     fn parse_char_literal(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
         match self.lexer.read_char_literal()?.kind {
@@ -1988,6 +2021,8 @@ impl Parser {
         let loc = tok.loc;
         if let TokenKind::PercentNotation(kind, content) = tok.kind {
             match kind {
+                // TODO: backslash-space must be valid in %w and %i.
+                // e.g. "foo\ bar" => "foo bar"
                 'w' => {
                     let ary = content
                         .split(|c| c == ' ' || c == '\n')
@@ -2001,6 +2036,10 @@ impl Parser {
                         .map(|x| Node::new_symbol(IdentId::get_id(x), loc))
                         .collect();
                     Ok(Node::new_array(ary, tok.loc))
+                }
+                'r' => {
+                    let ary = vec![Node::new_string(content + "-", loc)];
+                    Ok(Node::new_regexp(ary, tok.loc))
                 }
                 _ => return Err(self.error_unexpected(loc, "Unsupported % notation.")),
             }
@@ -2149,6 +2188,7 @@ impl Parser {
         Ok(id)
     }
 
+    /// Parse method definition.
     fn parse_def(&mut self) -> Result<Node, RubyError> {
         //  def FNAME ARGDECL
         //      COMPSTMT
@@ -2365,14 +2405,23 @@ impl Parser {
         Ok(args)
     }
 
+    /// Parse class definition.
     fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
-        //  class identifier [`<' EXPR]
+        // class CLASS_PATH ["<" EXPR] <term>
         //      COMPSTMT
-        //  end
+        // end
+        //
+        // CLASS_PATH : "::" CONST
+        //          | CONST
+        //          | PRIMARY <no term> "::" CONST
         let loc = self.prev_loc();
         let name = match &self.get()?.kind {
             TokenKind::Const(s) => s.clone(),
-            _ => return Err(self.error_unexpected(loc, "Class/Module name must be CONSTANT.")),
+            _ => {
+                return Err(
+                    self.error_unexpected(self.prev_loc(), "Class/Module name must be CONSTANT.")
+                )
+            }
         };
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
             if is_module {
@@ -2400,31 +2449,29 @@ impl Parser {
         ))
     }
 
-    fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, RubyError> {
-        match punct {
-            Punct::Plus => Ok(IdentId::_ADD),
-            Punct::Minus => Ok(IdentId::_SUB),
-            Punct::Mul => Ok(IdentId::_MUL),
-            Punct::Cmp => Ok(self.get_ident_id("<=>")),
-            Punct::LBracket => {
-                if self.consume_punct_no_term(Punct::RBracket)? {
-                    if self.consume_punct_no_term(Punct::Assign)? {
-                        Ok(IdentId::_INDEX_ASSIGN)
-                    } else {
-                        Ok(IdentId::_INDEX)
-                    }
-                } else {
-                    let loc = self.loc();
-                    Err(self.error_unexpected(loc, "Invalid operator."))
-                }
-            }
-            _ => Err(self.error_unexpected(self.prev_loc(), "Invalid operator.")),
-        }
+    /// Parse singleton class definition.
+    fn parse_singleton_class(&mut self, loc: Loc) -> Result<Node, RubyError> {
+        // class "<<" EXPR <term>
+        //      COMPSTMT
+        // end
+        let singleton = self.parse_expr()?;
+        let loc = loc.merge(self.prev_loc());
+        self.consume_term()?;
+        self.context_stack.push(ParseContext::new_class(None));
+        let body = self.parse_begin()?;
+        let lvar = self.context_stack.pop().unwrap().lvar;
+        #[cfg(feature = "verbose")]
+        eprintln!("Parsed singleton class");
+        Ok(Node::new_singleton_class_decl(singleton, body, lvar, loc))
     }
 
     fn parse_begin(&mut self) -> Result<Node, RubyError> {
+        // "begin" COMPSTMT [ "rescue" THEN ]* "end"
         let body = self.parse_comp_stmt()?;
-        if self.consume_reserved(Reserved::Rescue)? {
+        loop {
+            if !self.consume_reserved(Reserved::Rescue)? {
+                break;
+            };
             if !self.consume_term()? {
                 loop {
                     if self.peek_punct_no_term(Punct::FatArrow) {
@@ -2442,6 +2489,7 @@ impl Parser {
             }
             self.parse_comp_stmt()?;
         }
+
         let ensure = if self.consume_reserved(Reserved::Ensure)? {
             self.parse_comp_stmt()?
         } else {

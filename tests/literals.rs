@@ -178,6 +178,8 @@ fn percent_notation() {
         assert(%{evidence}, "evidence")
         assert(%Q[and#{123} #{:e34}ff #{$a=130} #$a], "and123 e34ff 130 130")
         assert(%{evi{d)[#{"e""n"}}ce}, "evi{d)[en}ce")
+
+        assert("E27/81" =~ /7\/8/, "E27/81" =~ %r!7/8!)
     "#;
     assert_script(program);
 }
