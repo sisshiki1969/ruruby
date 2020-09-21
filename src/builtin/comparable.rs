@@ -4,8 +4,7 @@
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Comparable");
-    let mut comparable = ClassRef::from(id, None);
+    let mut comparable = ClassRef::from_str("Comparable", None);
     comparable.add_builtin_instance_method("puts", puts);
     let comparable = Value::module(comparable);
     return comparable;

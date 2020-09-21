@@ -114,6 +114,15 @@ fn expr10() {
 }
 
 #[test]
+fn expr11() {
+    let program = r#"
+        assert(true, true || false && false)
+        assert(false, (true or false and false))
+    "#;
+    assert_script(program);
+}
+
+#[test]
 fn op1() {
     let program = "4==5";
     let expected = Value::bool(false);

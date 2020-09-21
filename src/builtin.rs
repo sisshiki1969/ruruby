@@ -3,7 +3,7 @@ pub mod class;
 pub mod comparable;
 pub mod complex;
 pub mod enumerator;
-pub mod errorobj;
+pub mod exception;
 pub mod fiber;
 pub mod file;
 pub mod float;

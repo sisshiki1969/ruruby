@@ -2,8 +2,7 @@ use crate::error::RubyError;
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let array_id = IdentId::get_id("Array");
-    let mut class = ClassRef::from(array_id, BuiltinClass::object());
+    let mut class = ClassRef::from_str("Array", BuiltinClass::object());
     let mut class_obj = Value::class(class);
     class.add_builtin_instance_method("inspect", inspect);
     class.add_builtin_instance_method("to_s", inspect);

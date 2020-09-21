@@ -2641,9 +2641,7 @@ impl VM {
         self.exec_program(absolute_path, program);
         self.root_path.pop();
         #[cfg(feature = "emit-iseq")]
-        {
-            self.globals.const_values.dump();
-        }
+        self.globals.const_values.dump();
     }
 
     pub fn exec_program(&mut self, absolute_path: PathBuf, program: String) {

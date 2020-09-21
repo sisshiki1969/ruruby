@@ -887,6 +887,10 @@ impl Value {
         RValue::new_class(ClassRef::from(id, superclass)).pack()
     }
 
+    pub fn class_from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
+        RValue::new_class(ClassRef::from_str(name, superclass)).pack()
+    }
+
     pub fn module(class_ref: ClassRef) -> Self {
         RValue::new_module(class_ref).pack()
     }

@@ -48,6 +48,7 @@ pub struct BuiltinClass {
     pub fiber: Value,
     pub object: Value,
     pub enumerator: Value,
+    pub exception: Value,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -85,6 +86,7 @@ impl BuiltinClass {
             fiber: nil,
             enumerator: nil,
             object,
+            exception: nil,
         }
     }
 
@@ -113,7 +115,7 @@ impl BuiltinClass {
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    fn set_class(class_name: &str, class_object: Value) {
+    pub fn set_class(class_name: &str, class_object: Value) {
         Self::object().set_var_by_str(class_name, class_object);
     }
 }
@@ -225,6 +227,7 @@ impl Globals {
         init_builtin_class!("Regexp", regexp);
         init_builtin_class!("Fiber", fiber);
         init_builtin_class!("Enumerator", enumerator);
+        init_builtin_class!("Exception", exception);
 
         let kernel = kernel::init(&mut globals);
         object.as_class().include.push(kernel);
@@ -239,12 +242,9 @@ impl Globals {
         init_class!("IO", io);
         init_class!("Comparable", comparable);
 
-        BuiltinClass::set_class("StandardError", Value::class(class.as_class()));
         let id = IdentId::get_id("StopIteration");
         let class = ClassRef::from(id, object);
         BuiltinClass::set_class("StopIteration", Value::class(class));
-        let errorobj = errorobj::init();
-        BuiltinClass::set_class("RuntimeError", errorobj);
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         let home_dir = dirs::home_dir()

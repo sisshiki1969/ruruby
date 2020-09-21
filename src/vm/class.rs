@@ -67,4 +67,12 @@ impl ClassRef {
         };
         ClassRef::new(ClassInfo::new(id, superclass))
     }
+
+    pub fn from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => Value::nil(),
+        };
+        ClassRef::new(ClassInfo::new(IdentId::get_id(name), superclass))
+    }
 }

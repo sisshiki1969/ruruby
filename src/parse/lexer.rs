@@ -194,8 +194,8 @@ impl Lexer {
     /// Examine if the next char is a whitespace or not.
     pub fn trailing_space(&self) -> bool {
         match self.peek() {
-            Ok(ch) => ch.is_ascii_whitespace(),
-            Err(_) => false,
+            Some(ch) => ch.is_ascii_whitespace(),
+            _ => false,
         }
     }
 
@@ -413,11 +413,12 @@ impl Lexer {
     }
 
     fn read_global_var(&mut self) -> Result<Token, RubyError> {
-        let tok = if self.peek()?.is_ascii_punctuation() {
-            let ch = self.get()?;
-            self.new_global_var(format!("${}", ch))
-        } else {
-            self.read_identifier(None, VarKind::GlobalVar)?
+        let tok = match self.peek() {
+            Some(ch) if ch.is_ascii_punctuation() => {
+                let ch = self.get()?;
+                self.new_global_var(format!("${}", ch))
+            }
+            _ => self.read_identifier(None, VarKind::GlobalVar)?,
         };
         Ok(tok)
     }
@@ -458,8 +459,8 @@ impl Lexer {
         };
         loop {
             let ch = match self.peek() {
-                Ok(ch) => ch,
-                Err(_) => {
+                Some(ch) => ch,
+                _ => {
                     break;
                 }
             };
@@ -479,21 +480,22 @@ impl Lexer {
             _ => {}
         }
 
-        match self.reserved.get(&tok) {
-            Some(reserved) => Ok(self.new_reserved(*reserved)),
-            None => {
-                if is_const {
-                    Ok(self.new_const(tok))
-                } else {
-                    match self.peek() {
-                        Ok(ch) if ch == '!' || ch == '?' => {
-                            tok.push(self.get()?);
-                        }
-                        _ => {}
-                    };
-                    Ok(self.new_ident(tok))
-                }
+        match self.peek() {
+            Some(ch) if (ch == '!' && self.peek2() != Some('=')) || ch == '?' => {
+                tok.push(self.get()?);
             }
+            _ => {}
+        };
+
+        match self.reserved.get(&tok) {
+            Some(reserved) => return Ok(self.new_reserved(*reserved)),
+            None => {}
+        };
+
+        if is_const {
+            Ok(self.new_const(tok))
+        } else {
+            Ok(self.new_ident(tok))
         }
     }
 
@@ -656,8 +658,10 @@ impl Lexer {
                 }
                 '\\' => s.push(self.read_escaped_char()?),
 
-                '#' => match self.peek()? {
-                    '{' | '$' | '@' => return Ok(InterpolateState::NewInterpolation(s, level)),
+                '#' => match self.peek() {
+                    Some(ch) if ch == '{' || ch == '$' || ch == '@' => {
+                        return Ok(InterpolateState::NewInterpolation(s, level))
+                    }
                     _ => s.push('#'),
                 },
                 c => s.push(c),
@@ -751,8 +755,10 @@ impl Lexer {
                         s.push(ch);
                     }
                 }
-                '#' => match self.peek()? {
-                    '{' | '$' | '@' => return Ok(InterpolateState::NewInterpolation(s, 0)),
+                '#' => match self.peek() {
+                    Some(ch) if ch == '{' || ch == '$' || ch == '@' => {
+                        return Ok(InterpolateState::NewInterpolation(s, 0))
+                    }
                     _ => s.push('#'),
                 },
                 c => s.push(c),
@@ -938,11 +944,21 @@ impl Lexer {
     }
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
-    fn peek(&self) -> Result<char, RubyError> {
-        if self.pos as usize >= self.len {
-            Err(self.error_eof(self.pos))
+    fn peek(&self) -> Option<char> {
+        let pos = self.pos as usize;
+        if pos >= self.len {
+            None
         } else {
-            Ok(self.source_info.code[self.pos as usize])
+            Some(self.source_info.code[pos])
+        }
+    }
+
+    fn peek2(&self) -> Option<char> {
+        let pos = self.pos as usize + 1;
+        if pos >= self.len {
+            None
+        } else {
+            Some(self.source_info.code[pos])
         }
     }
 
@@ -968,7 +984,7 @@ impl Lexer {
     fn goto_eol(&mut self) {
         loop {
             match self.peek() {
-                Ok('\n') | Err(_) => return,
+                Some('\n') | None => return,
                 _ => self.get().unwrap(),
             };
         }

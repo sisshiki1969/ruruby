@@ -1,8 +1,7 @@
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Complex");
-    let mut classref = ClassRef::from(id, BuiltinClass::object());
+    let mut classref = ClassRef::from_str("Complex", BuiltinClass::object());
     classref.add_builtin_instance_method("+", add);
     classref.add_builtin_instance_method("-", sub);
     classref.add_builtin_instance_method("*", mul);

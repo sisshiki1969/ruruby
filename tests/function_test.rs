@@ -186,3 +186,57 @@ fn paren() {
     "#;
     assert_script(program);
 }
+
+#[test]
+fn func_name_extention() {
+    let program = r#"
+        def while!
+            88
+        end
+        def while?
+            99
+        end
+        assert(88, while!)
+        assert(99, while?)
+        foo = 100
+        def foo!
+            77
+        end
+        def foo?
+            66
+        end
+        assert(77, foo!)
+        assert(66, foo?)
+    "#;
+    assert_script(program);
+}
+
+#[test]
+fn singleton_method() {
+    let program = r#"
+        obj = Object.new
+        def obj.def
+            42
+        end
+        assert(42, obj.def)
+    "#;
+    assert_script(program);
+}
+
+#[test]
+fn assign_like_method() {
+    let program = r#"
+        class Foo
+            def foo=(val)
+                @foo=val
+            end
+            def foo
+                @foo
+            end
+        end
+        f=Foo.new
+        f.foo=77
+        assert(77, f.foo)
+    "#;
+    assert_script(program);
+}
