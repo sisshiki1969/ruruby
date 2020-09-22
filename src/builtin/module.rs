@@ -18,6 +18,7 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("module_eval", module_eval);
     module_class.add_builtin_method_by_str("class_eval", module_eval);
     module_class.add_builtin_method_by_str("alias_method", module_alias_method);
+    module_class.add_builtin_method_by_str("private", private);
 }
 
 fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -270,6 +271,10 @@ fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         //.get_class()
         .as_class()
         .add_method(&mut vm.globals, new, method);
+    Ok(self_val)
+}
+
+fn private(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(self_val)
 }
 

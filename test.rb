@@ -1,5 +1,12 @@
-obj = Object.new
-def obj.def
-    p self
+class Sub
+    def self.main
+        puts "success"
+    end
 end
-obj.def
+
+Sub.main
+
+class Main < Sub
+end
+
+Main.main

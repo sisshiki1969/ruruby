@@ -369,6 +369,19 @@ impl Value {
         }
     }
 
+    /// Examine whether `self` is a singleton class.
+    /// Panic if `self` is not a class object.
+    #[inline]
+    pub fn is_singleton(&self) -> bool {
+        self.as_class().is_singleton
+    }
+
+    /// Examine whether `self` has a singleton class.
+    /// Panic if `self` is not a class object.
+    pub fn has_singleton(&self) -> bool {
+        self.get_class_for_method().is_singleton()
+    }
+
     pub fn set_var(&mut self, id: IdentId, val: Value) {
         self.rvalue_mut().set_var(id, val);
     }
@@ -600,10 +613,15 @@ impl Value {
         Ok(IdentId::get_id(str))
     }
 
+    /// Take ClassRef from `self`.
+    /// Panic if `self` is not a class object.
     pub fn as_class(&self) -> ClassRef {
         match self.is_class() {
             Some(class) => class,
-            None => panic!(format!("Class is not class. {:?}", *self)),
+            None => panic!(format!(
+                "as_class(): self in not a class object. {:?}",
+                *self
+            )),
         }
     }
 
@@ -994,7 +1012,7 @@ impl Value {
         match self.as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
-                if class.as_class().is_singleton {
+                if class.is_singleton() {
                     Ok(class)
                 } else {
                     let mut singleton_class = match oref.kind {

@@ -3,8 +3,7 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Kernel");
-    let mut kernel_class = ClassRef::from(id, None);
+    let mut kernel_class = ClassRef::from_str("Kernel", None);
     kernel_class.add_builtin_method_by_str("puts", puts);
     kernel_class.add_builtin_method_by_str("p", p);
     kernel_class.add_builtin_method_by_str("print", print);
@@ -24,7 +23,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("exit", exit);
     kernel_class.add_builtin_method_by_str("sleep", sleep);
     kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
-    let kernel = Value::class(kernel_class);
+    let kernel = Value::module(kernel_class);
     return kernel;
 }
 /// Built-in function "puts".

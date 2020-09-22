@@ -55,7 +55,7 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(len, 2, 3)?;
     let (start, end) = (args[0], args[1]);
     let exclude_end = if len == 2 { false } else { args[2].to_bool() };
-    Ok(Value::range(start, end, exclude_end))
+    vm.create_range(start, end, exclude_end)
 }
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

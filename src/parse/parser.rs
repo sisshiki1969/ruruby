@@ -2211,7 +2211,7 @@ impl Parser {
         //  end
 
         let tok = self.get()?;
-        let (singleton, id) = match &tok.kind {
+        let (singleton, name) = match &tok.kind {
             TokenKind::GlobalVar(s) => {
                 let id = IdentId::get_id(s);
                 self.consume_punct_no_term(Punct::Dot)?;
@@ -2269,11 +2269,20 @@ impl Parser {
         let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
+        #[cfg(feature = "verbose")]
+        {
+            match &singleton {
+                Some(singleton) => {
+                    eprintln!("parsed: method {:?} singleton {:?}", name, singleton.kind)
+                }
+                None => eprintln!("parsed: method {:?}", name),
+            }
+        }
         match singleton {
             Some(singleton) => Ok(Node::new_singleton_method_decl(
-                singleton, id, args, body, lvar,
+                singleton, name, args, body, lvar,
             )),
-            None => Ok(Node::new_method_decl(id, args, body, lvar)),
+            None => Ok(Node::new_method_decl(name, args, body, lvar)),
         }
     }
 
@@ -2429,6 +2438,12 @@ impl Parser {
                 )
             }
         };
+        #[cfg(feature = "verbose")]
+        eprintln!(
+            "***parsing.. {} {}",
+            if is_module { "module" } else { "class" },
+            name
+        );
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
             if is_module {
                 return Err(self.error_unexpected(self.prev_loc(), "Unexpected '<'."));
@@ -2445,11 +2460,7 @@ impl Parser {
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
-        eprintln!(
-            "Parsed {} name:{}",
-            if is_module { "module" } else { "class" },
-            name
-        );
+        eprintln!("***parsed");
         Ok(Node::new_class_decl(
             id, superclass, body, lvar, is_module, loc,
         ))
@@ -2461,13 +2472,15 @@ impl Parser {
         //      COMPSTMT
         // end
         let singleton = self.parse_expr()?;
+        #[cfg(feature = "verbose")]
+        eprintln!("***parsing.. singleton class {:?}", singleton.kind);
         let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
         self.context_stack.push(ParseContext::new_class(None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
-        eprintln!("Parsed singleton class");
+        eprintln!("***parsed");
         Ok(Node::new_singleton_class_decl(singleton, body, lvar, loc))
     }
 

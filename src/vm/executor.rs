@@ -944,12 +944,8 @@ impl VM {
                 Inst::CREATE_RANGE => {
                     let start = self.stack_pop();
                     let end = self.stack_pop();
-                    if !start.is_packed_fixnum() || !end.is_packed_fixnum() {
-                        return Err(self.error_argument("Bad value for range."));
-                    };
-                    let exclude_val = self.stack_pop();
-                    let exclude_end = exclude_val.to_bool();
-                    let range = Value::range(start, end, exclude_end);
+                    let exclude_end = self.stack_pop().to_bool();
+                    let range = self.create_range(start, end, exclude_end)?;
                     self.stack_push(range);
                     self.pc += 1;
                 }
@@ -2013,6 +2009,7 @@ impl VM {
         Ok(val)
     }
 
+    /// Generate new class object with `super_val` as a superclass.
     fn define_class(&mut self, id: IdentId, is_module: bool, super_val: Value) -> VMResult {
         let val = match BuiltinClass::object().get_var(id) {
             Some(val) => {
@@ -2044,6 +2041,9 @@ impl VM {
                 } else {
                     Value::class(classref)
                 };
+                if super_val.has_singleton() {
+                    self.get_singleton_class(val)?;
+                }
                 self.class().set_var(id, val);
                 val
             }
@@ -2527,6 +2527,13 @@ impl VM {
         }
         self.exec_stack.truncate(len - arg_num);
         args
+    }
+
+    pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
+        if start.get_class().id() != end.get_class().id() {
+            return Err(self.error_argument("Bad value for range."));
+        }
+        Ok(Value::range(start, end, exclude_end))
     }
 
     /// Create new Proc object from `method`,

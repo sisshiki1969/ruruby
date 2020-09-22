@@ -425,7 +425,7 @@ impl RValue {
     pub fn search_class(&self) -> Value {
         let mut class = self.class;
         loop {
-            if class.as_class().is_singleton {
+            if class.is_singleton() {
                 class = class.rvalue().class;
             } else {
                 return class;

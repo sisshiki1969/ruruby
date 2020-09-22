@@ -374,7 +374,7 @@ impl MethodCache {
             }
         };
         let mut temp_class = rec_class;
-        let mut singleton_flag = rec_class.as_class().is_singleton;
+        let mut singleton_flag = rec_class.is_singleton();
         loop {
             match temp_class.get_instance_method(method) {
                 Some(methodref) => {
