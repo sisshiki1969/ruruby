@@ -1819,10 +1819,9 @@ impl VM {
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(_) => {
-                    let res = rhs.get_class().id() == lhs.id();
-                    Ok(res)
-                }
+                ObjKind::Class(_) | ObjKind::Module(_) => Ok(self
+                    .fallback_for_binop(IdentId::get_id("==="), lhs, rhs)?
+                    .to_bool()),
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
                         RV::Symbol(sym) => IdentId::get_name(sym),

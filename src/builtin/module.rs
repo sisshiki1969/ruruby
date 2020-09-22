@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
     let mut module_class = globals.builtins.module.as_class();
+    module_class.add_builtin_method_by_str("===", teq);
     module_class.add_builtin_method_by_str("constants", constants);
     module_class.add_builtin_method_by_str("instance_methods", instance_methods);
     module_class.add_builtin_method_by_str("attr_accessor", attr_accessor);
@@ -19,6 +20,22 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("class_eval", module_eval);
     module_class.add_builtin_method_by_str("alias_method", module_alias_method);
     module_class.add_builtin_method_by_str("private", private);
+}
+
+fn teq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let mut class = args[0].get_class();
+    loop {
+        eprintln!("{:?}", class);
+        if class.id() == self_val.id() {
+            return Ok(Value::true_val());
+        };
+        match class.superclass() {
+            Some(superclass) => class = superclass,
+            None => break,
+        }
+    }
+    Ok(Value::false_val())
 }
 
 fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -281,6 +298,32 @@ fn private(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 #[cfg(test)]
 mod test {
     use crate::test::*;
+
+    #[test]
+    fn module_op() {
+        let program = r#"
+        assert(true, Integer === 3)
+        assert(false, Integer === "a")
+        assert(false, Integer === [])
+        assert(false, Array === 3)
+        assert(false, Array === "a")
+        assert(true, Array === [])
+
+        class A
+        end
+        class B < A
+        end
+        class C < B
+        end
+        c = C.new
+        assert(true, C === c)
+        assert(true, B === c)
+        assert(true, A === c)
+        assert(true, Object === c)
+        assert(false, Integer === c)
+        "#;
+        assert_script(program);
+    }
 
     #[test]
     fn module_function() {

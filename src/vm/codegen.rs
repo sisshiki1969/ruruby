@@ -1602,6 +1602,7 @@ impl Codegen {
                                 for elem in &branch.when {
                                     self.gen_dup(iseq, 1);
                                     self.gen(globals, iseq, elem, true)?;
+                                    self.gen_sinkn(iseq, 1);
                                     self.save_loc(iseq, elem.loc);
                                     iseq.push(Inst::TEQ);
                                     jmp_dest.push(self.gen_jmp_if_t(iseq));
