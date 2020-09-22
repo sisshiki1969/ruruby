@@ -179,6 +179,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("count", count);
     string_class.add_builtin_method_by_str("rstrip", rstrip);
     string_class.add_builtin_method_by_str("ord", ord);
+    string_class.add_builtin_method_by_str("empty?", empty);
 
     Value::class(string_class)
 }
@@ -963,6 +964,15 @@ fn ord(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::integer(ch as u32 as i64))
 }
 
+fn empty(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let len = match self_val.as_rstring().unwrap() {
+        RString::Bytes(b) => b.len(),
+        RString::Str(s) => s.len(),
+    };
+    Ok(Value::bool(len == 0))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -982,6 +992,9 @@ mod test {
         assert_error { "a" < 9 }
         assert_error { "a" > 9 }
         assert(7, "hello世界".size)
+        assert(true, "".empty?)
+        assert(false, "s".empty?)
+        assert(false, 2.chr.empty?)
         "#;
         assert_script(program);
     }

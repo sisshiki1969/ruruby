@@ -26,7 +26,6 @@ fn teq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let mut class = args[0].get_class();
     loop {
-        eprintln!("{:?}", class);
         if class.id() == self_val.id() {
             return Ok(Value::true_val());
         };

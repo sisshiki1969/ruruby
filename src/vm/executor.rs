@@ -1520,10 +1520,7 @@ impl VM {
                 let val = self.eval_send(mref, lhs, &arg)?;
                 Ok(val)
             }
-            Err(_) => {
-                let name = IdentId::get_ident_name(method);
-                Err(self.error_undefined_op(name, rhs, lhs))
-            }
+            Err(_) => Err(self.error_undefined_op(format!("{:?}", method), rhs, lhs)),
         }
     }
 }

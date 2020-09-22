@@ -46,6 +46,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("end", end);
     class.add_builtin_method_by_str("last", last);
     class.add_builtin_method_by_str("to_a", to_a);
+    class.add_builtin_method_by_str("exclude_end?", exclude_end);
     class_val.add_builtin_class_method("new", range_new);
     class_val
 }
@@ -102,6 +103,7 @@ fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
     let range = self_val.as_range().unwrap();
     let mut start = range.start.as_integer().unwrap();
     let end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
@@ -123,6 +125,7 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
     let start = range.start.expect_integer(&vm, "Start")?;
@@ -140,6 +143,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
     let start = range.start.expect_integer(&vm, "Start")?;
@@ -163,6 +167,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
     let method = match args.block {
         Some(method) => method,
@@ -183,6 +188,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
     let method = vm.expect_block(args.block)?;
     let start = range.start.expect_integer(&vm, "Start")?;
@@ -197,7 +203,8 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn to_a(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
     let start = range.start.expect_integer(&vm, "Range.start")?;
     let end = range.end.expect_integer(&vm, "Range.end")?;
@@ -212,6 +219,12 @@ fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
         }
     }
     Ok(Value::array_from(v))
+}
+
+fn exclude_end(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let range = self_val.as_range().unwrap();
+    Ok(Value::bool(range.exclude))
 }
 
 #[cfg(test)]
@@ -233,6 +246,8 @@ mod tests {
             assert([2, 3, 4, 5], (2..5).to_a)
             assert(true, (5..7).all? {|v| v > 0 })
             assert(false, (-1..3).all? {|v| v > 0 })
+            assert(true, (0...3).exclude_end?)
+            assert(false, (0..3).exclude_end?)
         "#;
         assert_script(program);
     }
