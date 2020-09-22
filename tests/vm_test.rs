@@ -1268,7 +1268,7 @@ fn singleton() {
     assert_script(program);
 }
 
-//#[test]
+#[test]
 fn singleton2() {
     let program = "
     class Foo
@@ -1282,5 +1282,22 @@ fn singleton2() {
 
     assert(100, Foo.f)
         ";
+    assert_script(program);
+}
+
+#[test]
+fn singleton3() {
+    let program = "
+    class A < Array
+        def foo
+            100
+        end
+    end
+
+    a = A.new
+    assert(A, a.class)
+    assert(Array, a.class.superclass)
+    assert(100, a.foo)
+    ";
     assert_script(program);
 }

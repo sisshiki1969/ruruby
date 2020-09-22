@@ -1,12 +1,10 @@
-class Sub
-    def self.main
-        puts "success"
+class A < Array
+    def foo
+        100
     end
 end
 
-Sub.main
-
-class Main < Sub
-end
-
-Main.main
+a = A.new
+raise unless A == a.class
+raise unless Array == a.class.superclass
+raise unless 100 == a.foo

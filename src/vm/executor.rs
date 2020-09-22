@@ -2037,14 +2037,28 @@ impl VM {
                 } else {
                     Value::class(classref)
                 };
-                if super_val.has_singleton() {
-                    self.get_singleton_class(val)?;
-                }
+                //if super_val.has_singleton() {
+                let mut singleton = self.get_singleton_class(val)?.as_class();
+                singleton.add_builtin_method(IdentId::NEW, Self::singleton_new);
+                //}
                 self.class().set_var(id, val);
                 val
             }
         };
         Ok(val)
+    }
+
+    fn singleton_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+        let superclass = match self_val.superclass() {
+            Some(class) => class,
+            None => return Err(vm.error_nomethod("`new` method not found.")),
+        };
+        let mut obj = vm.fallback(IdentId::NEW, superclass, args)?;
+        obj.set_class(self_val);
+        if let Some(method) = self_val.get_instance_method(IdentId::INITIALIZE) {
+            vm.eval_send(method, obj, args)?;
+        };
+        Ok(obj)
     }
 
     pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
