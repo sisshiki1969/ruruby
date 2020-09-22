@@ -930,6 +930,13 @@ impl Value {
         RValue::new_class(ClassRef::from_str(name, superclass)).pack()
     }
 
+    pub fn singleton_class_from(
+        id: impl Into<Option<IdentId>>,
+        superclass: impl Into<Option<Value>>,
+    ) -> Self {
+        RValue::new_class(ClassRef::singleton_from(id, superclass)).pack()
+    }
+
     pub fn module(class_ref: ClassRef) -> Self {
         RValue::new_module(class_ref).pack()
     }
@@ -1007,7 +1014,8 @@ impl Value {
     ///
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
-    /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, ..) which can not have a singleton class.
+    /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
+    /// TODO: nil=>NilClass, true=>TrueClass, false=>FalseClass
     pub fn get_singleton_class(&mut self) -> Result<Value, ()> {
         match self.as_mut_rvalue() {
             Some(oref) => {
@@ -1015,25 +1023,24 @@ impl Value {
                 if class.is_singleton() {
                     Ok(class)
                 } else {
-                    let mut singleton_class = match oref.kind {
+                    let singleton = match oref.kind {
                         ObjKind::Class(cref) | ObjKind::Module(cref) => {
                             let mut superclass = cref.superclass;
-                            if superclass.is_nil() {
-                                ClassRef::from(None, None)
+                            let mut singleton = if superclass.is_nil() {
+                                Value::singleton_class_from(None, None)
                             } else {
-                                ClassRef::from(None, superclass.get_singleton_class()?)
-                            }
+                                Value::singleton_class_from(None, superclass.get_singleton_class()?)
+                            };
+                            singleton.set_class(class);
+                            singleton
                         }
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => ClassRef::from(None, None),
+                        _ => Value::singleton_class_from(None, class),
                     };
-                    singleton_class.is_singleton = true;
-                    let singleton_obj = Value::class(singleton_class);
-                    singleton_obj.rvalue_mut().set_class(class);
-                    oref.set_class(singleton_obj);
-                    Ok(singleton_obj)
+                    oref.set_class(singleton);
+                    Ok(singleton)
                 }
             }
             _ => Err(()),

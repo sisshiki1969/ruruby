@@ -1301,3 +1301,12 @@ fn singleton3() {
     ";
     assert_script(program);
 }
+
+#[test]
+fn singleton4() {
+    let program = "
+    assert(Class, [].singleton_class.class)
+    assert(Array, [].singleton_class.superclass)
+    ";
+    assert_script(program);
+}

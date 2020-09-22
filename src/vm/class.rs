@@ -20,6 +20,16 @@ impl ClassInfo {
         }
     }
 
+    pub fn new_singleton(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
+        ClassInfo {
+            name: name.into(),
+            method_table: FxHashMap::default(),
+            superclass,
+            include: vec![],
+            is_singleton: true,
+        }
+    }
+
     pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
         let info = MethodInfo::BuiltinFunc { name: id, func };
         let methodref = MethodRef::new(info);
@@ -78,5 +88,16 @@ impl ClassRef {
             None => Value::nil(),
         };
         ClassRef::new(ClassInfo::new(IdentId::get_id(name), superclass))
+    }
+
+    pub fn singleton_from(
+        id: impl Into<Option<IdentId>>,
+        superclass: impl Into<Option<Value>>,
+    ) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => Value::nil(),
+        };
+        ClassRef::new(ClassInfo::new_singleton(id, superclass))
     }
 }
