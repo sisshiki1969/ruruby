@@ -44,10 +44,18 @@ impl Real {
             }
         }
     }
+
+    pub fn included(&self, start: &Self, end: &Self, exclude: bool) -> bool {
+        start <= self && (if exclude { self < end } else { self <= end })
+    }
 }
 
-impl std::fmt::Debug for Real {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+use std::cmp::*;
+use std::fmt::{Debug, Formatter, Result};
+use std::ops::*;
+
+impl Debug for Real {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
             Real::Integer(num) => write!(f, "{}", *num),
             Real::Float(num) => write!(f, "{}", *num),
@@ -55,7 +63,7 @@ impl std::fmt::Debug for Real {
     }
 }
 
-impl std::ops::Add for Real {
+impl Add for Real {
     type Output = Real;
     fn add(self, other: Real) -> Real {
         match (self, other) {
@@ -67,7 +75,7 @@ impl std::ops::Add for Real {
     }
 }
 
-impl std::ops::Sub for Real {
+impl Sub for Real {
     type Output = Real;
     fn sub(self, other: Real) -> Real {
         match (self, other) {
@@ -79,7 +87,7 @@ impl std::ops::Sub for Real {
     }
 }
 
-impl std::ops::Mul for Real {
+impl Mul for Real {
     type Output = Real;
     fn mul(self, other: Real) -> Real {
         match (self, other) {
@@ -91,7 +99,7 @@ impl std::ops::Mul for Real {
     }
 }
 
-impl std::ops::Div for Real {
+impl Div for Real {
     type Output = Real;
     fn div(self, other: Real) -> Real {
         match (self, other) {
@@ -103,7 +111,7 @@ impl std::ops::Div for Real {
     }
 }
 
-impl std::cmp::PartialEq for Real {
+impl PartialEq for Real {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Real::Integer(i1), Real::Integer(i2)) => *i1 == *i2,
@@ -114,12 +122,23 @@ impl std::cmp::PartialEq for Real {
     }
 }
 
-impl std::ops::Neg for Real {
+impl Neg for Real {
     type Output = Real;
     fn neg(self) -> Self {
         match self {
             Real::Integer(i) => Real::Integer(-i),
             Real::Float(f) => Real::Float(-f),
+        }
+    }
+}
+
+impl PartialOrd for Real {
+    fn partial_cmp(&self, other: &Real) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Real::Integer(i1), Real::Integer(i2)) => i1.partial_cmp(i2),
+            (Real::Integer(i1), Real::Float(f2)) => (*i1 as f64).partial_cmp(f2),
+            (Real::Float(f1), Real::Integer(i2)) => f1.partial_cmp(&(*i2 as f64)),
+            (Real::Float(f1), Real::Float(f2)) => f1.partial_cmp(f2),
         }
     }
 }

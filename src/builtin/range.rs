@@ -47,6 +47,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("last", last);
     class.add_builtin_method_by_str("to_a", to_a);
     class.add_builtin_method_by_str("exclude_end?", exclude_end);
+    class.add_builtin_method_by_str("include?", include);
     class_val.add_builtin_class_method("new", range_new);
     class_val
 }
@@ -206,18 +207,18 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn to_a(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
-    let start = range.start.expect_integer(&vm, "Range.start")?;
+    let start = range.start.expect_integer(
+        &vm,
+        format!("Can not iterate from {}", range.start.get_class_name()),
+    )?;
     let end = range.end.expect_integer(&vm, "Range.end")?;
-    let mut v = vec![];
-    if range.exclude {
-        for i in start..end {
-            v.push(Value::integer(i));
-        }
+    let v = if range.exclude {
+        start..end
     } else {
-        for i in start..=end {
-            v.push(Value::integer(i));
-        }
+        start..end + 1
     }
+    .map(|i| Value::integer(i))
+    .collect();
     Ok(Value::array_from(v))
 }
 
@@ -225,6 +226,44 @@ fn exclude_end(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
     Ok(Value::bool(range.exclude))
+}
+
+fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let range = self_val.as_range().unwrap();
+    match range.start.unpack() {
+        RV::Integer(start) => {
+            let start = Real::Integer(start);
+            let end = range.end.to_real().unwrap();
+            let val = match args[0].to_real() {
+                Some(real) => real,
+                None => return Ok(Value::false_val()),
+            };
+            let b = val.included(&start, &end, range.exclude);
+            Ok(Value::bool(b))
+        }
+        RV::Float(start) => {
+            let start = Real::Float(start);
+            let end = range.end.to_real().unwrap();
+            let val = match args[0].to_real() {
+                Some(real) => real,
+                None => return Ok(Value::false_val()),
+            };
+            let b = val.included(&start, &end, range.exclude);
+            Ok(Value::bool(b))
+        }
+        _ => {
+            if !vm.send_args(IdentId::_LE, range.start, args)?.to_bool() {
+                return Ok(Value::false_val());
+            };
+            let b = if range.exclude {
+                vm.send_args(IdentId::_GT, range.end, args)?.to_bool()
+            } else {
+                vm.send_args(IdentId::_GE, range.end, args)?.to_bool()
+            };
+            Ok(Value::bool(b))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -244,6 +283,7 @@ mod tests {
                 [[1, 2], [3, 4]].flat_map{|i| i.map{|j| j * 2}}
             )
             assert([2, 3, 4, 5], (2..5).to_a)
+            assert([2, 3, 4], (2...5).to_a)
             assert(true, (5..7).all? {|v| v > 0 })
             assert(false, (-1..3).all? {|v| v > 0 })
             assert(true, (0...3).exclude_end?)
@@ -274,6 +314,61 @@ mod tests {
             assert(Range.new(5,10).last(100), [5,6,7,8,9,10])
             assert(Range.new(5,10,true).last(4), [6,7,8,9])
             assert(Range.new(5,10,true).last(100), [5,6,7,8,9])";
+        assert_script(program);
+    }
+
+    #[test]
+    fn range_include() {
+        let program = r#"
+        assert(true, (3..7).include? 3)
+        assert(true, (3..7).include? 7)
+        assert(true, (3..7).include? 5)
+        assert(true, (3..7).include? 5.7)
+        assert(true, (3..7).include? 7.0)
+        assert(false, (3..7).include? 0)
+        assert(false, (3..7).include? 7.1)
+        assert(false, (3..7).include? "6")
+
+        assert(true, (3...7).include? 3)
+        assert(false, (3...7).include? 7)
+        assert(true, (3...7).include? 5.7)
+
+        assert(true, (3.3..7.1).include? 3.3)
+        assert(true, (3.3..7.1).include? 7.1)
+        assert(true, (3.3..7.1).include? 4.5)
+        assert(true, (3.3..7.1).include? 7)
+        assert(false, (3.3..7.1).include? 3.2)
+        assert(false, (3.3..7.1).include? 7.2)
+        assert(false, (3.3..7.1).include? 3)
+        assert(false, (3.3..7.1).include?(:a))
+
+        assert(true, (3.3...7.1).include? 3.3)
+        assert(false, (3.3...7.1).include? 7.1)
+        assert(true, (3.3...7.1).include? 4.5)
+        assert(false, (3.3...7.0).include? 7)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn range_include2() {
+        let program = r#"
+        class Foo
+            attr_accessor :x
+            include Comparable
+            def initialize(x)
+                @x = x
+            end
+            def <=>(other)
+                self.x<=>other.x
+            end
+        end
+
+        assert true, (Foo.new(3)..Foo.new(6)).include? Foo.new(3)
+        assert true, (Foo.new(3)..Foo.new(6)).include? Foo.new(6)
+        assert false, (Foo.new(3)..Foo.new(6)).include? Foo.new(0)
+        assert false, (Foo.new(3)..Foo.new(6)).include? Foo.new(7)
+        "#;
         assert_script(program);
     }
 }

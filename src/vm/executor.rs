@@ -1507,9 +1507,16 @@ impl VM {
 // Utilities for method call
 
 impl VM {
-    fn fallback(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
-        let mref = self.get_method_from_receiver(receiver, method_id)?;
-        let val = self.eval_send(mref, receiver, args)?;
+    pub fn send_args(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
+        let method = self.get_method_from_receiver(receiver, method_id)?;
+        let val = self.eval_send(method, receiver, args)?;
+        Ok(val)
+    }
+
+    pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
+        let method = self.get_method_from_receiver(receiver, method_id)?;
+        let args = Args::new0();
+        let val = self.eval_send(method, receiver, &args)?;
         Ok(val)
     }
 
@@ -1636,7 +1643,7 @@ impl VM {
         let val = match lhs.unpack() {
             RV::Integer(i) => Value::integer(-i),
             RV::Float(f) => Value::float(-f),
-            _ => return self.fallback(IdentId::get_id("-@"), lhs, &Args::new0()),
+            _ => return self.send0(IdentId::get_id("-@"), lhs),
         };
         Ok(val)
     }
@@ -1900,13 +1907,13 @@ impl VM {
                     ObjKind::Hash(ref mut href) => href.insert(args[0], val),
                     _ => {
                         args.push(val);
-                        self.fallback(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                        self.send_args(IdentId::_INDEX_ASSIGN, receiver, &args)?;
                     }
                 };
             }
             None => {
                 args.push(val);
-                self.fallback(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                self.send_args(IdentId::_INDEX_ASSIGN, receiver, &args)?;
             }
         }
         Ok(())
@@ -1923,7 +1930,7 @@ impl VM {
                     }
                     ObjKind::Hash(ref mut href) => href.insert(Value::integer(idx as i64), val),
                     _ => {
-                        self.fallback(
+                        self.send_args(
                             IdentId::_INDEX_ASSIGN,
                             receiver,
                             &Args::new2(Value::integer(idx as i64), val),
@@ -1932,7 +1939,7 @@ impl VM {
                 };
             }
             None => {
-                self.fallback(
+                self.send_args(
                     IdentId::_INDEX_ASSIGN,
                     receiver,
                     &Args::new2(Value::integer(idx as i64), val),
@@ -1957,7 +1964,7 @@ impl VM {
                     }
                 }
                 ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
-                _ => self.fallback(IdentId::_INDEX, receiver, &args)?,
+                _ => self.send_args(IdentId::_INDEX, receiver, &args)?,
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
@@ -1991,7 +1998,7 @@ impl VM {
                 }
                 _ => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    self.fallback(IdentId::_INDEX, receiver, &args)?
+                    self.send_args(IdentId::_INDEX, receiver, &args)?
                 }
             },
             None if receiver.is_packed_fixnum() => {
@@ -2053,7 +2060,7 @@ impl VM {
             Some(class) => class,
             None => return Err(vm.error_nomethod("`new` method not found.")),
         };
-        let mut obj = vm.fallback(IdentId::NEW, superclass, args)?;
+        let mut obj = vm.send_args(IdentId::NEW, superclass, args)?;
         obj.set_class(self_val);
         if let Some(method) = self_val.get_instance_method(IdentId::INITIALIZE) {
             vm.eval_send(method, obj, args)?;
@@ -2129,9 +2136,7 @@ impl VM {
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
                 ObjKind::Ordinary => {
-                    let val = self
-                        .fallback(IdentId::get_id("to_s"), val, &Args::new0())
-                        .unwrap();
+                    let val = self.send0(IdentId::get_id("to_s"), val).unwrap();
                     val.as_string().unwrap().clone()
                 }
                 //oref.to_s(),
@@ -2181,7 +2186,7 @@ impl VM {
                 ObjKind::Complex { .. } => format!("{:?}", oref.kind),
                 _ => {
                     let id = IdentId::get_id("inspect");
-                    self.send0(val, id)
+                    self.send0(id, val)
                         .unwrap()
                         .as_string()
                         .unwrap()
@@ -2189,13 +2194,6 @@ impl VM {
                 }
             },
         }
-    }
-
-    pub fn send0(&mut self, receiver: Value, method_id: IdentId) -> VMResult {
-        let method = self.get_method_from_receiver(receiver, method_id)?;
-        let args = Args::new0();
-        let val = self.eval_send(method, receiver, &args)?;
-        Ok(val)
     }
 }
 
