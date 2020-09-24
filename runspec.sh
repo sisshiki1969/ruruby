@@ -1,3 +1,3 @@
 #!/bin/sh
-cargo build --release --features verbose
+cargo build --release
 ../spec/mspec/bin/mspec -t target/release/ruruby

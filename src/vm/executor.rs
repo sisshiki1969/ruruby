@@ -2128,7 +2128,13 @@ impl VM {
                     Some(id) => format! {"{:?}", id},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
-                ObjKind::Ordinary => oref.to_s(),
+                ObjKind::Ordinary => {
+                    let val = self
+                        .fallback(IdentId::get_id("to_s"), val, &Args::new0())
+                        .unwrap();
+                    val.as_string().unwrap().clone()
+                }
+                //oref.to_s(),
                 ObjKind::Array(aref) => aref.to_s(self),
                 ObjKind::Range(rinfo) => rinfo.to_s(self),
                 ObjKind::Regexp(rref) => format!("({})", rref.as_str().to_string()),

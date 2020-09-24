@@ -34,8 +34,10 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::integer(id as i64))
 }
 
-fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let s = vm.val_to_s(self_val);
+fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let class_name = self_val.get_class().as_class().name();
+    let s = format!("#<{}:{:016x}>", class_name, self_val.id());
     Ok(Value::string(s))
 }
 

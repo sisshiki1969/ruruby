@@ -203,10 +203,6 @@ impl RValue {
         IdentId::get_ident_name(self.search_class().as_class().name)
     }
 
-    pub fn to_s(&self) -> String {
-        format! {"#<{}:{:?}>", self.class_name(), self}
-    }
-
     pub fn inspect(&self, vm: &mut VM) -> String {
         let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
         match self.var_table() {
