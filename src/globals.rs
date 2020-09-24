@@ -230,7 +230,7 @@ impl Globals {
         init_builtin_class!("Exception", exception);
 
         let kernel = kernel::init(&mut globals);
-        object.as_class().include.push(kernel);
+        object.as_class().include_append(&mut globals, kernel);
         BuiltinClass::set_class("Kernel", kernel);
 
         init_class!("Math", math);

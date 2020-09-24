@@ -1,10 +1,14 @@
-class A < Array
-    def foo
-        100
+class A
+    def foo(a,b,c,d:0)
+        puts "output of A(super) #{a},#{b},#{c},#{d}"
+    end            
+ end
+
+class B < A
+    def foo(a,b,c=300,d:400)
+        super(a,b,c,d:d)
+        puts "output of B #{a},#{b},#{c},#{d}"
     end
 end
 
-a = A.new
-raise unless A == a.class
-raise unless Array == a.class.superclass
-raise unless 100 == a.foo
+B.new.foo(100,200,d:500)

@@ -199,7 +199,7 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let mut class = vm.expect_module(self_val)?;
     let module = args[0];
-    class.include.push(module);
+    class.include_append(&mut vm.globals, module);
     Ok(Value::nil())
 }
 
@@ -213,9 +213,7 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         class = match class.as_module() {
             Some(cref) => {
-                for included in &cref.include {
-                    ary.push(*included);
-                }
+                ary.extend_from_slice(cref.include());
                 cref.superclass
             }
             None => {
@@ -239,9 +237,7 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         ary.push(superclass);
         superclass = match superclass.as_module() {
             Some(cref) => {
-                for included in &cref.include {
-                    ary.push(*included);
-                }
+                ary.extend_from_slice(cref.include());
                 cref.superclass
             }
             None => {

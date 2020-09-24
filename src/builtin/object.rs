@@ -150,17 +150,17 @@ fn freeze(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    //vm.check_args_num(args.len(), 0)?;
     let context = vm.current_context();
     let iseq = context.iseq_ref.unwrap();
     if let ISeqKind::Method(m) = context.kind {
         let class = match iseq.class_defined {
             Some(list) => list.class,
             None => {
-                let inspect = vm.val_inspect(self_val);
-                return Err(
-                    vm.error_nomethod(format!("no superclass method `{:?}' for {}.", m, inspect))
-                );
+                return Err(vm.error_nomethod(format!(
+                    "no superclass method `{:?}' for {:?}.",
+                    m, self_val
+                )));
             }
         };
         let method = match class.superclass() {
@@ -177,19 +177,24 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             None => {
-                let inspect = vm.val_inspect(self_val);
-                return Err(
-                    vm.error_nomethod(format!("no superclass method `{:?}' for {}.", m, inspect,))
-                );
+                return Err(vm.error_nomethod(format!(
+                    "no superclass method `{:?}' for {:?}.",
+                    m, self_val
+                )));
             }
         };
-        let param_num = iseq.params.param_ident.len();
-        let mut args = Args::new0();
-        for i in 0..param_num {
-            args.push(context[i]);
+        if args.len() == 0 {
+            let param_num = iseq.params.param_ident.len();
+            let mut args = Args::new0();
+            for i in 0..param_num {
+                args.push(context[i]);
+            }
+            let val = vm.eval_send(method, context.self_value, &args)?;
+            Ok(val)
+        } else {
+            let val = vm.eval_send(method, context.self_value, &args)?;
+            Ok(val)
         }
-        let val = vm.eval_send(method, context.self_value, &args)?;
-        Ok(val)
     } else {
         return Err(vm.error_nomethod("super called outside of method"));
     }
@@ -400,6 +405,34 @@ mod test {
         sum = 0
         [1,2,3,4,5].iich{|x| puts x, sum; sum = sum + x }
         assert(15 ,sum)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_super() {
+        let program = r#"
+        class A
+            def foo(a,b,c,d:0)
+                assert [100,200,300,500], [a,b,c,d]
+            end 
+            def boo(a,b,c)
+                assert [100,200,300], [a,b,c]
+            end           
+         end
+        
+        class B < A
+            def foo(a,b,c=300,d:400)
+                super(a,b,c,d:d)
+            end
+            def boo(a,b,c)
+                super
+            end
+        end
+        
+        B.new.foo(100,200,d:500)
+        B.new.boo(100,200,300)
+
         "#;
         assert_script(program);
     }

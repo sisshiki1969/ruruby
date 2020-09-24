@@ -5,7 +5,7 @@ pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub method_table: MethodTable,
     pub superclass: Value,
-    pub include: Vec<Value>,
+    include: Vec<Value>,
     pub is_singleton: bool,
 }
 
@@ -61,6 +61,18 @@ impl ClassInfo {
 
     pub fn name(&self) -> String {
         IdentId::get_ident_name(self.name)
+    }
+
+    /// Include `module` in `self` class.
+    /// This method increments `class_version`.
+    pub fn include_append(&mut self, globals: &mut Globals, module: Value) {
+        self.include.push(module);
+        globals.class_version += 1;
+    }
+
+    /// Get reference of included modules in `self` class.
+    pub fn include(&self) -> &Vec<Value> {
+        &self.include
     }
 }
 

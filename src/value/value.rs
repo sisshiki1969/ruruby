@@ -405,15 +405,16 @@ impl Value {
         }
     }
 
+    /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
+    /// Return None if no method found.
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
         let cref = self.as_module().unwrap();
         match cref.method_table.get(&id) {
             Some(method) => Some(*method),
             None => {
-                for v in &cref.include {
-                    match v.get_instance_method(id) {
-                        Some(method) => return Some(method),
-                        None => {}
+                for v in cref.include() {
+                    if let Some(method) = v.get_instance_method(id) {
+                        return Some(method);
                     }
                 }
                 None
