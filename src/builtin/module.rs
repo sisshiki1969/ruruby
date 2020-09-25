@@ -5,6 +5,7 @@ pub fn init(globals: &mut Globals) {
     let mut module_class = globals.builtins.module.as_class();
     module_class.add_builtin_method_by_str("===", teq);
     module_class.add_builtin_method_by_str("constants", constants);
+    module_class.add_builtin_method_by_str("const_defined?", const_defined);
     module_class.add_builtin_method_by_str("instance_methods", instance_methods);
     module_class.add_builtin_method_by_str("attr_accessor", attr_accessor);
     module_class.add_builtin_method_by_str("attr", attr_reader);
@@ -69,6 +70,13 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
         }
     }
     Ok(Value::array_from(v))
+}
+
+fn const_defined(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 2)?;
+    let mut name = args[0];
+    let name = name.expect_string_or_symbol(vm, "1st arg")?;
+    Ok(Value::bool(vm.get_super_const(self_val, name).is_ok()))
 }
 
 fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -476,6 +484,17 @@ mod test {
         assert(55, f.bar3)
         assert(55, f.bar4)
         "##;
+        assert_script(program);
+    }
+
+    #[test]
+    fn const_defined() {
+        let program = r#"
+        assert(true, Object.const_defined?(:Kernel))
+        assert(false, Object.const_defined?(:Kernels))
+        assert(true, Object.const_defined? "Array")
+        assert(false, Object.const_defined? "Arrays")
+        "#;
         assert_script(program);
     }
 }
