@@ -16,6 +16,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class_val.add_builtin_class_method("read", read);
     class_val.add_builtin_class_method("write", write);
     class_val.add_builtin_class_method("expand_path", expand_path);
+    class_val.add_builtin_class_method("exist?", exist);
     class_val
 }
 
@@ -181,6 +182,11 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 
     return Ok(Value::string(res_path.to_string_lossy().to_string()));
 }
+fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 1)?;
+    let b = string_to_canonicalized_path(vm, args[0], "1st arg").is_ok();
+    Ok(Value::bool(b))
+}
 
 #[cfg(test)]
 mod tests {
@@ -196,6 +202,8 @@ mod tests {
             assert("file.txt", File.basename("/home/usr/file.txt"))
             assert(".txt", File.extname("/home/usr/file.txt"))
             assert("/home/usr", File.dirname("/home/usr/file.txt"))
+            assert(true, File.exist? "Cargo.toml")
+            assert(false, File.exist? "Cargo.tomlz")
         "#;
         assert_script(program);
     }
