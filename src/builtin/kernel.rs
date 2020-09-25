@@ -21,6 +21,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("rand", rand_);
     kernel_class.add_builtin_method_by_str("loop", loop_);
     kernel_class.add_builtin_method_by_str("exit", exit);
+    kernel_class.add_builtin_method_by_str("abort", abort);
     kernel_class.add_builtin_method_by_str("sleep", sleep);
     kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
     let kernel = Value::module(kernel_class);
@@ -305,6 +306,18 @@ fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         args[0].expect_integer(vm, "Expect Integer.")?
     };
     std::process::exit(code as i32);
+}
+
+fn abort(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 0, 1)?;
+    let msg = if args.len() == 0 {
+        "".to_string()
+    } else {
+        let mut msg = args[0];
+        msg.expect_string(vm, "1st")?.to_owned()
+    };
+    eprintln!("{}", msg);
+    std::process::exit(1);
 }
 
 fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {

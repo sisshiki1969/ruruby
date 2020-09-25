@@ -20,6 +20,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("step", step);
     class.add_builtin_method_by_str("chr", chr);
     class.add_builtin_method_by_str("to_f", tof);
+    class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("even?", even);
     Value::class(class)
@@ -252,6 +253,12 @@ fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn tof(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     Ok(Value::float(num as f64))
+}
+
+fn toi(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    //vm.check_args_num(args.len(), 1, 1)?;
+    let num = self_val.as_integer().unwrap();
+    Ok(Value::integer(num))
 }
 
 fn even(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

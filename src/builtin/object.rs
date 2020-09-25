@@ -22,6 +22,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("eval", eval);
     object_class.add_builtin_method_by_str("to_enum", to_enum);
     object_class.add_builtin_method_by_str("enum_for", to_enum);
+    object_class.add_builtin_method_by_str("respond_to?", respond_to);
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -76,26 +77,11 @@ fn nil(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     //vm.check_args_num(args.len(), 1, 1)?;
-    let self_ = self_val;
-    let num = match &self_.as_rvalue() {
-        Some(info) => match &info.kind {
-            ObjKind::Integer(val) => *val,
-            ObjKind::Float(val) => f64::trunc(*val) as i64,
-            _ => return Err(vm.error_type("Must be a number.")),
-        },
-        None => {
-            if self_.is_packed_num() {
-                if self_.is_packed_fixnum() {
-                    self_.as_packed_fixnum()
-                } else {
-                    f64::trunc(self_.as_packed_flonum()) as i64
-                }
-            } else {
-                return Err(vm.error_type("Must be a number."));
-            }
-        }
-    };
-    Ok(Value::integer(num))
+    if self_val.is_nil() {
+        Ok(Value::integer(0))
+    } else {
+        Err(vm.error_undefined_method(IdentId::get_id("to_i"), self_val))
+    }
 }
 
 fn instance_variable_set(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -275,6 +261,17 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 1)?;
+    let mut name = args[0];
+    let method = name.expect_string_or_symbol(vm, "1st arg")?;
+    if vm.get_method_from_receiver(self_val, method).is_err() {
+        Ok(Value::false_val())
+    } else {
+        Ok(Value::true_val())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -299,6 +296,18 @@ mod test {
         assert(true, nil.nil?)
         assert(false, 4.nil?)
         assert(false, "nil".nil?)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn to_i() {
+        let program = r#"
+        assert(3, 3.to_i)
+        assert(4, 4.7.to_i)
+        assert(-4, -4.7.to_i)
+        assert(0, nil.to_i)
+        assert_error { true.to_i }
         "#;
         assert_script(program);
     }
@@ -435,6 +444,27 @@ mod test {
         B.new.foo(100,200,d:500)
         B.new.boo(100,200,300)
 
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_respond_to() {
+        let program = r#"
+        class A
+            def foo
+            end
+        end
+        class B < A
+            def bar
+            end
+        end
+        a = A.new
+        b = B.new
+        assert(true, a.respond_to?(:foo))
+        assert(false, a.respond_to? "bar")
+        assert(true, b.respond_to? "foo")
+        assert(true, b.respond_to?(:bar))
         "#;
         assert_script(program);
     }

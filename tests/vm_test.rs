@@ -115,6 +115,14 @@ fn expr11() {
     let program = r#"
         assert(true, true || false && false)
         assert(false, (true or false and false))
+        assert(false, true^5)
+        assert(false, true^true)
+        assert(true, true^false)
+        assert(true, true^nil)
+        assert(true, false^5)
+        assert(true, false^true)
+        assert(false, false^false)
+        assert(false, false^nil)
     "#;
     assert_script(program);
 }

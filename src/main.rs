@@ -46,7 +46,7 @@ fn main() {
     let argv = Value::array_from(res);
     let mut object = globals.builtins.object;
     object.set_var_by_str("ARGV", argv);
-    object.set_var_by_str("RUBY_VERSION", Value::string("0.2.0".to_string()));
+    object.set_var_by_str("RUBY_VERSION", Value::string("2.5.0".to_string()));
     object.set_var_by_str("RUBY_ENGINE", Value::string("ruruby".to_string()));
 
     vm.exec_file(args[0]);

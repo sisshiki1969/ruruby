@@ -1735,12 +1735,8 @@ impl VM {
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::integer(
-                lhs.as_packed_fixnum() ^ rhs.as_packed_fixnum(),
-            ));
-        }
         match (lhs.unpack(), rhs.unpack()) {
+            (RV::Bool(b), _) => Ok(Value::bool(b ^ rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
             (_, _) => return Err(self.error_undefined_op("^", rhs, lhs)),
         }

@@ -9,6 +9,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
+    class.add_builtin_method_by_str("to_i", toi);
     Value::class(class)
 }
 
@@ -92,6 +93,12 @@ fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let lhs = self_val.as_float().unwrap();
     Ok(Value::integer(lhs.floor() as i64))
+}
+
+fn toi(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    //vm.check_args_num(args.len(), 1, 1)?;
+    let num = self_val.as_float().unwrap().trunc() as i64;
+    Ok(Value::integer(num))
 }
 
 #[cfg(test)]
