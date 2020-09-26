@@ -9,7 +9,7 @@ pub struct Globals {
     pub allocator: AllocatorRef,
     pub builtins: BuiltinRef,
     pub const_values: ConstantValues,
-    pub global_var: ValueTable,
+    global_var: ValueTable,
     pub method_cache: MethodCache,
     pub inline_cache: InlineCache,
     pub case_dispatch: CaseDispatchMap,
@@ -273,21 +273,18 @@ impl Globals {
     }
 }
 
-/*
 impl Globals {
-    pub fn new_case_dispatch_map(&mut self) -> u32 {
-        self.case_dispatch.new_entry()
+    pub fn get_global_var(&self, id: IdentId) -> Value {
+        match self.global_var.get(&id) {
+            Some(val) => *val,
+            None => Value::nil(),
+        }
     }
 
-    pub fn get_case_dispatch_map(&self, id: u32) -> &FxHashMap<Value, i32> {
-        self.case_dispatch.get_entry(id)
-    }
-
-    pub fn get_mut_case_dispatch_map(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
-        self.case_dispatch.get_mut_entry(id)
+    pub fn set_global_var(&mut self, id: IdentId, val: Value) {
+        self.global_var.insert(id, val);
     }
 }
-*/
 
 ///
 /// Contant value

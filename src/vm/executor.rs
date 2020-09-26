@@ -1493,14 +1493,11 @@ impl VM {
     }
 
     pub fn get_global_var(&self, id: IdentId) -> Value {
-        match self.globals.global_var.get(&id) {
-            Some(val) => *val,
-            None => Value::nil(),
-        }
+        self.globals.get_global_var(id)
     }
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
-        self.globals.global_var.insert(id, val);
+        self.globals.set_global_var(id, val);
     }
 }
 
@@ -2670,6 +2667,11 @@ impl VM {
             }
         };
 
+        let file = absolute_path
+            .file_name()
+            .map(|x| x.to_string_lossy())
+            .unwrap_or(std::borrow::Cow::Borrowed(""));
+        self.set_global_var(IdentId::get_id("$0"), Value::string(file.to_string()));
         let root_path = absolute_path.clone();
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", root_path);

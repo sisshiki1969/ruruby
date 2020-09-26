@@ -10,7 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     let stdout = Value::ordinary_object(obj);
     BuiltinClass::object().set_var_by_str("STDOUT", stdout);
     let id = IdentId::get_id("$>");
-    globals.global_var.insert(id, stdout);
+    globals.set_global_var(id, stdout);
 
     obj
 }

@@ -174,6 +174,8 @@ pub fn init(_globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("<", lt);
     string_class.add_builtin_method_by_str(">", gt);
     string_class.add_builtin_method_by_str("center", center);
+    string_class.add_builtin_method_by_str("ljust", ljust);
+    string_class.add_builtin_method_by_str("rjust", rjust);
     string_class.add_builtin_method_by_str("next", next);
     string_class.add_builtin_method_by_str("succ", next);
     string_class.add_builtin_method_by_str("count", count);
@@ -861,11 +863,26 @@ fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn gen_pad(padding: &str, len: usize) -> String {
+    let pad_len = padding.chars().count();
+    let pad_repeat = padding.repeat(len / pad_len);
+    let pad_end: String = padding.chars().take(len % pad_len).collect();
+    format!("{}{}", pad_repeat, pad_end)
+}
+
 fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    vm.check_args_range(args.len(), 1, 2)?;
+    let mut pad_val = args[1];
+    let padding = if args.len() == 2 {
+        pad_val.expect_string(vm, "2nd arg")?
+    } else {
+        " "
+    };
+    if padding.len() == 0 {
+        return Err(vm.error_argument("Zero width padding."));
+    };
     let lhs = self_val.as_string().unwrap();
     let width = args[0].expect_integer(vm, "1st arg")?;
-    let padding = " ";
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
         return Ok(Value::string(lhs.clone()));
@@ -874,10 +891,52 @@ fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let tail = width as usize - str_len - head;
     return Ok(Value::string(format!(
         "{}{}{}",
-        padding.repeat(head),
+        gen_pad(padding, head),
         lhs,
-        padding.repeat(tail)
+        gen_pad(padding, tail)
     )));
+}
+
+fn ljust(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 2)?;
+    let mut pad_val = args[1];
+    let padding = if args.len() == 2 {
+        pad_val.expect_string(vm, "2nd arg")?
+    } else {
+        " "
+    };
+    if padding.len() == 0 {
+        return Err(vm.error_argument("Zero width padding."));
+    };
+    let lhs = self_val.as_string().unwrap();
+    let width = args[0].expect_integer(vm, "1st arg")?;
+    let str_len = lhs.chars().count();
+    if width <= 0 || width as usize <= str_len {
+        return Ok(Value::string(lhs.to_owned()));
+    }
+    let tail = width as usize - str_len;
+    Ok(Value::string(format!("{}{}", lhs, gen_pad(padding, tail))))
+}
+
+fn rjust(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 2)?;
+    let mut pad_val = args[1];
+    let padding = if args.len() == 2 {
+        pad_val.expect_string(vm, "2nd arg")?
+    } else {
+        " "
+    };
+    if padding.len() == 0 {
+        return Err(vm.error_argument("Zero width padding."));
+    };
+    let lhs = self_val.as_string().unwrap();
+    let width = args[0].expect_integer(vm, "1st arg")?;
+    let str_len = lhs.chars().count();
+    if width <= 0 || width as usize <= str_len {
+        return Ok(Value::string(lhs.to_owned()));
+    }
+    let tail = width as usize - str_len;
+    Ok(Value::string(format!("{}{}", gen_pad(padding, tail), lhs)))
 }
 
 fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1235,6 +1294,34 @@ mod test {
         assert("  foo   ", "foo".center(8))
         assert("   foo   ", "foo".center(9))
         assert("   foo    ", "foo".center(10))
+        assert("***foo****", "foo".center(10, "*"))
+        assert("121foo1212", "foo".center(10, "12"))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_ljust() {
+        let program = r#"
+        s = "戦闘妖精"
+        assert_error { s.ljust }
+        assert_error { s.ljust 8, "" }
+        assert("戦闘妖精       ", s.ljust 11)
+        assert("戦闘妖精$$$$$$$", s.ljust 11,"$")
+        assert("戦闘妖精1231231", s.ljust 11,"123")
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_rjust() {
+        let program = r#"
+        s = "戦闘妖精"
+        assert_error { s.rjust }
+        assert_error { s.rjust 8, "" }
+        assert("       戦闘妖精", s.rjust 11)
+        assert("$$$$$$$戦闘妖精", s.rjust 11,"$")
+        assert("1231231戦闘妖精", s.rjust 11,"123")
         "#;
         assert_script(program);
     }

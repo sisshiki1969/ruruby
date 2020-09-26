@@ -23,7 +23,10 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("exit", exit);
     kernel_class.add_builtin_method_by_str("abort", abort);
     kernel_class.add_builtin_method_by_str("sleep", sleep);
+    kernel_class.add_builtin_method_by_str("proc", proc);
+    kernel_class.add_builtin_method_by_str("lambda", proc);
     kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
+    kernel_class.add_builtin_method_by_str("Array", kernel_array);
     let kernel = Value::module(kernel_class);
     return kernel;
 }
@@ -114,9 +117,9 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(string) => string,
         None => return Err(vm.error_argument("file name must be a string.")),
     };
-    let mut load_path = match vm.globals.global_var.get(&IdentId::get_id("$:")) {
-        Some(path) => *path,
-        None => return Ok(Value::false_val()),
+    let mut load_path = vm.get_global_var(IdentId::get_id("$:"));
+    if load_path.is_nil() {
+        return Ok(Value::false_val());
     };
     let mut load_ary = load_path
         .expect_array(vm, "LOAD_PATH($:)")?
@@ -341,6 +344,13 @@ fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::integer(duration))
 }
 
+fn proc(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let block = vm.expect_block(args.block)?;
+    let procobj = vm.create_proc(block)?;
+    Ok(procobj)
+}
+
 fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 3)?;
     let (r, i, ex) = match args.len() {
@@ -358,6 +368,13 @@ fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     }
 
     Ok(Value::complex(r, i))
+}
+
+/// Array(arg) -> Array
+fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let res = vm.send0(IdentId::get_id("to_a"), args[0])?;
+    Ok(res)
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     let mut class_obj = Value::class(class);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_method_by_str("to_a", toa);
     class.add_builtin_method_by_str("length", length);
     class.add_builtin_method_by_str("size", length);
     class.add_builtin_method_by_str("empty?", empty);
@@ -91,6 +92,16 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let s = aref.to_s(vm);
     Ok(Value::string(s))
+}
+
+fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let array = vm.globals.builtins.array;
+    if self_val.get_class().id() == array.id() {
+        return Ok(self_val);
+    };
+    let mut new_val = self_val.dup();
+    new_val.set_class(array);
+    Ok(new_val)
 }
 
 fn set_elem(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -892,6 +903,23 @@ mod tests {
         assert [3,4,5], a[2,3]
         a[2,3] = 100
         assert [1,2,100,6,7], a
+        ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_toa() {
+        let program = "
+        a = [1,2,3]
+        assert Array, a.class
+        assert [1,2,3], a.to_a
+        assert true, a == a.to_a
+        class B < Array; end
+        b = B.new([1,2,3])
+        assert B, b.class
+        assert Array, b.to_a.class
+        assert true, b == b.to_a
+        assert false, b.object_id == b.to_a.object_id
         ";
         assert_script(program);
     }

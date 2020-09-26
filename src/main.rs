@@ -25,6 +25,7 @@ fn main() {
         Some(command) => {
             let mut globals = GlobalsRef::new_globals();
             let mut vm = globals.new_vm();
+            vm.set_global_var(IdentId::get_id("$0"), Value::string("-e".to_string()));
             vm.exec_program(std::path::PathBuf::default(), command.to_string());
             return;
         }

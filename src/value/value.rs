@@ -72,7 +72,7 @@ impl std::hash::Hash for Value {
 }
 
 impl PartialEq for Value {
-    /// Equality by value.
+    /// Equality of value.
     ///
     /// This kind of equality is used for `==` operator of Ruby.
     /// Generally, two objects which all of properties are `eq` are defined as `eq`.  
