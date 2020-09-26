@@ -10,3 +10,5 @@ mod fiber;
 pub use fiber::*;
 pub mod real;
 pub use real::*;
+pub mod string;
+pub use string::*;
