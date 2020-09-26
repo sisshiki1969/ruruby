@@ -37,8 +37,38 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let class_name = self_val.get_class().as_class().name();
-    let s = format!("#<{}:{:016x}>", class_name, self_val.id());
+
+    let s = match self_val.unpack() {
+        RV::Uninitialized => "[Uninitialized]".to_string(),
+        RV::Nil => "".to_string(),
+        RV::Bool(b) => match b {
+            true => "true".to_string(),
+            false => "false".to_string(),
+        },
+        RV::Integer(i) => i.to_string(),
+        RV::Float(f) => {
+            if f.fract() == 0.0 {
+                format!("{:.1}", f)
+            } else {
+                f.to_string()
+            }
+        }
+        RV::Symbol(i) => format!("{:?}", i),
+        RV::Object(oref) => match &oref.kind {
+            ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+            ObjKind::Class(cref) => match cref.name {
+                Some(id) => format! {"{:?}", id},
+                None => format! {"#<Class:0x{:x}>", cref.id()},
+            },
+            ObjKind::Ordinary => {
+                let class_name = self_val.get_class().as_class().name();
+                format!("#<{}:{:016x}>", class_name, self_val.id())
+            }
+            ObjKind::Regexp(rref) => format!("({})", rref.as_str().to_string()),
+            _ => format!("{:?}", oref.kind),
+        },
+    };
+
     Ok(Value::string(s))
 }
 
@@ -275,6 +305,25 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 #[cfg(test)]
 mod test {
     use crate::test::*;
+
+    #[test]
+    fn to_s() {
+        let program = r#"
+        assert("", nil.to_s)
+        assert("true", true.to_s)
+        assert("false", false.to_s)
+        assert("foo", :foo.to_s)
+        assert("75", 75.to_s)
+        assert("7.5", (7.5).to_s)
+        assert("Ruby", "Ruby".to_s)
+        assert("[]", [].to_s)
+        assert("[7]", [7].to_s)
+        assert("[:foo]", [:foo].to_s)
+        assert("{}", {}.to_s)
+        assert('{:foo=>"bar"}', {foo:"bar"}.to_s)
+        "#;
+        assert_script(program);
+    }
 
     #[test]
     fn dup() {

@@ -2127,20 +2127,10 @@ impl VM {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(s) => s.to_s(),
-                ObjKind::Class(cref) => match cref.name {
-                    Some(id) => format! {"{:?}", id},
-                    None => format! {"#<Class:0x{:x}>", cref.id()},
-                },
-                ObjKind::Ordinary => {
-                    let val = self.send0(IdentId::get_id("to_s"), val).unwrap();
+                _ => {
+                    let val = self.send0(IdentId::TO_S, val).unwrap();
                     val.as_string().unwrap().clone()
                 }
-                //oref.to_s(),
-                ObjKind::Array(aref) => aref.to_s(self),
-                ObjKind::Range(rinfo) => rinfo.to_s(self),
-                ObjKind::Regexp(rref) => format!("({})", rref.as_str().to_string()),
-                ObjKind::Hash(href) => href.to_s(self),
-                _ => format!("{:?}", oref.kind),
             },
         }
     }
