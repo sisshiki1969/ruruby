@@ -17,6 +17,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class_val.add_builtin_class_method("write", write);
     class_val.add_builtin_class_method("expand_path", expand_path);
     class_val.add_builtin_class_method("exist?", exist);
+    class_val.add_builtin_class_method("directory?", directory);
     class_val
 }
 
@@ -188,6 +189,15 @@ fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
+fn directory(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 1)?;
+    let b = match string_to_canonicalized_path(vm, args[0], "1st arg") {
+        Ok(path) => path.is_dir(),
+        Err(_) => false,
+    };
+    Ok(Value::bool(b))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -204,6 +214,9 @@ mod tests {
             assert("/home/usr", File.dirname("/home/usr/file.txt"))
             assert(true, File.exist? "Cargo.toml")
             assert(false, File.exist? "Cargo.tomlz")
+            assert(true, File.directory? "src")
+            assert(false, File.directory? "srcs")
+            assert(false, File.directory? "Cargo.toml")
         "#;
         assert_script(program);
     }

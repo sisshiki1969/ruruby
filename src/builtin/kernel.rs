@@ -496,4 +496,12 @@ mod test {
         "#;
         assert_script(program);
     }
+
+    #[test]
+    fn kernel_array() {
+        let program = r#"
+        assert([1,2,3], Array([1,2,3]))
+        "#;
+        assert_script(program);
+    }
 }
