@@ -317,15 +317,15 @@ impl HashInfo {
         }
     }
 
-    pub fn to_s(&self, vm: &mut VM) -> String {
-        match self.len() {
+    pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
+        let s = match self.len() {
             0 => "{}".to_string(),
             _ => {
                 let mut result = "".to_string();
                 let mut first = true;
                 for (k, v) in self.iter() {
-                    let k_inspect = vm.val_inspect(k);
-                    let v_inspect = vm.val_inspect(v);
+                    let k_inspect = vm.val_inspect(k)?;
+                    let v_inspect = vm.val_inspect(v)?;
                     result = if first {
                         format!("{}=>{}", k_inspect, v_inspect)
                     } else {
@@ -335,6 +335,7 @@ impl HashInfo {
                 }
                 format! {"{{{}}}", result}
             }
-        }
+        };
+        Ok(s)
     }
 }

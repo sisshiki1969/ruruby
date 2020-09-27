@@ -247,7 +247,7 @@ impl RegexpInfo {
             let mut res = given.to_string();
             let matched = Value::string(matched_str.to_string());
             let result = vm.eval_block(block, &Args::new1(matched))?;
-            let s = vm.val_to_s(result);
+            let s = vm.val_to_s(result)?;
             res.replace_range(start..end, &s);
             Ok((res, true))
         }
@@ -307,7 +307,7 @@ impl RegexpInfo {
                 };
                 let matched = Value::string(matched_str.to_string());
                 let result = vm.eval_block(block, &Args::new1(matched))?;
-                let replace = vm.val_to_s(result);
+                let replace = vm.val_to_s(result)?;
                 range.push((start, end, replace));
             }
 

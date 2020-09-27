@@ -557,10 +557,13 @@ impl Value {
     }
 
     pub fn expect_bytes(&self, vm: &mut VM, msg: &str) -> Result<&[u8], RubyError> {
-        let rstring = self.as_rstring().ok_or_else(|| {
-            let inspect = vm.val_inspect(*self);
-            vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
-        })?;
+        let rstring = match self.as_rstring() {
+            Some(rs) => rs,
+            None => {
+                let inspect = vm.val_inspect(*self)?;
+                return Err(vm.error_type(format!("{} must be String. (given:{})", msg, inspect)));
+            }
+        };
         Ok(rstring.as_bytes())
     }
 
@@ -586,10 +589,13 @@ impl Value {
 
     pub fn expect_string(&mut self, vm: &mut VM, msg: &str) -> Result<&String, RubyError> {
         let val = *self;
-        let rstring = self.as_mut_rstring().ok_or_else(|| {
-            let inspect = vm.val_inspect(val);
-            vm.error_type(format!("{} must be String. (given:{})", msg, inspect))
-        })?;
+        let rstring = match self.as_mut_rstring() {
+            Some(rs) => rs,
+            None => {
+                let inspect = vm.val_inspect(val)?;
+                return Err(vm.error_type(format!("{} must be String. (given:{})", msg, inspect)));
+            }
+        };
         rstring.as_string(vm)
     }
 
@@ -726,10 +732,13 @@ impl Value {
 
     pub fn expect_hash(&self, vm: &mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
         let val = *self;
-        self.as_hash().ok_or_else(|| {
-            let inspect = vm.val_inspect(val);
-            vm.error_type(format!("{} must be Hash. (given:{})", msg, inspect))
-        })
+        match self.as_hash() {
+            Some(hash) => Ok(hash),
+            None => {
+                let inspect = vm.val_inspect(val)?;
+                Err(vm.error_type(format!("{} must be Hash. (given:{})", msg, inspect)))
+            }
+        }
     }
 
     pub fn as_regexp(&self) -> Option<RegexpInfo> {

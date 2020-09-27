@@ -24,7 +24,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("abort", abort);
     kernel_class.add_builtin_method_by_str("sleep", sleep);
     kernel_class.add_builtin_method_by_str("proc", proc);
-    kernel_class.add_builtin_method_by_str("lambda", proc);
+    kernel_class.add_builtin_method_by_str("lambda", lambda);
     kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
     kernel_class.add_builtin_method_by_str("Array", kernel_array);
     let kernel = Value::module(kernel_class);
@@ -32,28 +32,29 @@ pub fn init(_globals: &mut Globals) -> Value {
 }
 /// Built-in function "puts".
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    fn flatten(vm: &mut VM, val: Value) {
+    fn flatten(vm: &mut VM, val: Value) -> Result<(), RubyError> {
         match val.as_array() {
-            None => println!("{}", vm.val_to_s(val)),
+            None => println!("{}", vm.val_to_s(val)?),
             Some(aref) => {
                 for val in &aref.elements {
-                    flatten(vm, val.clone());
+                    flatten(vm, val.clone())?;
                 }
             }
         }
+        Ok(())
     }
     if args.len() == 0 {
         println!();
     }
     for arg in args.iter() {
-        flatten(vm, *arg);
+        flatten(vm, *arg)?;
     }
     Ok(Value::nil())
 }
 
 fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
-        println!("{}", vm.val_inspect(*arg));
+        println!("{}", vm.val_inspect(*arg)?);
     }
     match args.len() {
         0 => Ok(Value::nil()),
@@ -70,7 +71,7 @@ fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 use std::io::{self, Write};
                 io::stdout().write(bytes).unwrap();
             }
-            None => print!("{}", vm.val_to_s(*arg)),
+            None => print!("{}", vm.val_to_s(*arg)?),
         }
     }
     Ok(Value::nil())
@@ -216,17 +217,17 @@ fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             ObjKind::String(s) => match s.parse::<i64>() {
                 Some(num) => num,
                 None => {
-                    let inspect = vm.val_inspect(args[0]);
+                    let inspect = vm.val_inspect(args[0])?;
                     return Err(vm.error_type(format!("Invalid value for Integer(): {}", inspect)));
                 }
             },
             _ => {
-                let inspect = vm.val_inspect(args[0]);
+                let inspect = vm.val_inspect(args[0])?;
                 return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
             }
         },
         _ => {
-            let inspect = vm.val_inspect(args[0]);
+            let inspect = vm.val_inspect(args[0])?;
             return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
         }
     };
@@ -348,6 +349,13 @@ fn proc(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let block = vm.expect_block(args.block)?;
     let procobj = vm.create_proc(block)?;
+    Ok(procobj)
+}
+
+fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let block = vm.expect_block(args.block)?;
+    let procobj = vm.create_lambda(block)?;
     Ok(procobj)
 }
 

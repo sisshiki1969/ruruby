@@ -16,18 +16,18 @@ impl RangeInfo {
         }
     }
 
-    pub fn to_s(&self, vm: &mut VM) -> String {
-        let start = vm.val_to_s(self.start);
-        let end = vm.val_to_s(self.end);
+    pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
+        let start = vm.val_to_s(self.start)?;
+        let end = vm.val_to_s(self.end)?;
         let sym = if self.exclude { "..." } else { ".." };
-        format!("{}{}{}", start, sym, end)
+        Ok(format!("{}{}{}", start, sym, end))
     }
 
-    pub fn inspect(&self, vm: &mut VM) -> String {
-        let start = vm.val_inspect(self.start);
-        let end = vm.val_inspect(self.end);
+    pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
+        let start = vm.val_inspect(self.start)?;
+        let end = vm.val_inspect(self.end)?;
         let sym = if self.exclude { "..." } else { ".." };
-        format!("{}{}{}", start, sym, end)
+        Ok(format!("{}{}{}", start, sym, end))
     }
 }
 
@@ -62,13 +62,13 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let res = range.to_s(vm);
+    let res = range.to_s(vm)?;
     Ok(Value::string(res))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let res = range.inspect(vm);
+    let res = range.inspect(vm)?;
     Ok(Value::string(res))
 }
 

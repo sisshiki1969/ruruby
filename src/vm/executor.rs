@@ -1156,7 +1156,7 @@ impl VM {
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
-                    let s = self.val_to_s(val);
+                    let s = self.val_to_s(val)?;
                     let res = Value::string(s);
                     self.stack_push(res);
                     self.pc += 1;
@@ -1399,17 +1399,23 @@ impl VM {
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
-        val.is_class().ok_or_else(|| {
-            let val = self.val_inspect(val);
-            self.error_type(format!("{} must be Class. (given:{})", msg, val))
-        })
+        match val.is_class() {
+            Some(class) => Ok(class),
+            None => {
+                let val = self.val_inspect(val)?;
+                Err(self.error_type(format!("{} must be Class. (given:{})", msg, val)))
+            }
+        }
     }
 
     pub fn expect_module(&mut self, val: Value) -> Result<ClassRef, RubyError> {
-        val.as_module().ok_or_else(|| {
-            let val = self.val_inspect(val);
-            self.error_type(format!("Must be Module or Class. (given:{})", val))
-        })
+        match val.as_module() {
+            Some(module) => Ok(module),
+            None => {
+                let val = self.val_inspect(val)?;
+                Err(self.error_type(format!("Must be Module or Class. (given:{})", val)))
+            }
+        }
     }
 }
 
@@ -2104,8 +2110,8 @@ impl VM {
 // API's for handling values.
 
 impl VM {
-    pub fn val_to_s(&mut self, val: Value) -> String {
-        match val.unpack() {
+    pub fn val_to_s(&mut self, val: Value) -> Result<String, RubyError> {
+        let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "".to_string(),
             RV::Bool(b) => match b {
@@ -2125,15 +2131,16 @@ impl VM {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(s) => s.to_s(),
                 _ => {
-                    let val = self.send0(IdentId::TO_S, val).unwrap();
-                    val.as_string().unwrap().clone()
+                    let val = self.send0(IdentId::TO_S, val)?;
+                    val.as_string().unwrap().to_owned()
                 }
             },
-        }
+        };
+        Ok(s)
     }
 
-    pub fn val_inspect(&mut self, val: Value) -> String {
-        match val.unpack() {
+    pub fn val_inspect(&mut self, val: Value) -> Result<String, RubyError> {
+        let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "nil".to_string(),
             RV::Bool(b) => match b {
@@ -2152,7 +2159,7 @@ impl VM {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
-                ObjKind::Range(rinfo) => rinfo.inspect(self),
+                ObjKind::Range(rinfo) => rinfo.inspect(self)?,
                 ObjKind::Class(cref) => match cref.name {
                     Some(id) => format! {"{:?}", id},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
@@ -2161,22 +2168,18 @@ impl VM {
                     Some(id) => format! {"{:?}", id},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },
-                ObjKind::Array(aref) => aref.to_s(self),
+                ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
-                ObjKind::Ordinary => oref.inspect(self),
-                ObjKind::Proc(pref) => format!("#<Proc:0x{:x}>", pref.context.id()),
-                ObjKind::Hash(href) => href.to_s(self),
+                ObjKind::Ordinary => oref.inspect(self)?,
+                ObjKind::Hash(href) => href.to_s(self)?,
                 ObjKind::Complex { .. } => format!("{:?}", oref.kind),
                 _ => {
                     let id = IdentId::get_id("inspect");
-                    self.send0(id, val)
-                        .unwrap()
-                        .as_string()
-                        .unwrap()
-                        .to_string()
+                    self.send0(id, val)?.as_string().unwrap().to_string()
                 }
             },
-        }
+        };
+        Ok(s)
     }
 }
 
@@ -2538,6 +2541,15 @@ impl VM {
     pub fn create_proc(&mut self, method: MethodRef) -> VMResult {
         self.move_outer_to_heap();
         let context = self.create_block_context(method)?;
+        Ok(Value::procobj(context))
+    }
+
+    /// Create new Lambda object from `method`,
+    /// moving outer `Context`s on stack to heap.
+    pub fn create_lambda(&mut self, method: MethodRef) -> VMResult {
+        self.move_outer_to_heap();
+        let mut context = self.create_block_context(method)?;
+        context.kind = ISeqKind::Method(IdentId::get_id(""));
         Ok(Value::procobj(context))
     }
 

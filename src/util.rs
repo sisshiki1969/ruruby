@@ -266,6 +266,7 @@ impl SourceInfo {
         }
 
         if !found {
+            eprintln!("NOT FOUND");
             let line = match lines.last() {
                 Some(line) => (line.no + 1, line.end + 1, loc.1),
                 None => (1, 0, loc.1),

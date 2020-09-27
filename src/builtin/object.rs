@@ -75,11 +75,11 @@ fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => {
-            let s = oref.inspect(vm);
+            let s = oref.inspect(vm)?;
             Ok(Value::string(s))
         }
         None => {
-            let s = vm.val_inspect(self_val);
+            let s = vm.val_inspect(self_val)?;
             Ok(Value::string(s))
         }
     }

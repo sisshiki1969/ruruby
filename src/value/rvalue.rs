@@ -203,19 +203,19 @@ impl RValue {
         IdentId::get_ident_name(self.search_class().as_class().name)
     }
 
-    pub fn inspect(&self, vm: &mut VM) -> String {
+    pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
         let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {
-                    let inspect = vm.val_to_s(*v);
+                    let inspect = vm.val_to_s(*v)?;
                     s = format!("{} {:?}={}", s, k, inspect);
                 }
             }
             None => {}
         }
 
-        format!("{}>", s)
+        Ok(s + ">")
     }
 
     pub fn new_invalid() -> Self {

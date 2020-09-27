@@ -103,18 +103,19 @@ impl ArrayInfo {
         }
     }
 
-    pub fn to_s(&self, vm: &mut VM) -> String {
-        match self.elements.len() {
+    pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
+        let s = match self.elements.len() {
             0 => "[]".to_string(),
-            1 => format!("[{}]", vm.val_inspect(self.elements[0])),
+            1 => format!("[{}]", vm.val_inspect(self.elements[0])?),
             len => {
-                let mut result = vm.val_inspect(self.elements[0]);
+                let mut result = vm.val_inspect(self.elements[0])?;
                 for i in 1..len {
-                    result = format!("{}, {}", result, vm.val_inspect(self.elements[i]));
+                    result = format!("{}, {}", result, vm.val_inspect(self.elements[i])?);
                 }
                 format! {"[{}]", result}
             }
-        }
+        };
+        Ok(s)
     }
 
     pub fn len(&self) -> usize {

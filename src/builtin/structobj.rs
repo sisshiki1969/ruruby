@@ -36,7 +36,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for index in i..args.len() {
         let v = args[index];
         if v.as_symbol().is_none() {
-            let n = vm.val_inspect(v);
+            let n = vm.val_inspect(v)?;
             return Err(vm.error_type(format!("{} is not a symbol.", n)));
         };
         vec.push(v);
@@ -93,7 +93,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut attr_str = String::new();
     for id in attrs {
         let val = match self_val.get_var(id) {
-            Some(v) => vm.val_inspect(v),
+            Some(v) => vm.val_inspect(v)?,
             None => "<>".to_string(),
         };
         attr_str = format!("{} {:?}={}", attr_str, id, val);

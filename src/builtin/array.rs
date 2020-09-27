@@ -90,7 +90,7 @@ fn array_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
-    let s = aref.to_s(vm);
+    let s = aref.to_s(vm)?;
     Ok(Value::string(s))
 }
 
@@ -245,13 +245,13 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         match aref.elements.len() {
             0 => return Ok(Value::string("".to_string())),
             1 => {
-                let res = vm.val_to_s(aref.elements[0]);
+                let res = vm.val_to_s(aref.elements[0])?;
                 return Ok(Value::string(res));
             }
             _ => {
-                let mut res = vm.val_to_s(aref.elements[0]);
+                let mut res = vm.val_to_s(aref.elements[0])?;
                 for i in 1..aref.elements.len() {
-                    res = format!("{}{}{}", res, s, vm.val_to_s(aref.elements[i]));
+                    res = format!("{}{}{}", res, s, vm.val_to_s(aref.elements[i])?);
                 }
                 return Ok(Value::string(res));
             }
@@ -642,7 +642,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let mut res = "".to_string();
     for elem in &aref.elements {
-        let s = vm.val_to_s(*elem);
+        let s = vm.val_to_s(*elem)?;
         if res.is_empty() {
             res = s.to_owned();
         } else {

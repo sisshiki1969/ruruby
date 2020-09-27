@@ -70,7 +70,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         }
     };
 
-    let receiver_string = vm.val_inspect(*receiver);
+    let receiver_string = vm.val_inspect(*receiver)?;
     let inspect = format!(
         "#<Enumerator: {}:{:?}{}>",
         receiver_string, method, arg_string

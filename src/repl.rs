@@ -74,7 +74,10 @@ pub fn repl_vm() {
                 match vm.run_repl(&parse_result, context) {
                     Ok(result) => {
                         parser.lexer.source_info = parse_result.source_info;
-                        println!("=> {}", vm.val_inspect(result));
+                        match vm.val_inspect(result) {
+                            Ok(inspect) => println!("=> {}", inspect),
+                            Err(err) => println!("Error occurs in result_val.inspect. {:?}", err),
+                        }
                     }
                     Err(err) => {
                         for (info, loc) in &err.info {
