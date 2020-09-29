@@ -2,6 +2,7 @@ pub mod array;
 pub mod class;
 pub mod comparable;
 pub mod complex;
+pub mod dir;
 pub mod enumerator;
 pub mod exception;
 pub mod fiber;

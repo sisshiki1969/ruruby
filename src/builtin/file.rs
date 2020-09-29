@@ -1,12 +1,10 @@
+use crate::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::*;
-//#[macro_use]
-use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("File");
-    let class = ClassRef::from(id, BuiltinClass::object());
+    let class = ClassRef::from_str("File", BuiltinClass::object());
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("join", join);
     class_val.add_builtin_class_method("basename", basename);
@@ -18,16 +16,20 @@ pub fn init(_globals: &mut Globals) -> Value {
     class_val.add_builtin_class_method("expand_path", expand_path);
     class_val.add_builtin_class_method("exist?", exist);
     class_val.add_builtin_class_method("directory?", directory);
+    class_val.add_builtin_class_method("file?", file);
+    class_val.add_builtin_class_method("realpath", realpath);
     class_val
 }
 
 // Utils
 
+/// Convert Ruby String value`string` to PathBuf.
 fn string_to_path(vm: &mut VM, mut string: Value, msg: &str) -> Result<PathBuf, RubyError> {
     let file = string.expect_string(vm, msg)?;
     Ok(PathBuf::from(file))
 }
 
+/// Convert Ruby String value`string` to canonicalized PathBuf.
 fn string_to_canonicalized_path(
     vm: &mut VM,
     string: Value,
@@ -198,13 +200,28 @@ fn directory(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
+fn file(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 1)?;
+    let b = match string_to_canonicalized_path(vm, args[0], "1st arg") {
+        Ok(path) => path.is_file(),
+        Err(_) => false,
+    };
+    Ok(Value::bool(b))
+}
+
+fn realpath(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 1)?;
+    let b = string_to_canonicalized_path(vm, args[0], "1st arg")?;
+    Ok(Value::string(b.to_string_lossy().to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
 
     #[test]
     fn file() {
-        let program = r#"
+        let program = r###"
             File.write("file.txt","foo")
             assert("foo", File.read("file.txt"))
             File.write("file.txt","bar")
@@ -217,27 +234,31 @@ mod tests {
             assert(true, File.directory? "src")
             assert(false, File.directory? "srcs")
             assert(false, File.directory? "Cargo.toml")
-        "#;
+            assert(false, File.file? "src")
+            assert(true, File.file? "Cargo.toml")
+            assert(false, File.file? "Cargo.tomlz")
+            assert("#{Dir.pwd}/Cargo.toml", File.realpath "Cargo.toml")
+            assert_error { File.realpath "Cargo.tomlz" }
+        "###;
         assert_script(program);
     }
 
     #[test]
-    #[ignore]
     fn file_expand_path() {
         let program = r###"
-            assert("#{ENV["HOME"]}/ruruby", File.expand_path("."))
-            assert("#{ENV["HOME"]}/ruruby", File.expand_path("", "."))
-            assert("#{ENV["HOME"]}", File.expand_path(".."))
-            assert("#{ENV["HOME"]}", File.expand_path("..", "."))
-            assert("/home", File.expand_path("../.."))
-            assert("/home", File.expand_path("../..", "."))
-            assert("/home", File.expand_path("../../", "."))
+            assert(Dir.pwd, File.expand_path("."))
+            assert(Dir.pwd, File.expand_path("", "."))
+            #assert("#{ENV["HOME"]}", File.expand_path(".."))
+            #assert("#{ENV["HOME"]}", File.expand_path("..", "."))
+            #assert("/home", File.expand_path("../.."))
+            #assert("/home", File.expand_path("../..", "."))
+            #assert("/home", File.expand_path("../../", "."))
             assert("/", File.expand_path("/"))
-            assert("#{ENV["HOME"]}/ruruby", File.expand_path("../", "tests"))
+            assert(Dir.pwd, File.expand_path("../", "tests"))
             assert("/home", File.expand_path("home", "/"))
-            assert("#{ENV["HOME"]}", File.expand_path("#{ENV["HOME"]}", "/"))
-            assert("#{ENV["HOME"]}/ruruby", File.expand_path("#{ENV["HOME"]}/ruruby", "/"))
-            assert("#{ENV["HOME"]}", File.expand_path("~"))
+            assert(Dir.home, File.expand_path("#{ENV["HOME"]}", "/"))
+            assert("/ruruby", File.expand_path("ruruby", "/"))
+            assert(Dir.home, File.expand_path("~"))
         "###;
         assert_script(program);
     }

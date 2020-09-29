@@ -235,6 +235,7 @@ impl Globals {
 
         init_class!("Math", math);
         init_class!("File", file);
+        init_class!("Dir", dir);
         init_class!("Process", process);
         init_class!("GC", gc);
         init_class!("Struct", structobj);
