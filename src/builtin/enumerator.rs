@@ -1,8 +1,7 @@
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Enumerator");
-    let mut class = ClassRef::from(id, BuiltinClass::object());
+    let mut class = ClassRef::from_str("Enumerator", BuiltinClass::object());
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("each", each);
     class.add_builtin_method_by_str("map", map);

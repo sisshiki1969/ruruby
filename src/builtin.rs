@@ -1,4 +1,5 @@
 pub mod array;
+pub mod basicobject;
 pub mod class;
 pub mod comparable;
 pub mod complex;

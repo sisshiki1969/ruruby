@@ -199,6 +199,15 @@ impl Lexer {
         }
     }
 
+    pub fn has_trailing_space(&self, tok: &Token) -> bool {
+        let pos = tok.loc.1 as usize + 1;
+        if pos >= self.len {
+            false
+        } else {
+            self.source_info.code[pos].is_ascii_whitespace()
+        }
+    }
+
     /// Get token as a regular expression.
     pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
         match self.read_regexp_sub()? {

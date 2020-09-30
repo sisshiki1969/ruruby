@@ -291,7 +291,8 @@ fn int_index() {
 #[test]
 fn objects() {
     let program = r#"
-        assert(nil, Object.superclass)
+        assert(nil, BasicObject.superclass)
+        assert(BasicObject, Object.superclass)
         assert(Object, Module.superclass)
         assert(Module, Class.superclass)
         assert(Object, Integer.superclass)
@@ -301,6 +302,8 @@ fn objects() {
         assert(Object, Proc.superclass)
         assert(Object, Method.superclass)
 
+        assert(Class, Object.class)
+        assert(Class, BasicObject.class)
         assert(Class, Module.class)
         assert(Class, Class.class)
         assert(Class, Integer.class)

@@ -434,7 +434,7 @@ mod test {
     #[test]
     fn ancestors() {
         let program = r#"
-        assert([Class, Module, Object, Kernel], Class.ancestors)
+        assert([Class, Module, Object, Kernel, BasicObject], Class.ancestors)
         assert([Kernel], Object.included_modules)
         assert([Kernel], Class.included_modules)
         assert(true, Class.singleton_class.singleton_class?)

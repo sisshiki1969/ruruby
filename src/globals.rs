@@ -55,16 +55,16 @@ type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
     fn new() -> Self {
-        let object_id = IdentId::OBJECT;
-        let module_id = IdentId::get_id("Module");
-        let class_id = IdentId::get_id("Class");
-        let object_class = ClassRef::from(object_id, None);
+        let basic_class = ClassRef::from_str("BasicObject", None);
+        let mut basic = Value::bootstrap_class(basic_class);
+        let object_class = ClassRef::from_str("Object", basic);
         let mut object = Value::bootstrap_class(object_class);
-        let module_class = ClassRef::from(module_id, object);
+        let module_class = ClassRef::from_str("Module", object);
         let mut module = Value::bootstrap_class(module_class);
-        let class_class = ClassRef::from(class_id, module);
+        let class_class = ClassRef::from_str("Class", module);
         let mut class = Value::bootstrap_class(class_class);
 
+        basic.set_class(class);
         object.set_class(class);
         module.set_class(class);
         class.set_class(class);
@@ -161,6 +161,7 @@ impl Globals {
         let mut builtins = BuiltinRef::new(BuiltinClass::new());
         BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
         let mut object = builtins.object;
+        let basic = object.superclass().unwrap();
         let module = builtins.module;
         let class = builtins.class;
         let main_object = Value::ordinary_object(object);
@@ -189,6 +190,7 @@ impl Globals {
         module::init(&mut globals);
         class::init(&mut globals);
         object::init(&mut globals);
+        basicobject::init(&mut globals);
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
@@ -211,6 +213,7 @@ impl Globals {
             };
         }
 
+        object.set_var_by_str("BasicObject", basic);
         set_builtin_class!("Object", object);
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);

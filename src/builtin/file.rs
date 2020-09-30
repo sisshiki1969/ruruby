@@ -223,21 +223,21 @@ mod tests {
     fn file() {
         let program = r###"
             File.write("file.txt","foo")
-            assert("foo", File.read("file.txt"))
+            assert "foo", File.read("file.txt")
             File.write("file.txt","bar")
-            assert("bar", File.read("file.txt"))
-            assert("file.txt", File.basename("/home/usr/file.txt"))
-            assert(".txt", File.extname("/home/usr/file.txt"))
-            assert("/home/usr", File.dirname("/home/usr/file.txt"))
-            assert(true, File.exist? "Cargo.toml")
-            assert(false, File.exist? "Cargo.tomlz")
-            assert(true, File.directory? "src")
-            assert(false, File.directory? "srcs")
-            assert(false, File.directory? "Cargo.toml")
-            assert(false, File.file? "src")
-            assert(true, File.file? "Cargo.toml")
-            assert(false, File.file? "Cargo.tomlz")
-            assert("#{Dir.pwd}/Cargo.toml", File.realpath "Cargo.toml")
+            assert "bar", File.read("file.txt")
+            assert "file.txt", File.basename("/home/usr/file.txt")
+            assert ".txt", File.extname("/home/usr/file.txt")
+            assert "/home/usr", File.dirname("/home/usr/file.txt")
+            assert true, File.exist? "Cargo.toml"
+            assert false, File.exist? "Cargo.tomlz"
+            assert true, File.directory? "src"
+            assert false, File.directory? "srcs"
+            assert false, File.directory? "Cargo.toml"
+            assert false, File.file? "src"
+            assert true, File.file? "Cargo.toml"
+            assert false, File.file? "Cargo.tomlz"
+            assert "#{Dir.pwd}/Cargo.toml", File.realpath "Cargo.toml"
             assert_error { File.realpath "Cargo.tomlz" }
         "###;
         assert_script(program);

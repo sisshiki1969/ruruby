@@ -1865,25 +1865,28 @@ impl Parser {
     fn is_command_(&mut self) -> Result<bool, RubyError> {
         let tok = self.peek_no_term()?;
         match tok.kind {
-            TokenKind::Ident(_)
-            | TokenKind::InstanceVar(_)
-            | TokenKind::GlobalVar(_)
-            | TokenKind::Const(_)
-            | TokenKind::IntegerLit(_)
-            | TokenKind::FloatLit(_)
-            | TokenKind::ImaginaryLit(_)
-            | TokenKind::StringLit(_)
-            | TokenKind::OpenString(_, _, _) => Ok(true),
+            TokenKind::LineTerm => Ok(false),
             TokenKind::Punct(p) => match p {
                 Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => Ok(true),
-                Punct::Colon => Ok(!self.lexer.trailing_space()),
+                Punct::Colon
+                | Punct::Plus
+                | Punct::Minus
+                | Punct::Mul
+                | Punct::Div
+                | Punct::Rem => Ok(!self.lexer.has_trailing_space(&tok)),
                 _ => Ok(false),
             },
             TokenKind::Reserved(r) => match r {
-                Reserved::False | Reserved::Nil | Reserved::True | Reserved::Self_ => Ok(true),
-                _ => Ok(false),
+                Reserved::Do
+                | Reserved::If
+                | Reserved::Unless
+                | Reserved::While
+                | Reserved::Until
+                | Reserved::And
+                | Reserved::Or => Ok(false),
+                _ => Ok(true),
             },
-            _ => Ok(false),
+            _ => Ok(true),
         }
     }
 
@@ -1894,6 +1897,8 @@ impl Parser {
             Punct::Plus => Ok(IdentId::_ADD),
             Punct::Minus => Ok(IdentId::_SUB),
             Punct::Mul => Ok(IdentId::_MUL),
+            Punct::Shl => Ok(IdentId::_SHL),
+            Punct::Shr => Ok(IdentId::get_id(">>")),
             Punct::Cmp => Ok(IdentId::_CMP),
             Punct::Eq => Ok(IdentId::_EQ),
             Punct::Ne => Ok(IdentId::_NEQ),
@@ -1902,6 +1907,7 @@ impl Parser {
             Punct::Gt => Ok(IdentId::_GT),
             Punct::Ge => Ok(IdentId::_GE),
             Punct::TEq => Ok(IdentId::_TEQ),
+            Punct::Match => Ok(IdentId::get_id("=~")),
             Punct::LBracket => {
                 if self.consume_punct_no_term(Punct::RBracket)? {
                     if self.consume_punct_no_term(Punct::Assign)? {
