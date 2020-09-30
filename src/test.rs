@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 pub fn eval_script(script: impl Into<String>, expected: Value) {
     let mut globals = GlobalsRef::new_globals();
-    let mut vm = globals.new_vm();
+    let mut vm = globals.create_main_fiber();
     let res = vm.run(PathBuf::from(""), &script.into());
     #[cfg(feature = "perf")]
     vm.perf.print_perf();
@@ -25,7 +25,7 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
 
 pub fn assert_script(script: impl Into<String>) {
     let mut globals = GlobalsRef::new_globals();
-    let mut vm = globals.new_vm();
+    let mut vm = globals.create_main_fiber();
     let res = vm.run(PathBuf::from(""), &script.into());
     #[cfg(feature = "perf")]
     vm.perf.print_perf();
@@ -43,7 +43,7 @@ pub fn assert_script(script: impl Into<String>) {
 
 pub fn assert_error(script: impl Into<String>) {
     let mut globals = GlobalsRef::new_globals();
-    let mut vm = globals.new_vm();
+    let mut vm = globals.create_main_fiber();
     let program = script.into();
     let res = vm.run(PathBuf::from(""), &program);
     #[cfg(feature = "perf")]

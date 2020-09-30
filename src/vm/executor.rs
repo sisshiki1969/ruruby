@@ -81,7 +81,7 @@ impl GC for VM {
 
 impl VM {
     pub fn new(globals: GlobalsRef) -> Self {
-        let vm = VM {
+        let mut vm = VM {
             globals,
             root_path: vec![],
             fiber_state: FiberState::Created,
@@ -97,6 +97,7 @@ impl VM {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
+        vm.exec_file("src/startup/startup.rb");
         vm
     }
 

@@ -30,7 +30,7 @@ pub fn repl_vm() {
     let mut program = String::new();
     let mut parser = Parser::new();
     let mut globals = GlobalsRef::new_globals();
-    let mut vm = globals.new_vm();
+    let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb".to_string()));
     let mut level = parser.get_context_depth();
     let method = MethodRef::new(MethodInfo::default());

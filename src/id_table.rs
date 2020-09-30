@@ -69,10 +69,11 @@ impl IdentId {
     pub const _LT: IdentId = id!(16);
     pub const _LE: IdentId = id!(17);
     pub const _CMP: IdentId = id!(18);
-    pub const _ENUM_FUNC: IdentId = id!(19);
-    pub const _INDEX: IdentId = id!(20);
-    pub const _INDEX_ASSIGN: IdentId = id!(21);
-    pub const TO_S: IdentId = id!(22);
+    pub const _TEQ: IdentId = id!(19);
+    pub const _ENUM_FUNC: IdentId = id!(20);
+    pub const _INDEX: IdentId = id!(21);
+    pub const _INDEX_ASSIGN: IdentId = id!(22);
+    pub const TO_S: IdentId = id!(23);
 }
 
 impl IdentId {
@@ -131,6 +132,7 @@ impl IdentifierTable {
         table.set_ident_id("<", IdentId::_LT);
         table.set_ident_id("<=", IdentId::_LE);
         table.set_ident_id("<=>", IdentId::_CMP);
+        table.set_ident_id("===", IdentId::_TEQ);
         table.set_ident_id("/enum", IdentId::_ENUM_FUNC);
         table.set_ident_id("[]", IdentId::_INDEX);
         table.set_ident_id("[]=", IdentId::_INDEX_ASSIGN);

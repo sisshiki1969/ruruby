@@ -145,7 +145,7 @@ impl GlobalsRef {
         Ref::new(Globals::new())
     }
 
-    pub fn new_vm(&mut self) -> VMRef {
+    pub fn create_main_fiber(&mut self) -> VMRef {
         let vm = VMRef::new(VM::new(self.to_owned()));
         self.main_fiber = Some(vm);
         self.fibers.push(vm);
