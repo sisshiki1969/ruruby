@@ -898,6 +898,7 @@ impl Codegen {
         let mut block_param = false;
         let mut param_ident = vec![];
         let mut keyword_params = FxHashMap::default();
+        let mut kwrest_param = false;
         let mut iseq = ISeq::new();
 
         self.context_stack
@@ -939,6 +940,10 @@ impl Codegen {
                         None => {}
                     }
                 }
+                NodeKind::KWRestParam(id) => {
+                    param_ident.push(*id);
+                    kwrest_param = true;
+                }
                 NodeKind::BlockParam(id) => {
                     param_ident.push(*id);
                     block_param = true;
@@ -964,6 +969,7 @@ impl Codegen {
                 block_param,
                 param_ident,
                 keyword_params,
+                kwrest_param,
                 iseq,
                 lvar_collector.clone(),
                 iseq_sourcemap,

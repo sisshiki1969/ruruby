@@ -73,6 +73,7 @@ impl LvarId {
 pub struct LvarCollector {
     id: usize,
     table: FxHashMap<IdentId, LvarId>,
+    kwrest: Option<LvarId>,
     block: Option<LvarId>,
 }
 
@@ -82,6 +83,7 @@ impl LvarCollector {
         LvarCollector {
             id: 0,
             table: FxHashMap::default(),
+            kwrest: None,
             block: None,
         }
     }
@@ -120,6 +122,15 @@ impl LvarCollector {
         Some(lvar)
     }
 
+    fn insert_kwrest_param(&mut self, val: IdentId) -> Option<LvarId> {
+        let lvar = match self.insert_new(val) {
+            Some(lvar) => lvar,
+            None => return None,
+        };
+        self.kwrest = Some(lvar);
+        Some(lvar)
+    }
+
     pub fn get(&self, val: &IdentId) -> Option<&LvarId> {
         self.table.get(val)
     }
@@ -131,6 +142,10 @@ impl LvarCollector {
             }
         }
         None
+    }
+
+    pub fn kwrest_param(&self) -> Option<LvarId> {
+        self.kwrest
     }
 
     pub fn block_param(&self) -> Option<LvarId> {
@@ -258,6 +273,15 @@ impl Parser {
     /// If a parameter with the same name already exists, return error.
     fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
         if self.context_mut().lvar.insert_new(id).is_none() {
+            return Err(self.error_unexpected(loc, "Duplicated argument name."));
+        }
+        Ok(())
+    }
+
+    /// Add the `id` as a new parameter in the current context.
+    /// If a parameter with the same name already exists, return error.
+    fn new_kwrest_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
+        if self.context_mut().lvar.insert_kwrest_param(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
@@ -1474,7 +1498,7 @@ impl Parser {
             if self.consume_punct(Punct::BitOr)? {
                 vec![]
             } else {
-                let params = self.parse_params(TokenKind::Punct(Punct::BitOr))?;
+                let params = self.parse_formal_params(TokenKind::Punct(Punct::BitOr))?;
                 self.consume_punct(Punct::BitOr)?;
                 params
             }
@@ -2293,9 +2317,9 @@ impl Parser {
         }
     }
 
-    /// Parse parameters.
+    /// Parse formal parameters.
     /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
-    fn parse_params(&mut self, terminator: TokenKind) -> Result<Vec<Node>, RubyError> {
+    fn parse_formal_params(&mut self, terminator: TokenKind) -> Result<Vec<Node>, RubyError> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
             Reqired,
@@ -2330,6 +2354,21 @@ impl Parser {
 
                 args.push(Node::new_splat_param(id, loc));
                 self.new_param(id, self.prev_loc())?;
+            } else if self.consume_punct(Punct::DMul)? {
+                // Keyword rest param
+                let id = self.expect_ident()?;
+                loc = loc.merge(self.prev_loc());
+                if state >= Kind::KWRest {
+                    return Err(self.error_unexpected(
+                        loc,
+                        "Keyword rest parameter is not allowed in ths position.",
+                    ));
+                } else {
+                    state = Kind::KWRest;
+                }
+
+                args.push(Node::new_kwrest_param(id, loc));
+                self.new_kwrest_param(id, self.prev_loc())?;
             } else {
                 let id = self.expect_ident()?;
                 if self.consume_punct(Punct::Assign)? {
@@ -2415,7 +2454,7 @@ impl Parser {
             return Ok(vec![]);
         }
 
-        let args = self.parse_params(TokenKind::Punct(Punct::RParen))?;
+        let args = self.parse_formal_params(TokenKind::Punct(Punct::RParen))?;
 
         if paren_flag {
             self.expect_punct(Punct::RParen)?

@@ -152,7 +152,9 @@ impl Context {
         }
         let mut context = Context::new(self_value, args.block, iseq, outer, caller);
         let params = &iseq.params;
-        let kw = if params.keyword_params.is_empty() {
+        let kw = if params.keyword_params.is_empty() && !params.kwrest_param {
+            // if no keyword param nor kwrest param exists in formal parameters,
+            // make Hash.
             args.kw_arg
         } else {
             Value::nil()
@@ -167,6 +169,7 @@ impl Context {
             }
         }
         context.set_arguments(args, kw);
+        let mut kwrest = FxHashMap::default();
         if !args.kw_arg.is_nil() && kw.is_nil() {
             let keyword = args.kw_arg.as_hash().unwrap();
             for (k, v) in keyword.iter() {
@@ -175,10 +178,19 @@ impl Context {
                     Some(lvar) => {
                         context[*lvar] = v;
                     }
-                    None => return Err(vm.error_argument("Undefined keyword.")),
+                    None => {
+                        if params.kwrest_param {
+                            kwrest.insert(HashKey(k), v);
+                        } else {
+                            return Err(vm.error_argument("Undefined keyword."));
+                        }
+                    }
                 };
             }
         };
+        if let Some(id) = iseq.lvar.kwrest_param() {
+            context[id] = Value::hash_from_map(kwrest);
+        }
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match args.block {
                 Some(block) => {

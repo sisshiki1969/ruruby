@@ -95,6 +95,7 @@ pub struct ISeqParams {
     pub block_param: bool,
     pub param_ident: Vec<IdentId>,
     pub keyword_params: FxHashMap<IdentId, LvarId>,
+    pub kwrest_param: bool,
 }
 
 impl ISeqParams {
@@ -104,6 +105,7 @@ impl ISeqParams {
             && self.post_params == 0
             && !self.block_param
             && self.keyword_params.is_empty()
+            && !self.kwrest_param
     }
 }
 
@@ -151,6 +153,7 @@ impl ISeqInfo {
         block_param: bool,
         param_ident: Vec<IdentId>,
         keyword_params: FxHashMap<IdentId, LvarId>,
+        kwrest_param: bool,
         iseq: ISeq,
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
@@ -166,6 +169,7 @@ impl ISeqInfo {
             block_param,
             param_ident,
             keyword_params,
+            kwrest_param,
         };
         let opt_flag = params.is_opt();
         ISeqInfo {
@@ -194,6 +198,7 @@ impl ISeqInfo {
             false,
             vec![],
             FxHashMap::default(),
+            false,
             ISeq::new(),
             LvarCollector::new(),
             vec![],

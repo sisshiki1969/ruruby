@@ -65,10 +65,15 @@ impl std::fmt::Debug for ObjKind {
                         "{:#?}, {:#?}, {:#?}",
                         aref.elements[0], aref.elements[1], aref.elements[2]
                     )?,
+                    4 => write!(
+                        f,
+                        "{:#?}, {:#?}, {:#?}, {:#?}",
+                        aref.elements[0], aref.elements[1], aref.elements[2], aref.elements[3]
+                    )?,
                     n => write!(
                         f,
-                        "{:#?}, {:#?}, {:#?}.. {} items",
-                        aref.elements[0], aref.elements[1], aref.elements[2], n
+                        "{:#?}, {:#?}, {:#?}, {:#?}.. {} items",
+                        aref.elements[0], aref.elements[1], aref.elements[2], aref.elements[3], n
                     )?,
                 }
                 write!(f, "]")

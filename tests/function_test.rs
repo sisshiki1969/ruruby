@@ -1,9 +1,7 @@
 #![feature(test)]
 extern crate ruruby;
-extern crate test;
 use ruruby::test::*;
 use ruruby::*;
-use test::Bencher;
 
 #[test]
 fn func1() {
@@ -33,7 +31,7 @@ fn func2() {
     let expected = Value::integer(120);
     eval_script(program, expected);
 }
-
+/*
 #[bench]
 fn func3(b: &mut Bencher) {
     let program = "
@@ -60,7 +58,7 @@ fn func4(b: &mut Bencher) {
         assert(120, fact(5))";
     b.iter(|| assert_script(program));
 }
-
+*/
 #[test]
 fn optional_param() {
     let program = "
@@ -95,6 +93,25 @@ fn parameters() {
         assert([1,2,3,4,100,77,[],5,6,100], fn(1,2,3,4,5,6))
         assert([1,2,3,4,100,77,[],5,6,88], fn(1,2,3,4,5,6,kw:88))
         assert([1,2,3,4,5,6,[7,8],9,10,55], fn(1,2,3,4,5,6,7,8,9,10,kw:55))
+        ";
+    assert_script(program);
+}
+
+#[test]
+fn kwrest_parameters() {
+    let program = "
+        def fn(a, *b, **c)
+            [a, b, c]
+        end
+        def gn(a, *b, kw2:50, **c)
+            [a, b, kw2, c]
+        end
+    
+        assert([1,[],{}], fn(1))
+        assert([1,[2],{}], fn(1,2))
+        assert([1,[2,3],{}], fn(1,2,3))
+        assert([1,[2,3,4],{kw1:77,kw2:88}], fn(1,2,3,4,kw1:77,kw2:88))
+        assert([1,[2,3,4],88,{kw1:77}], gn(1,2,3,4,kw1:77,kw2:88))
         ";
     assert_script(program);
 }

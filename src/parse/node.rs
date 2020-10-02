@@ -87,6 +87,7 @@ pub enum NodeKind {
     OptionalParam(IdentId, Box<Node>),
     RestParam(IdentId),
     KeywordParam(IdentId, Box<Option<Node>>),
+    KWRestParam(IdentId),
     BlockParam(IdentId),
 
     MethodDef(IdentId, Vec<Node>, Box<Node>, LvarCollector), // id, params, body
@@ -346,6 +347,10 @@ impl Node {
 
     pub fn new_keyword_param(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
         Node::new(NodeKind::KeywordParam(id, Box::new(default)), loc)
+    }
+
+    pub fn new_kwrest_param(id: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::KWRestParam(id), loc)
     }
 
     pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
