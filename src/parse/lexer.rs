@@ -389,7 +389,11 @@ impl Lexer {
                     }
                     '&' => {
                         if self.consume('&') {
-                            return Ok(self.new_punct(Punct::LAnd));
+                            if self.consume('=') {
+                                return Ok(self.new_punct(Punct::AssignOp(BinOp::LAnd)));
+                            } else {
+                                return Ok(self.new_punct(Punct::LAnd));
+                            }
                         } else if self.consume('=') {
                             return Ok(self.new_punct(Punct::AssignOp(BinOp::BitAnd)));
                         } else if self.consume('.') {

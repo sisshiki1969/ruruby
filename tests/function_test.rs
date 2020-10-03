@@ -162,7 +162,7 @@ fn block_argument() {
 
 #[test]
 fn splat_argument() {
-    // https://docs.ruby-lang.org/ja/latest/doc/spec=2fcall.html#block_arg
+    // https://docs.ruby-lang.org/ja/latest/doc/spec=2fcall.html
     let program = r#"
         def foo(*param)
             param
@@ -172,6 +172,22 @@ fn splat_argument() {
         assert [1], foo(1, *[])
         assert [1, 2, 3, 4, 5], foo(1, *[2, 3, 4], 5)
         assert [1, 2, 3, 4, 5, 6], foo(1, *[2, 3, 4], 5, *[6])
+    "#;
+    assert_script(program);
+}
+
+#[test]
+fn double_splat_argument() {
+    // https://docs.ruby-lang.org/ja/latest/doc/spec=2fcall.html#
+    let program = r#"
+        def foo(**param)
+            param
+        end
+
+        assert ({}), foo(**{})
+        assert ({a:2,b:3}), foo(a:2,b:3)
+        #assert ({a:2,b:3}), foo(**{a:2,b:3})
+        #assert ({a:2,b:3,c:1}), foo(**{a:2,b:3},c:1)
     "#;
     assert_script(program);
 }

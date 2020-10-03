@@ -73,25 +73,22 @@ pub enum NodeKind {
         ensure: Box<Node>,
     },
     Proc {
-        params: Vec<Node>,
+        params: Vec<FormalParam>,
         body: Box<Node>,
         lvar: LvarCollector,
     },
     Break(Box<Node>),
     Next(Box<Node>),
     Return(Box<Node>),
-    Yield(SendArgs),
-
-    Param(IdentId),
-    PostParam(IdentId),
-    OptionalParam(IdentId, Box<Node>),
-    RestParam(IdentId),
-    KeywordParam(IdentId, Box<Option<Node>>),
-    KWRestParam(IdentId),
-    BlockParam(IdentId),
-
-    MethodDef(IdentId, Vec<Node>, Box<Node>, LvarCollector), // id, params, body
-    SingletonMethodDef(Box<Node>, IdentId, Vec<Node>, Box<Node>, LvarCollector), // singleton_class, id, params, body
+    Yield(ArgList),
+    MethodDef(IdentId, Vec<FormalParam>, Box<Node>, LvarCollector), // id, params, body
+    SingletonMethodDef(
+        Box<Node>,
+        IdentId,
+        Vec<FormalParam>,
+        Box<Node>,
+        LvarCollector,
+    ), // singleton_class, id, params, body
     ClassDef {
         id: IdentId,
         superclass: Box<Node>,
@@ -107,25 +104,91 @@ pub enum NodeKind {
     Send {
         receiver: Box<Node>,
         method: IdentId,
-        send_args: SendArgs,
+        arglist: ArgList,
         completed: bool,
         safe_nav: bool,
-    }, //receiver, method_name, args
+    },
+}
+
+pub type FormalParam = Annot<ParamKind>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParamKind {
+    Param(IdentId),
+    Post(IdentId),
+    Optional(IdentId, Box<Node>), // name, default expr
+    Rest(IdentId),
+    Keyword(IdentId, Option<Box<Node>>), // name, default expr
+    KWRest(IdentId),
+    Block(IdentId),
+}
+
+impl FormalParam {
+    pub fn req_param(id: IdentId, loc: Loc) -> Self {
+        FormalParam::new(ParamKind::Param(id), loc)
+    }
+
+    pub fn optional(id: IdentId, default: Node, loc: Loc) -> Self {
+        FormalParam::new(ParamKind::Optional(id, Box::new(default)), loc)
+    }
+
+    pub fn rest(id: IdentId, loc: Loc) -> Self {
+        FormalParam::new(ParamKind::Rest(id), loc)
+    }
+
+    pub fn post(id: IdentId, loc: Loc) -> Self {
+        FormalParam::new(ParamKind::Post(id), loc)
+    }
+
+    pub fn keyword(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
+        FormalParam::new(
+            ParamKind::Keyword(id, default.map_or(None, |x| Some(Box::new(x)))),
+            loc,
+        )
+    }
+
+    pub fn kwrest(id: IdentId, loc: Loc) -> Self {
+        FormalParam::new(ParamKind::KWRest(id), loc)
+    }
+
+    pub fn block(id: IdentId, loc: Loc) -> Self {
+        FormalParam::new(ParamKind::Block(id), loc)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SendArgs {
+pub struct ArgList {
     pub args: Vec<Node>,
     pub kw_args: Vec<(IdentId, Node)>,
+    pub kw_rest: Vec<Node>,
     pub block: Option<Box<Node>>,
 }
 
-impl SendArgs {
+impl ArgList {
     pub fn default() -> Self {
-        SendArgs {
+        ArgList {
             args: vec![],
             kw_args: vec![],
+            kw_rest: vec![],
             block: None,
+        }
+    }
+
+    pub fn with_args(args: Vec<Node>) -> Self {
+        ArgList {
+            args: args,
+            kw_args: vec![],
+            kw_rest: vec![],
+            block: None,
+        }
+    }
+
+    pub fn with_block(block: Box<Node>) -> Self {
+        ArgList {
+            args: vec![],
+            kw_args: vec![],
+            kw_rest: vec![],
+            block: Some(block),
         }
     }
 }
@@ -329,34 +392,6 @@ impl Node {
         Node::new(NodeKind::LocalVar(id), loc)
     }
 
-    pub fn new_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::Param(id), loc)
-    }
-
-    pub fn new_optional_param(id: IdentId, default: Node, loc: Loc) -> Self {
-        Node::new(NodeKind::OptionalParam(id, Box::new(default)), loc)
-    }
-
-    pub fn new_splat_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::RestParam(id), loc)
-    }
-
-    pub fn new_post_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::PostParam(id), loc)
-    }
-
-    pub fn new_keyword_param(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
-        Node::new(NodeKind::KeywordParam(id, Box::new(default)), loc)
-    }
-
-    pub fn new_kwrest_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::KWRestParam(id), loc)
-    }
-
-    pub fn new_block_param(id: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::BlockParam(id), loc)
-    }
-
     pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
         Node::new(NodeKind::Ident(id), loc)
     }
@@ -400,7 +435,7 @@ impl Node {
 
     pub fn new_method_decl(
         id: IdentId,
-        params: Vec<Node>,
+        params: Vec<FormalParam>,
         body: Node,
         lvar: LvarCollector,
     ) -> Self {
@@ -411,7 +446,7 @@ impl Node {
     pub fn new_singleton_method_decl(
         singleton: Node,
         id: IdentId,
-        params: Vec<Node>,
+        params: Vec<FormalParam>,
         body: Node,
         lvar: LvarCollector,
     ) -> Self {
@@ -461,7 +496,7 @@ impl Node {
     pub fn new_send(
         receiver: Node,
         method: IdentId,
-        send_args: SendArgs,
+        arglist: ArgList,
         completed: bool,
         safe_nav: bool,
         loc: Loc,
@@ -470,7 +505,7 @@ impl Node {
             NodeKind::Send {
                 receiver: Box::new(receiver),
                 method,
-                send_args,
+                arglist,
                 completed,
                 safe_nav,
             },
@@ -485,16 +520,12 @@ impl Node {
         safe_nav: bool,
         loc: Loc,
     ) -> Self {
-        let send_args = SendArgs {
-            args: vec![],
-            kw_args: vec![],
-            block: None,
-        };
+        let arglist = ArgList::default();
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
                 method,
-                send_args,
+                arglist,
                 completed,
                 safe_nav,
             },
@@ -571,11 +602,11 @@ impl Node {
         Node::new(NodeKind::Return(Box::new(val)), loc)
     }
 
-    pub fn new_yield(args: SendArgs, loc: Loc) -> Self {
+    pub fn new_yield(args: ArgList, loc: Loc) -> Self {
         Node::new(NodeKind::Yield(args), loc)
     }
 
-    pub fn new_proc(params: Vec<Node>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
+    pub fn new_proc(params: Vec<FormalParam>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
         Node::new(
             NodeKind::Proc {
@@ -649,12 +680,12 @@ impl std::fmt::Display for Node {
             NodeKind::Send {
                 receiver,
                 method,
-                send_args,
+                arglist,
                 ..
             } => {
                 write!(f, "[ Send [{}]: [{:?}]", receiver, method)?;
-                for node in &send_args.args {
-                    write!(f, "({}) ", node)?;
+                for param in &arglist.args {
+                    write!(f, "({:?}) ", param)?;
                 }
                 write!(f, "]")?;
                 Ok(())
@@ -669,8 +700,8 @@ impl std::fmt::Display for Node {
             }
             NodeKind::MethodDef(id, args, body, _) => {
                 write!(f, "[ MethodDef {:?}: PARAM(", id)?;
-                for arg in args {
-                    write!(f, "({}) ", arg)?;
+                for param in args {
+                    write!(f, "({:?}) ", param)?;
                 }
                 write!(f, ") BODY({})]", body)?;
                 Ok(())

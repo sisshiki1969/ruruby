@@ -204,6 +204,7 @@ impl VM {
         for a in args.iter() {
             self.temp_stack.push(*a);
         }
+        self.temp_stack.push(args.kw_arg);
     }
 
     /// Push objects to the temporary area.
@@ -795,7 +796,12 @@ impl VM {
                 Inst::GET_LOCAL => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let val = self.current_context()[id];
-                    self.stack_push(val);
+                    if val.is_uninitialized() {
+                        self.current_context()[id] = Value::nil();
+                        self.stack_push(Value::nil());
+                    } else {
+                        self.stack_push(val);
+                    }
                     self.pc += 5;
                 }
                 Inst::LVAR_ADDI => {
@@ -2188,15 +2194,38 @@ impl VM {
     fn vm_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
-        let flag = iseq.read16(self.pc + 7);
+        let kw_rest_num = iseq.read8(self.pc + 7);
+        let flag = iseq.read8(self.pc + 8);
         let block = iseq.read64(self.pc + 9);
         let cache = iseq.read32(self.pc + 17);
         let methodref = self.get_method_from_icache(cache, receiver, method_id)?;
 
+        let mut kwrest = vec![];
+        for _ in 0..kw_rest_num {
+            let val = self.stack_pop();
+            eprintln!("{:?}", val);
+            kwrest.push(val);
+        }
+
         let keyword = if flag & 0b01 == 1 {
-            self.stack_pop()
-        } else {
+            let mut val = self.stack_pop();
+            let hash = val.as_mut_hash().unwrap();
+            for h in kwrest {
+                for (k, v) in h.expect_hash(self, "Arg")? {
+                    hash.insert(k, v);
+                }
+            }
+            val
+        } else if kwrest.len() == 0 {
             Value::nil()
+        } else {
+            let mut hash = FxHashMap::default();
+            for h in kwrest {
+                for (k, v) in h.expect_hash(self, "Arg")? {
+                    hash.insert(HashKey(k), v);
+                }
+            }
+            Value::hash_from_map(hash)
         };
 
         let block = if block != 0 {

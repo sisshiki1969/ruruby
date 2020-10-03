@@ -142,7 +142,7 @@ impl Context {
             if iseq.is_block() {
                 context.from_args_opt_block(iseq, args)?;
             } else {
-                let req_len = iseq.params.req_params;
+                let req_len = iseq.params.req;
                 vm.check_args_num(args.len(), req_len)?;
                 for i in 0..req_len {
                     context[i] = args[i];
@@ -152,7 +152,7 @@ impl Context {
         }
         let mut context = Context::new(self_value, args.block, iseq, outer, caller);
         let params = &iseq.params;
-        let kw = if params.keyword_params.is_empty() && !params.kwrest_param {
+        let kw = if params.keyword.is_empty() && !params.kwrest {
             // if no keyword param nor kwrest param exists in formal parameters,
             // make Hash.
             args.kw_arg
@@ -161,11 +161,11 @@ impl Context {
         };
         if !iseq.is_block() {
             let len = args.len() + if kw.is_nil() { 0 } else { 1 };
-            let min = params.req_params + params.post_params;
-            if params.rest_param {
+            let min = params.req + params.post;
+            if params.rest {
                 vm.check_args_min(len, min)?;
             } else {
-                vm.check_args_range(len, min, min + params.opt_params)?;
+                vm.check_args_range(len, min, min + params.opt)?;
             }
         }
         context.set_arguments(args, kw);
@@ -174,12 +174,12 @@ impl Context {
             let keyword = args.kw_arg.as_hash().unwrap();
             for (k, v) in keyword.iter() {
                 let id = k.as_symbol().unwrap();
-                match params.keyword_params.get(&id) {
+                match params.keyword.get(&id) {
                     Some(lvar) => {
                         context[*lvar] = v;
                     }
                     None => {
-                        if params.kwrest_param {
+                        if params.kwrest {
                             kwrest.insert(HashKey(k), v);
                         } else {
                             return Err(vm.error_argument("Undefined keyword."));
@@ -204,12 +204,13 @@ impl Context {
     }
 
     fn from_args_opt_block(&mut self, iseq: ISeqRef, args: &Args) -> Result<(), RubyError> {
-        //let mut context = Context::new(self_val, args.block, iseq, outer, caller);
         let args_len = args.len();
-        let req_len = iseq.params.req_params;
+        let req_len = iseq.params.req;
 
         if args_len == 1 && req_len > 1 {
             match args[0].as_array() {
+                // if a single array argument is given for the block which has multiple parameters,
+                // the arguments must be expanded.
                 Some(ary) => {
                     let args = &ary.elements;
                     self.fill_arguments_opt(args, args.len(), req_len);
@@ -240,7 +241,7 @@ impl Context {
             for i in 0..args_len {
                 self[i] = args[i];
             }
-            // fill rest req params with nil.
+            // fill the remaining req params with nil.
             for i in args_len..req_len {
                 self[i] = Value::nil();
             }
@@ -249,8 +250,8 @@ impl Context {
 
     fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
         let iseq = self.iseq_ref.unwrap();
-        let req_len = iseq.params.req_params;
-        let post_len = iseq.params.post_params;
+        let req_len = iseq.params.req;
+        let post_len = iseq.params.post;
         if iseq.is_block() && args.len() == 1 && req_len + post_len > 1 {
             match args[0].as_array() {
                 Some(ary) => {
@@ -274,10 +275,10 @@ impl Context {
     ) {
         let params = &iseq.params;
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
-        let req_len = params.req_params;
-        let opt_len = params.opt_params;
-        let rest_len = if params.rest_param { 1 } else { 0 };
-        let post_len = params.post_params;
+        let req_len = params.req;
+        let opt_len = params.opt;
+        let rest_len = if params.rest { 1 } else { 0 };
+        let post_len = params.post;
         let arg_len = args_len + kw_len;
         if post_len != 0 {
             // fill post_req params.

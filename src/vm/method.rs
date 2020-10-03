@@ -88,24 +88,37 @@ pub struct ISeqInfo {
 
 #[derive(Debug, Clone)]
 pub struct ISeqParams {
-    pub req_params: usize,
-    pub opt_params: usize,
-    pub rest_param: bool,
-    pub post_params: usize,
-    pub block_param: bool,
     pub param_ident: Vec<IdentId>,
-    pub keyword_params: FxHashMap<IdentId, LvarId>,
-    pub kwrest_param: bool,
+    pub req: usize,
+    pub opt: usize,
+    pub rest: bool,
+    pub post: usize,
+    pub block: bool,
+    pub keyword: FxHashMap<IdentId, LvarId>,
+    pub kwrest: bool,
 }
 
 impl ISeqParams {
+    pub fn default() -> Self {
+        ISeqParams {
+            param_ident: vec![],
+            req: 0,
+            opt: 0,
+            rest: false,
+            post: 0,
+            block: false,
+            keyword: FxHashMap::default(),
+            kwrest: false,
+        }
+    }
+
     pub fn is_opt(&self) -> bool {
-        self.opt_params == 0
-            && !self.rest_param
-            && self.post_params == 0
-            && !self.block_param
-            && self.keyword_params.is_empty()
-            && !self.kwrest_param
+        self.opt == 0
+            && !self.rest
+            && self.post == 0
+            && !self.block
+            && self.keyword.is_empty()
+            && !self.kwrest
     }
 }
 
@@ -146,14 +159,7 @@ impl ISeqInfo {
     pub fn new(
         method: MethodRef,
         name: Option<IdentId>,
-        req_params: usize,
-        opt_params: usize,
-        rest_param: bool,
-        post_params: usize,
-        block_param: bool,
-        param_ident: Vec<IdentId>,
-        keyword_params: FxHashMap<IdentId, LvarId>,
-        kwrest_param: bool,
+        params: ISeqParams,
         iseq: ISeq,
         lvar: LvarCollector,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
@@ -161,16 +167,6 @@ impl ISeqInfo {
         kind: ISeqKind,
     ) -> Self {
         let lvars = lvar.len();
-        let params = ISeqParams {
-            req_params,
-            opt_params,
-            rest_param,
-            post_params,
-            block_param,
-            param_ident,
-            keyword_params,
-            kwrest_param,
-        };
         let opt_flag = params.is_opt();
         ISeqInfo {
             method,
@@ -191,14 +187,7 @@ impl ISeqInfo {
         ISeqInfo::new(
             method,
             None,
-            0,
-            0,
-            false,
-            0,
-            false,
-            vec![],
-            FxHashMap::default(),
-            false,
+            ISeqParams::default(),
             ISeq::new(),
             LvarCollector::new(),
             vec![],

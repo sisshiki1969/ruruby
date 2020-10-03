@@ -247,6 +247,18 @@ fn op10() {
 }
 
 #[test]
+fn op11() {
+    let program = "
+        assert(nil, a&&=4)
+        a = 3
+        assert(4, a&&=4)
+        assert(4, b||=4)
+        assert(4, b||=5)
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn op_negate() {
     let program = "
     a = 3.5

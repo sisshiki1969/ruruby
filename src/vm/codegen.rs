@@ -1,6 +1,6 @@
 use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
-use crate::parse::node::{BinOp, Node, NodeKind, UnOp};
+use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -270,6 +270,10 @@ impl Codegen {
 }
 
 impl Codegen {
+    fn push8(iseq: &mut ISeq, num: u8) {
+        iseq.push(num as u8);
+    }
+
     fn push16(iseq: &mut ISeq, num: u16) {
         iseq.push(num as u8);
         iseq.push((num >> 8) as u8);
@@ -596,14 +600,16 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        flag: usize,
+        kw_rest_num: usize,
+        flag: u8,
         block: Option<MethodRef>,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND);
         Codegen::push32(iseq, method.into());
         Codegen::push16(iseq, args_num as u32 as u16);
-        Codegen::push16(iseq, flag as u32 as u16);
+        Codegen::push8(iseq, kw_rest_num as u32 as u16 as u8);
+        Codegen::push8(iseq, flag);
         Codegen::push64(
             iseq,
             match block {
@@ -620,14 +626,16 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        flag: usize,
+        kw_rest_num: usize,
+        flag: u8,
         block: Option<MethodRef>,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND_SELF);
         Codegen::push32(iseq, method.into());
         Codegen::push16(iseq, args_num as u32 as u16);
-        Codegen::push16(iseq, flag as u32 as u16);
+        Codegen::push8(iseq, kw_rest_num as u32 as u16 as u8);
+        Codegen::push8(iseq, flag);
         Codegen::push64(
             iseq,
             match block {
@@ -875,7 +883,7 @@ impl Codegen {
     pub fn gen_iseq(
         &mut self,
         globals: &mut Globals,
-        params: &[Node],
+        param_list: &[FormalParam],
         node: &Node,
         lvar_collector: &LvarCollector,
         use_value: bool,
@@ -891,64 +899,45 @@ impl Codegen {
             self.method_stack.push(methodref)
         }
         let save_loc = self.loc;
-        let mut req_params = 0;
-        let mut opt_params = 0;
-        let mut rest_param = false;
-        let mut post_params = 0;
-        let mut block_param = false;
-        let mut param_ident = vec![];
-        let mut keyword_params = FxHashMap::default();
-        let mut kwrest_param = false;
+        let mut params = ISeqParams::default();
         let mut iseq = ISeq::new();
 
         self.context_stack
             .push(Context::from(lvar_collector.clone_table(), kind));
-        for (lvar_id, param) in params.iter().enumerate() {
+        for (lvar_id, param) in param_list.iter().enumerate() {
             match &param.kind {
-                NodeKind::Param(id) => {
-                    param_ident.push(*id);
-                    req_params += 1;
+                ParamKind::Param(id) => {
+                    params.param_ident.push(*id);
+                    params.req += 1;
                 }
-                NodeKind::PostParam(id) => {
-                    param_ident.push(*id);
-                    post_params += 1;
+                ParamKind::Post(id) => {
+                    params.param_ident.push(*id);
+                    params.post += 1;
                 }
-                NodeKind::OptionalParam(id, default) => {
-                    param_ident.push(*id);
-                    opt_params += 1;
-                    self.gen_check_local(&mut iseq, *id)?;
-                    let src1 = self.gen_jmp_if_f(&mut iseq);
-                    self.gen(globals, &mut iseq, default, true)?;
-                    self.gen_set_local(&mut iseq, *id);
-                    Codegen::write_disp_from_cur(&mut iseq, src1);
+                ParamKind::Optional(id, default) => {
+                    params.param_ident.push(*id);
+                    params.opt += 1;
+                    self.gen_default_expr(globals, &mut iseq, *id, default)?;
                 }
-                NodeKind::RestParam(id) => {
-                    param_ident.push(*id);
-                    rest_param = true;
+                ParamKind::Rest(id) => {
+                    params.param_ident.push(*id);
+                    params.rest = true;
                 }
-                NodeKind::KeywordParam(id, default) => {
-                    param_ident.push(*id);
-                    keyword_params.insert(*id, LvarId::from_usize(lvar_id));
-                    match &**default {
-                        Some(default) => {
-                            self.gen_check_local(&mut iseq, *id)?;
-                            let src1 = self.gen_jmp_if_f(&mut iseq);
-                            self.gen(globals, &mut iseq, &default, true)?;
-                            self.gen_set_local(&mut iseq, *id);
-                            Codegen::write_disp_from_cur(&mut iseq, src1);
-                        }
-                        None => {}
+                ParamKind::Keyword(id, default) => {
+                    params.param_ident.push(*id);
+                    params.keyword.insert(*id, LvarId::from_usize(lvar_id));
+                    if let Some(default) = default {
+                        self.gen_default_expr(globals, &mut iseq, *id, default)?
                     }
                 }
-                NodeKind::KWRestParam(id) => {
-                    param_ident.push(*id);
-                    kwrest_param = true;
+                ParamKind::KWRest(id) => {
+                    params.param_ident.push(*id);
+                    params.kwrest = true;
                 }
-                NodeKind::BlockParam(id) => {
-                    param_ident.push(*id);
-                    block_param = true;
+                ParamKind::Block(id) => {
+                    params.param_ident.push(*id);
+                    params.block = true;
                 }
-                _ => return Err(self.error_syntax("Parameters should be identifier.", param.loc)),
             }
         }
 
@@ -962,14 +951,7 @@ impl Codegen {
             iseq: ISeqRef::new(ISeqInfo::new(
                 methodref,
                 name,
-                req_params,
-                opt_params,
-                rest_param,
-                post_params,
-                block_param,
-                param_ident,
-                keyword_params,
-                kwrest_param,
+                params,
                 iseq,
                 lvar_collector.clone(),
                 iseq_sourcemap,
@@ -1021,6 +1003,21 @@ impl Codegen {
             }
         }
         Ok(methodref)
+    }
+
+    fn gen_default_expr(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        id: IdentId,
+        default: &Node,
+    ) -> Result<(), RubyError> {
+        self.gen_check_local(iseq, id)?;
+        let src1 = self.gen_jmp_if_f(iseq);
+        self.gen(globals, iseq, default, true)?;
+        self.gen_set_local(iseq, id);
+        Codegen::write_disp_from_cur(iseq, src1);
+        Ok(())
     }
 
     /// Generate `cond` + JMP_IF_FALSE.
@@ -1242,7 +1239,7 @@ impl Codegen {
                 }
             }
             NodeKind::Ident(id) => {
-                self.gen_send_self(globals, iseq, *id, 0, 0, None);
+                self.gen_send_self(globals, iseq, *id, 0, 0, 0, None);
                 if !use_value {
                     self.gen_pop(iseq)
                 };
@@ -1497,7 +1494,7 @@ impl Codegen {
                     _ => unreachable!(),
                 };
                 self.gen(globals, iseq, iter, true)?;
-                self.gen_send(globals, iseq, IdentId::get_id("each"), 0, 0, Some(block));
+                self.gen_send(globals, iseq, IdentId::get_id("each"), 0, 0, 0, Some(block));
                 if !use_value {
                     self.gen_pop(iseq)
                 };
@@ -1746,29 +1743,34 @@ impl Codegen {
             NodeKind::Send {
                 receiver,
                 method,
-                send_args,
+                arglist,
                 safe_nav,
                 ..
             } => {
                 let loc = self.loc;
                 let mut no_splat_flag = true;
-                for arg in &send_args.args {
+                // push positional args.
+                for arg in &arglist.args {
                     if let NodeKind::Splat(_) = arg.kind {
                         no_splat_flag = false;
                     };
                     self.gen(globals, iseq, arg, true)?;
                 }
-                // A flag whether keyword parametera exist or not.
-                let kw_flag = send_args.kw_args.len() != 0;
+                // push keword args as a Hash.
+                let kw_flag = arglist.kw_args.len() != 0;
                 if kw_flag {
-                    for (id, default) in &send_args.kw_args {
+                    for (id, default) in &arglist.kw_args {
                         self.gen_symbol(iseq, *id);
                         self.gen(globals, iseq, default, true)?;
                     }
-                    self.gen_create_hash(iseq, send_args.kw_args.len());
+                    self.gen_create_hash(iseq, arglist.kw_args.len());
+                }
+                // push keyword rest args.
+                for arg in &arglist.kw_rest {
+                    self.gen(globals, iseq, arg, true)?;
                 }
                 let mut block_flag = false;
-                let block_ref = match &send_args.block {
+                let block_ref = match &arglist.block {
                     Some(block) => match &block.kind {
                         // Block literal ({})
                         NodeKind::Proc { params, body, lvar } => {
@@ -1794,11 +1796,16 @@ impl Codegen {
                     },
                     None => None,
                 };
-                // If the method call without block nor keyword/block/splat arguments, gen OPT_SEND.
-                if !block_flag && !kw_flag && block_ref.is_none() && no_splat_flag {
+                // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
+                if !block_flag
+                    && !kw_flag
+                    && block_ref.is_none()
+                    && no_splat_flag
+                    && arglist.kw_rest.is_empty()
+                {
                     if NodeKind::SelfValue == receiver.kind {
                         self.loc = loc;
-                        self.gen_opt_send_self(globals, iseq, *method, send_args.args.len());
+                        self.gen_opt_send_self(globals, iseq, *method, arglist.args.len());
                     } else {
                         self.gen(globals, iseq, receiver, true)?;
                         if *safe_nav {
@@ -1807,11 +1814,11 @@ impl Codegen {
                             iseq.push(Inst::NE);
                             let src = self.gen_jmp_if_f(iseq);
                             self.loc = loc;
-                            self.gen_opt_send(globals, iseq, *method, send_args.args.len());
+                            self.gen_opt_send(globals, iseq, *method, arglist.args.len());
                             Codegen::write_disp_from_cur(iseq, src);
                         } else {
                             self.loc = loc;
-                            self.gen_opt_send(globals, iseq, *method, send_args.args.len());
+                            self.gen_opt_send(globals, iseq, *method, arglist.args.len());
                         }
                     }
                 } else {
@@ -1821,7 +1828,8 @@ impl Codegen {
                             globals,
                             iseq,
                             *method,
-                            send_args.args.len(),
+                            arglist.args.len(),
+                            arglist.kw_rest.len(),
                             create_flag(kw_flag, block_flag),
                             block_ref,
                         );
@@ -1832,7 +1840,8 @@ impl Codegen {
                             globals,
                             iseq,
                             *method,
-                            send_args.args.len(),
+                            arglist.args.len(),
+                            arglist.kw_rest.len(),
                             create_flag(kw_flag, block_flag),
                             block_ref,
                         );
@@ -1843,21 +1852,20 @@ impl Codegen {
                 };
 
                 /// Create flag for argument info.
-                /// 0b0011
-                ///     ||
-                ///     |+- 1: keyword args exists. 0: no keyword args,
-                ///     +-- 1: a block arg exists. 0: no block arg.
-                fn create_flag(kw_flag: bool, block_flag: bool) -> usize {
-                    (if kw_flag { 1usize } else { 0usize })
-                        + (if block_flag { 2usize } else { 0usize })
+                /// 0b0000_0011
+                ///          ||
+                ///          |+- 1: keyword args exists. 0: no keyword args,
+                ///          +-- 1: a block arg exists. 0: no block arg.
+                fn create_flag(kw_flag: bool, block_flag: bool) -> u8 {
+                    (if kw_flag { 1 } else { 0 }) + (if block_flag { 2 } else { 0 })
                 }
             }
-            NodeKind::Yield(send_args) => {
+            NodeKind::Yield(arglist) => {
                 //let loc = self.loc;
-                for arg in &send_args.args {
+                for arg in &arglist.args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                self.gen_yield(iseq, send_args.args.len());
+                self.gen_yield(iseq, arglist.args.len());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
