@@ -1369,14 +1369,13 @@ impl Parser {
         &mut self,
         punct: impl Into<Option<Punct>>,
     ) -> Result<ArgList, RubyError> {
-        let (flag, punct) = match punct.into() {
-            Some(punct) => (true, punct),
-            None => (false, Punct::Arrow /* dummy */),
-        };
+        let punct = punct.into();
         let mut arglist = ArgList::default();
         loop {
-            if flag && self.consume_punct(punct)? {
-                return Ok(arglist);
+            if let Some(punct) = punct {
+                if self.consume_punct(punct)? {
+                    return Ok(arglist);
+                }
             }
             if self.consume_punct(Punct::Mul)? {
                 // splat argument
@@ -1415,8 +1414,8 @@ impl Parser {
                 };
             }
         }
-        if flag {
-            self.expect_punct(punct)?
+        if let Some(punct) = punct {
+            self.consume_punct(punct)?;
         };
         Ok(arglist)
     }
@@ -1537,6 +1536,9 @@ impl Parser {
                 }
                 Punct::LBrace => self.parse_hash_literal(),
                 Punct::Colon => {
+                    if self.lexer.trailing_space() {
+                        return Err(self.error_unexpected(loc, "Unexpected ':'."));
+                    }
                     // Symbol literal
                     let token = self.get()?;
                     let symbol_loc = self.prev_loc();
@@ -1601,6 +1603,16 @@ impl Parser {
                 }
                 Punct::Question => {
                     let node = self.parse_char_literal()?;
+                    Ok(node)
+                }
+                Punct::Shl => {
+                    if self.lexer.trailing_space() {
+                        return Err(
+                            self.error_unexpected(loc, r#"Expected '-', '~', '"', '`', or '\''."#)
+                        );
+                    }
+                    let string = self.lexer.read_heredocument()?;
+                    let node = Node::new_string(string, loc);
                     Ok(node)
                 }
                 _ => {
@@ -1841,7 +1853,8 @@ impl Parser {
                 | Punct::Minus
                 | Punct::Mul
                 | Punct::Div
-                | Punct::Rem => Ok(!self.lexer.has_trailing_space(&tok)),
+                | Punct::Rem
+                | Punct::Shl => Ok(!self.lexer.has_trailing_space(&tok)),
                 _ => Ok(false),
             },
             TokenKind::Reserved(r) => match r {

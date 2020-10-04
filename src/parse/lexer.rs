@@ -873,6 +873,69 @@ impl Lexer {
         };
         Ok(ch)
     }
+
+    pub fn read_heredocument(&mut self) -> Result<String, RubyError> {
+        #[derive(Clone, PartialEq)]
+        enum Mode {
+            Normal,
+            AllowIndent,
+        };
+        let mut mode = Mode::Normal;
+        let mut delimiter = vec![];
+        match self.peek() {
+            Some(ch) if ch == '-' => {
+                mode = Mode::AllowIndent;
+                self.get()?;
+            }
+            _ => {}
+        };
+        loop {
+            match self.peek() {
+                Some(ch) if ch.is_ascii_alphanumeric() || ch == '_' => {
+                    self.get()?;
+                    delimiter.push(ch);
+                }
+                _ => break,
+            };
+        }
+        if delimiter.len() == 0 {
+            return Err(self.error_unexpected(self.pos));
+        }
+        let delimiter: String = delimiter.iter().collect();
+        //eprintln!("delimiter:{}", delimiter);
+        //self.save_state();
+        self.goto_eol();
+        self.get()?;
+        let mut res = String::new();
+        loop {
+            let start = self.pos as usize;
+            self.goto_eol();
+            let end = self.pos as usize;
+            let line: String = self.source_info.code[start..end].iter().collect();
+            //eprintln!("line:[{}]", line);
+            if mode == Mode::AllowIndent {
+                if line.trim_start() == delimiter {
+                    break;
+                }
+            } else {
+                if line == delimiter {
+                    break;
+                }
+            }
+            if self.get().is_err() {
+                return Err(self.error_parse(
+                    &format!(
+                        r#"Can not find string "{}" anywhere before EOF."#,
+                        delimiter
+                    ),
+                    self.pos,
+                ));
+            };
+            res = format!("{}{}\n", res, line);
+        }
+        //self.restore_state();
+        Ok(res)
+    }
 }
 
 // Low level API

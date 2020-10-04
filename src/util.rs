@@ -222,9 +222,9 @@ impl SourceInfo {
                 Line::new((idx + 1) as u32, top, pos as u32)
             })
             .collect();
-        if line_top <= (self.code.len() - 1) as u32 {
+        if line_top <= self.code.len() as u32 {
             let line_no = lines.len() as u32;
-            lines.push(Line::new(line_no, line_top, (self.code.len() - 1) as u32));
+            lines.push(Line::new(line_no, line_top, self.code.len() as u32));
         }
 
         let mut found = false;
@@ -238,7 +238,11 @@ impl SourceInfo {
             };
 
             let mut start = line.top;
-            let mut end = line.end;
+            let mut end = if line.end as usize >= self.code.len() {
+                self.code.len() as u32 - 1
+            } else {
+                line.end
+            };
             if self[end] == '\n' && end > 0 {
                 end -= 1
             }

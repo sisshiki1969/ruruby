@@ -27,6 +27,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("lambda", lambda);
     kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
     kernel_class.add_builtin_method_by_str("Array", kernel_array);
+    kernel_class.add_builtin_method_by_str("at_exit", at_exit);
     let kernel = Value::module(kernel_class);
     return kernel;
 }
@@ -383,6 +384,10 @@ fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let res = vm.send0(IdentId::get_id("to_a"), args[0])?;
     Ok(res)
+}
+
+fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
+    Ok(_self_val)
 }
 
 #[cfg(test)]

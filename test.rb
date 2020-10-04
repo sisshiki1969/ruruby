@@ -1,1 +1,5 @@
-puts $0
+puts <<-EOS
+this is ruby.
+are you hungry?
+i love Rust.
+    EOS

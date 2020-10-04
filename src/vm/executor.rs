@@ -2232,16 +2232,20 @@ impl VM {
             Some(MethodRef::from_u64(block))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
-            let method = val
-                .as_proc()
-                .ok_or_else(|| {
-                    self.error_argument(format!("Block argument must be Proc. given:{:?}", val))
-                })?
-                .context
-                .iseq_ref
-                .unwrap()
-                .method;
-            Some(method)
+            if val.is_nil() {
+                None
+            } else {
+                let method = val
+                    .as_proc()
+                    .ok_or_else(|| {
+                        self.error_argument(format!("Block argument must be Proc. given:{:?}", val))
+                    })?
+                    .context
+                    .iseq_ref
+                    .unwrap()
+                    .method;
+                Some(method)
+            }
         } else {
             None
         };
