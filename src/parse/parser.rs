@@ -2501,7 +2501,11 @@ impl Parser {
             }
             self.parse_comp_stmt()?;
         }
-
+        let else_ = if self.consume_reserved(Reserved::Else)? {
+            self.parse_comp_stmt()?
+        } else {
+            Node::new_nop(body.loc())
+        };
         let ensure = if self.consume_reserved(Reserved::Ensure)? {
             self.parse_comp_stmt()?
         } else {
@@ -2509,12 +2513,6 @@ impl Parser {
         };
         self.expect_reserved(Reserved::End)?;
         let loc = body.loc();
-        Ok(Node::new_begin(
-            body,
-            vec![],
-            Node::new_nop(loc),
-            ensure,
-            loc,
-        ))
+        Ok(Node::new_begin(body, vec![], else_, ensure, loc))
     }
 }

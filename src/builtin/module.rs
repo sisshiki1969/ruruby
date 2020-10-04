@@ -20,7 +20,9 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("module_eval", module_eval);
     module_class.add_builtin_method_by_str("class_eval", module_eval);
     module_class.add_builtin_method_by_str("alias_method", module_alias_method);
+    module_class.add_builtin_method_by_str("public", public);
     module_class.add_builtin_method_by_str("private", private);
+    module_class.add_builtin_method_by_str("protected", protected);
 }
 
 fn teq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -294,7 +296,15 @@ fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+fn public(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    Ok(self_val)
+}
+
 fn private(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    Ok(self_val)
+}
+
+fn protected(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(self_val)
 }
 
@@ -324,6 +334,18 @@ mod test {
         assert(true, A === c)
         assert(true, Object === c)
         assert(false, Integer === c)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn module_visibility() {
+        let program = r#"
+        class A
+            public
+            private
+            protected
+        end
         "#;
         assert_script(program);
     }
