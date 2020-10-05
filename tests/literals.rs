@@ -108,6 +108,47 @@ fn interpolated_string_lit1() {
 }
 
 #[test]
+fn heredocument1() {
+    let program = r###"
+    a = <<RUBY
+We
+love
+Ruby.
+RUBY
+    assert "We\nlove\nRuby.\n", a
+    b = <<-RUBY
+We
+love
+Ruby.
+    RUBY
+    assert "We\nlove\nRuby.\n", b
+
+    "###;
+    assert_script(program);
+}
+
+#[test]
+fn heredocument_error1() {
+    let program = r###"
+    << RUBY
+RUBY
+    "###;
+    assert_error(program);
+}
+
+#[test]
+fn heredocument_error2() {
+    let program = r###"
+    <<RUBY
+We
+love
+Ruby.
+    RUBY
+    "###;
+    assert_error(program);
+}
+
+#[test]
 fn float_lit1() {
     let program = "
         assert(123000000.0, 12.3e7)

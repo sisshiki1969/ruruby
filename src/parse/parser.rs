@@ -1879,7 +1879,7 @@ impl Parser {
             Punct::Minus => Ok(IdentId::_SUB),
             Punct::Mul => Ok(IdentId::_MUL),
             Punct::Shl => Ok(IdentId::_SHL),
-            Punct::Shr => Ok(IdentId::get_id(">>")),
+            Punct::Shr => Ok(IdentId::_SHR),
             Punct::Cmp => Ok(IdentId::_CMP),
             Punct::Eq => Ok(IdentId::_EQ),
             Punct::Ne => Ok(IdentId::_NEQ),

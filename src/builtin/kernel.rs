@@ -81,7 +81,7 @@ fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Built-in function "assert".
 fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2)?;
-    if !vm.eval_eq(args[0], args[1]) {
+    if !vm.eval_eq(args[0], args[1])? {
         let res = format!(
             "Assertion error: Expected: {:?} Actual: {:?}",
             args[0], args[1],

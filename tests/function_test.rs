@@ -221,6 +221,22 @@ fn paren() {
 }
 
 #[test]
+fn command() {
+    let program = r#"
+        def foo(*x)
+            x
+        end
+        #assert_error { eval("p (7, 8)") }
+        assert([:a], foo :a)
+        assert([1], foo +1)
+        assert([-1], foo -1)
+        #assert([1,2], foo *[1,2])
+        #assert(["We love Ruby"], foo %w!We love Ruby!)
+    "#;
+    assert_script(program);
+}
+
+#[test]
 fn func_name_extention() {
     let program = r#"
         def while!
@@ -229,8 +245,8 @@ fn func_name_extention() {
         def while?
             99
         end
-        assert(88, while!)
-        assert(99, while?)
+        assert 88, while!
+        assert 99, while?
         foo = 100
         def foo!
             77
@@ -270,6 +286,70 @@ fn assign_like_method() {
         f=Foo.new
         f.foo=77
         assert(77, f.foo)
+    "#;
+    assert_script(program);
+}
+
+#[test]
+fn op_method() {
+    let program = r#"
+    class Foo
+        attr_accessor :x
+        def initialize(x)
+            @x = x
+        end
+        def +(other)
+            self.x + other.x
+        end
+        def -(other)
+            self.x - other.x
+        end
+        def *(other)
+            self.x * other.x
+        end
+        def ==(other)
+            self.x == other.x
+        end
+        def !=(other)
+            self.x != other.x
+        end
+        def <=(other)
+            self.x <= other.x
+        end
+        def >=(other)
+            self.x >= other.x
+        end
+        def <<(other)
+            self.x << other.x
+        end
+        def >>(other)
+            self.x >> other.x
+        end
+        def [](idx)
+            self.x[idx]
+        end
+        def []=(idx, val)
+            self.x[idx] = val
+        end
+    end
+    assert 100, Foo.new(25) + Foo.new(75)
+    assert 50, Foo.new(75) - Foo.new(25)
+    assert 75, Foo.new(25) * Foo.new(3)
+    assert true, Foo.new(25) == Foo.new(25)
+    assert false, Foo.new(26) == Foo.new(25)
+    assert false, Foo.new(25) != Foo.new(25)
+    assert true, Foo.new(26) != Foo.new(25)
+    assert true, Foo.new(25) >= Foo.new(25)
+    assert false, Foo.new(24) >= Foo.new(25)
+    assert true, Foo.new(25) <= Foo.new(25)
+    assert false, Foo.new(26) <= Foo.new(25)
+    assert 6, Foo.new(25) >> Foo.new(2)
+    assert 100, Foo.new(25) << Foo.new(2)
+    assert 3, Foo.new([1,2,3,4])[2]
+    ary = Foo.new([5,4,3,2,1,0])
+    assert 3, ary[2]
+    ary[2] = 77
+    assert 77, ary[2]
     "#;
     assert_script(program);
 }

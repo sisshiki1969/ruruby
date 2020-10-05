@@ -285,7 +285,7 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     for lhs in lhs_v {
         let mut flag = true;
         for rhs in rhs_v {
-            if vm.eval_eq(*lhs, *rhs) {
+            if vm.eval_eq(*lhs, *rhs)? {
                 flag = false;
                 break;
             }
@@ -403,7 +403,7 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let target = args[0];
     let aref = self_val.as_array().unwrap();
     for item in aref.elements.iter() {
-        if vm.eval_eq(*item, target) {
+        if vm.eval_eq(*item, target)? {
             return Ok(Value::true_val());
         }
     }
@@ -823,7 +823,7 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             let other = args[0];
             let mut count = 0;
             for elem in &ary.elements {
-                if vm.eval_eq(*elem, other) {
+                if vm.eval_eq(*elem, other)? {
                     count += 1;
                 }
             }
