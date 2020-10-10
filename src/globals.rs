@@ -218,6 +218,8 @@ impl Globals {
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
 
+        init_class!("Numeric", numeric);
+
         init_builtin_class!("Integer", integer);
         init_builtin_class!("Complex", complex);
         init_builtin_class!("Float", float);

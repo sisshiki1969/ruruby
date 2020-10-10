@@ -105,7 +105,6 @@ pub enum NodeKind {
         receiver: Box<Node>,
         method: IdentId,
         arglist: ArgList,
-        completed: bool,
         safe_nav: bool,
     },
 }
@@ -497,7 +496,6 @@ impl Node {
         receiver: Node,
         method: IdentId,
         arglist: ArgList,
-        completed: bool,
         safe_nav: bool,
         loc: Loc,
     ) -> Self {
@@ -506,27 +504,19 @@ impl Node {
                 receiver: Box::new(receiver),
                 method,
                 arglist,
-                completed,
                 safe_nav,
             },
             loc,
         )
     }
 
-    pub fn new_send_noarg(
-        receiver: Node,
-        method: IdentId,
-        completed: bool,
-        safe_nav: bool,
-        loc: Loc,
-    ) -> Self {
+    pub fn new_send_noarg(receiver: Node, method: IdentId, safe_nav: bool, loc: Loc) -> Self {
         let arglist = ArgList::default();
         Node::new(
             NodeKind::Send {
                 receiver: Box::new(receiver),
                 method,
                 arglist,
-                completed,
                 safe_nav,
             },
             loc,

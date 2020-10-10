@@ -693,58 +693,12 @@ impl Parser {
         // | UNPARENTHESIZED-METHOD
         // | ! UNPARENTHESIZED-METHOD
         // | not NOT
-        // UNPARENTHESIZED-METHOD :
-        // | FNAME ARGS
-        // | PRIMARY . FNAME ARGS
-        // | PRIMARY :: FNAME ARGS
-        // | return ARGS
-        // | break ARGS
-        // | next ARGS
-        // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]*
-        // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]* . FNAME ARGS
-        // | COMMAND-WITH-DO-BLOCK [CHAIN-METHOD]* :: FNAME ARGS
-        // CHAIN-METOD : . FNAME
-        // | :: FNAME
-        // | . FNAME( ARGS )
-        // | :: FNAME( ARGS )
-        // COMMAND-WITH-DO-BLOCK : FNAME ARGS DO-BLOCK
-        // | PRIMARY . FNAME ARGS DO-BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
         let node = self.parse_arg()?;
         if self.consume_punct_no_term(Punct::Comma)? {
             // EXPR : MLHS `=' MRHS
             return Ok(self.parse_mul_assign(node)?);
         }
-        if node.is_operation() && self.is_command()? {
-            // FNAME ARGS
-            // FNAME ARGS DO-BLOCK
-            Ok(self.parse_command(node.as_method_name().unwrap(), node.loc())?)
-        } else if let Node {
-            // PRIMARY . FNAME ARGS
-            // PRIMARY . FNAME ARGS DO_BLOCK [CHAIN-METHOD]* [ . FNAME ARGS]
-            kind:
-                NodeKind::Send {
-                    method,
-                    receiver,
-                    mut arglist,
-                    completed: false,
-                    safe_nav,
-                    ..
-                },
-            loc,
-            ..
-        } = node
-        {
-            if self.is_command()? {
-                arglist = self.parse_arglist()?;
-            } else {
-                arglist.block = self.parse_block()?
-            };
-            let node = Node::new_send(*receiver, method, arglist, true, safe_nav, loc);
-            Ok(node)
-        } else {
-            // EXPR : ARG
-            Ok(node)
-        }
+        Ok(node)
     }
 
     fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
@@ -826,38 +780,18 @@ impl Parser {
     fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
         // FNAME ARGS
         // FNAME ARGS DO-BLOCK
-        let send_args = self.parse_arglist()?;
+        let send_args = self.parse_arglist_block()?;
         Ok(Node::new_send(
             Node::new_self(loc),
             operation,
             send_args,
-            true,
             false,
             loc,
         ))
     }
 
-    fn parse_arglist(&mut self) -> Result<ArgList, RubyError> {
-        let first_arg = self.parse_arg()?;
-        if self.is_line_term()? {
-            return Ok(ArgList::with_args(vec![first_arg]));
-        }
-
-        if first_arg.is_operation() && self.is_command()? {
-            let args =
-                vec![self.parse_command(first_arg.as_method_name().unwrap(), first_arg.loc())?];
-            return Ok(ArgList::with_args(args));
-        }
-
-        let mut arglist = ArgList::with_args(vec![first_arg]);
-        if self.consume_punct_no_term(Punct::Comma)? {
-            let res = self.parse_argument_list(None)?;
-            let mut new_args = res.args;
-            arglist.kw_args = res.kw_args;
-            arglist.kw_rest = res.kw_rest;
-            arglist.block = res.block;
-            arglist.args.append(&mut new_args);
-        }
+    fn parse_arglist_block(&mut self) -> Result<ArgList, RubyError> {
+        let mut arglist = self.parse_argument_list(None)?;
         match self.parse_block()? {
             Some(actual_block) => {
                 if arglist.block.is_some() {
@@ -871,36 +805,6 @@ impl Parser {
             None => {}
         };
         Ok(arglist)
-    }
-
-    fn is_command(&mut self) -> Result<bool, RubyError> {
-        let tok = self.peek_no_term()?;
-        match tok.kind {
-            TokenKind::Ident(_)
-            | TokenKind::InstanceVar(_)
-            | TokenKind::GlobalVar(_)
-            | TokenKind::Const(_)
-            | TokenKind::IntegerLit(_)
-            | TokenKind::FloatLit(_)
-            | TokenKind::StringLit(_)
-            | TokenKind::OpenString(_, _, _) => Ok(true),
-            TokenKind::Punct(p) => match p {
-                Punct::LParen
-                | Punct::LBracket
-                | Punct::LBrace
-                | Punct::Colon
-                | Punct::Scope
-                | Punct::Plus
-                | Punct::Minus
-                | Punct::Arrow => Ok(true),
-                _ => Ok(false),
-            },
-            TokenKind::Reserved(r) => match r {
-                Reserved::False | Reserved::Nil | Reserved::True => Ok(true),
-                _ => Ok(false),
-            },
-            _ => Ok(false),
-        }
     }
 
     fn parse_arg(&mut self) -> Result<Node, RubyError> {
@@ -1229,7 +1133,6 @@ impl Parser {
                 Node::new_self(loc),
                 node.as_method_name().unwrap(),
                 send_args,
-                true,
                 false,
                 loc,
             ))
@@ -1239,7 +1142,6 @@ impl Parser {
                 Node::new_self(loc),
                 node.as_method_name().unwrap(),
                 ArgList::with_block(block),
-                true,
                 false,
                 loc,
             ))
@@ -1269,21 +1171,19 @@ impl Parser {
     /// | PRIMARY . FNAME => completed: false
     fn parse_primary_method(&mut self, receiver: Node, safe_nav: bool) -> Result<Node, RubyError> {
         let (id, loc) = self.parse_method_name()?;
-        let trailing_space = self.lexer.trailing_space();
-        let (mut arglist, mut completed) = if !self.consume_punct_no_term(Punct::LParen)? {
-            if trailing_space && self.is_command_()? {
+        let mut arglist = if !self.consume_punct_no_term(Punct::LParen)? {
+            if self.is_command() {
                 return Ok(Node::new_send(
                     receiver,
                     id,
-                    self.parse_arglist()?,
-                    true,
+                    self.parse_arglist_block()?,
                     false,
                     loc,
                 ));
             }
-            (ArgList::default(), false)
+            ArgList::default()
         } else {
-            (self.parse_argument_list(Punct::RParen)?, true)
+            self.parse_argument_list(Punct::RParen)?
         };
         if let Some(block) = self.parse_block()? {
             if arglist.block.is_some() {
@@ -1293,14 +1193,11 @@ impl Parser {
             }
             arglist.block = Some(block);
         };
-        if arglist.block.is_some() {
-            completed = true;
-        };
         let node = match receiver.kind {
-            NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, true, false, loc),
+            NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, false, loc),
             _ => receiver,
         };
-        Ok(Node::new_send(node, id, arglist, completed, safe_nav, loc))
+        Ok(Node::new_send(node, id, arglist, safe_nav, loc))
     }
 
     fn parse_yield(&mut self) -> Result<Node, RubyError> {
@@ -1315,11 +1212,11 @@ impl Parser {
             return Ok(Node::new_yield(ArgList::default(), loc));
         };
         let args = if self.consume_punct(Punct::LParen)? {
-            let args = self.parse_arglist()?;
+            let args = self.parse_arglist_block()?;
             self.expect_punct(Punct::RParen)?;
             args
         } else {
-            self.parse_arglist()?
+            self.parse_arglist_block()?
         };
         return Ok(Node::new_yield(args, loc));
     }
@@ -1478,16 +1375,19 @@ impl Parser {
                 } else {
                     // FUNCTION or COMMAND or LHS for assignment
                     let node = Node::new_identifier(id, loc);
-                    match self.peek_no_term()?.kind {
-                        // Multiple assignment
-                        TokenKind::Punct(Punct::Comma) => return Ok(node),
-                        // Method call with block and no args
-                        TokenKind::Punct(Punct::LBrace) | TokenKind::Reserved(Reserved::Do) => {
-                            return Ok(self.parse_function_args(node)?)
+                    if let Ok(tok) = self.peek_no_term() {
+                        match tok.kind {
+                            // Multiple assignment
+                            TokenKind::Punct(Punct::Comma) => return Ok(node),
+                            // Method call with block and no args
+                            TokenKind::Punct(Punct::LBrace) | TokenKind::Reserved(Reserved::Do) => {
+                                return Ok(self.parse_function_args(node)?)
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     };
-                    if self.lexer.trailing_space() && self.is_command_()? {
+
+                    if self.is_command() {
                         Ok(self.parse_command(id, loc)?)
                     } else {
                         Ok(node)
@@ -1552,7 +1452,7 @@ impl Parser {
                             let node = self.parse_interporated_string_literal(&s, *term, *level)?;
                             let method = self.get_ident_id("to_sym");
                             let loc = symbol_loc.merge(node.loc());
-                            return Ok(Node::new_send_noarg(node, method, true, false, loc));
+                            return Ok(Node::new_send_noarg(node, method, false, loc));
                         }
                         _ => {
                             return Err(
@@ -1842,32 +1742,44 @@ impl Parser {
 }
 
 impl Parser {
-    fn is_command_(&mut self) -> Result<bool, RubyError> {
-        let tok = self.peek_no_term()?;
-        match tok.kind {
-            TokenKind::LineTerm => Ok(false),
-            TokenKind::Punct(p) => match p {
-                Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => Ok(true),
-                Punct::Colon
-                | Punct::Plus
-                | Punct::Minus
-                | Punct::Mul
-                | Punct::Div
-                | Punct::Rem
-                | Punct::Shl => Ok(!self.lexer.has_trailing_space(&tok)),
-                _ => Ok(false),
-            },
-            TokenKind::Reserved(r) => match r {
-                Reserved::Do
-                | Reserved::If
-                | Reserved::Unless
-                | Reserved::While
-                | Reserved::Until
-                | Reserved::And
-                | Reserved::Or => Ok(false),
-                _ => Ok(true),
-            },
-            _ => Ok(true),
+    fn is_command(&mut self) -> bool {
+        let tok = match self.peek_no_term() {
+            Ok(tok) => tok,
+            _ => return false,
+        };
+        if self.lexer.trailing_space() {
+            match tok.kind {
+                TokenKind::LineTerm => false,
+                TokenKind::Punct(p) => match p {
+                    Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => true,
+                    Punct::Colon
+                    | Punct::Plus
+                    | Punct::Minus
+                    | Punct::Mul
+                    | Punct::Div
+                    | Punct::Rem
+                    | Punct::Shl => !self.lexer.has_trailing_space(&tok),
+                    _ => false,
+                },
+                TokenKind::Reserved(r) => match r {
+                    Reserved::Do
+                    | Reserved::If
+                    | Reserved::Unless
+                    | Reserved::While
+                    | Reserved::Until
+                    | Reserved::And
+                    | Reserved::Or => false,
+                    _ => true,
+                },
+                _ => true,
+            }
+        } else {
+            match tok.kind {
+                TokenKind::GlobalVar(_) => true,
+                TokenKind::InstanceVar(_) => true,
+                TokenKind::StringLit(_) => true,
+                _ => false,
+            }
         }
     }
 

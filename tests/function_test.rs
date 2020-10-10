@@ -230,8 +230,8 @@ fn command() {
         assert([:a], foo :a)
         assert([1], foo +1)
         assert([-1], foo -1)
-        #assert([1,2], foo *[1,2])
-        #assert(["We love Ruby"], foo %w!We love Ruby!)
+        assert([1,2], foo *[1,2])
+        assert([["We","love","Ruby"]], foo %w!We love Ruby!)
     "#;
     assert_script(program);
 }

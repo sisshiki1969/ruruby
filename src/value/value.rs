@@ -395,6 +395,11 @@ impl Value {
         self.rvalue().get_var(id)
     }
 
+    pub fn get_var_by_str(&self, name: &str) -> Option<Value> {
+        let id = IdentId::get_id(name);
+        self.rvalue().get_var(id)
+    }
+
     pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
         match self.rvalue_mut().get_mut_var(id) {
             Some(entry) => {

@@ -17,6 +17,7 @@ pub mod kernel;
 pub mod math;
 pub mod method;
 pub mod module;
+pub mod numeric;
 pub mod object;
 pub mod process;
 pub mod procobj;
