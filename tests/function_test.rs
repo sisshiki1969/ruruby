@@ -226,7 +226,7 @@ fn command() {
         def foo(*x)
             x
         end
-        #assert_error { eval("p (7, 8)") }
+        assert_error { eval("p (7, 8)") }
         assert([:a], foo :a)
         assert([1], foo +1)
         assert([-1], foo -1)

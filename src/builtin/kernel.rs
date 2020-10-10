@@ -28,6 +28,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("Complex", kernel_complex);
     kernel_class.add_builtin_method_by_str("Array", kernel_array);
     kernel_class.add_builtin_method_by_str("at_exit", at_exit);
+    kernel_class.add_builtin_method_by_str("`", command);
     let kernel = Value::module(kernel_class);
     return kernel;
 }
@@ -390,6 +391,19 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
     Ok(_self_val)
 }
 
+fn command(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    use std::process::Command;
+    vm.check_args_num(args.len(), 1)?;
+    let mut arg = args[0].to_owned();
+    let mut input = arg.expect_string(vm, "Arg")?.split_whitespace();
+    let command = input.next().unwrap();
+    let output = match Command::new(command).args(input).output() {
+        Ok(ok) => ok,
+        Err(err) => return Err(vm.error_internal(format!("Command failed. {:?}", err.kind()))),
+    };
+    Ok(Value::bytes(output.stdout))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -514,6 +528,16 @@ mod test {
     fn kernel_array() {
         let program = r#"
         assert([1,2,3], Array([1,2,3]))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_command() {
+        let program = r#"
+        assert("Cargo.toml\n", `ls Cargo.toml`)
+        a = "toml"
+        assert("Cargo.toml\n", `ls Cargo.#{a}`)
         "#;
         assert_script(program);
     }

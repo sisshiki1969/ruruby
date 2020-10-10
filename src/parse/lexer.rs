@@ -237,9 +237,7 @@ impl Lexer {
         loop {
             self.token_start_pos = self.pos;
             if let Some(tok) = self.skip_whitespace() {
-                if tok.kind == TokenKind::LineTerm {
-                    return Ok(tok);
-                }
+                return Ok(tok);
             };
 
             let pos = self.pos;
@@ -256,6 +254,7 @@ impl Lexer {
                 match ch {
                     '#' => self.goto_eol(),
                     '"' => return self.read_string_literal_double(None, '\"', 0),
+                    '`' => return self.read_command_literal(None, '`', 0),
                     '\'' => {
                         let s = self.read_string_literal_single(None, '\'')?;
                         return Ok(self.new_stringlit(s));
@@ -643,7 +642,24 @@ impl Lexer {
     ) -> Result<Token, RubyError> {
         match self.read_interpolate(open, term, level)? {
             InterpolateState::Finished(s) => Ok(self.new_stringlit(s)),
-            InterpolateState::NewInterpolation(s, level) => Ok(self.new_open_dq(s, term, level)),
+            InterpolateState::NewInterpolation(s, level) => {
+                Ok(self.new_open_string(s, term, level))
+            }
+        }
+    }
+
+    /// Read command literal (`..`)
+    pub fn read_command_literal(
+        &mut self,
+        open: Option<char>,
+        term: char,
+        level: usize,
+    ) -> Result<Token, RubyError> {
+        match self.read_interpolate(open, term, level)? {
+            InterpolateState::Finished(s) => Ok(self.new_commandlit(s)),
+            InterpolateState::NewInterpolation(s, level) => {
+                Ok(self.new_open_command(s, term, level))
+            }
         }
     }
 
@@ -1045,13 +1061,9 @@ impl Lexer {
         loop {
             if self.consume('\n') {
                 res = Some(self.new_line_term());
-                self.token_start_pos = self.pos;
             } else if self.consume_whitespace() {
-                self.token_start_pos = self.pos;
-                if res.is_none() {
-                    res = Some(self.new_space());
-                }
             } else {
+                self.token_start_pos = self.pos;
                 return res;
             }
         }
@@ -1109,24 +1121,28 @@ impl Lexer {
         Annot::new(TokenKind::StringLit(string.into()), self.cur_loc())
     }
 
+    fn new_commandlit(&self, string: impl Into<String>) -> Token {
+        Annot::new(TokenKind::CommandLit(string.into()), self.cur_loc())
+    }
+
     fn new_punct(&self, punc: Punct) -> Token {
         Annot::new(TokenKind::Punct(punc), self.cur_loc())
     }
 
-    fn new_open_dq(&self, s: String, delimiter: char, level: usize) -> Token {
-        Token::new_open_dq(s, delimiter, level, self.cur_loc())
+    fn new_open_string(&self, s: String, delimiter: char, level: usize) -> Token {
+        Token::new_open_string(s, delimiter, level, self.cur_loc())
     }
 
     fn new_open_reg(&self, s: String) -> Token {
         Token::new_open_reg(s, self.cur_loc())
     }
 
-    fn new_percent(&self, kind: char, content: String) -> Token {
-        Token::new_percent(kind, content, self.cur_loc())
+    fn new_open_command(&self, s: String, delimiter: char, level: usize) -> Token {
+        Token::new_open_command(s, delimiter, level, self.cur_loc())
     }
 
-    fn new_space(&self) -> Token {
-        Annot::new(TokenKind::Space, self.cur_loc())
+    fn new_percent(&self, kind: char, content: String) -> Token {
+        Token::new_percent(kind, content, self.cur_loc())
     }
 
     fn new_line_term(&self) -> Token {

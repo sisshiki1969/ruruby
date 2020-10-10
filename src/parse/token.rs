@@ -4,6 +4,7 @@ use crate::value::real::Real;
 
 pub type Token = Annot<TokenKind>;
 
+#[cfg(test)]
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
@@ -35,7 +36,6 @@ impl std::fmt::Display for Token {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    Nop,
     EOF,
     Ident(String),
     InstanceVar(String),
@@ -45,12 +45,13 @@ pub enum TokenKind {
     FloatLit(f64),
     ImaginaryLit(Real),
     StringLit(String),
+    CommandLit(String),
     Reserved(Reserved),
     Punct(Punct),
     OpenString(String, char, usize), // (content, delimiter, paren_level)
     OpenRegex(String),
+    OpenCommand(String, char, usize),
     PercentNotation(char, String),
-    Space,
     LineTerm,
 }
 
@@ -179,8 +180,12 @@ impl Token {
         Annot::new(TokenKind::StringLit(string.into()), loc)
     }
 
-    pub fn new_open_dq(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
+    pub fn new_open_string(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
         Annot::new(TokenKind::OpenString(s.into(), delimiter, level), loc)
+    }
+
+    pub fn new_open_command(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
+        Annot::new(TokenKind::OpenCommand(s.into(), delimiter, level), loc)
     }
 
     pub fn new_open_reg(s: impl Into<String>, loc: Loc) -> Self {
@@ -195,20 +200,12 @@ impl Token {
         Annot::new(TokenKind::Punct(punct), loc)
     }
 
-    pub fn new_space(loc: Loc) -> Self {
-        Annot::new(TokenKind::Space, loc)
-    }
-
     pub fn new_line_term(loc: Loc) -> Self {
         Annot::new(TokenKind::LineTerm, loc)
     }
 
     pub fn new_eof(pos: u32) -> Self {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
-    }
-
-    pub fn new_nop() -> Self {
-        Annot::new(TokenKind::Nop, Loc(0, 0))
     }
 }
 

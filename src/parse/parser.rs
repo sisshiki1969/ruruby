@@ -1414,8 +1414,16 @@ impl Parser {
             TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
             TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(*num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
+            TokenKind::CommandLit(s) => {
+                let content = Node::new_string(s.to_owned(), loc);
+                Ok(Node::new_command(content))
+            }
             TokenKind::OpenString(s, term, level) => {
                 Ok(self.parse_interporated_string_literal(s, *term, *level)?)
+            }
+            TokenKind::OpenCommand(s, term, level) => {
+                let content = self.parse_interporated_string_literal(s, *term, *level)?;
+                Ok(Node::new_command(content))
             }
             TokenKind::Punct(punct) => match punct {
                 Punct::Minus => match self.get()?.kind {

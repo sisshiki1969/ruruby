@@ -1740,6 +1740,10 @@ impl Codegen {
                     }
                 }
             }
+            NodeKind::Command(content) => {
+                self.gen(globals, iseq, content, true)?;
+                self.gen_opt_send_self(globals, iseq, IdentId::get_id("`"), 1);
+            }
             NodeKind::Send {
                 receiver,
                 method,

@@ -15,6 +15,7 @@ pub enum NodeKind {
     Bool(bool),
     String(String),
     InterporatedString(Vec<Node>),
+    Command(Box<Node>),
     Symbol(IdentId),
     Range {
         start: Box<Node>,
@@ -273,17 +274,6 @@ impl Node {
         }
     }
 
-    pub fn is_variable(&self) -> bool {
-        match &self.kind {
-            NodeKind::Ident(_)
-            | NodeKind::LocalVar(_)
-            | NodeKind::Const { .. }
-            | NodeKind::InstanceVar(_)
-            | NodeKind::GlobalVar(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn new_nil(loc: Loc) -> Self {
         Node::new(NodeKind::Nil, loc)
     }
@@ -346,6 +336,11 @@ impl Node {
 
     pub fn new_interporated_string(nodes: Vec<Node>, loc: Loc) -> Self {
         Node::new(NodeKind::InterporatedString(nodes), loc)
+    }
+
+    pub fn new_command(node: Node) -> Self {
+        let loc = node.loc;
+        Node::new(NodeKind::Command(Box::new(node)), loc)
     }
 
     pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {
@@ -608,20 +603,6 @@ impl Node {
         )
     }
 
-    pub fn is_operation(&self) -> bool {
-        match self.kind {
-            NodeKind::Ident(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_lvar(&self) -> bool {
-        match self.kind {
-            NodeKind::Ident(_) | NodeKind::LocalVar(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn is_splat(&self) -> bool {
         match self.kind {
             NodeKind::Splat(_) => true,
@@ -660,7 +641,7 @@ impl Node {
         }
     }
 }
-
+/*
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
@@ -703,3 +684,4 @@ impl std::fmt::Display for Node {
         }
     }
 }
+*/
