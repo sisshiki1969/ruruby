@@ -386,7 +386,8 @@ impl Node {
         Node::new(NodeKind::LocalVar(id), loc)
     }
 
-    pub fn new_identifier(id: IdentId, loc: Loc) -> Self {
+    pub fn new_identifier(name: &str, loc: Loc) -> Self {
+        let id = IdentId::get_id(name);
         Node::new(NodeKind::Ident(id), loc)
     }
 
@@ -394,19 +395,23 @@ impl Node {
         Node::new(NodeKind::Symbol(id), loc)
     }
 
-    pub fn new_instance_var(id: IdentId, loc: Loc) -> Self {
+    pub fn new_instance_var(name: &str, loc: Loc) -> Self {
+        let id = IdentId::get_id(name);
         Node::new(NodeKind::InstanceVar(id), loc)
     }
 
-    pub fn new_global_var(id: IdentId, loc: Loc) -> Self {
+    pub fn new_global_var(name: &str, loc: Loc) -> Self {
+        let id = IdentId::get_id(name);
         Node::new(NodeKind::GlobalVar(id), loc)
     }
 
-    pub fn new_const(id: IdentId, toplevel: bool, loc: Loc) -> Self {
+    pub fn new_const(name: &str, toplevel: bool, loc: Loc) -> Self {
+        let id = IdentId::get_id(name);
         Node::new(NodeKind::Const { toplevel, id }, loc)
     }
 
-    pub fn new_scope(parent: Node, id: IdentId, loc: Loc) -> Self {
+    pub fn new_scope(parent: Node, name: &str, loc: Loc) -> Self {
+        let id = IdentId::get_id(name);
         Node::new(NodeKind::Scope(Box::new(parent), id), loc)
     }
 

@@ -199,6 +199,14 @@ impl Lexer {
         }
     }
 
+    /// Examine if the next char is '('.
+    pub fn trailing_lparen(&self) -> bool {
+        match self.peek() {
+            Some(ch) => ch == '(',
+            _ => false,
+        }
+    }
+
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
         let pos = tok.loc.1 as usize + 1;
         if pos >= self.len {

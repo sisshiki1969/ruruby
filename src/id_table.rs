@@ -37,6 +37,13 @@ impl Into<u32> for IdentId {
     }
 }
 
+impl From<&u32> for IdentId {
+    fn from(id: &u32) -> Self {
+        let id = unsafe { NonZeroU32::new_unchecked(*id) };
+        IdentId(id)
+    }
+}
+
 impl From<u32> for IdentId {
     fn from(id: u32) -> Self {
         let id = unsafe { NonZeroU32::new_unchecked(id) };
@@ -89,7 +96,7 @@ impl IdentId {
     pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
         let id = id.into();
         match id {
-            Some(id) => IdentId::get_name(id).to_string(),
+            Some(id) => IdentId::get_name(id),
             None => "".to_string(),
         }
     }
@@ -103,7 +110,6 @@ impl IdentId {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdentifierTable {
     table: FxHashMap<String, u32>,
-    table_rev: FxHashMap<u32, String>,
     ident_id: u32,
 }
 
@@ -111,7 +117,6 @@ impl IdentifierTable {
     pub fn new() -> Self {
         let mut table = IdentifierTable {
             table: FxHashMap::default(),
-            table_rev: FxHashMap::default(),
             ident_id: 40,
         };
         table.set_ident_id("<null>", IdentId::from(0));
@@ -143,25 +148,22 @@ impl IdentifierTable {
     }
 
     fn set_ident_id(&mut self, name: impl Into<String>, id: IdentId) {
-        let name = name.into();
-        self.table.insert(name.clone(), id.into());
-        self.table_rev.insert(id.into(), name);
+        self.table.insert(name.into(), id.into());
     }
 
     fn get_ident_id(&mut self, name: &str) -> IdentId {
         match self.table.get(name) {
-            Some(id) => IdentId::from(*id),
+            Some(id) => id.into(),
             None => {
                 let id = self.ident_id;
                 self.table.insert(name.to_string(), id);
-                self.table_rev.insert(id, name.to_string());
                 self.ident_id += 1;
-                IdentId::from(id)
+                id.into()
             }
         }
     }
 
     fn get_name(&self, id: IdentId) -> &str {
-        self.table_rev.get(&id.0.get()).unwrap()
+        self.table.iter().find(|(_, v)| **v == id.into()).unwrap().0
     }
 }
