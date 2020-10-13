@@ -108,6 +108,8 @@ pub enum NodeKind {
         arglist: ArgList,
         safe_nav: bool,
     },
+
+    Defined(Box<Node>),
 }
 
 pub type FormalParam = Annot<ParamKind>;
@@ -341,6 +343,11 @@ impl Node {
     pub fn new_command(node: Node) -> Self {
         let loc = node.loc;
         Node::new(NodeKind::Command(Box::new(node)), loc)
+    }
+
+    pub fn new_defined(node: Node) -> Self {
+        let loc = node.loc;
+        Node::new(NodeKind::Defined(Box::new(node)), loc)
     }
 
     pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {

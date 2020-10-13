@@ -808,8 +808,18 @@ impl Parser {
     }
 
     fn parse_arg(&mut self) -> Result<Node, RubyError> {
-        let node = self.parse_arg_assign()?;
-        Ok(node)
+        if self.peek()?.kind == TokenKind::Reserved(Reserved::Defined) {
+            self.save_state();
+            self.consume_reserved(Reserved::Defined).unwrap();
+            if self.peek_punct_no_term(Punct::LParen) {
+                self.restore_state();
+            } else {
+                self.discard_state();
+                let node = self.parse_arg()?;
+                return Ok(Node::new_defined(node));
+            }
+        }
+        self.parse_arg_assign()
     }
 
     fn parse_arg_assign(&mut self) -> Result<Node, RubyError> {
@@ -1720,10 +1730,18 @@ impl Parser {
                     Reserved::Nil => Ok(Node::new_nil(loc)),
                     Reserved::Self_ => Ok(Node::new_self(loc)),
                     Reserved::Begin => self.parse_begin(),
+                    Reserved::Defined => {
+                        if self.consume_punct_no_term(Punct::LParen)? {
+                            let node = self.parse_expr()?;
+                            self.expect_punct(Punct::RParen)?;
+                            Ok(Node::new_defined(node))
+                        } else {
+                            let tok = self.get()?;
+                            Err(self.error_unexpected(tok.loc, format!("expected '('.")))
+                        }
+                    }
                     _ => {
-                        return Err(
-                            self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
-                        )
+                        Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
                     }
                 }
             }

@@ -1743,6 +1743,9 @@ impl Codegen {
             NodeKind::Command(content) => {
                 self.gen(globals, iseq, content, true)?;
                 self.gen_opt_send_self(globals, iseq, IdentId::get_id("`"), 1);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
             }
             NodeKind::Send {
                 receiver,
@@ -2043,6 +2046,28 @@ impl Codegen {
                 if !use_value {
                     self.gen_pop(iseq)
                 };
+            }
+            NodeKind::Defined(content) => {
+                match content.kind {
+                    NodeKind::Integer(_)
+                    | NodeKind::Float(_)
+                    | NodeKind::String(_)
+                    | NodeKind::Imaginary(_)
+                    | NodeKind::Hash(..)
+                    | NodeKind::Array(..) => self.gen_string(globals, iseq, "expression"),
+                    NodeKind::GlobalVar(..) => self.gen_string(globals, iseq, "global-variable"),
+                    NodeKind::InstanceVar(..) => {
+                        self.gen_string(globals, iseq, "instance-variable")
+                    }
+                    NodeKind::Index { .. } => self.gen_string(globals, iseq, "method"),
+                    NodeKind::Bool(true) => self.gen_string(globals, iseq, "true"),
+                    NodeKind::Bool(false) => self.gen_string(globals, iseq, "false"),
+                    NodeKind::Nil => self.gen_string(globals, iseq, "nil"),
+                    _ => unimplemented!(),
+                }
+                if !use_value {
+                    self.gen_pop(iseq)
+                }
             }
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
