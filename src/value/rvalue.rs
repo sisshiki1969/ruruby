@@ -144,23 +144,9 @@ impl RValue {
         match std::mem::replace(&mut self.kind, ObjKind::Invalid) {
             ObjKind::Invalid => return false,
             ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
-            ObjKind::Fiber(mut f) => f.free(),
-            ObjKind::Enumerator(mut f) => f.free(),
-            ObjKind::Ordinary => {}
-            ObjKind::Integer(_) => {}
-            ObjKind::Float(_) => {}
-            ObjKind::Complex { .. } => {}
-            ObjKind::String(_) => {}
-            ObjKind::Array(_) => {}
-            ObjKind::Range(_) => {}
-            ObjKind::Splat(_) => {}
-            ObjKind::Hash(_) => {}
-            ObjKind::Proc(_) => {}
-            ObjKind::Regexp(_) => {}
-            ObjKind::Method(_) => {}
-            ObjKind::Time(_) => {}
+            _ => {}
         }
-        std::mem::take(&mut self.var_table);
+        self.var_table = None;
         true
     }
 }

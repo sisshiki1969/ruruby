@@ -19,6 +19,22 @@ impl PartialEq for FiberInfo {
     }
 }
 
+impl Drop for FiberInfo {
+    fn drop(&mut self) {
+        if let Some(h) = self.vm.handle.take() {
+            // FiberState::Running or DEAD
+            let _id = h.thread().id();
+            if !self.vm.is_dead() {
+                let _ = self.tx.send(FiberMsg::Terminate);
+            }
+            h.join().unwrap();
+            //#[cfg(debug_assertions)]
+            //eprintln!("fiber disposed {:?}", _id);
+        };
+        self.vm.free();
+    }
+}
+
 pub enum FiberMsg {
     Resume,
     Terminate,
@@ -84,24 +100,6 @@ impl FiberInfo {
             rec,
             tx,
         }
-    }
-
-    pub fn free(&mut self) {
-        match self.vm.handle.take() {
-            // FiberState::Running or DEAD
-            Some(h) => {
-                let _id = h.thread().id();
-                if !self.vm.is_dead() {
-                    let _ = self.tx.send(FiberMsg::Terminate);
-                }
-                h.join().unwrap();
-                //#[cfg(debug_assertions)]
-                //eprintln!("fiber disposed {:?}", _id);
-            }
-            // FiberState::Created
-            None => {}
-        };
-        self.vm.free();
     }
 
     /// This BuiltinFunc is called in the fiber thread of a enumerator.

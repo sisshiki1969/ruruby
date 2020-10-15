@@ -253,11 +253,10 @@ impl Allocator {
             // Allocate new page.
             self.used_in_current = 1;
             self.pages.push(self.current);
-            self.current = if self.free_pages.len() == 0 {
-                PageRef::alloc_page()
-            } else {
-                self.free_pages.pop().unwrap()
-            };
+            self.current = self
+                .free_pages
+                .pop()
+                .unwrap_or_else(|| PageRef::alloc_page());
             self.current.get_data_ptr(0)
         } else {
             // Bump allocation.

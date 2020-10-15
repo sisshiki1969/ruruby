@@ -2049,21 +2049,26 @@ impl Codegen {
             }
             NodeKind::Defined(content) => {
                 match content.kind {
-                    NodeKind::Integer(_)
-                    | NodeKind::Float(_)
-                    | NodeKind::String(_)
-                    | NodeKind::Imaginary(_)
-                    | NodeKind::Hash(..)
-                    | NodeKind::Array(..) => self.gen_string(globals, iseq, "expression"),
+                    NodeKind::LocalVar(..) => self.gen_string(globals, iseq, "local-variable"),
                     NodeKind::GlobalVar(..) => self.gen_string(globals, iseq, "global-variable"),
+                    NodeKind::Const { .. } | NodeKind::Scope(..) => {
+                        self.gen_string(globals, iseq, "constant")
+                    }
                     NodeKind::InstanceVar(..) => {
                         self.gen_string(globals, iseq, "instance-variable")
                     }
-                    NodeKind::Index { .. } => self.gen_string(globals, iseq, "method"),
+                    NodeKind::AssignOp(..) | NodeKind::MulAssign(..) => {
+                        self.gen_string(globals, iseq, "assignment")
+                    }
+                    NodeKind::BinOp(..)
+                    | NodeKind::UnOp(..)
+                    | NodeKind::Index { .. }
+                    | NodeKind::Send { .. } => self.gen_string(globals, iseq, "method"),
                     NodeKind::Bool(true) => self.gen_string(globals, iseq, "true"),
                     NodeKind::Bool(false) => self.gen_string(globals, iseq, "false"),
                     NodeKind::Nil => self.gen_string(globals, iseq, "nil"),
-                    _ => unimplemented!(),
+                    NodeKind::SelfValue => self.gen_string(globals, iseq, "self"),
+                    _ => self.gen_string(globals, iseq, "expression"),
                 }
                 if !use_value {
                     self.gen_pop(iseq)
