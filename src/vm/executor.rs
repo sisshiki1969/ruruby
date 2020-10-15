@@ -233,16 +233,16 @@ impl VM {
     pub fn class_pop(&mut self) {
         self.class_context.pop().unwrap();
     }
-
-    pub fn classref(&self) -> ClassRef {
-        let (class, _) = self.class_context.last().unwrap();
-        if class.is_nil() {
-            self.globals.builtins.object.as_class()
-        } else {
-            class.as_module().unwrap()
+    /*
+        pub fn classref(&self) -> ClassRef {
+            let (class, _) = self.class_context.last().unwrap();
+            if class.is_nil() {
+                self.globals.builtins.object.as_class()
+            } else {
+                class.as_module().unwrap()
+            }
         }
-    }
-
+    */
     pub fn class(&self) -> Value {
         let (class, _) = self.class_context.last().unwrap();
         if class.is_nil() {
@@ -841,11 +841,11 @@ impl VM {
                         v if v.is_nil() => self.class(),
                         v => v,
                     };
-                    let val = self.stack_pop();
-                    match val.as_module() {
-                        Some(mut cref) => {
-                            if cref.name == None {
-                                cref.name = Some(id);
+                    let mut val = self.stack_pop();
+                    match val.as_mut_module() {
+                        Some(mut cinfo) => {
+                            if cinfo.name == None {
+                                cinfo.name = Some(id);
                             }
                         }
                         None => {}
@@ -1400,28 +1400,6 @@ impl VM {
         match block {
             Some(method) => Ok(method),
             None => return Err(self.error_argument("Currently, needs block.")),
-        }
-    }
-
-    /// Returns `ClassRef` if `self` is a Class.
-    /// When `self` is not a Class, returns `TypeError`.
-    pub fn expect_class(&mut self, val: Value, msg: &str) -> Result<ClassRef, RubyError> {
-        match val.is_class() {
-            Some(class) => Ok(class),
-            None => {
-                let val = self.val_inspect(val)?;
-                Err(self.error_type(format!("{} must be Class. (given:{})", msg, val)))
-            }
-        }
-    }
-
-    pub fn expect_module(&mut self, val: Value) -> Result<ClassRef, RubyError> {
-        match val.as_module() {
-            Some(module) => Ok(module),
-            None => {
-                let val = self.val_inspect(val)?;
-                Err(self.error_type(format!("Must be Module or Class. (given:{})", val)))
-            }
         }
     }
 }
@@ -2066,9 +2044,9 @@ impl VM {
     }
 
     /// Generate new class object with `super_val` as a superclass.
-    fn define_class(&mut self, id: IdentId, is_module: bool, super_val: Value) -> VMResult {
+    fn define_class(&mut self, id: IdentId, is_module: bool, mut super_val: Value) -> VMResult {
         let val = match BuiltinClass::object().get_var(id) {
-            Some(val) => {
+            Some(mut val) => {
                 if val.is_module().is_some() != is_module {
                     return Err(self.error_type(format!(
                         "{:?} is not {}.",
@@ -2076,7 +2054,7 @@ impl VM {
                         if is_module { "module" } else { "class" },
                     )));
                 };
-                let classref = self.expect_module(val)?;
+                let classref = val.expect_module(self)?;
                 if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                     return Err(
                         self.error_type(format!("superclass mismatch for class {:?}.", id,))
@@ -2088,18 +2066,19 @@ impl VM {
                 let super_val = if super_val.is_nil() {
                     BuiltinClass::object()
                 } else {
-                    self.expect_class(super_val, "Superclass")?;
+                    super_val.expect_class(self, "Superclass")?;
                     super_val
                 };
-                let classref = ClassRef::from(id, super_val);
+                let classref = ClassInfo::from(id, super_val);
                 let val = if is_module {
                     Value::module(classref)
                 } else {
                     Value::class(classref)
                 };
                 //if super_val.has_singleton() {
-                let mut singleton = self.get_singleton_class(val)?.as_class();
-                singleton.add_builtin_method(IdentId::NEW, Self::singleton_new);
+                let mut singleton = self.get_singleton_class(val)?;
+                let singleton_class = singleton.as_mut_class();
+                singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
                 //}
                 self.class().set_var(id, val);
                 val
@@ -2417,12 +2396,17 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
-        let mut class = match target_obj.as_module() {
-            Some(mref) => mref,
-            None => target_obj.get_class().as_module().unwrap(),
+    pub fn define_method(&mut self, mut target_obj: Value, id: IdentId, method: MethodRef) {
+        match target_obj.as_mut_module() {
+            Some(cinfo) => cinfo.add_method(&mut self.globals, id, method),
+            None => {
+                let mut class_val = target_obj.get_class();
+                class_val
+                    .as_mut_module()
+                    .unwrap()
+                    .add_method(&mut self.globals, id, method)
+            }
         };
-        class.add_method(&mut self.globals, id, method);
     }
 
     /// Define a method on a singleton class of `target_obj`.
@@ -2432,9 +2416,9 @@ impl VM {
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        let singleton = self.get_singleton_class(target_obj)?;
+        let mut singleton = self.get_singleton_class(target_obj)?;
         singleton
-            .as_class()
+            .as_mut_class()
             .add_method(&mut self.globals, id, method);
         Ok(())
     }

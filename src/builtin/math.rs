@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Math");
-    let class = ClassRef::from(id, BuiltinClass::object());
+    let class = ClassInfo::from(id, BuiltinClass::object());
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("sqrt", sqrt);
     class_val.add_builtin_class_method("cos", cos);

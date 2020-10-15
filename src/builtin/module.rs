@@ -2,7 +2,7 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let mut module_class = globals.builtins.module.as_class();
+    let module_class = globals.builtins.module.as_mut_class();
     module_class.add_builtin_method_by_str("===", teq);
     module_class.add_builtin_method_by_str("constants", constants);
     module_class.add_builtin_method_by_str("const_defined?", const_defined);
@@ -91,9 +91,9 @@ fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let mut class = vm.expect_module(self_val)?;
+fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
+    let mut class = self_val.expect_module(vm)?;
     let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
         false => {
@@ -117,7 +117,7 @@ fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     )
                     .cloned()
                     .collect();
-                match class.superclass() {
+                match class.mut_superclass() {
                     Some(superclass) => class = superclass,
                     None => break,
                 };
@@ -164,19 +164,19 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn define_reader(vm: &mut VM, class: Value, id: IdentId) {
+fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
     let instance_var_id = get_instance_var(vm, id);
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
     let methodref = MethodRef::new(info);
     class
-        .as_module()
+        .as_mut_module()
         .unwrap()
         .add_method(&mut vm.globals, id, methodref);
 }
 
-fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
+fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
     let instance_var_id = get_instance_var(vm, id);
     let assign_id = IdentId::add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
@@ -184,7 +184,7 @@ fn define_writer(vm: &mut VM, class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .as_module()
+        .as_mut_module()
         .unwrap()
         .add_method(&mut vm.globals, assign_id, methodref);
 }
@@ -200,14 +200,14 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let class = vm.expect_module(self_val)?;
+fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+    let class = self_val.expect_module(vm)?;
     Ok(Value::bool(class.is_singleton))
 }
 
-fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let mut class = vm.expect_module(self_val)?;
+    let class = self_val.expect_module(vm)?;
     let module = args[0];
     class.include_append(&mut vm.globals, module);
     Ok(Value::nil())
@@ -284,14 +284,13 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn module_alias_method(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 2)?;
     let new = args[0].clone().expect_string_or_symbol(vm, "1st arg")?;
     let org = args[1].clone().expect_string_or_symbol(vm, "2nd arg")?;
     let method = vm.get_method(self_val, org)?;
     self_val
-        //.get_class()
-        .as_class()
+        .as_mut_class()
         .add_method(&mut vm.globals, new, method);
     Ok(self_val)
 }

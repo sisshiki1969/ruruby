@@ -3,7 +3,7 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let mut kernel_class = ClassRef::from_str("Kernel", None);
+    let mut kernel_class = ClassInfo::from_str("Kernel", None);
     kernel_class.add_builtin_method_by_str("puts", puts);
     kernel_class.add_builtin_method_by_str("p", p);
     kernel_class.add_builtin_method_by_str("print", print);

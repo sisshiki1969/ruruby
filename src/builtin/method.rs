@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
     let proc_id = IdentId::get_id("Method");
-    let mut class = ClassRef::from(proc_id, BuiltinClass::object());
+    let mut class = ClassInfo::from(proc_id, BuiltinClass::object());
     class.add_builtin_method_by_str("call", method_call);
     Value::class(class)
 }

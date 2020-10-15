@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Struct");
-    let class = ClassRef::from(id, BuiltinClass::object());
+    let class = ClassInfo::from(id, BuiltinClass::object());
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("new", struct_new);
     class_val
@@ -25,7 +25,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let mut class_val = Value::class_from(name, self_val);
-    let mut class = class_val.as_class();
+    let class = class_val.as_mut_class();
     class.add_builtin_method_by_str("initialize", initialize);
     class.add_builtin_method_by_str("inspect", inspect);
     class_val.add_builtin_class_method("[]", builtin::class::new);

@@ -6,11 +6,12 @@ pub struct TimeInfo(DateTime<FixedOffset>);
 
 pub fn init(_globals: &mut Globals) -> Value {
     let time_id = IdentId::get_id("Time");
-    let mut class = ClassRef::from(time_id, BuiltinClass::object());
-    let mut class_val = Value::class(class);
+    let mut class = ClassInfo::from(time_id, BuiltinClass::object());
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("+", add);
+
+    let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("now", time_now);
     class_val
 }

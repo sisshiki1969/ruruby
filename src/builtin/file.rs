@@ -4,7 +4,7 @@ use std::io::Read;
 use std::path::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let class = ClassRef::from_str("File", BuiltinClass::object());
+    let class = ClassInfo::from_str("File", BuiltinClass::object());
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("join", join);
     class_val.add_builtin_class_method("basename", basename);

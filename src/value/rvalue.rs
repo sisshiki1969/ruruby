@@ -15,8 +15,8 @@ pub enum ObjKind {
     Integer(i64),
     Float(f64),
     Complex { r: Value, i: Value },
-    Class(ClassRef),
-    Module(ClassRef),
+    Class(Box<ClassInfo>),
+    Module(Box<ClassInfo>),
     String(RString),
     Array(ArrayInfo),
     Range(RangeInfo),
@@ -46,13 +46,13 @@ impl std::fmt::Debug for ObjKind {
                     write!(f, "({:?}{:?}i)", r, i)
                 }
             }
-            ObjKind::Class(cref) => match cref.name {
+            ObjKind::Class(cinfo) => match cinfo.name {
                 Some(id) => write!(f, "{:?}", id),
-                None => write!(f, "#<Class:0x{:x}>", cref.id()),
+                None => write!(f, "#<Class:0x{:x}>", cinfo.id()),
             },
-            ObjKind::Module(cref) => match cref.name {
+            ObjKind::Module(cinfo) => match cinfo.name {
                 Some(id) => write!(f, "{:?}", id),
-                None => write!(f, "#<Module:0x{:x}>", cref.id()),
+                None => write!(f, "#<Module:0x{:x}>", cinfo.id()),
             },
             ObjKind::Array(aref) => {
                 write!(f, "[")?;
@@ -143,7 +143,7 @@ impl RValue {
         };
         match std::mem::replace(&mut self.kind, ObjKind::Invalid) {
             ObjKind::Invalid => return false,
-            ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
+            //ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
             _ => {}
         }
         self.var_table = None;
@@ -171,14 +171,14 @@ impl RValue {
                     i: i.dup(),
                 },
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
-                ObjKind::Class(cref) => ObjKind::Class(cref.dup()),
+                ObjKind::Class(cinfo) => ObjKind::Class(cinfo.clone()),
+                ObjKind::Module(cinfo) => ObjKind::Module(cinfo.clone()),
                 ObjKind::Enumerator(_eref) => ObjKind::Ordinary,
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
-                ObjKind::Hash(href) => ObjKind::Hash(href.clone()),
-                ObjKind::Method(mref) => ObjKind::Method(mref.clone()),
-                ObjKind::Module(cref) => ObjKind::Module(cref.dup()),
+                ObjKind::Hash(hinfo) => ObjKind::Hash(hinfo.clone()),
+                ObjKind::Method(hinfo) => ObjKind::Method(hinfo.clone()),
                 ObjKind::Ordinary => ObjKind::Ordinary,
                 ObjKind::Proc(pref) => ObjKind::Proc(pref.clone()),
                 ObjKind::Range(info) => ObjKind::Range(info.clone()),
@@ -217,10 +217,10 @@ impl RValue {
         }
     }
 
-    pub fn new_bootstrap(classref: ClassRef) -> Self {
+    pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
         RValue {
             class: Value::nil(), // dummy for boot strapping
-            kind: ObjKind::Class(classref),
+            kind: ObjKind::Class(Box::new(cinfo)),
             var_table: None,
         }
     }
@@ -274,19 +274,19 @@ impl RValue {
         }
     }
 
-    pub fn new_class(classref: ClassRef) -> Self {
+    pub fn new_class(cinfo: ClassInfo) -> Self {
         RValue {
             class: BuiltinClass::class(),
             var_table: None,
-            kind: ObjKind::Class(classref),
+            kind: ObjKind::Class(Box::new(cinfo)),
         }
     }
 
-    pub fn new_module(classref: ClassRef) -> Self {
+    pub fn new_module(cinfo: ClassInfo) -> Self {
         RValue {
             class: BuiltinClass::module(),
             var_table: None,
-            kind: ObjKind::Module(classref),
+            kind: ObjKind::Module(Box::new(cinfo)),
         }
     }
 

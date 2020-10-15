@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let mut object_class = globals.builtins.object.as_class();
+    let object_class = globals.builtins.object.as_mut_class();
     object_class.add_builtin_method_by_str("class", class);
     object_class.add_builtin_method_by_str("object_id", object_id);
     object_class.add_builtin_method_by_str("to_s", to_s);
@@ -56,9 +56,9 @@ fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         RV::Symbol(i) => format!("{:?}", i),
         RV::Object(oref) => match &oref.kind {
             ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Class(cref) => match cref.name {
+            ObjKind::Class(cinfo) => match cinfo.name {
                 Some(id) => format! {"{:?}", id},
-                None => format! {"#<Class:0x{:x}>", cref.id()},
+                None => format! {"#<Class:0x{:x}>", oref.id()},
             },
             ObjKind::Ordinary => {
                 let class_name = self_val.get_class().as_class().name();

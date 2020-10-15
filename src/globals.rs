@@ -55,13 +55,13 @@ type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
     fn new() -> Self {
-        let basic_class = ClassRef::from_str("BasicObject", None);
+        let basic_class = ClassInfo::from_str("BasicObject", None);
         let mut basic = Value::bootstrap_class(basic_class);
-        let object_class = ClassRef::from_str("Object", basic);
+        let object_class = ClassInfo::from_str("Object", basic);
         let mut object = Value::bootstrap_class(object_class);
-        let module_class = ClassRef::from_str("Module", object);
+        let module_class = ClassInfo::from_str("Module", object);
         let mut module = Value::bootstrap_class(module_class);
-        let class_class = ClassRef::from_str("Class", module);
+        let class_class = ClassInfo::from_str("Class", module);
         let mut class = Value::bootstrap_class(class_class);
 
         basic.set_class(class);
@@ -182,7 +182,7 @@ impl Globals {
             regexp_cache: FxHashMap::default(),
         };
         // Generate singleton class for Object
-        let mut singleton_class = ClassRef::from(None, class);
+        let mut singleton_class = ClassInfo::from(None, class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(singleton_class);
         object.set_class(singleton_obj);
@@ -235,7 +235,7 @@ impl Globals {
         init_builtin_class!("Exception", exception);
 
         let kernel = kernel::init(&mut globals);
-        object.as_class().include_append(&mut globals, kernel);
+        object.as_mut_class().include_append(&mut globals, kernel);
         BuiltinClass::set_class("Kernel", kernel);
 
         init_class!("Math", math);
@@ -249,7 +249,7 @@ impl Globals {
         init_class!("Comparable", comparable);
 
         let id = IdentId::get_id("StopIteration");
-        let class = ClassRef::from(id, object);
+        let class = ClassInfo::from(id, object);
         BuiltinClass::set_class("StopIteration", Value::class(class));
 
         let mut env_map = HashInfo::new(FxHashMap::default());

@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) {
     let mut class_obj = globals.builtins.class;
-    let mut class = class_obj.as_class();
+    let class = class_obj.as_mut_class();
     class.add_builtin_method_by_str("new", new);
     class.add_builtin_method_by_str("superclass", superclass);
     class.add_builtin_method_by_str("inspect", inspect);
@@ -47,13 +47,13 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 /// Get super class of `self`.
-fn superclass(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let class = vm.expect_class(self_val, "Receiver")?;
+fn superclass(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+    let class = self_val.expect_class(vm, "Receiver")?;
     Ok(class.superclass)
 }
 
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let cref = vm.expect_class(self_val, "Receiver")?;
+fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+    let cref = self_val.expect_class(vm, "Receiver")?;
     let s = match cref.name {
         Some(id) => format! {"{:?}", id},
         None => format! {"#<Class:0x{:x}>", cref.id()},

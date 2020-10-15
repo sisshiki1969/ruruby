@@ -428,7 +428,8 @@ impl Value {
     }
 
     pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
-        let mut classref = self.get_singleton_class().unwrap().as_class();
+        let mut singleton = self.get_singleton_class().unwrap();
+        let classref = singleton.as_mut_class();
         classref.add_builtin_method_by_str(name, func);
     }
 }
@@ -627,9 +628,9 @@ impl Value {
 
     /// Take ClassRef from `self`.
     /// Panic if `self` is not a class object.
-    pub fn as_class(&self) -> ClassRef {
+    pub fn as_class(&self) -> &ClassInfo {
         match self.is_class() {
-            Some(class) => class,
+            Some(cinfo) => cinfo,
             None => panic!(format!(
                 "as_class(): self in not a class object. {:?}",
                 *self
@@ -637,33 +638,89 @@ impl Value {
         }
     }
 
-    pub fn is_class(&self) -> Option<ClassRef> {
+    /// Take ClassRef from `self`.
+    /// Panic if `self` is not a class object.
+    pub fn as_mut_class(&mut self) -> &mut ClassInfo {
+        let self_ = self.clone();
+        match self.is_mut_class() {
+            Some(cinfo) => return cinfo,
+            None => {}
+        };
+        panic!(format!(
+            "as_class(): self in not a class object. {:?}",
+            *self_
+        ))
+    }
+
+    pub fn is_class(&self) -> Option<&ClassInfo> {
         match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Class(cref) => Some(cref),
+            Some(oref) => match &oref.kind {
+                ObjKind::Class(cinfo) => Some(cinfo),
                 _ => None,
             },
             None => None,
         }
     }
 
-    pub fn as_module(&self) -> Option<ClassRef> {
-        match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Class(cref) | ObjKind::Module(cref) => Some(cref),
+    pub fn is_mut_class(&mut self) -> Option<&mut ClassInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Class(cinfo) => Some(cinfo),
                 _ => None,
             },
             None => None,
         }
     }
 
-    pub fn is_module(&self) -> Option<ClassRef> {
+    pub fn as_module(&self) -> Option<&ClassInfo> {
         match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Module(cref) => Some(cref),
+            Some(oref) => match &oref.kind {
+                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => Some(cinfo),
                 _ => None,
             },
             None => None,
+        }
+    }
+
+    pub fn as_mut_module(&mut self) -> Option<&mut ClassInfo> {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => Some(cinfo),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub fn is_module(&self) -> Option<&ClassInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Module(cinfo) => Some(cinfo),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    /// Returns `ClassRef` if `self` is a Class.
+    /// When `self` is not a Class, returns `TypeError`.
+    pub fn expect_class(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
+        let self_ = self.clone();
+        if let Some(cinfo) = self.is_mut_class() {
+            Ok(cinfo)
+        } else {
+            let val = vm.val_inspect(self_)?;
+            Err(vm.error_type(format!("{} must be Class. (given:{})", msg, val)))
+        }
+    }
+
+    pub fn expect_module(&mut self, vm: &mut VM) -> Result<&mut ClassInfo, RubyError> {
+        let self_ = self.clone();
+        if let Some(cinfo) = self.as_mut_module() {
+            Ok(cinfo)
+        } else {
+            let val = vm.val_inspect(self_)?;
+            Err(vm.error_type(format!("Must be Module or Class. (given:{})", val)))
         }
     }
 
@@ -922,38 +979,38 @@ impl Value {
         RValue::new_range(info).pack()
     }
 
-    pub fn bootstrap_class(classref: ClassRef) -> Self {
-        RValue::new_bootstrap(classref).pack()
+    pub fn bootstrap_class(cinfo: ClassInfo) -> Self {
+        RValue::new_bootstrap(cinfo).pack()
     }
 
     pub fn ordinary_object(class: Value) -> Self {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn class(class_ref: ClassRef) -> Self {
-        RValue::new_class(class_ref).pack()
+    pub fn class(cinfo: ClassInfo) -> Self {
+        RValue::new_class(cinfo).pack()
     }
 
     pub fn class_from(
         id: impl Into<Option<IdentId>>,
         superclass: impl Into<Option<Value>>,
     ) -> Self {
-        RValue::new_class(ClassRef::from(id, superclass)).pack()
+        RValue::new_class(ClassInfo::from(id, superclass)).pack()
     }
 
     pub fn class_from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
-        RValue::new_class(ClassRef::from_str(name, superclass)).pack()
+        RValue::new_class(ClassInfo::from_str(name, superclass)).pack()
     }
 
     pub fn singleton_class_from(
         id: impl Into<Option<IdentId>>,
         superclass: impl Into<Option<Value>>,
     ) -> Self {
-        RValue::new_class(ClassRef::singleton_from(id, superclass)).pack()
+        RValue::new_class(ClassInfo::singleton_from(id, superclass)).pack()
     }
 
-    pub fn module(class_ref: ClassRef) -> Self {
-        RValue::new_module(class_ref).pack()
+    pub fn module(cinfo: ClassInfo) -> Self {
+        RValue::new_module(cinfo).pack()
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {
@@ -1038,9 +1095,9 @@ impl Value {
                 if class.is_singleton() {
                     Ok(class)
                 } else {
-                    let singleton = match oref.kind {
-                        ObjKind::Class(cref) | ObjKind::Module(cref) => {
-                            let mut superclass = cref.superclass;
+                    let singleton = match &oref.kind {
+                        ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
+                            let mut superclass = cinfo.superclass;
                             let mut singleton = if superclass.is_nil() {
                                 Value::singleton_class_from(None, None)
                             } else {
@@ -1277,7 +1334,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class(ClassRef::from(IdentId::from(1), None));
+        let expect = Value::class(ClassInfo::from(IdentId::from(1), None));
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

@@ -136,7 +136,7 @@ impl std::ops::Deref for RegexpInfo {
 
 pub fn init(globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Regexp");
-    let class = ClassRef::from(id, globals.builtins.object);
+    let class = ClassInfo::from(id, globals.builtins.object);
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("new", regexp_new);
     class_val.add_builtin_class_method("compile", regexp_new);

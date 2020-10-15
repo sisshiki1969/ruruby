@@ -33,8 +33,7 @@ impl RangeInfo {
 
 pub fn init(_globals: &mut Globals) -> Value {
     let id = IdentId::get_id("Range");
-    let mut class = ClassRef::from(id, BuiltinClass::object());
-    let mut class_val = Value::class(class);
+    let mut class = ClassInfo::from(id, BuiltinClass::object());
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("map", map);
@@ -48,6 +47,8 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_a", to_a);
     class.add_builtin_method_by_str("exclude_end?", exclude_end);
     class.add_builtin_method_by_str("include?", include);
+
+    let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("new", range_new);
     class_val
 }

@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
     pub name: Option<IdentId>,
     pub method_table: MethodTable,
@@ -20,6 +20,10 @@ impl ClassInfo {
         }
     }
 
+    pub fn id(&self) -> u64 {
+        self as *const Self as u64
+    }
+
     pub fn new_singleton(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
         ClassInfo {
             name: name.into(),
@@ -28,6 +32,17 @@ impl ClassInfo {
             include: vec![],
             is_singleton: true,
         }
+    }
+
+    pub fn singleton_from(
+        id: impl Into<Option<IdentId>>,
+        superclass: impl Into<Option<Value>>,
+    ) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => Value::nil(),
+        };
+        ClassInfo::new_singleton(id, superclass)
     }
 
     pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
@@ -41,11 +56,19 @@ impl ClassInfo {
         self.add_builtin_method(name, func);
     }
 
-    pub fn superclass(&self) -> Option<ClassRef> {
+    pub fn superclass(&self) -> Option<&ClassInfo> {
         if self.superclass.is_nil() {
             None
         } else {
             Some(self.superclass.as_class())
+        }
+    }
+
+    pub fn mut_superclass(&mut self) -> Option<&mut ClassInfo> {
+        if self.superclass.is_nil() {
+            None
+        } else {
+            Some(self.superclass.as_mut_class())
         }
     }
 
@@ -74,24 +97,13 @@ impl ClassInfo {
     pub fn include(&self) -> &Vec<Value> {
         &self.include
     }
-}
 
-impl GC for ClassInfo {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.superclass.mark(alloc);
-        self.include.iter().for_each(|v| v.mark(alloc));
-    }
-}
-
-pub type ClassRef = Ref<ClassInfo>;
-
-impl ClassRef {
     pub fn from(id: impl Into<Option<IdentId>>, superclass: impl Into<Option<Value>>) -> Self {
         let superclass = match superclass.into() {
             Some(superclass) => superclass,
             None => Value::nil(),
         };
-        ClassRef::new(ClassInfo::new(id, superclass))
+        ClassInfo::new(id, superclass)
     }
 
     pub fn from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
@@ -99,17 +111,13 @@ impl ClassRef {
             Some(superclass) => superclass,
             None => Value::nil(),
         };
-        ClassRef::new(ClassInfo::new(IdentId::get_id(name), superclass))
+        ClassInfo::new(IdentId::get_id(name), superclass)
     }
+}
 
-    pub fn singleton_from(
-        id: impl Into<Option<IdentId>>,
-        superclass: impl Into<Option<Value>>,
-    ) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
-        ClassRef::new(ClassInfo::new_singleton(id, superclass))
+impl GC for ClassInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.superclass.mark(alloc);
+        self.include.iter().for_each(|v| v.mark(alloc));
     }
 }
