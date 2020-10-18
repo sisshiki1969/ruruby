@@ -35,6 +35,9 @@ impl Inst {
     pub const OPT_SET_INDEX: u8 = 55;
 
     pub const CHECK_LOCAL: u8 = 56;
+    pub const CHECK_CONST: u8 = 57;
+    pub const CHECK_IVAR: u8 = 58;
+    pub const CHECK_GVAR: u8 = 59;
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
@@ -196,6 +199,9 @@ impl Inst {
             Inst::OPT_SET_INDEX => "OPT_SET_IDX".to_string(),
 
             Inst::CHECK_LOCAL => "CHECK_LOCAL".to_string(),
+            Inst::CHECK_CONST => "CHECK_CONST".to_string(),
+            Inst::CHECK_IVAR => "CHECK_IVAR".to_string(),
+            Inst::CHECK_GVAR => "CHECK_GVAR".to_string(),
 
             Inst::SEND => "SEND".to_string(),
             Inst::SEND_SELF => "SENDSLF".to_string(),
@@ -279,18 +285,22 @@ impl Inst {
             | Inst::GET_LOCAL           // LVarId: u32
             | Inst::GET_CONST           // IdentId: u32
             | Inst::SET_CONST           // IdentId: u32
+            | Inst::CHECK_CONST         // IdentId: u32
             | Inst::GET_CONST_TOP       // IdentId: u32
             | Inst::GET_SCOPE           // IdentId: u32
             | Inst::GET_IVAR            // IdentId: u32
             | Inst::SET_IVAR            // IdentId: u32
+            | Inst::CHECK_IVAR          // IdentId: u32
             | Inst::GET_GVAR            // IdentId: u32
             | Inst::SET_GVAR            // IdentId: u32
+            | Inst::CHECK_GVAR          // IdentId: u32
             | Inst::GET_INDEX           // number of items: u32
             | Inst::SET_INDEX           // number of items: u32
             | Inst::OPT_GET_INDEX       // immediate: u32
             | Inst::OPT_SET_INDEX       // immediate: u32
             | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CONST_VAL           // ConstId: u32
+
             | Inst::JMP                 // disp: i32
             | Inst::JMP_BACK            // disp: i32
             | Inst::JMP_F               // disp: i32
@@ -457,9 +467,15 @@ impl Inst {
             | Inst::GET_CONST
             | Inst::GET_CONST_TOP
             | Inst::SET_CONST
+            | Inst::CHECK_CONST
             | Inst::GET_SCOPE
             | Inst::GET_IVAR
-            | Inst::SET_IVAR => format!(
+            | Inst::SET_IVAR
+            | Inst::CHECK_IVAR
+            | Inst::GET_GVAR
+            | Inst::SET_GVAR
+            | Inst::CHECK_GVAR
+             => format!(
                 "{} '{}'",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1)

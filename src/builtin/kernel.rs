@@ -120,9 +120,9 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(string) => string,
         None => return Err(vm.error_argument("file name must be a string.")),
     };
-    let mut load_path = vm.get_global_var(IdentId::get_id("$:"));
-    if load_path.is_nil() {
-        return Ok(Value::false_val());
+    let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
+        Some(path) => path,
+        None => return Ok(Value::false_val()),
     };
     let mut load_ary = load_path
         .expect_array(vm, "LOAD_PATH($:)")?
@@ -168,8 +168,8 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn require_main(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
-    let file_name = path.to_string_lossy().to_string();
-    let (absolute_path, program) = vm.load_file(file_name)?;
+    let file_name = path.to_string_lossy();
+    let (absolute_path, program) = vm.load_file(file_name.as_ref())?;
     #[cfg(feature = "verbose")]
     eprintln!("reading:{}", absolute_path.to_string_lossy());
     vm.root_path.push(path);

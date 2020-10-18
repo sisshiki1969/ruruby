@@ -285,11 +285,8 @@ impl Globals {
 }
 
 impl Globals {
-    pub fn get_global_var(&self, id: IdentId) -> Value {
-        match self.global_var.get(&id) {
-            Some(val) => *val,
-            None => Value::nil(),
-        }
+    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
+        self.global_var.get(&id).cloned()
     }
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {

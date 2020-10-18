@@ -141,11 +141,7 @@ impl RValue {
         if self.kind == ObjKind::Invalid {
             return false;
         };
-        match std::mem::replace(&mut self.kind, ObjKind::Invalid) {
-            ObjKind::Invalid => return false,
-            //ObjKind::Class(c) | ObjKind::Module(c) => c.free(),
-            _ => {}
-        }
+        self.kind = ObjKind::Invalid;
         self.var_table = None;
         true
     }

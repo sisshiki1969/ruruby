@@ -2048,35 +2048,77 @@ impl Codegen {
                 };
             }
             NodeKind::Defined(content) => {
-                match content.kind {
-                    NodeKind::LocalVar(..) => self.gen_string(globals, iseq, "local-variable"),
-                    NodeKind::GlobalVar(..) => self.gen_string(globals, iseq, "global-variable"),
-                    NodeKind::Const { .. } | NodeKind::Scope(..) => {
-                        self.gen_string(globals, iseq, "constant")
-                    }
-                    NodeKind::InstanceVar(..) => {
-                        self.gen_string(globals, iseq, "instance-variable")
-                    }
-                    NodeKind::AssignOp(..) | NodeKind::MulAssign(..) => {
-                        self.gen_string(globals, iseq, "assignment")
-                    }
-                    NodeKind::BinOp(..)
-                    | NodeKind::UnOp(..)
-                    | NodeKind::Index { .. }
-                    | NodeKind::Send { .. } => self.gen_string(globals, iseq, "method"),
-                    NodeKind::Bool(true) => self.gen_string(globals, iseq, "true"),
-                    NodeKind::Bool(false) => self.gen_string(globals, iseq, "false"),
-                    NodeKind::Nil => self.gen_string(globals, iseq, "nil"),
-                    NodeKind::SelfValue => self.gen_string(globals, iseq, "self"),
-                    _ => self.gen_string(globals, iseq, "expression"),
-                }
-                if !use_value {
-                    self.gen_pop(iseq)
+                let mut nil_labels = vec![];
+                self.check_defined(content, iseq, &mut nil_labels);
+                if use_value {
+                    self.gen_string(globals, iseq, content.test_defined());
+                    let end = Codegen::gen_jmp(iseq);
+                    nil_labels
+                        .iter()
+                        .for_each(|label| Codegen::write_disp_from_cur(iseq, *label));
+                    self.gen_push_nil(iseq);
+                    Codegen::write_disp_from_cur(iseq, end);
                 }
             }
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())
+    }
+}
+
+impl Codegen {
+    pub fn check_defined(&mut self, node: &Node, iseq: &mut ISeq, labels: &mut Vec<ISeqPos>) {
+        match &node.kind {
+            NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
+                match self.get_local_var(*id) {
+                    Some((outer, lvar_id)) => {
+                        iseq.push(Inst::CHECK_LOCAL);
+                        Codegen::push32(iseq, lvar_id.as_u32());
+                        Codegen::push32(iseq, outer);
+                    }
+                    None => {
+                        iseq.push(Inst::PUSH_TRUE);
+                    }
+                };
+
+                labels.push(self.gen_jmp_if_t(iseq));
+            }
+            NodeKind::GlobalVar(id) => {
+                iseq.push(Inst::CHECK_GVAR);
+                Codegen::push32(iseq, (*id).into());
+                labels.push(self.gen_jmp_if_t(iseq));
+            }
+            NodeKind::InstanceVar(id) => {
+                iseq.push(Inst::CHECK_IVAR);
+                Codegen::push32(iseq, (*id).into());
+                labels.push(self.gen_jmp_if_t(iseq));
+            }
+            NodeKind::Const { .. } | NodeKind::Scope(..) => {}
+            NodeKind::Array(elems, ..) => elems
+                .iter()
+                .for_each(|n| self.check_defined(n, iseq, labels)),
+            NodeKind::BinOp(_, lhs, rhs) => {
+                self.check_defined(lhs, iseq, labels);
+                self.check_defined(rhs, iseq, labels);
+            }
+            NodeKind::UnOp(_, node) => self.check_defined(node, iseq, labels),
+            NodeKind::Index { base, index } => {
+                self.check_defined(base, iseq, labels);
+                index
+                    .iter()
+                    .for_each(|i| self.check_defined(i, iseq, labels));
+            }
+            NodeKind::Send {
+                receiver, arglist, ..
+            } => {
+                self.check_defined(receiver, iseq, labels);
+                arglist
+                    .args
+                    .iter()
+                    .for_each(|n| self.check_defined(n, iseq, labels));
+            }
+            _ => {}
+        }
     }
 }
 

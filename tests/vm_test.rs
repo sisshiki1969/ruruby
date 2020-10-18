@@ -1336,3 +1336,28 @@ fn singleton4() {
     ";
     assert_script(program);
 }
+
+#[test]
+fn defined() {
+    let program = r##"
+    assert("expression", defined? 1)
+    assert("expression", defined? 1.1)
+    assert("expression", defined? "1.1")
+    assert("expression", defined? [])
+    assert("expression", defined? {})
+    assert("method", defined? 1+1)
+    assert("method", defined? -(1))
+    assert(nil, defined? a)
+    assert(nil, defined? @a)
+    assert(nil, defined? $a)
+    a = [1,2]
+    @a = 100
+    $a = 100
+    assert("local-variable", defined? a)
+    assert("instance-variable", defined? @a)
+    assert("global-variable", defined? $a)
+    assert("method", defined? a.each)
+    assert("method", defined? a[2])
+    "##;
+    assert_script(program);
+}

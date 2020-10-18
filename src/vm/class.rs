@@ -20,10 +20,6 @@ impl ClassInfo {
         }
     }
 
-    pub fn id(&self) -> u64 {
-        self as *const Self as u64
-    }
-
     pub fn new_singleton(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
         ClassInfo {
             name: name.into(),
@@ -32,6 +28,18 @@ impl ClassInfo {
             include: vec![],
             is_singleton: true,
         }
+    }
+
+    pub fn from(id: impl Into<Option<IdentId>>, superclass: impl Into<Option<Value>>) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => Value::nil(),
+        };
+        ClassInfo::new(id, superclass)
+    }
+
+    pub fn from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
+        ClassInfo::from(IdentId::get_id(name), superclass)
     }
 
     pub fn singleton_from(
@@ -45,15 +53,8 @@ impl ClassInfo {
         ClassInfo::new_singleton(id, superclass)
     }
 
-    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
-        let info = MethodInfo::BuiltinFunc { name: id, func };
-        let methodref = MethodRef::new(info);
-        self.method_table.insert(id, methodref);
-    }
-
-    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
-        let name = IdentId::get_id(name);
-        self.add_builtin_method(name, func);
+    pub fn id(&self) -> u64 {
+        self as *const Self as u64
     }
 
     pub fn superclass(&self) -> Option<&ClassInfo> {
@@ -72,6 +73,15 @@ impl ClassInfo {
         }
     }
 
+    /// Get reference of included modules in `self` class.
+    pub fn include(&self) -> &Vec<Value> {
+        &self.include
+    }
+
+    pub fn name(&self) -> String {
+        IdentId::get_ident_name(self.name)
+    }
+
     pub fn add_method(
         &mut self,
         globals: &mut Globals,
@@ -82,36 +92,22 @@ impl ClassInfo {
         self.method_table.insert(id, info)
     }
 
-    pub fn name(&self) -> String {
-        IdentId::get_ident_name(self.name)
+    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
+        let info = MethodInfo::BuiltinFunc { name: id, func };
+        let methodref = MethodRef::new(info);
+        self.method_table.insert(id, methodref);
+    }
+
+    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+        let name = IdentId::get_id(name);
+        self.add_builtin_method(name, func);
     }
 
     /// Include `module` in `self` class.
     /// This method increments `class_version`.
     pub fn include_append(&mut self, globals: &mut Globals, module: Value) {
-        self.include.push(module);
         globals.class_version += 1;
-    }
-
-    /// Get reference of included modules in `self` class.
-    pub fn include(&self) -> &Vec<Value> {
-        &self.include
-    }
-
-    pub fn from(id: impl Into<Option<IdentId>>, superclass: impl Into<Option<Value>>) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
-        ClassInfo::new(id, superclass)
-    }
-
-    pub fn from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
-        ClassInfo::new(IdentId::get_id(name), superclass)
+        self.include.push(module);
     }
 }
 

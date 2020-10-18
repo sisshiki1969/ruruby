@@ -228,25 +228,22 @@ impl Allocator {
     pub fn alloc(&mut self, data: RValue) -> *mut GCBox<RValue> {
         self.allocated += 1;
 
-        match self.free {
-            Some(gcbox) => {
-                // Allocate from the free list.
-                self.free = gcbox.next;
-                #[cfg(feature = "gc-debug")]
-                assert_eq!(gcbox.inner.kind, ObjKind::Invalid);
-                unsafe {
-                    std::ptr::write(
-                        gcbox.as_ptr(),
-                        GCBox {
-                            inner: data,
-                            next: None,
-                        },
-                    );
-                }
-                self.free_list_count -= 1;
-                return gcbox.as_ptr();
+        if let Some(gcbox) = self.free {
+            // Allocate from the free list.
+            self.free = gcbox.next;
+            #[cfg(feature = "gc-debug")]
+            assert_eq!(gcbox.inner.kind, ObjKind::Invalid);
+            unsafe {
+                std::ptr::write(
+                    gcbox.as_ptr(),
+                    GCBox {
+                        inner: data,
+                        next: None,
+                    },
+                );
             }
-            None => {}
+            self.free_list_count -= 1;
+            return gcbox.as_ptr();
         }
 
         let gcbox = if self.used_in_current == DATA_LEN {

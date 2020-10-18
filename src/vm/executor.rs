@@ -891,6 +891,15 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
+                Inst::CHECK_IVAR => {
+                    let var_id = iseq.read_id(self.pc + 1);
+                    let val = match self_oref.get_var(var_id) {
+                        Some(_) => Value::false_val(),
+                        None => Value::true_val(),
+                    };
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
                 Inst::IVAR_ADDI => {
                     let var_id = iseq.read_id(self.pc + 1);
                     let i = iseq.read32(self.pc + 5) as i32;
@@ -910,7 +919,16 @@ impl VM {
                 }
                 Inst::GET_GVAR => {
                     let var_id = iseq.read_id(self.pc + 1);
-                    let val = self.get_global_var(var_id);
+                    let val = self.get_global_var(var_id).unwrap_or(Value::nil());
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
+                Inst::CHECK_GVAR => {
+                    let var_id = iseq.read_id(self.pc + 1);
+                    let val = match self.get_global_var(var_id) {
+                        Some(_) => Value::false_val(),
+                        None => Value::true_val(),
+                    };
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -1483,7 +1501,7 @@ impl VM {
         }
     }
 
-    pub fn get_global_var(&self, id: IdentId) -> Value {
+    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
         self.globals.get_global_var(id)
     }
 
@@ -2045,7 +2063,7 @@ impl VM {
 
     /// Generate new class object with `super_val` as a superclass.
     fn define_class(&mut self, id: IdentId, is_module: bool, mut super_val: Value) -> VMResult {
-        let val = match BuiltinClass::object().get_var(id) {
+        match BuiltinClass::object().get_var(id) {
             Some(mut val) => {
                 if val.is_module().is_some() != is_module {
                     return Err(self.error_type(format!(
@@ -2060,7 +2078,7 @@ impl VM {
                         self.error_type(format!("superclass mismatch for class {:?}.", id,))
                     );
                 };
-                val
+                Ok(val)
             }
             None => {
                 let super_val = if super_val.is_nil() {
@@ -2069,22 +2087,19 @@ impl VM {
                     super_val.expect_class(self, "Superclass")?;
                     super_val
                 };
-                let classref = ClassInfo::from(id, super_val);
+                let cinfo = ClassInfo::from(id, super_val);
                 let val = if is_module {
-                    Value::module(classref)
+                    Value::module(cinfo)
                 } else {
-                    Value::class(classref)
+                    Value::class(cinfo)
                 };
-                //if super_val.has_singleton() {
                 let mut singleton = self.get_singleton_class(val)?;
                 let singleton_class = singleton.as_mut_class();
                 singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
-                //}
                 self.class().set_var(id, val);
-                val
+                Ok(val)
             }
-        };
-        Ok(val)
+        }
     }
 
     fn singleton_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -2711,19 +2726,19 @@ impl VM {
 impl VM {
     pub fn load_file(
         &mut self,
-        file_name: String,
+        file_name: &str,
     ) -> Result<(std::path::PathBuf, String), RubyError> {
         use crate::loader::*;
-        match crate::loader::load_file(&file_name) {
+        match crate::loader::load_file(file_name) {
             Ok((path, program)) => Ok((path, program)),
             Err(err) => {
                 let err_str = match err {
                     LoadError::NotFound(msg) => format!(
                         "LoadError: No such file or directory -- {}\n{}",
-                        &file_name, msg
+                        file_name, msg
                     ),
                     LoadError::CouldntOpen(msg) => {
-                        format!("Cannot open file. '{}'\n{}", &file_name, msg)
+                        format!("Cannot open file. '{}'\n{}", file_name, msg)
                     }
                 };
                 Err(self.error_internal(err_str))
@@ -2737,8 +2752,8 @@ impl VM {
             Ok((path, program)) => (path, program),
             Err(err) => {
                 match err {
-                    LoadError::NotFound(msg) => eprintln!("LoadError: {}\n{}", &file_name, msg),
-                    LoadError::CouldntOpen(msg) => eprintln!("LoadError: {}\n{}", &file_name, msg),
+                    LoadError::NotFound(msg) => eprintln!("LoadError: {}\n{}", file_name, msg),
+                    LoadError::CouldntOpen(msg) => eprintln!("LoadError: {}\n{}", file_name, msg),
                 };
                 return;
             }

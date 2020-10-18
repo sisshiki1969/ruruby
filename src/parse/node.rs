@@ -276,6 +276,25 @@ impl Node {
         }
     }
 
+    pub fn test_defined(&self) -> &'static str {
+        match &self.kind {
+            NodeKind::LocalVar(..) => "local-variable",
+            NodeKind::GlobalVar(..) => "global-variable",
+            NodeKind::Const { .. } | NodeKind::Scope(..) => "constant",
+            NodeKind::InstanceVar(..) => "instance-variable",
+            NodeKind::AssignOp(..) | NodeKind::MulAssign(..) => "assignment",
+            NodeKind::BinOp(..)
+            | NodeKind::UnOp(..)
+            | NodeKind::Index { .. }
+            | NodeKind::Send { .. } => "method",
+            NodeKind::Bool(true) => "true",
+            NodeKind::Bool(false) => "false",
+            NodeKind::Nil => "nil",
+            NodeKind::SelfValue => "self",
+            _ => "expression",
+        }
+    }
+
     pub fn new_nil(loc: Loc) -> Self {
         Node::new(NodeKind::Nil, loc)
     }
