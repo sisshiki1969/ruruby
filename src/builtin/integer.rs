@@ -25,6 +25,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("even?", even);
+    class.add_builtin_method_by_str("size", size);
     Value::class(class)
 }
 
@@ -252,20 +253,27 @@ fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn tof(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn tof(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let num = self_val.as_integer().unwrap();
     Ok(Value::float(num as f64))
 }
 
-fn toi(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    //vm.check_args_num(args.len(), 1, 1)?;
+fn toi(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let num = self_val.as_integer().unwrap();
     Ok(Value::integer(num))
 }
 
-fn even(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn even(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
     let num = self_val.as_integer().unwrap();
     Ok(Value::bool(num % 2 == 0))
+}
+
+fn size(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    Ok(Value::integer(8))
 }
 
 #[cfg(test)]
@@ -281,6 +289,7 @@ mod tests {
         assert(-4, -4.floor)
         assert(true, 8.even?)
         assert(false, 9.even?)
+        assert(8, 1.size)
         "#;
         assert_script(program);
     }

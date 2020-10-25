@@ -2335,11 +2335,11 @@ impl VM {
             }
             context = context
                 .outer
-                .ok_or_else(|| self.error_unimplemented("No block given."))?;
+                .ok_or_else(|| self.error_local_jump("No block given."))?;
         }
         let method = context
             .block
-            .ok_or_else(|| self.error_unimplemented("No block given."))?;
+            .ok_or_else(|| self.error_local_jump("No block given."))?;
 
         let res = self.eval_method(
             method,

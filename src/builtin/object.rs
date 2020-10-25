@@ -1,7 +1,8 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let object_class = globals.builtins.object.as_mut_class();
+    let mut object = globals.builtins.object;
+    let object_class = object.as_mut_class();
     object_class.add_builtin_method_by_str("class", class);
     object_class.add_builtin_method_by_str("object_id", object_id);
     object_class.add_builtin_method_by_str("to_s", to_s);
@@ -23,6 +24,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("to_enum", to_enum);
     object_class.add_builtin_method_by_str("enum_for", to_enum);
     object_class.add_builtin_method_by_str("respond_to?", respond_to);
+    object_class.add_builtin_method_by_str("instance_exec", instance_exec);
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -299,6 +301,17 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Ok(Value::false_val())
     } else {
         Ok(Value::true_val())
+    }
+}
+
+fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let context = vm.current_context();
+    match args.block {
+        Some(method) => {
+            let res = vm.eval_method(method, self_val, Some(context), &args);
+            res
+        }
+        None => return Err(vm.error_argument("Needs block.")),
     }
 }
 

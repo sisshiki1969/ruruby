@@ -152,6 +152,41 @@ fn argument_number() {
 }
 
 #[test]
+fn block_yield() {
+    let program = r#"
+        def fn
+            yield
+        end
+        block = Proc.new { 100 }
+        assert_error { fn }
+        assert 200, fn(){ 200 }
+        assert 100, fn(&block)
+    "#;
+    assert_script(program);
+}
+
+#[test]
+fn block_capture() {
+    let program = r#"
+        def fn2(&block)
+            block.call
+        end
+        def fn1(&block)
+            fn2(&block)
+        end
+        x = 100
+        y = 200
+        block = Proc.new { x }
+        assert_error { fn }
+        assert 200, fn2(){ y }
+        assert 100, fn2(&block)
+        assert 200, fn1(){ y }
+        assert 100, fn1(&block)
+    "#;
+    assert_script(program);
+}
+
+#[test]
 fn block_argument() {
     let program = r#"
         block = Proc.new {|x| x.upcase }

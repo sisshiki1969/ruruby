@@ -265,6 +265,13 @@ impl Globals {
 
         let env = Value::hash_from(env_map);
         object.set_var_by_str("ENV", env);
+        object.set_var_by_str("RUBY_PLATFORM", Value::string("x86_64-linux".to_string()));
+        object.set_var_by_str("RUBY_VERSION", Value::string("2.5.0".to_string()));
+        object.set_var_by_str("RUBY_ENGINE", Value::string("ruruby".to_string()));
+        object.set_var_by_str(
+            "RUBY_DESCRIPTION",
+            Value::string("ruruby [x86_64-linux]".to_string()),
+        );
 
         globals
             .global_var

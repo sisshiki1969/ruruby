@@ -5,6 +5,12 @@ use std::ops::{Index, IndexMut, Range};
 const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Block {
+    Method(MethodRef),
+    Proc(Value),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Args {
     pub block: Option<MethodRef>,
     pub kw_arg: Value,

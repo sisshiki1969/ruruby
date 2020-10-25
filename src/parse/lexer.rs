@@ -576,7 +576,10 @@ impl Lexer {
         } else {
             match s.parse::<i64>() {
                 Ok(i) => Real::Integer(i),
-                Err(err) => return Err(self.error_parse(&format!("{:?}", err), self.pos)),
+                Err(_err) => {
+                    // TODO: parse BigNum
+                    Real::Integer(0)
+                }
             }
         };
         if self.consume('i') {

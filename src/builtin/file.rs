@@ -15,6 +15,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     class_val.add_builtin_class_method("write", write);
     class_val.add_builtin_class_method("expand_path", expand_path);
     class_val.add_builtin_class_method("exist?", exist);
+    class_val.add_builtin_class_method("executable?", executable);
     class_val.add_builtin_class_method("directory?", directory);
     class_val.add_builtin_class_method("file?", file);
     class_val.add_builtin_class_method("realpath", realpath);
@@ -110,7 +111,7 @@ fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// IO.read(path)
 fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_range(len, 1, 1)?;
+    vm.check_args_num(len, 1)?;
     let filename = string_to_path(vm, args[0], "1st arg")?;
     let mut file = match File::open(&filename) {
         Ok(file) => file,
@@ -185,7 +186,14 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 
     return Ok(Value::string(res_path.to_string_lossy().to_string()));
 }
+
 fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(args.len(), 1, 1)?;
+    let b = string_to_canonicalized_path(vm, args[0], "1st arg").is_ok();
+    Ok(Value::bool(b))
+}
+
+fn executable(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 1)?;
     let b = string_to_canonicalized_path(vm, args[0], "1st arg").is_ok();
     Ok(Value::bool(b))

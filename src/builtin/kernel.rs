@@ -11,6 +11,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel_class.add_builtin_method_by_str("assert_error", assert_error);
     kernel_class.add_builtin_method_by_str("require", require);
     kernel_class.add_builtin_method_by_str("require_relative", require_relative);
+    kernel_class.add_builtin_method_by_str("load", load);
     kernel_class.add_builtin_method_by_str("block_given?", block_given);
     kernel_class.add_builtin_method_by_str("method", method);
     kernel_class.add_builtin_method_by_str("is_a?", isa);
@@ -136,7 +137,7 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         match base_path.canonicalize() {
             Ok(path) => {
                 //eprintln!("found: {:?}", path);
-                require_main(vm, path)?;
+                load_exec(vm, path)?;
                 return Ok(Value::bool(true));
             }
             _ => {}
@@ -163,11 +164,43 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     path.set_extension("rb");
-    require_main(vm, path)?;
+    load_exec(vm, path)?;
     Ok(Value::bool(true))
 }
 
-fn require_main(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
+fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let file_name = match args[0].as_string() {
+        Some(string) => string,
+        None => return Err(vm.error_argument("file name must be a string.")),
+    };
+    let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
+        Some(path) => path,
+        None => return Err(vm.error_internal("Load path not found.")),
+    };
+    let mut load_ary = load_path
+        .expect_array(vm, "LOAD_PATH($:)")?
+        .elements
+        .clone();
+    for path in load_ary.iter_mut() {
+        let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
+        base_path.push(file_name);
+        //base_path.set_extension("rb");
+        //eprintln!("search: {:?}", base_path);
+        match base_path.canonicalize() {
+            Ok(path) => {
+                //eprintln!("found: {:?}", path);
+                load_exec(vm, path)?;
+                return Ok(Value::true_val());
+            }
+            _ => {}
+        }
+    }
+    Err(vm.error_internal(format!("File not found. {:?}", file_name)))
+}
+
+/// Load file and execute.
+fn load_exec(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
     let file_name = path.to_string_lossy();
     let (absolute_path, program) = vm.load_file(file_name.as_ref())?;
     #[cfg(feature = "verbose")]
