@@ -432,6 +432,16 @@ impl Value {
         let classref = singleton.as_mut_class();
         classref.add_builtin_method_by_str(name, func);
     }
+
+    /// Add module function to `self`.
+    /// `self` must be Module or Class.
+    pub fn add_builtin_module_func(&mut self, name: &str, func: BuiltinFunc) {
+        let classref = self.as_mut_module().unwrap();
+        classref.add_builtin_method_by_str(name, func);
+        let mut singleton = self.get_singleton_class().unwrap();
+        let classref = singleton.as_mut_class();
+        classref.add_builtin_method_by_str(name, func);
+    }
 }
 
 impl Value {

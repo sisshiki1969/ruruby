@@ -1190,7 +1190,7 @@ impl Parser {
         let tok = self.get()?;
         let loc = tok.loc();
         let id = match &tok.kind {
-            TokenKind::Ident(s) => self.get_ident_id(s),
+            TokenKind::Ident(s) | TokenKind::Const(s) => self.get_ident_id(s),
             TokenKind::Reserved(r) => {
                 let s = self.lexer.get_string_from_reserved(*r).to_owned();
                 self.get_ident_id(&s)

@@ -30,6 +30,14 @@ fn string_to_path(vm: &mut VM, mut string: Value, msg: &str) -> Result<PathBuf, 
     Ok(PathBuf::from(file))
 }
 
+/// Canonicalize PathBuf.
+fn canonicalize_path(vm: &mut VM, path: PathBuf) -> Result<PathBuf, RubyError> {
+    match path.canonicalize() {
+        Ok(file) => Ok(file),
+        Err(_) => Err(vm.error_argument(format!("Invalid file path. {:?}", path))),
+    }
+}
+
 /// Convert Ruby String value`string` to canonicalized PathBuf.
 fn string_to_canonicalized_path(
     vm: &mut VM,
@@ -218,9 +226,16 @@ fn file(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 }
 
 fn realpath(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 1, 1)?;
-    let b = string_to_canonicalized_path(vm, args[0], "1st arg")?;
-    Ok(Value::string(b.to_string_lossy().to_string()))
+    vm.check_args_range(args.len(), 1, 2)?;
+    let mut pathname = args[0];
+    let mut root = if args.len() == 2 {
+        string_to_path(vm, args[1], "2nd arg")?
+    } else {
+        PathBuf::new()
+    };
+    root.push(pathname.expect_string(vm, "1st arg")?);
+    let path_str = canonicalize_path(vm, root)?.to_string_lossy().to_string();
+    Ok(Value::string(path_str))
 }
 
 #[cfg(test)]
@@ -247,6 +262,7 @@ mod tests {
             assert false, File.file? "Cargo.tomlz"
             assert "#{Dir.pwd}/Cargo.toml", File.realpath "Cargo.toml"
             assert_error { File.realpath "Cargo.tomlz" }
+            assert_error { File.realpath("Cargo.tomlz", "/") }
         "###;
         assert_script(program);
     }
