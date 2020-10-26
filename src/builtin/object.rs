@@ -238,7 +238,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for i in 0..args.len() - 1 {
         new_args[i] = args[i + 1];
     }
-    new_args.block = args.block;
+    new_args.block = args.block.clone();
     let res = vm.eval_send(method, self_val, &new_args)?;
     Ok(res)
 }
@@ -264,7 +264,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
     let method = vm.parse_program_eval(path, program)?;
     let args = Args::new0();
-    let res = vm.eval_block(method, &args)?;
+    let res = vm.eval_block(&Block::Method(method), &args)?;
     Ok(res)
 }
 
@@ -275,7 +275,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (method, new_args) = if args.len() == 0 {
         let method = IdentId::get_id("each");
         let mut new_args = Args::new0();
-        new_args.block = Some(*METHODREF_ENUM);
+        new_args.block = Some(Block::Method(*METHODREF_ENUM));
         (method, new_args)
     } else {
         if !args[0].is_packed_symbol() {
@@ -286,7 +286,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         for i in 0..args.len() - 1 {
             new_args[i] = args[i + 1];
         }
-        new_args.block = Some(*METHODREF_ENUM);
+        new_args.block = Some(Block::Method(*METHODREF_ENUM));
         (method, new_args)
     };
     let val = vm.create_enumerator(method, self_val, new_args)?;
@@ -305,12 +305,8 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let context = vm.current_context();
-    match args.block {
-        Some(method) => {
-            let res = vm.eval_method(method, self_val, Some(context), &args);
-            res
-        }
+    match &args.block {
+        Some(block) => vm.eval_block_self(block, self_val, args),
         None => return Err(vm.error_argument("Needs block.")),
     }
 }
@@ -467,7 +463,6 @@ mod test {
         let program = r#"
         class Array
             def iich
-                p self
                 len = self.size
                 for i in 0...len
                     yield(self[i])

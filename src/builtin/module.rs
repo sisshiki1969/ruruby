@@ -263,12 +263,11 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = vm.current_context();
-    match args.block {
-        Some(method) => {
+    match &args.block {
+        Some(block) => {
             vm.check_args_num(args.len(), 0)?;
             let args = Args::new0();
-            let res = vm.eval_method(method, self_val, Some(context), &args);
-            res
+            vm.eval_block_self(block, self_val, &args)
         }
         None => {
             vm.check_args_num(args.len(), 1)?;

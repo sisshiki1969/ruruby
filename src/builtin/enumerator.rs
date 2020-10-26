@@ -24,7 +24,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let (method, new_args) = if args.len() == 1 {
         let method = IdentId::get_id("each");
         let mut new_args = Args::new0();
-        new_args.block = Some(*METHODREF_ENUM);
+        new_args.block = Some(Block::Method(*METHODREF_ENUM));
         (method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
@@ -35,7 +35,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         for i in 0..args.len() - 2 {
             new_args[i] = args[i + 2];
         }
-        new_args.block = Some(*METHODREF_ENUM);
+        new_args.block = Some(Block::Method(*METHODREF_ENUM));
         (method, new_args)
     };
     let val = vm.create_enumerator(method, receiver, new_args)?;
@@ -100,7 +100,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
     let mut info = vm.dup_enum(eref);
-    let block = match args.block {
+    let block = match &args.block {
         Some(method) => method,
         None => {
             return Ok(self_val);
@@ -127,7 +127,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
-    let block = match args.block {
+    let block = match &args.block {
         Some(method) => method,
         None => {
             // return Enumerator
@@ -157,7 +157,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     //let fref = &mut eref.fiber;
-    let block = match args.block {
+    let block = match &args.block {
         Some(method) => method,
         None => {
             // return Enumerator

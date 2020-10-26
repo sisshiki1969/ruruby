@@ -6,7 +6,7 @@ const LVAR_ARRAY_SIZE: usize = 4;
 #[derive(Debug, Clone)]
 pub struct Context {
     pub self_value: Value,
-    pub block: Option<MethodRef>,
+    pub block: Option<Block>,
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
     pub iseq_ref: Option<ISeqRef>,
@@ -15,7 +15,6 @@ pub struct Context {
     /// Context of caller.
     pub caller: Option<ContextRef>,
     pub on_stack: bool,
-    //pub stack_len: usize,
     pub kind: ISeqKind,
 }
 
@@ -74,6 +73,10 @@ impl GC for Context {
             }
             None => {}
         }
+        match self.block {
+            Some(Block::Proc(proc)) => proc.mark(alloc),
+            _ => {}
+        }
         match self.outer {
             Some(c) => c.mark(alloc),
             None => {}
@@ -84,7 +87,7 @@ impl GC for Context {
 impl Context {
     pub fn new(
         self_value: Value,
-        block: Option<MethodRef>,
+        block: Option<Block>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
         caller: Option<ContextRef>,
@@ -132,13 +135,13 @@ impl Context {
         iseq: ISeqRef,
         args: &Args,
         outer: Option<ContextRef>,
-        caller: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
+        let caller = vm.latest_context();
         if iseq.opt_flag {
             if !args.kw_arg.is_nil() {
                 return Err(vm.error_argument("Undefined keyword."));
             };
-            let mut context = Context::new(self_value, args.block, iseq, outer, caller);
+            let mut context = Context::new(self_value, args.block.clone(), iseq, outer, caller);
             if iseq.is_block() {
                 context.from_args_opt_block(iseq, args)?;
             } else {
@@ -150,7 +153,7 @@ impl Context {
             }
             return Ok(context);
         }
-        let mut context = Context::new(self_value, args.block, iseq, outer, caller);
+        let mut context = Context::new(self_value, args.block.clone(), iseq, outer, caller);
         let params = &iseq.params;
         let kw = if params.keyword.is_empty() && !params.kwrest {
             // if no keyword param nor kwrest param exists in formal parameters,
@@ -192,11 +195,12 @@ impl Context {
             context[id] = Value::hash_from_map(kwrest);
         }
         if let Some(id) = iseq.lvar.block_param() {
-            context[id] = match args.block {
-                Some(block) => {
-                    let proc_context = vm.create_block_context(block)?;
+            context[id] = match &args.block {
+                Some(Block::Method(method)) => {
+                    let proc_context = vm.create_block_context(*method)?;
                     Value::procobj(proc_context)
                 }
+                Some(Block::Proc(proc)) => *proc,
                 None => Value::nil(),
             }
         }
@@ -328,7 +332,7 @@ impl Context {
 impl ContextRef {
     pub fn from(
         self_value: Value,
-        block: Option<MethodRef>,
+        block: Option<Block>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
         caller: Option<ContextRef>,

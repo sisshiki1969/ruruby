@@ -1457,6 +1457,7 @@ impl Parser {
                     let symbol_loc = self.prev_loc();
                     let id = match &token.kind {
                         TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
+                        TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
                         _ if token.can_be_symbol() => {
                             let ident = self.token_as_symbol(&token);
                             self.get_ident_id(&ident)
@@ -2057,6 +2058,9 @@ impl Parser {
         Ok(())
     }
 
+    /// Check method name extension.
+    /// Parse "xxxx!" as a valid mathod name.
+    /// "xxxx!=" or "xxxx?=" is invalid.
     fn method_def_ext(&mut self, s: &str) -> Result<IdentId, RubyError> {
         let id = if !self.lexer.trailing_space()
             && !(s.ends_with('!') || s.ends_with('?'))

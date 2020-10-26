@@ -15,8 +15,11 @@ pub fn init(_globals: &mut Globals) -> Value {
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let method = vm.expect_block(args.block)?;
-    let context = vm.create_block_context(method)?;
+    let context = match vm.expect_block(&args.block)? {
+        Block::Method(method) => vm.create_block_context(*method)?,
+        Block::Proc(proc) => proc.expect_proc(vm)?.context,
+    };
+
     let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
     let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
     let new_fiber = vm.create_fiber(tx0, rx1);

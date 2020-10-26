@@ -10,9 +10,28 @@ pub enum Block {
     Proc(Value),
 }
 
+impl Block {
+    pub fn to_iseq(&self, vm: &mut VM) -> Result<ISeqRef, RubyError> {
+        match self {
+            Block::Proc(val) => {
+                let val = *val;
+                Ok(val
+                    .as_proc()
+                    .ok_or_else(|| {
+                        vm.error_argument(format!("Block argument must be Proc. given:{:?}", val))
+                    })?
+                    .context
+                    .iseq_ref
+                    .unwrap())
+            }
+            Block::Method(methodref) => methodref.as_iseq(vm),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Args {
-    pub block: Option<MethodRef>,
+    pub block: Option<Block>,
     pub kw_arg: Value,
     elems: ArgsArray,
 }
@@ -62,12 +81,7 @@ impl Args {
         }
     }
 
-    pub fn new3(
-        block: impl Into<Option<MethodRef>>,
-        arg0: Value,
-        arg1: Value,
-        arg2: Value,
-    ) -> Self {
+    pub fn new3(block: impl Into<Option<Block>>, arg0: Value, arg1: Value, arg2: Value) -> Self {
         Args {
             block: block.into(),
             kw_arg: Value::nil(),

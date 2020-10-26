@@ -983,7 +983,7 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = iseq.read_methodref(self.pc + 1);
-                    let proc_obj = self.create_proc(method)?;
+                    let proc_obj = self.create_proc(&Block::Method(method))?;
                     self.stack_push(proc_obj);
                     self.pc += 9;
                 }
@@ -1413,10 +1413,10 @@ impl VM {
     }
 }
 
-impl VM {
-    pub fn expect_block(&self, block: Option<MethodRef>) -> Result<MethodRef, RubyError> {
+impl<'a> VM {
+    pub fn expect_block(&self, block: &'a Option<Block>) -> Result<&'a Block, RubyError> {
         match block {
-            Some(method) => Ok(method),
+            Some(block) => Ok(block),
             None => return Err(self.error_argument("Currently, needs block.")),
         }
     }
@@ -2270,22 +2270,23 @@ impl VM {
         };
 
         let block = if block != 0 {
-            Some(MethodRef::from_u64(block))
+            let method = MethodRef::from_u64(block);
+            Some(Block::Method(method))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
             if val.is_nil() {
                 None
             } else {
-                let method = val
-                    .as_proc()
-                    .ok_or_else(|| {
-                        self.error_argument(format!("Block argument must be Proc. given:{:?}", val))
-                    })?
-                    .context
-                    .iseq_ref
-                    .unwrap()
-                    .method;
-                Some(method)
+                /*let method = val
+                .as_proc()
+                .ok_or_else(|| {
+                    self.error_argument(format!("Block argument must be Proc. given:{:?}", val))
+                })?
+                .context
+                .iseq_ref
+                .unwrap()
+                .method;*/
+                Some(Block::Proc(val))
             }
         } else {
             None
@@ -2320,13 +2321,38 @@ impl VM {
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
-    #[inline]
-    pub fn eval_block(&mut self, methodref: MethodRef, args: &Args) -> VMResult {
-        let context = self.current_context();
-        self.eval_method(methodref, context.self_value, Some(context), args)
+    pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
+        match block {
+            Block::Method(method) => {
+                let outer = self.current_context();
+                self.eval_method(*method, outer.self_value, Some(outer), args)
+            }
+            Block::Proc(proc) => self.eval_proc(*proc, args),
+        }
     }
 
-    /// Evaluate method with self_val of current context, caller context as outer context, and given `args`.
+    /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
+    pub fn eval_block_self(&mut self, block: &Block, self_val: Value, args: &Args) -> VMResult {
+        match block {
+            Block::Method(method) => {
+                let outer = self.current_context();
+                self.eval_method(*method, self_val, Some(outer), args)
+            }
+            Block::Proc(proc) => {
+                let pref = proc.as_proc().unwrap();
+                let context = Context::from_args(
+                    self,
+                    self_val,
+                    pref.context.iseq_ref.unwrap(),
+                    args,
+                    pref.context.outer,
+                )?;
+                self.run_context(ContextRef::from_local(&context))
+            }
+        }
+    }
+
+    /// Evaluate given block with given `args`.
     pub fn eval_yield(&mut self, args: &Args) -> VMResult {
         let mut context = self.current_context();
         loop {
@@ -2337,16 +2363,31 @@ impl VM {
                 .outer
                 .ok_or_else(|| self.error_local_jump("No block given."))?;
         }
-        let method = context
+        let block = &context
             .block
+            .clone()
             .ok_or_else(|| self.error_local_jump("No block given."))?;
 
-        let res = self.eval_method(
-            method,
-            self.current_context().self_value,
-            context.caller,
-            &args,
+        let res = match block {
+            Block::Method(method) => {
+                //let outer = self.current_context();
+                self.eval_method(*method, context.self_value, context.caller, args)?
+            }
+            Block::Proc(proc) => self.eval_proc(*proc, args)?,
+        };
+        Ok(res)
+    }
+
+    pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
+        let pref = proc.as_proc().unwrap();
+        let context = Context::from_args(
+            self,
+            pref.context.self_value,
+            pref.context.iseq_ref.unwrap(),
+            args,
+            pref.context.outer,
         )?;
+        let res = self.run_context(ContextRef::from_local(&context))?;
         Ok(res)
     }
 
@@ -2394,8 +2435,7 @@ impl VM {
                 None => unreachable!("AttrReader must be used only for class instance."),
             },
             MethodInfo::RubyFunc { iseq } => {
-                let context =
-                    Context::from_args(self, self_val, *iseq, args, outer, self.latest_context())?;
+                let context = Context::from_args(self, self_val, *iseq, args, outer)?;
                 let res = self.run_context(ContextRef::from_local(&context));
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(_inst);
@@ -2618,19 +2658,29 @@ impl VM {
 
     /// Create new Proc object from `method`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_proc(&mut self, method: MethodRef) -> VMResult {
-        self.move_outer_to_heap();
-        let context = self.create_block_context(method)?;
-        Ok(Value::procobj(context))
+    pub fn create_proc(&mut self, block: &Block) -> VMResult {
+        match block {
+            Block::Method(method) => {
+                //self.move_outer_to_heap();
+                let context = self.create_block_context(*method)?;
+                Ok(Value::procobj(context))
+            }
+            Block::Proc(proc) => Ok(proc.dup()),
+        }
     }
 
     /// Create new Lambda object from `method`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_lambda(&mut self, method: MethodRef) -> VMResult {
-        self.move_outer_to_heap();
-        let mut context = self.create_block_context(method)?;
-        context.kind = ISeqKind::Method(IdentId::get_id(""));
-        Ok(Value::procobj(context))
+    pub fn create_lambda(&mut self, block: &Block) -> VMResult {
+        match block {
+            Block::Method(method) => {
+                //self.move_outer_to_heap();
+                let mut context = self.create_block_context(*method)?;
+                context.kind = ISeqKind::Method(IdentId::get_id(""));
+                Ok(Value::procobj(context))
+            }
+            Block::Proc(proc) => Ok(proc.dup()),
+        }
     }
 
     pub fn create_enum_info(

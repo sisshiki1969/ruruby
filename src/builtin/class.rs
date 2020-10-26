@@ -24,11 +24,11 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     let val = Value::class_from(None, superclass);
 
-    match args.block {
-        Some(method) => {
+    match &args.block {
+        Some(block) => {
             vm.class_push(val);
             let arg = Args::new1(val);
-            vm.eval_method(method, val, Some(vm.current_context()), &arg)?;
+            vm.eval_block_self(block, val, &arg)?;
             vm.class_pop();
         }
         None => {}

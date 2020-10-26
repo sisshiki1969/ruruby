@@ -429,8 +429,8 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let replace = arg1.expect_string(vm, "2nd arg")?;
         RegexpInfo::replace_one(vm, args[0], given, replace)?
     } else {
-        let block = vm.expect_block(args.block)?;
-        let (res, _) = RegexpInfo::replace_one_block(vm, args[0], given, block)?;
+        let block = vm.expect_block(&args.block)?;
+        let (res, _) = RegexpInfo::replace_one_block(vm, args[0], given, &block)?;
         res
     };
     Ok(Value::string(res))
@@ -449,7 +449,7 @@ fn gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, bool), RubyError> {
-    match args.block {
+    match &args.block {
         Some(block) => {
             vm.check_args_num(args.len(), 1)?;
             let given = self_val.expect_string(vm, "Receiver")?;
@@ -476,7 +476,7 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     } else {
         return Err(vm.error_argument("1st arg must be RegExp or String."));
     };
-    match args.block {
+    match &args.block {
         Some(block) => {
             vm.temp_push_vec(&mut vec.clone());
             for arg in vec {
@@ -618,7 +618,7 @@ fn size(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    match args.block {
+    match &args.block {
         Some(block) => {
             let rstr = match self_val.as_rstring() {
                 Some(rstr) => rstr,
@@ -643,7 +643,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let block = match args.block {
+    let block = match &args.block {
         Some(block) => block,
         None => return Err(vm.error_argument("Block is neccessary.")),
     };
@@ -670,7 +670,7 @@ fn chars(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let block = match args.block {
+    let block = match &args.block {
         Some(block) => block,
         None => return Err(vm.error_argument("Block is neccessary.")),
     };

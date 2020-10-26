@@ -160,7 +160,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let method = match args.block {
+    let method = match &args.block {
         Some(method) => method,
         None => {
             let id = IdentId::get_id("times");
@@ -182,7 +182,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let method = match args.block {
+    let method = match &args.block {
         Some(method) => method,
         None => {
             let id = IdentId::get_id("upto");
@@ -204,7 +204,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 2)?;
-    let method = match args.block {
+    let method = match &args.block {
         Some(method) => method,
         None => {
             let id = IdentId::get_id("step");

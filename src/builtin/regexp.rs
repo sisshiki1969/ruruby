@@ -226,13 +226,13 @@ impl RegexpInfo {
         vm: &mut VM,
         re_val: Value,
         given: &str,
-        block: MethodRef,
+        block: &Block,
     ) -> Result<(String, bool), RubyError> {
         fn replace_(
             vm: &mut VM,
             re: &RegexpInfo,
             given: &str,
-            block: MethodRef,
+            block: &Block,
         ) -> Result<(String, bool), RubyError> {
             let (start, end, matched_str) = match re.captures_from_pos(given, 0) {
                 Ok(None) => return Ok((given.to_string(), false)),
@@ -284,13 +284,13 @@ impl RegexpInfo {
         vm: &mut VM,
         re_val: Value,
         given: &str,
-        block: MethodRef,
+        block: &Block,
     ) -> Result<(String, bool), RubyError> {
         fn replace_(
             vm: &mut VM,
             re: &RegexpInfo,
             given: &str,
-            block: MethodRef,
+            block: &Block,
         ) -> Result<(String, bool), RubyError> {
             let mut range = vec![];
             let mut i = 0;

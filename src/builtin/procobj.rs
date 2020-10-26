@@ -27,8 +27,8 @@ pub fn init(_globals: &mut Globals) -> Value {
 // Class methods
 
 fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    let method = vm.expect_block(args.block)?;
-    let procobj = vm.create_proc(method)?;
+    let block = vm.expect_block(&args.block)?;
+    let procobj = vm.create_proc(block)?;
     Ok(procobj)
 }
 
@@ -46,17 +46,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let pref = self_val.as_proc().unwrap();
-    let context = Context::from_args(
-        vm,
-        pref.context.self_value,
-        pref.context.iseq_ref.unwrap(),
-        args,
-        pref.context.outer,
-        vm.latest_context(),
-    )?;
-    let res = vm.run_context(ContextRef::from_local(&context))?;
-    Ok(res)
+    vm.eval_proc(self_val, args)
 }
 
 #[cfg(test)]
@@ -66,9 +56,9 @@ mod test {
     #[test]
     fn proc() {
         let program = "
-        @foo = 42
-        p = Proc.new { @foo}
-        l = lambda { @foo }
+        foo = 42
+        p = Proc.new { foo }
+        l = lambda { foo }
         assert(42, p[])
         assert(42, l[])
         ";

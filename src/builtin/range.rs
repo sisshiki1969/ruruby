@@ -129,14 +129,14 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
     let mut res = vec![];
     for i in start..end {
         arg[0] = Value::integer(i);
-        let val = vm.eval_block(method, &arg)?;
+        let val = vm.eval_block(&block, &arg)?;
         vm.temp_push(val);
         res.push(val);
     }
@@ -147,14 +147,14 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
     let mut res = vec![];
     for i in start..end {
         arg[0] = Value::integer(i);
-        let val = vm.eval_block(method, &arg)?;
+        let val = vm.eval_block(&block, &arg)?;
         vm.temp_push(val);
         match val.as_array() {
             Some(aref) => {
@@ -171,7 +171,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
-    let method = match args.block {
+    let method = match &args.block {
         Some(method) => method,
         None => {
             // return Enumerator
@@ -192,12 +192,12 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let range = self_val.as_range().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let start = range.start.expect_integer(&vm, "Start")?;
     let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(Value::integer(i));
-        let res = vm.eval_block(method, &arg)?;
+        let res = vm.eval_block(&block, &arg)?;
         if !res.to_bool() {
             return Ok(Value::false_val());
         }

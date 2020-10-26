@@ -80,13 +80,13 @@ fn empty(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = self_val.as_hash().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let method = vm.expect_block(&args.block)?;
     let mut res = FxHashMap::default();
     let mut arg = Args::new2(Value::nil(), Value::nil());
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
-        if vm.eval_block(method, &arg)?.to_bool() {
+        if vm.eval_block(&method, &arg)?.to_bool() {
             res.insert(HashKey(k), v);
         };
     }
@@ -130,11 +130,11 @@ fn values(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let mut arg = Args::new1(Value::nil());
     for (_, v) in hash.iter() {
         arg[0] = v;
-        vm.eval_block(method, &arg)?;
+        vm.eval_block(&block, &arg)?;
     }
 
     Ok(self_val)
@@ -143,12 +143,12 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let mut arg = Args::new1(Value::nil());
 
     for (k, _) in hash.iter() {
         arg[0] = k;
-        vm.eval_block(method, &arg)?;
+        vm.eval_block(&block, &arg)?;
     }
 
     Ok(self_val)
@@ -157,13 +157,13 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let hash = self_val.as_hash().unwrap();
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let mut arg = Args::new2(Value::nil(), Value::nil());
 
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
-        vm.eval_block(method, &arg)?;
+        vm.eval_block(&block, &arg)?;
     }
 
     Ok(self_val)
@@ -189,7 +189,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let val = match hash.get(&key) {
         Some(val) => *val,
         None => {
-            match args.block {
+            match &args.block {
                 // TODO: If arg[1] exists, Should warn "block supersedes default value argument".
                 Some(block) => vm.eval_block(block, &Args::new1(key))?,
                 None => {

@@ -45,11 +45,11 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     class_val.set_var_by_str("_members", Value::array_from(vec));
     builtin::module::attr_accessor(vm, class_val, &attr_args)?;
 
-    match args.block {
+    match &args.block {
         Some(method) => {
             vm.class_push(class_val);
             let arg = Args::new1(class_val);
-            vm.eval_method(method, class_val, Some(vm.current_context()), &arg)?;
+            vm.eval_block_self(method, class_val, &arg)?;
             vm.class_pop();
         }
         None => {}

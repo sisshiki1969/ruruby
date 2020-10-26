@@ -823,6 +823,13 @@ impl Value {
         }
     }
 
+    pub fn expect_proc(&self, vm: &mut VM) -> Result<&ProcInfo, RubyError> {
+        match self.as_proc() {
+            Some(e) => Ok(e),
+            None => Err(vm.error_argument("Must be Proc.")),
+        }
+    }
+
     pub fn as_method(&self) -> Option<&MethodObjInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {

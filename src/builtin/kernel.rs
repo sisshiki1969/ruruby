@@ -97,7 +97,7 @@ fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let method = match args.block {
+    let method = match &args.block {
         Some(block) => block,
         None => return Err(vm.error_argument("assert_error(): Block not given.")),
     };
@@ -317,10 +317,10 @@ fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
 }
 
 fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    let method = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let arg = Args::new0();
     loop {
-        let res = vm.eval_block(method, &arg);
+        let res = vm.eval_block(&block, &arg);
         match res {
             Ok(_) => {}
             Err(err) => match &err.kind {
@@ -382,14 +382,14 @@ fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn proc(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let block = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let procobj = vm.create_proc(block)?;
     Ok(procobj)
 }
 
 fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let block = vm.expect_block(args.block)?;
+    let block = vm.expect_block(&args.block)?;
     let procobj = vm.create_lambda(block)?;
     Ok(procobj)
 }
