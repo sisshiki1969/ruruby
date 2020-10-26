@@ -3,8 +3,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::*;
 
-pub fn init(_globals: &mut Globals) -> Value {
-    let class = ClassInfo::from_str("File", BuiltinClass::object());
+pub fn init(globals: &mut Globals) -> Value {
+    let object_class = globals.builtins.object;
+    let io_class = object_class.get_var_by_str("IO").unwrap();
+    let class = ClassInfo::from_str("File", io_class);
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("join", join);
     class_val.add_builtin_class_method("basename", basename);

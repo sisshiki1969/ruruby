@@ -58,8 +58,10 @@ mod test {
         let program = "
         foo = 42
         p = Proc.new { foo }
+        p2 = proc { foo }
         l = lambda { foo }
         assert(42, p[])
+        assert(42, p2[])
         assert(42, l[])
         ";
         assert_script(program);

@@ -12,3 +12,24 @@ class Thread
     false
   end
 end
+
+class RubyVM
+  class AbstractSyntaxTree
+    class Node
+    end
+  end
+end
+
+RUBY_PLATFORM = "x86_64-linux"
+RUBY_VERSION = "2.5.0"
+RUBY_ENGINE = "ruruby"
+RUBY_DESCRIPTION = "ruruby [x86_64-linux]"
+$: = ["#{Dir.home}/.rbenv/rbenv.d/exec/gem-rehash",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/site_ruby/3.0.0",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/site_ruby/3.0.0/x86_64-linux",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/site_ruby",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/vendor_ruby/3.0.0",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/vendor_ruby/3.0.0/x86_64-linux",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/vendor_ruby",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/3.0.0",
+  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/3.0.0/x86_64-linux"]

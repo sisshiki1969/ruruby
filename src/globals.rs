@@ -239,13 +239,13 @@ impl Globals {
         BuiltinClass::set_class("Kernel", kernel);
 
         init_class!("Math", math);
+        init_class!("IO", io);
         init_class!("File", file);
         init_class!("Dir", dir);
         init_class!("Process", process);
         init_class!("GC", gc);
         init_class!("Struct", structobj);
         init_class!("Time", time);
-        init_class!("IO", io);
         init_class!("Comparable", comparable);
 
         let id = IdentId::get_id("StopIteration");
@@ -265,18 +265,6 @@ impl Globals {
 
         let env = Value::hash_from(env_map);
         object.set_var_by_str("ENV", env);
-        object.set_var_by_str("RUBY_PLATFORM", Value::string("x86_64-linux".to_string()));
-        object.set_var_by_str("RUBY_VERSION", Value::string("2.5.0".to_string()));
-        object.set_var_by_str("RUBY_ENGINE", Value::string("ruruby".to_string()));
-        object.set_var_by_str(
-            "RUBY_DESCRIPTION",
-            Value::string("ruruby [x86_64-linux]".to_string()),
-        );
-
-        globals
-            .global_var
-            .insert(IdentId::get_id("$:"), Value::array_from(vec![]));
-
         globals
     }
 

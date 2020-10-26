@@ -182,6 +182,14 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         .expect_array(vm, "LOAD_PATH($:)")?
         .elements
         .clone();
+    match PathBuf::from(file_name).canonicalize() {
+        Ok(path) => {
+            //eprintln!("found: {:?}", path);
+            load_exec(vm, path)?;
+            return Ok(Value::true_val());
+        }
+        _ => {}
+    }
     for path in load_ary.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
         base_path.push(file_name);
@@ -491,15 +499,27 @@ mod test {
 
     #[test]
     fn kernel_etc() {
-        let program = r#"
+        let program = r###"
         assert_error { assert 2, 3 }
         assert_error { assert_error { true } }
         assert_error { raise }
-        require_relative "../../tests/kernel_test.rb"
-        assert_error { require_relative "kernel_test.rb" }
-        assert_error { assert rand. rand }
+        require "#{Dir.pwd}/tests/kernel_test"
+        require_relative "../../tests/kernel_test"
+        load "#{Dir.pwd}/tests/kernel_test.rb"
+        assert_error { require_relative "kernel_test" }
+        assert_error { assert rand, rand }
         sleep(0.1)
-        "#;
+        print "Ruby"
+        at_exit
+        "###;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_exit() {
+        let program = r###"
+        exit(0)
+        "###;
         assert_script(program);
     }
 
