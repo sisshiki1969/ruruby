@@ -35,19 +35,17 @@ pub fn repl_vm() {
     let mut level = parser.get_context_depth();
     let method = MethodRef::new(MethodInfo::default());
     let info = ISeqInfo::default(method);
-    let context = ContextRef::from(vm.globals.main_object, None, ISeqRef::new(info), None, None);
+    let context =
+        ContextRef::new_heap(vm.globals.main_object, None, ISeqRef::new(info), None, None);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
-        let readline = rl.readline(
-            &format!(
-                "{}{:1}{} {}",
-                Red.bold().paint("irb:"),
-                level,
-                prompt,
-                " ".repeat(level * 2)
-            )
-            .to_string(),
-        );
+        let readline = rl.readline(&format!(
+            "{}{:1}{} {}",
+            Red.bold().paint("irb:"),
+            level,
+            prompt,
+            " ".repeat(level * 2)
+        ));
         let mut line = match readline {
             Ok(line) => line,
             Err(err) => match err {

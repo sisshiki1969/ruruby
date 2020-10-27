@@ -62,6 +62,12 @@ impl IndexMut<usize> for Context {
     }
 }
 
+impl Into<ContextRef> for &Context {
+    fn into(self) -> ContextRef {
+        Ref::from_ref(self)
+    }
+}
+
 impl GC for Context {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_value.mark(alloc);
@@ -143,7 +149,7 @@ impl Context {
             };
             let mut context = Context::new(self_value, args.block.clone(), iseq, outer, caller);
             if iseq.is_block() {
-                context.from_args_opt_block(iseq, args)?;
+                context.from_args_opt_block(&iseq.params, args)?;
             } else {
                 let req_len = iseq.params.req;
                 vm.check_args_num(args.len(), req_len)?;
@@ -207,9 +213,33 @@ impl Context {
         Ok(context)
     }
 
-    fn from_args_opt_block(&mut self, iseq: ISeqRef, args: &Args) -> Result<(), RubyError> {
+    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
+        #[inline]
+        fn fill_arguments_opt(
+            context: &mut Context,
+            args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
+            args_len: usize,
+            req_len: usize,
+        ) {
+            if req_len <= args_len {
+                // fill req params.
+                for i in 0..req_len {
+                    context[i] = args[i];
+                }
+            } else {
+                // fill req params.
+                for i in 0..args_len {
+                    context[i] = args[i];
+                }
+                // fill the remaining req params with nil.
+                for i in args_len..req_len {
+                    context[i] = Value::nil();
+                }
+            }
+        }
+
         let args_len = args.len();
-        let req_len = iseq.params.req;
+        let req_len = params.req;
 
         if args_len == 1 && req_len > 1 {
             match args[0].as_array() {
@@ -217,39 +247,15 @@ impl Context {
                 // the arguments must be expanded.
                 Some(ary) => {
                     let args = &ary.elements;
-                    self.fill_arguments_opt(args, args.len(), req_len);
+                    fill_arguments_opt(self, args, args.len(), req_len);
                     return Ok(());
                 }
                 _ => {}
             }
         }
 
-        self.fill_arguments_opt(args, args_len, req_len);
+        fill_arguments_opt(self, args, args_len, req_len);
         Ok(())
-    }
-
-    #[inline]
-    fn fill_arguments_opt(
-        &mut self,
-        args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
-        args_len: usize,
-        req_len: usize,
-    ) {
-        if req_len <= args_len {
-            // fill req params.
-            for i in 0..req_len {
-                self[i] = args[i];
-            }
-        } else {
-            // fill req params.
-            for i in 0..args_len {
-                self[i] = args[i];
-            }
-            // fill the remaining req params with nil.
-            for i in args_len..req_len {
-                self[i] = Value::nil();
-            }
-        }
     }
 
     fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
@@ -260,24 +266,24 @@ impl Context {
             match args[0].as_array() {
                 Some(ary) => {
                     let args = &ary.elements;
-                    self.fill_arguments(args, args.len(), iseq, kw_arg);
+                    self.fill_arguments(args, args.len(), &iseq.params, kw_arg);
                     return;
                 }
                 _ => {}
             }
         }
 
-        self.fill_arguments(args, args.len(), iseq, kw_arg);
+        self.fill_arguments(args, args.len(), &iseq.params, kw_arg);
     }
 
     fn fill_arguments(
         &mut self,
         args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
         args_len: usize,
-        iseq: ISeqRef,
+        params: &ISeqParams,
         kw_arg: Value,
     ) {
-        let params = &iseq.params;
+        //let params = &iseq.params;
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;
         let opt_len = params.opt;
@@ -330,7 +336,7 @@ impl Context {
 }
 
 impl ContextRef {
-    pub fn from(
+    pub fn new_heap(
         self_value: Value,
         block: Option<Block>,
         iseq_ref: ISeqRef,
@@ -340,10 +346,6 @@ impl ContextRef {
         let mut context = Context::new(self_value, block, iseq_ref, outer, caller);
         context.on_stack = false;
         ContextRef::new(context)
-    }
-
-    pub fn from_local(info: &Context) -> Self {
-        Ref::from_ref(info)
     }
 
     pub fn adjust_lvar_size(&mut self) {

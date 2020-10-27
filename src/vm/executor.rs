@@ -419,7 +419,8 @@ impl VM {
         }
     }
 
-    pub fn run_context(&mut self, context: ContextRef) -> VMResult {
+    pub fn run_context(&mut self, context: impl Into<ContextRef>) -> VMResult {
+        let context = context.into();
         let stack_len = self.exec_stack.len();
         let pc = self.pc;
         self.context_push(context);
@@ -2347,7 +2348,7 @@ impl VM {
                     args,
                     pref.context.outer,
                 )?;
-                self.run_context(ContextRef::from_local(&context))
+                self.run_context(&context)
             }
         }
     }
@@ -2363,21 +2364,20 @@ impl VM {
                 .outer
                 .ok_or_else(|| self.error_local_jump("No block given."))?;
         }
-        let block = &context
+        let block = context
             .block
-            .clone()
+            .as_ref()
             .ok_or_else(|| self.error_local_jump("No block given."))?;
 
-        let res = match block {
+        match block {
             Block::Method(method) => {
-                //let outer = self.current_context();
-                self.eval_method(*method, context.self_value, context.caller, args)?
+                self.eval_method(*method, context.self_value, context.caller, args)
             }
-            Block::Proc(proc) => self.eval_proc(*proc, args)?,
-        };
-        Ok(res)
+            Block::Proc(proc) => self.eval_proc(*proc, args),
+        }
     }
 
+    /// Evaluate Proc object.
     pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
         let pref = proc.as_proc().unwrap();
         let context = Context::from_args(
@@ -2387,7 +2387,7 @@ impl VM {
             args,
             pref.context.outer,
         )?;
-        let res = self.run_context(ContextRef::from_local(&context))?;
+        let res = self.run_context(&context)?;
         Ok(res)
     }
 
@@ -2436,7 +2436,7 @@ impl VM {
             },
             MethodInfo::RubyFunc { iseq } => {
                 let context = Context::from_args(self, self_val, *iseq, args, outer)?;
-                let res = self.run_context(ContextRef::from_local(&context));
+                let res = self.run_context(&context);
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(_inst);
                 res?
@@ -2742,7 +2742,7 @@ impl VM {
         self.move_outer_to_heap();
         let iseq = self.get_iseq(method)?;
         let outer = self.current_context();
-        Ok(ContextRef::from(
+        Ok(ContextRef::new_heap(
             outer.self_value,
             None,
             iseq,
