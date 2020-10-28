@@ -24,12 +24,14 @@ RUBY_PLATFORM = "x86_64-linux"
 RUBY_VERSION = "2.5.0"
 RUBY_ENGINE = "ruruby"
 RUBY_DESCRIPTION = "ruruby [x86_64-linux]"
+exec_path = ".rbenv/versions/3.0.0-dev/lib/ruby"
+version = "3.0.0"
 $: = ["#{Dir.home}/.rbenv/rbenv.d/exec/gem-rehash",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/site_ruby/3.0.0",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/site_ruby/3.0.0/x86_64-linux",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/site_ruby",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/vendor_ruby/3.0.0",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/vendor_ruby/3.0.0/x86_64-linux",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/vendor_ruby",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/3.0.0",
-  "#{Dir.home}/.rbenv/versions/3.0.0-dev/lib/ruby/3.0.0/x86_64-linux"]
+  "#{Dir.home}/#{exec_path}/site_ruby/#{version}",
+  "#{Dir.home}/#{exec_path}/site_ruby/#{version}/#{RUBY_PLATFORM}",
+  "#{Dir.home}/#{exec_path}/site_ruby",
+  "#{Dir.home}/#{exec_path}/vendor_ruby/#{version}",
+  "#{Dir.home}/#{exec_path}/vendor_ruby/#{version}/#{RUBY_PLATFORM}",
+  "#{Dir.home}/#{exec_path}/vendor_ruby",
+  "#{Dir.home}/#{exec_path}/#{version}",
+  "#{Dir.home}/#{exec_path}/#{version}/#{RUBY_PLATFORM}"]
