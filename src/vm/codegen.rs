@@ -1913,6 +1913,7 @@ impl Codegen {
                 };
             }
             NodeKind::ClassDef {
+                base,
                 id,
                 superclass,
                 body,
@@ -1930,6 +1931,7 @@ impl Codegen {
                     None,
                 )?;
                 self.gen(globals, iseq, superclass, true)?;
+                self.gen(globals, iseq, base, true)?;
                 self.save_loc(iseq, loc);
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if *is_module { 1 } else { 0 });
@@ -2058,6 +2060,14 @@ impl Codegen {
                         .for_each(|label| Codegen::write_disp_from_cur(iseq, *label));
                     self.gen_push_nil(iseq);
                     Codegen::write_disp_from_cur(iseq, end);
+                }
+            }
+            NodeKind::AliasMethod(new, old) => {
+                self.gen_symbol(iseq, *new);
+                self.gen_symbol(iseq, *old);
+                self.gen_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2);
+                if !use_value {
+                    self.gen_pop(iseq);
                 }
             }
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),

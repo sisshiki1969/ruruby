@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from_str("Fiber", BuiltinClass::object());
+    let mut class = ClassInfo::from(BuiltinClass::object());
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("resume", resume);
 

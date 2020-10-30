@@ -30,16 +30,12 @@ impl ClassInfo {
         }
     }
 
-    pub fn from(id: impl Into<Option<IdentId>>, superclass: impl Into<Option<Value>>) -> Self {
+    pub fn from(superclass: impl Into<Option<Value>>) -> Self {
         let superclass = match superclass.into() {
             Some(superclass) => superclass,
             None => Value::nil(),
         };
-        ClassInfo::new(id, superclass)
-    }
-
-    pub fn from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
-        ClassInfo::from(IdentId::get_id(name), superclass)
+        ClassInfo::new(None, superclass)
     }
 
     pub fn singleton_from(

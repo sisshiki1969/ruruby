@@ -82,6 +82,7 @@ impl IdentId {
     pub const _INDEX_ASSIGN: IdentId = id!(22);
     pub const TO_S: IdentId = id!(23);
     pub const _SHR: IdentId = id!(24);
+    pub const _ALIAS_METHOD: IdentId = id!(25);
 }
 
 impl IdentId {
@@ -144,6 +145,7 @@ impl IdentifierTable {
         table.set_ident_id("[]=", IdentId::_INDEX_ASSIGN);
         table.set_ident_id("to_s", IdentId::TO_S);
         table.set_ident_id(">>", IdentId::_SHR);
+        table.set_ident_id("/alias_method", IdentId::_ALIAS_METHOD);
         table
     }
 

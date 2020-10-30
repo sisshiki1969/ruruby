@@ -195,8 +195,19 @@ fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
-    vm.module_function(true);
+    if args.len() == 0 {
+        vm.module_function(true);
+    } else {
+        let mut class = vm.class();
+        let mut singleton = class.get_singleton_class().unwrap();
+        let classinfo = singleton.as_mut_class();
+        for arg in args.iter() {
+            let mut arg = *arg;
+            let name = arg.expect_string_or_symbol(vm, "Args")?;
+            let method = vm.get_method(class.clone(), name)?;
+            classinfo.add_method(&mut vm.globals, name, method);
+        }
+    }
     Ok(Value::nil())
 }
 
@@ -359,6 +370,20 @@ mod test {
     end
     assert(123, Foo.bar)
     assert(123, Foo.new.bar)
+
+    class Bar
+        def foo
+            456
+        end
+        def bar
+            789
+        end
+        module_function :foo, "bar"
+    end
+    assert(456, Bar.new.foo)
+    assert(789, Bar.new.bar)
+    assert(456, Bar.foo)
+    assert(789, Bar.bar)
     "#;
         assert_script(program);
     }

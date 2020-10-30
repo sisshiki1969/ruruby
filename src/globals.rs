@@ -55,13 +55,13 @@ type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
     fn new() -> Self {
-        let basic_class = ClassInfo::from_str("BasicObject", None);
+        let basic_class = ClassInfo::from(None);
         let mut basic = Value::bootstrap_class(basic_class);
-        let object_class = ClassInfo::from_str("Object", basic);
+        let object_class = ClassInfo::from(basic);
         let mut object = Value::bootstrap_class(object_class);
-        let module_class = ClassInfo::from_str("Module", object);
+        let module_class = ClassInfo::from(object);
         let mut module = Value::bootstrap_class(module_class);
-        let class_class = ClassInfo::from_str("Class", module);
+        let class_class = ClassInfo::from(module);
         let mut class = Value::bootstrap_class(class_class);
 
         basic.set_class(class);
@@ -115,7 +115,11 @@ impl BuiltinClass {
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_class(class_name: &str, class_object: Value) {
+    pub fn set_class(class_name: &str, mut class_object: Value) {
+        match class_object.as_mut_module() {
+            Some(cinfo) => cinfo.name = Some(IdentId::get_id(class_name)),
+            None => {}
+        }
         Self::object().set_var_by_str(class_name, class_object);
     }
 }
@@ -182,7 +186,7 @@ impl Globals {
             regexp_cache: FxHashMap::default(),
         };
         // Generate singleton class for Object
-        let mut singleton_class = ClassInfo::from(None, class);
+        let mut singleton_class = ClassInfo::from(class);
         singleton_class.is_singleton = true;
         let singleton_obj = Value::class(singleton_class);
         object.set_class(singleton_obj);
@@ -194,7 +198,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                object.set_var_by_str($name, $class_object);
+                BuiltinClass::set_class($name, $class_object);
             };
         }
 
@@ -202,18 +206,18 @@ impl Globals {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
                 builtins.$module_name = class_obj;
-                object.set_var_by_str($name, class_obj);
+                BuiltinClass::set_class($name, class_obj);
             };
         }
 
         macro_rules! init_class {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
-                object.set_var_by_str($name, class_obj);
+                BuiltinClass::set_class($name, class_obj);
             };
         }
 
-        object.set_var_by_str("BasicObject", basic);
+        set_builtin_class!("BasicObject", basic);
         set_builtin_class!("Object", object);
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
@@ -248,8 +252,7 @@ impl Globals {
         init_class!("Time", time);
         init_class!("Comparable", comparable);
 
-        let id = IdentId::get_id("StopIteration");
-        let class = ClassInfo::from(id, object);
+        let class = ClassInfo::from(object);
         BuiltinClass::set_class("StopIteration", Value::class(class));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
@@ -264,7 +267,7 @@ impl Globals {
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
 
         let env = Value::hash_from(env_map);
-        object.set_var_by_str("ENV", env);
+        BuiltinClass::set_class("ENV", env);
         globals
     }
 

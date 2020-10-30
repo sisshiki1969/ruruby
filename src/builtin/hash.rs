@@ -1,8 +1,7 @@
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Hash");
-    let mut class = ClassInfo::from(id, BuiltinClass::object());
+    let mut class = ClassInfo::from(BuiltinClass::object());
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("clear", clear);

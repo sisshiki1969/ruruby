@@ -91,6 +91,7 @@ pub enum NodeKind {
         LvarCollector,
     ), // singleton_class, id, params, body
     ClassDef {
+        base: Box<Node>,
         id: IdentId,
         superclass: Box<Node>,
         body: Box<Node>,
@@ -110,6 +111,7 @@ pub enum NodeKind {
     },
 
     Defined(Box<Node>),
+    AliasMethod(IdentId, IdentId), // (new_method, old_method)
 }
 
 pub type FormalParam = Annot<ParamKind>;
@@ -369,6 +371,10 @@ impl Node {
         Node::new(NodeKind::Defined(Box::new(node)), loc)
     }
 
+    pub fn new_alias(new: IdentId, old: IdentId, loc: Loc) -> Self {
+        Node::new(NodeKind::AliasMethod(new, old), loc)
+    }
+
     pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {
         if let Some(node) = nodes.first() {
             loc = node.loc();
@@ -483,6 +489,7 @@ impl Node {
     }
 
     pub fn new_class_decl(
+        base: Node,
         id: IdentId,
         superclass: Node,
         body: Node,
@@ -492,6 +499,7 @@ impl Node {
     ) -> Self {
         Node::new(
             NodeKind::ClassDef {
+                base: Box::new(base),
                 id,
                 superclass: Box::new(superclass),
                 body: Box::new(body),

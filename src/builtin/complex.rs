@@ -4,7 +4,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     let object = BuiltinClass::object();
     let numeric = object.get_var_by_str("Numeric").unwrap();
 
-    let mut classref = ClassInfo::from_str("Complex", numeric);
+    let mut classref = ClassInfo::from(numeric);
     classref.add_builtin_method_by_str("+", add);
     classref.add_builtin_method_by_str("-", sub);
     classref.add_builtin_method_by_str("*", mul);

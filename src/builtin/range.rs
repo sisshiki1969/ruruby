@@ -32,8 +32,7 @@ impl RangeInfo {
 }
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Range");
-    let mut class = ClassInfo::from(id, BuiltinClass::object());
+    let mut class = ClassInfo::from(BuiltinClass::object());
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("map", map);

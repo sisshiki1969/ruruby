@@ -1,8 +1,7 @@
 use crate::*;
 
 pub fn init(_globals: &mut Globals) -> Value {
-    let id = IdentId::get_id("Process");
-    let class = ClassInfo::from(id, BuiltinClass::object());
+    let class = ClassInfo::from(BuiltinClass::object());
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("clock_gettime", clock_gettime);
     class_val.add_builtin_class_method("pid", pid);

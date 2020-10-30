@@ -373,7 +373,7 @@ impl Value {
     /// Panic if `self` is not a class object.
     #[inline]
     pub fn is_singleton(&self) -> bool {
-        self.as_class().is_singleton
+        self.as_module().unwrap().is_singleton
     }
 
     /// Examine whether `self` has a singleton class.
@@ -388,7 +388,7 @@ impl Value {
 
     pub fn set_var_by_str(&mut self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
-        self.rvalue_mut().set_var(id, val);
+        self.set_var(id, val);
     }
 
     pub fn get_var(&self, id: IdentId) -> Option<Value> {
@@ -429,8 +429,8 @@ impl Value {
 
     pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
         let mut singleton = self.get_singleton_class().unwrap();
-        let classref = singleton.as_mut_class();
-        classref.add_builtin_method_by_str(name, func);
+        let classinfo = singleton.as_mut_class();
+        classinfo.add_builtin_method_by_str(name, func);
     }
 
     /// Add module function to `self`.
@@ -1008,15 +1008,8 @@ impl Value {
         RValue::new_class(cinfo).pack()
     }
 
-    pub fn class_from(
-        id: impl Into<Option<IdentId>>,
-        superclass: impl Into<Option<Value>>,
-    ) -> Self {
-        RValue::new_class(ClassInfo::from(id, superclass)).pack()
-    }
-
-    pub fn class_from_str(name: &str, superclass: impl Into<Option<Value>>) -> Self {
-        RValue::new_class(ClassInfo::from_str(name, superclass)).pack()
+    pub fn class_from(superclass: impl Into<Option<Value>>) -> Self {
+        RValue::new_class(ClassInfo::from(superclass)).pack()
     }
 
     pub fn singleton_class_from(
@@ -1351,7 +1344,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class(ClassInfo::from(IdentId::from(1), None));
+        let expect = Value::class(ClassInfo::from(None));
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

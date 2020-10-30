@@ -870,7 +870,7 @@ impl Parser {
     fn check_lhs(&mut self, lhs: &Node) -> Result<(), RubyError> {
         if let NodeKind::Ident(id) = lhs.kind {
             self.add_local_var_if_new(id);
-        } else if let NodeKind::Const { toplevel: _, id: _ } = lhs.kind {
+        } else if let NodeKind::Const { .. } = lhs.kind {
             for c in self.context_stack.iter().rev() {
                 match c.kind {
                     ContextKind::Class => return Ok(()),
@@ -1186,6 +1186,8 @@ impl Parser {
         }
     }
 
+    /// Parse method name.
+    /// In primary method call, assign-like method name(cf. foo= or Bar=) is not allowed.
     fn parse_method_name(&mut self) -> Result<(IdentId, Loc), RubyError> {
         let tok = self.get()?;
         let loc = tok.loc();
@@ -1201,11 +1203,16 @@ impl Parser {
         Ok((id, loc.merge(self.prev_loc())))
     }
 
-    /// PRIMARY-METHOD :
-    /// | PRIMARY . FNAME BLOCK => completed: true
-    /// | PRIMARY . FNAME ( ARGS ) BLOCK? => completed: true
-    /// | PRIMARY . FNAME => completed: false
+    /// Parse primary method call.
     fn parse_primary_method(&mut self, receiver: Node, safe_nav: bool) -> Result<Node, RubyError> {
+        // 一次式メソッド呼出し : 省略可能実引数付きsuper
+        //      ｜ 添字メソッド呼出し
+        //      ｜ メソッド専用識別子
+        //      ｜ メソッド識別子 ブロック
+        //      ｜ メソッド識別子 括弧付き実引数 ブロック?
+        //      ｜ 一次式 ［行終端子禁止］ "." メソッド名 括弧付き実引数? ブロック?
+        //      ｜ 一次式 ［行終端子禁止］ "::" メソッド名 括弧付き実引数 ブロック?
+        //      ｜ 一次式 ［行終端子禁止］ "::" 定数以外のメソッド名 ブロック?
         let (id, loc) = self.parse_method_name()?;
         let mut arglist = if !self.consume_punct_no_term(Punct::LParen)? {
             if self.is_command() {
@@ -1448,34 +1455,7 @@ impl Parser {
                     Ok(Node::new_array(nodes, loc))
                 }
                 Punct::LBrace => self.parse_hash_literal(),
-                Punct::Colon => {
-                    if self.lexer.trailing_space() {
-                        return Err(self.error_unexpected(loc, "Unexpected ':'."));
-                    }
-                    // Symbol literal
-                    let token = self.get()?;
-                    let symbol_loc = self.prev_loc();
-                    let id = match &token.kind {
-                        TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
-                        TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
-                        _ if token.can_be_symbol() => {
-                            let ident = self.token_as_symbol(&token);
-                            self.get_ident_id(&ident)
-                        }
-                        TokenKind::OpenString(s, term, level) => {
-                            let node = self.parse_interporated_string_literal(&s, *term, *level)?;
-                            let method = self.get_ident_id("to_sym");
-                            let loc = symbol_loc.merge(node.loc());
-                            return Ok(Node::new_send_noarg(node, method, false, loc));
-                        }
-                        _ => {
-                            return Err(
-                                self.error_unexpected(symbol_loc, "Expect identifier or string.")
-                            );
-                        }
-                    };
-                    Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
-                }
+                Punct::Colon => self.parse_symbol(),
                 Punct::Arrow => {
                     // Lambda literal
                     let mut params = vec![];
@@ -1741,6 +1721,28 @@ impl Parser {
                             Err(self.error_unexpected(tok.loc, format!("expected '('.")))
                         }
                     }
+                    Reserved::Alias => {
+                        let new_name = if self.consume_punct_no_term(Punct::Colon)? {
+                            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
+                                id
+                            } else {
+                                unreachable!("parse_symbol() returned illegal node type.")
+                            }
+                        } else {
+                            self.parse_method_def_name()?
+                        };
+                        let old_name = if self.consume_punct_no_term(Punct::Colon)? {
+                            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
+                                id
+                            } else {
+                                unreachable!("parse_symbol() returned illegal node type.")
+                            }
+                        } else {
+                            self.parse_method_def_name()?
+                        };
+                        let loc = loc.merge(self.prev_loc());
+                        Ok(Node::new_alias(new_name, old_name, loc))
+                    }
                     _ => {
                         Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
                     }
@@ -2004,6 +2006,34 @@ impl Parser {
         Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
     }
 
+    fn parse_symbol(&mut self) -> Result<Node, RubyError> {
+        let loc = self.prev_loc();
+        if self.lexer.trailing_space() {
+            return Err(self.error_unexpected(loc, "Unexpected ':'."));
+        }
+        // Symbol literal
+        let token = self.get()?;
+        let symbol_loc = self.prev_loc();
+        let id = match &token.kind {
+            TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
+            TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
+            _ if token.can_be_symbol() => {
+                let ident = self.token_as_symbol(&token);
+                self.get_ident_id(&ident)
+            }
+            TokenKind::OpenString(s, term, level) => {
+                let node = self.parse_interporated_string_literal(&s, *term, *level)?;
+                let method = self.get_ident_id("to_sym");
+                let loc = symbol_loc.merge(node.loc());
+                return Ok(Node::new_send_noarg(node, method, false, loc));
+            }
+            _ => {
+                return Err(self.error_unexpected(symbol_loc, "Expect identifier or string."));
+            }
+        };
+        Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
+    }
+
     fn parse_if_then(&mut self) -> Result<Node, RubyError> {
         //  if EXPR THEN
         //      COMPSTMT
@@ -2075,7 +2105,6 @@ impl Parser {
 
     /// Parse method definition name.
     fn parse_method_def_name(&mut self) -> Result<IdentId, RubyError> {
-        // メソッド定義
         // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
         // メソッド名 : 局所変数識別子
         //      | 定数識別子
@@ -2084,10 +2113,6 @@ impl Parser {
         //      | キーワード
         // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
         //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
-        //
-        // 特異メソッド定義
-        // ( 変数参照 | "(" 式 ")" ) ( "." | "::" ) メソッド定義名
-        // 変数参照 : 定数識別子 | 大域変数識別子 | クラス変数識別子 | インスタンス変数識別子 | 局所変数識別子 | 擬似変数
         let tok = self.get()?;
         let id = match tok.kind {
             TokenKind::Reserved(r) => {
@@ -2106,19 +2131,11 @@ impl Parser {
 
     /// Parse method definition.
     fn parse_def(&mut self) -> Result<Node, RubyError> {
-        //  def FNAME ARGDECL
-        //      COMPSTMT
-        //      [rescue [ARGS] [`=>' LHS] THEN COMPSTMT]+
-        //      [else COMPSTMT]
-        //      [ensure COMPSTMT]
-        //  end
+        // メソッド定義
 
-        //  def SINGLETON ARGDECL
-        //      COMPSTMT
-        //      [rescue [ARGS] [`=>' LHS] THEN COMPSTMT]+
-        //      [else COMPSTMT]
-        //      [ensure COMPSTMT]
-        //  end
+        // 特異メソッド定義
+        // ( 変数参照 | "(" 式 ")" ) ( "." | "::" ) メソッド定義名
+        // 変数参照 : 定数識別子 | 大域変数識別子 | クラス変数識別子 | インスタンス変数識別子 | 局所変数識別子 | 擬似変数
 
         let tok = self.get()?;
         let loc = tok.loc;
@@ -2342,14 +2359,14 @@ impl Parser {
 
     /// Parse class definition.
     fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
-        // class CLASS_PATH ["<" EXPR] <term>
-        //      COMPSTMT
-        // end
-        //
-        // CLASS_PATH : "::" CONST
-        //          | CONST
-        //          | PRIMARY <no term> "::" CONST
+        // クラス定義 : "class" クラスパス [行終端子禁止] ("<" スーパークラス)? 分離子 クラス本体 "end"
+        // クラスパス : "::" 定数識別子
+        //      ｜ 定数識別子
+        //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
+        // スーパークラス : 式
+        // クラス本体 : 本体文
         let loc = self.prev_loc();
+        let base = Node::new_nil(loc);
         let name = match &self.get()?.kind {
             TokenKind::Const(s) => s.clone(),
             _ => {
@@ -2382,7 +2399,7 @@ impl Parser {
         #[cfg(feature = "verbose")]
         eprintln!("***parsed");
         Ok(Node::new_class_decl(
-            id, superclass, body, lvar, is_module, loc,
+            base, id, superclass, body, lvar, is_module, loc,
         ))
     }
 

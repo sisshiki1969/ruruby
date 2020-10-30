@@ -243,6 +243,8 @@ impl VM {
             }
         }
     */
+
+    /// Get Class of current class context.
     pub fn class(&self) -> Value {
         let (class, _) = self.class_context.last().unwrap();
         if class.is_nil() {
@@ -838,20 +840,12 @@ impl VM {
                 }
                 Inst::SET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
-                    let mut parent = match self.stack_pop() {
+                    let parent = match self.stack_pop() {
                         v if v.is_nil() => self.class(),
                         v => v,
                     };
-                    let mut val = self.stack_pop();
-                    match val.as_mut_module() {
-                        Some(mut cinfo) => {
-                            if cinfo.name == None {
-                                cinfo.name = Some(id);
-                            }
-                        }
-                        None => {}
-                    }
-                    parent.set_var(id, val);
+                    let val = self.stack_pop();
+                    self.set_const(parent, id, val)?;
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
@@ -865,7 +859,7 @@ impl VM {
                 }
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
-                    let class = BuiltinClass::object();
+                    let class = self.globals.builtins.object;
                     let val = self.get_super_const(class, id)?;
                     self.stack_push(val);
                     self.pc += 5;
@@ -1135,8 +1129,9 @@ impl VM {
                     let is_module = iseq.read8(self.pc + 1) == 1;
                     let id = iseq.read_id(self.pc + 2);
                     let method = iseq.read_methodref(self.pc + 6);
+                    let base = self.stack_pop();
                     let super_val = self.stack_pop();
-                    let val = self.define_class(id, is_module, super_val)?;
+                    let val = self.define_class(base, id, is_module, super_val)?;
                     self.class_push(val);
                     let mut iseq = self.get_iseq(method)?;
                     iseq.class_defined = self.get_class_defined(val);
@@ -1508,6 +1503,34 @@ impl VM {
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.globals.set_global_var(id, val);
+    }
+
+    pub fn set_const(
+        &mut self,
+        mut parent: Value,
+        id: IdentId,
+        mut val: Value,
+    ) -> Result<(), RubyError> {
+        match val.as_mut_module() {
+            Some(mut cinfo) => {
+                if cinfo.name == None {
+                    cinfo.name = if parent == self.globals.builtins.object {
+                        Some(id)
+                    } else {
+                        match parent.expect_module(self)?.name {
+                            Some(parent_name) => {
+                                let name = IdentId::get_id(&format!("{:?}::{:?}", parent_name, id));
+                                Some(name)
+                            }
+                            None => None,
+                        }
+                    };
+                }
+            }
+            None => {}
+        }
+        parent.set_var(id, val);
+        Ok(())
     }
 }
 
@@ -2063,8 +2086,15 @@ impl VM {
     }
 
     /// Generate new class object with `super_val` as a superclass.
-    fn define_class(&mut self, id: IdentId, is_module: bool, mut super_val: Value) -> VMResult {
-        match BuiltinClass::object().get_var(id) {
+    fn define_class(
+        &mut self,
+        _base: Value,
+        id: IdentId,
+        is_module: bool,
+        mut super_val: Value,
+    ) -> VMResult {
+        let current_class = self.class();
+        match current_class.get_var(id) {
             Some(mut val) => {
                 if val.is_module().is_some() != is_module {
                     return Err(self.error_type(format!(
@@ -2083,12 +2113,12 @@ impl VM {
             }
             None => {
                 let super_val = if super_val.is_nil() {
-                    BuiltinClass::object()
+                    self.globals.builtins.object
                 } else {
                     super_val.expect_class(self, "Superclass")?;
                     super_val
                 };
-                let cinfo = ClassInfo::from(id, super_val);
+                let cinfo = ClassInfo::from(super_val);
                 let val = if is_module {
                     Value::module(cinfo)
                 } else {
@@ -2097,7 +2127,7 @@ impl VM {
                 let mut singleton = self.get_singleton_class(val)?;
                 let singleton_class = singleton.as_mut_class();
                 singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
-                self.class().set_var(id, val);
+                self.set_const(current_class, id, val)?;
                 Ok(val)
             }
         }
