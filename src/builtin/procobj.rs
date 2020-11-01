@@ -11,8 +11,8 @@ impl ProcInfo {
     }
 }
 
-pub fn init(_globals: &mut Globals) -> Value {
-    let mut proc_class = ClassInfo::from(BuiltinClass::object());
+pub fn init(globals: &mut Globals) -> Value {
+    let mut proc_class = ClassInfo::from(globals.builtins.object);
     proc_class.add_builtin_method_by_str("to_s", inspect);
     proc_class.add_builtin_method_by_str("inspect", inspect);
     proc_class.add_builtin_method_by_str("call", proc_call);

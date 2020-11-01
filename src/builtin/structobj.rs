@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(_globals: &mut Globals) -> Value {
-    let class = ClassInfo::from(BuiltinClass::object());
+pub fn init(globals: &mut Globals) -> Value {
+    let class = ClassInfo::from(globals.builtins.object);
     let mut class_val = Value::class(class);
     class_val.add_builtin_class_method("new", struct_new);
     class_val
@@ -18,13 +18,14 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 _ => return Err(vm.error_name(format!("Identifier `{}` needs to be constant.", s))),
             };
             i = 1;
-            let s = IdentId::get_id(&format!("Struct:{}", s));
+            let s = IdentId::get_id(&format!("Struct::{}", s));
             Some(s)
         }
     };
 
     let mut class_val = Value::class_from(self_val);
     let class = class_val.as_mut_class();
+    class.name = name;
     class.add_builtin_method_by_str("initialize", initialize);
     class.add_builtin_method_by_str("inspect", inspect);
     class_val.add_builtin_class_method("[]", builtin::class::new);
@@ -35,13 +36,12 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for index in i..args.len() {
         let v = args[index];
         if v.as_symbol().is_none() {
-            let n = vm.val_inspect(v)?;
-            return Err(vm.error_type(format!("{} is not a symbol.", n)));
+            return Err(vm.error_type(format!("{:?} is not a symbol.", args[index])));
         };
         vec.push(v);
         attr_args[index - i] = v;
     }
-    class_val.set_var_by_str("_members", Value::array_from(vec));
+    class_val.set_var_by_str("/members", Value::array_from(vec));
     builtin::module::attr_accessor(vm, class_val, &attr_args)?;
 
     match &args.block {
@@ -58,7 +58,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class();
-    let name = class.get_var(IdentId::get_id("_members")).unwrap();
+    let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
         return Err(vm.error_argument("Struct size differs."));
@@ -71,37 +71,33 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
+use std::borrow::Cow;
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let mut name = self_val.get_class().get_var(IdentId::get_id("_members"));
-    let members = match name {
-        Some(ref mut v) => match v.as_array() {
-            Some(aref) => aref,
-            None => return Err(vm.error_internal("Illegal _members value.")),
-        },
-        None => return Err(vm.error_internal("No _members.")),
+    let mut inspect = format!("#<struct ");
+    match self_val.get_class().as_class().name {
+        Some(id) => inspect += &IdentId::get_ident_name(id),
+        None => {}
     };
-    let attrs: Vec<IdentId> = members
-        .elements
-        .iter()
-        .map(|x| {
-            let id = x.as_symbol().unwrap();
-            let name = format!("@{:?}", id);
-            IdentId::get_id(&name)
-        })
-        .collect();
-    let mut attr_str = String::new();
-    for id in attrs {
+    let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {
+        Some(name) => name,
+        None => return Err(vm.error_internal("No /members.")),
+    };
+    //eprintln!("{:?}", name);
+    let members = match name.as_array() {
+        Some(aref) => aref,
+        None => return Err(vm.error_internal(format!("Illegal _members value. {:?}", name))),
+    };
+
+    for x in &members.elements {
+        let id = IdentId::add_prefix(x.as_symbol().unwrap(), "@");
         let val = match self_val.get_var(id) {
-            Some(v) => vm.val_inspect(v)?,
-            None => "<>".to_string(),
+            Some(v) => Cow::from(vm.val_inspect(v)?),
+            None => Cow::from("nil"),
         };
-        attr_str = format!("{} {:?}={}", attr_str, id, val);
+        inspect = format!("{} {:?}={}", inspect, id, val);
     }
-    let class_name = match self_val.get_class().as_class().name {
-        Some(id) => IdentId::get_ident_name(id),
-        None => "".to_string(),
-    };
-    let inspect = format!("#<struct: {}{}>", class_name, attr_str);
+    inspect += ">";
+
     Ok(Value::string(inspect))
 }
 
@@ -120,6 +116,18 @@ mod tests {
         assert "Hello Dave!", Customer.new("Dave", "123 Main").greeting
         assert "Hello Gave!", Customer["Gave", "456 Sub"].greeting
         "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn struct_inspect() {
+        let program = r###"
+        S = Struct.new(:a,:b)
+        s = S.new(100,200)
+        assert 100, s.a
+        assert 200, s.b
+        assert "#<struct S @a=100 @b=200>", s.inspect
+        "###;
         assert_script(program);
     }
 }

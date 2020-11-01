@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(_globals: &mut Globals) -> Value {
-    let object = BuiltinClass::object();
+pub fn init(globals: &mut Globals) -> Value {
+    let object = globals.builtins.object;
     let numeric = object.get_var_by_str("Numeric").unwrap();
 
     let mut class = ClassInfo::from(numeric);

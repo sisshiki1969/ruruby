@@ -106,6 +106,11 @@ impl IdentId {
         let new_name = format!("{:?}{}", id, postfix);
         IdentId::get_id(&new_name)
     }
+
+    pub fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
+        let new_name = format!("{}{:?}", prefix, id);
+        IdentId::get_id(&new_name)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
