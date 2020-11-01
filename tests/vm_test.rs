@@ -1102,6 +1102,22 @@ fn class4() {
 }
 
 #[test]
+fn class5() {
+    let program = r##"
+        class A
+        end
+        class A::B
+        end
+        class A::B::C
+          D = 100
+        end
+        assert 100, A::B::C::D
+        assert "A::B::C", A::B::C.inspect
+        "##;
+    assert_script(program);
+}
+
+#[test]
 fn initialize() {
     let program = "
     class Vec

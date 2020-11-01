@@ -1125,7 +1125,9 @@ impl Parser {
         if self.consume_reserved(Reserved::Yield)? {
             return self.parse_yield();
         }
-        // <一次式メソッド呼び出し>
+        // 一次式メソッド呼び出し
+        // スコープ付き定数参照 :: 一次式 [行終端子禁止][空白類禁止] "::" 定数識別子
+        //      ｜"::" 定数識別子
         let mut node = self.parse_primary()?;
         loop {
             node = if self.consume_punct(Punct::Dot)? {
@@ -2359,25 +2361,29 @@ impl Parser {
 
     /// Parse class definition.
     fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
-        // クラス定義 : "class" クラスパス [行終端子禁止] ("<" スーパークラス)? 分離子 クラス本体 "end"
+        // クラス定義 : "class" クラスパス [行終端子禁止] ("<" 式)? 分離子 本体文 "end"
         // クラスパス : "::" 定数識別子
         //      ｜ 定数識別子
         //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
-        // スーパークラス : 式
-        // クラス本体 : 本体文
         let loc = self.prev_loc();
-        let base = Node::new_nil(loc);
-        let name = match &self.get()?.kind {
-            TokenKind::Const(s) => s.clone(),
-            _ => {
-                return Err(
-                    self.error_unexpected(self.prev_loc(), "Class/Module name must be CONSTANT.")
-                )
+        let prim = self.parse_method_call()?;
+        let (base, name) = match prim.kind {
+            NodeKind::Const { toplevel: true, id } if !self.peek_punct_no_term(Punct::Scope) => {
+                (Node::new_nil(loc), id)
             }
+            NodeKind::Const {
+                toplevel: false,
+                id,
+                ..
+            } if !self.peek_punct_no_term(Punct::Scope) => (Node::new_nil(loc), id),
+            NodeKind::Scope(base, id) => (*base, id),
+            _ => return Err(self.error_unexpected(prim.loc, "Invalid Class/Module name.")),
         };
+        //eprintln!("base:{:?} name:{:?}", base, name);
+
         #[cfg(feature = "verbose")]
         eprintln!(
-            "***parsing.. {} {}",
+            "***parsing.. {} {:?}",
             if is_module { "module" } else { "class" },
             name
         );
@@ -2392,14 +2398,13 @@ impl Parser {
         };
         let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
-        let id = self.get_ident_id(&name);
         self.context_stack.push(ParseContext::new_class(None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
         eprintln!("***parsed");
         Ok(Node::new_class_decl(
-            base, id, superclass, body, lvar, is_module, loc,
+            base, name, superclass, body, lvar, is_module, loc,
         ))
     }
 

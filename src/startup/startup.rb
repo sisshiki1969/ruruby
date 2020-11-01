@@ -20,6 +20,18 @@ class RubyVM
   end
 end
 
+class Symbol
+end
+
+class TrueClass
+end
+
+class FalseClass
+end
+
+class NilClass
+end
+
 RUBY_PLATFORM = "x86_64-linux"
 RUBY_VERSION = "2.5.0"
 RUBY_ENGINE = "ruruby"

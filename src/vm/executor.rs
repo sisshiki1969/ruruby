@@ -2088,12 +2088,12 @@ impl VM {
     /// Generate new class object with `super_val` as a superclass.
     fn define_class(
         &mut self,
-        _base: Value,
+        base: Value,
         id: IdentId,
         is_module: bool,
         mut super_val: Value,
     ) -> VMResult {
-        let current_class = self.class();
+        let current_class = if base.is_nil() { self.class() } else { base };
         match current_class.get_var(id) {
             Some(mut val) => {
                 if val.is_module().is_some() != is_module {
