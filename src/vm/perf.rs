@@ -75,14 +75,13 @@ impl Perf {
     }
 
     pub fn print_perf(&self) {
-        eprintln!("Performance analysis for Inst:");
-        eprintln!("------------------------------------------");
+        eprintln!("+-------------------------------------------+");
+        eprintln!("| Performance stats for inst:               |");
         eprintln!(
-            "{:<13} {:>10} {:>8} {:>8}",
-            "Inst name", "count", "%time", "nsec"
+            "| {:<13} {:>9} {:>8} {:>8} |",
+            "Inst name", "count", "%time", "ns/inst"
         );
-        eprintln!("{:<13} {:>10} {:>8} {:>8}", "", "", "", "/inst");
-        eprintln!("------------------------------------------");
+        eprintln!("+-------------------------------------------+");
         let mut sum = std::time::Duration::from_secs(0);
         for c in &self.counter {
             sum += c.duration;
@@ -99,7 +98,7 @@ impl Perf {
                 continue;
             }
             eprintln!(
-                "{:<13} {:>10} {:>8.2} {:>8}",
+                "  {:<13}{:>9} {:>8.2} {:>8}",
                 if i as u8 == Perf::CODEGEN {
                     "CODEGEN".to_string()
                 } else if i as u8 == Perf::EXTERN {
@@ -120,6 +119,5 @@ impl Perf {
                 d.as_nanos() / (*c as u128)
             );
         }
-        eprintln!("------------------------------------------");
     }
 }

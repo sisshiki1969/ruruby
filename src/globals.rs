@@ -134,7 +134,10 @@ impl GC for Globals {
     fn mark(&self, alloc: &mut Allocator) {
         self.const_values.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
-        self.method_cache.0.keys().for_each(|(v, _)| v.mark(alloc));
+        self.method_cache
+            .cache
+            .keys()
+            .for_each(|(v, _)| v.mark(alloc));
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
@@ -276,6 +279,11 @@ impl Globals {
         alloc.gc(self);
     }
 
+    #[cfg(feature = "perf")]
+    pub fn inc_inline_hit(&mut self) {
+        self.method_cache.inc_inline_hit();
+    }
+
     #[cfg(feature = "gc-debug")]
     pub fn print_mark(&self) {
         self.allocator.print_mark();
@@ -336,7 +344,15 @@ impl GC for ConstantValues {
 /// This module supports global method cache.
 ///
 #[derive(Debug, Clone)]
-pub struct MethodCache(FxHashMap<(Value, IdentId), MethodCacheEntry>);
+pub struct MethodCache {
+    cache: FxHashMap<(Value, IdentId), MethodCacheEntry>,
+    #[cfg(feature = "perf")]
+    inline_hit: usize,
+    #[cfg(feature = "perf")]
+    total: usize,
+    #[cfg(feature = "perf")]
+    missed: usize,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
@@ -346,16 +362,24 @@ pub struct MethodCacheEntry {
 
 impl MethodCache {
     fn new() -> Self {
-        MethodCache(FxHashMap::default())
+        MethodCache {
+            cache: FxHashMap::default(),
+            #[cfg(feature = "perf")]
+            inline_hit: 0,
+            #[cfg(feature = "perf")]
+            total: 0,
+            #[cfg(feature = "perf")]
+            missed: 0,
+        }
     }
 
     fn add_entry(&mut self, class: Value, id: IdentId, version: u32, method: MethodRef) {
-        self.0
+        self.cache
             .insert((class, id), MethodCacheEntry { method, version });
     }
 
     fn get_entry(&self, class: Value, id: IdentId) -> Option<&MethodCacheEntry> {
-        self.0.get(&(class, id))
+        self.cache.get(&(class, id))
     }
 
     /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
@@ -371,11 +395,19 @@ impl MethodCache {
         method: IdentId,
     ) -> Option<MethodRef> {
         //let class_version = self.class_version;
+        #[cfg(feature = "perf")]
+        {
+            self.total += 1;
+        }
         if let Some(MethodCacheEntry { version, method }) = self.get_entry(rec_class, method) {
             if *version == class_version {
                 return Some(*method);
             }
         };
+        #[cfg(feature = "perf")]
+        {
+            self.missed += 1;
+        }
         let mut temp_class = rec_class;
         let mut singleton_flag = rec_class.is_singleton();
         loop {
@@ -397,6 +429,22 @@ impl MethodCache {
                 },
             };
         }
+    }
+}
+
+#[cfg(feature = "perf")]
+impl MethodCache {
+    fn inc_inline_hit(&mut self) {
+        self.inline_hit += 1;
+    }
+
+    pub fn print_stats(&self) {
+        eprintln!("+-------------------------------------------+");
+        eprintln!("| Method cache stats:                       |");
+        eprintln!("+-------------------------------------------+");
+        eprintln!("  hit inline cache : {:>10}", self.inline_hit);
+        eprintln!("  hit global cache : {:>10}", self.total - self.missed);
+        eprintln!("  missed           : {:>10}", self.missed);
     }
 }
 

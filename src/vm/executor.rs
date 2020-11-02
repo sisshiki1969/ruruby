@@ -2546,7 +2546,13 @@ impl VM {
         let icache = self.globals.inline_cache.get_entry(cache);
         if icache.version == version {
             match icache.entries {
-                Some((class, method)) if class.id() == rec_class.id() => return Ok(method),
+                Some((class, method)) if class.id() == rec_class.id() => {
+                    #[cfg(feature = "perf")]
+                    {
+                        self.globals.inc_inline_hit();
+                    }
+                    return Ok(method);
+                }
                 _ => {}
             }
         };
@@ -2859,7 +2865,10 @@ impl VM {
         match self.run(absolute_path, &program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
-                self.perf.print_perf();
+                {
+                    self.perf.print_perf();
+                    self.globals.method_cache.print_stats();
+                }
                 #[cfg(feature = "gc-debug")]
                 self.globals.print_mark();
             }
