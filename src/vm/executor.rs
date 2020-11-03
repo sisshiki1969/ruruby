@@ -3,7 +3,7 @@ use crate::*;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 use vm_inst::*;
@@ -15,7 +15,7 @@ pub type VMResult = Result<Value, RubyError>;
 pub struct VM {
     // Global info
     pub globals: GlobalsRef,
-    pub root_path: Vec<PathBuf>,
+    //pub root_path: Vec<PathBuf>,
     // VM state
     fiber_state: FiberState,
     exec_context: Vec<ContextRef>,
@@ -83,7 +83,7 @@ impl VM {
     pub fn new(globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            root_path: vec![],
+            //root_path: vec![],
             fiber_state: FiberState::Created,
             class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             exec_context: vec![],
@@ -104,7 +104,7 @@ impl VM {
     pub fn create_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<FiberMsg>) -> Self {
         let vm = VM {
             globals: self.globals,
-            root_path: self.root_path.clone(),
+            //root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
             exec_context: vec![],
             temp_stack: vec![],
@@ -145,6 +145,15 @@ impl VM {
             Some(iseq) => iseq.source_info,
             None => SourceInfoRef::empty(),
         }
+    }
+
+    pub fn get_source_path(&self) -> PathBuf {
+        self.current_context()
+            .iseq_ref
+            .unwrap()
+            .source_info
+            .path
+            .clone()
     }
 
     pub fn fiberstate_created(&mut self) {
@@ -1374,6 +1383,16 @@ impl VM {
     pub fn error_block_return(&self, val: Value) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_block_return(val, self.source_info(), loc)
+    }
+
+    pub fn error_load(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(
+            RuntimeErrKind::LoadError,
+            msg.into(),
+            self.source_info(),
+            loc,
+        )
     }
 
     pub fn check_args_num(&self, len: usize, num: usize) -> Result<(), RubyError> {
@@ -2873,32 +2892,48 @@ impl VM {
 }
 
 impl VM {
-    pub fn load_file(
-        &mut self,
-        file_name: &str,
-    ) -> Result<(std::path::PathBuf, String), RubyError> {
+    pub fn canonicalize_path(&mut self, path: &PathBuf) -> Result<PathBuf, RubyError> {
+        match path.canonicalize() {
+            Ok(path) => Ok(path),
+            Err(ioerr) => {
+                let msg = format!("File not found. {:?}\n{}", path, ioerr);
+                Err(self.error_runtime(msg))
+            }
+        }
+    }
+
+    pub fn load_file(&mut self, path: &PathBuf) -> Result<String, RubyError> {
         use crate::loader::*;
-        match crate::loader::load_file(file_name) {
-            Ok((path, program)) => Ok((path, program)),
+        match loader::load_file(path) {
+            Ok(program) => {
+                self.globals.add_source_file(path);
+                Ok(program)
+            }
             Err(err) => {
                 let err_str = match err {
-                    LoadError::NotFound(msg) => format!(
-                        "LoadError: No such file or directory -- {}\n{}",
-                        file_name, msg
-                    ),
+                    LoadError::NotFound(msg) => {
+                        format!("No such file or directory -- {:?}\n{}", path, msg)
+                    }
                     LoadError::CouldntOpen(msg) => {
-                        format!("Cannot open file. '{}'\n{}", file_name, msg)
+                        format!("Cannot open file. '{:?}'\n{}", path, msg)
                     }
                 };
-                Err(self.error_internal(err_str))
+                Err(self.error_load(err_str))
             }
         }
     }
 
     pub fn exec_file(&mut self, file_name: &str) {
         use crate::loader::*;
-        let (absolute_path, program) = match crate::loader::load_file(file_name) {
-            Ok((path, program)) => (path, program),
+        let path = match Path::new(file_name).canonicalize() {
+            Ok(path) => path,
+            Err(ioerr) => {
+                eprintln!("LoadError: {}\n{}", file_name, ioerr);
+                return;
+            }
+        };
+        let (absolute_path, program) = match loader::load_file(&path) {
+            Ok(program) => (path, program),
             Err(err) => {
                 match err {
                     LoadError::NotFound(msg) => eprintln!("LoadError: {}\n{}", file_name, msg),
@@ -2907,18 +2942,17 @@ impl VM {
                 return;
             }
         };
-
+        self.globals.add_source_file(&absolute_path);
         let file = absolute_path
             .file_name()
             .map(|x| x.to_string_lossy())
             .unwrap_or(std::borrow::Cow::Borrowed(""));
         self.set_global_var(IdentId::get_id("$0"), Value::string(file.to_string()));
-        let root_path = absolute_path.clone();
         #[cfg(feature = "verbose")]
-        eprintln!("load file: {:?}", root_path);
-        self.root_path.push(root_path);
+        eprintln!("load file: {:?}", &absolute_path);
+        //self.root_path.push(root_path);
         self.exec_program(absolute_path, program);
-        self.root_path.pop();
+        //self.root_path.pop();
         #[cfg(feature = "emit-iseq")]
         self.globals.const_values.dump();
     }

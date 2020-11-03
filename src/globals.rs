@@ -1,6 +1,7 @@
 use crate::*;
 use fancy_regex::Regex;
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
@@ -23,6 +24,7 @@ pub struct Globals {
 
     pub fibers: Vec<VMRef>,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
+    source_files: Vec<PathBuf>,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -187,6 +189,7 @@ impl Globals {
             gc_enabled: true,
             fibers: vec![],
             regexp_cache: FxHashMap::default(),
+            source_files: vec![],
         };
         // Generate singleton class for Object
         let mut singleton_class = ClassInfo::from(class);
@@ -279,6 +282,16 @@ impl Globals {
         alloc.gc(self);
     }
 
+    pub fn add_source_file(&mut self, file_path: &PathBuf) -> Option<usize> {
+        if self.source_files.contains(file_path) {
+            None
+        } else {
+            let i = self.source_files.len();
+            self.source_files.push(file_path.to_owned());
+            Some(i)
+        }
+    }
+
     #[cfg(feature = "perf")]
     pub fn inc_inline_hit(&mut self) {
         self.method_cache.inc_inline_hit();
@@ -296,6 +309,11 @@ impl Globals {
     }
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
+        self.global_var.insert(id, val);
+    }
+
+    pub fn set_global_var_by_str(&mut self, name: &str, val: Value) {
+        let id = IdentId::get_id(name);
         self.global_var.insert(id, val);
     }
 }

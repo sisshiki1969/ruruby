@@ -94,7 +94,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_rstring().unwrap();
-    let rhs = match args[0].expect_integer(vm, "1st arg must be Integer.")? {
+    let rhs = match args[0].expect_integer(vm, "1st arg")? {
         i if i < 0 => return Err(vm.error_argument("Negative argument.")),
         i => i as usize,
     };
@@ -215,7 +215,7 @@ fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn expect_char(vm: &mut VM, chars: &mut std::str::Chars) -> Result<char, RubyError> {
     let ch = match chars.next() {
         Some(ch) => ch,
-        None => return Err(vm.error_argument("Invalid format character")),
+        None => return Err(vm.error_argument("Invalid termination of format string.")),
     };
     Ok(ch)
 }
@@ -285,7 +285,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Err(vm.error_argument("Too few arguments"));
         };
         // Specifier
-        let val = arguments[arg_no];
+        let mut val = arguments[arg_no];
         arg_no += 1;
         let format = match ch {
             'd' => {
@@ -337,7 +337,8 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     .ok_or_else(|| vm.error_argument("Invalid value for placeholder."))?;
                 format!("{}", ch)
             }
-            _ => return Err(vm.error_argument("Invalid format character.")),
+            's' => val.expect_string(vm, "Value for placeholder")?.to_string(),
+            _ => return Err(vm.error_argument(format!("Invalid format character. {}", ch))),
         };
         format_str.append(&mut format.chars().collect());
         next_char!(ch, chars);

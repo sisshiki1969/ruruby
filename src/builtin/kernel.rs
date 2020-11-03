@@ -130,24 +130,18 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
         base_path.push(file_name);
         base_path.set_extension("rb");
-        //eprintln!("search: {:?}", base_path);
-        match base_path.canonicalize() {
-            Ok(path) => {
-                //eprintln!("found: {:?}", path);
-                load_exec(vm, path)?;
-                return Ok(Value::bool(true));
-            }
-            _ => {}
+        if base_path.exists() {
+            return Ok(Value::bool(load_exec(vm, &base_path, false)?));
         }
     }
     Ok(Value::false_val())
+    // TODO: This is not correct. Work around for load error in requiring .so files.
+    //Err(vm.error_load(format!("Can not load such file -- {:?}", file_name)))
 }
 
 fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let context = vm.current_context();
-    let mut path = std::path::PathBuf::from(context.iseq_ref.unwrap().source_info.path.clone());
-
+    let mut path = vm.get_source_path();
     let file_name = match args[0].as_string() {
         Some(string) => PathBuf::from(string),
         None => return Err(vm.error_argument("file name must be a string.")),
@@ -161,8 +155,7 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     path.set_extension("rb");
-    load_exec(vm, path)?;
-    Ok(Value::bool(true))
+    Ok(Value::bool(load_exec(vm, &path, false)?))
 }
 
 fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -171,51 +164,48 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(string) => string,
         None => return Err(vm.error_argument("file name must be a string.")),
     };
+    let path = PathBuf::from(file_name);
+    if path.exists() {
+        load_exec(vm, &path, true)?;
+        return Ok(Value::true_val());
+    }
+
     let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
         Some(path) => path,
         None => return Err(vm.error_internal("Load path not found.")),
     };
+
     let mut load_ary = load_path
         .expect_array(vm, "LOAD_PATH($:)")?
         .elements
         .clone();
-    match PathBuf::from(file_name).canonicalize() {
-        Ok(path) => {
-            //eprintln!("found: {:?}", path);
-            load_exec(vm, path)?;
-            return Ok(Value::true_val());
-        }
-        _ => {}
-    }
     for path in load_ary.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
         base_path.push(file_name);
-        //base_path.set_extension("rb");
-        //eprintln!("search: {:?}", base_path);
-        match base_path.canonicalize() {
-            Ok(path) => {
-                //eprintln!("found: {:?}", path);
-                load_exec(vm, path)?;
-                return Ok(Value::true_val());
-            }
-            _ => {}
+        if base_path.exists() {
+            load_exec(vm, &base_path, true)?;
+            return Ok(Value::true_val());
         }
     }
-    Err(vm.error_internal(format!("File not found. {:?}", file_name)))
+    Err(vm.error_load(format!("Can not load such file -- {:?}", file_name)))
 }
 
 /// Load file and execute.
-fn load_exec(vm: &mut VM, path: PathBuf) -> Result<(), RubyError> {
-    let file_name = path.to_string_lossy();
-    let (absolute_path, program) = vm.load_file(file_name.as_ref())?;
+fn load_exec(vm: &mut VM, path: &PathBuf, allow_repeat: bool) -> Result<bool, RubyError> {
+    let absolute_path = vm.canonicalize_path(path)?;
+    let res = vm.globals.add_source_file(&absolute_path);
+    if !allow_repeat && res.is_none() {
+        return Ok(false);
+    }
+    let program = vm.load_file(&absolute_path)?;
     #[cfg(feature = "verbose")]
     eprintln!("reading:{}", absolute_path.to_string_lossy());
-    vm.root_path.push(path);
+    //vm.root_path.push(absolute_path.clone());
     vm.class_push(BuiltinClass::object());
     vm.run(absolute_path, &program)?;
     vm.class_pop();
-    vm.root_path.pop().unwrap();
-    Ok(())
+    //vm.root_path.pop().unwrap();
+    Ok(true)
 }
 
 /// Built-in function "block_given?".
@@ -276,24 +266,14 @@ fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut path = match vm.root_path.last() {
-        Some(path) => path,
-        None => return Ok(Value::nil()),
-    }
-    .clone();
+    let mut path = vm.get_source_path();
     path.pop();
     Ok(Value::string(path.to_string_lossy().to_string()))
 }
 
 fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let path = vm
-        .current_context()
-        .iseq_ref
-        .unwrap()
-        .source_info
-        .path
-        .clone();
+    let path = vm.get_source_path();
     Ok(Value::string(path.to_string_lossy().to_string()))
 }
 

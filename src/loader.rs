@@ -1,22 +1,15 @@
 use std::fs::*;
 use std::io::Read;
+use std::path::PathBuf;
 
 pub enum LoadError {
     NotFound(String),
     CouldntOpen(String),
 }
 
-pub fn load_file(file_name: &str) -> Result<(std::path::PathBuf, String), LoadError> {
-    let path = std::path::Path::new(file_name); //.with_extension("rb");
-    let absolute_path = match path.canonicalize() {
-        Ok(path) => path,
-        Err(ioerr) => {
-            let msg = format!("{}", ioerr);
-            return Err(LoadError::NotFound(msg));
-        }
-    };
+pub fn load_file(path: &PathBuf) -> Result<String, LoadError> {
     let mut file_body = String::new();
-    match OpenOptions::new().read(true).open(&absolute_path) {
+    match OpenOptions::new().read(true).open(path) {
         Ok(mut file) => match file.read_to_string(&mut file_body) {
             Ok(_) => {}
             Err(ioerr) => {
@@ -30,5 +23,5 @@ pub fn load_file(file_name: &str) -> Result<(std::path::PathBuf, String), LoadEr
         }
     };
 
-    Ok((absolute_path, file_body))
+    Ok(file_body)
 }

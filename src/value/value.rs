@@ -496,9 +496,10 @@ impl Value {
     }
 
     pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
-        match self.as_integer() {
-            Some(i) => Ok(i),
-            None => Err(vm.error_argument(format!(
+        match self.unpack() {
+            RV::Integer(i) => Ok(i),
+            RV::Float(f) => Ok(f.trunc() as i64),
+            _ => Err(vm.error_argument(format!(
                 "{} must be an Integer. (given:{})",
                 msg.into(),
                 self.get_class_name()

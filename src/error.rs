@@ -23,7 +23,6 @@ pub enum ParseErrKind {
     UnexpectedEOF,
     UnexpectedToken,
     SyntaxError(String),
-    LoadError(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,6 +39,7 @@ pub enum RuntimeErrKind {
     LocalJump,
     StopIteration,
     Runtime,
+    LoadError,
 }
 
 impl RubyError {
@@ -103,7 +103,6 @@ impl RubyError {
                 ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF"),
                 ParseErrKind::UnexpectedToken => eprintln!("Unexpected token"),
                 ParseErrKind::SyntaxError(n) => eprintln!("SyntaxError: {}", n),
-                ParseErrKind::LoadError(n) => eprintln!("LoadError: {}", n),
             },
             RubyErrorKind::RuntimeErr { kind, message } => {
                 match kind {
@@ -119,6 +118,7 @@ impl RubyError {
                     RuntimeErrKind::LocalJump => eprint!("LocalJumpError"),
                     RuntimeErrKind::StopIteration => eprint!("StopIteration"),
                     RuntimeErrKind::Runtime => eprint!("RuntimeError"),
+                    RuntimeErrKind::LoadError => eprintln!("LoadError"),
                 };
                 eprintln!("({})", message);
             }
