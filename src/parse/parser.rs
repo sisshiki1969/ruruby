@@ -1415,6 +1415,7 @@ impl Parser {
                 }
             }
             TokenKind::InstanceVar(name) => Ok(Node::new_instance_var(name, loc)),
+            TokenKind::ClassVar(name) => Ok(Node::new_class_var(name, loc)),
             TokenKind::GlobalVar(name) => Ok(Node::new_global_var(name, loc)),
             TokenKind::Const(name) => {
                 if self.lexer.trailing_lparen() {

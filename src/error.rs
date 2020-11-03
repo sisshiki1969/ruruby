@@ -39,6 +39,7 @@ pub enum RuntimeErrKind {
     Fiber,
     LocalJump,
     StopIteration,
+    Runtime,
 }
 
 impl RubyError {
@@ -117,6 +118,7 @@ impl RubyError {
                     RuntimeErrKind::Fiber => eprint!("FiberError"),
                     RuntimeErrKind::LocalJump => eprint!("LocalJumpError"),
                     RuntimeErrKind::StopIteration => eprint!("StopIteration"),
+                    RuntimeErrKind::Runtime => eprint!("RuntimeError"),
                 };
                 eprintln!("({})", message);
             }

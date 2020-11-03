@@ -30,6 +30,7 @@ pub enum NodeKind {
     Ident(IdentId),
     InstanceVar(IdentId),
     GlobalVar(IdentId),
+    ClassVar(IdentId),
     Const {
         toplevel: bool,
         id: IdentId,
@@ -282,6 +283,7 @@ impl Node {
         match &self.kind {
             NodeKind::LocalVar(..) => "local-variable",
             NodeKind::GlobalVar(..) => "global-variable",
+            NodeKind::ClassVar(..) => "class-variable",
             NodeKind::Const { .. } | NodeKind::Scope(..) => "constant",
             NodeKind::InstanceVar(..) => "instance-variable",
             NodeKind::AssignOp(..) | NodeKind::MulAssign(..) => "assignment",
@@ -430,6 +432,11 @@ impl Node {
     pub fn new_instance_var(name: &str, loc: Loc) -> Self {
         let id = IdentId::get_id(name);
         Node::new(NodeKind::InstanceVar(id), loc)
+    }
+
+    pub fn new_class_var(name: &str, loc: Loc) -> Self {
+        let id = IdentId::get_id(name);
+        Node::new(NodeKind::ClassVar(id), loc)
     }
 
     pub fn new_global_var(name: &str, loc: Loc) -> Self {

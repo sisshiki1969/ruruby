@@ -6,7 +6,6 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct Codegen {
     // Codegen State
-    //pub class_stack: Vec<IdentId>,
     method_stack: Vec<MethodRef>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
@@ -561,6 +560,18 @@ impl Codegen {
         }
     }
 
+    fn gen_get_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::GET_CVAR);
+        Codegen::push32(iseq, id.into());
+    }
+
+    fn gen_set_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::SET_CVAR);
+        Codegen::push32(iseq, id.into());
+    }
+
     fn gen_get_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
         iseq.push(Inst::GET_GVAR);
         Codegen::push32(iseq, id.into());
@@ -688,6 +699,7 @@ impl Codegen {
             }
             NodeKind::InstanceVar(id) => self.gen_set_instance_var(iseq, *id),
             NodeKind::GlobalVar(id) => self.gen_set_global_var(iseq, *id),
+            NodeKind::ClassVar(id) => self.gen_set_class_var(iseq, *id),
             NodeKind::Scope(parent, id) => {
                 self.gen(globals, iseq, parent, true)?;
                 self.gen_set_const(iseq, *id);
@@ -767,6 +779,10 @@ impl Codegen {
             NodeKind::InstanceVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen_set_instance_var(iseq, *id)
+            }
+            NodeKind::ClassVar(id) => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen_set_class_var(iseq, *id)
             }
             NodeKind::GlobalVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
@@ -1275,6 +1291,12 @@ impl Codegen {
             }
             NodeKind::InstanceVar(id) => {
                 self.gen_get_instance_var(iseq, *id);
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
+            NodeKind::ClassVar(id) => {
+                self.gen_get_class_var(iseq, *id);
                 if !use_value {
                     self.gen_pop(iseq)
                 };

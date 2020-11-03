@@ -781,6 +781,52 @@ fn instance_var1() {
 }
 
 #[test]
+fn class_var1() {
+    let program = "
+    class A
+        @@a = 100
+        def get
+            @@a
+        end
+        def set(val)
+            @@a = val
+        end
+    end
+    assert(100, A.new.get)
+    A.new.set(77)
+    assert(77, A.new.get)
+    ";
+    assert_script(program);
+}
+
+#[test]
+fn class_var2() {
+    let program = "
+    class A
+        @@a = 100
+        def get
+            @@a
+        end
+        def set(val)
+            @@a = val
+        end
+    end
+    class B < A
+        @@a = 77
+    end
+    assert(77, A.new.get)
+    assert(77, B.new.get)
+    B.new.set(42)
+    assert(42, A.new.get)
+    assert(42, B.new.get)
+    A.new.set(99)
+    assert(99, A.new.get)
+    assert(99, B.new.get)
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn global_var() {
     let program = "
         class A

@@ -5,6 +5,7 @@ pub fn init(globals: &mut Globals) {
     let module_class = globals.builtins.module.as_mut_class();
     module_class.add_builtin_method_by_str("===", teq);
     module_class.add_builtin_method_by_str("constants", constants);
+    module_class.add_builtin_method_by_str("class_variables", class_variables);
     module_class.add_builtin_method_by_str("const_defined?", const_defined);
     module_class.add_builtin_method_by_str("instance_methods", instance_methods);
     module_class.add_builtin_method_by_str("attr_accessor", attr_accessor);
@@ -72,6 +73,22 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
         }
     }
     Ok(Value::array_from(v))
+}
+
+fn class_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let inherit = args[0].to_bool();
+    assert_eq!(inherit, false);
+    let receiver = self_val.rvalue();
+    let res = match receiver.var_table() {
+        Some(table) => table
+            .keys()
+            .filter(|x| IdentId::get_ident_name(**x).starts_with("@@"))
+            .map(|x| Value::symbol(*x))
+            .collect(),
+        None => vec![],
+    };
+    Ok(Value::array_from(res))
 }
 
 fn const_defined(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -165,7 +182,7 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
-    let instance_var_id = get_instance_var(vm, id);
+    let instance_var_id = IdentId::add_prefix(id, "@");
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
@@ -177,7 +194,7 @@ fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
 }
 
 fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
-    let instance_var_id = get_instance_var(vm, id);
+    let instance_var_id = IdentId::add_prefix(id, "@");
     let assign_id = IdentId::add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
@@ -187,11 +204,6 @@ fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
         .as_mut_module()
         .unwrap()
         .add_method(&mut vm.globals, assign_id, methodref);
-}
-
-fn get_instance_var(_vm: &VM, id: IdentId) -> IdentId {
-    //let s = IdentId::get_ident_name(id);
-    IdentId::get_id(&format!("@{:?}", id))
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -412,6 +424,20 @@ mod test {
     assert(true, ary_cmp(Foo.constants, [:Bar, :Ker]))
     assert(true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker]))
     "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn class_variables() {
+        let program = r##"
+        class One
+            @@var1 = 1
+        end
+        class Two < One
+            @@var2 = 2
+        end
+        assert([:"@@var2"], Two.class_variables(false))
+        "##;
         assert_script(program);
     }
 

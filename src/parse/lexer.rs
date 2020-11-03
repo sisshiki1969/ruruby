@@ -128,6 +128,7 @@ impl Lexer {
         )
     }
 
+    #[cfg(test)]
     pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, RubyError> {
         self.init(std::path::PathBuf::new(), code_text);
         let mut tokens = vec![];
@@ -422,7 +423,13 @@ impl Lexer {
                             return Ok(self.new_punct(Punct::BitOr));
                         }
                     }
-                    '@' => return self.read_identifier(None, VarKind::InstanceVar),
+                    '@' => {
+                        if self.consume('@') {
+                            return self.read_identifier(None, VarKind::ClassVar);
+                        } else {
+                            return self.read_identifier(None, VarKind::InstanceVar);
+                        }
+                    }
                     '$' => return self.read_global_var(),
                     _ => return Err(self.error_unexpected(pos)),
                 }
@@ -491,12 +498,9 @@ impl Lexer {
             }
         }
         match var_kind {
-            VarKind::InstanceVar => {
-                return Ok(self.new_instance_var(tok));
-            }
-            VarKind::GlobalVar => {
-                return Ok(self.new_global_var(tok));
-            }
+            VarKind::InstanceVar => return Ok(self.new_instance_var(tok)),
+            VarKind::ClassVar => return Ok(self.new_class_var(tok)),
+            VarKind::GlobalVar => return Ok(self.new_global_var(tok)),
             _ => {}
         }
 
@@ -1104,6 +1108,10 @@ impl Lexer {
         Annot::new(TokenKind::InstanceVar(ident.into()), self.cur_loc())
     }
 
+    fn new_class_var(&self, ident: impl Into<String>) -> Token {
+        Annot::new(TokenKind::ClassVar(ident.into()), self.cur_loc())
+    }
+
     fn new_global_var(&self, ident: impl Into<String>) -> Token {
         Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
     }
@@ -1165,6 +1173,7 @@ impl Lexer {
     }
 }
 
+#[cfg(test)]
 impl LexerResult {
     fn new(tokens: Vec<Token>) -> Self {
         LexerResult { tokens }

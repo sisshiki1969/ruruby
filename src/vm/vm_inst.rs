@@ -17,18 +17,21 @@ impl Inst {
     pub const CREATE_REGEXP: u8 = 14;
     pub const CONST_VAL: u8 = 15;
 
-    pub const SET_LOCAL: u8 = 40;
-    pub const GET_LOCAL: u8 = 41;
-    pub const SET_DYNLOCAL: u8 = 42;
-    pub const GET_DYNLOCAL: u8 = 43;
-    pub const GET_CONST: u8 = 44;
-    pub const SET_CONST: u8 = 45;
-    pub const GET_CONST_TOP: u8 = 46;
-    pub const GET_SCOPE: u8 = 47;
-    pub const GET_IVAR: u8 = 48;
-    pub const SET_IVAR: u8 = 49;
-    pub const GET_GVAR: u8 = 50;
-    pub const SET_GVAR: u8 = 51;
+    pub const SET_LOCAL: u8 = 30;
+    pub const GET_LOCAL: u8 = 31;
+    pub const SET_DYNLOCAL: u8 = 32;
+    pub const GET_DYNLOCAL: u8 = 33;
+    pub const GET_CONST: u8 = 34;
+    pub const SET_CONST: u8 = 35;
+    pub const GET_CONST_TOP: u8 = 36;
+    pub const GET_SCOPE: u8 = 37;
+    pub const GET_IVAR: u8 = 38;
+    pub const SET_IVAR: u8 = 39;
+    pub const GET_GVAR: u8 = 40;
+    pub const SET_GVAR: u8 = 41;
+    pub const GET_CVAR: u8 = 42;
+    pub const SET_CVAR: u8 = 43;
+
     pub const GET_INDEX: u8 = 52;
     pub const SET_INDEX: u8 = 53;
     pub const OPT_GET_INDEX: u8 = 54;
@@ -192,7 +195,8 @@ impl Inst {
 
             Inst::GET_IVAR => "GET_IVAR",
             Inst::SET_IVAR => "SET_IVAR",
-            Inst::GET_GVAR => "GET_GVAR",
+            Inst::SET_CVAR => "SET_CVAR",
+            Inst::GET_CVAR => "GET_CVAR",
             Inst::SET_GVAR => "SET_GVAR",
             Inst::GET_INDEX => "GET_INDEX",
             Inst::SET_INDEX => "SET_INDEX",
@@ -296,6 +300,8 @@ impl Inst {
             | Inst::GET_GVAR            // IdentId: u32
             | Inst::SET_GVAR            // IdentId: u32
             | Inst::CHECK_GVAR          // IdentId: u32
+            | Inst::GET_CVAR            // IdentId: u32
+            | Inst::SET_CVAR            // IdentId: u32
             | Inst::GET_INDEX           // number of items: u32
             | Inst::SET_INDEX           // number of items: u32
             | Inst::OPT_GET_INDEX       // immediate: u32
@@ -474,6 +480,8 @@ impl Inst {
             | Inst::GET_IVAR
             | Inst::SET_IVAR
             | Inst::CHECK_IVAR
+            | Inst::GET_CVAR
+            | Inst::SET_CVAR
             | Inst::GET_GVAR
             | Inst::SET_GVAR
             | Inst::CHECK_GVAR

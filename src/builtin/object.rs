@@ -156,7 +156,7 @@ fn instance_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let res = match receiver.var_table() {
         Some(table) => table
             .keys()
-            .filter(|x| IdentId::get_ident_name(**x).chars().nth(0) == Some('@'))
+            .filter(|x| IdentId::get_ident_name(**x).starts_with('@'))
             .map(|x| Value::symbol(*x))
             .collect(),
         None => vec![],

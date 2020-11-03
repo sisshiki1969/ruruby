@@ -435,7 +435,9 @@ impl RValue {
         }
     }
 
-    pub fn set_var(&mut self, id: IdentId, val: Value) {
+    /// Set `val` for `id` in variable table. <br>
+    /// Return Some(old_value) or None if no old value exists.
+    pub fn set_var(&mut self, id: IdentId, val: Value) -> Option<Value> {
         match &mut self.var_table {
             Some(table) => table.insert(id, val),
             None => {
@@ -444,7 +446,7 @@ impl RValue {
                 self.var_table = Some(Box::new(table));
                 v
             }
-        };
+        }
     }
 
     pub fn var_table(&self) -> Option<&ValueTable> {

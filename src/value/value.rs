@@ -382,8 +382,8 @@ impl Value {
         self.get_class_for_method().is_singleton()
     }
 
-    pub fn set_var(&mut self, id: IdentId, val: Value) {
-        self.rvalue_mut().set_var(id, val);
+    pub fn set_var(&mut self, id: IdentId, val: Value) -> Option<Value> {
+        self.rvalue_mut().set_var(id, val)
     }
 
     pub fn set_var_by_str(&mut self, name: &str, val: Value) {

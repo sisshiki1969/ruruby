@@ -85,7 +85,7 @@ impl VM {
             globals,
             root_path: vec![],
             fiber_state: FiberState::Created,
-            class_context: vec![(Value::nil(), DefineMode::default())],
+            class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
@@ -222,7 +222,7 @@ impl VM {
 
     pub fn clear(&mut self) {
         self.exec_stack.clear();
-        self.class_context = vec![(Value::nil(), DefineMode::default())];
+        self.class_context = vec![(BuiltinClass::object(), DefineMode::default())];
         self.exec_context.clear();
     }
 
@@ -233,38 +233,22 @@ impl VM {
     pub fn class_pop(&mut self) {
         self.class_context.pop().unwrap();
     }
-    /*
-        pub fn classref(&self) -> ClassRef {
-            let (class, _) = self.class_context.last().unwrap();
-            if class.is_nil() {
-                self.globals.builtins.object.as_class()
-            } else {
-                class.as_module().unwrap()
-            }
-        }
-    */
 
     /// Get Class of current class context.
     pub fn class(&self) -> Value {
-        let (class, _) = self.class_context.last().unwrap();
-        if class.is_nil() {
-            BuiltinClass::object()
-        } else {
-            *class
-        }
+        self.class_context.last().unwrap().0
     }
 
     pub fn define_mode(&self) -> &DefineMode {
         &self.class_context.last().unwrap().1
     }
 
-    #[cfg(not(tarpaulin_include))]
     pub fn define_mode_mut(&mut self) -> &mut DefineMode {
         &mut self.class_context.last_mut().unwrap().1
     }
 
     pub fn module_function(&mut self, flag: bool) {
-        self.class_context.last_mut().unwrap().1.module_function = flag;
+        self.define_mode_mut().module_function = flag;
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: i64) {
@@ -927,6 +911,18 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
+                Inst::SET_CVAR => {
+                    let var_id = iseq.read_id(self.pc + 1);
+                    let new_val = self.stack_pop();
+                    self.set_class_var(var_id, new_val)?;
+                    self.pc += 5;
+                }
+                Inst::GET_CVAR => {
+                    let var_id = iseq.read_id(self.pc + 1);
+                    let val = self.get_class_var(var_id)?;
+                    self.stack_push(val);
+                    self.pc += 5;
+                }
                 Inst::SET_INDEX => {
                     let arg_num = iseq.read_usize(self.pc + 1);
                     self.set_index(arg_num)?;
@@ -1245,6 +1241,11 @@ impl VM {
 }
 
 impl VM {
+    pub fn error_runtime(&self, msg: impl Into<String>) -> RubyError {
+        let loc = self.get_loc();
+        RubyError::new_runtime_err(RuntimeErrKind::Runtime, msg.into(), self.source_info(), loc)
+    }
+
     pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
         let loc = self.get_loc();
         RubyError::new_runtime_err(
@@ -1459,8 +1460,20 @@ impl VM {
             None => self.get_nearest_class_stack(),
         }
     }
+}
 
-    // Search class stack for the constant.
+// handling global/class varables.
+
+impl VM {
+    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
+        self.globals.get_global_var(id)
+    }
+
+    pub fn set_global_var(&mut self, id: IdentId, val: Value) {
+        self.globals.set_global_var(id, val);
+    }
+
+    // Search lexical class stack for the constant.
     fn get_env_const(&self, id: IdentId) -> Option<Value> {
         let mut class_list = match self.get_nearest_class_stack() {
             Some(list) => list,
@@ -1497,14 +1510,9 @@ impl VM {
         }
     }
 
-    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
-        self.globals.get_global_var(id)
-    }
-
-    pub fn set_global_var(&mut self, id: IdentId, val: Value) {
-        self.globals.set_global_var(id, val);
-    }
-
+    /// Set a constant (`parent`::`id`) to `val`.
+    /// If `val` is a module or class, set the name of the class/module to the name of the constant.<br>
+    /// If the constant was already initialized, output warning.
     pub fn set_const(
         &mut self,
         mut parent: Value,
@@ -1529,8 +1537,63 @@ impl VM {
             }
             None => {}
         }
-        parent.set_var(id, val);
+        if parent.set_var(id, val).is_some() {
+            eprintln!("warning: already initialized constant {:?}", id);
+        }
         Ok(())
+    }
+
+    fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
+        if self.exec_context.len() == 0 {
+            return Err(self.error_runtime("class varable access from toplevel."));
+        }
+        let self_val = self.current_context().self_value;
+        let mut org_class = match self_val.as_module() {
+            Some(_) => self_val,
+            None => self_val.get_class(),
+        };
+        let mut class = org_class;
+        loop {
+            if class.set_var_if_exists(id, val) {
+                return Ok(());
+            } else {
+                match class.superclass() {
+                    Some(superclass) => class = superclass,
+                    None => {
+                        org_class.set_var(id, val);
+                        return Ok(());
+                    }
+                }
+            };
+        }
+    }
+
+    fn get_class_var(&self, id: IdentId) -> VMResult {
+        if self.exec_context.len() == 0 {
+            return Err(self.error_runtime("class varable access from toplevel."));
+        }
+        let self_val = self.current_context().self_value;
+        let mut class = match self_val.as_module() {
+            Some(_) => self_val,
+            None => self_val.get_class(),
+        };
+        loop {
+            match class.get_var(id) {
+                Some(val) => {
+                    return Ok(val);
+                }
+                None => match class.superclass() {
+                    Some(superclass) => {
+                        class = superclass;
+                    }
+                    None => {
+                        return Err(
+                            self.error_name(format!("Uninitialized class variable {:?}.", id))
+                        );
+                    }
+                },
+            }
+        }
     }
 }
 
