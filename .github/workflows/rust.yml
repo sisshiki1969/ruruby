@@ -14,17 +14,13 @@ jobs:
       options: --security-opt seccomp=unconfined
 
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v2
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           override: true
-      - name: Build
-        run: cargo build --verbose
       - name: Run tests
-        run: cargo tarpaulin -v --out Xml --all-features
-      - name: Codecov
-        uses: codecov/codecov-action@v1.0.7
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
+        run: cargo +nightly tarpaulin -v --out Xml --all-features --workspace
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v1
