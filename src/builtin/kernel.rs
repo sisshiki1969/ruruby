@@ -491,7 +491,7 @@ mod test {
         "###;
         assert_script(program);
     }
-
+/*
     #[test]
     fn kernel_exit() {
         let program = r###"
@@ -499,7 +499,7 @@ mod test {
         "###;
         assert_script(program);
     }
-
+*/
     #[test]
     fn kernel_loop() {
         let program = r#"
