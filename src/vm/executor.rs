@@ -1530,7 +1530,8 @@ impl VM {
     }
 
     /// Set a constant (`parent`::`id`) to `val`.
-    /// If `val` is a module or class, set the name of the class/module to the name of the constant.<br>
+    ///
+    /// If `val` is a module or class, set the name of the class/module to the name of the constant.
     /// If the constant was already initialized, output warning.
     pub fn set_const(
         &mut self,

@@ -39,14 +39,11 @@ impl ClassInfo {
     }
 
     pub fn from(superclass: impl Into<Option<Value>>) -> Self {
-        Self::new(superclass, ClassExt::new(None), false)
+        Self::new(superclass, ClassExt::new(), false)
     }
 
-    pub fn singleton_from(
-        id: impl Into<Option<IdentId>>,
-        superclass: impl Into<Option<Value>>,
-    ) -> Self {
-        Self::new(superclass, ClassExt::new(id), true)
+    pub fn singleton_from(superclass: impl Into<Option<Value>>) -> Self {
+        Self::new(superclass, ClassExt::new(), true)
     }
 
     pub fn name(&self) -> Option<IdentId> {
@@ -127,9 +124,9 @@ struct ClassExt {
 type ClassRef = Ref<ClassExt>;
 
 impl ClassExt {
-    fn new(name: impl Into<Option<IdentId>>) -> Self {
+    fn new() -> Self {
         ClassExt {
-            name: name.into(),
+            name: None,
             method_table: FxHashMap::default(),
             include: vec![],
         }

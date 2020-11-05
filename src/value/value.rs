@@ -1013,11 +1013,8 @@ impl Value {
         RValue::new_class(ClassInfo::from(superclass)).pack()
     }
 
-    pub fn singleton_class_from(
-        id: impl Into<Option<IdentId>>,
-        superclass: impl Into<Option<Value>>,
-    ) -> Self {
-        RValue::new_class(ClassInfo::singleton_from(id, superclass)).pack()
+    pub fn singleton_class_from(superclass: impl Into<Option<Value>>) -> Self {
+        RValue::new_class(ClassInfo::singleton_from(superclass)).pack()
     }
 
     pub fn module(cinfo: ClassInfo) -> Self {
@@ -1110,9 +1107,9 @@ impl Value {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
                             let mut superclass = cinfo.superclass();
                             let mut singleton = if superclass.is_nil() {
-                                Value::singleton_class_from(None, None)
+                                Value::singleton_class_from(None)
                             } else {
-                                Value::singleton_class_from(None, superclass.get_singleton_class()?)
+                                Value::singleton_class_from(superclass.get_singleton_class()?)
                             };
                             singleton.set_class(class);
                             singleton
@@ -1120,7 +1117,7 @@ impl Value {
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => Value::singleton_class_from(None, class),
+                        _ => Value::singleton_class_from(class),
                     };
                     oref.set_class(singleton);
                     Ok(singleton)

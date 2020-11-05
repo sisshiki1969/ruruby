@@ -192,7 +192,7 @@ impl Globals {
             source_files: vec![],
         };
         // Generate singleton class for Object
-        let singleton_class = ClassInfo::singleton_from(None,class);
+        let singleton_class = ClassInfo::singleton_from(class);
         let singleton_obj = Value::class(singleton_class);
         object.set_class(singleton_obj);
 
