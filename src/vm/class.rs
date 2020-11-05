@@ -2,7 +2,7 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
-    superclass: Value,
+    pub superclass: Value,
     flags: ClassFlags,
     ext: ClassRef,
 }
@@ -56,10 +56,6 @@ impl ClassInfo {
 
     pub fn name_str(&self) -> String {
         IdentId::get_ident_name(self.ext.name)
-    }
-
-    pub fn superclass(&self) -> Value {
-        self.superclass
     }
 
     pub fn mut_super_classinfo(&mut self) -> Option<&mut ClassInfo> {

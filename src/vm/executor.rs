@@ -852,15 +852,15 @@ impl VM {
                 }
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
-                    let class = self.globals.builtins.object;
-                    let val = self.get_super_const(class, id)?;
+                    let parent = self.globals.builtins.object;
+                    let val = self.get_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::GET_SCOPE => {
                     let parent = self.stack_pop();
                     let id = iseq.read_id(self.pc + 1);
-                    let val = self.get_super_const(parent, id)?;
+                    let val = self.get_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -1529,6 +1529,17 @@ impl VM {
         }
     }
 
+    pub fn get_const(&self, parent: Value, id: IdentId) -> VMResult {
+        match parent.get_var(id) {
+            Some(val) => {
+                return Ok(val);
+            }
+            None => {
+                return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
+            }
+        }
+    }
+
     /// Set a constant (`parent`::`id`) to `val`.
     ///
     /// If `val` is a module or class, set the name of the class/module to the name of the constant.
@@ -1539,7 +1550,7 @@ impl VM {
         id: IdentId,
         mut val: Value,
     ) -> Result<(), RubyError> {
-        match val.as_mut_module() {
+        match val.if_mut_module() {
             Some(cinfo) => {
                 if cinfo.name() == None {
                     cinfo.set_name(if parent == self.globals.builtins.object {
@@ -1568,7 +1579,7 @@ impl VM {
             return Err(self.error_runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
-        let mut org_class = match self_val.as_module() {
+        let mut org_class = match self_val.if_module() {
             Some(_) => self_val,
             None => self_val.get_class(),
         };
@@ -1593,7 +1604,7 @@ impl VM {
             return Err(self.error_runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
-        let mut class = match self_val.as_module() {
+        let mut class = match self_val.if_module() {
             Some(_) => self_val,
             None => self_val.get_class(),
         };
@@ -2179,7 +2190,7 @@ impl VM {
         let current_class = if base.is_nil() { self.class() } else { base };
         match current_class.get_var(id) {
             Some(mut val) => {
-                if val.is_module().is_some() != is_module {
+                if val.is_module() != is_module {
                     return Err(self.error_type(format!(
                         "{:?} is not {}.",
                         id,
@@ -2187,7 +2198,7 @@ impl VM {
                     )));
                 };
                 let classref = val.expect_module(self)?;
-                if !super_val.is_nil() && classref.superclass().id() != super_val.id() {
+                if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
                     return Err(
                         self.error_type(format!("superclass mismatch for class {:?}.", id,))
                     );
@@ -2565,12 +2576,12 @@ impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
     pub fn define_method(&mut self, mut target_obj: Value, id: IdentId, method: MethodRef) {
-        match target_obj.as_mut_module() {
+        match target_obj.if_mut_module() {
             Some(cinfo) => cinfo.add_method(&mut self.globals, id, method),
             None => {
                 let mut class_val = target_obj.get_class();
                 class_val
-                    .as_mut_module()
+                    .if_mut_module()
                     .unwrap()
                     .add_method(&mut self.globals, id, method)
             }

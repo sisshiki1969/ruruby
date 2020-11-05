@@ -49,7 +49,7 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Get super class of `self`.
 fn superclass(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let class = self_val.expect_class(vm, "Receiver")?;
-    Ok(class.superclass())
+    Ok(class.superclass)
 }
 
 fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {

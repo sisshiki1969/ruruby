@@ -188,7 +188,7 @@ fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .as_mut_module()
+        .if_mut_module()
         .unwrap()
         .add_method(&mut vm.globals, id, methodref);
 }
@@ -201,7 +201,7 @@ fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .as_mut_module()
+        .if_mut_module()
         .unwrap()
         .add_method(&mut vm.globals, assign_id, methodref);
 }
@@ -244,17 +244,9 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         if class.is_nil() {
             break;
         }
-        class = match class.as_module() {
-            Some(cref) => {
-                ary.extend_from_slice(cref.include());
-                cref.superclass()
-            }
-            None => {
-                return Err(
-                    vm.error_internal(format!("Illegal value in superclass chain. {:?}", class))
-                );
-            }
-        };
+        let cinfo = class.as_module();
+        ary.extend_from_slice(cinfo.include());
+        class = cinfo.superclass;
     }
     Ok(Value::array_from(ary))
 }
@@ -268,18 +260,9 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             break;
         }
         ary.push(superclass);
-        superclass = match superclass.as_module() {
-            Some(cref) => {
-                ary.extend_from_slice(cref.include());
-                cref.superclass()
-            }
-            None => {
-                return Err(vm.error_internal(format!(
-                    "Illegal value in superclass chain. {:?}",
-                    superclass
-                )));
-            }
-        };
+        let cinfo = superclass.as_module();
+        ary.extend_from_slice(cinfo.include());
+        superclass = cinfo.superclass;
     }
     Ok(Value::array_from(ary))
 }

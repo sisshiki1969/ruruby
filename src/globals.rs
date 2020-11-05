@@ -118,7 +118,7 @@ impl BuiltinClass {
 
     /// Bind `class_object` to the constant `class_name` of the root object.
     pub fn set_class(class_name: &str, mut class_object: Value) {
-        match class_object.as_mut_module() {
+        match class_object.if_mut_module() {
             Some(cinfo) => cinfo.set_name(IdentId::get_id(class_name)),
             None => {}
         }
