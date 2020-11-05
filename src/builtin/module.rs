@@ -134,7 +134,7 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     )
                     .cloned()
                     .collect();
-                match class.mut_superclass() {
+                match class.mut_super_classinfo() {
                     Some(superclass) => class = superclass,
                     None => break,
                 };
