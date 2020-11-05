@@ -231,7 +231,7 @@ fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         if recv_class.id() == args[0].id() {
             return Ok(Value::true_val());
         }
-        recv_class = recv_class.as_class().superclass;
+        recv_class = recv_class.as_class().superclass();
         if recv_class.is_nil() {
             return Ok(Value::false_val());
         }
@@ -289,7 +289,7 @@ fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         eprintln!("{}", vm.val_inspect(*arg));
     }*/
     if args.len() == 1 && args[0].is_class().is_some() {
-        if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name {
+        if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
             return Err(vm.error_stop_iteration(""));
         };
     }

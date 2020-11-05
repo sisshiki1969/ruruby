@@ -1291,7 +1291,7 @@ impl VM {
         self.error_nomethod(format!(
             "no method `{:?}' for {}",
             method,
-            class.as_class().name()
+            class.as_class().name_str()
         ))
     }
 
@@ -1539,19 +1539,19 @@ impl VM {
         mut val: Value,
     ) -> Result<(), RubyError> {
         match val.as_mut_module() {
-            Some(mut cinfo) => {
-                if cinfo.name == None {
-                    cinfo.name = if parent == self.globals.builtins.object {
+            Some(cinfo) => {
+                if cinfo.name() == None {
+                    cinfo.set_name(if parent == self.globals.builtins.object {
                         Some(id)
                     } else {
-                        match parent.expect_module(self)?.name {
+                        match parent.expect_module(self)?.name() {
                             Some(parent_name) => {
                                 let name = IdentId::get_id(&format!("{:?}::{:?}", parent_name, id));
                                 Some(name)
                             }
                             None => None,
                         }
-                    };
+                    });
                 }
             }
             None => {}
@@ -2186,7 +2186,7 @@ impl VM {
                     )));
                 };
                 let classref = val.expect_module(self)?;
-                if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
+                if !super_val.is_nil() && classref.superclass().id() != super_val.id() {
                     return Err(
                         self.error_type(format!("superclass mismatch for class {:?}.", id,))
                     );
@@ -2321,11 +2321,11 @@ impl VM {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self)?,
-                ObjKind::Class(cref) => match cref.name {
+                ObjKind::Class(cref) => match cref.name() {
                     Some(id) => format! {"{:?}", id},
                     None => format! {"#<Class:0x{:x}>", cref.id()},
                 },
-                ObjKind::Module(cref) => match cref.name {
+                ObjKind::Module(cref) => match cref.name() {
                     Some(id) => format! {"{:?}", id},
                     None => format! {"#<Module:0x{:x}>", cref.id()},
                 },

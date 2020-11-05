@@ -2,31 +2,13 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
-    pub name: Option<IdentId>,
-    pub method_table: MethodTable,
-    pub superclass: Value,
-    include: Vec<Value>,
-    pub is_singleton: bool,
+    ext: ClassRef,
 }
 
 impl ClassInfo {
-    pub fn new(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
+    fn new(info: ClassExt) -> Self {
         ClassInfo {
-            name: name.into(),
-            method_table: FxHashMap::default(),
-            superclass,
-            include: vec![],
-            is_singleton: false,
-        }
-    }
-
-    pub fn new_singleton(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
-        ClassInfo {
-            name: name.into(),
-            method_table: FxHashMap::default(),
-            superclass,
-            include: vec![],
-            is_singleton: true,
+            ext: ClassRef::new(info),
         }
     }
 
@@ -35,7 +17,7 @@ impl ClassInfo {
             Some(superclass) => superclass,
             None => Value::nil(),
         };
-        ClassInfo::new(None, superclass)
+        Self::new(ClassExt::new(None, superclass))
     }
 
     pub fn singleton_from(
@@ -46,36 +28,99 @@ impl ClassInfo {
             Some(superclass) => superclass,
             None => Value::nil(),
         };
-        ClassInfo::new_singleton(id, superclass)
+        Self::new(ClassExt::new_singleton(id, superclass))
     }
 
-    pub fn id(&self) -> u64 {
-        self as *const Self as u64
+    pub fn name(&self) -> Option<IdentId> {
+        self.ext.name
     }
 
-    pub fn superclass(&self) -> Option<&ClassInfo> {
-        if self.superclass.is_nil() {
-            None
-        } else {
-            Some(self.superclass.as_class())
-        }
+    pub fn set_name(&mut self, name:impl Into<Option<IdentId>>)  {
+        self.ext.name = name.into();
+    }
+
+    pub fn name_str(&self) -> String {
+        IdentId::get_ident_name(self.ext.name)
+    }
+
+    pub fn superclass(&self) -> Value {
+        self.ext.superclass
     }
 
     pub fn mut_superclass(&mut self) -> Option<&mut ClassInfo> {
-        if self.superclass.is_nil() {
+        if self.ext.superclass.is_nil() {
             None
         } else {
-            Some(self.superclass.as_mut_class())
+            Some(self.ext.superclass.as_mut_class())
         }
     }
 
-    /// Get reference of included modules in `self` class.
-    pub fn include(&self) -> &Vec<Value> {
-        &self.include
+    pub fn is_singleton(&self) -> bool {
+        self.ext.is_singleton
     }
 
-    pub fn name(&self) -> String {
-        IdentId::get_ident_name(self.name)
+    pub fn method_table(&self) -> &MethodTable {
+        &self.ext.method_table
+    }
+
+    pub fn id(&self) -> u64 {
+        self.ext.id()
+    }
+
+    pub fn add_builtin_method(&mut self, id:IdentId, func:BuiltinFunc)  {
+        self.ext.add_builtin_method(id, func)
+    }
+
+    pub fn add_builtin_method_by_str(&mut self, name:&str, func:BuiltinFunc)  {
+        self.ext.add_builtin_method_by_str(name, func)
+    }
+
+    pub fn add_method(&mut self, globals:&mut Globals, id:IdentId, info:MethodRef) -> Option<MethodRef> {
+        self.ext.add_method(globals, id, info)
+    }
+
+    pub fn include(&self) -> &Vec<Value> {
+        &self.ext.include
+    }
+
+    /// Include `module` in `self` class.
+    /// This method increments `class_version`.
+    pub fn include_append(&mut self, globals: &mut Globals, module: Value) {
+        globals.class_version += 1;
+        self.ext.include.push(module);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ClassExt {
+    name: Option<IdentId>,
+    method_table: MethodTable,
+    superclass: Value,
+    include: Vec<Value>,
+    is_singleton: bool,
+}
+
+type ClassRef = Ref<ClassExt>;
+
+impl ClassExt {
+    fn new(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
+        ClassExt {
+            name: name.into(),
+            method_table: FxHashMap::default(),
+            superclass,
+            include: vec![],
+            is_singleton: false,
+        }
+    }
+
+    fn new_singleton(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
+        ClassExt {
+            name: name.into(),
+            method_table: FxHashMap::default(),
+            superclass,
+            include: vec![],
+            is_singleton: true,
+        }
     }
 
     pub fn add_method(
@@ -98,18 +143,11 @@ impl ClassInfo {
         let name = IdentId::get_id(name);
         self.add_builtin_method(name, func);
     }
-
-    /// Include `module` in `self` class.
-    /// This method increments `class_version`.
-    pub fn include_append(&mut self, globals: &mut Globals, module: Value) {
-        globals.class_version += 1;
-        self.include.push(module);
-    }
 }
 
 impl GC for ClassInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        self.superclass.mark(alloc);
-        self.include.iter().for_each(|v| v.mark(alloc));
+        self.ext.superclass.mark(alloc);
+        self.ext.include.iter().for_each(|v| v.mark(alloc));
     }
 }

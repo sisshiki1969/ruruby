@@ -358,7 +358,7 @@ impl Value {
     pub fn superclass(&self) -> Option<Value> {
         match self.as_module() {
             Some(class) => {
-                let superclass = class.superclass;
+                let superclass = class.superclass();
                 if superclass.is_nil() {
                     None
                 } else {
@@ -373,7 +373,7 @@ impl Value {
     /// Panic if `self` is not a class object.
     #[inline]
     pub fn is_singleton(&self) -> bool {
-        self.as_module().unwrap().is_singleton
+        self.as_module().unwrap().is_singleton()
     }
 
     /// Examine whether `self` has a singleton class.
@@ -414,7 +414,7 @@ impl Value {
     /// Return None if no method found.
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
         let cref = self.as_module().unwrap();
-        match cref.method_table.get(&id) {
+        match cref.method_table().get(&id) {
             Some(method) => Some(*method),
             None => {
                 for v in cref.include() {
@@ -1108,7 +1108,7 @@ impl Value {
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
-                            let mut superclass = cinfo.superclass;
+                            let mut superclass = cinfo.superclass();
                             let mut singleton = if superclass.is_nil() {
                                 Value::singleton_class_from(None, None)
                             } else {

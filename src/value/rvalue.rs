@@ -15,8 +15,8 @@ pub enum ObjKind {
     Integer(i64),
     Float(f64),
     Complex { r: Value, i: Value },
-    Class(Box<ClassInfo>),
-    Module(Box<ClassInfo>),
+    Class(ClassInfo),
+    Module(ClassInfo),
     String(RString),
     Array(ArrayInfo),
     Range(RangeInfo),
@@ -46,11 +46,11 @@ impl std::fmt::Debug for ObjKind {
                     write!(f, "({:?}{:?}i)", r, i)
                 }
             }
-            ObjKind::Class(cinfo) => match cinfo.name {
+            ObjKind::Class(cinfo) => match cinfo.name() {
                 Some(id) => write!(f, "{:?}", id),
                 None => write!(f, "#<Class:0x{:x}>", cinfo.id()),
             },
-            ObjKind::Module(cinfo) => match cinfo.name {
+            ObjKind::Module(cinfo) => match cinfo.name() {
                 Some(id) => write!(f, "{:?}", id),
                 None => write!(f, "#<Module:0x{:x}>", cinfo.id()),
             },
@@ -187,7 +187,7 @@ impl RValue {
     }
 
     pub fn class_name(&self) -> String {
-        IdentId::get_ident_name(self.search_class().as_class().name)
+        IdentId::get_ident_name(self.search_class().as_class().name())
     }
 
     pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
@@ -216,7 +216,7 @@ impl RValue {
     pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
         RValue {
             class: Value::nil(), // dummy for boot strapping
-            kind: ObjKind::Class(Box::new(cinfo)),
+            kind: ObjKind::Class(cinfo),
             var_table: None,
         }
     }
@@ -274,7 +274,7 @@ impl RValue {
         RValue {
             class: BuiltinClass::class(),
             var_table: None,
-            kind: ObjKind::Class(Box::new(cinfo)),
+            kind: ObjKind::Class(cinfo),
         }
     }
 
@@ -282,7 +282,7 @@ impl RValue {
         RValue {
             class: BuiltinClass::module(),
             var_table: None,
-            kind: ObjKind::Module(Box::new(cinfo)),
+            kind: ObjKind::Module(cinfo),
         }
     }
 
@@ -466,7 +466,7 @@ impl RValue {
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
         self.search_class()
             .as_class()
-            .method_table
+            .method_table()
             .get(&id)
             .cloned()
     }

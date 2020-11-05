@@ -58,12 +58,12 @@ fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         RV::Symbol(i) => format!("{:?}", i),
         RV::Object(oref) => match &oref.kind {
             ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Class(cinfo) => match cinfo.name {
+            ObjKind::Class(cinfo) => match cinfo.name() {
                 Some(id) => format! {"{:?}", id},
                 None => format! {"#<Class:0x{:x}>", oref.id()},
             },
             ObjKind::Ordinary => {
-                let class_name = self_val.get_class().as_class().name();
+                let class_name = self_val.get_class().as_class().name_str();
                 format!("#<{}:{:016x}>", class_name, self_val.id())
             }
             ObjKind::Regexp(rref) => format!("({})", rref.as_str().to_string()),

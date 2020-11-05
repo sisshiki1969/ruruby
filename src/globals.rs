@@ -119,7 +119,7 @@ impl BuiltinClass {
     /// Bind `class_object` to the constant `class_name` of the root object.
     pub fn set_class(class_name: &str, mut class_object: Value) {
         match class_object.as_mut_module() {
-            Some(cinfo) => cinfo.name = Some(IdentId::get_id(class_name)),
+            Some(cinfo) => cinfo.set_name(IdentId::get_id(class_name)),
             None => {}
         }
         Self::object().set_var_by_str(class_name, class_object);
@@ -192,8 +192,7 @@ impl Globals {
             source_files: vec![],
         };
         // Generate singleton class for Object
-        let mut singleton_class = ClassInfo::from(class);
-        singleton_class.is_singleton = true;
+        let singleton_class = ClassInfo::singleton_from(None,class);
         let singleton_obj = Value::class(singleton_class);
         object.set_class(singleton_obj);
 

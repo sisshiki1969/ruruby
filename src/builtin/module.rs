@@ -115,7 +115,7 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     match inherited_too {
         false => {
             let v = class
-                .method_table
+                .method_table()
                 .keys()
                 .map(|k| Value::symbol(*k))
                 .collect();
@@ -127,7 +127,7 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 v = v
                     .union(
                         &class
-                            .method_table
+                            .method_table()
                             .keys()
                             .map(|k| Value::symbol(*k))
                             .collect(),
@@ -225,7 +225,7 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
     let class = self_val.expect_module(vm)?;
-    Ok(Value::bool(class.is_singleton))
+    Ok(Value::bool(class.is_singleton()))
 }
 
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -247,7 +247,7 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         class = match class.as_module() {
             Some(cref) => {
                 ary.extend_from_slice(cref.include());
-                cref.superclass
+                cref.superclass()
             }
             None => {
                 return Err(
@@ -271,7 +271,7 @@ fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         superclass = match superclass.as_module() {
             Some(cref) => {
                 ary.extend_from_slice(cref.include());
-                cref.superclass
+                cref.superclass()
             }
             None => {
                 return Err(vm.error_internal(format!(

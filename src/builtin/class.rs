@@ -49,12 +49,12 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Get super class of `self`.
 fn superclass(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let class = self_val.expect_class(vm, "Receiver")?;
-    Ok(class.superclass)
+    Ok(class.superclass())
 }
 
 fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let cref = self_val.expect_class(vm, "Receiver")?;
-    let s = match cref.name {
+    let s = match cref.name() {
         Some(id) => format! {"{:?}", id},
         None => format! {"#<Class:0x{:x}>", cref.id()},
     };
@@ -63,7 +63,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 
 fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let cref = self_val.as_class();
-    let val = match cref.name {
+    let val = match cref.name() {
         Some(id) => Value::string(format! {"{:?}", id}),
         None => Value::nil(),
     };
