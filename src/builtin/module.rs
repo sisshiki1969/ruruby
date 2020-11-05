@@ -45,22 +45,21 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
     loop {
-        match &mut class.rvalue().var_table() {
-            Some(table) => v.append(
-                &mut table
-                    .keys()
-                    .filter(|x| {
-                        IdentId::get_ident_name(**x)
-                            .chars()
-                            .nth(0)
-                            .unwrap()
-                            .is_ascii_uppercase()
-                    })
-                    .map(|k| Value::symbol(*k))
-                    .collect::<Vec<Value>>(),
-            ),
-            None => {}
-        };
+        v.append(
+            &mut class
+                .as_module()
+                .const_table()
+                .keys()
+                .filter(|x| {
+                    IdentId::get_ident_name(**x)
+                        .chars()
+                        .nth(0)
+                        .unwrap()
+                        .is_ascii_uppercase()
+                })
+                .map(|k| Value::symbol(*k))
+                .collect::<Vec<Value>>(),
+        );
         match class.superclass() {
             Some(superclass) => {
                 if superclass == BuiltinClass::object() {

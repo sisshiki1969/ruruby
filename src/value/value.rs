@@ -394,11 +394,6 @@ impl Value {
         self.rvalue().get_var(id)
     }
 
-    pub fn get_var_by_str(&self, name: &str) -> Option<Value> {
-        let id = IdentId::get_id(name);
-        self.rvalue().get_var(id)
-    }
-
     pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
         match self.rvalue_mut().get_mut_var(id) {
             Some(entry) => {
@@ -687,6 +682,19 @@ impl Value {
             None => panic!(format!(
                 "as_module(): Not a class or module object. {:?}",
                 self
+            )),
+        }
+    }
+
+    /// Take &mut ClassInfo from `self`.
+    /// Panic if `self` is not a Class nor Module.
+    pub fn as_mut_module(&mut self) -> &mut ClassInfo {
+        let self_ = *self;
+        match self.if_mut_module() {
+            Some(cinfo) => cinfo,
+            None => panic!(format!(
+                "as_mut_module(): Not a class or module object. {:?}",
+                self_
             )),
         }
     }

@@ -74,6 +74,10 @@ impl ClassInfo {
         &self.ext.method_table
     }
 
+    pub fn const_table(&self) -> &ValueTable {
+        &self.ext.const_table
+    }
+
     pub fn id(&self) -> u64 {
         self.ext.id()
     }
@@ -98,6 +102,54 @@ impl ClassInfo {
         self.ext.add_method(globals, id, info)
     }
 
+    /// Set a constant (`parent`::`id`) to `val`.
+    ///
+    /// If `val` is a module or class, set the name of the class/module to the name of the constant.
+    /// If the constant was already initialized, output warning.
+    pub fn set_const(
+        &mut self,
+        //mut parent: Value,
+        id: IdentId,
+        mut val: Value,
+    ) {
+        match val.if_mut_module() {
+            Some(cinfo) => {
+                if cinfo.name() == None {
+                    cinfo.set_name(if self == BuiltinClass::object().as_module() {
+                        Some(id)
+                    } else {
+                        match self.name() {
+                            Some(parent_name) => {
+                                let name = IdentId::get_id(&format!("{:?}::{:?}", parent_name, id));
+                                Some(name)
+                            }
+                            None => None,
+                        }
+                    });
+                }
+            }
+            None => {}
+        }
+
+        if self.ext.set_const(id, val).is_some() {
+            eprintln!("warning: already initialized constant {:?}", id);
+        }
+    }
+
+    pub fn set_const_by_str(&mut self, name: &str, val: Value) {
+        let id = IdentId::get_id(name);
+        self.set_const(id, val)
+    }
+
+    pub fn get_const(&self, id: IdentId) -> Option<Value> {
+        self.ext.get_const(id)
+    }
+
+    pub fn get_const_by_str(&self, name: &str) -> Option<Value> {
+        let id = IdentId::get_id(name);
+        self.ext.get_const(id)
+    }
+
     pub fn include(&self) -> &Vec<Value> {
         &self.ext.include
     }
@@ -114,6 +166,7 @@ impl ClassInfo {
 struct ClassExt {
     name: Option<IdentId>,
     method_table: MethodTable,
+    const_table: ValueTable,
     include: Vec<Value>,
 }
 
@@ -124,11 +177,12 @@ impl ClassExt {
         ClassExt {
             name: None,
             method_table: FxHashMap::default(),
+            const_table: FxHashMap::default(),
             include: vec![],
         }
     }
 
-    pub fn add_method(
+    fn add_method(
         &mut self,
         globals: &mut Globals,
         id: IdentId,
@@ -137,11 +191,20 @@ impl ClassExt {
         globals.class_version += 1;
         self.method_table.insert(id, info)
     }
+
+    fn set_const(&mut self, id: IdentId, val: Value) -> Option<Value> {
+        self.const_table.insert(id, val)
+    }
+
+    fn get_const(&self, id: IdentId) -> Option<Value> {
+        self.const_table.get(&id).cloned()
+    }
 }
 
 impl GC for ClassInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.superclass.mark(alloc);
+        self.ext.const_table.values().for_each(|v| v.mark(alloc));
         self.ext.include.iter().for_each(|v| v.mark(alloc));
     }
 }

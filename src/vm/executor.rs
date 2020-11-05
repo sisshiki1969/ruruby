@@ -833,12 +833,12 @@ impl VM {
                 }
                 Inst::SET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
-                    let parent = match self.stack_pop() {
+                    let mut parent = match self.stack_pop() {
                         v if v.is_nil() => self.class(),
                         v => v,
                     };
                     let val = self.stack_pop();
-                    self.set_const(parent, id, val)?;
+                    parent.as_mut_module().set_const(id, val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
@@ -1499,7 +1499,7 @@ impl VM {
             None => return None,
         };
         loop {
-            match class_list.class.get_var(id) {
+            match class_list.class.as_module().get_const(id) {
                 Some(val) => return Some(val),
                 None => {}
             }
@@ -1513,7 +1513,7 @@ impl VM {
     /// Search class inheritance chain for the constant.
     pub fn get_super_const(&self, mut class: Value, id: IdentId) -> VMResult {
         loop {
-            match class.get_var(id) {
+            match class.as_module().get_const(id) {
                 Some(val) => {
                     return Ok(val);
                 }
@@ -1530,7 +1530,7 @@ impl VM {
     }
 
     pub fn get_const(&self, parent: Value, id: IdentId) -> VMResult {
-        match parent.get_var(id) {
+        match parent.as_module().get_const(id) {
             Some(val) => {
                 return Ok(val);
             }
@@ -1538,40 +1538,6 @@ impl VM {
                 return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
             }
         }
-    }
-
-    /// Set a constant (`parent`::`id`) to `val`.
-    ///
-    /// If `val` is a module or class, set the name of the class/module to the name of the constant.
-    /// If the constant was already initialized, output warning.
-    pub fn set_const(
-        &mut self,
-        mut parent: Value,
-        id: IdentId,
-        mut val: Value,
-    ) -> Result<(), RubyError> {
-        match val.if_mut_module() {
-            Some(cinfo) => {
-                if cinfo.name() == None {
-                    cinfo.set_name(if parent == self.globals.builtins.object {
-                        Some(id)
-                    } else {
-                        match parent.expect_module(self)?.name() {
-                            Some(parent_name) => {
-                                let name = IdentId::get_id(&format!("{:?}::{:?}", parent_name, id));
-                                Some(name)
-                            }
-                            None => None,
-                        }
-                    });
-                }
-            }
-            None => {}
-        }
-        if parent.set_var(id, val).is_some() {
-            eprintln!("warning: already initialized constant {:?}", id);
-        }
-        Ok(())
     }
 
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
@@ -2187,8 +2153,8 @@ impl VM {
         is_module: bool,
         mut super_val: Value,
     ) -> VMResult {
-        let current_class = if base.is_nil() { self.class() } else { base };
-        match current_class.get_var(id) {
+        let mut current_class = if base.is_nil() { self.class() } else { base };
+        match current_class.as_module().get_const(id) {
             Some(mut val) => {
                 if val.is_module() != is_module {
                     return Err(self.error_type(format!(
@@ -2221,7 +2187,7 @@ impl VM {
                 let mut singleton = self.get_singleton_class(val)?;
                 let singleton_class = singleton.as_mut_class();
                 singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
-                self.set_const(current_class, id, val)?;
+                current_class.as_mut_module().set_const(id, val);
                 Ok(val)
             }
         }

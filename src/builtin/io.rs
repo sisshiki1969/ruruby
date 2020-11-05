@@ -9,7 +9,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     let io_obj = Value::class(io_class);
     let stdout = Value::ordinary_object(io_obj);
-    globals.builtins.object.set_var_by_str("STDOUT", stdout);
+    globals.set_constant("STDOUT", stdout);
     globals.set_global_var_by_str("$>", stdout);
     globals.set_global_var_by_str("$stdout", stdout);
 

@@ -45,8 +45,7 @@ fn main() {
         .map(|x| Value::string(x.to_string()))
         .collect();
     let argv = Value::array_from(res);
-    let mut object = globals.builtins.object;
-    object.set_var_by_str("ARGV", argv);
+    globals.set_constant("ARGV", argv);
 
     vm.exec_file(args[0]);
 }

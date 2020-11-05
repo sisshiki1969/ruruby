@@ -115,15 +115,6 @@ impl BuiltinClass {
     pub fn float() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().float)
     }
-
-    /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_class(class_name: &str, mut class_object: Value) {
-        match class_object.if_mut_module() {
-            Some(cinfo) => cinfo.set_name(IdentId::get_id(class_name)),
-            None => {}
-        }
-        Self::object().set_var_by_str(class_name, class_object);
-    }
 }
 
 impl GC for BuiltinClass {
@@ -203,7 +194,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                BuiltinClass::set_class($name, $class_object);
+                globals.set_constant($name, $class_object);
             };
         }
 
@@ -211,14 +202,14 @@ impl Globals {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
                 builtins.$module_name = class_obj;
-                BuiltinClass::set_class($name, class_obj);
+                globals.set_constant($name, class_obj);
             };
         }
 
         macro_rules! init_class {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
-                BuiltinClass::set_class($name, class_obj);
+                globals.set_constant($name, class_obj);
             };
         }
 
@@ -245,7 +236,7 @@ impl Globals {
 
         let kernel = kernel::init(&mut globals);
         object.as_mut_class().include_append(&mut globals, kernel);
-        BuiltinClass::set_class("Kernel", kernel);
+        globals.set_constant("Kernel", kernel);
 
         init_class!("Math", math);
         init_class!("IO", io);
@@ -258,7 +249,7 @@ impl Globals {
         init_class!("Comparable", comparable);
 
         let class = ClassInfo::from(object);
-        BuiltinClass::set_class("StopIteration", Value::class(class));
+        globals.set_constant("StopIteration", Value::class(class));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         /*
@@ -272,7 +263,7 @@ impl Globals {
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
 
         let env = Value::hash_from(env_map);
-        BuiltinClass::set_class("ENV", env);
+        globals.set_constant("ENV", env);
         globals
     }
 
@@ -314,6 +305,19 @@ impl Globals {
     pub fn set_global_var_by_str(&mut self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.global_var.insert(id, val);
+    }
+
+    /// Bind `class_object` to the constant `class_name` of the root object.
+    pub fn set_constant(&self, class_name: &str, class_object: Value) {
+        let mut object = self.builtins.object;
+        object
+            .as_mut_module()
+            .set_const_by_str(class_name, class_object);
+    }
+
+    pub fn get_constant(&self, class_name: &str) -> Option<Value> {
+        let object = self.builtins.object;
+        object.as_module().get_const_by_str(class_name)
     }
 }
 

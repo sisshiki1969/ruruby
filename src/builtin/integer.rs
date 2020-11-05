@@ -1,8 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let object = globals.builtins.object;
-    let numeric = object.get_var_by_str("Numeric").unwrap();
+    let numeric = globals.get_constant("Numeric").unwrap();
 
     let mut class = ClassInfo::from(numeric);
     class.add_builtin_method_by_str("+", add);
