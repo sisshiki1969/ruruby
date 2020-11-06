@@ -427,6 +427,11 @@ impl Value {
         classinfo.add_builtin_method_by_str(name, func);
     }
 
+    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+        let name = IdentId::get_id(name);
+        self.as_mut_module().add_builtin_method(name, func);
+    }
+
     /// Add module function to `self`.
     /// `self` must be Module or Class.
     pub fn add_builtin_module_func(&mut self, name: &str, func: BuiltinFunc) {
@@ -1036,8 +1041,8 @@ impl Value {
         RValue::new_class(ClassInfo::singleton_from(superclass)).pack()
     }
 
-    pub fn module(cinfo: ClassInfo) -> Self {
-        RValue::new_module(cinfo).pack()
+    pub fn module() -> Self {
+        RValue::new_module(ClassInfo::from(BuiltinClass::object())).pack()
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {

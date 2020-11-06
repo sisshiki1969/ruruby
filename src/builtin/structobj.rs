@@ -1,10 +1,9 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = ClassInfo::from(globals.builtins.object);
-    let mut class_val = Value::class(class);
-    class_val.add_builtin_class_method("new", struct_new);
-    class_val
+    let mut struct_class = Value::class_from(globals.builtins.object);
+    struct_class.add_builtin_class_method("new", struct_new);
+    struct_class
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

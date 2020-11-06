@@ -2,7 +2,7 @@ use crate::error::RubyError;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from(globals.builtins.object);
+    let mut class = Value::class_from(globals.builtins.object);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("to_a", toa);
@@ -55,9 +55,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("sort", sort);
     class.add_builtin_method_by_str("count", count);
 
-    let mut class_obj = Value::class(class);
-    class_obj.add_builtin_class_method("new", array_new);
-    class_obj
+    class.add_builtin_class_method("new", array_new);
+    class
 }
 
 // Class methods

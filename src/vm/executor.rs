@@ -2172,16 +2172,19 @@ impl VM {
                 Ok(val)
             }
             None => {
-                let super_val = if super_val.is_nil() {
-                    self.globals.builtins.object
-                } else {
-                    super_val.expect_class(self, "Superclass")?;
-                    super_val
-                };
-                let cinfo = ClassInfo::from(super_val);
                 let val = if is_module {
-                    Value::module(cinfo)
+                    if !super_val.is_nil() {
+                        panic!("Module can not have superclass.");
+                    };
+                    Value::module()
                 } else {
+                    let super_val = if super_val.is_nil() {
+                        self.globals.builtins.object
+                    } else {
+                        super_val.expect_class(self, "Superclass")?;
+                        super_val
+                    };
+                    let cinfo = ClassInfo::from(super_val);
                     Value::class(cinfo)
                 };
                 let mut singleton = self.get_singleton_class(val)?;
