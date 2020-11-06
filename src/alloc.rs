@@ -448,7 +448,7 @@ impl Allocator {
             .iter()
             .for_each(|x| eprintln!("{:?}", x.as_ptr()));
         eprintln!("{:?}", self.current.as_ptr());
-        panic!("The ptr is not in heap pages. {:?}", ptr);
+        unreachable!("The ptr is not in heap pages. {:?}", ptr);
     }
 
     fn check_free_list(&self) -> usize {

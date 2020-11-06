@@ -1517,7 +1517,7 @@ impl VM {
                 Some(val) => {
                     return Ok(val);
                 }
-                None => match class.superclass() {
+                None => match class.upper() {
                     Some(superclass) => {
                         class = superclass;
                     }
@@ -1554,7 +1554,7 @@ impl VM {
             if class.set_var_if_exists(id, val) {
                 return Ok(());
             } else {
-                match class.superclass() {
+                match class.upper() {
                     Some(superclass) => class = superclass,
                     None => {
                         org_class.set_var(id, val);
@@ -1579,7 +1579,7 @@ impl VM {
                 Some(val) => {
                     return Ok(val);
                 }
-                None => match class.superclass() {
+                None => match class.upper() {
                     Some(superclass) => {
                         class = superclass;
                     }

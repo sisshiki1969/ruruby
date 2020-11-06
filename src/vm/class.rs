@@ -9,11 +9,14 @@ pub struct ClassInfo {
 
 /// flags
 /// 0000 0000
-///         +-- 1 = singleton
+///        ||
+///        |+-- 1 = singleton
+///        +--- 1 = included module
 #[derive(Debug, Clone, PartialEq)]
 struct ClassFlags(u8);
 
-const SINGLETON: u8 = 1;
+const SINGLETON: u8 = 1 << 0;
+const INCLUDED: u8 = 1 << 1;
 
 impl ClassFlags {
     fn new(is_singleton: bool) -> Self {
@@ -22,6 +25,14 @@ impl ClassFlags {
 
     fn is_singleton(&self) -> bool {
         self.0 & SINGLETON != 0
+    }
+
+    fn is_included(&self) -> bool {
+        self.0 & INCLUDED != 0
+    }
+
+    fn set_include(&mut self) {
+        self.0 |= INCLUDED;
     }
 }
 
@@ -68,6 +79,10 @@ impl ClassInfo {
 
     pub fn is_singleton(&self) -> bool {
         self.flags.is_singleton()
+    }
+
+    pub fn is_included(&self) -> bool {
+        self.flags.is_included()
     }
 
     pub fn method_table(&self) -> &MethodTable {

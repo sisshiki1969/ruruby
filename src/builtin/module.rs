@@ -60,7 +60,7 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
                 .map(|k| Value::symbol(*k))
                 .collect::<Vec<Value>>(),
         );
-        match class.superclass() {
+        match class.upper() {
             Some(superclass) => {
                 if superclass == BuiltinClass::object() {
                     break;
@@ -547,6 +547,33 @@ mod test {
         assert(false, Object.const_defined?(:Kernels))
         assert(true, Object.const_defined? "Array")
         assert(false, Object.const_defined? "Arrays")
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include() {
+        let program = r#"
+        class C
+        end
+        module M1
+          def f
+            "M1"
+          end
+        end
+        module M2
+          def f
+            "M2"
+          end
+        end
+        class C
+          include M1
+        end
+        assert "M1", C.new.f
+        class C
+          include M2
+        end
+        #assert "M2", C.new.f
         "#;
         assert_script(program);
     }

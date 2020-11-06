@@ -437,7 +437,7 @@ impl MethodCache {
                     self.add_entry(rec_class, method, class_version, methodref);
                     return Some(methodref);
                 }
-                None => match temp_class.superclass() {
+                None => match temp_class.upper() {
                     Some(superclass) => temp_class = superclass,
                     None => {
                         if singleton_flag {

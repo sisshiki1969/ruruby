@@ -52,7 +52,7 @@ impl std::hash::Hash for Value {
         match self.as_rvalue() {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
+                ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::Integer(lhs) => lhs.hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
@@ -112,10 +112,10 @@ impl PartialEq for Value {
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
             (ObjKind::Invalid, _) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
+                unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
             (_, ObjKind::Invalid) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
+                unreachable!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
             }
             (_, _) => false,
         }
@@ -357,6 +357,30 @@ impl Value {
     /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
     pub fn superclass(&self) -> Option<Value> {
         match self.if_module() {
+            Some(cinfo) => {
+                let mut superclass = cinfo.superclass;
+                loop {
+                    if superclass.is_nil() {
+                        return None;
+                    }
+                    let cinfo = superclass.as_module();
+                    if !cinfo.is_included() {
+                        break;
+                    };
+                    superclass = cinfo.superclass;
+                }
+                Some(superclass)
+            }
+            None => None,
+        }
+    }
+
+    /// Get an upper module/class of `self`.
+    ///
+    /// If `self` has no upper module/class, return None.
+    /// Panic if `self` is not Class/Module.
+    pub fn upper(&self) -> Option<Value> {
+        match self.if_module() {
             Some(class) => {
                 let superclass = class.superclass;
                 if superclass.is_nil() {
@@ -365,7 +389,7 @@ impl Value {
                     Some(superclass)
                 }
             }
-            None => None,
+            None => unreachable!("upper(): Not a Class / Module."),
         }
     }
 
