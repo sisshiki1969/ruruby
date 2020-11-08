@@ -109,11 +109,11 @@ fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
-    let mut class = self_val.expect_module(vm)?;
+    let mut module = self_val.expect_module(vm)?;
     let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
         false => {
-            let v = class
+            let v = module
                 .method_table()
                 .keys()
                 .map(|k| Value::symbol(*k))
@@ -125,7 +125,7 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             loop {
                 v = v
                     .union(
-                        &class
+                        &module
                             .method_table()
                             .keys()
                             .map(|k| Value::symbol(*k))
@@ -133,10 +133,11 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     )
                     .cloned()
                     .collect();
-                match class.mut_super_classinfo() {
-                    Some(superclass) => class = superclass,
-                    None => break,
-                };
+                if module.upper.is_nil() {
+                    break;
+                } else {
+                    module = module.upper.as_mut_module();
+                }
             }
             Ok(Value::array_from(v.iter().cloned().collect()))
         }
@@ -229,39 +230,46 @@ fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
 
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let class = self_val.expect_module(vm)?;
-    let module = args[0];
-    class.include_append(&mut vm.globals, module);
+    let cinfo = self_val.expect_module(vm)?;
+    let mut module = args[0].dup();
+    module.expect_module(vm)?;
+    cinfo.append_include(module, &mut vm.globals);
     Ok(Value::nil())
 }
 
 fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut class = self_val;
+    let mut module = self_val;
     let mut ary = vec![];
     loop {
-        if class.is_nil() {
+        if module.is_nil() {
             break;
         }
-        let cinfo = class.as_module();
-        ary.extend_from_slice(cinfo.include());
-        class = cinfo.superclass;
+        let cinfo = module.as_module();
+        if cinfo.is_included() {
+            ary.push(cinfo.origin())
+        };
+        module = cinfo.upper;
     }
     Ok(Value::array_from(ary))
 }
 
 fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut superclass = self_val;
+    let mut module = self_val;
     let mut ary = vec![];
     loop {
-        if superclass.is_nil() {
+        if module.is_nil() {
             break;
         }
-        ary.push(superclass);
-        let cinfo = superclass.as_module();
-        ary.extend_from_slice(cinfo.include());
-        superclass = cinfo.superclass;
+        let cinfo = module.as_module();
+        if cinfo.is_included() {
+            ary.push(cinfo.origin())
+        } else {
+            ary.push(module)
+        };
+        let cinfo = module.as_module();
+        module = cinfo.upper;
     }
     Ok(Value::array_from(ary))
 }
@@ -573,7 +581,7 @@ mod test {
         class C
           include M2
         end
-        #assert "M2", C.new.f
+        assert "M2", C.new.f
         "#;
         assert_script(program);
     }

@@ -462,12 +462,4 @@ impl RValue {
         }
         self.var_table.as_deref_mut().unwrap()
     }
-
-    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        self.search_class()
-            .as_class()
-            .method_table()
-            .get(&id)
-            .cloned()
-    }
 }

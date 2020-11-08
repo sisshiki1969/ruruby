@@ -357,20 +357,7 @@ impl Value {
     /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
     pub fn superclass(&self) -> Option<Value> {
         match self.if_module() {
-            Some(cinfo) => {
-                let mut superclass = cinfo.superclass;
-                loop {
-                    if superclass.is_nil() {
-                        return None;
-                    }
-                    let cinfo = superclass.as_module();
-                    if !cinfo.is_included() {
-                        break;
-                    };
-                    superclass = cinfo.superclass;
-                }
-                Some(superclass)
-            }
+            Some(cinfo) => Some(cinfo.superclass()),
             None => None,
         }
     }
@@ -382,7 +369,7 @@ impl Value {
     pub fn upper(&self) -> Option<Value> {
         match self.if_module() {
             Some(class) => {
-                let superclass = class.superclass;
+                let superclass = class.upper;
                 if superclass.is_nil() {
                     None
                 } else {
@@ -432,17 +419,7 @@ impl Value {
     /// Return None if no method found.
     pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
         let cref = self.as_module();
-        match cref.method_table().get(&id) {
-            Some(method) => Some(*method),
-            None => {
-                for v in cref.include() {
-                    if let Some(method) = v.get_instance_method(id) {
-                        return Some(method);
-                    }
-                }
-                None
-            }
-        }
+        cref.method_table().get(&id).cloned()
     }
 
     pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
@@ -1153,7 +1130,7 @@ impl Value {
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
-                            let mut superclass = cinfo.superclass;
+                            let mut superclass = cinfo.superclass();
                             let mut singleton = if superclass.is_nil() {
                                 Value::singleton_class_from(None)
                             } else {

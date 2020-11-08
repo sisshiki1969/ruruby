@@ -1518,8 +1518,8 @@ impl VM {
                     return Ok(val);
                 }
                 None => match class.upper() {
-                    Some(superclass) => {
-                        class = superclass;
+                    Some(upper) => {
+                        class = upper;
                     }
                     None => {
                         return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
@@ -1611,13 +1611,14 @@ impl VM {
     }
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
-        match self.get_method_from_receiver(lhs, method) {
-            Ok(mref) => {
+        let class = lhs.get_class_for_method();
+        match self.find_method(class, method) {
+            Some(mref) => {
                 let arg = Args::new1(rhs);
                 let val = self.eval_send(mref, lhs, &arg)?;
                 Ok(val)
             }
-            Err(_) => Err(self.error_undefined_op(format!("{:?}", method), rhs, lhs)),
+            None => Err(self.error_undefined_op(format!("{:?}", method), rhs, lhs)),
         }
     }
 }
@@ -2163,8 +2164,12 @@ impl VM {
                         if is_module { "module" } else { "class" },
                     )));
                 };
-                let classref = val.expect_module(self)?;
-                if !super_val.is_nil() && classref.superclass.id() != super_val.id() {
+                val.expect_module(self)?;
+                let val_super = match val.superclass() {
+                    Some(v) => v,
+                    None => Value::nil(),
+                };
+                if !super_val.is_nil() && val_super.id() != super_val.id() {
                     return Err(
                         self.error_type(format!("superclass mismatch for class {:?}.", id,))
                     );
@@ -2203,7 +2208,7 @@ impl VM {
         };
         let mut obj = vm.send_args(IdentId::NEW, superclass, args)?;
         obj.set_class(self_val);
-        if let Some(method) = self_val.get_instance_method(IdentId::INITIALIZE) {
+        if let Some(method) = vm.find_method(self_val, IdentId::INITIALIZE) {
             vm.eval_send(method, obj, args)?;
         };
         Ok(obj)
@@ -2571,14 +2576,11 @@ impl VM {
         Ok(())
     }
 
-    /// Get method(MethodRef) for receiver.
-    pub fn get_method_from_receiver(
-        &mut self,
-        receiver: Value,
-        method_id: IdentId,
-    ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_for_method();
-        self.get_method(rec_class, method_id)
+    pub fn find_method(&mut self, rec_class: Value, method_id: IdentId) -> Option<MethodRef> {
+        let class_version = self.globals.class_version;
+        self.globals
+            .method_cache
+            .get_method(class_version, rec_class, method_id)
     }
 
     /// Get method(MethodRef) for class.
@@ -2587,15 +2589,20 @@ impl VM {
         rec_class: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        let class_version = self.globals.class_version;
-        match self
-            .globals
-            .method_cache
-            .get_method(class_version, rec_class, method_id)
-        {
+        match self.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
             None => Err(self.error_undefined_method_for_class(method_id, rec_class)),
         }
+    }
+
+    /// Get method(MethodRef) for receiver.
+    pub fn get_method_from_receiver(
+        &mut self,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Result<MethodRef, RubyError> {
+        let rec_class = receiver.get_class_for_method();
+        self.get_method(rec_class, method_id)
     }
 
     fn get_method_from_icache(
