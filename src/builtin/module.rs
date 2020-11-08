@@ -109,7 +109,7 @@ fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
-    let mut module = self_val.expect_module(vm)?;
+    let mut module = self_val.expect_mod_class(vm)?;
     let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
         false => {
@@ -188,7 +188,7 @@ fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .if_mut_module()
+        .if_mut_mod_class()
         .unwrap()
         .add_method(&mut vm.globals, id, methodref);
 }
@@ -201,7 +201,7 @@ fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .if_mut_module()
+        .if_mut_mod_class()
         .unwrap()
         .add_method(&mut vm.globals, assign_id, methodref);
 }
@@ -224,15 +224,15 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
-    let class = self_val.expect_module(vm)?;
+    let class = self_val.expect_mod_class(vm)?;
     Ok(Value::bool(class.is_singleton()))
 }
 
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let cinfo = self_val.expect_module(vm)?;
-    let mut module = args[0].dup();
-    module.expect_module(vm)?;
+    let cinfo = self_val.expect_mod_class(vm)?;
+    let mut module = args[0];
+    module.expect_module(vm, "1st arg")?;
     cinfo.append_include(module, &mut vm.globals);
     Ok(Value::nil())
 }
@@ -560,7 +560,7 @@ mod test {
     }
 
     #[test]
-    fn include() {
+    fn include1() {
         let program = r#"
         class C
         end
@@ -582,6 +582,31 @@ mod test {
           include M2
         end
         assert "M2", C.new.f
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include2() {
+        let program = r#"
+    module M2
+    end
+
+    module M1
+      include M2
+    end
+
+    class S
+    end
+
+    class C < S
+      include M1
+    end
+
+    assert C, C.ancestors[0]
+    assert M1, C.ancestors[1]
+    assert M2, C.ancestors[2]
+    assert S, C.ancestors[3]
         "#;
         assert_script(program);
     }

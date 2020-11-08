@@ -103,23 +103,21 @@ impl ClassInfo {
     }
 
     pub fn set_include(&mut self, origin: Value) {
+        assert!(!origin.as_module().is_included());
         self.flags.set_include();
         self.ext.origin = origin;
     }
 
-    pub fn append_include(&mut self, module: Value, globals: &mut Globals) {
+    pub fn append_include(&mut self, mut module: Value, globals: &mut Globals) {
         let superclass = self.upper;
         let mut imodule = module.dup();
         self.upper = imodule;
         imodule.as_mut_module().set_include(module);
         loop {
-            let module = match module.upper() {
+            module = match module.upper() {
                 Some(module) => module,
                 None => break,
             };
-            if module.id() == globals.builtins.object.id() {
-                break;
-            }
             let mut prev = imodule;
             imodule = module.dup();
             prev.as_mut_module().upper = imodule;
@@ -175,7 +173,7 @@ impl ClassInfo {
     /// If `val` is a module or class, set the name of the class/module to the name of the constant.
     /// If the constant was already initialized, output warning.
     pub fn set_const(&mut self, id: IdentId, mut val: Value) {
-        match val.if_mut_module() {
+        match val.if_mut_mod_class() {
             Some(cinfo) => {
                 if cinfo.name().is_none() {
                     cinfo.set_name(if self == BuiltinClass::object().as_module() {

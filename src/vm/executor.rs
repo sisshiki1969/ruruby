@@ -1512,16 +1512,20 @@ impl VM {
 
     /// Search class inheritance chain for the constant.
     pub fn get_super_const(&self, mut class: Value, id: IdentId) -> VMResult {
+        let is_module = class.is_module();
         loop {
             match class.as_module().get_const(id) {
-                Some(val) => {
-                    return Ok(val);
-                }
+                Some(val) => return Ok(val),
                 None => match class.upper() {
-                    Some(upper) => {
-                        class = upper;
-                    }
+                    Some(upper) => class = upper,
                     None => {
+                        if is_module {
+                            if let Some(val) =
+                                self.globals.builtins.object.as_module().get_const(id)
+                            {
+                                return Ok(val);
+                            }
+                        }
                         return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
                     }
                 },
@@ -1545,7 +1549,7 @@ impl VM {
             return Err(self.error_runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
-        let mut org_class = match self_val.if_module() {
+        let mut org_class = match self_val.if_mod_class() {
             Some(_) => self_val,
             None => self_val.get_class(),
         };
@@ -1570,7 +1574,7 @@ impl VM {
             return Err(self.error_runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
-        let mut class = match self_val.if_module() {
+        let mut class = match self_val.if_mod_class() {
             Some(_) => self_val,
             None => self_val.get_class(),
         };
@@ -2164,7 +2168,7 @@ impl VM {
                         if is_module { "module" } else { "class" },
                     )));
                 };
-                val.expect_module(self)?;
+                val.expect_mod_class(self)?;
                 let val_super = match val.superclass() {
                     Some(v) => v,
                     None => Value::nil(),
@@ -2550,12 +2554,12 @@ impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
     pub fn define_method(&mut self, mut target_obj: Value, id: IdentId, method: MethodRef) {
-        match target_obj.if_mut_module() {
+        match target_obj.if_mut_mod_class() {
             Some(cinfo) => cinfo.add_method(&mut self.globals, id, method),
             None => {
                 let mut class_val = target_obj.get_class();
                 class_val
-                    .if_mut_module()
+                    .if_mut_mod_class()
                     .unwrap()
                     .add_method(&mut self.globals, id, method)
             }
