@@ -235,7 +235,7 @@ impl Globals {
         init_builtin_class!("Exception", exception);
 
         let kernel = kernel::init(&mut globals);
-        object.as_mut_class().include_append(&mut globals, kernel);
+        object.as_mut_class().append_include(kernel, &mut globals);
         globals.set_constant("Kernel", kernel);
 
         init_class!("Math", math);
@@ -437,7 +437,7 @@ impl MethodCache {
                     self.add_entry(rec_class, method, class_version, methodref);
                     return Some(methodref);
                 }
-                None => match temp_class.superclass() {
+                None => match temp_class.upper() {
                     Some(superclass) => temp_class = superclass,
                     None => {
                         if singleton_flag {

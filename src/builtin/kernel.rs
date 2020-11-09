@@ -225,15 +225,21 @@ fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let mut recv_class = self_val.get_class();
+    let mut module = self_val.get_class();
     loop {
-        if recv_class.id() == args[0].id() {
+        let cinfo = module.as_module();
+        let real_module = if cinfo.is_included() {
+            cinfo.origin()
+        } else {
+            module
+        };
+        if real_module.id() == args[0].id() {
             return Ok(Value::true_val());
         }
-        recv_class = recv_class.as_class().superclass;
-        if recv_class.is_nil() {
+        module = cinfo.upper;
+        if module.is_nil() {
             return Ok(Value::false_val());
-        }
+        };
     }
 }
 
@@ -430,7 +436,8 @@ mod test {
         let program = "
         module M
         end
-        class C
+        class C < Object
+          include M
         end
         class S < C
         end
@@ -439,9 +446,9 @@ mod test {
         assert true, obj.is_a?(S)
         assert true, obj.is_a?(C)
         assert true, obj.is_a?(Object)
+        #assert true, obj.is_a?(M)
         assert false, obj.is_a?(Integer)
         assert false, obj.is_a?(Array)
-        assert false, obj.is_a?(M)
         ";
         assert_script(program);
     }

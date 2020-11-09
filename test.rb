@@ -1,7 +1,18 @@
-def iich
-  yield(15)
+module M2
 end
 
-sum = 15
-iich{|x| sum = sum + x }
-puts sum
+module M1
+  include M2
+end
+
+class S
+end
+
+class C < S
+  include M1
+end
+
+p C.ancestors[0] == C
+p C.ancestors[1] == M1
+p C.ancestors[2] == M2
+p C.ancestors[3] == S

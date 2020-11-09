@@ -57,7 +57,7 @@ fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         RV::Symbol(i) => format!("{:?}", i),
         RV::Object(oref) => match &oref.kind {
-            ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+            ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
             ObjKind::Class(cinfo) => match cinfo.name() {
                 Some(id) => format! {"{:?}", id},
                 None => format! {"#<Class:0x{:x}>", oref.id()},
