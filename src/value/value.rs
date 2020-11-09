@@ -936,12 +936,8 @@ impl Value {
         if self.0 == ZERO {
             return 0.0;
         }
-        let num = if self.0 & (0b1000u64 << 60) == 0 {
-            self.0 //(self.0 & !(0b0011u64)) | 0b10
-        } else {
-            (self.0 & !(0b0011u64)) | 0b01
-        }
-        .rotate_right(3);
+        let bit = 0b10 - ((self.0 >> 63) & 0b1);
+        let num = ((self.0 & !(0b0011u64)) | bit).rotate_right(3);
         //eprintln!("after  unpack:{:064b}", num);
         f64::from_bits(num)
     }
@@ -988,8 +984,8 @@ impl Value {
             return Value(ZERO);
         }
         let unum = f64::to_bits(num);
-        let exp = (unum >> 60) & 0b111;
-        if exp == 4 || exp == 3 {
+        let exp = ((unum >> 60) & 0b111) + 1;
+        if (exp & 0b0110) == 0b0100 {
             Value((unum & MASK1 | MASK2).rotate_left(3))
         } else {
             RValue::new_float(num).pack()
