@@ -397,11 +397,11 @@ impl Inst {
                 iseq.read32(pc + 5) as i32
             ),
             Inst::LVAR_ADDI => {
-                let id = iseq.read32(pc + 1) as usize;
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let id = iseq.read32(pc + 1);
+                let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
                 format!(
-                    "LVAR_ADDI '{:?}' LvarId:{} +{}",
-                    ident_id,
+                    "LVAR_ADDI '{}' LvarId:{} +{}",
+                    IdentId::get_ident_name(ident_id),
                     id,
                     iseq.read32(pc + 5) as i32
                 )

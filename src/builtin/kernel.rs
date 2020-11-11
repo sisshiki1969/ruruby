@@ -236,7 +236,7 @@ fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         if real_module.id() == args[0].id() {
             return Ok(Value::true_val());
         }
-        module = cinfo.upper;
+        module = cinfo.upper();
         if module.is_nil() {
             return Ok(Value::false_val());
         };

@@ -2,21 +2,23 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
-    pub upper: Value,
+    upper: Value,
     flags: ClassFlags,
     ext: ClassRef,
 }
 
-/// flags
+/// ClassFlags:
 /// 0000 0000
-///        ||
-///        |+-- 1 = singleton
-///        +--- 1 = included module
+///       |||
+///       ||+-- 1 = singleton
+///       |+--- 1 = included module
+///       +---- 1 = module which has prepend
 #[derive(Debug, Clone, PartialEq)]
 struct ClassFlags(u8);
 
 const SINGLETON: u8 = 1 << 0;
 const INCLUDED: u8 = 1 << 1;
+const HAS_PREPEND: u8 = 1 << 2;
 
 impl ClassFlags {
     fn new(is_singleton: bool) -> Self {
@@ -31,8 +33,16 @@ impl ClassFlags {
         self.0 & INCLUDED != 0
     }
 
+    fn has_prepend(&self) -> bool {
+        self.0 & HAS_PREPEND != 0
+    }
+
     fn set_include(&mut self) {
         self.0 |= INCLUDED;
+    }
+
+    fn set_prepend(&mut self) {
+        self.0 |= HAS_PREPEND;
     }
 }
 
@@ -63,6 +73,20 @@ impl ClassInfo {
 
     pub fn singleton_from(superclass: impl Into<Option<Value>>) -> Self {
         Self::new(superclass, ClassExt::new(), true)
+    }
+
+    pub fn upper(&self) -> Value {
+        let mut upper = self.upper;
+        loop {
+            if upper.is_nil() {
+                return upper;
+            };
+            let cinfo = upper.as_module();
+            if !cinfo.has_prepend() {
+                return upper;
+            }
+            upper = cinfo.upper;
+        }
     }
 
     /// Get superclass of `self`.
@@ -102,6 +126,14 @@ impl ClassInfo {
         self.flags.is_included()
     }
 
+    fn has_prepend(&self) -> bool {
+        self.flags.has_prepend()
+    }
+
+    fn set_prepend(&mut self) {
+        self.flags.set_prepend()
+    }
+
     pub fn set_include(&mut self, origin: Value) {
         assert!(!origin.as_module().is_included());
         self.flags.set_include();
@@ -110,25 +142,44 @@ impl ClassInfo {
 
     pub fn append_include(&mut self, mut module: Value, globals: &mut Globals) {
         let superclass = self.upper;
-        let mut imodule = module.dup();
+        let mut imodule = module.generate_included();
         self.upper = imodule;
-        imodule.as_mut_module().set_include(module);
         loop {
             module = match module.upper() {
                 Some(module) => module,
                 None => break,
             };
             let mut prev = imodule;
-            imodule = module.dup();
+            imodule = module.generate_included();
             prev.as_mut_module().upper = imodule;
-            let origin = if module.as_module().is_included() {
-                module.as_module().origin()
-            } else {
-                module
-            };
-            imodule.as_mut_module().set_include(origin);
         }
         imodule.as_mut_module().upper = superclass;
+        globals.class_version += 1;
+    }
+
+    pub fn append_prepend(&mut self, base: Value, mut module: Value, globals: &mut Globals) {
+        let superclass = self.upper;
+        let mut imodule = module.generate_included();
+        self.upper = imodule;
+        loop {
+            module = match module.upper() {
+                Some(module) => module,
+                None => break,
+            };
+            let mut prev = imodule;
+            imodule = module.generate_included();
+            prev.as_mut_module().upper = imodule;
+        }
+        if !self.has_prepend() {
+            let mut dummy = base.dup();
+            let mut dinfo = dummy.as_mut_module();
+            dinfo.upper = superclass;
+            dinfo.set_include(base);
+            imodule.as_mut_module().upper = dummy;
+            self.set_prepend();
+        } else {
+            imodule.as_mut_module().upper = superclass;
+        }
         globals.class_version += 1;
     }
 

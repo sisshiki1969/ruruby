@@ -369,7 +369,7 @@ impl Value {
     pub fn upper(&self) -> Option<Value> {
         match self.if_mod_class() {
             Some(class) => {
-                let superclass = class.upper;
+                let superclass = class.upper();
                 if superclass.is_nil() {
                     None
                 } else {
@@ -780,6 +780,17 @@ impl Value {
             let val = vm.val_inspect(self_)?;
             Err(vm.error_type(format!("Must be Module or Class. (given:{})", val)))
         }
+    }
+
+    pub fn generate_included(&self) -> Value {
+        let origin = if self.as_module().is_included() {
+            self.as_module().origin()
+        } else {
+            *self
+        };
+        let mut imodule = self.dup();
+        imodule.as_mut_module().set_include(origin);
+        imodule
     }
 
     pub fn as_array(&self) -> Option<&ArrayInfo> {
