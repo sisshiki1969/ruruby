@@ -1616,7 +1616,7 @@ impl VM {
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
         let class = lhs.get_class_for_method();
-        match self.find_method(class, method) {
+        match self.globals.find_method(class, method) {
             Some(mref) => {
                 let arg = Args::new1(rhs);
                 let val = self.eval_send(mref, lhs, &arg)?;
@@ -2212,7 +2212,7 @@ impl VM {
         };
         let mut obj = vm.send_args(IdentId::NEW, superclass, args)?;
         obj.set_class(self_val);
-        if let Some(method) = vm.find_method(self_val, IdentId::INITIALIZE) {
+        if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
             vm.eval_send(method, obj, args)?;
         };
         Ok(obj)
@@ -2580,20 +2580,15 @@ impl VM {
         Ok(())
     }
 
-    pub fn find_method(&mut self, rec_class: Value, method_id: IdentId) -> Option<MethodRef> {
-        let class_version = self.globals.class_version;
-        self.globals
-            .method_cache
-            .get_method(class_version, rec_class, method_id)
-    }
-
     /// Get method(MethodRef) for class.
+    ///
+    /// If the method was not found, return NoMethodError.
     pub fn get_method(
         &mut self,
         rec_class: Value,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
-        match self.find_method(rec_class, method_id) {
+        match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
             None => Err(self.error_undefined_method_for_class(method_id, rec_class)),
         }
@@ -2630,13 +2625,8 @@ impl VM {
                 _ => {}
             }
         };
-        match self
-            .globals
-            .method_cache
-            .get_method(version, rec_class, method_id)
-        {
+        match self.globals.find_method(rec_class, method_id) {
             Some(m) => {
-                //eprintln!("miss");
                 let icache = self.globals.inline_cache.get_entry(cache);
                 icache.version = version;
                 icache.entries = Some((rec_class, m));
@@ -2647,8 +2637,10 @@ impl VM {
     }
 
     pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {
-        obj.get_singleton_class()
-            .map_err(|_| self.error_type("Can not define singleton."))
+        match obj.get_singleton_class() {
+            Some(val) => Ok(val),
+            None => Err(self.error_type("Can not define singleton.")),
+        }
     }
 }
 

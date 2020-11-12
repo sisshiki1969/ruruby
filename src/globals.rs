@@ -319,6 +319,15 @@ impl Globals {
         let object = self.builtins.object;
         object.as_module().get_const_by_str(class_name)
     }
+
+    /// Search method for receiver class.
+    ///
+    /// If the method was not found, return None.
+    pub fn find_method(&mut self, rec_class: Value, method_id: IdentId) -> Option<MethodRef> {
+        let class_version = self.class_version;
+        self.method_cache
+            .get_method(class_version, rec_class, method_id)
+    }
 }
 
 ///

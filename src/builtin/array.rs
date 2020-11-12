@@ -26,11 +26,14 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("flat_map", flat_map);
     class.add_builtin_method_by_str("each", each);
     class.add_builtin_method_by_str("each_with_index", each_with_index);
+    class.add_builtin_method_by_str("partition", partition);
 
     class.add_builtin_method_by_str("include?", include);
     class.add_builtin_method_by_str("reverse", reverse);
     class.add_builtin_method_by_str("reverse!", reverse_);
     class.add_builtin_method_by_str("rotate!", rotate_);
+    class.add_builtin_method_by_str("compact", compact);
+    class.add_builtin_method_by_str("compact!", compact_);
 
     class.add_builtin_method_by_str("transpose", transpose);
     class.add_builtin_method_by_str("min", min);
@@ -398,6 +401,33 @@ fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+fn partition(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let method = match &args.block {
+        Some(method) => method,
+        None => {
+            let id = IdentId::get_id("partition");
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            return Ok(val);
+        }
+    };
+
+    let aref = self_val.as_mut_array().unwrap();
+    let mut arg = Args::new1(Value::nil());
+    let mut res_true = vec![];
+    let mut res_false = vec![];
+    for i in &aref.elements {
+        arg[0] = *i;
+        if vm.eval_block(method, &arg)?.to_bool() {
+            res_true.push(*i);
+        } else {
+            res_false.push(*i);
+        };
+    }
+    let ary = vec![Value::array_from(res_true), Value::array_from(res_false)];
+    Ok(Value::array_from(ary))
+}
+
 fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let target = args[0];
     let aref = self_val.as_array().unwrap();
@@ -452,6 +482,36 @@ fn rotate_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         vec2.append(&mut vec);
         aref.elements = vec2;
         Ok(self_val)
+    }
+}
+
+fn compact(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let aref = self_val.as_mut_array().unwrap();
+    let ary = aref
+        .elements
+        .iter()
+        .filter(|x| !x.is_nil())
+        .cloned()
+        .collect();
+    Ok(Value::array_from(ary))
+}
+
+fn compact_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let aref = self_val.as_mut_array().unwrap();
+    let mut flag = false;
+    aref.elements.retain(|x| {
+        let b = !x.is_nil();
+        if !b {
+            flag = true
+        };
+        b
+    });
+    if flag {
+        Ok(self_val)
+    } else {
+        Ok(Value::nil())
     }
 }
 
@@ -1046,6 +1106,15 @@ mod tests {
     }
 
     #[test]
+    fn partition() {
+        let program = "
+        a = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].partition {|i| i % 3 == 0 }
+        assert [[9, 6, 3, 0], [10, 8, 7, 5, 4, 2, 1]], a
+    ";
+        assert_script(program);
+    }
+
+    #[test]
     fn array_include() {
         let program = r#"
         a = ["ruby","rust","java"]
@@ -1077,6 +1146,19 @@ mod tests {
         assert ["b","c","d","a"], a
         assert ["d","a","b","c"], a.rotate!(2)
         assert ["a","b","c","d"], a.rotate!(-3) 
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_compact() {
+        let program = r#"
+        ary = [1, nil, 2, nil, 3, nil]
+        assert [1, 2, 3], ary.compact 
+        assert [1, nil, 2, nil, 3, nil], ary 
+        assert [1, 2, 3], ary.compact!
+        assert [1, 2, 3], ary
+        assert nil, ary.compact!
     "#;
         assert_script(program);
     }

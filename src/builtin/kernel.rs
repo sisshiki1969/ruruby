@@ -15,7 +15,6 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("block_given?", block_given);
     kernel.add_builtin_module_func("method", method);
     kernel.add_builtin_module_func("is_a?", isa);
-    kernel.add_builtin_module_func("Integer", integer);
     kernel.add_builtin_module_func("__dir__", dir);
     kernel.add_builtin_module_func("__FILE__", file_);
     kernel.add_builtin_module_func("raise", raise);
@@ -26,6 +25,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("sleep", sleep);
     kernel.add_builtin_module_func("proc", proc);
     kernel.add_builtin_module_func("lambda", lambda);
+    kernel.add_builtin_module_func("Integer", kernel_integer);
     kernel.add_builtin_module_func("Complex", kernel_complex);
     kernel.add_builtin_module_func("Array", kernel_array);
     kernel.add_builtin_module_func("at_exit", at_exit);
@@ -243,32 +243,6 @@ fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
-    let val = match args[0].unpack() {
-        RV::Integer(num) => num,
-        RV::Float(num) => num as i64,
-        RV::Object(obj) => match &obj.kind {
-            ObjKind::String(s) => match s.parse::<i64>() {
-                Some(num) => num,
-                None => {
-                    let inspect = vm.val_inspect(args[0])?;
-                    return Err(vm.error_type(format!("Invalid value for Integer(): {}", inspect)));
-                }
-            },
-            _ => {
-                let inspect = vm.val_inspect(args[0])?;
-                return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
-            }
-        },
-        _ => {
-            let inspect = vm.val_inspect(args[0])?;
-            return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
-        }
-    };
-    Ok(Value::integer(val))
-}
-
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let mut path = vm.get_source_path();
@@ -384,6 +358,32 @@ fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(procobj)
 }
 
+fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let val = match args[0].unpack() {
+        RV::Integer(num) => num,
+        RV::Float(num) => num as i64,
+        RV::Object(obj) => match &obj.kind {
+            ObjKind::String(s) => match s.parse::<i64>() {
+                Some(num) => num,
+                None => {
+                    let inspect = vm.val_inspect(args[0])?;
+                    return Err(vm.error_type(format!("Invalid value for Integer(): {}", inspect)));
+                }
+            },
+            _ => {
+                let inspect = vm.val_inspect(args[0])?;
+                return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
+            }
+        },
+        _ => {
+            let inspect = vm.val_inspect(args[0])?;
+            return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
+        }
+    };
+    Ok(Value::integer(val))
+}
+
 fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 3)?;
     let (r, i, ex) = match args.len() {
@@ -406,7 +406,17 @@ fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Array(arg) -> Array
 fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let res = vm.send0(IdentId::get_id("to_a"), args[0])?;
+    let arg = args[0];
+    let arg_class = arg.get_class_for_method();
+    match vm.globals.find_method(arg_class, IdentId::get_id("to_a")) {
+        Some(method) => return vm.eval_send(method, arg, &Args::new0()),
+        None => {}
+    };
+    match vm.globals.find_method(arg_class, IdentId::get_id("to_ary")) {
+        Some(method) => return vm.eval_send(method, arg, &Args::new0()),
+        None => {}
+    };
+    let res = Value::array_from(vec![arg]);
     Ok(res)
 }
 
@@ -564,6 +574,8 @@ mod test {
     fn kernel_array() {
         let program = r#"
         assert([1,2,3], Array([1,2,3]))
+        assert([1], Array(1))
+        assert([1,2,3], Array(1..3))
         "#;
         assert_script(program);
     }

@@ -194,6 +194,7 @@ end
 ['loop_times.rb',
  'loop_for.rb',
  'loop_whileloop.rb',
+ 'so_concatenate.rb',
  'so_mandelbrot.rb',
  'app_mandelbrot.rb',
  'app_fibo.rb',

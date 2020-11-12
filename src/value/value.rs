@@ -1148,14 +1148,14 @@ impl Value {
     ///
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
-    /// Return Err(()) when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
+    /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
     /// TODO: nil=>NilClass, true=>TrueClass, false=>FalseClass
-    pub fn get_singleton_class(&mut self) -> Result<Value, ()> {
+    pub fn get_singleton_class(&mut self) -> Option<Value> {
         match self.as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
                 if class.is_singleton() {
-                    Ok(class)
+                    Some(class)
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
@@ -1174,10 +1174,10 @@ impl Value {
                         _ => Value::singleton_class_from(class),
                     };
                     oref.set_class(singleton);
-                    Ok(singleton)
+                    Some(singleton)
                 }
             }
-            _ => Err(()),
+            _ => None,
         }
     }
 }
