@@ -1,10 +1,9 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = ClassInfo::from(globals.builtins.object);
-    let mut class_val = Value::class(class);
-    class_val.add_builtin_class_method("new", struct_new);
-    class_val
+    let mut struct_class = Value::class_from(globals.builtins.object);
+    struct_class.add_builtin_class_method("new", struct_new);
+    struct_class
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -25,7 +24,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let mut class_val = Value::class_from(self_val);
     let class = class_val.as_mut_class();
-    class.name = name;
+    class.set_name(name);
     class.add_builtin_method_by_str("initialize", initialize);
     class.add_builtin_method_by_str("inspect", inspect);
     class_val.add_builtin_class_method("[]", builtin::class::new);
@@ -74,7 +73,7 @@ fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 use std::borrow::Cow;
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut inspect = format!("#<struct ");
-    match self_val.get_class().as_class().name {
+    match self_val.get_class().as_class().name() {
         Some(id) => inspect += &IdentId::get_ident_name(id),
         None => {}
     };

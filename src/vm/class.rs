@@ -2,80 +2,212 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
-    pub name: Option<IdentId>,
-    pub method_table: MethodTable,
-    pub superclass: Value,
-    include: Vec<Value>,
-    pub is_singleton: bool,
+    upper: Value,
+    flags: ClassFlags,
+    ext: ClassRef,
+}
+
+/// ClassFlags:
+/// 0000 0000
+///       |||
+///       ||+-- 1 = singleton
+///       |+--- 1 = included module
+///       +---- 1 = module which has prepend
+#[derive(Debug, Clone, PartialEq)]
+struct ClassFlags(u8);
+
+const SINGLETON: u8 = 1 << 0;
+const INCLUDED: u8 = 1 << 1;
+const HAS_PREPEND: u8 = 1 << 2;
+
+impl ClassFlags {
+    fn new(is_singleton: bool) -> Self {
+        ClassFlags(if is_singleton { SINGLETON } else { 0 })
+    }
+
+    fn is_singleton(&self) -> bool {
+        self.0 & SINGLETON != 0
+    }
+
+    fn is_included(&self) -> bool {
+        self.0 & INCLUDED != 0
+    }
+
+    fn has_prepend(&self) -> bool {
+        self.0 & HAS_PREPEND != 0
+    }
+
+    fn set_include(&mut self) {
+        self.0 |= INCLUDED;
+    }
+
+    fn set_prepend(&mut self) {
+        self.0 |= HAS_PREPEND;
+    }
+}
+
+impl GC for ClassInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.upper.mark(alloc);
+        self.ext.const_table.values().for_each(|v| v.mark(alloc));
+        self.ext.origin.mark(alloc);
+    }
 }
 
 impl ClassInfo {
-    pub fn new(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
+    fn new(superclass: impl Into<Option<Value>>, info: ClassExt, is_singleton: bool) -> Self {
+        let superclass = match superclass.into() {
+            Some(superclass) => superclass,
+            None => Value::nil(),
+        };
         ClassInfo {
-            name: name.into(),
-            method_table: FxHashMap::default(),
-            superclass,
-            include: vec![],
-            is_singleton: false,
-        }
-    }
-
-    pub fn new_singleton(name: impl Into<Option<IdentId>>, superclass: Value) -> Self {
-        ClassInfo {
-            name: name.into(),
-            method_table: FxHashMap::default(),
-            superclass,
-            include: vec![],
-            is_singleton: true,
+            upper: superclass,
+            flags: ClassFlags::new(is_singleton),
+            ext: ClassRef::new(info),
         }
     }
 
     pub fn from(superclass: impl Into<Option<Value>>) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
-        ClassInfo::new(None, superclass)
+        Self::new(superclass, ClassExt::new(), false)
     }
 
-    pub fn singleton_from(
-        id: impl Into<Option<IdentId>>,
-        superclass: impl Into<Option<Value>>,
-    ) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
-        ClassInfo::new_singleton(id, superclass)
+    pub fn singleton_from(superclass: impl Into<Option<Value>>) -> Self {
+        Self::new(superclass, ClassExt::new(), true)
+    }
+
+    pub fn upper(&self) -> Value {
+        let mut upper = self.upper;
+        loop {
+            if upper.is_nil() {
+                return upper;
+            };
+            let cinfo = upper.as_module();
+            if !cinfo.has_prepend() {
+                return upper;
+            }
+            upper = cinfo.upper;
+        }
+    }
+
+    /// Get superclass of `self`.
+    ///
+    /// If `self` has no superclass, return nil.
+    pub fn superclass(&self) -> Value {
+        let mut upper = self.upper;
+        loop {
+            if upper.is_nil() {
+                return upper;
+            }
+            let cinfo = upper.as_module();
+            if !cinfo.is_included() {
+                return upper;
+            };
+            upper = cinfo.upper;
+        }
+    }
+
+    pub fn name(&self) -> Option<IdentId> {
+        self.ext.name
+    }
+
+    pub fn set_name(&mut self, name: impl Into<Option<IdentId>>) {
+        self.ext.name = name.into();
+    }
+
+    pub fn name_str(&self) -> String {
+        IdentId::get_ident_name(self.ext.name)
+    }
+
+    pub fn is_singleton(&self) -> bool {
+        self.flags.is_singleton()
+    }
+
+    pub fn is_included(&self) -> bool {
+        self.flags.is_included()
+    }
+
+    fn has_prepend(&self) -> bool {
+        self.flags.has_prepend()
+    }
+
+    fn set_prepend(&mut self) {
+        self.flags.set_prepend()
+    }
+
+    pub fn set_include(&mut self, origin: Value) {
+        assert!(!origin.as_module().is_included());
+        self.flags.set_include();
+        self.ext.origin = origin;
+    }
+
+    pub fn append_include(&mut self, mut module: Value, globals: &mut Globals) {
+        let superclass = self.upper;
+        let mut imodule = module.generate_included();
+        self.upper = imodule;
+        loop {
+            module = match module.upper() {
+                Some(module) => module,
+                None => break,
+            };
+            let mut prev = imodule;
+            imodule = module.generate_included();
+            prev.as_mut_module().upper = imodule;
+        }
+        imodule.as_mut_module().upper = superclass;
+        globals.class_version += 1;
+    }
+
+    pub fn append_prepend(&mut self, base: Value, mut module: Value, globals: &mut Globals) {
+        let superclass = self.upper;
+        let mut imodule = module.generate_included();
+        self.upper = imodule;
+        loop {
+            module = match module.upper() {
+                Some(module) => module,
+                None => break,
+            };
+            let mut prev = imodule;
+            imodule = module.generate_included();
+            prev.as_mut_module().upper = imodule;
+        }
+        if !self.has_prepend() {
+            let mut dummy = base.dup();
+            let mut dinfo = dummy.as_mut_module();
+            dinfo.upper = superclass;
+            dinfo.set_include(base);
+            imodule.as_mut_module().upper = dummy;
+            self.set_prepend();
+        } else {
+            imodule.as_mut_module().upper = superclass;
+        }
+        globals.class_version += 1;
+    }
+
+    pub fn origin(&self) -> Value {
+        self.ext.origin
+    }
+
+    pub fn method_table(&self) -> &MethodTable {
+        &self.ext.method_table
+    }
+
+    pub fn const_table(&self) -> &ValueTable {
+        &self.ext.const_table
     }
 
     pub fn id(&self) -> u64 {
-        self as *const Self as u64
+        self.ext.id()
     }
 
-    pub fn superclass(&self) -> Option<&ClassInfo> {
-        if self.superclass.is_nil() {
-            None
-        } else {
-            Some(self.superclass.as_class())
-        }
+    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
+        let info = MethodInfo::BuiltinFunc { name: id, func };
+        let methodref = MethodRef::new(info);
+        self.ext.method_table.insert(id, methodref);
     }
 
-    pub fn mut_superclass(&mut self) -> Option<&mut ClassInfo> {
-        if self.superclass.is_nil() {
-            None
-        } else {
-            Some(self.superclass.as_mut_class())
-        }
-    }
-
-    /// Get reference of included modules in `self` class.
-    pub fn include(&self) -> &Vec<Value> {
-        &self.include
-    }
-
-    pub fn name(&self) -> String {
-        IdentId::get_ident_name(self.name)
+    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+        let name = IdentId::get_id(name);
+        self.add_builtin_method(name, func);
     }
 
     pub fn add_method(
@@ -84,32 +216,81 @@ impl ClassInfo {
         id: IdentId,
         info: MethodRef,
     ) -> Option<MethodRef> {
-        globals.class_version += 1;
-        self.method_table.insert(id, info)
+        self.ext.add_method(globals, id, info)
     }
 
-    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
-        let info = MethodInfo::BuiltinFunc { name: id, func };
-        let methodref = MethodRef::new(info);
-        self.method_table.insert(id, methodref);
+    /// Set a constant (`self`::`id`) to `val`.
+    ///
+    /// If `val` is a module or class, set the name of the class/module to the name of the constant.
+    /// If the constant was already initialized, output warning.
+    pub fn set_const(&mut self, id: IdentId, mut val: Value) {
+        match val.if_mut_mod_class() {
+            Some(cinfo) => {
+                if cinfo.name().is_none() {
+                    cinfo.set_name(if self == BuiltinClass::object().as_module() {
+                        Some(id)
+                    } else {
+                        match self.name() {
+                            Some(parent_name) => {
+                                let name = IdentId::get_id(&format!("{:?}::{:?}", parent_name, id));
+                                Some(name)
+                            }
+                            None => None,
+                        }
+                    });
+                }
+            }
+            None => {}
+        }
+
+        if self.ext.const_table.insert(id, val).is_some() {
+            eprintln!("warning: already initialized constant {:?}", id);
+        }
     }
 
-    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
-        let name = IdentId::get_id(name);
-        self.add_builtin_method(name, func);
+    pub fn set_const_by_str(&mut self, name: &str, val: Value) {
+        let id = IdentId::get_id(name);
+        self.set_const(id, val)
     }
 
-    /// Include `module` in `self` class.
-    /// This method increments `class_version`.
-    pub fn include_append(&mut self, globals: &mut Globals, module: Value) {
-        globals.class_version += 1;
-        self.include.push(module);
+    pub fn get_const(&self, id: IdentId) -> Option<Value> {
+        self.ext.const_table.get(&id).cloned()
+    }
+
+    pub fn get_const_by_str(&self, name: &str) -> Option<Value> {
+        let id = IdentId::get_id(name);
+        self.get_const(id)
     }
 }
 
-impl GC for ClassInfo {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.superclass.mark(alloc);
-        self.include.iter().for_each(|v| v.mark(alloc));
+#[derive(Debug, Clone, PartialEq)]
+struct ClassExt {
+    name: Option<IdentId>,
+    method_table: MethodTable,
+    const_table: ValueTable,
+    /// This slot holds original module Value for include modules.
+    origin: Value,
+}
+
+type ClassRef = Ref<ClassExt>;
+
+impl ClassExt {
+    fn new() -> Self {
+        ClassExt {
+            name: None,
+            method_table: FxHashMap::default(),
+            const_table: FxHashMap::default(),
+            origin: Value::nil(),
+        }
+    }
+
+    fn add_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        info: MethodRef,
+    ) -> Option<MethodRef> {
+        globals.class_version += 1;
+        self.method_table.insert(id, info)
     }
 }

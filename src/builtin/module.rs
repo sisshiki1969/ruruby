@@ -16,6 +16,7 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("singleton_class?", singleton_class);
     module_class.add_builtin_method_by_str("const_get", const_get);
     module_class.add_builtin_method_by_str("include", include);
+    module_class.add_builtin_method_by_str("prepend", prepend);
     module_class.add_builtin_method_by_str("included_modules", included_modules);
     module_class.add_builtin_method_by_str("ancestors", ancestors);
     module_class.add_builtin_method_by_str("module_eval", module_eval);
@@ -28,13 +29,22 @@ pub fn init(globals: &mut Globals) {
 
 fn teq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let mut class = args[0].get_class();
+    let mut module = args[0].get_class();
     loop {
-        if class.id() == self_val.id() {
+        let minfo = match module.if_mod_class() {
+            Some(info) => info,
+            None => return Err(vm.error_argument("Must be module or class.")),
+        };
+        let true_module = if minfo.is_included() {
+            minfo.origin()
+        } else {
+            module
+        };
+        if true_module.id() == self_val.id() {
             return Ok(Value::true_val());
         };
-        match class.superclass() {
-            Some(superclass) => class = superclass,
+        match module.upper() {
+            Some(upper) => module = upper,
             None => break,
         }
     }
@@ -45,23 +55,22 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
     loop {
-        match &mut class.rvalue().var_table() {
-            Some(table) => v.append(
-                &mut table
-                    .keys()
-                    .filter(|x| {
-                        IdentId::get_ident_name(**x)
-                            .chars()
-                            .nth(0)
-                            .unwrap()
-                            .is_ascii_uppercase()
-                    })
-                    .map(|k| Value::symbol(*k))
-                    .collect::<Vec<Value>>(),
-            ),
-            None => {}
-        };
-        match class.superclass() {
+        v.append(
+            &mut class
+                .as_module()
+                .const_table()
+                .keys()
+                .filter(|x| {
+                    IdentId::get_ident_name(**x)
+                        .chars()
+                        .nth(0)
+                        .unwrap()
+                        .is_ascii_uppercase()
+                })
+                .map(|k| Value::symbol(*k))
+                .collect::<Vec<Value>>(),
+        );
+        match class.upper() {
             Some(superclass) => {
                 if superclass == BuiltinClass::object() {
                     break;
@@ -110,12 +119,12 @@ fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 0, 1)?;
-    let mut class = self_val.expect_module(vm)?;
+    let mut module = self_val.expect_mod_class(vm)?;
     let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
         false => {
-            let v = class
-                .method_table
+            let v = module
+                .method_table()
                 .keys()
                 .map(|k| Value::symbol(*k))
                 .collect();
@@ -126,18 +135,20 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             loop {
                 v = v
                     .union(
-                        &class
-                            .method_table
+                        &module
+                            .method_table()
                             .keys()
                             .map(|k| Value::symbol(*k))
                             .collect(),
                     )
                     .cloned()
                     .collect();
-                match class.mut_superclass() {
-                    Some(superclass) => class = superclass,
-                    None => break,
-                };
+                if module.upper().is_nil() {
+                    break;
+                } else {
+                    self_val = module.upper();
+                    module = self_val.as_mut_module();
+                }
             }
             Ok(Value::array_from(v.iter().cloned().collect()))
         }
@@ -188,7 +199,7 @@ fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .as_mut_module()
+        .if_mut_mod_class()
         .unwrap()
         .add_method(&mut vm.globals, id, methodref);
 }
@@ -201,7 +212,7 @@ fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
     };
     let methodref = MethodRef::new(info);
     class
-        .as_mut_module()
+        .if_mut_mod_class()
         .unwrap()
         .add_method(&mut vm.globals, assign_id, methodref);
 }
@@ -224,62 +235,62 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
-    let class = self_val.expect_module(vm)?;
-    Ok(Value::bool(class.is_singleton))
+    let class = self_val.expect_mod_class(vm)?;
+    Ok(Value::bool(class.is_singleton()))
 }
 
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
-    let class = self_val.expect_module(vm)?;
-    let module = args[0];
-    class.include_append(&mut vm.globals, module);
+    let cinfo = self_val.expect_mod_class(vm)?;
+    let mut module = args[0];
+    module.expect_module(vm, "1st arg")?;
+    cinfo.append_include(module, &mut vm.globals);
+    Ok(Value::nil())
+}
+
+fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let self_val2 = self_val.clone();
+    let cinfo = self_val.expect_mod_class(vm)?;
+    let mut module = args[0];
+    module.expect_module(vm, "1st arg")?;
+    cinfo.append_prepend(self_val2, module, &mut vm.globals);
     Ok(Value::nil())
 }
 
 fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut class = self_val;
+    let mut module = self_val;
     let mut ary = vec![];
     loop {
-        if class.is_nil() {
+        if module.is_nil() {
             break;
         }
-        class = match class.as_module() {
-            Some(cref) => {
-                ary.extend_from_slice(cref.include());
-                cref.superclass
-            }
-            None => {
-                return Err(
-                    vm.error_internal(format!("Illegal value in superclass chain. {:?}", class))
-                );
-            }
+        let cinfo = module.as_module();
+        if cinfo.is_included() {
+            ary.push(cinfo.origin())
         };
+        module = cinfo.upper();
     }
     Ok(Value::array_from(ary))
 }
 
 fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
-    let mut superclass = self_val;
+    let mut module = self_val;
     let mut ary = vec![];
     loop {
-        if superclass.is_nil() {
+        if module.is_nil() {
             break;
         }
-        ary.push(superclass);
-        superclass = match superclass.as_module() {
-            Some(cref) => {
-                ary.extend_from_slice(cref.include());
-                cref.superclass
-            }
-            None => {
-                return Err(vm.error_internal(format!(
-                    "Illegal value in superclass chain. {:?}",
-                    superclass
-                )));
-            }
+        let cinfo = module.as_module();
+        if cinfo.is_included() {
+            ary.push(cinfo.origin())
+        } else {
+            ary.push(module)
         };
+        let cinfo = module.as_module();
+        module = cinfo.upper();
     }
     Ok(Value::array_from(ary))
 }
@@ -343,16 +354,22 @@ mod test {
         assert(false, Array === "a")
         assert(true, Array === [])
 
-        class A
-        end
+        module M1; end
+        module M2; end
+        class A; end
         class B < A
+          include M1
         end
         class C < B
+          include M2
         end
+
         c = C.new
         assert(true, C === c)
         assert(true, B === c)
         assert(true, A === c)
+        assert(true, M1 === c)
+        assert(true, M2 === c)
         assert(true, Object === c)
         assert(false, Integer === c)
         "#;
@@ -565,6 +582,85 @@ mod test {
         assert(false, Object.const_defined?(:Kernels))
         assert(true, Object.const_defined? "Array")
         assert(false, Object.const_defined? "Arrays")
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include1() {
+        let program = r#"
+        class C; end
+        module M1
+          def f; "M1"; end
+        end
+        module M2
+          def f; "M2"; end
+        end
+        class C
+          include M1
+        end
+        assert "M1", C.new.f
+        class C
+          include M2
+        end
+        assert "M2", C.new.f
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include2() {
+        let program = r#"
+    module M2; end
+
+    module M1
+      include M2
+    end
+
+    class S; end
+
+    class C < S
+      include M1
+    end
+
+    assert C, C.ancestors[0]
+    assert M1, C.ancestors[1]
+    assert M2, C.ancestors[2]
+    assert S, C.ancestors[3]
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn prepend1() {
+        let program = r#"
+        module M0
+          def f; "M0"; end
+        end
+        class S
+          include M0
+        end
+        class C < S; end
+        module M1
+          def f; "M1"; end
+        end
+        module M2
+          def f; "M2"; end
+        end
+        assert "M0", C.new.f
+        class S
+          def f; "S"; end
+        end
+        assert "S", C.new.f
+        class S
+          prepend M1
+        end
+        assert "M1", C.new.f
+        class S
+          prepend M2
+        end
+        assert "M2", C.new.f
+        assert [C, M2, M1, S, M0, Object, Kernel, BasicObject], C.ancestors
         "#;
         assert_script(program);
     }

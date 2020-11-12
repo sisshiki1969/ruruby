@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - new_class
 
 jobs:
   build:

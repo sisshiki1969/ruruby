@@ -1967,7 +1967,7 @@ impl Parser {
             let node = self.parse_interporated_string_literal(&s, term, level)?;
             return Ok(node);
         } else {
-            panic!(format!("{:?}", tok.kind));
+            unreachable!(format!("parse_percent_notation(): {:?}", tok.kind));
         }
     }
 

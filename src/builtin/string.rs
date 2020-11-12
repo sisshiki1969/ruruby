@@ -2,7 +2,7 @@ use crate::vm::*;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut string_class = ClassInfo::from(globals.builtins.object);
+    let mut string_class = Value::class_from(globals.builtins.object);
     string_class.add_builtin_method_by_str("to_s", to_s);
     string_class.add_builtin_method_by_str("inspect", inspect);
     string_class.add_builtin_method_by_str("+", add);
@@ -47,7 +47,7 @@ pub fn init(globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("ord", ord);
     string_class.add_builtin_method_by_str("empty?", empty);
 
-    Value::class(string_class)
+    string_class
 }
 
 fn to_s(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -70,7 +70,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     })?;
     match (lhs, rhs) {
         (RString::Str(lhs), RString::Str(rhs)) => {
-            let res = format!("{}{}", lhs, rhs);
+            let res = lhs.to_owned() + rhs;
             Ok(Value::string(res))
         }
         (RString::Str(lhs), RString::Bytes(rhs)) => {
@@ -199,12 +199,12 @@ fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 1)?;
     let lhs = self_val.as_mut_string().unwrap();
     let mut arg0 = args[0];
-    *lhs = match arg0.as_mut_rstring() {
-        Some(rhs) => format!("{}{}", lhs, rhs.as_string(vm)?),
+    match arg0.as_mut_rstring() {
+        Some(rhs) => *lhs += rhs.as_string(vm)?,
         None => match arg0.as_integer() {
             Some(i) => {
                 let mut rhs = RString::Bytes(vec![i as i8 as u8]);
-                format!("{}{}", lhs, rhs.as_string(vm)?)
+                *lhs += rhs.as_string(vm)?;
             }
             None => return Err(vm.error_argument("Arg must be String or Integer.")),
         },

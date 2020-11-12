@@ -32,6 +32,11 @@ end
 class NilClass
 end
 
+class Module
+  def undef_method(sym); end
+  def define_method(sym); end
+end
+
 RUBY_PLATFORM = "x86_64-linux"
 RUBY_VERSION = "2.5.0"
 RUBY_ENGINE = "ruruby"
