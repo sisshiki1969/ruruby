@@ -1421,6 +1421,9 @@ impl Parser {
                 if self.lexer.trailing_lparen() {
                     let node = Node::new_identifier(name, loc);
                     self.parse_function_args(node)
+                } else if self.is_command() {
+                    let id = self.get_ident_id(name);
+                    Ok(self.parse_command(id, loc)?)
                 } else {
                     Ok(Node::new_const(name, false, loc))
                 }

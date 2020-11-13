@@ -1001,6 +1001,21 @@ impl Lexer {
         }
     }
 
+    /// Consume continue line. ("\\n")
+    /// Return true if consumed.
+    fn consume_cont_line(&mut self) -> bool {
+        if self.pos as usize + 1 >= self.len {
+            return false;
+        };
+        let code = &self.source_info.code;
+        if code[self.pos as usize] == '\\' && code[self.pos as usize + 1] == '\n' {
+            self.pos += 2;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Consume the next char, if the char is numeric char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_numeric(&mut self) -> Option<char> {
@@ -1070,14 +1085,14 @@ impl Lexer {
     }
 
     /// Skip whitespace and line terminator.
+    ///
     /// Returns Some(Space or LineTerm) or None if the cursor reached EOF.
     fn skip_whitespace(&mut self) -> Option<Token> {
         let mut res = None;
         loop {
             if self.consume('\n') {
                 res = Some(self.new_line_term());
-            } else if self.consume_whitespace() {
-            } else {
+            } else if !self.consume_cont_line() && !self.consume_whitespace() {
                 self.token_start_pos = self.pos;
                 return res;
             }
@@ -1411,6 +1426,22 @@ mod test {
             Token![LineTerm, 89, 89],
             Token![NumLit(10), 102, 103],
             Token![EOF, 121],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn cont_line() {
+        let program = r###"a \
+\
+\
+  =\
+77"###;
+        let ans = vec![
+            Token![Ident("a"), 0, 0],
+            Token![Punct(Punct::Assign), 10, 10],
+            Token![NumLit(77), 13, 14],
+            Token![EOF, 15],
         ];
         assert_tokens(program, ans);
     }

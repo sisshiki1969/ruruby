@@ -481,8 +481,12 @@ mod test {
         let program = r#"
         assert 4, Integer(4)
         assert 9, Integer(9.88)
+        assert -4, Integer(-4.2)
         assert 9, Integer(9.02)
         assert 10, Integer("10")
+        assert 4, Integer 4
+        assert -4, Integer -4.2
+        assert 10, Integer"10"
         assert_error { Integer("13.55") }
         assert_error { Integer([1,3,6]) }
         assert_error { Integer(:"2") }
