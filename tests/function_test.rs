@@ -228,6 +228,19 @@ fn double_splat_argument() {
 }
 
 #[test]
+fn intrinsic_conversion_to_hash() {
+    let program = r#"
+        def foo(*p)
+            p
+        end
+
+        assert [1,2,3], foo(1,2,3)
+        assert [1,2,{:abs=>"abs", :kvm=>"kvm"}], foo(1,2,:abs=>"abs",:kvm=>"kvm")
+    "#;
+    assert_script(program);
+}
+
+#[test]
 fn safe_navigation() {
     // https://docs.ruby-lang.org/ja/latest/doc/spec=2fcall.html#block_arg
     let program = r#"

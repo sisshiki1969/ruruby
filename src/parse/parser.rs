@@ -1307,6 +1307,28 @@ impl Parser {
                 arglist.block = Some(Box::new(self.parse_arg()?));
             } else {
                 let node = self.parse_arg()?;
+                let loc = node.loc();
+                if self.consume_punct(Punct::FatArrow)? {
+                    let value = self.parse_arg()?;
+                    let mut kvp = vec![(node, value)];
+                    if self.consume_punct(Punct::Comma)? {
+                        loop {
+                            let key = self.parse_arg()?;
+                            self.expect_punct(Punct::FatArrow)?;
+                            let value = self.parse_arg()?;
+                            kvp.push((key, value));
+                            if !self.consume_punct(Punct::Comma)? {
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(punct) = punct {
+                        self.consume_punct(punct)?;
+                    };
+                    let node = Node::new_hash(kvp, loc);
+                    arglist.args.push(node);
+                    return Ok(arglist);
+                }
                 match node.kind {
                     NodeKind::Ident(id, ..) | NodeKind::LocalVar(id) => {
                         if self.consume_punct_no_term(Punct::Colon)? {
