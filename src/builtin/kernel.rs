@@ -1,3 +1,4 @@
+use crate::loader::*;
 use crate::*;
 use rand;
 use std::path::PathBuf;
@@ -187,24 +188,6 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     Err(vm.error_load(format!("Can not load such file -- {:?}", file_name)))
-}
-
-/// Load file and execute.
-fn load_exec(vm: &mut VM, path: &PathBuf, allow_repeat: bool) -> Result<bool, RubyError> {
-    let absolute_path = vm.canonicalize_path(path)?;
-    let res = vm.globals.add_source_file(&absolute_path);
-    if !allow_repeat && res.is_none() {
-        return Ok(false);
-    }
-    let program = vm.load_file(&absolute_path)?;
-    #[cfg(feature = "verbose")]
-    eprintln!("reading:{}", absolute_path.to_string_lossy());
-    //vm.root_path.push(absolute_path.clone());
-    vm.class_push(BuiltinClass::object());
-    vm.run(absolute_path, &program)?;
-    vm.class_pop();
-    //vm.root_path.pop().unwrap();
-    Ok(true)
 }
 
 /// Built-in function "block_given?".

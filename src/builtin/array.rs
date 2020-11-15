@@ -57,6 +57,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("grep", grep);
     class.add_builtin_method_by_str("sort", sort);
     class.add_builtin_method_by_str("count", count);
+    class.add_builtin_method_by_str("inject", inject);
+    class.add_builtin_method_by_str("reduce", inject);
 
     class.add_builtin_class_method("new", array_new);
     class
@@ -892,6 +894,23 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let block = match args.block.clone() {
+        Some(block) => block,
+        None => return Err(vm.error_argument("Currently, block is neccessory.")),
+    };
+    let ary = self_val.expect_array(vm, "").unwrap();
+    let mut res = args[0];
+    let mut args = Args::new2(Value::nil(), Value::nil());
+    for elem in ary.elements.iter() {
+        args[0] = res;
+        args[1] = *elem;
+        res = vm.eval_block(&block, &args)?;
+    }
+    Ok(res)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1270,6 +1289,15 @@ mod tests {
         assert false, [3, 111, :d].all?(Integer)
         assert false, %w[ant bear cat].all?(/t/)
         assert true, %w[ant bear cat].all?(/a/)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn inject() {
+        let program = r#"
+        assert 14, [2, 3, 4, 5].inject(0) {|result, item| result + item }
+        assert 54, [2, 3, 4, 5].inject(0) {|result, item| result + item**2 }
         "#;
         assert_script(program);
     }

@@ -154,13 +154,18 @@ fn argument_number() {
 #[test]
 fn block_yield() {
     let program = r#"
-        def fn
+        class A
+          def self.fn
             yield
+          end
         end
-        block = Proc.new { 100 }
-        assert_error { fn }
-        assert 200, fn(){ 200 }
-        assert 100, fn(&block)
+        one = 100
+        two = 200
+        block = Proc.new { one }
+        assert_error { A.fn }
+        assert 200, A.fn { two }
+        assert self, A.fn { self }
+        assert 100, A.fn(&block)
     "#;
     assert_script(program);
 }

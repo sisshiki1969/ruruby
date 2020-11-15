@@ -26,7 +26,7 @@ fn main() {
             let mut globals = GlobalsRef::new_globals();
             let mut vm = globals.create_main_fiber();
             vm.set_global_var(IdentId::get_id("$0"), Value::string("-e".to_string()));
-            vm.exec_program(std::path::PathBuf::default(), command.to_string());
+            vm.exec_program(std::path::PathBuf::default(), command);
             return;
         }
         None => {}

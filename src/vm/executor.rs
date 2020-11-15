@@ -97,7 +97,18 @@ impl VM {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
-        vm.exec_file("src/startup/startup.rb");
+        let mut startup = PathBuf::from(file!());
+        startup.pop();
+        startup.pop();
+        startup.push("startup/startup.rb");
+        match crate::loader::load_exec(&mut vm, &startup, false) {
+            Ok(_) => {}
+            Err(err) => {
+                err.show_err();
+                err.show_loc(0);
+                panic!("Got error: {:?}", err);
+            }
+        }
         vm
     }
 
@@ -2466,6 +2477,9 @@ impl VM {
                 .outer
                 .ok_or_else(|| self.error_local_jump("No block given."))?;
         }
+        let caller = context
+            .caller
+            .ok_or_else(|| self.error_local_jump("No block given."))?;
         let block = context
             .block
             .as_ref()
@@ -2473,7 +2487,7 @@ impl VM {
 
         match block {
             Block::Method(method) => {
-                self.eval_method(*method, context.self_value, context.caller, args)
+                self.eval_method(*method, caller.self_value, Some(caller), args)
             }
             Block::Proc(proc) => self.eval_proc(*proc, args),
         }
@@ -2934,16 +2948,13 @@ impl VM {
         self.set_global_var(IdentId::get_id("$0"), Value::string(file.to_string()));
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
-        //self.root_path.push(root_path);
-        self.exec_program(absolute_path, program);
-        //self.root_path.pop();
+        self.exec_program(absolute_path, &program);
         #[cfg(feature = "emit-iseq")]
         self.globals.const_values.dump();
     }
 
-    pub fn exec_program(&mut self, absolute_path: PathBuf, program: String) {
-        //let absolute_path = PathBuf::default();
-        match self.run(absolute_path, &program) {
+    pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
+        match self.run(absolute_path, program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
                 {
