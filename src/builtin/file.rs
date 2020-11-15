@@ -54,16 +54,28 @@ fn string_to_canonicalized_path(
 // Class methods
 
 fn join(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2)?;
-    let mut path = string_to_path(vm, args[0], "1st agr")?;
-    let arg = string_to_path(vm, args[1], "2nd arg")?;
-
-    for p in arg.iter() {
-        if p == ".." {
-            path.pop();
-        } else {
-            path.push(p);
+    fn flatten(vm: &mut VM, path: &mut PathBuf, val: Value) -> Result<(), RubyError> {
+        match val.as_array() {
+            Some(ainfo) => {
+                for v in ainfo.elements.iter() {
+                    flatten(vm, path, *v)?;
+                }
+            }
+            None => {
+                for p in string_to_path(vm, val, "Args")?.iter() {
+                    if p == ".." {
+                        path.pop();
+                    } else {
+                        path.push(p);
+                    }
+                }
+            }
         }
+        Ok(())
+    }
+    let mut path = PathBuf::new();
+    for arg in args.iter() {
+        flatten(vm, &mut path, *arg)?;
     }
     Ok(Value::string(path.to_string_lossy().to_string()))
 }
@@ -264,6 +276,8 @@ mod tests {
             assert "#{Dir.pwd}/Cargo.toml", File.realpath "Cargo.toml"
             assert_error { File.realpath "Cargo.tomlz" }
             assert_error { File.realpath("Cargo.tomlz", "/") }
+            assert "a/b/c", File.join("a","b","c")
+            assert "a/b/c", File.join([["a"],"b"],"c")
         "###;
         assert_script(program);
     }
