@@ -1612,17 +1612,62 @@ impl VM {
 // Utilities for method call
 
 impl VM {
-    pub fn send_args(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
-        let method = self.get_method_from_receiver(receiver, method_id)?;
-        let val = self.eval_send(method, receiver, args)?;
-        Ok(val)
+    pub fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
+        match self.globals.find_method_from_receiver(receiver, method_id) {
+            Some(method) => return self.eval_send(method, receiver, args),
+            None => {}
+        };
+        match self
+            .globals
+            .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
+        {
+            Some(method) => {
+                let mut new_args = Args::new(args.len() + 1);
+                new_args[0] = Value::symbol(method_id);
+                for i in 0..args.len() {
+                    new_args[i + 1] = args[i];
+                }
+                return self.eval_send(method, receiver, &new_args);
+            }
+            None => {}
+        };
+        Err(self.error_undefined_method(method_id, receiver))
+    }
+
+    fn send_icache(
+        &mut self,
+        cache: u32,
+        method_id: IdentId,
+        receiver: Value,
+        args: &Args,
+    ) -> VMResult {
+        match self
+            .globals
+            .find_method_from_icache(cache, receiver, method_id)
+        {
+            Some(method) => return self.eval_send(method, receiver, args),
+            None => {}
+        }
+        match self
+            .globals
+            .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
+        {
+            Some(method) => {
+                let mut new_args = Args::new(args.len() + 1);
+                new_args[0] = Value::symbol(method_id);
+                for i in 0..args.len() {
+                    new_args[i + 1] = args[i];
+                }
+                return self.eval_send(method, receiver, &new_args);
+            }
+            None => {}
+        };
+        Err(self.error_undefined_method(method_id, receiver))
     }
 
     pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
-        let method = self.get_method_from_receiver(receiver, method_id)?;
         let args = Args::new0();
-        let val = self.eval_send(method, receiver, &args)?;
-        Ok(val)
+        self.send(method_id, receiver, &args)
     }
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
@@ -2056,13 +2101,13 @@ impl VM {
                     ObjKind::Hash(ref mut href) => href.insert(args[0], val),
                     _ => {
                         args.push(val);
-                        self.send_args(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                        self.send(IdentId::_INDEX_ASSIGN, receiver, &args)?;
                     }
                 };
             }
             None => {
                 args.push(val);
-                self.send_args(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                self.send(IdentId::_INDEX_ASSIGN, receiver, &args)?;
             }
         }
         Ok(())
@@ -2079,7 +2124,7 @@ impl VM {
                     }
                     ObjKind::Hash(ref mut href) => href.insert(Value::integer(idx as i64), val),
                     _ => {
-                        self.send_args(
+                        self.send(
                             IdentId::_INDEX_ASSIGN,
                             receiver,
                             &Args::new2(Value::integer(idx as i64), val),
@@ -2088,7 +2133,7 @@ impl VM {
                 };
             }
             None => {
-                self.send_args(
+                self.send(
                     IdentId::_INDEX_ASSIGN,
                     receiver,
                     &Args::new2(Value::integer(idx as i64), val),
@@ -2113,7 +2158,7 @@ impl VM {
                     }
                 }
                 ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
-                _ => self.send_args(IdentId::_INDEX, receiver, &args)?,
+                _ => self.send(IdentId::_INDEX, receiver, &args)?,
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
@@ -2147,7 +2192,7 @@ impl VM {
                 }
                 _ => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    self.send_args(IdentId::_INDEX, receiver, &args)?
+                    self.send(IdentId::_INDEX, receiver, &args)?
                 }
             },
             None if receiver.is_packed_fixnum() => {
@@ -2221,7 +2266,7 @@ impl VM {
             Some(class) => class,
             None => return Err(vm.error_nomethod("`new` method not found.")),
         };
-        let mut obj = vm.send_args(IdentId::NEW, superclass, args)?;
+        let mut obj = vm.send(IdentId::NEW, superclass, args)?;
         obj.set_class(self_val);
         if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
             vm.eval_send(method, obj, args)?;
@@ -2353,7 +2398,6 @@ impl VM {
         let flag = iseq.read8(self.pc + 8);
         let block = iseq.read64(self.pc + 9);
         let cache = iseq.read32(self.pc + 17);
-        let methodref = self.get_method_from_icache(cache, receiver, method_id)?;
 
         let mut kwrest = vec![];
         for _ in 0..kw_rest_num {
@@ -2391,15 +2435,6 @@ impl VM {
             if val.is_nil() {
                 None
             } else {
-                /*let method = val
-                .as_proc()
-                .ok_or_else(|| {
-                    self.error_argument(format!("Block argument must be Proc. given:{:?}", val))
-                })?
-                .context
-                .iseq_ref
-                .unwrap()
-                .method;*/
                 Some(Block::Proc(val))
             }
         } else {
@@ -2408,8 +2443,7 @@ impl VM {
         let mut args = self.pop_args_to_args(args_num as usize);
         args.block = block;
         args.kw_arg = keyword;
-        let val = self.eval_send(methodref, receiver, &args)?;
-        Ok(val)
+        self.send_icache(cache, method_id, receiver, &args)
     }
 
     fn vm_opt_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
@@ -2417,13 +2451,11 @@ impl VM {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
         let cache = iseq.read32(self.pc + 7);
-        let methodref = self.get_method_from_icache(cache, receiver, method_id)?;
 
         let len = self.exec_stack.len();
         let args = Args::from_slice(&self.exec_stack[len - args_num..]);
         self.exec_stack.truncate(len - args_num);
-        let val = self.eval_send(methodref, receiver, &args)?;
-        Ok(val)
+        self.send_icache(cache, method_id, receiver, &args)
     }
 }
 
@@ -2616,38 +2648,6 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
         self.get_method(rec_class, method_id)
-    }
-
-    fn get_method_from_icache(
-        &mut self,
-        cache: u32,
-        receiver: Value,
-        method_id: IdentId,
-    ) -> Result<MethodRef, RubyError> {
-        let rec_class = receiver.get_class_for_method();
-        let version = self.globals.class_version;
-        let icache = self.globals.inline_cache.get_entry(cache);
-        if icache.version == version {
-            match icache.entries {
-                Some((class, method)) if class.id() == rec_class.id() => {
-                    #[cfg(feature = "perf")]
-                    {
-                        self.globals.inc_inline_hit();
-                    }
-                    return Ok(method);
-                }
-                _ => {}
-            }
-        };
-        match self.globals.find_method(rec_class, method_id) {
-            Some(m) => {
-                let icache = self.globals.inline_cache.get_entry(cache);
-                icache.version = version;
-                icache.entries = Some((rec_class, m));
-                Ok(m)
-            }
-            None => return Err(self.error_undefined_method(method_id, receiver)),
-        }
     }
 
     pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {

@@ -20,6 +20,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("super", super_);
     object_class.add_builtin_method_by_str("equal?", equal);
     object_class.add_builtin_method_by_str("send", send);
+    object_class.add_builtin_method_by_str("__send__", send);
     object_class.add_builtin_method_by_str("eval", eval);
     object_class.add_builtin_method_by_str("to_enum", to_enum);
     object_class.add_builtin_method_by_str("enum_for", to_enum);
@@ -184,18 +185,15 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
         let method = match class.superclass() {
-            Some(class) => {
-                let class_version = vm.globals.class_version;
-                match vm.globals.method_cache.get_method(class_version, class, m) {
-                    Some(m) => m,
-                    None => {
-                        return Err(vm.error_nomethod(format!(
-                            "no superclass method `{:?}' for {:?}",
-                            m, self_val
-                        )));
-                    }
+            Some(class) => match vm.globals.find_method(class, m) {
+                Some(m) => m,
+                None => {
+                    return Err(vm.error_nomethod(format!(
+                        "no superclass method `{:?}' for {:?}",
+                        m, self_val
+                    )));
                 }
-            }
+            },
             None => {
                 return Err(vm.error_nomethod(format!(
                     "no superclass method `{:?}' for {:?}.",
@@ -209,11 +207,9 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             for i in 0..param_num {
                 args.push(context[i]);
             }
-            let val = vm.eval_send(method, context.self_value, &args)?;
-            Ok(val)
+            vm.eval_send(method, context.self_value, &args)
         } else {
-            let val = vm.eval_send(method, context.self_value, &args)?;
-            Ok(val)
+            vm.eval_send(method, context.self_value, &args)
         }
     } else {
         return Err(vm.error_nomethod("super called outside of method"));
@@ -297,11 +293,11 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_range(args.len(), 1, 1)?;
     let mut name = args[0];
     let method = name.expect_string_or_symbol(vm, "1st arg")?;
-    if vm.get_method_from_receiver(self_val, method).is_err() {
-        Ok(Value::false_val())
-    } else {
-        Ok(Value::true_val())
-    }
+    let b = vm
+        .globals
+        .find_method_from_receiver(self_val, method)
+        .is_some();
+    Ok(Value::bool(b))
 }
 
 fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

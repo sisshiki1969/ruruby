@@ -18,6 +18,7 @@ pub fn init(globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("to_sym", to_sym);
     string_class.add_builtin_method_by_str("intern", to_sym);
     string_class.add_builtin_method_by_str("split", split);
+    string_class.add_builtin_method_by_str("include?", include_);
     string_class.add_builtin_method_by_str("sub", sub);
     string_class.add_builtin_method_by_str("gsub", gsub);
     string_class.add_builtin_method_by_str("gsub!", gsub_);
@@ -419,6 +420,15 @@ fn split(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let ary = Value::array_from(vec);
         return Ok(ary);
     }
+}
+
+fn include_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 1)?;
+    let mut arg = args[0];
+    let rec = self_val.expect_string(vm, "Receiver")?;
+    let pat = arg.expect_string(vm, "Arg")?;
+    let b = rec.contains(pat);
+    Ok(Value::bool(b))
 }
 
 fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -1078,6 +1088,15 @@ mod test {
         a = ""
         [114, 117, 98].map{ |elem| a += elem.chr}
         assert 329, a.sum
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_include() {
+        let program = r#"
+        assert true, "hello".include? "lo"
+        assert false, "hello".include? "ol"
         "#;
         assert_script(program);
     }

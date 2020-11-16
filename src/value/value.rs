@@ -1180,6 +1180,30 @@ impl Value {
             _ => None,
         }
     }
+
+    /// Get method for a receiver class (`self`) and method (IdentId).
+    pub fn get_method(&self, method: IdentId) -> Option<MethodRef> {
+        let mut temp_class = *self;
+        let mut singleton_flag = self.is_singleton();
+        loop {
+            match temp_class.get_instance_method(method) {
+                Some(method) => {
+                    return Some(method);
+                }
+                None => match temp_class.upper() {
+                    Some(superclass) => temp_class = superclass,
+                    None => {
+                        if singleton_flag {
+                            singleton_flag = false;
+                            temp_class = self.rvalue().class();
+                        } else {
+                            return None;
+                        }
+                    }
+                },
+            };
+        }
+    }
 }
 
 impl Value {

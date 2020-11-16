@@ -328,6 +328,54 @@ impl Globals {
         self.method_cache
             .get_method(class_version, rec_class, method_id)
     }
+
+    /// Search method(MethodRef) for receiver object.
+    ///
+    /// If the method was not found, return None.
+    pub fn find_method_from_receiver(
+        &mut self,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Option<MethodRef> {
+        let rec_class = receiver.get_class_for_method();
+        self.find_method(rec_class, method_id)
+    }
+}
+
+impl GlobalsRef {
+    /// Search method(MethodRef) for receiver object using inline method cache.
+    ///
+    /// If the method was not found, return None.
+    pub fn find_method_from_icache(
+        &mut self,
+        cache: u32,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Option<MethodRef> {
+        let mut globals = self.clone();
+        let rec_class = receiver.get_class_for_method();
+        let version = self.class_version;
+        let icache = self.inline_cache.get_entry(cache);
+        if icache.version == version {
+            match icache.entries {
+                Some((class, method)) if class.id() == rec_class.id() => {
+                    #[cfg(feature = "perf")]
+                    {
+                        self.inc_inline_hit();
+                    }
+                    return Some(method);
+                }
+                _ => {}
+            }
+        };
+        let method = match globals.find_method(rec_class, method_id) {
+            Some(method) => method,
+            None => return None,
+        };
+        icache.version = version;
+        icache.entries = Some((rec_class, method));
+        Some(method)
+    }
 }
 
 ///
@@ -424,7 +472,6 @@ impl MethodCache {
         rec_class: Value,
         method: IdentId,
     ) -> Option<MethodRef> {
-        //let class_version = self.class_version;
         #[cfg(feature = "perf")]
         {
             self.total += 1;
@@ -438,26 +485,12 @@ impl MethodCache {
         {
             self.missed += 1;
         }
-        let mut temp_class = rec_class;
-        let mut singleton_flag = rec_class.is_singleton();
-        loop {
-            match temp_class.get_instance_method(method) {
-                Some(methodref) => {
-                    self.add_entry(rec_class, method, class_version, methodref);
-                    return Some(methodref);
-                }
-                None => match temp_class.upper() {
-                    Some(superclass) => temp_class = superclass,
-                    None => {
-                        if singleton_flag {
-                            singleton_flag = false;
-                            temp_class = rec_class.rvalue().class();
-                        } else {
-                            return None;
-                        }
-                    }
-                },
-            };
+        match rec_class.get_method(method) {
+            Some(methodref) => {
+                self.add_entry(rec_class, method, class_version, methodref);
+                Some(methodref)
+            }
+            None => None,
         }
     }
 }

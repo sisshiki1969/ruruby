@@ -1811,7 +1811,8 @@ impl Parser {
                     | Reserved::While
                     | Reserved::Until
                     | Reserved::And
-                    | Reserved::Or => false,
+                    | Reserved::Or
+                    | Reserved::Then => false,
                     _ => true,
                 },
                 _ => true,

@@ -406,3 +406,24 @@ fn op_method() {
     "#;
     assert_script(program);
 }
+
+#[test]
+fn method_missing() {
+    let program = r##"
+    class A
+      attr_accessor :a
+      def initialize(a)
+        @a = a
+      end
+      def method_missing(method, *arg)
+        "method_missing #{@a} #{method} #{arg}"
+      end
+    end
+    
+    a = A.new(100)
+    b = A.new(200)
+    assert "method_missing 100 amber [1, 2]", a.amber 1,2
+    assert "method_missing 200 gold [3, 4]", b.gold 3,4
+"##;
+    assert_script(program);
+}

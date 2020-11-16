@@ -784,11 +784,11 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-use std::collections::HashSet;
+use fxhash::FxHashSet;
 fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
     let aref = self_val.as_array().unwrap();
-    let mut h: HashSet<HashKey> = HashSet::new();
+    let mut h: FxHashSet<HashKey> = FxHashSet::default();
     let mut v = vec![];
     match &args.block {
         None => {
