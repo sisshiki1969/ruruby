@@ -28,7 +28,15 @@ pub fn init(globals: &mut Globals) -> Value {
 /// Convert Ruby String value`string` to PathBuf.
 fn string_to_path(vm: &mut VM, mut string: Value, msg: &str) -> Result<PathBuf, RubyError> {
     let file = string.expect_string(vm, msg)?;
-    Ok(PathBuf::from(file))
+    let mut path = PathBuf::new();
+    for p in PathBuf::from(file).iter() {
+        if p == ".." && path.file_name().is_some() {
+            path.pop();
+        } else {
+            path.push(p);
+        };
+    }
+    Ok(path)
 }
 
 /// Canonicalize PathBuf.
@@ -45,16 +53,17 @@ fn string_to_canonicalized_path(
     string: Value,
     msg: &str,
 ) -> Result<PathBuf, RubyError> {
-    match string_to_path(vm, string, msg)?.canonicalize() {
+    let path = string_to_path(vm, string, msg)?;
+    match path.canonicalize() {
         Ok(file) => Ok(file),
-        Err(_) => Err(vm.error_argument(format!("{} is an invalid filename. {:?}", msg, string))),
+        Err(_) => Err(vm.error_argument(format!("{} is an invalid filename. {:?}", msg, path))),
     }
 }
 
 // Class methods
 
 fn join(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    fn flatten(vm: &mut VM, path: &mut PathBuf, val: Value) -> Result<(), RubyError> {
+    fn flatten(vm: &mut VM, path: &mut String, mut val: Value) -> Result<(), RubyError> {
         match val.as_array() {
             Some(ainfo) => {
                 for v in ainfo.elements.iter() {
@@ -62,22 +71,24 @@ fn join(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
                 }
             }
             None => {
-                for p in string_to_path(vm, val, "Args")?.iter() {
-                    if p == ".." {
-                        path.pop();
-                    } else {
-                        path.push(p);
-                    }
+                if !path.is_empty() && !path.ends_with('/') {
+                    path.push('/');
                 }
+                let s = val.expect_string(vm, "Args")?;
+                path.push_str(if !path.is_empty() && s.starts_with('/') {
+                    &s[1..]
+                } else {
+                    s
+                });
             }
         }
         Ok(())
     }
-    let mut path = PathBuf::new();
+    let mut path = String::new();
     for arg in args.iter() {
         flatten(vm, &mut path, *arg)?;
     }
-    Ok(Value::string(path.to_string_lossy().to_string()))
+    Ok(Value::string(path))
 }
 
 fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -273,11 +284,18 @@ mod tests {
             assert false, File.file? "src"
             assert true, File.file? "Cargo.toml"
             assert false, File.file? "Cargo.tomlz"
+
             assert "#{Dir.pwd}/Cargo.toml", File.realpath "Cargo.toml"
             assert_error { File.realpath "Cargo.tomlz" }
             assert_error { File.realpath("Cargo.tomlz", "/") }
+
             assert "a/b/c", File.join("a","b","c")
             assert "a/b/c", File.join([["a"],"b"],"c")
+            assert "a/b/c", File.join("a/","b","/c")
+            assert "a/b/c", File.join("a/","/b/","/c")
+            assert "/a/b/c", File.join("/a/","/b/","/c")
+            assert "", File.join
+            assert "", File.join([])
         "###;
         assert_script(program);
     }
