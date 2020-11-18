@@ -343,7 +343,7 @@ impl VM {
         #[cfg(feature = "perf")]
         self.perf.set_prev_inst(Perf::CODEGEN);
 
-        let methodref = Codegen::new(result.source_info).gen_iseq(
+        let method = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             &vec![],
             &result.node,
@@ -352,7 +352,7 @@ impl VM {
             ContextKind::Method,
             None,
         )?;
-        let iseq = self.get_iseq(methodref)?;
+        let iseq = method.as_iseq();
         context.iseq_ref = Some(iseq);
         context.adjust_lvar_size();
         //context.pc = 0;
@@ -1149,7 +1149,7 @@ impl VM {
                     let super_val = self.stack_pop();
                     let val = self.define_class(base, id, is_module, super_val)?;
                     self.class_push(val);
-                    let mut iseq = self.get_iseq(method)?;
+                    let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(val);
                     let arg = Args::new0();
                     try_push!(self.eval_send(method, val, &arg));
@@ -1161,7 +1161,7 @@ impl VM {
                     let base = self.stack_pop();
                     let singleton = self.get_singleton_class(base)?;
                     self.class_push(singleton);
-                    let mut iseq = self.get_iseq(method)?;
+                    let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(singleton);
                     let arg = Args::new0();
                     try_push!(self.eval_send(method, singleton, &arg));
@@ -1171,7 +1171,7 @@ impl VM {
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);
-                    let mut iseq = self.get_iseq(method)?;
+                    let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(None);
                     self.define_method(self_value, id, method);
                     if self.define_mode().module_function {
@@ -1182,7 +1182,7 @@ impl VM {
                 Inst::DEF_SMETHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);
-                    let mut iseq = self.get_iseq(method)?;
+                    let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(None);
                     let singleton = self.stack_pop();
                     self.define_singleton_method(singleton, id, method)?;
@@ -2856,7 +2856,7 @@ impl VM {
     /// Create a new execution context for a block.
     pub fn create_block_context(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
         self.move_outer_to_heap();
-        let iseq = self.get_iseq(method)?;
+        let iseq = method.as_iseq();
         let outer = self.current_context();
         Ok(ContextRef::new_heap(
             outer.self_value,
@@ -2865,10 +2865,6 @@ impl VM {
             Some(outer),
             None,
         ))
-    }
-
-    pub fn get_iseq(&self, method: MethodRef) -> Result<ISeqRef, RubyError> {
-        method.as_iseq(&self)
     }
 
     /// Create new Regexp object from `string`.

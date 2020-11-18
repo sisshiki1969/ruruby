@@ -43,11 +43,19 @@ impl MethodInfo {
         }
     }
 
-    pub fn as_iseq(&self, vm: &VM) -> Result<ISeqRef, RubyError> {
+    pub fn expect_iseq(&self, vm: &VM) -> Result<ISeqRef, RubyError> {
         if let MethodInfo::RubyFunc { iseq } = self {
             Ok(*iseq)
         } else {
             Err(vm.error_unimplemented("Methodref is illegal."))
+        }
+    }
+
+    pub fn as_iseq(&self) -> ISeqRef {
+        if let MethodInfo::RubyFunc { iseq } = self {
+            *iseq
+        } else {
+            unimplemented!("Methodref is illegal.")
         }
     }
 }
