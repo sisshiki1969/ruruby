@@ -24,7 +24,7 @@ impl Block {
                     .iseq_ref
                     .unwrap())
             }
-            Block::Method(methodref) => methodref.as_iseq(vm),
+            Block::Method(methodref) => methodref.expect_iseq(vm),
         }
     }
 }
