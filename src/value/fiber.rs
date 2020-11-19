@@ -158,10 +158,10 @@ impl FiberInfo {
                     #[cfg(feature = "trace")]
                     println!("<=== yield {:?} and terminate fiber.", res);
                     let res = match res {
-                        Err(err) => match err.kind {
+                        Err(err) => match &err.kind {
                             RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
                             RubyErrorKind::RuntimeErr { kind, .. }
-                                if kind == RuntimeErrKind::Fiber =>
+                                if *kind == RuntimeErrKind::Fiber =>
                             {
                                 #[cfg(feature = "perf")]
                                 match &fiber_vm.parent_fiber {

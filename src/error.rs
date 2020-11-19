@@ -1,7 +1,23 @@
 use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RubyError {
+pub struct RubyError(Box<ErrorInfo>);
+
+impl std::ops::Deref for RubyError {
+    type Target = ErrorInfo;
+    fn deref(&self) -> &ErrorInfo {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for RubyError {
+    fn deref_mut(&mut self) -> &mut ErrorInfo {
+        &mut self.0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErrorInfo {
     pub kind: RubyErrorKind,
     pub info: Vec<(SourceInfoRef, Loc)>,
     level: usize,
@@ -44,33 +60,33 @@ pub enum RuntimeErrKind {
 
 impl RubyError {
     pub fn new(kind: RubyErrorKind, source_info: SourceInfoRef, level: usize, loc: Loc) -> Self {
-        RubyError {
+        Self(Box::new(ErrorInfo {
             kind,
             info: vec![(source_info, loc)],
             level,
-        }
+        }))
     }
 
     pub fn is_block_return(&self) -> bool {
-        match &self.kind {
+        match &self.0.kind {
             RubyErrorKind::BlockReturn(_) => true,
             _ => false,
         }
     }
 
     pub fn is_method_return(&self) -> bool {
-        match &self.kind {
+        match &self.0.kind {
             RubyErrorKind::MethodReturn(_) => true,
             _ => false,
         }
     }
 
     pub fn is_stop_iteration(&self) -> bool {
-        match &self.kind {
-            RubyErrorKind::RuntimeErr { kind, .. } => match kind {
-                RuntimeErrKind::StopIteration => true,
-                _ => false,
-            },
+        match &self.0.kind {
+            RubyErrorKind::RuntimeErr {
+                kind: RuntimeErrKind::StopIteration,
+                ..
+            } => true,
             _ => false,
         }
     }
@@ -78,27 +94,27 @@ impl RubyError {
 
 impl RubyError {
     pub fn loc(&self) -> Loc {
-        self.info[0].1
+        self.0.info[0].1
     }
 
     pub fn level(&self) -> usize {
-        self.level
+        self.0.level
     }
 
     pub fn set_level(&mut self, level: usize) {
-        self.level = level;
+        self.0.level = level;
     }
 
     pub fn show_file_name(&self, pos: usize) {
-        self.info[pos].0.show_file_name();
+        self.0.info[pos].0.show_file_name();
     }
 
     pub fn show_loc(&self, pos: usize) {
-        self.info[pos].0.show_loc(&self.info[pos].1);
+        self.0.info[pos].0.show_loc(&self.0.info[pos].1);
     }
 
     pub fn show_err(&self) {
-        match &self.kind {
+        match &self.0.kind {
             RubyErrorKind::ParseErr(e) => match e {
                 ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF"),
                 ParseErrKind::UnexpectedToken => eprintln!("Unexpected token"),
