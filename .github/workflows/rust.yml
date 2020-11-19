@@ -25,3 +25,6 @@ jobs:
         run: cargo +nightly tarpaulin -v --out Xml --all-features --workspace
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
+
+codecov:
+  disable_default_path_fixes: false
