@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from(globals.builtins.object);
+    let mut class = Value::class_from(globals.builtins.object);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("clear", clear);
@@ -28,8 +28,21 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("compare_by_identity", compare_by_identity);
     class.add_builtin_method_by_str("sort", sort);
     class.add_builtin_method_by_str("invert", invert);
-    Value::class(class)
+
+    class.add_builtin_class_method("new", hash_new);
+    class
 }
+
+// Class methods
+
+fn hash_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(args.len(), 0)?;
+    let map = FxHashMap::default();
+    let hash = Value::hash_from_map(map);
+    Ok(hash)
+}
+
+// Instance methods
 
 fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.check_args_num(args.len(), 0)?;
@@ -244,16 +257,15 @@ fn invert(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 #[cfg(test)]
 mod test {
     use crate::test::*;
-    /*
-        #[test]
-        fn hash_inspect() {
-            let program = r#"
-                s = {:key=>"value", awesome: "Ruby"}.inspect
-                assert("{:key=>\"value\", :awesome=>\"Ruby\"}", s)
+
+    #[test]
+    fn hash_new() {
+        let program = r#"
+            assert ({}), Hash.new
             "#;
-            assert_script(program);
-        }
-    */
+        assert_script(program);
+    }
+
     #[test]
     fn hash1() {
         let program = r#"

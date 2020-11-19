@@ -39,6 +39,7 @@ pub enum ParseErrKind {
     UnexpectedEOF,
     UnexpectedToken,
     SyntaxError(String),
+    Name(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -59,7 +60,20 @@ pub enum RuntimeErrKind {
 }
 
 impl RubyError {
-    pub fn new(kind: RubyErrorKind, source_info: SourceInfoRef, level: usize, loc: Loc) -> Self {
+    pub fn new(kind: RubyErrorKind, level: usize) -> Self {
+        Self(Box::new(ErrorInfo {
+            kind,
+            info: vec![],
+            level,
+        }))
+    }
+
+    pub fn new_with_info(
+        kind: RubyErrorKind,
+        source_info: SourceInfoRef,
+        level: usize,
+        loc: Loc,
+    ) -> Self {
         Self(Box::new(ErrorInfo {
             kind,
             info: vec![(source_info, loc)],
@@ -119,6 +133,7 @@ impl RubyError {
                 ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF"),
                 ParseErrKind::UnexpectedToken => eprintln!("Unexpected token"),
                 ParseErrKind::SyntaxError(n) => eprintln!("SyntaxError: {}", n),
+                ParseErrKind::Name(n) => eprintln!("NameError: {}", n),
             },
             RubyErrorKind::RuntimeErr { kind, message } => {
                 match kind {
@@ -149,14 +164,9 @@ impl RubyError {
 }
 
 impl RubyError {
-    pub fn new_runtime_err(
-        kind: RuntimeErrKind,
-        message: String,
-        source_info: SourceInfoRef,
-        loc: Loc,
-    ) -> Self {
+    pub fn new_runtime_err(kind: RuntimeErrKind, message: String) -> Self {
         let kind = RubyErrorKind::RuntimeErr { kind, message };
-        RubyError::new(kind, source_info, 0, loc)
+        RubyError::new(kind, 0)
     }
 
     pub fn new_parse_err(
@@ -166,15 +176,15 @@ impl RubyError {
         loc: Loc,
     ) -> Self {
         let kind = RubyErrorKind::ParseErr(err);
-        RubyError::new(kind, source_info, level, loc)
+        RubyError::new_with_info(kind, source_info, level, loc)
     }
 
-    pub fn new_method_return(val: Value, source_info: SourceInfoRef, loc: Loc) -> Self {
-        RubyError::new(RubyErrorKind::MethodReturn(val), source_info, 0, loc)
+    pub fn new_method_return(val: Value) -> Self {
+        RubyError::new(RubyErrorKind::MethodReturn(val), 0)
     }
 
-    pub fn new_block_return(val: Value, source_info: SourceInfoRef, loc: Loc) -> Self {
-        RubyError::new(RubyErrorKind::BlockReturn(val), source_info, 0, loc)
+    pub fn new_block_return(val: Value) -> Self {
+        RubyError::new(RubyErrorKind::BlockReturn(val), 0)
     }
 
     pub fn conv_localjump_err(mut self) -> Self {

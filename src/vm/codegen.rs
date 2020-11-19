@@ -1,5 +1,5 @@
 use super::vm_inst::*;
-use crate::error::{ParseErrKind, RubyError, RuntimeErrKind};
+use crate::error::{ParseErrKind, RubyError};
 use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use crate::*;
 
@@ -2164,7 +2164,12 @@ impl Codegen {
         )
     }
     pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into(), self.source_info, self.loc)
+        RubyError::new_parse_err(
+            ParseErrKind::Name(msg.into()),
+            self.source_info,
+            0,
+            self.loc,
+        )
     }
 }
 
