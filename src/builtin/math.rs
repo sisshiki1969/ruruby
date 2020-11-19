@@ -16,7 +16,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn sqrt(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn sqrt(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -25,13 +25,13 @@ fn sqrt(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             arg.as_packed_flonum()
         }
     } else {
-        return Err(vm.error_type("Must be a number."));
+        return Err(VM::error_type("Must be a number."));
     };
     let res = Value::float(num.sqrt());
     Ok(res)
 }
 
-fn cos(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn cos(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -40,13 +40,13 @@ fn cos(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             arg.as_packed_flonum()
         }
     } else {
-        return Err(vm.error_type("Must be a number."));
+        return Err(VM::error_type("Must be a number."));
     };
     let res = Value::float(num.cos());
     Ok(res)
 }
 
-fn sin(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn sin(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let num = if arg.is_packed_num() {
         if arg.is_packed_fixnum() {
@@ -55,7 +55,7 @@ fn sin(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             arg.as_packed_flonum()
         }
     } else {
-        return Err(vm.error_type("Must be a number."));
+        return Err(VM::error_type("Must be a number."));
     };
     let res = Value::float(num.sin());
     Ok(res)

@@ -82,13 +82,13 @@ fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 /// Built-in function "assert".
 fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2)?;
+    args.check_args_num(2)?;
     if !vm.eval_eq(args[0], args[1])? {
         let res = format!(
             "Assertion error: Expected: {:?} Actual: {:?}",
             args[0], args[1],
         );
-        Err(vm.error_argument(res))
+        Err(VM::error_argument(res))
     } else {
         println!("Assert OK: {:?}", args[0]);
         Ok(Value::nil())
@@ -96,13 +96,13 @@ fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let method = match &args.block {
         Some(block) => block,
-        None => return Err(vm.error_argument("assert_error(): Block not given.")),
+        None => return Err(VM::error_argument("assert_error(): Block not given.")),
     };
     match vm.eval_block(method, &Args::new0()) {
-        Ok(val) => Err(vm.error_argument(format!(
+        Ok(val) => Err(VM::error_argument(format!(
             "Assertion error: No error occured. returned {:?}",
             val
         ))),
@@ -116,16 +116,16 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let file_name = match args[0].as_string() {
         Some(string) => string,
-        None => return Err(vm.error_argument("file name must be a string.")),
+        None => return Err(VM::error_argument("file name must be a string.")),
     };
     let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
         Some(path) => path,
         None => return Ok(Value::false_val()),
     };
-    let ainfo = load_path.expect_array(vm, "LOAD_PATH($:)")?;
+    let ainfo = load_path.expect_array("LOAD_PATH($:)")?;
     for path in ainfo.elements.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
         base_path.push(file_name);
@@ -140,11 +140,11 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let mut path = vm.get_source_path();
     let file_name = match args[0].as_string() {
         Some(string) => PathBuf::from(string),
-        None => return Err(vm.error_argument("file name must be a string.")),
+        None => return Err(VM::error_argument("file name must be a string.")),
     };
     path.pop();
     for p in file_name.iter() {
@@ -159,10 +159,10 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let file_name = match args[0].as_string() {
         Some(string) => string,
-        None => return Err(vm.error_argument("file name must be a string.")),
+        None => return Err(VM::error_argument("file name must be a string.")),
     };
     let path = PathBuf::from(file_name);
     if path.exists() {
@@ -172,13 +172,10 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
     let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
         Some(path) => path,
-        None => return Err(vm.error_internal("Load path not found.")),
+        None => return Err(VM::error_internal("Load path not found.")),
     };
 
-    let mut load_ary = load_path
-        .expect_array(vm, "LOAD_PATH($:)")?
-        .elements
-        .clone();
+    let mut load_ary = load_path.expect_array("LOAD_PATH($:)")?.elements.clone();
     for path in load_ary.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
         base_path.push(file_name);
@@ -187,7 +184,10 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             return Ok(Value::true_val());
         }
     }
-    Err(vm.error_load(format!("Can not load such file -- {:?}", file_name)))
+    Err(VM::error_load(format!(
+        "Can not load such file -- {:?}",
+        file_name
+    )))
 }
 
 /// Built-in function "block_given?".
@@ -196,18 +196,18 @@ fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
 }
 
 fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(id) => id,
-        None => return Err(vm.error_type("An argument must be a Symbol.")),
+        None => return Err(VM::error_type("An argument must be a Symbol.")),
     };
     let method = vm.get_method_from_receiver(self_val, name)?;
     let val = Value::method(name, self_val, method);
     Ok(val)
 }
 
-fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let mut module = self_val.get_class();
     loop {
         let cinfo = module.as_module();
@@ -227,14 +227,14 @@ fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let mut path = vm.get_source_path();
     path.pop();
     Ok(Value::string(path.to_string_lossy().to_string()))
 }
 
 fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let path = vm.get_source_path();
     Ok(Value::string(path.to_string_lossy().to_string()))
 }
@@ -245,17 +245,17 @@ fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// fail(message, cause: $!) -> ()
 /// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
 /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
-fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 2)?;
+fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 2)?;
     /*for arg in args.iter() {
         eprintln!("{}", vm.val_inspect(*arg));
     }*/
     if args.len() == 1 && args[0].is_class() {
         if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
-            return Err(vm.error_stop_iteration(""));
+            return Err(VM::error_stop_iteration(""));
         };
     }
-    Err(vm.error_unimplemented("error"))
+    Err(VM::error_unimplemented("error"))
 }
 
 fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
@@ -284,18 +284,18 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     }
 }
 
-fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 1)?;
+fn exit(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
     let code = if args.len() == 0 {
         0
     } else {
-        args[0].expect_integer(vm, "Expect Integer.")?
+        args[0].expect_integer("Expect Integer.")?
     };
     std::process::exit(code as i32);
 }
 
 fn abort(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 1)?;
+    args.check_args_range(0, 1)?;
     let msg = if args.len() == 0 {
         "".to_string()
     } else {
@@ -306,18 +306,18 @@ fn abort(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     std::process::exit(1);
 }
 
-fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 1)?;
+fn sleep(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
     let secs = if args.len() == 0 {
         0.0
     } else {
         let secs = match args[0].unpack() {
             RV::Integer(i) => i as f64,
             RV::Float(f) => f,
-            _ => return Err(vm.error_argument("Arg must be Integer or Float.")),
+            _ => return Err(VM::error_argument("Arg must be Integer or Float.")),
         };
         if secs < 0.0 {
-            return Err(vm.error_argument("Negative number."));
+            return Err(VM::error_argument("Negative number."));
         }
         secs
     };
@@ -328,21 +328,21 @@ fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn proc(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let block = vm.expect_block(&args.block)?;
     let procobj = vm.create_proc(block)?;
     Ok(procobj)
 }
 
 fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let block = vm.expect_block(&args.block)?;
     let procobj = vm.create_lambda(block)?;
     Ok(procobj)
 }
 
 fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let val = match args[0].unpack() {
         RV::Integer(num) => num,
         RV::Float(num) => num as i64,
@@ -351,24 +351,33 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 Some(num) => num,
                 None => {
                     let inspect = vm.val_inspect(args[0])?;
-                    return Err(vm.error_type(format!("Invalid value for Integer(): {}", inspect)));
+                    return Err(VM::error_type(format!(
+                        "Invalid value for Integer(): {}",
+                        inspect
+                    )));
                 }
             },
             _ => {
                 let inspect = vm.val_inspect(args[0])?;
-                return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
+                return Err(VM::error_type(format!(
+                    "Can not convert {} into Integer.",
+                    inspect
+                )));
             }
         },
         _ => {
             let inspect = vm.val_inspect(args[0])?;
-            return Err(vm.error_type(format!("Can not convert {} into Integer.", inspect)));
+            return Err(VM::error_type(format!(
+                "Can not convert {} into Integer.",
+                inspect
+            )));
         }
     };
     Ok(Value::integer(val))
 }
 
-fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 1, 3)?;
+fn kernel_complex(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_range(1, 3)?;
     let (r, i, ex) = match args.len() {
         1 => (args[0], Value::integer(0), true),
         2 => (args[0], args[1], true),
@@ -377,7 +386,7 @@ fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     if !r.is_real() || !i.is_real() {
         if ex {
-            return Err(vm.error_argument("Not a real."));
+            return Err(VM::error_argument("Not a real."));
         } else {
             return Ok(Value::nil());
         }
@@ -388,7 +397,7 @@ fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 /// Array(arg) -> Array
 fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let arg = args[0];
     let arg_class = arg.get_class_for_method();
     match vm.globals.find_method(arg_class, IdentId::get_id("to_a")) {
@@ -409,13 +418,18 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
 
 fn command(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     use std::process::Command;
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let mut arg = args[0].to_owned();
     let mut input = arg.expect_string(vm, "Arg")?.split_whitespace();
     let command = input.next().unwrap();
     let output = match Command::new(command).args(input).output() {
         Ok(ok) => ok,
-        Err(err) => return Err(vm.error_internal(format!("Command failed. {:?}", err.kind()))),
+        Err(err) => {
+            return Err(VM::error_internal(format!(
+                "Command failed. {:?}",
+                err.kind()
+            )))
+        }
     };
     Ok(Value::bytes(output.stdout))
 }

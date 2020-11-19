@@ -145,14 +145,14 @@ impl Context {
         let caller = vm.latest_context();
         if iseq.opt_flag {
             if !args.kw_arg.is_nil() {
-                return Err(vm.error_argument("Undefined keyword."));
+                return Err(VM::error_argument("Undefined keyword."));
             };
             let mut context = Context::new(self_value, args.block.clone(), iseq, outer, caller);
             if iseq.is_block() {
                 context.from_args_opt_block(&iseq.params, args)?;
             } else {
                 let req_len = iseq.params.req;
-                vm.check_args_num(args.len(), req_len)?;
+                args.check_args_num(req_len)?;
                 for i in 0..req_len {
                     context[i] = args[i];
                 }
@@ -169,12 +169,14 @@ impl Context {
             Value::nil()
         };
         if !iseq.is_block() {
-            let len = args.len() + if kw.is_nil() { 0 } else { 1 };
             let min = params.req + params.post;
+            let kw = if kw.is_nil() { 0 } else { 1 };
             if params.rest {
-                vm.check_args_min(len, min)?;
+                if min > kw {
+                    args.check_args_min(min - kw)?;
+                }
             } else {
-                vm.check_args_range(len, min, min + params.opt)?;
+                args.check_args_range_ofs(kw, min, min + params.opt)?;
             }
         }
         context.set_arguments(args, kw);
@@ -191,7 +193,7 @@ impl Context {
                         if params.kwrest {
                             kwrest.insert(HashKey(k), v);
                         } else {
-                            return Err(vm.error_argument("Undefined keyword."));
+                            return Err(VM::error_argument("Undefined keyword."));
                         }
                     }
                 };

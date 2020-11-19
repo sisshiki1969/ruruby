@@ -54,7 +54,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
 fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    vm.check_args_range(len, 2, 3)?;
+    args.check_args_range(2, 3)?;
     let (start, end) = (args[0], args[1]);
     let exclude_end = if len == 2 { false } else { args[2].to_bool() };
     vm.create_range(start, end, exclude_end)
@@ -82,16 +82,16 @@ fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(range.end)
 }
 
-fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let start = range.start.as_integer().unwrap();
     let mut end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.start);
     };
-    let arg = args[0].expect_integer(&vm, "Argument")?;
+    let arg = args[0].expect_integer("Argument")?;
     if arg < 0 {
-        return Err(vm.error_argument("Negative array size"));
+        return Err(VM::error_argument("Negative array size"));
     };
     let mut v = vec![];
     if start + arg - 1 < end {
@@ -103,17 +103,17 @@ fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 1)?;
+fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
     let range = self_val.as_range().unwrap();
     let mut start = range.start.as_integer().unwrap();
     let end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.end);
     };
-    let arg = args[0].expect_integer(&vm, "Argument")?;
+    let arg = args[0].expect_integer("Argument")?;
     if arg < 0 {
-        return Err(vm.error_argument("Negative array size"));
+        return Err(VM::error_argument("Negative array size"));
     };
     let mut v = vec![];
     if end - arg + 1 > start {
@@ -126,11 +126,11 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = vm.expect_block(&args.block)?;
-    let start = range.start.expect_integer(&vm, "Start")?;
-    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.expect_integer("Start")?;
+    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
     let mut res = vec![];
     for i in start..end {
@@ -144,11 +144,11 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = vm.expect_block(&args.block)?;
-    let start = range.start.expect_integer(&vm, "Start")?;
-    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.expect_integer("Start")?;
+    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new1(Value::nil());
     let mut res = vec![];
     for i in start..end {
@@ -168,7 +168,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let method = match &args.block {
         Some(method) => method,
@@ -179,8 +179,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(e);
         }
     };
-    let start = range.start.expect_integer(&vm, "Start")?;
-    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.expect_integer("Start")?;
+    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(Value::integer(i));
         vm.eval_block(method, &arg)?;
@@ -189,11 +189,11 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = vm.expect_block(&args.block)?;
-    let start = range.start.expect_integer(&vm, "Start")?;
-    let end = range.end.expect_integer(&vm, "End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.expect_integer("Start")?;
+    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(Value::integer(i));
         let res = vm.eval_block(&block, &arg)?;
@@ -204,14 +204,14 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn to_a(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn to_a(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
-    let start = range.start.expect_integer(
-        &vm,
-        format!("Can not iterate from {}", range.start.get_class_name()),
-    )?;
-    let end = range.end.expect_integer(&vm, "Range.end")?;
+    let start = range.start.expect_integer(format!(
+        "Can not iterate from {}",
+        range.start.get_class_name()
+    ))?;
+    let end = range.end.expect_integer("Range.end")?;
     let v = if range.exclude {
         start..end
     } else {
@@ -222,14 +222,14 @@ fn to_a(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-fn exclude_end(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn exclude_end(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     Ok(Value::bool(range.exclude))
 }
 
 fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let range = self_val.as_range().unwrap();
     match range.start.unpack() {
         RV::Integer(start) => {

@@ -16,9 +16,9 @@ pub fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_min(args.len(), 1)?;
+    args.check_args_min(1)?;
     if args.block.is_some() {
-        return Err(vm.error_argument("Block is not allowed."));
+        return Err(VM::error_argument("Block is not allowed."));
     };
     let receiver = args[0];
     let (method, new_args) = if args.len() == 1 {
@@ -28,7 +28,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         (method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
-            return Err(vm.error_argument("2nd arg must be Symbol."));
+            return Err(VM::error_argument("2nd arg must be Symbol."));
         };
         let method = args[1].as_packed_symbol();
         let mut new_args = Args::new(args.len() - 2);
@@ -78,25 +78,25 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
-        return Err(vm.error_argument("Block is not allowed."));
+        return Err(VM::error_argument("Block is not allowed."));
     };
     if eref.vm.is_dead() {
-        return Err(vm.error_stop_iteration("Iteration reached an end."));
+        return Err(VM::error_stop_iteration("Iteration reached an end."));
     };
     match eref.resume(vm) {
         Ok(val) => Ok(val),
         Err(err) if err.is_stop_iteration() => {
-            return Err(vm.error_stop_iteration("Iteration reached an end."))
+            return Err(VM::error_stop_iteration("Iteration reached an end."))
         }
         Err(err) => Err(err),
     }
 }
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
     let mut info = vm.dup_enum(eref);
@@ -124,7 +124,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     let block = match &args.block {
@@ -153,7 +153,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     //let fref = &mut eref.fiber;

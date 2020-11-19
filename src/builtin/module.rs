@@ -27,13 +27,13 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("protected", protected);
 }
 
-fn teq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let mut module = args[0].get_class();
     loop {
         let minfo = match module.if_mod_class() {
             Some(info) => info,
-            None => return Err(vm.error_argument("Must be module or class.")),
+            None => return Err(VM::error_argument("Must be module or class.")),
         };
         let true_module = if minfo.is_included() {
             minfo.origin()
@@ -84,8 +84,8 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-fn class_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn class_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let inherit = args[0].to_bool();
     assert_eq!(inherit, false);
     let receiver = self_val.rvalue();
@@ -101,24 +101,24 @@ fn class_variables(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn const_defined(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 1, 2)?;
+    args.check_args_range(1, 2)?;
     let mut name = args[0];
     let name = name.expect_string_or_symbol(vm, "1st arg")?;
     Ok(Value::bool(vm.get_super_const(self_val, name).is_ok()))
 }
 
 fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
-        None => return Err(vm.error_type("1st arg must be Symbol.")),
+        None => return Err(VM::error_type("1st arg must be Symbol.")),
     };
     let val = vm.get_super_const(self_val, name)?;
     Ok(val)
 }
 
 fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 1)?;
+    args.check_args_range(0, 1)?;
     let mut module = self_val.expect_mod_class(vm)?;
     let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
@@ -162,7 +162,9 @@ pub fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             define_reader(vm, self_val, id);
             define_writer(vm, self_val, id);
         } else {
-            return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
+            return Err(VM::error_name(
+                "Each of args for attr_accessor must be a symbol.",
+            ));
         }
     }
     Ok(Value::nil())
@@ -174,7 +176,9 @@ fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let id = arg.as_packed_symbol();
             define_reader(vm, self_val, id);
         } else {
-            return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
+            return Err(VM::error_name(
+                "Each of args for attr_accessor must be a symbol.",
+            ));
         }
     }
     Ok(Value::nil())
@@ -186,7 +190,9 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let id = arg.as_packed_symbol();
             define_writer(vm, self_val, id);
         } else {
-            return Err(vm.error_name("Each of args for attr_accessor must be a symbol."));
+            return Err(VM::error_name(
+                "Each of args for attr_accessor must be a symbol.",
+            ));
         }
     }
     Ok(Value::nil())
@@ -240,7 +246,7 @@ fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
 }
 
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let cinfo = self_val.expect_mod_class(vm)?;
     let mut module = args[0];
     module.expect_module(vm, "1st arg")?;
@@ -249,7 +255,7 @@ fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let self_val2 = self_val.clone();
     let cinfo = self_val.expect_mod_class(vm)?;
     let mut module = args[0];
@@ -258,8 +264,8 @@ fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let mut module = self_val;
     let mut ary = vec![];
     loop {
@@ -275,8 +281,8 @@ fn included_modules(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn ancestors(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let mut module = self_val;
     let mut ary = vec![];
     loop {
@@ -299,12 +305,12 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = vm.current_context();
     match &args.block {
         Some(block) => {
-            vm.check_args_num(args.len(), 0)?;
+            args.check_args_num(0)?;
             let args = Args::new0();
             vm.eval_block_self(block, self_val, &args)
         }
         None => {
-            vm.check_args_num(args.len(), 1)?;
+            args.check_args_num(1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string(vm, "1st arg")?;
             let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
@@ -318,7 +324,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn module_alias_method(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2)?;
+    args.check_args_num(2)?;
     let new = args[0].clone().expect_string_or_symbol(vm, "1st arg")?;
     let org = args[1].clone().expect_string_or_symbol(vm, "2nd arg")?;
     let method = vm.get_method(self_val, org)?;

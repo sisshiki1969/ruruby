@@ -61,7 +61,7 @@ impl RegexpInfo {
                     //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
                     RegexpInfo::get_captures(vm, &captures, given);
                 }
-                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+                Err(err) => return Err(VM::error_internal(format!("Capture failed. {:?}", err))),
             };
         }
         let mut res = given.to_string();
@@ -113,7 +113,7 @@ impl RegexpInfo {
                 res.replace_range(m.start()..m.end(), &rep);
                 Ok((res, Some(captures)))
             }
-            Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+            Err(err) => return Err(VM::error_internal(format!("Capture failed. {:?}", err))),
         }
     }
 }
@@ -147,7 +147,7 @@ pub fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let mut arg0 = args[0];
     let string = arg0.expect_string(vm, "1st arg")?;
     let val = vm.create_regexp_from_string(string)?;
@@ -155,7 +155,7 @@ fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn regexp_escape(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let mut arg0 = args[0];
     let string = arg0.expect_string(vm, "1st arg")?;
     let res = regex::escape(string);
@@ -217,7 +217,7 @@ impl RegexpInfo {
         } else if let Some(re) = re_val.as_regexp() {
             return re.replace_once(vm, given, replace).map(|x| x.0);
         } else {
-            return Err(vm.error_argument("1st arg must be RegExp or String."));
+            return Err(VM::error_argument("1st arg must be RegExp or String."));
         };
     }
 
@@ -240,7 +240,7 @@ impl RegexpInfo {
                     RegexpInfo::get_captures(vm, &captures, given);
                     (m.start(), m.end(), m.as_str())
                 }
-                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+                Err(err) => return Err(VM::error_internal(format!("Capture failed. {:?}", err))),
             };
 
             let mut res = given.to_string();
@@ -257,7 +257,7 @@ impl RegexpInfo {
         } else if let Some(re) = re_val.as_regexp() {
             return replace_(vm, &re, given, block);
         } else {
-            return Err(vm.error_argument("1st arg must be RegExp or String."));
+            return Err(VM::error_argument("1st arg must be RegExp or String."));
         };
     }
 
@@ -274,7 +274,7 @@ impl RegexpInfo {
         } else if let Some(re) = regexp.as_regexp() {
             return re.replace_repeat(vm, given, replace);
         } else {
-            return Err(vm.error_argument("1st arg must be RegExp or String."));
+            return Err(VM::error_argument("1st arg must be RegExp or String."));
         };
     }
 
@@ -302,7 +302,9 @@ impl RegexpInfo {
                         RegexpInfo::get_captures(vm, &captures, given);
                         (m.start(), m.end(), m.as_str())
                     }
-                    Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+                    Err(err) => {
+                        return Err(VM::error_internal(format!("Capture failed. {:?}", err)))
+                    }
                 };
                 let matched = Value::string(matched_str.to_string());
                 let result = vm.eval_block(block, &Args::new1(matched))?;
@@ -323,7 +325,7 @@ impl RegexpInfo {
         } else if let Some(re) = re_val.as_regexp() {
             return replace_(vm, &re, given, block);
         } else {
-            return Err(vm.error_argument("1st arg must be RegExp or String."));
+            return Err(VM::error_argument("1st arg must be RegExp or String."));
         };
     }
 
@@ -338,7 +340,7 @@ impl RegexpInfo {
                 RegexpInfo::get_captures(vm, &captures, given);
                 Ok(captures.get(0))
             }
-            Err(err) => Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+            Err(err) => Err(VM::error_internal(format!("Capture failed. {:?}", err))),
         }
     }
 
@@ -374,7 +376,7 @@ impl RegexpInfo {
                     }
                     last_captures = Some(captures);
                 }
-                Err(err) => return Err(vm.error_internal(format!("Capture failed. {:?}", err))),
+                Err(err) => return Err(VM::error_internal(format!("Capture failed. {:?}", err))),
             };
         }
         match last_captures {

@@ -32,8 +32,8 @@ pub fn init(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs + rhs).to_val()),
@@ -43,13 +43,13 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(vm.error_undefined_op("+", args[0], self_val)),
+            None => Err(VM::error_undefined_op("+", args[0], self_val)),
         },
     }
 }
 
-fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs - rhs).to_val()),
@@ -59,13 +59,13 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = -i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+            None => Err(VM::error_undefined_op("-", args[0], self_val)),
         },
     }
 }
 
-fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs * rhs).to_val()),
@@ -75,23 +75,23 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+            None => Err(VM::error_undefined_op("-", args[0], self_val)),
         },
     }
 }
 
-fn quotient(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
-        None => Err(vm.error_undefined_op("div", args[0], self_val)),
+        None => Err(VM::error_undefined_op("div", args[0], self_val)),
     }
 }
 
-fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
-    let lhs = self_val.expect_integer(vm, "Receiver")?;
+fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.expect_integer("Receiver")?;
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs == rhs)),
         RV::Float(rhs) => Ok(Value::bool(lhs as f64 == rhs)),
@@ -99,9 +99,9 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn neq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
-    let lhs = self_val.expect_integer(vm, "Receiver")?;
+fn neq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.expect_integer("Receiver")?;
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs != rhs)),
         RV::Float(rhs) => Ok(Value::bool(lhs as f64 != rhs)),
@@ -110,14 +110,14 @@ fn neq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 macro_rules! define_cmp {
-    ($vm:ident, $self_val:ident, $args:ident, $op:ident) => {
-        $vm.check_args_num($args.len(), 1)?;
-        let lhs = $self_val.expect_integer($vm, "Receiver")?;
+    ($self_val:ident, $args:ident, $op:ident) => {
+        $args.check_args_num(1)?;
+        let lhs = $self_val.expect_integer("Receiver")?;
         match $args[0].unpack() {
             RV::Integer(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
             RV::Float(rhs) => return Ok(Value::bool((lhs as f64).$op(&rhs))),
             _ => {
-                return Err($vm.error_argument(format!(
+                return Err(VM::error_argument(format!(
                     "Comparison of Integer with {} failed.",
                     $args[0].get_class_name()
                 )))
@@ -126,26 +126,26 @@ macro_rules! define_cmp {
     };
 }
 
-fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(vm, self_val, args, ge);
+fn ge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    define_cmp!(self_val, args, ge);
 }
 
-fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(vm, self_val, args, gt);
+fn gt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    define_cmp!(self_val, args, gt);
 }
 
-fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(vm, self_val, args, le);
+fn le(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    define_cmp!(self_val, args, le);
 }
 
-fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(vm, self_val, args, lt);
+fn lt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    define_cmp!(self_val, args, lt);
 }
 
-fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
-    vm.check_args_num(args.len(), 1)?;
-    let lhs = self_val.expect_integer(vm, "Receiver")?;
+    args.check_args_num(1)?;
+    let lhs = self_val.expect_integer("Receiver")?;
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&rhs),
         RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
@@ -158,7 +158,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let method = match &args.block {
         Some(method) => method,
         None => {
@@ -180,7 +180,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let method = match &args.block {
         Some(method) => method,
         None => {
@@ -190,7 +190,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
     let num = self_val.as_integer().unwrap();
-    let max = args[0].expect_integer(vm, "Arg")?;
+    let max = args[0].expect_integer("Arg")?;
     if num <= max {
         let mut arg = Args::new1(Value::nil());
         for i in num..max + 1 {
@@ -202,7 +202,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 1, 2)?;
+    args.check_args_range(1, 2)?;
     let method = match &args.block {
         Some(method) => method,
         None => {
@@ -211,12 +211,12 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(val);
         }
     };
-    let start = self_val.expect_integer(vm, "Start")?;
-    let limit = args[0].expect_integer(vm, "Limit")?;
+    let start = self_val.expect_integer("Start")?;
+    let limit = args[0].expect_integer("Limit")?;
     let step = if args.len() == 2 {
-        let step = args[1].expect_integer(vm, "Step")?;
+        let step = args[1].expect_integer("Step")?;
         if step == 0 {
-            return Err(vm.error_argument("Step can not be 0."));
+            return Err(VM::error_argument("Step can not be 0."));
         }
         step
     } else {
@@ -238,40 +238,42 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 /// Built-in function "chr".
-fn chr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     if 0 > num || num > 255 {
-        return Err(vm.error_unimplemented("Currently, receiver must be 0..255."));
+        return Err(VM::error_unimplemented(
+            "Currently, receiver must be 0..255.",
+        ));
     };
     Ok(Value::bytes(vec![num as u8]))
 }
 
-fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     self_val.as_integer().unwrap();
     Ok(self_val)
 }
 
-fn tof(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn tof(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let num = self_val.as_integer().unwrap();
     Ok(Value::float(num as f64))
 }
 
-fn toi(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn toi(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let num = self_val.as_integer().unwrap();
     Ok(Value::integer(num))
 }
 
-fn even(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn even(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let num = self_val.as_integer().unwrap();
     Ok(Value::bool(num % 2 == 0))
 }
 
-fn size(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     Ok(Value::integer(8))
 }
 

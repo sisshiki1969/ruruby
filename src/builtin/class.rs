@@ -16,7 +16,7 @@ pub fn init(globals: &mut Globals) {
 /// If a block is given, eval it in the context of newly created class.
 /// args[0]: super class.
 fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_range(args.len(), 0, 1)?;
+    args.check_args_range(0, 1)?;
     let superclass = if args.len() == 0 {
         BuiltinClass::object()
     } else {

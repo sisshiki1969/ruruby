@@ -117,24 +117,24 @@ impl FiberInfo {
         vm.context_push(ContextRef::from_ref(&context));
         vm.eval_method(method, receiver, None, &args)?;
         //vm.context_pop();
-        let res = Err(vm.error_stop_iteration("msg"));
+        let res = Err(VM::error_stop_iteration("msg"));
         res
     }
 
-    pub fn resume(&mut self, current_vm: &mut VM) -> VMResult {
+    pub fn resume(&mut self, _current_vm: &mut VM) -> VMResult {
         #[allow(unused_variables, unused_assignments, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
         {
-            inst = current_vm.perf.get_prev_inst();
+            inst = _current_vm.perf.get_prev_inst();
         }
         match self.vm.fiberstate() {
             FiberState::Dead => {
-                return Err(current_vm.error_fiber("Dead fiber called."));
+                return Err(VM::error_fiber("Dead fiber called."));
             }
             FiberState::Created => {
                 #[cfg(feature = "perf")]
-                current_vm.perf.get_perf(Perf::INVALID);
+                _current_vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 println!("===> resume(spawn)");
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
@@ -200,12 +200,12 @@ impl FiberInfo {
                 let res = self.rec.recv().unwrap();
                 self.vm.handle = Some(join);
                 #[cfg(feature = "perf")]
-                current_vm.perf.get_perf_no_count(inst);
+                _current_vm.perf.get_perf_no_count(inst);
                 res
             }
             FiberState::Running => {
                 #[cfg(feature = "perf")]
-                current_vm.perf.get_perf(Perf::INVALID);
+                _current_vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 println!("===> resume");
                 //eprintln!("resume {:?}", VMRef::from_ref(&self.vm));
@@ -213,7 +213,7 @@ impl FiberInfo {
                 // Wait for Fiber.yield.
                 let res = self.rec.recv().unwrap();
                 #[cfg(feature = "perf")]
-                current_vm.perf.get_perf_no_count(inst);
+                _current_vm.perf.get_perf_no_count(inst);
                 res
             }
         }

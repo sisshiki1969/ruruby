@@ -13,20 +13,20 @@ pub fn init(globals: &mut Globals) -> Value {
 }
 
 fn count(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let count = vm.globals.allocator.count();
     Ok(Value::integer(count as i64))
 }
 
 fn enable(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let last_state = vm.globals.gc_enabled;
     vm.globals.gc_enabled = true;
     Ok(Value::bool(last_state))
 }
 
 fn disable(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let last_state = vm.globals.gc_enabled;
     vm.globals.gc_enabled = false;
     Ok(Value::bool(last_state))

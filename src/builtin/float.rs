@@ -18,8 +18,8 @@ pub fn init(globals: &mut Globals) -> Value {
 
 // Instance methods
 
-fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs + rhs).to_val()),
@@ -29,13 +29,13 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(vm.error_undefined_op("+", args[0], self_val)),
+            None => Err(VM::error_undefined_op("+", args[0], self_val)),
         },
     }
 }
 
-fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs - rhs).to_val()),
@@ -45,13 +45,13 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = -i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+            None => Err(VM::error_undefined_op("-", args[0], self_val)),
         },
     }
 }
 
-fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs * rhs).to_val()),
@@ -61,23 +61,23 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(vm.error_undefined_op("-", args[0], self_val)),
+            None => Err(VM::error_undefined_op("-", args[0], self_val)),
         },
     }
 }
 
-fn quotient(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
-        None => Err(vm.error_undefined_op("div", args[0], self_val)),
+        None => Err(VM::error_undefined_op("div", args[0], self_val)),
     }
 }
 
-fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let lhs = self_val.as_float().unwrap();
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&(rhs as f64)),
@@ -90,14 +90,14 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn floor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let lhs = self_val.as_float().unwrap();
     Ok(Value::integer(lhs.floor() as i64))
 }
 
-fn toi(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    //vm.check_args_num(args.len(), 1, 1)?;
+fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    //args.check_args_num( 1, 1)?;
     let num = self_val.as_float().unwrap().trunc() as i64;
     Ok(Value::integer(num))
 }

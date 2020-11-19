@@ -15,8 +15,8 @@ pub fn init(globals: &mut Globals) -> Value {
 
 // Singleton methods
 
-fn home(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let home_dir = dirs::home_dir()
         .unwrap_or(PathBuf::new())
         .to_string_lossy()
@@ -24,8 +24,8 @@ fn home(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(home_dir))
 }
 
-fn pwd(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let cur_dir = std::env::current_dir()
         .unwrap_or(PathBuf::new())
         .to_string_lossy()
@@ -34,7 +34,7 @@ fn pwd(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 }
 
 fn glob(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+    args.check_args_num(1)?;
     let mut pat_val = args[0];
     let mut pattern = pat_val.expect_string(vm, "1st arg")?.chars().peekable();
     let mut glob: Vec<String> = vec![];
@@ -103,7 +103,7 @@ fn glob(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     let mut matches = HashSet::new();
     match traverse_dir(&fullpath, &path, &glob, 0, &mut matches) {
         Ok(_) => {}
-        Err(err) => return Err(vm.error_internal(format!("{:?}", err))),
+        Err(err) => return Err(VM::error_internal(format!("{:?}", err))),
     };
     Ok(Value::array_from(matches.into_iter().collect()))
 }

@@ -7,7 +7,7 @@ pub fn init(globals: &mut Globals) {
 }
 
 fn alias_method(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 2)?;
+    args.check_args_num(2)?;
     let old = args[1].as_symbol().unwrap();
     let new = args[0].as_symbol().unwrap();
     let mut class = vm.class();

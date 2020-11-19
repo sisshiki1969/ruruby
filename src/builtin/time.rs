@@ -15,15 +15,15 @@ pub fn init(globals: &mut Globals) -> Value {
     class_val
 }
 
-fn time_now(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn time_now(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let time_info = TimeInfo(Utc::now().with_timezone(&FixedOffset::east(9 * 3600)));
     let new_obj = Value::time(self_val, time_info);
     Ok(new_obj)
 }
 
-fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
@@ -31,8 +31,8 @@ fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(format!("{}", time)))
 }
 
-fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
@@ -53,14 +53,14 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let offset = (res.num_nanoseconds().unwrap() as f64) / 1000.0 / 1000.0 / 1000.0;
                 Ok(Value::float(offset))
             }
-            _ => return Err(vm.error_undefined_op("-", args[0], self_val)),
+            _ => return Err(VM::error_undefined_op("-", args[0], self_val)),
         },
-        _ => return Err(vm.error_undefined_op("-", args[0], self_val)),
+        _ => return Err(VM::error_undefined_op("-", args[0], self_val)),
     }
 }
 
-fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 1)?;
+fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
@@ -75,7 +75,7 @@ fn add(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let res = time + Duration::nanoseconds(offset);
             Ok(Value::time(self_val.get_class(), TimeInfo(res)))
         }
-        _ => return Err(vm.error_undefined_op("+", args[0], self_val)),
+        _ => return Err(VM::error_undefined_op("+", args[0], self_val)),
     }
 }
 

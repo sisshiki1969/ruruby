@@ -14,7 +14,7 @@ pub fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
+    args.check_args_num(0)?;
     let context = match vm.expect_block(&args.block)? {
         Block::Method(method) => vm.create_block_context(*method)?,
         Block::Proc(proc) => proc.expect_proc(vm)?.context,
@@ -34,8 +34,8 @@ fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
-    let fref = self_val.expect_fiber(vm, "Expect Fiber.")?;
+fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+    let fref = self_val.expect_fiber("Expect Fiber.")?;
     let inspect = format!(
         "#<Fiber:0x{:<016x} ({:?})>",
         fref as *mut FiberInfo as u64,
@@ -45,8 +45,8 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_num(args.len(), 0)?;
-    let fiber = self_val.expect_fiber(vm, "")?;
+    args.check_args_num(0)?;
+    let fiber = self_val.expect_fiber("")?;
     fiber.resume(vm)
 }
 

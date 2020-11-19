@@ -7,14 +7,19 @@ pub fn init(globals: &mut Globals) -> Value {
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.check_args_min(args.len(), 1)?;
+    args.check_args_min(1)?;
     let mut i = 0;
     let name = match args[0].as_string() {
         None => None,
         Some(s) => {
             match s.chars().nth(0) {
                 Some(c) if c.is_ascii_uppercase() => {}
-                _ => return Err(vm.error_name(format!("Identifier `{}` needs to be constant.", s))),
+                _ => {
+                    return Err(VM::error_name(format!(
+                        "Identifier `{}` needs to be constant.",
+                        s
+                    )))
+                }
             };
             i = 1;
             let s = IdentId::get_id(&format!("Struct::{}", s));
@@ -35,7 +40,10 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for index in i..args.len() {
         let v = args[index];
         if v.as_symbol().is_none() {
-            return Err(vm.error_type(format!("{:?} is not a symbol.", args[index])));
+            return Err(VM::error_type(format!(
+                "{:?} is not a symbol.",
+                args[index]
+            )));
         };
         vec.push(v);
         attr_args[index - i] = v;
@@ -55,12 +63,12 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(class_val)
 }
 
-fn initialize(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
-        return Err(vm.error_argument("Struct size differs."));
+        return Err(VM::error_argument("Struct size differs."));
     };
     for (i, arg) in args.iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
@@ -79,12 +87,17 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     };
     let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {
         Some(name) => name,
-        None => return Err(vm.error_internal("No /members.")),
+        None => return Err(VM::error_internal("No /members.")),
     };
     //eprintln!("{:?}", name);
     let members = match name.as_array() {
         Some(aref) => aref,
-        None => return Err(vm.error_internal(format!("Illegal _members value. {:?}", name))),
+        None => {
+            return Err(VM::error_internal(format!(
+                "Illegal _members value. {:?}",
+                name
+            )))
+        }
     };
 
     for x in &members.elements {

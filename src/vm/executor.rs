@@ -332,7 +332,7 @@ impl VM {
 
         let stack_len = self.exec_stack.len();
         if stack_len != 0 {
-            self.error_internal(format!("Error: stack length is illegal. {}", stack_len));
+            VM::error_internal(format!("Error: stack length is illegal. {}", stack_len));
         };
 
         Ok(val)
@@ -476,10 +476,7 @@ impl VM {
                             let res = match err.kind {
                                 RubyErrorKind::BlockReturn(val) => Ok(val),
                                 RubyErrorKind::MethodReturn(val) if self.is_method() => Ok(val),
-                                _ => {
-                                    //self.context_pop().unwrap();
-                                    Err(err)
-                                }
+                                _ => Err(err),
                             };
                             return res;
                         }
@@ -513,8 +510,7 @@ impl VM {
                     #[cfg(debug_assertions)]
                     assert!(context.kind == ISeqKind::Block || context.kind == ISeqKind::Other);
                     let val = self.stack_pop();
-                    let err = self.error_block_return(val);
-                    //self.context_pop().unwrap();
+                    let err = VM::error_block_return(val);
                     return Err(err);
                 }
                 Inst::MRETURN => {
@@ -522,8 +518,7 @@ impl VM {
                     #[cfg(debug_assertions)]
                     assert_eq!(context.kind, ISeqKind::Block);
                     let val = self.stack_pop();
-                    let err = self.error_method_return(val);
-                    //self.context_pop().unwrap();
+                    let err = VM::error_method_return(val);
                     return Err(err);
                 }
                 Inst::PUSH_NIL => {
@@ -1252,28 +1247,23 @@ impl VM {
 
                     self.pc += 5;
                 }
-                _ => return Err(self.error_unimplemented("Unimplemented instruction.")),
+                _ => return Err(VM::error_unimplemented("Unimplemented instruction.")),
             }
         }
     }
 }
 
 impl VM {
-    pub fn error_runtime(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_runtime(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Runtime, msg.into())
     }
 
-    pub fn error_nomethod(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_nomethod(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::NoMethod, msg.into())
     }
 
-    pub fn error_undefined_op(
-        &self,
-        method_name: impl Into<String>,
-        rhs: Value,
-        lhs: Value,
-    ) -> RubyError {
-        self.error_nomethod(format!(
+    pub fn error_undefined_op(method_name: impl Into<String>, rhs: Value, lhs: Value) -> RubyError {
+        VM::error_nomethod(format!(
             "no method `{}' {} for {}",
             method_name.into(),
             rhs.get_class_name(),
@@ -1281,108 +1271,75 @@ impl VM {
         ))
     }
 
-    pub fn error_undefined_method(&self, method: IdentId, receiver: Value) -> RubyError {
-        self.error_nomethod(format!(
+    pub fn error_undefined_method(method: IdentId, receiver: Value) -> RubyError {
+        VM::error_nomethod(format!(
             "no method `{:?}' for {}",
             method,
             receiver.get_class_name()
         ))
     }
 
-    pub fn error_undefined_method_for_class(&self, method: IdentId, class: Value) -> RubyError {
-        self.error_nomethod(format!(
+    pub fn error_undefined_method_for_class(method: IdentId, class: Value) -> RubyError {
+        VM::error_nomethod(format!(
             "no method `{:?}' for {}",
             method,
             class.as_class().name_str()
         ))
     }
 
-    pub fn error_unimplemented(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_unimplemented(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Unimplemented, msg.into())
     }
 
-    pub fn error_internal(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_internal(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Internal, msg.into())
     }
 
-    pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_name(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into())
     }
 
-    pub fn error_type(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_type(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into())
     }
 
-    pub fn error_argument(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_argument(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
     }
 
-    pub fn error_regexp(&self, err: fancy_regex::Error) -> RubyError {
+    pub fn error_regexp(err: fancy_regex::Error) -> RubyError {
         RubyError::new_runtime_err(
             RuntimeErrKind::Regexp,
             format!("Invalid string for a regular expression. {:?}", err),
         )
     }
 
-    pub fn error_index(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_index(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Index, msg.into())
     }
 
-    pub fn error_fiber(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_fiber(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Fiber, msg.into())
     }
 
-    pub fn error_stop_iteration(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_stop_iteration(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::StopIteration, msg.into())
     }
 
-    pub fn error_method_return(&self, val: Value) -> RubyError {
+    pub fn error_method_return(val: Value) -> RubyError {
         RubyError::new_method_return(val)
     }
 
-    pub fn error_local_jump(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_local_jump(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::LocalJump, msg.into())
     }
 
-    pub fn error_block_return(&self, val: Value) -> RubyError {
+    pub fn error_block_return(val: Value) -> RubyError {
         RubyError::new_block_return(val)
     }
 
-    pub fn error_load(&self, msg: impl Into<String>) -> RubyError {
+    pub fn error_load(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::LoadError, msg.into())
-    }
-
-    pub fn check_args_num(&self, len: usize, num: usize) -> Result<(), RubyError> {
-        if len == num {
-            Ok(())
-        } else {
-            Err(self.error_argument(format!(
-                "Wrong number of arguments. (given {}, expected {})",
-                len, num
-            )))
-        }
-    }
-
-    pub fn check_args_range(&self, len: usize, min: usize, max: usize) -> Result<(), RubyError> {
-        if min <= len && len <= max {
-            Ok(())
-        } else {
-            Err(self.error_argument(format!(
-                "Wrong number of arguments. (given {}, expected {}..{})",
-                len, min, max
-            )))
-        }
-    }
-
-    pub fn check_args_min(&self, len: usize, min: usize) -> Result<(), RubyError> {
-        if min <= len {
-            Ok(())
-        } else {
-            Err(self.error_argument(format!(
-                "Wrong number of arguments. (given {}, expected {}+)",
-                len, min
-            )))
-        }
     }
 }
 
@@ -1390,7 +1347,7 @@ impl<'a> VM {
     pub fn expect_block(&self, block: &'a Option<Block>) -> Result<&'a Block, RubyError> {
         match block {
             Some(block) => Ok(block),
-            None => return Err(self.error_argument("Currently, needs block.")),
+            None => return Err(VM::error_argument("Currently, needs block.")),
         }
     }
 }
@@ -1451,7 +1408,17 @@ impl VM {
 
     // Search lexical class stack for the constant.
     fn get_env_const(&self, id: IdentId) -> Option<Value> {
-        let mut class_list = match self.get_nearest_class_stack() {
+        let mut context = self.current_context();
+        loop {
+            if context.iseq_ref.unwrap().class_defined.is_some() {
+                break;
+            }
+            context = match context.outer {
+                Some(context) => context,
+                None => return None,
+            };
+        }
+        let mut class_list = match context.iseq_ref.unwrap().class_defined {
             Some(list) => list,
             None => return None,
         };
@@ -1483,7 +1450,7 @@ impl VM {
                                 return Ok(val);
                             }
                         }
-                        return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
+                        return Err(VM::error_name(format!("Uninitialized constant {:?}.", id)));
                     }
                 },
             }
@@ -1496,14 +1463,14 @@ impl VM {
                 return Ok(val);
             }
             None => {
-                return Err(self.error_name(format!("Uninitialized constant {:?}.", id)));
+                return Err(VM::error_name(format!("Uninitialized constant {:?}.", id)));
             }
         }
     }
 
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
         if self.exec_context.len() == 0 {
-            return Err(self.error_runtime("class varable access from toplevel."));
+            return Err(VM::error_runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
         let mut org_class = match self_val.if_mod_class() {
@@ -1528,7 +1495,7 @@ impl VM {
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
         if self.exec_context.len() == 0 {
-            return Err(self.error_runtime("class varable access from toplevel."));
+            return Err(VM::error_runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
         let mut class = match self_val.if_mod_class() {
@@ -1545,9 +1512,10 @@ impl VM {
                         class = superclass;
                     }
                     None => {
-                        return Err(
-                            self.error_name(format!("Uninitialized class variable {:?}.", id))
-                        );
+                        return Err(VM::error_name(format!(
+                            "Uninitialized class variable {:?}.",
+                            id
+                        )));
                     }
                 },
             }
@@ -1577,7 +1545,7 @@ impl VM {
             }
             None => {}
         };
-        Err(self.error_undefined_method(method_id, receiver))
+        Err(VM::error_undefined_method(method_id, receiver))
     }
 
     fn send_icache(
@@ -1608,7 +1576,7 @@ impl VM {
             }
             None => {}
         };
-        Err(self.error_undefined_method(method_id, receiver))
+        Err(VM::error_undefined_method(method_id, receiver))
     }
 
     pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
@@ -1624,7 +1592,7 @@ impl VM {
                 let val = self.eval_send(mref, lhs, &arg)?;
                 Ok(val)
             }
-            None => Err(self.error_undefined_op(format!("{:?}", method), rhs, lhs)),
+            None => Err(VM::error_undefined_op(format!("{:?}", method), rhs, lhs)),
         }
     }
 }
@@ -1796,7 +1764,7 @@ impl VM {
         }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs & rhs)),
-            (_, _) => return Err(self.error_undefined_op("&", rhs, lhs)),
+            (_, _) => return Err(VM::error_undefined_op("&", rhs, lhs)),
         }
     }
 
@@ -1807,7 +1775,7 @@ impl VM {
         }
         match lhs.unpack() {
             RV::Integer(lhs) => Ok(Value::integer(lhs & i)),
-            _ => return Err(self.error_undefined_op("&", Value::integer(i), lhs)),
+            _ => return Err(VM::error_undefined_op("&", Value::integer(i), lhs)),
         }
     }
 
@@ -1819,7 +1787,7 @@ impl VM {
         }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs | rhs)),
-            (_, _) => return Err(self.error_undefined_op("|", rhs, lhs)),
+            (_, _) => return Err(VM::error_undefined_op("|", rhs, lhs)),
         }
     }
 
@@ -1830,7 +1798,7 @@ impl VM {
         }
         match lhs.unpack() {
             RV::Integer(lhs) => Ok(Value::integer(lhs | i)),
-            _ => return Err(self.error_undefined_op("|", Value::integer(i), lhs)),
+            _ => return Err(VM::error_undefined_op("|", Value::integer(i), lhs)),
         }
     }
 
@@ -1838,14 +1806,14 @@ impl VM {
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Bool(b), _) => Ok(Value::bool(b ^ rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
-            (_, _) => return Err(self.error_undefined_op("^", rhs, lhs)),
+            (_, _) => return Err(VM::error_undefined_op("^", rhs, lhs)),
         }
     }
 
     fn eval_bitnot(&mut self, lhs: Value) -> VMResult {
         match lhs.unpack() {
             RV::Integer(lhs) => Ok(Value::integer(!lhs)),
-            _ => Err(self.error_undefined_method(IdentId::get_id("~"), lhs)),
+            _ => Err(VM::error_undefined_method(IdentId::get_id("~"), lhs)),
         }
     }
 }
@@ -2091,13 +2059,12 @@ impl VM {
 
     fn get_index(&mut self, arg_num: usize) -> VMResult {
         let args = self.pop_args_to_args(arg_num);
-        let arg_num = args.len();
         let receiver = self.stack_top();
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.get_elem(self, &args)?,
                 ObjKind::Hash(href) => {
-                    self.check_args_range(arg_num, 1, 1)?;
+                    args.check_args_range(1, 1)?;
                     match href.get(&args[0]) {
                         Some(val) => *val,
                         None => Value::nil(),
@@ -2108,8 +2075,8 @@ impl VM {
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
-                self.check_args_range(arg_num, 1, 1)?;
-                let index = args[0].expect_integer(&self, "Index")?;
+                args.check_args_range(1, 1)?;
+                let index = args[0].expect_integer("Index")?;
                 let val = if index < 0 || 63 < index {
                     0
                 } else {
@@ -2117,7 +2084,7 @@ impl VM {
                 };
                 Value::integer(val)
             }
-            _ => return Err(self.error_undefined_method(IdentId::_INDEX, receiver)),
+            _ => return Err(VM::error_undefined_method(IdentId::_INDEX, receiver)),
         };
         self.stack_pop();
         Ok(val)
@@ -2146,7 +2113,7 @@ impl VM {
                 let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
                 Value::integer(val)
             }
-            _ => return Err(self.error_undefined_method(IdentId::_INDEX, receiver)),
+            _ => return Err(VM::error_undefined_method(IdentId::_INDEX, receiver)),
         };
         self.stack_pop();
         Ok(val)
@@ -2164,7 +2131,7 @@ impl VM {
         match current_class.as_module().get_const(id) {
             Some(mut val) => {
                 if val.is_module() != is_module {
-                    return Err(self.error_type(format!(
+                    return Err(VM::error_type(format!(
                         "{:?} is not {}.",
                         id,
                         if is_module { "module" } else { "class" },
@@ -2176,9 +2143,10 @@ impl VM {
                     None => Value::nil(),
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
-                    return Err(
-                        self.error_type(format!("superclass mismatch for class {:?}.", id,))
-                    );
+                    return Err(VM::error_type(format!(
+                        "superclass mismatch for class {:?}.",
+                        id,
+                    )));
                 };
                 Ok(val)
             }
@@ -2210,7 +2178,7 @@ impl VM {
     fn singleton_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let superclass = match self_val.superclass() {
             Some(class) => class,
-            None => return Err(vm.error_nomethod("`new` method not found.")),
+            None => return Err(VM::error_nomethod("`new` method not found.")),
         };
         let mut obj = vm.send(IdentId::NEW, superclass, args)?;
         obj.set_class(self_val);
@@ -2228,7 +2196,7 @@ impl VM {
                     v if v.is_nil() => {
                         let lhs = val.get_class_name();
                         let rhs = vec[i].get_class_name();
-                        return Err(self.error_argument(format!(
+                        return Err(VM::error_argument(format!(
                             "Comparison of {} with {} failed.",
                             lhs, rhs
                         )));
@@ -2246,7 +2214,7 @@ impl VM {
     fn create_regexp(&mut self, arg: Value) -> VMResult {
         let mut arg = match arg.as_string() {
             Some(arg) => arg.clone(),
-            None => return Err(self.error_argument("Illegal argument for CREATE_REGEXP")),
+            None => return Err(VM::error_argument("Illegal argument for CREATE_REGEXP")),
         };
         match arg.pop().unwrap() {
             'i' => arg.insert_str(0, "(?mi)"),
@@ -2254,7 +2222,7 @@ impl VM {
             'x' => arg.insert_str(0, "(?mx)"),
             'o' => arg.insert_str(0, "(?mo)"),
             '-' => arg.insert_str(0, "(?m)"),
-            _ => return Err(self.error_internal("Illegal internal regexp expression.")),
+            _ => return Err(VM::error_internal("Illegal internal regexp expression.")),
         };
         self.create_regexp_from_string(&arg)
     }
@@ -2356,7 +2324,7 @@ impl VM {
             let mut val = self.stack_pop();
             let hash = val.as_mut_hash().unwrap();
             for h in kwrest {
-                for (k, v) in h.expect_hash(self, "Arg")? {
+                for (k, v) in h.expect_hash("Arg")? {
                     hash.insert(k, v);
                 }
             }
@@ -2366,7 +2334,7 @@ impl VM {
         } else {
             let mut hash = FxHashMap::default();
             for h in kwrest {
-                for (k, v) in h.expect_hash(self, "Arg")? {
+                for (k, v) in h.expect_hash("Arg")? {
                     hash.insert(HashKey(k), v);
                 }
             }
@@ -2453,15 +2421,15 @@ impl VM {
             }
             context = context
                 .outer
-                .ok_or_else(|| self.error_local_jump("No block given."))?;
+                .ok_or_else(|| VM::error_local_jump("No block given."))?;
         }
         let caller = context
             .caller
-            .ok_or_else(|| self.error_local_jump("No block given."))?;
+            .ok_or_else(|| VM::error_local_jump("No block given."))?;
         let block = context
             .block
             .as_ref()
-            .ok_or_else(|| self.error_local_jump("No block given."))?;
+            .ok_or_else(|| VM::error_local_jump("No block given."))?;
 
         match block {
             Block::Method(method) => {
@@ -2582,7 +2550,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(self.error_undefined_method_for_class(method_id, rec_class)),
+            None => Err(VM::error_undefined_method_for_class(method_id, rec_class)),
         }
     }
 
@@ -2599,7 +2567,7 @@ impl VM {
     pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {
         match obj.get_singleton_class() {
             Some(val) => Ok(val),
-            None => Err(self.error_type("Can not define singleton.")),
+            None => Err(VM::error_type("Can not define singleton.")),
         }
     }
 }
@@ -2613,7 +2581,7 @@ impl VM {
             _ => Value::array_from(args.to_vec()),
         };
         match &self.parent_fiber {
-            None => return Err(self.error_fiber("Can not yield from main fiber.")),
+            None => return Err(VM::error_fiber("Can not yield from main fiber.")),
             Some(ParentFiberInfo { tx, rx, .. }) => {
                 #[cfg(feature = "perf")]
                 let mut _inst: u8;
@@ -2630,7 +2598,7 @@ impl VM {
                 // Wait for fiber's response
                 match rx.recv() {
                     Ok(FiberMsg::Resume) => {}
-                    _ => return Err(self.error_fiber("terminated")),
+                    _ => return Err(VM::error_fiber("terminated")),
                 }
                 #[cfg(feature = "perf")]
                 self.perf.get_perf_no_count(_inst);
@@ -2654,7 +2622,7 @@ impl VM {
         if index < 0 {
             let i = len as i64 + index;
             if i < 0 {
-                return Err(self.error_unimplemented("Index too small for array."));
+                return Err(VM::error_unimplemented("Index too small for array."));
             };
             Ok(i as usize)
         } else {
@@ -2713,7 +2681,7 @@ impl VM {
 
     pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
         if start.get_class().id() != end.get_class().id() {
-            return Err(self.error_argument("Bad value for range."));
+            return Err(VM::error_argument("Bad value for range."));
         }
         Ok(Value::range(start, end, exclude_end))
     }
@@ -2818,7 +2786,7 @@ impl VM {
     /// Returns RubyError if `string` was invalid regular expression.
     pub fn create_regexp_from_string(&mut self, string: &str) -> VMResult {
         let re = RegexpInfo::from_string(&mut self.globals, string)
-            .map_err(|err| self.error_regexp(err))?;
+            .map_err(|err| VM::error_regexp(err))?;
         let regexp = Value::regexp(re);
         Ok(regexp)
     }
@@ -2827,7 +2795,7 @@ impl VM {
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
     pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
-        RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| self.error_regexp(err))
+        RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| VM::error_regexp(err))
     }
 }
 
@@ -2837,7 +2805,7 @@ impl VM {
             Ok(path) => Ok(path),
             Err(ioerr) => {
                 let msg = format!("File not found. {:?}\n{}", path, ioerr);
-                Err(self.error_runtime(msg))
+                Err(VM::error_runtime(msg))
             }
         }
     }
@@ -2858,7 +2826,7 @@ impl VM {
                         format!("Cannot open file. '{:?}'\n{}", path, msg)
                     }
                 };
-                Err(self.error_load(err_str))
+                Err(VM::error_load(err_str))
             }
         }
     }

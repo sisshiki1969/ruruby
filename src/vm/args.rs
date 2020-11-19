@@ -11,20 +11,20 @@ pub enum Block {
 }
 
 impl Block {
-    pub fn to_iseq(&self, vm: &mut VM) -> Result<ISeqRef, RubyError> {
+    pub fn to_iseq(&self) -> Result<ISeqRef, RubyError> {
         match self {
             Block::Proc(val) => {
                 let val = *val;
                 Ok(val
                     .as_proc()
                     .ok_or_else(|| {
-                        vm.error_argument(format!("Block argument must be Proc. given:{:?}", val))
+                        VM::error_argument(format!("Block argument must be Proc. given:{:?}", val))
                     })?
                     .context
                     .iseq_ref
                     .unwrap())
             }
-            Block::Method(methodref) => methodref.expect_iseq(vm),
+            Block::Method(methodref) => methodref.expect_iseq(),
         }
     }
 }
@@ -97,6 +97,59 @@ impl Args {
         match self.elems {
             ArgsArray::Array { ary, len } => ary[0..len].to_vec(),
             ArgsArray::Vec(v) => v,
+        }
+    }
+
+    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if len == num {
+            Ok(())
+        } else {
+            Err(VM::error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {})",
+                len, num
+            )))
+        }
+    }
+
+    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(VM::error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {}..{})",
+                len, min, max
+            )))
+        }
+    }
+
+    pub fn check_args_range_ofs(
+        &self,
+        offset: usize,
+        min: usize,
+        max: usize,
+    ) -> Result<(), RubyError> {
+        let len = self.len() + offset;
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(VM::error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {}..{})",
+                len, min, max
+            )))
+        }
+    }
+
+    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if min <= len {
+            Ok(())
+        } else {
+            Err(VM::error_argument(format!(
+                "Wrong number of arguments. (given {}, expected {}+)",
+                len, min
+            )))
         }
     }
 }

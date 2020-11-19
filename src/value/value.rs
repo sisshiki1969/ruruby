@@ -495,11 +495,11 @@ impl Value {
         }
     }
 
-    pub fn expect_integer(&self, vm: &VM, msg: impl Into<String>) -> Result<i64, RubyError> {
+    pub fn expect_integer(&self, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(vm.error_argument(format!(
+            _ => Err(VM::error_argument(format!(
                 "{} must be an Integer. (given:{})",
                 msg.into(),
                 self.get_class_name()
@@ -507,10 +507,10 @@ impl Value {
         }
     }
 
-    pub fn expect_flonum(&self, vm: &VM, msg: &str) -> Result<f64, RubyError> {
+    pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
-            None => Err(vm.error_argument(format!(
+            None => Err(VM::error_argument(format!(
                 "{} must be Float. (given:{})",
                 msg,
                 self.get_class_name()
@@ -578,7 +578,10 @@ impl Value {
             Some(rs) => rs,
             None => {
                 let inspect = vm.val_inspect(*self)?;
-                return Err(vm.error_type(format!("{} must be String. (given:{})", msg, inspect)));
+                return Err(VM::error_type(format!(
+                    "{} must be String. (given:{})",
+                    msg, inspect
+                )));
             }
         };
         Ok(rstring.as_bytes())
@@ -610,7 +613,10 @@ impl Value {
             Some(rs) => rs,
             None => {
                 let inspect = vm.val_inspect(val)?;
-                return Err(vm.error_type(format!("{} must be String. (given:{})", msg, inspect)));
+                return Err(VM::error_type(format!(
+                    "{} must be String. (given:{})",
+                    msg, inspect
+                )));
             }
         };
         rstring.as_string(vm)
@@ -628,7 +634,7 @@ impl Value {
         let str = self
             .as_mut_rstring()
             .ok_or_else(|| {
-                vm.error_type(format!(
+                VM::error_type(format!(
                     "{} must be String or Symbol. (given:{:?})",
                     msg, val
                 ))
@@ -754,7 +760,10 @@ impl Value {
             Ok(cinfo)
         } else {
             let val = vm.val_inspect(self_)?;
-            Err(vm.error_type(format!("{} must be Class. (given:{})", msg, val)))
+            Err(VM::error_type(format!(
+                "{} must be Class. (given:{})",
+                msg, val
+            )))
         }
     }
 
@@ -766,7 +775,10 @@ impl Value {
             Ok(cinfo)
         } else {
             let val = vm.val_inspect(self_)?;
-            Err(vm.error_type(format!("{} must be Module. (given:{})", msg, val)))
+            Err(VM::error_type(format!(
+                "{} must be Module. (given:{})",
+                msg, val
+            )))
         }
     }
 
@@ -778,7 +790,10 @@ impl Value {
             Ok(cinfo)
         } else {
             let val = vm.val_inspect(self_)?;
-            Err(vm.error_type(format!("Must be Module or Class. (given:{})", val)))
+            Err(VM::error_type(format!(
+                "Must be Module or Class. (given:{})",
+                val
+            )))
         }
     }
 
@@ -813,11 +828,14 @@ impl Value {
         }
     }
 
-    pub fn expect_array(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
+    pub fn expect_array(&mut self, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
         let val = *self;
         match self.as_mut_array() {
             Some(ary) => Ok(ary),
-            None => Err(vm.error_type(format!("{} must be Array. (given:{:?})", msg, val))),
+            None => Err(VM::error_type(format!(
+                "{} must be Array. (given:{:?})",
+                msg, val
+            ))),
         }
     }
 
@@ -861,14 +879,14 @@ impl Value {
         }
     }
 
-    pub fn expect_hash(&self, vm: &mut VM, msg: &str) -> Result<&HashInfo, RubyError> {
+    pub fn expect_hash(&self, msg: &str) -> Result<&HashInfo, RubyError> {
         let val = *self;
         match self.as_hash() {
             Some(hash) => Ok(hash),
-            None => {
-                let inspect = vm.val_inspect(val)?;
-                Err(vm.error_type(format!("{} must be Hash. (given:{})", msg, inspect)))
-            }
+            None => Err(VM::error_type(format!(
+                "{} must be Hash. (given:{:?})",
+                msg, val
+            ))),
         }
     }
 
@@ -892,10 +910,10 @@ impl Value {
         }
     }
 
-    pub fn expect_proc(&self, vm: &mut VM) -> Result<&ProcInfo, RubyError> {
+    pub fn expect_proc(&self, _: &mut VM) -> Result<&ProcInfo, RubyError> {
         match self.as_proc() {
             Some(e) => Ok(e),
-            None => Err(vm.error_argument("Must be Proc.")),
+            None => Err(VM::error_argument("Must be Proc.")),
         }
     }
 
@@ -929,28 +947,20 @@ impl Value {
         }
     }
 
-    pub fn expect_enumerator(
-        &mut self,
-        vm: &mut VM,
-        error_msg: &str,
-    ) -> Result<&mut FiberInfo, RubyError> {
+    pub fn expect_enumerator(&mut self, error_msg: &str) -> Result<&mut FiberInfo, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
-            None => Err(vm.error_argument(error_msg)),
+            None => Err(VM::error_argument(error_msg)),
         }
     }
 
-    pub fn expect_fiber(
-        &mut self,
-        vm: &mut VM,
-        error_msg: &str,
-    ) -> Result<&mut FiberInfo, RubyError> {
+    pub fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberInfo, RubyError> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Fiber(f) => Ok(f.as_mut()),
-                _ => Err(vm.error_argument(error_msg)),
+                _ => Err(VM::error_argument(error_msg)),
             },
-            None => Err(vm.error_argument(error_msg)),
+            None => Err(VM::error_argument(error_msg)),
         }
     }
 

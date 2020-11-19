@@ -18,8 +18,8 @@ impl ArrayInfo {
 
     pub fn get_elem(&self, vm: &mut VM, args: &Args) -> VMResult {
         let arg_num = args.len();
-        vm.check_args_range(arg_num, 1, 2)?;
-        let index = args[0].expect_integer(&vm, "Index")?;
+        args.check_args_range(1, 2)?;
+        let index = args[0].expect_integer("Index")?;
         let self_len = self.elements.len();
         let index = vm.get_array_index(index, self_len).unwrap_or(self_len);
         let val = if arg_num == 1 {
@@ -29,7 +29,7 @@ impl ArrayInfo {
                 self.elements[index]
             }
         } else {
-            let len = args[1].expect_integer(&vm, "Index")?;
+            let len = args[1].expect_integer("Index")?;
             if len < 0 {
                 Value::nil()
             } else if index >= self_len {
@@ -53,9 +53,9 @@ impl ArrayInfo {
     }
 
     pub fn set_elem(&mut self, vm: &mut VM, args: &Args) -> VMResult {
-        vm.check_args_range(args.len(), 2, 3)?;
+        args.check_args_range(2, 3)?;
         let val = if args.len() == 3 { args[2] } else { args[1] };
-        let index = args[0].expect_integer(&vm, "Index")?;
+        let index = args[0].expect_integer("Index")?;
         let elements = &mut self.elements;
         let len = elements.len();
         if args.len() == 2 {
@@ -69,9 +69,9 @@ impl ArrayInfo {
             }
         } else {
             let index = vm.get_array_index(index, len)?;
-            let length = args[1].expect_integer(&vm, "Length")?;
+            let length = args[1].expect_integer("Length")?;
             if length < 0 {
-                return Err(vm.error_index(format!("Negative length. {}", length)));
+                return Err(VM::error_index(format!("Negative length. {}", length)));
             };
             let length = length as usize;
             let end = std::cmp::min(len, index + length);
