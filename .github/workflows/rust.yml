@@ -26,5 +26,3 @@ jobs:
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
 
-codecov:
-  disable_default_path_fixes: false
