@@ -447,6 +447,7 @@ impl VM {
                 Ok(val)
             }
             Err(mut err) => {
+                self.context_pop().unwrap();
                 self.exec_stack.truncate(stack_len);
                 self.pc = pc;
                 if self.latest_context().is_some() {
@@ -478,8 +479,7 @@ impl VM {
                                 RubyErrorKind::BlockReturn(val) => Ok(val),
                                 RubyErrorKind::MethodReturn(val) if self.is_method() => Ok(val),
                                 _ => {
-                                    //self.dump_context();
-                                    self.context_pop().unwrap();
+                                    //self.context_pop().unwrap();
                                     Err(err)
                                 }
                             };
@@ -516,7 +516,7 @@ impl VM {
                     assert!(context.kind == ISeqKind::Block || context.kind == ISeqKind::Other);
                     let val = self.stack_pop();
                     let err = self.error_block_return(val);
-                    self.context_pop().unwrap();
+                    //self.context_pop().unwrap();
                     return Err(err);
                 }
                 Inst::MRETURN => {
@@ -525,7 +525,7 @@ impl VM {
                     assert_eq!(context.kind, ISeqKind::Block);
                     let val = self.stack_pop();
                     let err = self.error_method_return(val);
-                    self.context_pop().unwrap();
+                    //self.context_pop().unwrap();
                     return Err(err);
                 }
                 Inst::PUSH_NIL => {
