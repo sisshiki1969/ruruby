@@ -587,10 +587,11 @@ impl Codegen {
         Codegen::push32(iseq, id.into());
     }
 
-    fn gen_get_const(&mut self, iseq: &mut ISeq, id: IdentId) {
+    fn gen_get_const(&mut self, globals: &mut Globals, iseq: &mut ISeq, id: IdentId) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
         Codegen::push32(iseq, id.into());
+        Codegen::push32(iseq, globals.const_cache.add_entry());
     }
 
     fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -1276,7 +1277,7 @@ impl Codegen {
                 if *toplevel {
                     self.gen_get_const_top(iseq, *id);
                 } else {
-                    self.gen_get_const(iseq, *id);
+                    self.gen_get_const(globals, iseq, *id);
                 };
                 if !use_value {
                     self.gen_pop(iseq)

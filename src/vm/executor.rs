@@ -837,22 +837,39 @@ impl VM {
                 }
                 Inst::SET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
-                    let mut parent = match self.stack_pop() {
+                    let parent = match self.stack_pop() {
                         v if v.is_nil() => self.class(),
                         v => v,
                     };
                     let val = self.stack_pop();
-                    parent.as_mut_module().set_const(id, val);
+                    self.globals.set_const(parent, id, val);
                     self.pc += 5;
                 }
                 Inst::GET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
-                    let val = match self.get_env_const(id) {
-                        Some(val) => val,
-                        None => self.get_super_const(self.class(), id)?,
+                    let slot = iseq.read32(self.pc + 5);
+                    let const_version = self.globals.const_version;
+                    let entry = self.globals.const_cache.get_entry(slot);
+                    let val = match *entry {
+                        ConstCacheEntry {
+                            version,
+                            val: Some(val),
+                        } if version == const_version => val,
+                        _ => {
+                            let val = match self.get_env_const(id) {
+                                Some(val) => val,
+                                None => self.get_super_const(self.class(), id)?,
+                            };
+                            *self.globals.const_cache.get_entry(slot) = ConstCacheEntry {
+                                version: const_version,
+                                val: Some(val),
+                            };
+                            val
+                        }
                     };
+
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 9;
                 }
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
@@ -2127,7 +2144,7 @@ impl VM {
         is_module: bool,
         mut super_val: Value,
     ) -> VMResult {
-        let mut current_class = if base.is_nil() { self.class() } else { base };
+        let current_class = if base.is_nil() { self.class() } else { base };
         match current_class.as_module().get_const(id) {
             Some(mut val) => {
                 if val.is_module() != is_module {
@@ -2169,7 +2186,7 @@ impl VM {
                 let mut singleton = self.get_singleton_class(val)?;
                 let singleton_class = singleton.as_mut_class();
                 singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
-                current_class.as_mut_module().set_const(id, val);
+                self.globals.set_const(current_class, id, val);
                 Ok(val)
             }
         }

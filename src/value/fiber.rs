@@ -116,7 +116,7 @@ impl FiberInfo {
         let context = Context::new_noiseq();
         vm.context_push(ContextRef::from_ref(&context));
         vm.eval_method(method, receiver, None, &args)?;
-        //vm.context_pop();
+        vm.context_pop();
         let res = Err(VM::error_stop_iteration("msg"));
         res
     }

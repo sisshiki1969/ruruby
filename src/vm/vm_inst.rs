@@ -289,7 +289,7 @@ impl Inst {
             Inst::PUSH_SYMBOL           // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32
             | Inst::GET_LOCAL           // LVarId: u32
-            | Inst::GET_CONST           // IdentId: u32
+
             | Inst::SET_CONST           // IdentId: u32
             | Inst::CHECK_CONST         // IdentId: u32
             | Inst::GET_CONST_TOP       // IdentId: u32
@@ -344,8 +344,9 @@ impl Inst {
             | Inst::PUSH_FLONUM         // value:f64
             | Inst::SET_DYNLOCAL
             | Inst::GET_DYNLOCAL
-            | Inst::OPT_CASE
             | Inst::CHECK_LOCAL
+            | Inst::GET_CONST           // IdentId: u32 / cache: u32
+            | Inst::OPT_CASE
             | Inst::IVAR_ADDI
             | Inst::LVAR_ADDI
             | Inst::JMP_F_EQI           // immediate: i32 / disp: i32

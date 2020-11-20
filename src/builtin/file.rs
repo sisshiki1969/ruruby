@@ -4,23 +4,22 @@ use std::io::Read;
 use std::path::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let io_class = globals.get_constant("IO").unwrap();
-    let class = ClassInfo::from(io_class);
-    let mut class_val = Value::class(class);
-    class_val.add_builtin_class_method("join", join);
-    class_val.add_builtin_class_method("basename", basename);
-    class_val.add_builtin_class_method("extname", extname);
-    class_val.add_builtin_class_method("dirname", dirname);
-    class_val.add_builtin_class_method("binread", binread);
-    class_val.add_builtin_class_method("read", read);
-    class_val.add_builtin_class_method("write", write);
-    class_val.add_builtin_class_method("expand_path", expand_path);
-    class_val.add_builtin_class_method("exist?", exist);
-    class_val.add_builtin_class_method("executable?", executable);
-    class_val.add_builtin_class_method("directory?", directory);
-    class_val.add_builtin_class_method("file?", file);
-    class_val.add_builtin_class_method("realpath", realpath);
-    class_val
+    let io_class = globals.get_toplevel_constant("IO").unwrap();
+    let mut class = Value::class_from(io_class);
+    class.add_builtin_class_method("join", join);
+    class.add_builtin_class_method("basename", basename);
+    class.add_builtin_class_method("extname", extname);
+    class.add_builtin_class_method("dirname", dirname);
+    class.add_builtin_class_method("binread", binread);
+    class.add_builtin_class_method("read", read);
+    class.add_builtin_class_method("write", write);
+    class.add_builtin_class_method("expand_path", expand_path);
+    class.add_builtin_class_method("exist?", exist);
+    class.add_builtin_class_method("executable?", executable);
+    class.add_builtin_class_method("directory?", directory);
+    class.add_builtin_class_method("file?", file);
+    class.add_builtin_class_method("realpath", realpath);
+    class
 }
 
 // Utils

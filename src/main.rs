@@ -45,7 +45,7 @@ fn main() {
         .map(|x| Value::string(x.to_string()))
         .collect();
     let argv = Value::array_from(res);
-    globals.set_constant("ARGV", argv);
+    globals.set_toplevel_constant("ARGV", argv);
 
     vm.exec_file(args[0]);
 }

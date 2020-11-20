@@ -751,6 +751,23 @@ fn proc_return() {
 }
 
 #[test]
+fn const_test() {
+    let program = "
+        class CONST
+          def fn
+            77
+          end
+        end
+        assert 77, CONST.new.fn
+        CONST = 100
+        assert 100, CONST
+        CONST = 200
+        assert 200, CONST
+            ";
+    assert_script(program);
+}
+
+#[test]
 fn local_var1() {
     let program = "
             ruby = 7

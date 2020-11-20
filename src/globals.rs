@@ -13,12 +13,14 @@ pub struct Globals {
     global_var: ValueTable,
     pub method_cache: MethodCache,
     pub inline_cache: InlineCache,
+    pub const_cache: ConstCache,
     pub case_dispatch: CaseDispatchMap,
 
     main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
     pub class_version: u32,
+    pub const_version: u32,
     pub main_object: Value,
     pub gc_enabled: bool,
 
@@ -172,9 +174,11 @@ impl Globals {
             global_var: FxHashMap::default(),
             method_cache: MethodCache::new(),
             inline_cache: InlineCache::new(),
+            const_cache: ConstCache::new(),
             main_fiber: None,
             instant: std::time::Instant::now(),
             class_version: 0,
+            const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
             gc_enabled: true,
@@ -194,7 +198,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                globals.set_constant($name, $class_object);
+                globals.set_toplevel_constant($name, $class_object);
             };
         }
 
@@ -202,14 +206,14 @@ impl Globals {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
                 builtins.$module_name = class_obj;
-                globals.set_constant($name, class_obj);
+                globals.set_toplevel_constant($name, class_obj);
             };
         }
 
         macro_rules! init_class {
             ($name:expr, $module_name:ident) => {
                 let class_obj = $module_name::init(&mut globals);
-                globals.set_constant($name, class_obj);
+                globals.set_toplevel_constant($name, class_obj);
             };
         }
 
@@ -236,7 +240,7 @@ impl Globals {
 
         let kernel = kernel::init(&mut globals);
         object.as_mut_class().append_include(kernel, &mut globals);
-        globals.set_constant("Kernel", kernel);
+        globals.set_toplevel_constant("Kernel", kernel);
 
         init_class!("Math", math);
         init_class!("IO", io);
@@ -249,7 +253,7 @@ impl Globals {
         init_class!("Comparable", comparable);
 
         let class = ClassInfo::from(object);
-        globals.set_constant("StopIteration", Value::class(class));
+        globals.set_toplevel_constant("StopIteration", Value::class(class));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         /*
@@ -263,7 +267,7 @@ impl Globals {
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
 
         let env = Value::hash_from(env_map);
-        globals.set_constant("ENV", env);
+        globals.set_toplevel_constant("ENV", env);
         globals
     }
 
@@ -308,14 +312,21 @@ impl Globals {
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_constant(&self, class_name: &str, class_object: Value) {
+    pub fn set_const(&mut self, mut class_obj: Value, id: IdentId, val: Value) {
+        class_obj.as_mut_module().set_const(id, val);
+        self.const_version += 1;
+    }
+
+    /// Bind `class_object` to the constant `class_name` of the root object.
+    pub fn set_toplevel_constant(&mut self, class_name: &str, class_object: Value) {
         let mut object = self.builtins.object;
         object
             .as_mut_module()
             .set_const_by_str(class_name, class_object);
+        self.const_version += 1;
     }
 
-    pub fn get_constant(&self, class_name: &str) -> Option<Value> {
+    pub fn get_toplevel_constant(&self, class_name: &str) -> Option<Value> {
         let object = self.builtins.object;
         object.as_module().get_const_by_str(class_name)
     }
@@ -551,6 +562,50 @@ impl InlineCache {
     }
 
     pub fn get_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
+        &mut self.table[id as usize]
+    }
+}
+
+///
+///  Inline constant cache
+///
+///  This module supports inline constant cache which is embedded in the instruction sequence directly.
+///
+#[derive(Debug, Clone)]
+pub struct ConstCache {
+    table: Vec<ConstCacheEntry>,
+    id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConstCacheEntry {
+    pub version: u32,
+    pub val: Option<Value>,
+}
+
+impl ConstCacheEntry {
+    fn new() -> Self {
+        ConstCacheEntry {
+            version: 0,
+            val: None,
+        }
+    }
+}
+
+impl ConstCache {
+    fn new() -> Self {
+        ConstCache {
+            table: vec![],
+            id: 0,
+        }
+    }
+    pub fn add_entry(&mut self) -> u32 {
+        self.id += 1;
+        self.table.push(ConstCacheEntry::new());
+        self.id - 1
+    }
+
+    pub fn get_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
         &mut self.table[id as usize]
     }
 }
