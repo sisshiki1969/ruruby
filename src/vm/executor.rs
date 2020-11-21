@@ -2860,7 +2860,7 @@ impl VM {
                 #[cfg(feature = "perf")]
                 {
                     self.perf.print_perf();
-                    self.globals.method_cache.print_stats();
+                    self.globals.print_method_cache_stats();
                 }
                 #[cfg(feature = "gc-debug")]
                 self.globals.print_mark();

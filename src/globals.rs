@@ -11,7 +11,7 @@ pub struct Globals {
     pub builtins: BuiltinRef,
     pub const_values: ConstantValues,
     global_var: ValueTable,
-    pub method_cache: MethodCache,
+    method_cache: MethodCache,
     inline_cache: InlineCache,
     const_cache: ConstCache,
     pub case_dispatch: CaseDispatchMap,
@@ -371,6 +371,13 @@ impl Globals {
 
     fn get_inline_cache_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
         self.inline_cache.get_entry(id)
+    }
+}
+
+#[cfg(feature = "perf")]
+impl Globals {
+    pub fn print_method_cache_stats(&self) {
+        self.method_cache.print_stats()
     }
 }
 
