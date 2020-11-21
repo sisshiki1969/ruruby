@@ -4,13 +4,12 @@ use std::fs;
 use std::path::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = ClassInfo::from(globals.builtins.object);
-    let mut class_val = Value::class(class);
-    class_val.add_builtin_class_method("home", home);
-    class_val.add_builtin_class_method("pwd", pwd);
-    class_val.add_builtin_class_method("glob", glob);
-    class_val.add_builtin_class_method("[]", glob);
-    class_val
+    let mut class = Value::class_from(globals.builtins.object);
+    class.add_builtin_class_method("home", home);
+    class.add_builtin_class_method("pwd", pwd);
+    class.add_builtin_class_method("glob", glob);
+    class.add_builtin_class_method("[]", glob);
+    class
 }
 
 // Singleton methods

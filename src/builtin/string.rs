@@ -196,16 +196,16 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn concat(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_mut_string().unwrap();
     let mut arg0 = args[0];
     match arg0.as_mut_rstring() {
-        Some(rhs) => *lhs += rhs.as_string(vm)?,
+        Some(rhs) => *lhs += rhs.as_string()?,
         None => match arg0.as_integer() {
             Some(i) => {
                 let mut rhs = RString::Bytes(vec![i as i8 as u8]);
-                *lhs += rhs.as_string(vm)?;
+                *lhs += rhs.as_string()?;
             }
             None => return Err(VM::error_argument("Arg must be String or Integer.")),
         },
@@ -582,7 +582,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         RV::Object(_rvalue) => match &mut args[0].clone().rvalue_mut().kind {
             ObjKind::String(rs) => {
                 args.check_args_num(1)?;
-                let given = rs.as_string(vm)?;
+                let given = rs.as_string()?;
                 *target = target.replacen(given, "", usize::MAX);
                 Ok(Value::string(given.clone()))
             }

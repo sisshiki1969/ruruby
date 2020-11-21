@@ -2180,8 +2180,7 @@ impl VM {
                         super_val.expect_class(self, "Superclass")?;
                         super_val
                     };
-                    let cinfo = ClassInfo::from(super_val);
-                    Value::class(cinfo)
+                    Value::class_from(super_val)
                 };
                 let mut singleton = self.get_singleton_class(val)?;
                 let singleton_class = singleton.as_mut_class();

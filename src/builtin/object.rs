@@ -295,7 +295,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 1)?;
     let mut name = args[0];
-    let method = name.expect_string_or_symbol(vm, "1st arg")?;
+    let method = name.expect_string_or_symbol("1st arg")?;
     let b = vm
         .globals
         .find_method_from_receiver(self_val, method)

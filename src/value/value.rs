@@ -619,14 +619,10 @@ impl Value {
                 )));
             }
         };
-        rstring.as_string(vm)
+        rstring.as_string()
     }
 
-    pub fn expect_string_or_symbol(
-        &mut self,
-        vm: &mut VM,
-        msg: &str,
-    ) -> Result<IdentId, RubyError> {
+    pub fn expect_string_or_symbol(&mut self, msg: &str) -> Result<IdentId, RubyError> {
         let val = *self;
         if let Some(id) = val.as_symbol() {
             return Ok(id);
@@ -639,7 +635,7 @@ impl Value {
                     msg, val
                 ))
             })?
-            .as_string(vm)?;
+            .as_string()?;
         Ok(IdentId::get_id(str))
     }
 
@@ -1430,7 +1426,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class(ClassInfo::from(None));
+        let expect = Value::class_from(None);
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

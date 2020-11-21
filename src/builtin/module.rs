@@ -103,7 +103,7 @@ fn class_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn const_defined(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     let mut name = args[0];
-    let name = name.expect_string_or_symbol(vm, "1st arg")?;
+    let name = name.expect_string_or_symbol("1st arg")?;
     Ok(Value::bool(vm.get_super_const(self_val, name).is_ok()))
 }
 
@@ -232,7 +232,7 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         let classinfo = singleton.as_mut_class();
         for arg in args.iter() {
             let mut arg = *arg;
-            let name = arg.expect_string_or_symbol(vm, "Args")?;
+            let name = arg.expect_string_or_symbol("Args")?;
             let method = vm.get_method(class.clone(), name)?;
             classinfo.add_method(&mut vm.globals, name, method);
         }
@@ -325,8 +325,8 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn module_alias_method(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
-    let new = args[0].clone().expect_string_or_symbol(vm, "1st arg")?;
-    let org = args[1].clone().expect_string_or_symbol(vm, "2nd arg")?;
+    let new = args[0].clone().expect_string_or_symbol("1st arg")?;
+    let org = args[1].clone().expect_string_or_symbol("2nd arg")?;
     let method = vm.get_method(self_val, org)?;
     self_val
         .as_mut_class()

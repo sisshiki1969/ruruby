@@ -50,7 +50,7 @@ impl RString {
     /// Try to take reference of String from RString.
     /// If byte sequence is invalid as UTF-8, return Err.
     /// When valid, convert the byte sequence to UTF-8 string.
-    pub fn as_string(&mut self, _: &VM) -> Result<&String, RubyError> {
+    pub fn as_string(&mut self) -> Result<&String, RubyError> {
         match self {
             RString::Str(s) => Ok(s),
             RString::Bytes(bytes) => match String::from_utf8(bytes.clone()) {

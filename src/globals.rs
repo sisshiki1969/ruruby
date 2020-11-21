@@ -252,8 +252,7 @@ impl Globals {
         init_class!("Time", time);
         init_class!("Comparable", comparable);
 
-        let class = ClassInfo::from(object);
-        globals.set_toplevel_constant("StopIteration", Value::class(class));
+        globals.set_toplevel_constant("StopIteration", Value::class_from(object));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         /*
