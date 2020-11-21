@@ -591,7 +591,7 @@ impl Codegen {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
         Codegen::push32(iseq, id.into());
-        Codegen::push32(iseq, globals.const_cache.add_entry());
+        Codegen::push32(iseq, globals.add_const_cache_entry());
     }
 
     fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -629,7 +629,7 @@ impl Codegen {
                 None => 0,
             },
         );
-        Codegen::push32(iseq, globals.inline_cache.add_entry());
+        Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
     fn gen_send_self(
@@ -655,7 +655,7 @@ impl Codegen {
                 None => 0,
             },
         );
-        Codegen::push32(iseq, globals.inline_cache.add_entry());
+        Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
     fn gen_opt_send(
@@ -669,7 +669,7 @@ impl Codegen {
         iseq.push(Inst::OPT_SEND);
         Codegen::push32(iseq, method.into());
         Codegen::push16(iseq, args_num as u32 as u16);
-        Codegen::push32(iseq, globals.inline_cache.add_entry());
+        Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
     fn gen_opt_send_self(
@@ -683,7 +683,7 @@ impl Codegen {
         iseq.push(Inst::OPT_SEND_SELF);
         Codegen::push32(iseq, method.into());
         Codegen::push16(iseq, args_num as u32 as u16);
-        Codegen::push32(iseq, globals.inline_cache.add_entry());
+        Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
     fn gen_assign(

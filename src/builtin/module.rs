@@ -100,20 +100,20 @@ fn class_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn const_defined(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn const_defined(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     let mut name = args[0];
     let name = name.expect_string_or_symbol("1st arg")?;
-    Ok(Value::bool(vm.get_super_const(self_val, name).is_ok()))
+    Ok(Value::bool(VM::get_super_const(self_val, name).is_ok()))
 }
 
-fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(VM::error_type("1st arg must be Symbol.")),
     };
-    let val = vm.get_super_const(self_val, name)?;
+    let val = VM::get_super_const(self_val, name)?;
     Ok(val)
 }
 

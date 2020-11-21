@@ -849,21 +849,17 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let slot = iseq.read32(self.pc + 5);
                     let const_version = self.globals.const_version;
-                    let entry = self.globals.const_cache.get_entry(slot);
-                    let val = match *entry {
+                    let val = match *self.globals.get_const_cache_entry(slot) {
                         ConstCacheEntry {
                             version,
                             val: Some(val),
                         } if version == const_version => val,
                         _ => {
-                            let val = match self.get_env_const(id) {
+                            let val = match VM::get_env_const(self.current_context(), id) {
                                 Some(val) => val,
-                                None => self.get_super_const(self.class(), id)?,
+                                None => VM::get_super_const(self.class(), id)?,
                             };
-                            *self.globals.const_cache.get_entry(slot) = ConstCacheEntry {
-                                version: const_version,
-                                val: Some(val),
-                            };
+                            self.globals.set_const_cache(slot, const_version, val);
                             val
                         }
                     };
@@ -1400,8 +1396,7 @@ impl VM {
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
     fn get_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
-        let new_class = new_class.into();
-        match new_class {
+        match new_class.into() {
             Some(class) => {
                 let outer = self.get_nearest_class_stack();
                 let class_list = ClassList::new(outer, class);
@@ -1424,18 +1419,8 @@ impl VM {
     }
 
     // Search lexical class stack for the constant.
-    fn get_env_const(&self, id: IdentId) -> Option<Value> {
-        let mut context = self.current_context();
-        loop {
-            if context.iseq_ref.unwrap().class_defined.is_some() {
-                break;
-            }
-            context = match context.outer {
-                Some(context) => context,
-                None => return None,
-            };
-        }
-        let mut class_list = match context.iseq_ref.unwrap().class_defined {
+    fn get_env_const(context: ContextRef, id: IdentId) -> Option<Value> {
+        let mut class_list = match context.get_outermost().iseq_ref.unwrap().class_defined {
             Some(list) => list,
             None => return None,
         };
@@ -1452,7 +1437,7 @@ impl VM {
     }
 
     /// Search class inheritance chain for the constant.
-    pub fn get_super_const(&self, mut class: Value, id: IdentId) -> VMResult {
+    pub fn get_super_const(mut class: Value, id: IdentId) -> VMResult {
         let is_module = class.is_module();
         loop {
             match class.as_module().get_const(id) {
@@ -1461,9 +1446,7 @@ impl VM {
                     Some(upper) => class = upper,
                     None => {
                         if is_module {
-                            if let Some(val) =
-                                self.globals.builtins.object.as_module().get_const(id)
-                            {
+                            if let Some(val) = BuiltinClass::object().as_module().get_const(id) {
                                 return Ok(val);
                             }
                         }
@@ -2430,15 +2413,7 @@ impl VM {
 
     /// Evaluate given block with given `args`.
     pub fn eval_yield(&mut self, args: &Args) -> VMResult {
-        let mut context = self.current_context();
-        loop {
-            if let ISeqKind::Method(_) = context.kind {
-                break;
-            }
-            context = context
-                .outer
-                .ok_or_else(|| VM::error_local_jump("No block given."))?;
-        }
+        let context = self.current_context().get_outermost();
         let caller = context
             .caller
             .ok_or_else(|| VM::error_local_jump("No block given."))?;
