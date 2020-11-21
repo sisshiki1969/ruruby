@@ -316,6 +316,30 @@ impl Globals {
         self.const_version += 1;
     }
 
+    /// Search inline constant cache for `slot`.
+    ///
+    /// Return None if not found.
+    pub fn find_const_cache(&mut self, slot: u32) -> Option<Value> {
+        let const_version = self.const_version;
+        #[cfg(feature = "perf")]
+        {
+            self.const_cache.total += 1;
+        }
+        match &self.const_cache.get_entry(slot) {
+            ConstCacheEntry {
+                version,
+                val: Some(val),
+            } if *version == const_version => Some(*val),
+            _ => {
+                #[cfg(feature = "perf")]
+                {
+                    self.const_cache.missed += 1;
+                }
+                None
+            }
+        }
+    }
+
     /// Bind `class_object` to the constant `class_name` of the root object.
     pub fn set_toplevel_constant(&mut self, class_name: &str, class_object: Value) {
         let mut object = self.builtins.object;
@@ -330,7 +354,7 @@ impl Globals {
         object.as_module().get_const_by_str(class_name)
     }
 
-    /// Search method for receiver class.
+    /// Search global method cache with receiver class and method name.
     ///
     /// If the method was not found, return None.
     pub fn find_method(&mut self, rec_class: Value, method_id: IdentId) -> Option<MethodRef> {
@@ -339,7 +363,7 @@ impl Globals {
             .get_method(class_version, rec_class, method_id)
     }
 
-    /// Search method(MethodRef) for receiver object.
+    /// Search global method cache with receiver object and method class_name.
     ///
     /// If the method was not found, return None.
     pub fn find_method_from_receiver(
@@ -358,10 +382,11 @@ impl Globals {
     }
 
     pub fn get_const_cache_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
-        self.const_cache.get_entry(id)
+        self.const_cache.get_mut_entry(id)
     }
 
-    pub fn set_const_cache(&mut self, id: u32, version: u32, val: Value) {
+    pub fn set_const_cache(&mut self, id: u32, val: Value) {
+        let version = self.const_version;
         self.const_cache.set(id, version, val)
     }
 
@@ -379,10 +404,14 @@ impl Globals {
     pub fn print_method_cache_stats(&self) {
         self.method_cache.print_stats()
     }
+
+    pub fn print_constant_cache_stats(&self) {
+        self.const_cache.print_stats()
+    }
 }
 
 impl GlobalsRef {
-    /// Search method(MethodRef) for receiver object using inline method cache.
+    /// Search inline method cache for receiver object and method name.
     ///
     /// If the method was not found, return None.
     pub fn find_method_from_icache(
@@ -603,6 +632,10 @@ impl InlineCache {
 struct ConstCache {
     table: Vec<ConstCacheEntry>,
     id: u32,
+    #[cfg(feature = "perf")]
+    total: usize,
+    #[cfg(feature = "perf")]
+    missed: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -625,6 +658,10 @@ impl ConstCache {
         ConstCache {
             table: vec![],
             id: 0,
+            #[cfg(feature = "perf")]
+            total: 0,
+            #[cfg(feature = "perf")]
+            missed: 0,
         }
     }
     fn add_entry(&mut self) -> u32 {
@@ -633,7 +670,11 @@ impl ConstCache {
         self.id - 1
     }
 
-    fn get_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
+    fn get_entry(&self, id: u32) -> &ConstCacheEntry {
+        &self.table[id as usize]
+    }
+
+    fn get_mut_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
         &mut self.table[id as usize]
     }
 
@@ -642,6 +683,17 @@ impl ConstCache {
             version,
             val: Some(val),
         };
+    }
+}
+
+#[cfg(feature = "perf")]
+impl ConstCache {
+    pub fn print_stats(&self) {
+        eprintln!("+-------------------------------------------+");
+        eprintln!("| Constant cache stats:                     |");
+        eprintln!("+-------------------------------------------+");
+        eprintln!("  hit              : {:>10}", self.total - self.missed);
+        eprintln!("  missed           : {:>10}", self.missed);
     }
 }
 

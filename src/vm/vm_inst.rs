@@ -195,8 +195,9 @@ impl Inst {
 
             Inst::GET_IVAR => "GET_IVAR",
             Inst::SET_IVAR => "SET_IVAR",
-            Inst::SET_CVAR => "SET_CVAR",
             Inst::GET_CVAR => "GET_CVAR",
+            Inst::SET_CVAR => "SET_CVAR",
+            Inst::GET_GVAR => "GET_GVAR",
             Inst::SET_GVAR => "SET_GVAR",
             Inst::GET_INDEX => "GET_INDEX",
             Inst::SET_INDEX => "SET_INDEX",

@@ -1221,9 +1221,13 @@ impl Codegen {
             NodeKind::Array(nodes, is_const) => {
                 if *is_const {
                     if use_value {
-                        let val = self.const_expr(globals, node)?;
-                        let id = globals.const_values.insert(val);
-                        self.gen_const_val(iseq, id);
+                        if nodes.len() == 0 {
+                            self.gen_create_array(iseq, 0);
+                        } else {
+                            let val = self.const_expr(globals, node)?;
+                            let id = globals.const_values.insert(val);
+                            self.gen_const_val(iseq, id);
+                        }
                     }
                 } else {
                     let len = nodes.len();
@@ -1239,9 +1243,13 @@ impl Codegen {
             NodeKind::Hash(key_value, is_const) => {
                 if *is_const {
                     if use_value {
-                        let val = self.const_expr(globals, node)?;
-                        let id = globals.const_values.insert(val);
-                        self.gen_const_val(iseq, id);
+                        if key_value.len() == 0 {
+                            self.gen_create_hash(iseq, 0);
+                        } else {
+                            let val = self.const_expr(globals, node)?;
+                            let id = globals.const_values.insert(val);
+                            self.gen_const_val(iseq, id);
+                        }
                     }
                 } else {
                     let len = key_value.len();

@@ -848,18 +848,14 @@ impl VM {
                 Inst::GET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
                     let slot = iseq.read32(self.pc + 5);
-                    let const_version = self.globals.const_version;
-                    let val = match *self.globals.get_const_cache_entry(slot) {
-                        ConstCacheEntry {
-                            version,
-                            val: Some(val),
-                        } if version == const_version => val,
-                        _ => {
+                    let val = match self.globals.find_const_cache(slot) {
+                        Some(val) => val,
+                        None => {
                             let val = match VM::get_env_const(self.current_context(), id) {
                                 Some(val) => val,
                                 None => VM::get_super_const(self.class(), id)?,
                             };
-                            self.globals.set_const_cache(slot, const_version, val);
+                            self.globals.set_const_cache(slot, val);
                             val
                         }
                     };
@@ -2861,6 +2857,7 @@ impl VM {
                 {
                     self.perf.print_perf();
                     self.globals.print_method_cache_stats();
+                    self.globals.print_constant_cache_stats();
                 }
                 #[cfg(feature = "gc-debug")]
                 self.globals.print_mark();
