@@ -12,8 +12,8 @@ pub struct Globals {
     pub const_values: ConstantValues,
     global_var: ValueTable,
     pub method_cache: MethodCache,
-    pub inline_cache: InlineCache,
-    pub const_cache: ConstCache,
+    inline_cache: InlineCache,
+    const_cache: ConstCache,
     pub case_dispatch: CaseDispatchMap,
 
     main_fiber: Option<VMRef>,
@@ -353,6 +353,28 @@ impl Globals {
     }
 }
 
+impl Globals {
+    pub fn add_const_cache_entry(&mut self) -> u32 {
+        self.const_cache.add_entry()
+    }
+
+    pub fn get_const_cache_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
+        self.const_cache.get_entry(id)
+    }
+
+    pub fn set_const_cache(&mut self, id: u32, version: u32, val: Value) {
+        self.const_cache.set(id, version, val)
+    }
+
+    pub fn add_inline_cache_entry(&mut self) -> u32 {
+        self.inline_cache.add_entry()
+    }
+
+    fn get_inline_cache_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
+        self.inline_cache.get_entry(id)
+    }
+}
+
 impl GlobalsRef {
     /// Search method(MethodRef) for receiver object using inline method cache.
     ///
@@ -366,7 +388,7 @@ impl GlobalsRef {
         let mut globals = self.clone();
         let rec_class = receiver.get_class_for_method();
         let version = self.class_version;
-        let icache = self.inline_cache.get_entry(cache);
+        let icache = self.get_inline_cache_entry(cache);
         if icache.version == version {
             match icache.entries {
                 Some((class, method)) if class.id() == rec_class.id() => {
@@ -555,13 +577,13 @@ impl InlineCache {
             id: 0,
         }
     }
-    pub fn add_entry(&mut self) -> u32 {
+    fn add_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(InlineCacheEntry::new());
         self.id - 1
     }
 
-    pub fn get_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
+    fn get_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
         &mut self.table[id as usize]
     }
 }
@@ -572,7 +594,7 @@ impl InlineCache {
 ///  This module supports inline constant cache which is embedded in the instruction sequence directly.
 ///
 #[derive(Debug, Clone)]
-pub struct ConstCache {
+struct ConstCache {
     table: Vec<ConstCacheEntry>,
     id: u32,
 }
@@ -599,14 +621,21 @@ impl ConstCache {
             id: 0,
         }
     }
-    pub fn add_entry(&mut self) -> u32 {
+    fn add_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(ConstCacheEntry::new());
         self.id - 1
     }
 
-    pub fn get_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
+    fn get_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
         &mut self.table[id as usize]
+    }
+
+    fn set(&mut self, id: u32, version: u32, val: Value) {
+        self.table[id as usize] = ConstCacheEntry {
+            version,
+            val: Some(val),
+        };
     }
 }
 
