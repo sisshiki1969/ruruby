@@ -155,7 +155,7 @@ impl Index<usize> for Args {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        &self.elems[index]
+        unsafe { self.elems.get_unchecked(index) }
     }
 }
 
@@ -163,13 +163,13 @@ impl Index<Range<usize>> for Args {
     type Output = [Value];
 
     fn index(&self, range: Range<usize>) -> &Self::Output {
-        &self.elems[range]
+        unsafe { self.elems.get_unchecked(range) }
     }
 }
 
 impl IndexMut<usize> for Args {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.elems[index]
+        unsafe { self.elems.get_unchecked_mut(index) }
     }
 }
 
