@@ -340,11 +340,7 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             arg[0] = *elem;
         } else {
             match elem.as_array() {
-                Some(ary) => {
-                    for i in 0..param_num {
-                        arg[i] = ary.elements[i];
-                    }
-                }
+                Some(ary) => arg.copy_from_slice(&ary.elements[0..param_num]),
                 None => arg[0] = *elem,
             }
         }
