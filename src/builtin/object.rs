@@ -16,6 +16,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
     object_class.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
     object_class.add_builtin_method_by_str("instance_variables", instance_variables);
+    object_class.add_builtin_method_by_str("instance_of?", instance_of);
     object_class.add_builtin_method_by_str("freeze", freeze);
     object_class.add_builtin_method_by_str("super", super_);
     object_class.add_builtin_method_by_str("equal?", equal);
@@ -166,6 +167,11 @@ fn instance_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => vec![],
     };
     Ok(Value::array_from(res))
+}
+
+fn instance_of(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    Ok(Value::bool(args[0].id() == self_val.get_class().id()))
 }
 
 fn freeze(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -385,6 +391,21 @@ mod test {
         end
 
         assert(true, ary_cmp([:@foo, :@bar], obj.instance_variables))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn instance_of() {
+        let program = r#"
+        class C < Object
+        end
+        class S < C
+        end
+        
+        obj = S.new
+        assert true, obj.instance_of?(S)
+        assert false, obj.instance_of?(C)
         "#;
         assert_script(program);
     }

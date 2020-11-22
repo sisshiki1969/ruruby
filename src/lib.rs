@@ -5,6 +5,7 @@ extern crate fancy_regex;
 #[macro_use]
 extern crate lazy_static;
 extern crate fxhash;
+extern crate smallvec;
 pub use fxhash::FxHashMap;
 pub mod alloc;
 pub mod builtin;
@@ -31,3 +32,4 @@ pub use crate::parse::parser::{LvarCollector, LvarId, ParseResult, Parser};
 pub use crate::util::*;
 pub use crate::value::*;
 pub use crate::vm::*;
+pub use smallvec::*;

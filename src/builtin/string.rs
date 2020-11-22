@@ -777,11 +777,11 @@ fn gen_pad(padding: &str, len: usize) -> String {
 
 fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
-    let mut pad_val = args[1];
     let padding = if args.len() == 2 {
-        pad_val.expect_string(vm, "2nd arg")?
+        let mut arg = args[1];
+        arg.expect_string(vm, "2nd arg")?.to_string()
     } else {
-        " "
+        " ".to_string()
     };
     if padding.len() == 0 {
         return Err(VM::error_argument("Zero width padding."));
@@ -796,19 +796,19 @@ fn center(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let tail = width as usize - str_len - head;
     return Ok(Value::string(format!(
         "{}{}{}",
-        gen_pad(padding, head),
+        gen_pad(&padding, head),
         lhs,
-        gen_pad(padding, tail)
+        gen_pad(&padding, tail)
     )));
 }
 
 fn ljust(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
-    let mut pad_val = args[1];
     let padding = if args.len() == 2 {
-        pad_val.expect_string(vm, "2nd arg")?
+        let mut arg = args[1];
+        arg.expect_string(vm, "2nd arg")?.to_string()
     } else {
-        " "
+        " ".to_string()
     };
     if padding.len() == 0 {
         return Err(VM::error_argument("Zero width padding."));
@@ -820,16 +820,16 @@ fn ljust(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Ok(Value::string(lhs.to_owned()));
     }
     let tail = width as usize - str_len;
-    Ok(Value::string(format!("{}{}", lhs, gen_pad(padding, tail))))
+    Ok(Value::string(format!("{}{}", lhs, gen_pad(&padding, tail))))
 }
 
 fn rjust(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
-    let mut pad_val = args[1];
     let padding = if args.len() == 2 {
-        pad_val.expect_string(vm, "2nd arg")?
+        let mut arg = args[1];
+        arg.expect_string(vm, "2nd arg")?.to_string()
     } else {
-        " "
+        " ".to_string()
     };
     if padding.len() == 0 {
         return Err(VM::error_argument("Zero width padding."));
@@ -841,7 +841,7 @@ fn rjust(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Ok(Value::string(lhs.to_owned()));
     }
     let tail = width as usize - str_len;
-    Ok(Value::string(format!("{}{}", gen_pad(padding, tail), lhs)))
+    Ok(Value::string(format!("{}{}", gen_pad(&padding, tail), lhs)))
 }
 
 fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
