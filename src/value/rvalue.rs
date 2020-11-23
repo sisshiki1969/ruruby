@@ -246,20 +246,20 @@ impl RValue {
         }
     }
 
-    pub fn new_string(s: String) -> Self {
+    pub fn new_string_from_rstring(rs: RString) -> Self {
         RValue {
             class: BuiltinClass::string(),
             var_table: None,
-            kind: ObjKind::String(RString::Str(s)),
+            kind: ObjKind::String(rs),
         }
     }
 
+    pub fn new_string(s: String) -> Self {
+        RValue::new_string_from_rstring(RString::from_str(s))
+    }
+
     pub fn new_bytes(b: Vec<u8>) -> Self {
-        RValue {
-            class: BuiltinClass::string(),
-            var_table: None,
-            kind: ObjKind::String(RString::Bytes(b)),
-        }
+        RValue::new_string_from_rstring(RString::Bytes(b))
     }
 
     pub fn new_ordinary(class: Value) -> Self {

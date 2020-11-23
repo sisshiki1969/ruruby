@@ -565,61 +565,42 @@ impl Value {
     pub fn as_bytes(&self) -> Option<&[u8]> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Str(s)) => Some(s.as_bytes()),
-                ObjKind::String(RString::Bytes(b)) => Some(b),
+                ObjKind::String(rs) => Some(rs.as_bytes()),
                 _ => None,
             },
             None => None,
         }
     }
 
-    pub fn expect_bytes(&self, vm: &mut VM, msg: &str) -> Result<&[u8], RubyError> {
-        let rstring = match self.as_rstring() {
-            Some(rs) => rs,
-            None => {
-                let inspect = vm.val_inspect(*self)?;
-                return Err(VM::error_type(format!(
-                    "{} must be String. (given:{})",
-                    msg, inspect
-                )));
-            }
-        };
-        Ok(rstring.as_bytes())
+    pub fn expect_bytes(&self, msg: &str) -> Result<&[u8], RubyError> {
+        match self.as_rstring() {
+            Some(rs) => Ok(rs.as_bytes()),
+            None => Err(VM::error_type(format!(
+                "{} must be String. (given:{:?})",
+                msg, *self
+            ))),
+        }
     }
 
-    pub fn as_string(&self) -> Option<&String> {
+    pub fn as_string(&self) -> Option<&str> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::String(RString::Str(s)) => Some(s),
+                ObjKind::String(rs) => Some(rs.as_str()),
                 _ => None,
             },
             None => None,
         }
     }
 
-    pub fn as_mut_string(&mut self) -> Option<&mut String> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::String(RString::Str(s)) => Some(s),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    pub fn expect_string(&mut self, vm: &mut VM, msg: &str) -> Result<&String, RubyError> {
+    pub fn expect_string(&mut self, msg: &str) -> Result<&str, RubyError> {
         let val = *self;
-        let rstring = match self.as_mut_rstring() {
-            Some(rs) => rs,
-            None => {
-                let inspect = vm.val_inspect(val)?;
-                return Err(VM::error_type(format!(
-                    "{} must be String. (given:{})",
-                    msg, inspect
-                )));
-            }
-        };
-        rstring.as_string()
+        match self.as_mut_rstring() {
+            Some(rs) => rs.as_string(),
+            None => Err(VM::error_type(format!(
+                "{} must be String. (given:{:?})",
+                msg, val
+            ))),
+        }
     }
 
     pub fn expect_string_or_symbol(&mut self, msg: &str) -> Result<IdentId, RubyError> {
@@ -1036,13 +1017,17 @@ impl Value {
         RValue::new_complex(r, i).pack()
     }
 
+    pub fn string_from_rstring(rs: RString) -> Self {
+        RValue::new_string_from_rstring(rs).pack()
+    }
+
     pub fn string(string: String) -> Self {
         RValue::new_string(string).pack()
     }
 
     pub fn bytes(bytes: Vec<u8>) -> Self {
-        match String::from_utf8(bytes.clone()) {
-            Ok(s) => RValue::new_string(s).pack(),
+        match std::str::from_utf8(&bytes) {
+            Ok(s) => RValue::new_string(s.to_string()).pack(),
             Err(_) => RValue::new_bytes(bytes).pack(),
         }
     }

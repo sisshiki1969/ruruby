@@ -2208,7 +2208,7 @@ impl VM {
 impl VM {
     fn create_regexp(&mut self, arg: Value) -> VMResult {
         let mut arg = match arg.as_string() {
-            Some(arg) => arg.clone(),
+            Some(arg) => arg.to_string(),
             None => return Err(VM::error_argument("Illegal argument for CREATE_REGEXP")),
         };
         match arg.pop().unwrap() {

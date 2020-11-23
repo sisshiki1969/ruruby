@@ -312,7 +312,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => {
             args.check_args_num(1)?;
             let mut arg0 = args[0];
-            let program = arg0.expect_string(vm, "1st arg")?;
+            let program = arg0.expect_string("1st arg")?;
             let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
             let args = Args::new0();
             vm.class_push(self_val);

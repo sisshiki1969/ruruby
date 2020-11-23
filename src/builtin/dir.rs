@@ -32,10 +32,10 @@ fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(cur_dir))
 }
 
-fn glob(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut pat_val = args[0];
-    let mut pattern = pat_val.expect_string(vm, "1st arg")?.chars().peekable();
+    let mut pattern = pat_val.expect_string("1st arg")?.chars().peekable();
     let mut glob: Vec<String> = vec![];
     let mut charbuf = vec!['^'];
     let (fullpath, path) = if pattern.peek() == Some(&'/') {

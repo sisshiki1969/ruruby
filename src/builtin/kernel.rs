@@ -127,7 +127,7 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     let ainfo = load_path.expect_array("LOAD_PATH($:)")?;
     for path in ainfo.elements.iter_mut() {
-        let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
+        let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);
         base_path.set_extension("rb");
         if base_path.exists() {
@@ -177,7 +177,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
     let mut load_ary = load_path.expect_array("LOAD_PATH($:)")?.elements.clone();
     for path in load_ary.iter_mut() {
-        let mut base_path = PathBuf::from(path.expect_string(vm, "LOAD_PATH($:)")?);
+        let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);
         if base_path.exists() {
             load_exec(vm, &base_path, true)?;
@@ -255,7 +255,12 @@ fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
             return Err(VM::error_stop_iteration(""));
         };
     }
-    Err(VM::error_unimplemented("error"))
+    let error_msg = match args.len() {
+        1 => format!("Raised. {:?}", args[0]),
+        2 => format!("Raised. {:?} {:?}", args[0], args[1]),
+        _ => "Raised.".to_string(),
+    };
+    Err(VM::error_unimplemented(error_msg))
 }
 
 fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
@@ -294,13 +299,13 @@ fn exit(_: &mut VM, _: Value, args: &Args) -> VMResult {
     std::process::exit(code as i32);
 }
 
-fn abort(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn abort(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     let msg = if args.len() == 0 {
         "".to_string()
     } else {
         let mut msg = args[0];
-        msg.expect_string(vm, "1st")?.to_owned()
+        msg.expect_string("1st")?.to_owned()
     };
     eprintln!("{}", msg);
     std::process::exit(1);
@@ -416,11 +421,11 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
     Ok(_self_val)
 }
 
-fn command(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     use std::process::Command;
     args.check_args_num(1)?;
     let mut arg = args[0].to_owned();
-    let mut input = arg.expect_string(vm, "Arg")?.split_whitespace();
+    let mut input = arg.expect_string("Arg")?.split_whitespace();
     let command = input.next().unwrap();
     let output = match Command::new(command).args(input).output() {
         Ok(ok) => ok,

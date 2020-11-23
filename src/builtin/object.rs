@@ -251,7 +251,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 4)?;
     let mut arg0 = args[0];
-    let program = arg0.expect_string(vm, "1st arg")?;
+    let program = arg0.expect_string("1st arg")?;
     //#[cfg(debug_assertions)]
     //eprintln!("eval: {}", program);
     if args.len() > 1 {
@@ -261,7 +261,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     }
     let path = if args.len() > 2 {
         let mut arg2 = args[2];
-        let name = arg2.expect_string(vm, "3rd arg")?;
+        let name = arg2.expect_string("3rd arg")?;
         std::path::PathBuf::from(name)
     } else {
         std::path::PathBuf::from("(eval)")

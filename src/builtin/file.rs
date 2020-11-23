@@ -25,8 +25,8 @@ pub fn init(globals: &mut Globals) -> Value {
 // Utils
 
 /// Convert Ruby String value`string` to PathBuf.
-fn string_to_path(vm: &mut VM, mut string: Value, msg: &str) -> Result<PathBuf, RubyError> {
-    let file = string.expect_string(vm, msg)?;
+fn string_to_path(_: &mut VM, mut string: Value, msg: &str) -> Result<PathBuf, RubyError> {
+    let file = string.expect_string(msg)?;
     let mut path = PathBuf::new();
     for p in PathBuf::from(file).iter() {
         if p == ".." && path.file_name().is_some() {
@@ -76,7 +76,7 @@ fn join(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
                 if !path.is_empty() && !path.ends_with('/') {
                     path.push('/');
                 }
-                let s = val.expect_string(vm, "Args")?;
+                let s = val.expect_string("Args")?;
                 path.push_str(if !path.is_empty() && s.starts_with('/') {
                     &s[1..]
                 } else {
@@ -165,12 +165,12 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 /// IO.write(path, string)
-fn write(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+fn write(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
     let mut arg0 = args[0];
     let mut arg1 = args[1];
-    let filename = arg0.expect_string(vm, "1st arg")?;
-    let contents = arg1.expect_string(vm, "2nd arg")?;
+    let filename = arg0.expect_string("1st arg")?;
+    let contents = arg1.expect_string("2nd arg")?;
     match std::fs::write(&filename, contents) {
         Ok(()) => {}
         Err(err) => {
@@ -263,7 +263,7 @@ fn realpath(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     } else {
         PathBuf::new()
     };
-    root.push(pathname.expect_string(vm, "1st arg")?);
+    root.push(pathname.expect_string("1st arg")?);
     let path_str = canonicalize_path(vm, root)?.to_string_lossy().to_string();
     Ok(Value::string(path_str))
 }

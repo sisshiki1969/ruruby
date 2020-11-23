@@ -1,9 +1,11 @@
 //#![feature(test)]
 #![feature(box_patterns)]
 #![feature(assoc_char_funcs)]
+#![feature(pattern)]
 extern crate fancy_regex;
 #[macro_use]
 extern crate lazy_static;
+extern crate arraystring;
 extern crate fxhash;
 extern crate smallvec;
 pub use fxhash::FxHashMap;
