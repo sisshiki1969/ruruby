@@ -62,13 +62,13 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         Some(id) => format! {"{:?}", id},
         None => format! {"#<Class:0x{:x}>", cref.id()},
     };
-    Ok(Value::string(s))
+    Ok(Value::string_from_string(s))
 }
 
 fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let cref = self_val.as_class();
     let val = match cref.name() {
-        Some(id) => Value::string(format! {"{:?}", id}),
+        Some(id) => Value::string_from_string(format! {"{:?}", id}),
         None => Value::nil(),
     };
     Ok(val)

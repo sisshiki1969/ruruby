@@ -95,7 +95,7 @@ fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let s = aref.to_s(vm)?;
-    Ok(Value::string(s))
+    Ok(Value::string_from_string(s))
 }
 
 fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
@@ -247,17 +247,18 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Ok(res)
     } else if let Some(s) = args[0].as_string() {
         match aref.elements.len() {
-            0 => return Ok(Value::string("".to_string())),
+            0 => return Ok(Value::string_from_str("")),
             1 => {
-                let res = vm.val_to_s(aref.elements[0])?;
-                return Ok(Value::string(res));
+                let res = aref.elements[0].val_to_s(vm)?;
+                return Ok(Value::string_from_cow(res));
             }
             _ => {
-                let mut res = vm.val_to_s(aref.elements[0])?;
+                let mut res = aref.elements[0].val_to_s(vm)?.to_string();
                 for i in 1..aref.elements.len() {
-                    res = format!("{}{}{}", res, s, vm.val_to_s(aref.elements[i])?);
+                    let elem = aref.elements[i].val_to_s(vm)?;
+                    res = res + s + &elem;
                 }
-                return Ok(Value::string(res));
+                return Ok(Value::string_from_string(res));
             }
         };
     } else {
@@ -699,16 +700,16 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     };
     let aref = self_val.as_array().unwrap();
-    let mut res = "".to_string();
+    let mut res = String::new();
     for elem in &aref.elements {
-        let s = vm.val_to_s(*elem)?;
+        let s = elem.val_to_s(vm)?;
         if res.is_empty() {
-            res = s.to_owned();
+            res = s.into_owned();
         } else {
-            res = res + sep + s.as_str();
+            res = res + sep + &s;
         }
     }
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn drop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -741,7 +742,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match &args.block {
         Some(block) => {
             let mut arg = Args::new1(Value::nil());
-            vm.temp_push_vec(&mut ary.clone());
+            vm.temp_push_vec(&ary);
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;

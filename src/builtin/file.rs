@@ -90,14 +90,14 @@ fn join(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
         flatten(vm, &mut path, *arg)?;
     }
-    Ok(Value::string(path))
+    Ok(Value::string_from_string(path))
 }
 
 fn basename(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 1)?;
     let filename = string_to_path(vm, args[0], "1st arg")?;
     let basename = match filename.file_name() {
-        Some(ostr) => Value::string(ostr.to_string_lossy().to_string()),
+        Some(ostr) => Value::string_from_cow(ostr.to_string_lossy()),
         None => Value::nil(),
     };
     Ok(basename)
@@ -110,7 +110,7 @@ fn extname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(ostr) => format!(".{}", ostr.to_string_lossy()),
         None => "".to_string(),
     };
-    Ok(Value::string(extname))
+    Ok(Value::string_from_string(extname))
 }
 
 fn dirname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -120,7 +120,7 @@ fn dirname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(ostr) => format!("{}", ostr.to_string_lossy()),
         None => "".to_string(),
     };
-    Ok(Value::string(dirname))
+    Ok(Value::string_from_string(dirname))
 }
 
 fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -161,7 +161,7 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Ok(file) => file,
         Err(_) => return Err(VM::error_internal("Could not read the file.")),
     };
-    Ok(Value::string(contents))
+    Ok(Value::string_from_string(contents))
 }
 
 /// IO.write(path, string)
@@ -222,7 +222,7 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     }
     //eprintln!("{:?}", res_path);
 
-    return Ok(Value::string(res_path.to_string_lossy().to_string()));
+    return Ok(Value::string_from_cow(res_path.to_string_lossy()));
 }
 
 fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -264,8 +264,9 @@ fn realpath(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         PathBuf::new()
     };
     root.push(pathname.expect_string("1st arg")?);
-    let path_str = canonicalize_path(vm, root)?.to_string_lossy().to_string();
-    Ok(Value::string(path_str))
+    let path_buf = canonicalize_path(vm, root)?;
+    let path_str = path_buf.to_string_lossy();
+    Ok(Value::string_from_cow(path_str))
 }
 
 #[cfg(test)]

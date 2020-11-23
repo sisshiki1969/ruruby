@@ -68,23 +68,23 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let class_name = self_val.get_class().as_class().name_str();
                 format!("#<{}:{:016x}>", class_name, self_val.id())
             }
-            ObjKind::Regexp(rref) => format!("({})", rref.as_str().to_string()),
+            ObjKind::Regexp(rref) => format!("({})", rref.as_str()),
             _ => format!("{:?}", oref.kind),
         },
     };
 
-    Ok(Value::string(s))
+    Ok(Value::string_from_string(s))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.inspect(vm)?;
-            Ok(Value::string(s))
+            Ok(Value::string_from_string(s))
         }
         None => {
             let s = vm.val_inspect(self_val)?;
-            Ok(Value::string(s))
+            Ok(Value::string_from_string(s))
         }
     }
 }

@@ -23,7 +23,7 @@ fn output(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match args[0].as_string() {
         Some(s) => print!("{}", s),
         None => {
-            let s = vm.val_to_s(args[0])?;
+            let s = args[0].val_to_s(vm)?;
             print!("{}", s)
         }
     };

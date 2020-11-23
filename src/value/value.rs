@@ -1,4 +1,5 @@
 use crate::*;
+use std::borrow::Cow;
 use std::sync::mpsc::{Receiver, SyncSender};
 
 const FALSE_VALUE: u64 = 0x00;
@@ -263,6 +264,37 @@ impl Value {
 
     pub fn rvalue_mut(&self) -> &mut RValue {
         unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
+    }
+}
+
+impl Value {
+    pub fn val_to_s(&self, vm: &mut VM) -> Result<Cow<str>, RubyError> {
+        let s = match self.unpack() {
+            RV::Uninitialized => Cow::from("[Uninitialized]"),
+            RV::Nil => Cow::from(""),
+            RV::Bool(b) => match b {
+                true => Cow::from("true"),
+                false => Cow::from("false"),
+            },
+            RV::Integer(i) => Cow::from(i.to_string()),
+            RV::Float(f) => {
+                if f.fract() == 0.0 {
+                    Cow::from(format!("{:.1}", f))
+                } else {
+                    Cow::from(f.to_string())
+                }
+            }
+            RV::Symbol(i) => Cow::from(format!("{:?}", i)),
+            RV::Object(oref) => match &oref.kind {
+                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+                ObjKind::String(s) => s.to_s(),
+                _ => {
+                    let val = vm.send0(IdentId::TO_S, *self)?;
+                    Cow::from(val.as_string().unwrap().to_owned())
+                }
+            },
+        };
+        Ok(s)
     }
 
     /// Change class of `self`.
@@ -1021,13 +1053,21 @@ impl Value {
         RValue::new_string_from_rstring(rs).pack()
     }
 
-    pub fn string(string: String) -> Self {
-        RValue::new_string(string).pack()
+    pub fn string_from_str(string: &str) -> Self {
+        RValue::new_string_from_str(string).pack()
+    }
+
+    pub fn string_from_string(string: String) -> Self {
+        RValue::new_string_from_string(string).pack()
+    }
+
+    pub fn string_from_cow(string: Cow<str>) -> Self {
+        RValue::new_string_from_cow(string).pack()
     }
 
     pub fn bytes(bytes: Vec<u8>) -> Self {
         match std::str::from_utf8(&bytes) {
-            Ok(s) => RValue::new_string(s.to_string()).pack(),
+            Ok(s) => RValue::new_string_from_str(s).pack(),
             Err(_) => RValue::new_bytes(bytes).pack(),
         }
     }
@@ -1300,7 +1340,7 @@ mod tests {
         for expect in expect_ary.iter() {
             let got = match RV::Integer(*expect).pack().as_integer() {
                 Some(int) => int,
-                None => panic!("Expect:{:?} Got:Invalid RValue"),
+                None => panic!("Expect:{:?} Got:Invalid RValue", *expect),
             };
             if *expect != got {
                 panic!("Expect:{:?} Got:{:?}", *expect, got)

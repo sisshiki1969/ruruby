@@ -158,7 +158,7 @@ fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut arg0 = args[0];
     let string = arg0.expect_string("1st arg")?;
     let res = regex::escape(string);
-    let regexp = Value::string(res);
+    let regexp = Value::string_from_string(res);
     Ok(regexp)
 }
 
@@ -172,9 +172,9 @@ impl RegexpInfo {
         let id2 = IdentId::get_id("$'");
         match captures.get(0) {
             Some(m) => {
-                let val = Value::string(given[m.start()..m.end()].to_string());
+                let val = Value::string_from_str(&given[m.start()..m.end()]);
                 vm.set_global_var(id1, val);
-                let val = Value::string(given[m.end()..].to_string());
+                let val = Value::string_from_str(&given[m.end()..]);
                 vm.set_global_var(id2, val);
             }
             None => {
@@ -193,8 +193,7 @@ impl RegexpInfo {
 
     fn set_special_global(vm: &mut VM, i: usize, given: &str, start: usize, end: usize) {
         let id = IdentId::get_id(&format!("${}", i));
-        let val = Value::string(given[start..end].to_string());
-        //eprintln!("${}: {}", i, given[start..end].to_string());
+        let val = Value::string_from_str(&given[start..end]);
         vm.set_global_var(id, val);
     }
 
@@ -243,9 +242,9 @@ impl RegexpInfo {
             };
 
             let mut res = given.to_string();
-            let matched = Value::string(matched_str.to_string());
+            let matched = Value::string_from_str(matched_str);
             let result = vm.eval_block(block, &Args::new1(matched))?;
-            let s = vm.val_to_s(result)?;
+            let s = result.val_to_s(vm)?;
             res.replace_range(start..end, &s);
             Ok((res, true))
         }
@@ -305,9 +304,9 @@ impl RegexpInfo {
                         return Err(VM::error_internal(format!("Capture failed. {:?}", err)))
                     }
                 };
-                let matched = Value::string(matched_str.to_string());
+                let matched = Value::string_from_str(matched_str);
                 let result = vm.eval_block(block, &Args::new1(matched))?;
-                let replace = vm.val_to_s(result)?;
+                let replace = result.val_to_s(vm)?.into_owned();
                 range.push((start, end, replace));
             }
 
@@ -355,7 +354,7 @@ impl RegexpInfo {
                     idx = m.end();
                     match captures.len() {
                         1 => {
-                            let val = Value::string(given[m.start()..m.end()].to_string());
+                            let val = Value::string_from_str(&given[m.start()..m.end()]);
                             ary.push(val);
                         }
                         len => {
@@ -363,8 +362,9 @@ impl RegexpInfo {
                             for i in 1..len {
                                 match captures.get(i) {
                                     Some(m) => {
-                                        let s = given[m.start()..m.end()].to_string();
-                                        vec.push(Value::string(s));
+                                        vec.push(Value::string_from_str(
+                                            &given[m.start()..m.end()],
+                                        ));
                                     }
                                     None => vec.push(Value::nil()),
                                 }

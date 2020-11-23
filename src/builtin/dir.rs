@@ -20,7 +20,7 @@ fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         .unwrap_or(PathBuf::new())
         .to_string_lossy()
         .to_string();
-    Ok(Value::string(home_dir))
+    Ok(Value::string_from_string(home_dir))
 }
 
 fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -29,7 +29,7 @@ fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         .unwrap_or(PathBuf::new())
         .to_string_lossy()
         .to_string();
-    Ok(Value::string(cur_dir))
+    Ok(Value::string_from_string(cur_dir))
 }
 
 fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -122,8 +122,8 @@ fn traverse_dir(
     }
 
     if level == glob.len() {
-        let path = path.to_string_lossy().to_string();
-        matches.insert(Value::string(path));
+        let path = path.to_string_lossy();
+        matches.insert(Value::string_from_cow(path));
         return Ok(());
     }
     assert!(level < glob.len());
@@ -133,14 +133,14 @@ fn traverse_dir(
         let name_cow = name.to_string_lossy();
         let state = match &glob[level] {
             Some(re) => {
-                if re.find(name_cow.as_ref()).is_none() {
+                if re.find(&name_cow).is_none() {
                     continue;
                 } else {
                     MatchState::Match
                 }
             }
             None => match glob.get(level + 1) {
-                Some(Some(re)) if re.find(name_cow.as_ref()).is_some() => MatchState::NextMatch,
+                Some(Some(re)) if re.find(&name_cow).is_some() => MatchState::NextMatch,
                 _ => MatchState::WildMatch,
             },
         };
@@ -169,8 +169,8 @@ fn traverse_dir(
         {
             let mut path = path.clone();
             path.push(name_cow.as_ref());
-            let path = path.to_string_lossy().to_string();
-            matches.insert(Value::string(path));
+            let path = path.to_string_lossy();
+            matches.insert(Value::string_from_cow(path));
         }
     }
     Ok(())

@@ -37,7 +37,7 @@ pub fn init(_globals: &mut Globals) -> Value {
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     fn flatten(vm: &mut VM, val: Value) -> Result<(), RubyError> {
         match val.as_array() {
-            None => println!("{}", vm.val_to_s(val)?),
+            None => println!("{}", val.val_to_s(vm)?),
             Some(aref) => {
                 for val in &aref.elements {
                     flatten(vm, val.clone())?;
@@ -74,7 +74,7 @@ fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 use std::io::{self, Write};
                 io::stdout().write(bytes).unwrap();
             }
-            None => print!("{}", vm.val_to_s(*arg)?),
+            None => print!("{}", arg.val_to_s(vm)?),
         }
     }
     Ok(Value::nil())
@@ -230,13 +230,13 @@ fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut path = vm.get_source_path();
     path.pop();
-    Ok(Value::string(path.to_string_lossy().to_string()))
+    Ok(Value::string_from_cow(path.to_string_lossy()))
 }
 
 fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let path = vm.get_source_path();
-    Ok(Value::string(path.to_string_lossy().to_string()))
+    Ok(Value::string_from_cow(path.to_string_lossy()))
 }
 
 /// raise -> ()

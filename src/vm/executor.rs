@@ -228,8 +228,8 @@ impl VM {
     }
 
     /// Push objects to the temporary area.
-    pub fn temp_push_vec(&mut self, vec: &mut Vec<Value>) {
-        self.temp_stack.append(vec);
+    pub fn temp_push_vec(&mut self, vec: &Vec<Value>) {
+        self.temp_stack.extend_from_slice(vec);
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
@@ -783,7 +783,7 @@ impl VM {
                         res += v.as_string().unwrap();
                     }
 
-                    let val = Value::string(res);
+                    let val = Value::string_from_string(res);
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -1195,8 +1195,8 @@ impl VM {
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
-                    let s = self.val_to_s(val)?;
-                    let res = Value::string(s);
+                    let s = val.val_to_s(self)?;
+                    let res = Value::string_from_cow(s);
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -2226,35 +2226,6 @@ impl VM {
 // API's for handling values.
 
 impl VM {
-    pub fn val_to_s(&mut self, val: Value) -> Result<String, RubyError> {
-        let s = match val.unpack() {
-            RV::Uninitialized => "[Uninitialized]".to_string(),
-            RV::Nil => "".to_string(),
-            RV::Bool(b) => match b {
-                true => "true".to_string(),
-                false => "false".to_string(),
-            },
-            RV::Integer(i) => i.to_string(),
-            RV::Float(f) => {
-                if f.fract() == 0.0 {
-                    format!("{:.1}", f)
-                } else {
-                    f.to_string()
-                }
-            }
-            RV::Symbol(i) => format!("{:?}", i),
-            RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-                ObjKind::String(s) => s.to_s(),
-                _ => {
-                    let val = self.send0(IdentId::TO_S, val)?;
-                    val.as_string().unwrap().to_owned()
-                }
-            },
-        };
-        Ok(s)
-    }
-
     pub fn val_inspect(&mut self, val: Value) -> Result<String, RubyError> {
         let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
@@ -2842,7 +2813,7 @@ impl VM {
             .file_name()
             .map(|x| x.to_string_lossy())
             .unwrap_or(std::borrow::Cow::Borrowed(""));
-        self.set_global_var(IdentId::get_id("$0"), Value::string(file.to_string()));
+        self.set_global_var(IdentId::get_id("$0"), Value::string_from_cow(file));
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
         self.exec_program(absolute_path, &program);

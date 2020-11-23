@@ -1,4 +1,5 @@
 use crate::*;
+use std::borrow::Cow;
 
 /// Heap-allocated objects.
 #[derive(Debug, PartialEq)]
@@ -195,7 +196,7 @@ impl RValue {
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {
-                    let inspect = vm.val_to_s(*v)?;
+                    let inspect = v.val_to_s(vm)?;
                     s = format!("{} {:?}={}", s, k, inspect);
                 }
             }
@@ -254,8 +255,16 @@ impl RValue {
         }
     }
 
-    pub fn new_string(s: String) -> Self {
+    pub fn new_string_from_str(s: &str) -> Self {
         RValue::new_string_from_rstring(RString::from_str(s))
+    }
+
+    pub fn new_string_from_string(s: String) -> Self {
+        RValue::new_string_from_rstring(RString::from_string(s))
+    }
+
+    pub fn new_string_from_cow(s: Cow<str>) -> Self {
+        RValue::new_string_from_rstring(RString::from_cow(s))
     }
 
     pub fn new_bytes(b: Vec<u8>) -> Self {

@@ -54,13 +54,13 @@ pub fn init(globals: &mut Globals) -> Value {
 fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let self_ = self_val.as_rstring().unwrap();
-    Ok(Value::string(self_.to_s()))
+    Ok(Value::string_from_cow(self_.to_s()))
 }
 
 fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let self_ = self_val.as_rstring().unwrap();
-    Ok(Value::string(self_.inspect()))
+    Ok(Value::string_from_string(self_.inspect()))
 }
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -82,8 +82,8 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
 
     let res = match lhs {
-        RString::Str(s) => Value::string(s.repeat(count)),
-        RString::SmallStr(s) => Value::string(s.repeat(count)),
+        RString::Str(s) => Value::string_from_string(s.repeat(count)),
+        RString::SmallStr(s) => Value::string_from_string(s.repeat(count)),
         RString::Bytes(b) => Value::bytes(b.repeat(count)),
     };
     Ok(res)
@@ -114,7 +114,7 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             };
             let len = if args.len() == 2 {
                 match args[1].expect_integer("1st arg")? {
-                    0 => return Ok(Value::string("".to_string())),
+                    0 => return Ok(Value::string_from_str("")),
                     i if i < 0 => return Ok(Value::nil()),
                     i => i as usize,
                 }
@@ -123,7 +123,7 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             };
             let ch: String = lhs.chars().skip(index).take(len).collect();
             if ch.len() != 0 {
-                Ok(Value::string(ch))
+                Ok(Value::string_from_string(ch))
             } else {
                 Ok(Value::nil())
             }
@@ -135,7 +135,7 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     (Some(start), Some(end)) => {
                         match (conv_index(start, len), conv_index(end, len)) {
                             (Some(start), Some(end)) if start > end => {
-                                return Ok(Value::string("".to_string()))
+                                return Ok(Value::string_from_str(""))
                             }
                             (Some(start), Some(end)) => (start, end),
                             _ => return Ok(Value::nil()),
@@ -144,7 +144,7 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     _ => return Err(VM::error_argument("Index must be Integer.")),
                 };
                 let s: String = lhs.chars().skip(start).take(end - start + 1).collect();
-                Ok(Value::string(s))
+                Ok(Value::string_from_string(s))
             }
             _ => return Err(VM::error_argument("Bad type for index.")),
         },
@@ -224,7 +224,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut ch = match chars.next() {
         Some(ch) => ch,
         None => {
-            let res = Value::string("".to_string());
+            let res = Value::string_from_str("");
             return Ok(res);
         }
     };
@@ -336,7 +336,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         next_char!(ch, chars);
     }
 
-    let res = Value::string(format_str.into_iter().collect());
+    let res = Value::string_from_string(format_str.into_iter().collect());
     Ok(res)
 }
 
@@ -376,13 +376,13 @@ fn split(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         0
     };
     if lim == 1 {
-        let vec = vec![Value::string(string.to_string())];
+        let vec = vec![Value::string_from_str(string)];
         let ary = Value::array_from(vec);
         return Ok(ary);
     } else if lim < 0 {
         let vec = string
             .split(sep)
-            .map(|x| Value::string(x.to_string()))
+            .map(|x| Value::string_from_str(x))
             .collect();
         let ary = Value::array_from(vec);
         return Ok(ary);
@@ -400,13 +400,13 @@ fn split(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 None => break,
             }
         }
-        let vec = vec.iter().map(|x| Value::string(x.to_string())).collect();
+        let vec = vec.iter().map(|x| Value::string_from_str(x)).collect();
         let ary = Value::array_from(vec);
         return Ok(ary);
     } else {
         let vec = string
             .splitn(lim as usize, sep)
-            .map(|x| Value::string(x.to_string()))
+            .map(|x| Value::string_from_str(x))
             .collect();
         let ary = Value::array_from(vec);
         return Ok(ary);
@@ -434,17 +434,17 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let (res, _) = RegexpInfo::replace_one_block(vm, args[0], given, &block)?;
         res
     };
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn gsub(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (res, _) = gsub_main(vm, self_val, args)?;
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (res, changed) = gsub_main(vm, self_val, args)?;
-    *self_val.rvalue_mut() = RValue::new_string(res);
+    *self_val.rvalue_mut() = RValue::new_string_from_str(&res);
     let res = if changed { self_val } else { Value::nil() };
     Ok(res)
 }
@@ -470,7 +470,7 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let given = self_val.expect_string("Receiver")?;
     let vec = if let Some(s) = args[0].as_string() {
-        let re = vm.regexp_from_string(&s)?;
+        let re = vm.regexp_from_string(s)?;
         RegexpInfo::find_all(vm, &re, given)?
     } else if let Some(re) = args[0].as_regexp() {
         RegexpInfo::find_all(vm, &*re, given)?
@@ -479,15 +479,11 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     match &args.block {
         Some(block) => {
-            vm.temp_push_vec(&mut vec.clone());
+            vm.temp_push_vec(&vec);
             for arg in vec {
                 match arg.as_array() {
                     Some(ary) => {
-                        let len = ary.elements.len();
-                        let mut block_args = Args::new(len);
-                        for i in 0..len {
-                            block_args[i] = ary.elements[i]
-                        }
+                        let block_args = Args::from_slice(&ary.elements);
                         vm.eval_block(block, &block_args)?;
                     }
                     None => {
@@ -529,7 +525,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     None => return Ok(Value::nil()),
                 };
                 target.remove(pos);
-                return Ok(Value::string(ch.to_string()));
+                return Ok(Value::string_from_string(ch.to_string()));
             } else {
                 let len = args[1].expect_integer("2nd arg")?;
                 let len = if len < 0 {
@@ -558,24 +554,24 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     }
                 }
 
-                Ok(Value::string(take))
+                Ok(Value::string_from_string(take))
             }
         }
         RV::Object(_rvalue) => match &mut args[0].clone().rvalue_mut().kind {
             ObjKind::String(rs) => {
                 args.check_args_num(1)?;
                 let given = rs.as_string()?;
-                *target = RString::from_str(target.replacen(given, "", usize::MAX));
-                Ok(Value::string(given.to_owned()))
+                *target = RString::from_str(&target.replacen(given, "", usize::MAX));
+                Ok(Value::string_from_str(given))
             }
             ObjKind::Regexp(regexp) => {
                 let given = target.as_string()?;
                 let (res, cap) = regexp.replace_once(vm, given, "")?;
                 let ret = match cap {
-                    Some(cap) => Value::string(cap.get(0).unwrap().as_str().to_string()),
+                    Some(cap) => Value::string_from_str(cap.get(0).unwrap().as_str()),
                     None => Value::nil(),
                 };
-                *target = RString::from_str(res);
+                *target = RString::from_str(&res);
                 Ok(ret)
             }
             _ => {
@@ -614,7 +610,7 @@ fn tr(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let from = arg0.expect_string("1st arg")?;
     let to = arg1.expect_string("2nd arg")?;
     let res = rec.replace(from, to);
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn size(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -670,7 +666,7 @@ fn chars(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let string = self_val.expect_string("Receiver")?;
     let ary: Vec<Value> = string
         .chars()
-        .map(|c| Value::string(c.to_string()))
+        .map(|c| Value::string_from_string(c.to_string()))
         .collect();
     Ok(Value::array_from(ary))
 }
@@ -683,7 +679,7 @@ fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     let chars = self_val.expect_string("Receiver")?;
     for c in chars.chars() {
-        let char = Value::string(c.to_string());
+        let char = Value::string_from_string(c.to_string());
         vm.eval_block(block, &Args::new1(char))?;
     }
     Ok(self_val)
@@ -703,14 +699,14 @@ fn upcase(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let self_ = self_val.expect_string("Receiver")?;
     let res = self_.to_uppercase();
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn chomp(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let self_ = self_val.expect_string("Receiver")?;
     let res = self_.trim_end_matches('\n').to_string();
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn toi(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -772,11 +768,11 @@ fn center(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let width = args[0].expect_integer("1st arg")?;
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
-        return Ok(Value::string(lhs.to_string()));
+        return Ok(Value::string_from_str(lhs));
     }
     let head = (width as usize - str_len) / 2;
     let tail = width as usize - str_len - head;
-    return Ok(Value::string(format!(
+    return Ok(Value::string_from_string(format!(
         "{}{}{}",
         gen_pad(&padding, head),
         lhs,
@@ -799,10 +795,14 @@ fn ljust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let width = args[0].expect_integer("1st arg")?;
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
-        return Ok(Value::string(lhs.to_owned()));
+        return Ok(Value::string_from_str(lhs));
     }
     let tail = width as usize - str_len;
-    Ok(Value::string(format!("{}{}", lhs, gen_pad(&padding, tail))))
+    Ok(Value::string_from_string(format!(
+        "{}{}",
+        lhs,
+        gen_pad(&padding, tail)
+    )))
 }
 
 fn rjust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -820,10 +820,14 @@ fn rjust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let width = args[0].expect_integer("1st arg")?;
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
-        return Ok(Value::string(lhs.to_owned()));
+        return Ok(Value::string_from_str(lhs));
     }
     let tail = width as usize - str_len;
-    Ok(Value::string(format!("{}{}", gen_pad(&padding, tail), lhs)))
+    Ok(Value::string_from_string(format!(
+        "{}{}",
+        gen_pad(&padding, tail),
+        lhs
+    )))
 }
 
 fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -834,7 +838,7 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let self_ = self_val.as_string().unwrap();
     if self_.len() == 0 {
-        return Ok(Value::string("".to_string()));
+        return Ok(Value::string_from_str(""));
     }
     let chars = self_.chars();
     let mut buf: Vec<char> = vec![];
@@ -876,7 +880,7 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             buf.push('A');
         }
     }
-    let val = Value::string(buf.iter().rev().collect());
+    let val = Value::string_from_string(buf.iter().rev().collect());
     let _ = val.as_string();
     Ok(val)
 }
@@ -898,7 +902,7 @@ fn rstrip(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let string = self_val.as_string().unwrap();
     let trim: &[_] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
     let res = string.trim_end_matches(trim);
-    Ok(Value::string(res.to_owned()))
+    Ok(Value::string_from_str(res))
 }
 
 fn ord(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

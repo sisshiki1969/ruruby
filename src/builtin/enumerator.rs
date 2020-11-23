@@ -74,7 +74,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         "#<Enumerator: {}:{:?}{}>",
         receiver_string, method, arg_string
     );
-    Ok(Value::string(inspect))
+    Ok(Value::string_from_string(inspect))
 }
 
 fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

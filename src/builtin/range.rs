@@ -17,8 +17,8 @@ impl RangeInfo {
     }
 
     pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
-        let start = vm.val_to_s(self.start)?;
-        let end = vm.val_to_s(self.end)?;
+        let start = self.start.val_to_s(vm)?;
+        let end = self.end.val_to_s(vm)?;
         let sym = if self.exclude { "..." } else { ".." };
         Ok(format!("{}{}{}", start, sym, end))
     }
@@ -63,13 +63,13 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.to_s(vm)?;
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.inspect(vm)?;
-    Ok(Value::string(res))
+    Ok(Value::string_from_string(res))
 }
 
 fn begin(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

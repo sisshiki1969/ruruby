@@ -110,7 +110,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     }
     inspect += ">";
 
-    Ok(Value::string(inspect))
+    Ok(Value::string_from_string(inspect))
 }
 
 #[cfg(test)]
