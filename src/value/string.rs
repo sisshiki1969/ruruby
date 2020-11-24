@@ -53,26 +53,9 @@ impl fmt::Display for RString {
 
 use std::borrow::Cow;
 impl RString {
-    /// Converts a &str to a RString::Str or RString::SmallStr.
-    pub fn from_str(s: &str) -> Self {
-        if s.len() <= SmallString::capacity() as usize {
-            RString::SmallStr(SmallString::from_str_truncate(s))
-        } else {
-            RString::Str(s.to_string())
-        }
-    }
-
-    /// Converts a String to a RString::Str or RString::SmallStr.
-    pub fn from_string(s: String) -> Self {
-        if s.len() <= SmallString::capacity() as usize {
-            RString::SmallStr(SmallString::from_str_truncate(s))
-        } else {
-            RString::Str(s)
-        }
-    }
-
-    /// Converts a Cow<str> to a RString::Str or RString::SmallStr.
-    pub fn from_cow(s: Cow<str>) -> Self {
+    /// Converts an object of Cow<str> or &str or String to a RString::Str.
+    pub fn from<'a>(s: impl Into<Cow<'a, str>>) -> Self {
+        let s = s.into();
         if s.len() <= SmallString::capacity() as usize {
             RString::SmallStr(SmallString::from_str_truncate(s))
         } else {
@@ -85,7 +68,7 @@ impl RString {
     /// If a Vec<u8> is valid as UTF-8, converts to a RString::Str or ::SmallStr.
     pub fn from_bytes(b: Vec<u8>) -> Self {
         match std::str::from_utf8(&b) {
-            Ok(s) => RString::from_str(s),
+            Ok(s) => RString::from(s),
             Err(_) => RString::Bytes(b),
         }
     }
@@ -166,7 +149,7 @@ impl RString {
                 Ok(s) => {
                     //let mut_rstring = self as *const RString as *mut RString;
                     // Convert RString::Bytes => RString::Str in place.
-                    *self = RString::from_str(s);
+                    *self = RString::from(s);
                     Ok(self.as_str())
                 }
                 Err(_) => Err(VM::error_argument("Invalid as UTF-8 string.")),
@@ -208,7 +191,7 @@ impl RString {
             RString::SmallStr(s) => {
                 let mut s = s.to_string();
                 s.replace_range(range, replace_with);
-                *self = RString::from_str(&s);
+                *self = RString::from(&s);
             }
             RString::Bytes(_) => panic!(),
         }

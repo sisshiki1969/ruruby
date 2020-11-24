@@ -323,7 +323,7 @@ impl Codegen {
     }
 
     fn gen_string(&mut self, globals: &mut Globals, iseq: &mut ISeq, s: &str) {
-        let val = Value::string_from_str(s);
+        let val = Value::string(s);
         let id = globals.const_values.insert(val);
         self.gen_const_val(iseq, id);
     }
@@ -1614,7 +1614,7 @@ impl Codegen {
                                     let k = match &elem.kind {
                                         NodeKind::Integer(i) => Value::integer(*i),
                                         NodeKind::Symbol(sym) => Value::symbol(*sym),
-                                        NodeKind::String(str) => Value::string_from_str(str),
+                                        NodeKind::String(str) => Value::string(str),
                                         _ => unreachable!(),
                                     };
                                     map.insert(k, disp);
@@ -2191,7 +2191,7 @@ impl Codegen {
             NodeKind::Float(f) => Ok(Value::float(*f)),
             NodeKind::Nil => Ok(Value::nil()),
             NodeKind::Symbol(s) => Ok(Value::symbol(*s)),
-            NodeKind::String(s) => Ok(Value::string_from_str(s)),
+            NodeKind::String(s) => Ok(Value::string(s)),
             NodeKind::Hash(key_value, true) => {
                 let mut map = FxHashMap::default();
                 for (k, v) in key_value {

@@ -63,13 +63,13 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.to_s(vm)?;
-    Ok(Value::string_from_string(res))
+    Ok(Value::string(res))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.inspect(vm)?;
-    Ok(Value::string_from_string(res))
+    Ok(Value::string(res))
 }
 
 fn begin(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

@@ -255,16 +255,8 @@ impl RValue {
         }
     }
 
-    pub fn new_string_from_str(s: &str) -> Self {
-        RValue::new_string_from_rstring(RString::from_str(s))
-    }
-
-    pub fn new_string_from_string(s: String) -> Self {
-        RValue::new_string_from_rstring(RString::from_string(s))
-    }
-
-    pub fn new_string_from_cow(s: Cow<str>) -> Self {
-        RValue::new_string_from_rstring(RString::from_cow(s))
+    pub fn new_string<'a>(s: impl Into<Cow<'a, str>>) -> Self {
+        RValue::new_string_from_rstring(RString::from(s))
     }
 
     pub fn new_bytes(b: Vec<u8>) -> Self {

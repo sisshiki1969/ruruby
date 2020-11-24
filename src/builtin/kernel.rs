@@ -230,13 +230,13 @@ fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut path = vm.get_source_path();
     path.pop();
-    Ok(Value::string_from_cow(path.to_string_lossy()))
+    Ok(Value::string(path.to_string_lossy()))
 }
 
 fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let path = vm.get_source_path();
-    Ok(Value::string_from_cow(path.to_string_lossy()))
+    Ok(Value::string(path.to_string_lossy()))
 }
 
 /// raise -> ()

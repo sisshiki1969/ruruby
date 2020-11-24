@@ -20,7 +20,7 @@ fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         .unwrap_or(PathBuf::new())
         .to_string_lossy()
         .to_string();
-    Ok(Value::string_from_string(home_dir))
+    Ok(Value::string(home_dir))
 }
 
 fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -29,7 +29,7 @@ fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         .unwrap_or(PathBuf::new())
         .to_string_lossy()
         .to_string();
-    Ok(Value::string_from_string(cur_dir))
+    Ok(Value::string(cur_dir))
 }
 
 fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -123,7 +123,7 @@ fn traverse_dir(
 
     if level == glob.len() {
         let path = path.to_string_lossy();
-        matches.insert(Value::string_from_cow(path));
+        matches.insert(Value::string(path));
         return Ok(());
     }
     assert!(level < glob.len());
@@ -170,7 +170,7 @@ fn traverse_dir(
             let mut path = path.clone();
             path.push(name_cow.as_ref());
             let path = path.to_string_lossy();
-            matches.insert(Value::string_from_cow(path));
+            matches.insert(Value::string(path));
         }
     }
     Ok(())

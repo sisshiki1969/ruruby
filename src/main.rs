@@ -25,7 +25,7 @@ fn main() {
         Some(command) => {
             let mut globals = GlobalsRef::new_globals();
             let mut vm = globals.create_main_fiber();
-            vm.set_global_var(IdentId::get_id("$0"), Value::string_from_str("-e"));
+            vm.set_global_var(IdentId::get_id("$0"), Value::string("-e"));
             vm.exec_program(std::path::PathBuf::default(), command);
             return;
         }
@@ -40,10 +40,7 @@ fn main() {
     };
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
-    let res: Vec<Value> = args[1..]
-        .iter()
-        .map(|x| Value::string_from_str(x))
-        .collect();
+    let res: Vec<Value> = args[1..].iter().map(|x| Value::string(*x)).collect();
     let argv = Value::array_from(res);
     globals.set_toplevel_constant("ARGV", argv);
 

@@ -28,7 +28,7 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         ObjKind::Time(time) => time.0,
         _ => unreachable!(),
     };
-    Ok(Value::string_from_string(format!("{}", time)))
+    Ok(Value::string(format!("{}", time)))
 }
 
 fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

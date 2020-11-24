@@ -95,7 +95,7 @@ fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     let s = aref.to_s(vm)?;
-    Ok(Value::string_from_string(s))
+    Ok(Value::string(s))
 }
 
 fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
@@ -247,10 +247,10 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Ok(res)
     } else if let Some(s) = args[0].as_string() {
         match aref.elements.len() {
-            0 => return Ok(Value::string_from_str("")),
+            0 => return Ok(Value::string("")),
             1 => {
                 let res = aref.elements[0].val_to_s(vm)?;
-                return Ok(Value::string_from_cow(res));
+                return Ok(Value::string(res));
             }
             _ => {
                 let mut res = aref.elements[0].val_to_s(vm)?.to_string();
@@ -258,7 +258,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     let elem = aref.elements[i].val_to_s(vm)?;
                     res = res + s + &elem;
                 }
-                return Ok(Value::string_from_string(res));
+                return Ok(Value::string(res));
             }
         };
     } else {
@@ -709,7 +709,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             res = res + sep + &s;
         }
     }
-    Ok(Value::string_from_string(res))
+    Ok(Value::string(res))
 }
 
 fn drop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

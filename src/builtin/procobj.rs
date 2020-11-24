@@ -41,7 +41,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", pref.context.id())
     };
-    Ok(Value::string_from_string(s))
+    Ok(Value::string(s))
 }
 
 fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

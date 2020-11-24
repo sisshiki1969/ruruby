@@ -783,7 +783,7 @@ impl VM {
                         res += v.as_string().unwrap();
                     }
 
-                    let val = Value::string_from_string(res);
+                    let val = Value::string(res);
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -1196,7 +1196,7 @@ impl VM {
                 Inst::TO_S => {
                     let val = self.stack_pop();
                     let s = val.val_to_s(self)?;
-                    let res = Value::string_from_cow(s);
+                    let res = Value::string(s);
                     self.stack_push(res);
                     self.pc += 1;
                 }
@@ -2813,7 +2813,7 @@ impl VM {
             .file_name()
             .map(|x| x.to_string_lossy())
             .unwrap_or(std::borrow::Cow::Borrowed(""));
-        self.set_global_var(IdentId::get_id("$0"), Value::string_from_cow(file));
+        self.set_global_var(IdentId::get_id("$0"), Value::string(file));
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
         self.exec_program(absolute_path, &program);

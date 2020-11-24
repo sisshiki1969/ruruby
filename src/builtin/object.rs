@@ -73,18 +73,18 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         },
     };
 
-    Ok(Value::string_from_string(s))
+    Ok(Value::string(s))
 }
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => {
             let s = oref.inspect(vm)?;
-            Ok(Value::string_from_string(s))
+            Ok(Value::string(s))
         }
         None => {
             let s = vm.val_inspect(self_val)?;
-            Ok(Value::string_from_string(s))
+            Ok(Value::string(s))
         }
     }
 }

@@ -41,7 +41,7 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         fref as *mut FiberInfo as u64,
         fref.vm.fiberstate(),
     );
-    Ok(Value::string_from_string(inspect))
+    Ok(Value::string(inspect))
 }
 
 fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

@@ -31,7 +31,7 @@ pub fn repl_vm() {
     let mut parser = Parser::new();
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
-    vm.set_global_var(IdentId::get_id("$0"), Value::string_from_str("irb"));
+    vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
     let mut level = parser.get_context_depth();
     let method = MethodRef::new(MethodInfo::default());
     let info = ISeqInfo::default(method);

@@ -1053,21 +1053,17 @@ impl Value {
         RValue::new_string_from_rstring(rs).pack()
     }
 
-    pub fn string_from_str(string: &str) -> Self {
-        RValue::new_string_from_str(string).pack()
-    }
-
     pub fn string_from_string(string: String) -> Self {
-        RValue::new_string_from_string(string).pack()
+        RValue::new_string(string).pack()
     }
 
-    pub fn string_from_cow(string: Cow<str>) -> Self {
-        RValue::new_string_from_cow(string).pack()
+    pub fn string<'a>(string: impl Into<Cow<'a, str>>) -> Self {
+        RValue::new_string(string).pack()
     }
 
     pub fn bytes(bytes: Vec<u8>) -> Self {
         match std::str::from_utf8(&bytes) {
-            Ok(s) => RValue::new_string_from_str(s).pack(),
+            Ok(s) => RValue::new_string(s).pack(),
             Err(_) => RValue::new_bytes(bytes).pack(),
         }
     }
