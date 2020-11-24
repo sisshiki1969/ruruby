@@ -709,7 +709,7 @@ impl Codegen {
                 receiver, method, ..
             } => {
                 let name = format!("{:?}=", method);
-                let assign_id = IdentId::get_id(&name);
+                let assign_id = IdentId::get_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
                 self.gen_opt_send(globals, iseq, assign_id, 1);
@@ -798,7 +798,7 @@ impl Codegen {
                 receiver, method, ..
             } => {
                 let name = format!("{:?}=", method);
-                let assign_id = IdentId::get_id(&name);
+                let assign_id = IdentId::get_id(name);
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();

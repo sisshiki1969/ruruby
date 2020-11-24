@@ -1,4 +1,5 @@
 use fxhash::FxHashMap;
+use std::borrow::Cow;
 use std::fmt;
 use std::num::NonZeroU32;
 use std::sync::RwLock;
@@ -34,13 +35,6 @@ impl Into<usize> for IdentId {
 impl Into<u32> for IdentId {
     fn into(self) -> u32 {
         self.0.get()
-    }
-}
-
-impl From<&u32> for IdentId {
-    fn from(id: &u32) -> Self {
-        let id = unsafe { NonZeroU32::new_unchecked(*id) };
-        IdentId(id)
     }
 }
 
@@ -87,7 +81,7 @@ impl IdentId {
 }
 
 impl IdentId {
-    pub fn get_id(name: &str) -> Self {
+    pub fn get_id<'a>(name: impl Into<Cow<'a, str>>) -> Self {
         ID.write().unwrap().get_ident_id(name)
     }
 
@@ -105,12 +99,12 @@ impl IdentId {
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
         let new_name = format!("{:?}{}", id, postfix);
-        IdentId::get_id(&new_name)
+        IdentId::get_id(new_name)
     }
 
     pub fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
         let new_name = format!("{}{:?}", prefix, id);
-        IdentId::get_id(&new_name)
+        IdentId::get_id(new_name)
     }
 }
 
@@ -160,12 +154,13 @@ impl IdentifierTable {
         self.table.insert(name.into(), id.into());
     }
 
-    fn get_ident_id(&mut self, name: &str) -> IdentId {
-        match self.table.get(name) {
-            Some(id) => id.into(),
+    fn get_ident_id<'a>(&mut self, name: impl Into<Cow<'a, str>>) -> IdentId {
+        let name = name.into();
+        match self.table.get(name.as_ref()) {
+            Some(id) => (*id).into(),
             None => {
                 let id = self.ident_id;
-                self.table.insert(name.to_string(), id);
+                self.table.insert(name.into_owned(), id);
                 self.ident_id += 1;
                 id.into()
             }

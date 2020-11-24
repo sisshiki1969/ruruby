@@ -1053,10 +1053,6 @@ impl Value {
         RValue::new_string_from_rstring(rs).pack()
     }
 
-    pub fn string_from_string(string: String) -> Self {
-        RValue::new_string(string).pack()
-    }
-
     pub fn string<'a>(string: impl Into<Cow<'a, str>>) -> Self {
         RValue::new_string(string).pack()
     }

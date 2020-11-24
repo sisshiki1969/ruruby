@@ -232,7 +232,7 @@ impl ClassInfo {
                     } else {
                         match self.name() {
                             Some(parent_name) => {
-                                let name = IdentId::get_id(&format!("{:?}::{:?}", parent_name, id));
+                                let name = IdentId::get_id(format!("{:?}::{:?}", parent_name, id));
                                 Some(name)
                             }
                             None => None,

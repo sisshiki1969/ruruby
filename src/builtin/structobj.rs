@@ -22,7 +22,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             };
             i = 1;
-            let s = IdentId::get_id(&format!("Struct::{}", s));
+            let s = IdentId::get_id(format!("Struct::{}", s));
             Some(s)
         }
     };
