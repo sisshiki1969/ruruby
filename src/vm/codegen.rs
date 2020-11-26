@@ -149,7 +149,7 @@ impl ISeq {
     }
 
     pub fn ident_name(&self, pc: usize) -> String {
-        IdentId::get_name(IdentId::from(self.read32(pc))).to_string()
+        IdentId::get_name(self.read32(pc).into())
     }
 
     pub fn push(&mut self, val: u8) {

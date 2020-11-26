@@ -1181,6 +1181,15 @@ fn class5() {
 }
 
 #[test]
+fn class6() {
+    let program = r##"
+        class A end
+        class B def fn; end end
+        "##;
+    assert_script(program);
+}
+
+#[test]
 fn initialize() {
     let program = "
     class Vec

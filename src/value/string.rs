@@ -101,7 +101,7 @@ impl RString {
                     }
                     SmallStr(rhs) => {
                         lhs += rhs.as_str();
-                        Str(lhs)
+                        RString::from(lhs)
                     }
                     Bytes(rhs) => {
                         let mut bytes = lhs.into_bytes();

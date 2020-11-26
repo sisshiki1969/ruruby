@@ -635,17 +635,17 @@ impl Value {
         }
     }
 
-    pub fn expect_string_or_symbol(&mut self, msg: &str) -> Result<IdentId, RubyError> {
-        let val = *self;
+    pub fn expect_string_or_symbol(&self, msg: &str) -> Result<IdentId, RubyError> {
+        let mut val = *self;
         if let Some(id) = val.as_symbol() {
             return Ok(id);
         };
-        let str = self
+        let str = val
             .as_mut_rstring()
             .ok_or_else(|| {
                 VM::error_type(format!(
                     "{} must be String or Symbol. (given:{:?})",
-                    msg, val
+                    msg, *self
                 ))
             })?
             .as_string()?;

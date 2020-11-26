@@ -8,7 +8,7 @@ An alternative Ruby implementation by Rust.
 - No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
 - Hand-written original parser.
 - Virtual machine execution.
-- :ribbon: Simple mark & sweep garbage collector is implemented. 
+- :ribbon: Simple mark & sweep garbage collector is implemented.
 
 ## Related article (sorry, currently only in Japanese)
 
@@ -46,7 +46,7 @@ You can launch irb-like interactive shell, omitting file name.
 % cargo run
 ```
 
-There are some useful options for analysis and development. Use `feature` flag of cargo.
+There are some useful options for analysis and development. Use `features` flag of cargo.
 
 ### `trace` option: bytecode trace execution
 
@@ -81,7 +81,7 @@ Hello world!
      Running `target/debug/ruruby tests/sample.rb`
 -----------------------------------------
 MethodRef(200)
-local var(0): w 
+local var(0): w
 block: None
   00000 PUSH_STRING 182
   00005 SET_LOCAL 'w' outer:0 LvarId:0
@@ -149,7 +149,7 @@ EXTERN **         8042K     8.76      153
 ------------------------------------------
 ```
 
-Instruction name, total execution count, percentage in the total execution time, and 
+Instruction name, total execution count, percentage in the total execution time, and
 execution time per single instruction are shown.  
 \* `GC` means garbage collection.  
-\** `EXTERN` means exectution of native methods.  
+\*\* `EXTERN` means exectution of native methods.

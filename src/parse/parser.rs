@@ -1128,7 +1128,7 @@ impl Parser {
         // 一次式メソッド呼び出し
         // スコープ付き定数参照 :: 一次式 [行終端子禁止][空白類禁止] "::" 定数識別子
         //      ｜"::" 定数識別子
-        let mut node = self.parse_primary()?;
+        let mut node = self.parse_primary(false)?;
         loop {
             node = if self.consume_punct(Punct::Dot)? {
                 self.parse_primary_method(node, false)?
@@ -1402,7 +1402,25 @@ impl Parser {
         Ok(Some(Box::new(node)))
     }
 
-    fn parse_primary(&mut self) -> Result<Node, RubyError> {
+    fn alias_name(&mut self) -> Result<IdentId, RubyError> {
+        if self.consume_punct_no_term(Punct::Colon)? {
+            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
+                Ok(id)
+            } else {
+                unreachable!("parse_symbol() returned illegal node type.")
+            }
+        } else if let TokenKind::GlobalVar(_) = self.peek_no_term()?.kind {
+            let tok = self.get()?;
+            match tok.kind {
+                TokenKind::GlobalVar(name) => Ok(IdentId::get_id(name)),
+                _ => unreachable!(),
+            }
+        } else {
+            self.parse_method_def_name()
+        }
+    }
+
+    fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, RubyError> {
         let tok = self.get()?;
         let loc = tok.loc();
         match &tok.kind {
@@ -1429,7 +1447,7 @@ impl Parser {
                         }
                     };
 
-                    if self.is_command() {
+                    if !suppress_unparen_call && self.is_command() {
                         Ok(self.parse_command(id, loc)?)
                     } else {
                         Ok(node)
@@ -1443,7 +1461,7 @@ impl Parser {
                 if self.lexer.trailing_lparen() {
                     let node = Node::new_identifier(name, loc);
                     self.parse_function_args(node)
-                } else if self.is_command() {
+                } else if !suppress_unparen_call && self.is_command() {
                     let id = self.get_ident_id(name);
                     Ok(self.parse_command(id, loc)?)
                 } else {
@@ -1750,24 +1768,8 @@ impl Parser {
                         }
                     }
                     Reserved::Alias => {
-                        let new_name = if self.consume_punct_no_term(Punct::Colon)? {
-                            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
-                                id
-                            } else {
-                                unreachable!("parse_symbol() returned illegal node type.")
-                            }
-                        } else {
-                            self.parse_method_def_name()?
-                        };
-                        let old_name = if self.consume_punct_no_term(Punct::Colon)? {
-                            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
-                                id
-                            } else {
-                                unreachable!("parse_symbol() returned illegal node type.")
-                            }
-                        } else {
-                            self.parse_method_def_name()?
-                        };
+                        let new_name = self.alias_name()?;
+                        let old_name = self.alias_name()?;
                         let loc = loc.merge(self.prev_loc());
                         Ok(Node::new_alias(new_name, old_name, loc))
                     }
@@ -1812,7 +1814,8 @@ impl Parser {
                     | Reserved::Until
                     | Reserved::And
                     | Reserved::Or
-                    | Reserved::Then => false,
+                    | Reserved::Then
+                    | Reserved::End => false,
                     _ => true,
                 },
                 _ => true,
@@ -2386,6 +2389,24 @@ impl Parser {
         Ok(args)
     }
 
+    fn parse_class_def_name(&mut self) -> Result<Node, RubyError> {
+        // クラスパス : "::" 定数識別子
+        //      ｜ 定数識別子
+        //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
+        let mut node = self.parse_primary(true)?;
+        loop {
+            node = if self.consume_punct(Punct::Dot)? {
+                self.parse_primary_method(node, false)?
+            } else if self.consume_punct_no_term(Punct::Scope)? {
+                let loc = self.prev_loc();
+                let name = self.expect_const()?;
+                Node::new_scope(node, &name, loc)
+            } else {
+                return Ok(node);
+            };
+        }
+    }
+
     /// Parse class definition.
     fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
         // クラス定義 : "class" クラスパス [行終端子禁止] ("<" 式)? 分離子 本体文 "end"
@@ -2393,7 +2414,7 @@ impl Parser {
         //      ｜ 定数識別子
         //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
         let loc = self.prev_loc();
-        let prim = self.parse_method_call()?;
+        let prim = self.parse_class_def_name()?;
         let (base, name) = match prim.kind {
             NodeKind::Const { toplevel: true, id } if !self.peek_punct_no_term(Punct::Scope) => {
                 (Node::new_nil(loc), id)

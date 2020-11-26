@@ -195,6 +195,8 @@ end
  'loop_for.rb',
  'loop_whileloop.rb',
  'so_concatenate.rb',
+ 'string_scan_str.rb',
+ 'string_scan_re.rb',
  'so_mandelbrot.rb',
  'app_mandelbrot.rb',
  'app_fibo.rb',

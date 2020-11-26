@@ -90,11 +90,14 @@ impl IdentId {
     }
 
     pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
-        let id = id.into();
-        match id {
+        match id.into() {
             Some(id) => IdentId::get_name(id),
             None => "".to_string(),
         }
+    }
+
+    pub fn starts_with(id: IdentId, pat: &str) -> bool {
+        ID.read().unwrap().starts_with(id, pat)
     }
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
@@ -169,5 +172,9 @@ impl IdentifierTable {
 
     fn get_name(&self, id: IdentId) -> &str {
         self.table.iter().find(|(_, v)| **v == id.into()).unwrap().0
+    }
+
+    fn starts_with<'a>(&'a self, id: IdentId, pat: impl std::str::pattern::Pattern<'a>) -> bool {
+        self.get_name(id).starts_with(pat)
     }
 }
