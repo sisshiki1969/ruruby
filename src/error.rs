@@ -108,7 +108,11 @@ impl RubyError {
 
 impl RubyError {
     pub fn loc(&self) -> Loc {
-        self.0.info[0].1
+        if let Some(info) = self.0.info.get(0) {
+            info.1
+        } else {
+            Loc(0, 0)
+        }
     }
 
     pub fn level(&self) -> usize {
@@ -120,11 +124,15 @@ impl RubyError {
     }
 
     pub fn show_file_name(&self, pos: usize) {
-        self.0.info[pos].0.show_file_name();
+        if let Some(info) = self.0.info.get(pos) {
+            info.0.show_file_name()
+        }
     }
 
     pub fn show_loc(&self, pos: usize) {
-        self.0.info[pos].0.show_loc(&self.0.info[pos].1);
+        if let Some(info) = self.0.info.get(pos) {
+            info.0.show_loc(&self.0.info[pos].1);
+        }
     }
 
     pub fn show_err(&self) {
