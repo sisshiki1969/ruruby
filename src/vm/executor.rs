@@ -80,10 +80,9 @@ impl GC for VM {
 }
 
 impl VM {
-    pub fn new(globals: GlobalsRef) -> Self {
+    pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            //root_path: vec![],
             fiber_state: FiberState::Created,
             class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             exec_context: vec![],
@@ -91,12 +90,25 @@ impl VM {
             temp_stack: vec![],
             exception: false,
             pc: 0,
-            //gc_counter: 0,
             parent_fiber: None,
             handle: None,
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
+
+        use std::process::Command;
+        let load_path = match Command::new("ruby").args(&["-e", "p($:)"]).output() {
+            Ok(output) => match std::str::from_utf8(&output.stdout) {
+                Ok(s) => s.to_string(),
+                Err(_) => "[]".to_string(),
+            },
+            Err(_) => "[]".to_string(),
+        };
+        match vm.run(PathBuf::from("(startup)"), &load_path) {
+            Ok(val) => globals.set_global_var_by_str("$:", val),
+            Err(_) => {}
+        };
+
         match vm.run(
             PathBuf::from("ruruby/startup/startup.rb"),
             include_str!("../startup/startup.rb"),
@@ -108,6 +120,12 @@ impl VM {
                 panic!("Error occured in executing startup.rb.");
             }
         };
+
+        #[cfg(feature = "perf")]
+        {
+            vm.perf = Perf::new();
+        }
+
         vm
     }
 

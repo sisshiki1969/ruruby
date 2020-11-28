@@ -58,4 +58,4 @@ RUBY_VERSION = "2.5.0"
 RUBY_ENGINE = "ruruby"
 RUBY_DESCRIPTION = "ruruby [x86_64-linux]"
 
-$: = eval(`ruby -e p($:)`)
+#$: = eval(`ruby -e p($:)`)
