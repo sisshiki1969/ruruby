@@ -133,10 +133,19 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         if base_path.exists() {
             return Ok(Value::bool(load_exec(vm, &base_path, false)?));
         }
+        base_path.set_extension("so");
+        if base_path.exists() {
+            eprintln!(
+                "Warning: currently, can not require .so file. {:?}",
+                base_path
+            );
+            return Ok(Value::bool(false));
+        }
     }
-    Ok(Value::false_val())
-    // TODO: This is not correct. Work around for load error in requiring .so files.
-    //Err(vm.error_load(format!("Can not load such file -- {:?}", file_name)))
+    Err(VM::error_load(format!(
+        "Can not load such file -- {:?}",
+        file_name
+    )))
 }
 
 fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -421,10 +430,11 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
     Ok(_self_val)
 }
 
+/// TODO: Can not handle command args including ' or ".
 fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     use std::process::Command;
     args.check_args_num(1)?;
-    let mut arg = args[0].to_owned();
+    let mut arg = args[0];
     let mut input = arg.expect_string("Arg")?.split_whitespace();
     let command = input.next().unwrap();
     let output = match Command::new(command).args(input).output() {

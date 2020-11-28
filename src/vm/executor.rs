@@ -97,17 +97,17 @@ impl VM {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
-        let _ = vm.run(PathBuf::new(), include_str!("../startup/startup.rb"));
-        /*
-        match crate::loader::load_exec(&mut vm, &startup, false) {
+        match vm.run(
+            PathBuf::from("ruruby/startup/startup.rb"),
+            include_str!("../startup/startup.rb"),
+        ) {
             Ok(_) => {}
             Err(err) => {
                 err.show_err();
                 err.show_loc(0);
-                panic!("Got error: {:?}", err);
+                panic!("Error occured in executing startup.rb.");
             }
-        }
-        */
+        };
         vm
     }
 

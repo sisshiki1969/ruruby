@@ -142,12 +142,17 @@ impl Context {
         args: &Args,
         outer: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
-        let caller = vm.latest_context();
+        let mut context = Context::new(
+            self_value,
+            args.block.clone(),
+            iseq,
+            outer,
+            vm.latest_context(),
+        );
         if iseq.opt_flag {
             if !args.kw_arg.is_nil() {
                 return Err(VM::error_argument("Undefined keyword."));
             };
-            let mut context = Context::new(self_value, args.block.clone(), iseq, outer, caller);
             if iseq.is_block() {
                 context.from_args_opt_block(&iseq.params, args)?;
             } else {
@@ -159,7 +164,6 @@ impl Context {
             }
             return Ok(context);
         }
-        let mut context = Context::new(self_value, args.block.clone(), iseq, outer, caller);
         let params = &iseq.params;
         let kw = if params.keyword.is_empty() && !params.kwrest {
             // if no keyword param nor kwrest param exists in formal parameters,
