@@ -116,6 +116,21 @@ impl ArrayInfo {
         Ok(val)
     }
 
+    pub fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
+        let index = idx.expect_integer("Index")?;
+        let elements = &mut self.elements;
+        let len = elements.len();
+        if index >= elements.len() as i64 {
+            let padding = index as usize - len;
+            elements.extend_from_slice(&vec![Value::nil(); padding]);
+            elements.push(val);
+        } else {
+            let index = get_array_index(index, len)?;
+            elements[index] = val;
+        }
+        Ok(val)
+    }
+
     pub fn set_elem_imm(&mut self, index: u32, val: Value) {
         let elements = &mut self.elements;
         let len = elements.len();

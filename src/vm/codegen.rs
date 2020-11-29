@@ -371,9 +371,8 @@ impl Codegen {
         iseq.push(Inst::GET_INDEX);
     }
 
-    fn gen_set_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
+    fn gen_set_array_elem(&mut self, iseq: &mut ISeq) {
         iseq.push(Inst::SET_INDEX);
-        Codegen::push32(iseq, num_args as u32);
     }
 
     fn gen_splat(&mut self, iseq: &mut ISeq) {
@@ -686,6 +685,7 @@ impl Codegen {
         Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
+    /// stack: val
     fn gen_assign(
         &mut self,
         globals: &mut Globals,
@@ -717,24 +717,39 @@ impl Codegen {
             }
             NodeKind::Index { base, index } => {
                 self.gen(globals, iseq, base, true)?;
-                if index.len() == 1 {
+                if index.len() == 1 && !index[0].is_splat() {
                     match index[0].is_imm_u32() {
                         Some(u) => {
-                            self.gen_topn(iseq, 1);
                             self.save_loc(iseq, lhs.loc());
-                            iseq.push(Inst::OPT_SET_INDEX);
+                            iseq.push(Inst::SET_IDX_I);
                             Codegen::push32(iseq, u);
                             return Ok(());
                         }
-                        None => {}
+                        None => {
+                            self.gen(globals, iseq, &index[0], true)?;
+                            self.gen_topn(iseq, 2);
+                            self.save_loc(iseq, lhs.loc());
+                            self.gen_set_array_elem(iseq);
+                            return Ok(());
+                        }
                     }
                 }
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
                 }
-                self.gen_topn(iseq, index.len());
-                self.save_loc(iseq, lhs.loc());
-                self.gen_set_array_elem(iseq, index.len());
+                self.gen_topn(iseq, index.len() + 1);
+                self.gen_topn(iseq, index.len() + 1);
+                self.loc = lhs.loc();
+                self.gen_send(
+                    globals,
+                    iseq,
+                    IdentId::_INDEX_ASSIGN,
+                    index.len() + 1,
+                    0,
+                    0,
+                    None,
+                );
+                self.gen_pop(iseq);
             }
             _ => {
                 return Err(
@@ -807,19 +822,30 @@ impl Codegen {
             }
             NodeKind::Index { base, index } => {
                 self.gen(globals, iseq, base, true)?;
-                if index.len() == 1 {
+                if index.len() == 1 && !index[0].is_splat() {
                     match index[0].is_imm_u32() {
                         Some(u) => {
                             self.gen_assign_val(globals, iseq, rhs, use_value)?;
                             if use_value {
-                                self.gen_sinkn(iseq, 2);
+                                self.gen_topn(iseq, 2);
+                            } else {
+                                self.gen_topn(iseq, 1);
                             }
                             self.save_loc(iseq, lhs.loc());
-                            iseq.push(Inst::OPT_SET_INDEX);
+                            iseq.push(Inst::SET_IDX_I);
                             Codegen::push32(iseq, u);
                             return Ok(());
                         }
-                        None => {}
+                        None => {
+                            self.gen(globals, iseq, &index[0], true)?;
+                            self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                            if use_value {
+                                self.gen_sinkn(iseq, 3);
+                            }
+                            self.save_loc(iseq, lhs.loc());
+                            self.gen_set_array_elem(iseq);
+                            return Ok(());
+                        }
                     }
                 }
                 for i in index {
@@ -829,8 +855,18 @@ impl Codegen {
                 if use_value {
                     self.gen_sinkn(iseq, index.len() + 2);
                 }
-                self.save_loc(iseq, lhs.loc());
-                self.gen_set_array_elem(iseq, index.len());
+                self.gen_topn(iseq, index.len() + 1);
+                self.loc = lhs.loc();
+                self.gen_send(
+                    globals,
+                    iseq,
+                    IdentId::_INDEX_ASSIGN,
+                    index.len() + 1,
+                    0,
+                    0,
+                    None,
+                );
+                self.gen_pop(iseq);
             }
             _ => {
                 return Err(

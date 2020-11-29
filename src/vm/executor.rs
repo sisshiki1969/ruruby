@@ -963,18 +963,17 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SET_INDEX => {
-                    let arg_num = iseq.read_usize(self.pc + 1);
-                    self.set_index(arg_num)?;
-                    self.pc += 5;
+                    self.set_index()?;
+                    self.pc += 1;
                 }
                 Inst::GET_INDEX => {
                     let val = self.get_index()?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
-                Inst::OPT_SET_INDEX => {
+                Inst::SET_IDX_I => {
                     let idx = iseq.read32(self.pc + 1);
-                    self.opt_set_index(idx)?;
+                    self.set_index_imm(idx)?;
                     self.pc += 5;
                 }
                 Inst::GET_IDX_I => {
@@ -2013,35 +2012,33 @@ impl VM {
         }
     }
 
-    fn set_index(&mut self, arg_num: usize) -> Result<(), RubyError> {
+    fn set_index(&mut self) -> Result<(), RubyError> {
         let val = self.stack_pop();
-        let mut args = self.pop_args_to_args(arg_num);
+        let idx = self.stack_pop();
         let mut receiver = self.stack_pop();
+
         match receiver.as_mut_rvalue() {
             Some(oref) => {
                 match oref.kind {
                     ObjKind::Array(ref mut aref) => {
-                        args.push(val);
-                        aref.set_elem(&args)?;
+                        aref.set_elem1(idx, val)?;
                     }
-                    ObjKind::Hash(ref mut href) => href.insert(args[0], val),
+                    ObjKind::Hash(ref mut href) => href.insert(idx, val),
                     _ => {
-                        args.push(val);
-                        self.send(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                        self.send(IdentId::_INDEX_ASSIGN, receiver, &Args::new2(idx, val))?;
                     }
                 };
             }
             None => {
-                args.push(val);
-                self.send(IdentId::_INDEX_ASSIGN, receiver, &args)?;
+                self.send(IdentId::_INDEX_ASSIGN, receiver, &Args::new2(idx, val))?;
             }
         }
         Ok(())
     }
 
-    fn opt_set_index(&mut self, idx: u32) -> Result<(), RubyError> {
-        let val = self.stack_pop();
+    fn set_index_imm(&mut self, idx: u32) -> Result<(), RubyError> {
         let mut receiver = self.stack_pop();
+        let val = self.stack_pop();
         match receiver.as_mut_rvalue() {
             Some(oref) => {
                 match oref.kind {
