@@ -255,18 +255,12 @@ impl Globals {
         globals.set_toplevel_constant("StopIteration", Value::class_from(object));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
-        /*
-            let home_dir = dirs::home_dir()
-                .unwrap_or(std::path::PathBuf::new())
-                .to_string_lossy()
-                .to_string();
-            env_map.insert(Value::string("HOME".to_string()), Value::string(home_dir));
-        */
         std::env::vars()
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
 
         let env = Value::hash_from(env_map);
         globals.set_toplevel_constant("ENV", env);
+
         globals
     }
 
