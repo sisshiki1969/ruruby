@@ -13,6 +13,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("eql?", eql);
     object_class.add_builtin_method_by_str("nil?", nil);
     object_class.add_builtin_method_by_str("to_i", toi);
+    object_class.add_builtin_method_by_str("method", method);
     object_class.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
     object_class.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
     object_class.add_builtin_method_by_str("instance_variables", instance_variables);
@@ -119,6 +120,17 @@ fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
             self_val,
         ))
     }
+}
+
+fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let name = match args[0].as_symbol() {
+        Some(id) => id,
+        None => return Err(VM::error_type("An argument must be a Symbol.")),
+    };
+    let method = vm.get_method_from_receiver(self_val, name)?;
+    let val = Value::method(name, self_val, method);
+    Ok(val)
 }
 
 fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -541,6 +553,16 @@ mod test {
         assert(false, a.respond_to? "bar")
         assert(true, b.respond_to? "foo")
         assert(true, b.respond_to?(:bar))
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_etc() {
+        let program = r#"
+        #assert 365, -365.method(:abs).call
+        assert "RUBY", "Ruby".method(:upcase).call
+        assert_error { "Ruby".method(100) }
         "#;
         assert_script(program);
     }

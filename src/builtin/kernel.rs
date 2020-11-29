@@ -14,7 +14,6 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("require_relative", require_relative);
     kernel.add_builtin_module_func("load", load);
     kernel.add_builtin_module_func("block_given?", block_given);
-    kernel.add_builtin_module_func("method", method);
     kernel.add_builtin_module_func("is_a?", isa);
     kernel.add_builtin_module_func("__dir__", dir);
     kernel.add_builtin_module_func("__FILE__", file_);
@@ -214,17 +213,6 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Built-in function "block_given?".
 fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
     Ok(Value::bool(vm.current_context().block.is_some()))
-}
-
-fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let name = match args[0].as_symbol() {
-        Some(id) => id,
-        None => return Err(VM::error_type("An argument must be a Symbol.")),
-    };
-    let method = vm.get_method_from_receiver(self_val, name)?;
-    let val = Value::method(name, self_val, method);
-    Ok(val)
 }
 
 fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -524,13 +512,21 @@ mod test {
         assert_error { assert 2, 3 }
         assert_error { assert_error { true } }
         assert_error { raise }
+        assert_error { assert_error }
         require "#{Dir.pwd}/tests/kernel_test"
         require_relative "../../tests/kernel_test"
         load "#{Dir.pwd}/tests/kernel_test.rb"
+        assert_error { require 100 }
+        assert_error { require "kernel_test" }
+        assert_error { require_relative 100 }
         assert_error { require_relative "kernel_test" }
+        assert_error { load 100 }
+        assert_error { load "kernel_test" }
         assert_error { assert rand, rand }
         sleep(0.1)
         print "Ruby"
+        print 3
+        puts
         at_exit
         "###;
         assert_script(program);
@@ -594,6 +590,9 @@ mod test {
     fn kernel_complex() {
         let program = r#"
         assert(Complex.rect(5.2, -99), Complex(5.2, -99))
+        assert(Complex.rect(5.2, -99), Complex(5.2, -99, true))
+        assert_error { Complex("s","k",true) }
+        assert nil, Complex("s","k",false) 
         "#;
         assert_script(program);
     }
@@ -614,6 +613,7 @@ mod test {
         assert("Cargo.toml\n", `ls Cargo.toml`)
         a = "toml"
         assert("Cargo.toml\n", `ls Cargo.#{a}`)
+        assert_error { `wooo` }
         "#;
         assert_script(program);
     }
