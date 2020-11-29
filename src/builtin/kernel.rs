@@ -121,6 +121,18 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(string) => string,
         None => return Err(VM::error_argument("file name must be a string.")),
     };
+    let mut path = PathBuf::from(file_name);
+    if path.is_absolute() {
+        path.set_extension("rb");
+        if path.exists() {
+            return Ok(Value::bool(load_exec(vm, &path, false)?));
+        }
+        path.set_extension("so");
+        if path.exists() {
+            eprintln!("Warning: currently, can not require .so file. {:?}", path);
+            return Ok(Value::bool(false));
+        }
+    }
     let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
         Some(path) => path,
         None => return Ok(Value::false_val()),

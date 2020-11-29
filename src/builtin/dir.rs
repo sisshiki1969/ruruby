@@ -16,20 +16,14 @@ pub fn init(globals: &mut Globals) -> Value {
 
 fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let home_dir = dirs::home_dir()
-        .unwrap_or(PathBuf::new())
-        .to_string_lossy()
-        .to_string();
-    Ok(Value::string(home_dir))
+    let home_dir = dirs::home_dir().unwrap_or(PathBuf::new());
+    Ok(Value::string(home_dir.to_string_lossy()))
 }
 
 fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let cur_dir = std::env::current_dir()
-        .unwrap_or(PathBuf::new())
-        .to_string_lossy()
-        .to_string();
-    Ok(Value::string(cur_dir))
+    let cur_dir = std::env::current_dir().unwrap_or(PathBuf::new());
+    Ok(Value::string(cur_dir.to_string_lossy()))
 }
 
 fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
