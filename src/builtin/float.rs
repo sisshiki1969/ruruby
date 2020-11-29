@@ -107,7 +107,7 @@ mod tests {
     use crate::test::*;
 
     #[test]
-    fn float() {
+    fn cmp() {
         let program = "
         assert(1, 1.3<=>1) 
         assert(-1, 1.3<=>5)
@@ -115,14 +115,33 @@ mod tests {
         assert(nil, 1.3<=>:foo)
         assert(1, 1.3.floor)
         assert(-2, (-1.3).floor)
+
+        assert(1, 1.3.send(:<=>, 1) 
+        assert(-1, 1.3.send(:<=>, 5)
+        assert(0, 1.3.send(:<=>, 1.3)
+        assert(nil, 1.3.send(:<=>, :foo)
     ";
         assert_script(program);
     }
 
     #[test]
-    fn float_quotient() {
+    fn float_ops() {
         let program = "
-        assert(1, 3.0.div(2)) 
+        assert(5.0, 3.0.send(:+,2)) 
+        assert(5.0, 3.0.send(:+,2.0)) 
+        assert(-1.0, (-3.0).send(:+,2.0)) 
+        assert(-1.0, (-3.0).send(:+,2)) 
+
+        assert(1.0, 3.0.send(:-,2)) 
+        assert(1.0, 3.0.send(:-,2.0)) 
+        assert(-5.0, (-3.0).send(:-,2.0)) 
+        assert(-5.0, (-3.0).send(:-,2)) 
+
+        assert(6.0, 3.0.send(:*,2)) 
+        assert(6.0, 3.0.send(:*,2.0)) 
+        assert(-6.0, (-3.0).send(:*,2.0)) 
+        assert(-6.0, (-3.0).send(:*,2)) 
+
         assert(1, 3.0.div(2.0)) 
         assert(-2, (-3.0).div(2.0)) 
         assert(-2, (-3.0).div(2)) 
