@@ -652,6 +652,19 @@ impl Value {
         Ok(IdentId::get_id(str))
     }
 
+    pub fn expect_regexp_or_string(&self, vm: &mut VM, msg: &str) -> Result<RegexpInfo, RubyError> {
+        if let Some(re) = self.as_regexp() {
+            Ok(re)
+        } else if let Some(string) = self.as_string() {
+            vm.regexp_from_string(string)
+        } else {
+            Err(VM::error_argument(format!(
+                "{} arg must be RegExp or String.",
+                msg
+            )))
+        }
+    }
+
     /// Take &ClassInfo from `self`.
     /// Panic if `self` is not Class.
     pub fn as_class(&self) -> &ClassInfo {
@@ -1116,6 +1129,10 @@ impl Value {
 
     pub fn regexp(regexp: RegexpInfo) -> Self {
         RValue::new_regexp(regexp).pack()
+    }
+
+    pub fn regexp_from(vm: &mut VM, string: &str) -> Result<Self, RubyError> {
+        Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
     pub fn procobj(context: ContextRef) -> Self {

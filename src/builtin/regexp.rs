@@ -5,7 +5,7 @@ use fancy_regex::{Captures, Error, Match, Regex};
 use crate::*;
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RegexpInfo(Rc<Regex>);
 
 impl RegexpInfo {
@@ -149,7 +149,7 @@ fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut arg0 = args[0];
     let string = arg0.expect_string("1st arg")?;
-    let val = vm.create_regexp_from_string(string)?;
+    let val = Value::regexp_from(vm, string)?;
     Ok(val)
 }
 
@@ -157,8 +157,7 @@ fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut arg0 = args[0];
     let string = arg0.expect_string("1st arg")?;
-    let res = regex::escape(string);
-    let regexp = Value::string(res);
+    let regexp = Value::string(regex::escape(string));
     Ok(regexp)
 }
 
@@ -210,7 +209,7 @@ impl RegexpInfo {
         replace: &str,
     ) -> Result<String, RubyError> {
         if let Some(s) = re_val.as_string() {
-            let re = vm.regexp_from_string(&s)?;
+            let re = vm.regexp_from_escaped_string(&s)?;
             return re.replace_once(vm, given, replace).map(|x| x.0);
         } else if let Some(re) = re_val.as_regexp() {
             return re.replace_once(vm, given, replace).map(|x| x.0);
@@ -250,7 +249,7 @@ impl RegexpInfo {
         }
 
         if let Some(s) = re_val.as_string() {
-            let re = vm.regexp_from_string(&s)?;
+            let re = vm.regexp_from_escaped_string(&s)?;
             return replace_(vm, &re, given, block);
         } else if let Some(re) = re_val.as_regexp() {
             return replace_(vm, &re, given, block);
@@ -267,7 +266,7 @@ impl RegexpInfo {
         replace: &str,
     ) -> Result<(String, bool), RubyError> {
         if let Some(s) = regexp.as_string() {
-            let re = vm.regexp_from_string(&s)?;
+            let re = vm.regexp_from_escaped_string(&s)?;
             return re.replace_repeat(vm, given, replace);
         } else if let Some(re) = regexp.as_regexp() {
             return re.replace_repeat(vm, given, replace);
@@ -318,13 +317,59 @@ impl RegexpInfo {
         }
 
         if let Some(s) = re_val.as_string() {
-            let re = vm.regexp_from_string(&s)?;
+            let re = vm.regexp_from_escaped_string(&s)?;
             return replace_(vm, &re, given, block);
         } else if let Some(re) = re_val.as_regexp() {
             return replace_(vm, &re, given, block);
         } else {
             return Err(VM::error_argument("1st arg must be RegExp or String."));
         };
+    }
+
+    pub fn match_one<'a>(
+        vm: &mut VM,
+        re: &Regex,
+        given: &'a str,
+        pos: usize,
+    ) -> Result<Value, RubyError> {
+        let pos = match given.char_indices().nth(pos) {
+            Some((pos, _)) => pos,
+            None => return Ok(Value::nil()),
+        };
+        match re.captures_from_pos(given, pos) {
+            Ok(None) => Ok(Value::nil()),
+            Ok(Some(captures)) => {
+                RegexpInfo::get_captures(vm, &captures, given);
+                let mut v = vec![];
+                for i in 0..captures.len() {
+                    v.push(Value::string(captures.get(i).unwrap().as_str()));
+                }
+                Ok(Value::array_from(v))
+            }
+            Err(err) => Err(VM::error_internal(format!("Capture failed. {:?}", err))),
+        }
+    }
+
+    pub fn match_one_block<'a>(
+        vm: &mut VM,
+        re: &Regex,
+        given: &'a str,
+        block: &Block,
+        pos: usize,
+    ) -> Result<Value, RubyError> {
+        let pos = match given.char_indices().nth(pos) {
+            Some((pos, _)) => pos,
+            None => return Ok(Value::nil()),
+        };
+        match re.captures_from_pos(given, pos) {
+            Ok(None) => Ok(Value::nil()),
+            Ok(Some(captures)) => {
+                RegexpInfo::get_captures(vm, &captures, given);
+                let matched = Value::string(captures.get(0).unwrap().as_str());
+                vm.eval_block(block, &Args::new1(matched))
+            }
+            Err(err) => Err(VM::error_internal(format!("Capture failed. {:?}", err))),
+        }
     }
 
     pub fn find_one<'a>(

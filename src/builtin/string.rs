@@ -24,6 +24,7 @@ pub fn init(globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("gsub!", gsub_);
     string_class.add_builtin_method_by_str("scan", scan);
     string_class.add_builtin_method_by_str("slice!", slice_);
+    string_class.add_builtin_method_by_str("match", str_match);
     string_class.add_builtin_method_by_str("=~", rmatch);
     string_class.add_builtin_method_by_str("tr", tr);
     string_class.add_builtin_method_by_str("size", size);
@@ -467,7 +468,7 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let given = self_val.expect_string("Receiver")?;
     let vec = if let Some(s) = args[0].as_string() {
-        let re = vm.regexp_from_string(s)?;
+        let re = vm.regexp_from_escaped_string(s)?;
         RegexpInfo::find_all(vm, &re, given)?
     } else if let Some(re) = args[0].as_regexp() {
         RegexpInfo::find_all(vm, &*re, given)?
@@ -589,7 +590,7 @@ fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let given = self_val.expect_string("Receiver")?;
     if let Some(re) = args[0].as_regexp() {
-        let res = match RegexpInfo::find_one(vm, &*re, given).unwrap() {
+        let res = match RegexpInfo::find_one(vm, &re, given).unwrap() {
             Some(mat) => Value::integer(mat.start() as i64),
             None => Value::nil(),
         };
@@ -597,6 +598,24 @@ fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     } else {
         return Err(VM::error_argument("1st arg must be RegExp."));
     };
+}
+
+fn str_match(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(1, 2)?;
+    let given = self_val.expect_string("Receiver")?;
+    let re = args[0].expect_regexp_or_string(vm, "1st arg")?;
+    let pos = if args.len() == 1 {
+        0usize
+    } else {
+        match args[1].expect_integer("2nd arg")? {
+            pos if pos >= 0 => pos as usize,
+            _ => return Ok(Value::nil()),
+        }
+    };
+    match &args.block {
+        Some(block) => RegexpInfo::match_one_block(vm, &re, given, block, pos),
+        None => RegexpInfo::match_one(vm, &re, given, pos),
+    }
 }
 
 fn tr(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -985,6 +1004,25 @@ mod test {
         a[9] = "P"
         a[3,6] = "/"
         assert("qwe/P", a) 
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_match() {
+        let program = r#"
+        assert ["ll", "l"],'hello'.match('(.)\1')   # => #<MatchData "ll" 1:"l">
+        assert "ll", 'hello'.match('(.)\1')[0]
+        assert "ll", 'hello'.match(/(.)\1/)[0]
+        assert nil, 'hello'.match('xx')
+
+        assert "match l", 'hello'.match('(.)\1'){|e| "match #{$1}" }
+        assert nil, 'hello'.match('xx'){|e| "match #{$1}" }
+
+        assert ["hoge"], 'hoge hige hege bar'.match('h.ge', 0)     # => #<MatchData "hoge">
+        assert ["hige"], 'hoge hige hege bar'.match('h.ge', 1)     # => #<MatchData "hige">
+        assert nil, 'hoge hige hege bar'.match('h.ge', -1)
+        assert nil, 'hoge hige hege bar'.match('h.ge', 18)     # => #<MatchData "hige">
         "#;
         assert_script(program);
     }

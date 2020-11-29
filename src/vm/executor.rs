@@ -2236,7 +2236,7 @@ impl VM {
             '-' => arg.insert_str(0, "(?m)"),
             _ => return Err(VM::error_internal("Illegal internal regexp expression.")),
         };
-        self.create_regexp_from_string(&arg)
+        Ok(Value::regexp_from(self, &arg)?)
     }
 }
 
@@ -2756,21 +2756,17 @@ impl VM {
         ))
     }
 
-    /// Create new Regexp object from `string`.
-    /// Regular expression meta characters are handled as is.
-    /// Returns RubyError if `string` was invalid regular expression.
-    pub fn create_regexp_from_string(&mut self, string: &str) -> VMResult {
-        let re = RegexpInfo::from_string(&mut self.globals, string)
-            .map_err(|err| VM::error_regexp(err))?;
-        let regexp = Value::regexp(re);
-        Ok(regexp)
-    }
-
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+    pub fn regexp_from_escaped_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| VM::error_regexp(err))
+    }
+
+    /// Create fancy_regex::Regex from `string` without escaping meta characters.
+    /// Returns RubyError if `string` was invalid regular expression.
+    pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+        RegexpInfo::from_string(&mut self.globals, string).map_err(|err| VM::error_regexp(err))
     }
 }
 
