@@ -2,11 +2,12 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let mut class = ClassInfo::from(globals.builtins.object);
-    class.add_builtin_method_by_str("call", method_call);
+    class.add_builtin_method_by_str("call", call);
+    class.add_builtin_method_by_str("[]", call);
     Value::class(class)
 }
 
-pub fn method_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+pub fn call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = match self_val.as_method() {
         Some(method) => method,
         None => return Err(VM::error_unimplemented("Expected Method object.")),
@@ -39,6 +40,23 @@ mod tests {
         assert "foo", methods[1].call       # => "foo"
         assert "bar", methods[2].call       # => "bar"
         assert "baz", methods[3].call       # => "baz"
+
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn method2() {
+        let program = r#"
+        class Foo
+          def foo(arg)
+            "foo called with arg #{arg}"
+          end
+        end
+      
+        m = Foo.new.method(:foo) # => #<Method: Foo#foo>
+        assert "foo called with arg 1", m[1]  
+        assert "foo called with arg 2", m.call(2) 
     "#;
         assert_script(program);
     }

@@ -11,17 +11,30 @@ impl GC for ArrayInfo {
     }
 }
 
+/// Calculate array index.
+fn get_array_index(index: i64, len: usize) -> Result<usize, RubyError> {
+    if index < 0 {
+        let i = len as i64 + index;
+        if i < 0 {
+            return Err(VM::error_unimplemented("Index too small for array."));
+        };
+        Ok(i as usize)
+    } else {
+        Ok(index as usize)
+    }
+}
+
 impl ArrayInfo {
     pub fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
     }
 
-    pub fn get_elem(&self, vm: &mut VM, args: &Args) -> VMResult {
+    pub fn get_elem(&self, args: &Args) -> VMResult {
         let arg_num = args.len();
         args.check_args_range(1, 2)?;
         let index = args[0].expect_integer("Index")?;
         let self_len = self.elements.len();
-        let index = vm.get_array_index(index, self_len).unwrap_or(self_len);
+        let index = get_array_index(index, self_len).unwrap_or(self_len);
         let val = if arg_num == 1 {
             if index >= self_len {
                 Value::nil()
@@ -44,6 +57,18 @@ impl ArrayInfo {
         Ok(val)
     }
 
+    pub fn get_elem1(&self, idx: Value) -> VMResult {
+        let index = idx.expect_integer("Index")?;
+        let self_len = self.elements.len();
+        let index = get_array_index(index, self_len).unwrap_or(self_len);
+        let val = if index >= self_len {
+            Value::nil()
+        } else {
+            self.elements[index]
+        };
+        Ok(val)
+    }
+
     pub fn get_elem_imm(&self, index: u32) -> Value {
         if index as usize >= self.elements.len() {
             Value::nil()
@@ -52,7 +77,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn set_elem(&mut self, vm: &mut VM, args: &Args) -> VMResult {
+    pub fn set_elem(&mut self, args: &Args) -> VMResult {
         args.check_args_range(2, 3)?;
         let val = if args.len() == 3 { args[2] } else { args[1] };
         let index = args[0].expect_integer("Index")?;
@@ -64,11 +89,11 @@ impl ArrayInfo {
                 elements.append(&mut vec![Value::nil(); padding]);
                 elements.push(val);
             } else {
-                let index = vm.get_array_index(index, len)?;
+                let index = get_array_index(index, len)?;
                 elements[index] = val;
             }
         } else {
-            let index = vm.get_array_index(index, len)?;
+            let index = get_array_index(index, len)?;
             let length = args[1].expect_integer("Length")?;
             if length < 0 {
                 return Err(VM::error_index(format!("Negative length. {}", length)));

@@ -968,19 +968,18 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::GET_INDEX => {
-                    let arg_num = iseq.read_usize(self.pc + 1);
-                    let val = self.get_index(arg_num)?;
+                    let val = self.get_index()?;
                     self.stack_push(val);
-                    self.pc += 5;
+                    self.pc += 1;
                 }
                 Inst::OPT_SET_INDEX => {
                     let idx = iseq.read32(self.pc + 1);
                     self.opt_set_index(idx)?;
                     self.pc += 5;
                 }
-                Inst::OPT_GET_INDEX => {
+                Inst::GET_IDX_I => {
                     let idx = iseq.read32(self.pc + 1);
-                    let val = self.opt_get_index(idx)?;
+                    let val = self.get_index_imm(idx)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -2023,7 +2022,7 @@ impl VM {
                 match oref.kind {
                     ObjKind::Array(ref mut aref) => {
                         args.push(val);
-                        aref.set_elem(self, &args)?;
+                        aref.set_elem(&args)?;
                     }
                     ObjKind::Hash(ref mut href) => href.insert(args[0], val),
                     _ => {
@@ -2070,26 +2069,21 @@ impl VM {
         Ok(())
     }
 
-    fn get_index(&mut self, arg_num: usize) -> VMResult {
-        let args = self.pop_args_to_args(arg_num);
+    fn get_index(&mut self) -> VMResult {
+        let idx = self.stack_pop();
         let receiver = self.stack_top();
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => aref.get_elem(self, &args)?,
-                ObjKind::Hash(href) => {
-                    args.check_args_range(1, 1)?;
-                    match href.get(&args[0]) {
-                        Some(val) => *val,
-                        None => Value::nil(),
-                    }
-                }
-                ObjKind::Method(mref) => self.eval_send(mref.method, mref.receiver, &args)?,
-                _ => self.send(IdentId::_INDEX, receiver, &args)?,
+                ObjKind::Array(aref) => aref.get_elem1(idx)?,
+                ObjKind::Hash(href) => match href.get(&idx) {
+                    Some(val) => *val,
+                    None => Value::nil(),
+                },
+                _ => self.send(IdentId::_INDEX, receiver, &Args::new1(idx))?,
             },
             None if receiver.is_packed_fixnum() => {
                 let i = receiver.as_packed_fixnum();
-                args.check_args_range(1, 1)?;
-                let index = args[0].expect_integer("Index")?;
+                let index = idx.expect_integer("Index")?;
                 let val = if index < 0 || 63 < index {
                     0
                 } else {
@@ -2103,7 +2097,7 @@ impl VM {
         Ok(val)
     }
 
-    fn opt_get_index(&mut self, idx: u32) -> VMResult {
+    fn get_index_imm(&mut self, idx: u32) -> VMResult {
         let receiver = self.stack_top();
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -2590,19 +2584,6 @@ impl VM {
             context = context.outer.unwrap();
         }
         context
-    }
-
-    /// Calculate array index.
-    pub fn get_array_index(&self, index: i64, len: usize) -> Result<usize, RubyError> {
-        if index < 0 {
-            let i = len as i64 + index;
-            if i < 0 {
-                return Err(VM::error_unimplemented("Index too small for array."));
-            };
-            Ok(i as usize)
-        } else {
-            Ok(index as usize)
-        }
     }
 
     fn pop_key_value_pair(&mut self, arg_num: usize) -> FxHashMap<HashKey, Value> {

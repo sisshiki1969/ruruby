@@ -34,7 +34,7 @@ impl Inst {
 
     pub const GET_INDEX: u8 = 52;
     pub const SET_INDEX: u8 = 53;
-    pub const OPT_GET_INDEX: u8 = 54;
+    pub const GET_IDX_I: u8 = 54;
     pub const OPT_SET_INDEX: u8 = 55;
 
     pub const CHECK_LOCAL: u8 = 56;
@@ -201,7 +201,7 @@ impl Inst {
             Inst::SET_GVAR => "SET_GVAR",
             Inst::GET_INDEX => "GET_INDEX",
             Inst::SET_INDEX => "SET_INDEX",
-            Inst::OPT_GET_INDEX => "OPT_GET_IDX",
+            Inst::GET_IDX_I => "GET_IDX_I",
             Inst::OPT_SET_INDEX => "OPT_SET_IDX",
 
             Inst::CHECK_LOCAL => "CHECK_LOCAL",
@@ -281,6 +281,7 @@ impl Inst {
             | Inst::BNOT
             | Inst::CREATE_RANGE
             | Inst::CREATE_REGEXP
+            | Inst::GET_INDEX
             | Inst::TO_S
             | Inst::SPLAT
             | Inst::POP
@@ -303,9 +304,8 @@ impl Inst {
             | Inst::CHECK_GVAR          // IdentId: u32
             | Inst::GET_CVAR            // IdentId: u32
             | Inst::SET_CVAR            // IdentId: u32
-            | Inst::GET_INDEX           // number of items: u32
             | Inst::SET_INDEX           // number of items: u32
-            | Inst::OPT_GET_INDEX       // immediate: u32
+            | Inst::GET_IDX_I       // immediate: u32
             | Inst::OPT_SET_INDEX       // immediate: u32
             | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CONST_VAL           // ConstId: u32
@@ -391,7 +391,7 @@ impl Inst {
             | Inst::GEI
             | Inst::LTI
             | Inst::LEI
-            | Inst::OPT_GET_INDEX
+            | Inst::GET_IDX_I
             | Inst::OPT_SET_INDEX => imm_i32(iseq, pc),
             Inst::IVAR_ADDI => format!(
                 "IVAR_ADDI {} +{}",
@@ -493,7 +493,7 @@ impl Inst {
                 iseq.ident_name(pc + 1)
             ),
 
-            Inst::GET_INDEX => format!("GET_INDEX {} items", iseq.read32(pc + 1)),
+            //Inst::GET_INDEX => format!("GET_INDEX {} items", iseq.read32(pc + 1)),
             Inst::SET_INDEX => format!("SET_INDEX {} items", iseq.read32(pc + 1)),
             Inst::SEND | Inst::SEND_SELF => format!(
                 "{} '{}' {} items",

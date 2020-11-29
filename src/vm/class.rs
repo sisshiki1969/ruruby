@@ -135,6 +135,7 @@ impl ClassInfo {
     }
 
     pub fn set_include(&mut self, origin: Value) {
+        #[cfg(debug_assertions)]
         assert!(!origin.as_module().is_included());
         self.flags.set_include();
         self.ext.origin = origin;

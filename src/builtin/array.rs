@@ -9,6 +9,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("length", length);
     class.add_builtin_method_by_str("size", length);
     class.add_builtin_method_by_str("empty?", empty);
+    class.add_builtin_method_by_str("[]", get_elem);
     class.add_builtin_method_by_str("[]=", set_elem);
     class.add_builtin_method_by_str("push", push);
     class.add_builtin_method_by_str("<<", push);
@@ -108,9 +109,15 @@ fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(new_val)
 }
 
-fn set_elem(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn get_elem(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_mut_array().unwrap();
-    let val = aref.set_elem(vm, args)?;
+    let val = aref.get_elem(args)?;
+    Ok(val)
+}
+
+fn set_elem(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    let aref = self_val.as_mut_array().unwrap();
+    let val = aref.set_elem(args)?;
     Ok(val)
 }
 

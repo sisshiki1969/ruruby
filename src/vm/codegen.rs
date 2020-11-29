@@ -366,9 +366,9 @@ impl Codegen {
         iseq.push(Inst::CREATE_REGEXP);
     }
 
-    fn gen_get_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
+    fn gen_get_array_elem(&mut self, iseq: &mut ISeq, loc: Loc) {
+        self.save_loc(iseq, loc);
         iseq.push(Inst::GET_INDEX);
-        Codegen::push32(iseq, num_args as u32);
     }
 
     fn gen_set_array_elem(&mut self, iseq: &mut ISeq, num_args: usize) {
@@ -1448,27 +1448,35 @@ impl Codegen {
             }
             NodeKind::Index { base, index } => {
                 let loc = node.loc();
-                self.gen(globals, iseq, base, true)?;
                 let num_args = index.len();
-                if num_args == 1 {
+                if num_args == 1 && !index[0].is_splat() {
+                    self.gen(globals, iseq, base, true)?;
                     match index[0].is_imm_u32() {
                         Some(u) => {
                             self.save_loc(iseq, loc);
-                            iseq.push(Inst::OPT_GET_INDEX);
+                            iseq.push(Inst::GET_IDX_I);
                             Codegen::push32(iseq, u);
                             if !use_value {
                                 self.gen_pop(iseq)
                             };
                             return Ok(());
                         }
-                        None => {}
+                        None => {
+                            self.gen(globals, iseq, &index[0], true)?;
+                            self.gen_get_array_elem(iseq, loc);
+                            if !use_value {
+                                self.gen_pop(iseq)
+                            };
+                            return Ok(());
+                        }
                     }
                 }
                 for i in index {
                     self.gen(globals, iseq, i, true)?;
                 }
-                self.save_loc(iseq, loc);
-                self.gen_get_array_elem(iseq, num_args);
+                self.gen(globals, iseq, base, true)?;
+                self.loc = loc;
+                self.gen_send(globals, iseq, IdentId::_INDEX, num_args, 0, 0, None);
                 if !use_value {
                     self.gen_pop(iseq)
                 };
