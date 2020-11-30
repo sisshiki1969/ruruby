@@ -25,7 +25,7 @@ fn sqrt(_: &mut VM, _: Value, args: &Args) -> VMResult {
             arg.as_packed_flonum()
         }
     } else {
-        return Err(VM::error_type("Must be a number."));
+        return Err(RubyError::typeerr("Must be a number."));
     };
     let res = Value::float(num.sqrt());
     Ok(res)
@@ -40,7 +40,7 @@ fn cos(_: &mut VM, _: Value, args: &Args) -> VMResult {
             arg.as_packed_flonum()
         }
     } else {
-        return Err(VM::error_type("Must be a number."));
+        return Err(RubyError::typeerr("Must be a number."));
     };
     let res = Value::float(num.cos());
     Ok(res)
@@ -55,7 +55,7 @@ fn sin(_: &mut VM, _: Value, args: &Args) -> VMResult {
             arg.as_packed_flonum()
         }
     } else {
-        return Err(VM::error_type("Must be a number."));
+        return Err(RubyError::typeerr("Must be a number."));
     };
     let res = Value::float(num.sin());
     Ok(res)

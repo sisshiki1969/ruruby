@@ -115,7 +115,7 @@ fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     if self_val.is_nil() {
         Ok(Value::integer(0))
     } else {
-        Err(VM::error_undefined_method(
+        Err(RubyError::undefined_method(
             IdentId::get_id("to_i"),
             self_val,
         ))
@@ -126,7 +126,7 @@ fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(id) => id,
-        None => return Err(VM::error_type("An argument must be a Symbol.")),
+        None => return Err(RubyError::typeerr("An argument must be a Symbol.")),
     };
     let method = vm.get_method_from_receiver(self_val, name)?;
     let val = Value::method(name, self_val, method);
@@ -141,7 +141,7 @@ fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => match name.as_string() {
             Some(s) => IdentId::get_id(s),
-            None => return Err(VM::error_type("1st arg must be Symbol or String.")),
+            None => return Err(RubyError::typeerr("1st arg must be Symbol or String.")),
         },
     };
     let self_obj = self_val.rvalue_mut();
@@ -156,7 +156,7 @@ fn instance_variable_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => match name.as_string() {
             Some(s) => IdentId::get_id(s),
-            None => return Err(VM::error_type("1st arg must be Symbol or String.")),
+            None => return Err(RubyError::typeerr("1st arg must be Symbol or String.")),
         },
     };
     let self_obj = self_val.rvalue();
@@ -199,7 +199,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let class = match iseq.class_defined {
             Some(list) => list.class,
             None => {
-                return Err(VM::error_nomethod(format!(
+                return Err(RubyError::nomethod(format!(
                     "no superclass method `{:?}' for {:?}.",
                     m, self_val
                 )));
@@ -209,14 +209,14 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some(class) => match vm.globals.find_method(class, m) {
                 Some(m) => m,
                 None => {
-                    return Err(VM::error_nomethod(format!(
+                    return Err(RubyError::nomethod(format!(
                         "no superclass method `{:?}' for {:?}",
                         m, self_val
                     )));
                 }
             },
             None => {
-                return Err(VM::error_nomethod(format!(
+                return Err(RubyError::nomethod(format!(
                     "no superclass method `{:?}' for {:?}.",
                     m, self_val
                 )));
@@ -233,7 +233,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.eval_send(method, context.self_value, &args)
         }
     } else {
-        return Err(VM::error_nomethod("super called outside of method"));
+        return Err(RubyError::nomethod("super called outside of method"));
     }
 }
 
@@ -247,7 +247,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let receiver = self_val;
     let method_id = match args[0].as_symbol() {
         Some(symbol) => symbol,
-        None => return Err(VM::error_argument("Must be a symbol.")),
+        None => return Err(RubyError::argument("Must be a symbol.")),
     };
     let method = vm.get_method_from_receiver(receiver, method_id)?;
 
@@ -268,7 +268,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     //eprintln!("eval: {}", program);
     if args.len() > 1 {
         if !args[1].is_nil() {
-            return Err(VM::error_argument("Currently, 2nd arg must be Nil."));
+            return Err(RubyError::argument("Currently, 2nd arg must be Nil."));
         }
     }
     let path = if args.len() > 2 {
@@ -287,7 +287,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.block.is_some() {
-        return Err(VM::error_argument("Curently, block is not allowed."));
+        return Err(RubyError::argument("Curently, block is not allowed."));
     };
     let (method, new_args) = if args.len() == 0 {
         let method = IdentId::get_id("each");
@@ -296,7 +296,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         (method, new_args)
     } else {
         if !args[0].is_packed_symbol() {
-            return Err(VM::error_argument("2nd arg must be Symbol."));
+            return Err(RubyError::argument("2nd arg must be Symbol."));
         };
         let method = args[0].as_packed_symbol();
         let mut new_args = Args::new(args.len() - 1);
@@ -323,7 +323,7 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match &args.block {
         Some(block) => vm.eval_block_self(block, self_val, args),
-        None => return Err(VM::error_argument("Needs block.")),
+        None => return Err(RubyError::argument("Needs block.")),
     }
 }
 

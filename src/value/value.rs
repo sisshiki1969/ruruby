@@ -531,7 +531,7 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(VM::error_argument(format!(
+            _ => Err(RubyError::argument(format!(
                 "{} must be an Integer. (given:{})",
                 msg.into(),
                 self.get_class_name()
@@ -542,7 +542,7 @@ impl Value {
     pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
-            None => Err(VM::error_argument(format!(
+            None => Err(RubyError::argument(format!(
                 "{} must be Float. (given:{})",
                 msg,
                 self.get_class_name()
@@ -607,7 +607,7 @@ impl Value {
     pub fn expect_bytes(&self, msg: &str) -> Result<&[u8], RubyError> {
         match self.as_rstring() {
             Some(rs) => Ok(rs.as_bytes()),
-            None => Err(VM::error_type(format!(
+            None => Err(RubyError::typeerr(format!(
                 "{} must be String. (given:{:?})",
                 msg, *self
             ))),
@@ -628,7 +628,7 @@ impl Value {
         let val = *self;
         match self.as_mut_rstring() {
             Some(rs) => rs.as_string(),
-            None => Err(VM::error_type(format!(
+            None => Err(RubyError::typeerr(format!(
                 "{} must be String. (given:{:?})",
                 msg, val
             ))),
@@ -643,7 +643,7 @@ impl Value {
         let str = val
             .as_mut_rstring()
             .ok_or_else(|| {
-                VM::error_type(format!(
+                RubyError::typeerr(format!(
                     "{} must be String or Symbol. (given:{:?})",
                     msg, *self
                 ))
@@ -658,7 +658,7 @@ impl Value {
         } else if let Some(string) = self.as_string() {
             vm.regexp_from_string(string)
         } else {
-            Err(VM::error_argument(format!(
+            Err(RubyError::argument(format!(
                 "{} arg must be RegExp or String.",
                 msg
             )))
@@ -782,7 +782,7 @@ impl Value {
             Ok(cinfo)
         } else {
             let val = vm.val_inspect(self_)?;
-            Err(VM::error_type(format!(
+            Err(RubyError::typeerr(format!(
                 "{} must be Class. (given:{})",
                 msg, val
             )))
@@ -797,7 +797,7 @@ impl Value {
             Ok(cinfo)
         } else {
             let val = vm.val_inspect(self_)?;
-            Err(VM::error_type(format!(
+            Err(RubyError::typeerr(format!(
                 "{} must be Module. (given:{})",
                 msg, val
             )))
@@ -812,7 +812,7 @@ impl Value {
             Ok(cinfo)
         } else {
             let val = vm.val_inspect(self_)?;
-            Err(VM::error_type(format!(
+            Err(RubyError::typeerr(format!(
                 "Must be Module or Class. (given:{})",
                 val
             )))
@@ -854,7 +854,7 @@ impl Value {
         let val = *self;
         match self.as_mut_array() {
             Some(ary) => Ok(ary),
-            None => Err(VM::error_type(format!(
+            None => Err(RubyError::typeerr(format!(
                 "{} must be Array. (given:{:?})",
                 msg, val
             ))),
@@ -905,7 +905,7 @@ impl Value {
         let val = *self;
         match self.as_hash() {
             Some(hash) => Ok(hash),
-            None => Err(VM::error_type(format!(
+            None => Err(RubyError::typeerr(format!(
                 "{} must be Hash. (given:{:?})",
                 msg, val
             ))),
@@ -935,7 +935,7 @@ impl Value {
     pub fn expect_proc(&self, _: &mut VM) -> Result<&ProcInfo, RubyError> {
         match self.as_proc() {
             Some(e) => Ok(e),
-            None => Err(VM::error_argument("Must be Proc.")),
+            None => Err(RubyError::argument("Must be Proc.")),
         }
     }
 
@@ -972,7 +972,7 @@ impl Value {
     pub fn expect_enumerator(&mut self, error_msg: &str) -> Result<&mut FiberInfo, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
-            None => Err(VM::error_argument(error_msg)),
+            None => Err(RubyError::argument(error_msg)),
         }
     }
 
@@ -980,9 +980,9 @@ impl Value {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Fiber(f) => Ok(f.as_mut()),
-                _ => Err(VM::error_argument(error_msg)),
+                _ => Err(RubyError::argument(error_msg)),
             },
-            None => Err(VM::error_argument(error_msg)),
+            None => Err(RubyError::argument(error_msg)),
         }
     }
 

@@ -53,9 +53,9 @@ fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let offset = (res.num_nanoseconds().unwrap() as f64) / 1000.0 / 1000.0 / 1000.0;
                 Ok(Value::float(offset))
             }
-            _ => return Err(VM::error_undefined_op("-", args[0], self_val)),
+            _ => return Err(RubyError::undefined_op("-", args[0], self_val)),
         },
-        _ => return Err(VM::error_undefined_op("-", args[0], self_val)),
+        _ => return Err(RubyError::undefined_op("-", args[0], self_val)),
     }
 }
 
@@ -75,7 +75,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let res = time + Duration::nanoseconds(offset);
             Ok(Value::time(self_val.get_class(), TimeInfo(res)))
         }
-        _ => return Err(VM::error_undefined_op("+", args[0], self_val)),
+        _ => return Err(RubyError::undefined_op("+", args[0], self_val)),
     }
 }
 

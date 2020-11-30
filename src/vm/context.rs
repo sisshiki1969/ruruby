@@ -172,7 +172,7 @@ impl Context {
         );
         if iseq.opt_flag {
             if !args.kw_arg.is_nil() {
-                return Err(VM::error_argument("Undefined keyword."));
+                return Err(RubyError::argument("Undefined keyword."));
             };
             if iseq.is_block() {
                 context.from_args_opt_block(&iseq.params, args)?;
@@ -220,7 +220,7 @@ impl Context {
                             if params.kwrest {
                                 kwrest.insert(HashKey(k), v);
                             } else {
-                                return Err(VM::error_argument("Undefined keyword."));
+                                return Err(RubyError::argument("Undefined keyword."));
                             }
                         }
                     };
@@ -241,36 +241,6 @@ impl Context {
             }
         }
         Ok(context)
-    }
-
-    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
-        #[inline]
-        fn fill_arguments_opt(context: &mut Context, args: &[Value], req_len: usize) {
-            let args_len = args.len();
-            if req_len <= args_len {
-                // fill req params.
-                context.copy_from_slice(0, &args[0..req_len]);
-            } else {
-                // fill req params.
-                context.copy_from_slice(0, args);
-                // fill the remaining req params with nil.
-                context.fill(args_len..req_len, Value::nil());
-            }
-        }
-
-        let args_len = args.len();
-        let req_len = params.req;
-        if args_len == 1 && req_len > 1 {
-            if let Some(ary) = args[0].as_array() {
-                // if a single array argument is given for the block with multiple formal parameters,
-                // the arguments must be expanded.
-                fill_arguments_opt(self, &ary.elements, req_len);
-                return Ok(());
-            };
-        }
-
-        fill_arguments_opt(self, args, req_len);
-        Ok(())
     }
 
     fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
@@ -331,6 +301,36 @@ impl Context {
             };
             self[optreq_len] = Value::array_from(ary);
         }
+    }
+
+    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
+        #[inline]
+        fn fill_arguments_opt(context: &mut Context, args: &[Value], req_len: usize) {
+            let args_len = args.len();
+            if req_len <= args_len {
+                // fill req params.
+                context.copy_from_slice(0, &args[0..req_len]);
+            } else {
+                // fill req params.
+                context.copy_from_slice(0, args);
+                // fill the remaining req params with nil.
+                context.fill(args_len..req_len, Value::nil());
+            }
+        }
+
+        let args_len = args.len();
+        let req_len = params.req;
+        if args_len == 1 && req_len > 1 {
+            if let Some(ary) = args[0].as_array() {
+                // if a single array argument is given for the block with multiple formal parameters,
+                // the arguments must be expanded.
+                fill_arguments_opt(self, &ary.elements, req_len);
+                return Ok(());
+            };
+        }
+
+        fill_arguments_opt(self, args, req_len);
+        Ok(())
     }
 }
 

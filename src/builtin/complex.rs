@@ -23,14 +23,14 @@ pub fn init(globals: &mut Globals) -> Value {
 fn complex_rect(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     if !args[0].is_real() {
-        return Err(VM::error_type("Not a real."));
+        return Err(RubyError::typeerr("Not a real."));
     }
     let i = if args.len() == 1 {
         Value::integer(0)
     } else if args[1].is_real() {
         args[1]
     } else {
-        return Err(VM::error_type("Not a real."));
+        return Err(RubyError::typeerr("Not a real."));
     };
     Ok(Value::complex(args[0], i))
 }
@@ -42,7 +42,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
-        None => return Err(VM::error_type("Not a real.")),
+        None => return Err(RubyError::typeerr("Not a real.")),
     };
     Ok(Value::complex((r1 + r2).to_val(), (i1 + i2).to_val()))
 }
@@ -52,7 +52,7 @@ fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
-        None => return Err(VM::error_type("Not a real.")),
+        None => return Err(RubyError::typeerr("Not a real.")),
     };
     Ok(Value::complex((r1 - r2).to_val(), (i1 - i2).to_val()))
 }
@@ -62,7 +62,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
-        None => return Err(VM::error_type("Not a real.")),
+        None => return Err(RubyError::typeerr("Not a real.")),
     };
     let r = r1 * r2 - i1 * i2;
     let i = i1 * r2 + i2 * r1;
@@ -74,7 +74,7 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
-        None => return Err(VM::error_type("Not a real.")),
+        None => return Err(RubyError::typeerr("Not a real.")),
     };
     let abs2 = r2 * r2 + i2 * i2;
     let r = (r2 * r1 + i2 * i1) / abs2;
@@ -87,7 +87,7 @@ fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let (r1, i1) = self_val.to_complex().unwrap();
     let (r2, i2) = match args[0].to_complex() {
         Some(t) => t,
-        None => return Err(VM::error_type("Not a real.")),
+        None => return Err(RubyError::typeerr("Not a real.")),
     };
     let b = r1 == r2 && i1 == i2;
     Ok(Value::bool(b))

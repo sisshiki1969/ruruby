@@ -111,13 +111,11 @@ impl FiberInfo {
         args: &Args,
     ) -> VMResult {
         let method = vm.get_method_from_receiver(receiver, method_id)?;
-        let mut args = args.clone();
-        args.block = Some(Block::Method(*METHODREF_ENUM));
         let context = Context::new_noiseq();
         vm.context_push(ContextRef::from_ref(&context));
-        vm.eval_method(method, receiver, None, &args)?;
+        vm.eval_method(method, receiver, None, args)?;
         vm.context_pop();
-        let res = Err(VM::error_stop_iteration("msg"));
+        let res = Err(RubyError::stop_iteration("msg"));
         res
     }
 
@@ -130,7 +128,7 @@ impl FiberInfo {
         }
         match self.vm.fiberstate() {
             FiberState::Dead => {
-                return Err(VM::error_fiber("Dead fiber called."));
+                return Err(RubyError::fiber("Dead fiber called."));
             }
             FiberState::Created => {
                 #[cfg(feature = "perf")]

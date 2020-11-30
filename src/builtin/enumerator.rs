@@ -18,24 +18,22 @@ pub fn init(globals: &mut Globals) -> Value {
 fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_min(1)?;
     if args.block.is_some() {
-        return Err(VM::error_argument("Block is not allowed."));
+        return Err(RubyError::argument("Block is not allowed."));
     };
     let receiver = args[0];
     let (method, new_args) = if args.len() == 1 {
         let method = IdentId::get_id("each");
-        let mut new_args = Args::new0();
-        new_args.block = Some(Block::Method(*METHODREF_ENUM));
+        let new_args = Args::new0();
         (method, new_args)
     } else {
         if !args[1].is_packed_symbol() {
-            return Err(VM::error_argument("2nd arg must be Symbol."));
+            return Err(RubyError::argument("2nd arg must be Symbol."));
         };
         let method = args[1].as_packed_symbol();
         let mut new_args = Args::new(args.len() - 2);
         for i in 0..args.len() - 2 {
             new_args[i] = args[i + 2];
         }
-        new_args.block = Some(Block::Method(*METHODREF_ENUM));
         (method, new_args)
     };
     let val = vm.create_enumerator(method, receiver, new_args)?;
@@ -81,15 +79,15 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
-        return Err(VM::error_argument("Block is not allowed."));
+        return Err(RubyError::argument("Block is not allowed."));
     };
     if eref.vm.is_dead() {
-        return Err(VM::error_stop_iteration("Iteration reached an end."));
+        return Err(RubyError::stop_iteration("Iteration reached an end."));
     };
     match eref.resume(vm) {
         Ok(val) => Ok(val),
         Err(err) if err.is_stop_iteration() => {
-            return Err(VM::error_stop_iteration("Iteration reached an end."))
+            return Err(RubyError::stop_iteration("Iteration reached an end."))
         }
         Err(err) => Err(err),
     }

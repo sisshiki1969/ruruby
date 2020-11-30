@@ -42,7 +42,10 @@ fn string_to_path(_: &mut VM, mut string: Value, msg: &str) -> Result<PathBuf, R
 fn canonicalize_path(_: &mut VM, path: PathBuf) -> Result<PathBuf, RubyError> {
     match path.canonicalize() {
         Ok(file) => Ok(file),
-        Err(_) => Err(VM::error_argument(format!("Invalid file path. {:?}", path))),
+        Err(_) => Err(RubyError::argument(format!(
+            "Invalid file path. {:?}",
+            path
+        ))),
     }
 }
 
@@ -55,7 +58,7 @@ fn string_to_canonicalized_path(
     let path = string_to_path(vm, string, msg)?;
     match path.canonicalize() {
         Ok(file) => Ok(file),
-        Err(_) => Err(VM::error_argument(format!(
+        Err(_) => Err(RubyError::argument(format!(
             "{} is an invalid filename. {:?}",
             msg, path
         ))),
@@ -129,7 +132,7 @@ fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut file = match File::open(&filename) {
         Ok(file) => file,
         Err(_) => {
-            return Err(VM::error_internal(format!(
+            return Err(RubyError::internal(format!(
                 "Can not open file. {:?}",
                 &filename
             )))
@@ -138,7 +141,7 @@ fn binread(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut contents = vec![];
     match file.read_to_end(&mut contents) {
         Ok(file) => file,
-        Err(_) => return Err(VM::error_internal("Could not read the file.")),
+        Err(_) => return Err(RubyError::internal("Could not read the file.")),
     };
     Ok(Value::bytes(contents))
 }
@@ -150,7 +153,7 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut file = match File::open(&filename) {
         Ok(file) => file,
         Err(_) => {
-            return Err(VM::error_internal(format!(
+            return Err(RubyError::internal(format!(
                 "Can not open file. {:?}",
                 &filename
             )))
@@ -159,7 +162,7 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut contents = String::new();
     match file.read_to_string(&mut contents) {
         Ok(file) => file,
-        Err(_) => return Err(VM::error_internal("Could not read the file.")),
+        Err(_) => return Err(RubyError::internal("Could not read the file.")),
     };
     Ok(Value::string(contents))
 }
@@ -174,7 +177,7 @@ fn write(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     match std::fs::write(&filename, contents) {
         Ok(()) => {}
         Err(err) => {
-            return Err(VM::error_internal(format!(
+            return Err(RubyError::internal(format!(
                 "Can not create or write file. {:?}\n{:?}",
                 &filename, err
             )))
@@ -188,8 +191,8 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     let len = args.len();
     args.check_args_range(1, 2)?;
     let current_dir = std::env::current_dir()
-        .or_else(|_| Err(VM::error_internal("Failed to get current directory.")))?;
-    let home_dir = dirs::home_dir().ok_or(VM::error_internal("Failed to get home directory."))?;
+        .or_else(|_| Err(RubyError::internal("Failed to get current directory.")))?;
+    let home_dir = dirs::home_dir().ok_or(RubyError::internal("Failed to get home directory."))?;
     let path = if len == 1 {
         string_to_path(vm, args[0], "1st arg")?
     } else {

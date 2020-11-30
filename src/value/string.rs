@@ -1,4 +1,3 @@
-use crate::vm::*;
 use crate::*;
 use arraystring::{typenum::U23, ArrayString};
 
@@ -152,7 +151,7 @@ impl RString {
                     *self = RString::from(s);
                     Ok(self.as_str())
                 }
-                Err(_) => Err(VM::error_argument("Invalid as UTF-8 string.")),
+                Err(_) => Err(RubyError::argument("Invalid as UTF-8 string.")),
             },
         }
     }

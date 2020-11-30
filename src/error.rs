@@ -172,7 +172,7 @@ impl RubyError {
 }
 
 impl RubyError {
-    pub fn new_runtime_err(kind: RuntimeErrKind, message: String) -> Self {
+    fn new_runtime_err(kind: RuntimeErrKind, message: String) -> Self {
         let kind = RubyErrorKind::RuntimeErr { kind, message };
         RubyError::new(kind, 0)
     }
@@ -187,20 +187,106 @@ impl RubyError {
         RubyError::new_with_info(kind, source_info, level, loc)
     }
 
-    pub fn new_method_return(val: Value) -> Self {
-        RubyError::new(RubyErrorKind::MethodReturn(val), 0)
-    }
-
-    pub fn new_block_return(val: Value) -> Self {
-        RubyError::new(RubyErrorKind::BlockReturn(val), 0)
-    }
-
     pub fn conv_localjump_err(mut self) -> Self {
         self.kind = RubyErrorKind::RuntimeErr {
             kind: RuntimeErrKind::LocalJump,
             message: "Unexpected return.".to_string(),
         };
         self
+    }
+}
+
+impl RubyError {
+    pub fn runtime(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Runtime, msg.into())
+    }
+
+    pub fn nomethod(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::NoMethod, msg.into())
+    }
+
+    pub fn undefined_op(method_name: impl Into<String>, rhs: Value, lhs: Value) -> RubyError {
+        Self::nomethod(format!(
+            "no method `{}' {} for {:?}:{}",
+            method_name.into(),
+            rhs.get_class_name(),
+            lhs,
+            lhs.get_class_name()
+        ))
+    }
+
+    pub fn undefined_method(method: IdentId, receiver: Value) -> RubyError {
+        Self::nomethod(format!(
+            "no method `{:?}' for {:?}:{}",
+            method,
+            receiver,
+            receiver.get_class_name()
+        ))
+    }
+
+    pub fn undefined_method_for_class(method: IdentId, class: Value) -> RubyError {
+        Self::nomethod(format!(
+            "no method `{:?}' for {}",
+            method,
+            class.as_class().name_str()
+        ))
+    }
+
+    pub fn unimplemented(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented, msg.into())
+    }
+
+    pub fn internal(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Internal, msg.into())
+    }
+
+    pub fn name(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into())
+    }
+
+    pub fn typeerr(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into())
+    }
+
+    pub fn argument(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
+    }
+
+    pub fn regexp(err: fancy_regex::Error) -> RubyError {
+        RubyError::new_runtime_err(
+            RuntimeErrKind::Regexp,
+            format!("Invalid string for a regular expression. {:?}", err),
+        )
+    }
+
+    pub fn index(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Index, msg.into())
+    }
+
+    pub fn fiber(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Fiber, msg.into())
+    }
+
+    pub fn load(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::LoadError, msg.into())
+    }
+}
+
+impl RubyError {
+    pub fn method_return(val: Value) -> RubyError {
+        RubyError::new(RubyErrorKind::MethodReturn(val), 0)
+    }
+
+    pub fn block_return(val: Value) -> RubyError {
+        RubyError::new(RubyErrorKind::BlockReturn(val), 0)
+    }
+
+    pub fn stop_iteration(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::StopIteration, msg.into())
+    }
+
+    pub fn local_jump(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::LocalJump, msg.into())
     }
 }
 

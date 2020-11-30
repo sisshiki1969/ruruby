@@ -33,7 +33,7 @@ fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     loop {
         let minfo = match module.if_mod_class() {
             Some(info) => info,
-            None => return Err(VM::error_argument("Must be module or class.")),
+            None => return Err(RubyError::argument("Must be module or class.")),
         };
         let true_module = if minfo.is_included() {
             minfo.origin()
@@ -110,7 +110,7 @@ fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
-        None => return Err(VM::error_type("1st arg must be Symbol.")),
+        None => return Err(RubyError::typeerr("1st arg must be Symbol.")),
     };
     let val = VM::get_super_const(self_val, name)?;
     Ok(val)
@@ -161,7 +161,7 @@ pub fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             define_reader(vm, self_val, id);
             define_writer(vm, self_val, id);
         } else {
-            return Err(VM::error_name(
+            return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
             ));
         }
@@ -175,7 +175,7 @@ fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let id = arg.as_packed_symbol();
             define_reader(vm, self_val, id);
         } else {
-            return Err(VM::error_name(
+            return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
             ));
         }
@@ -189,7 +189,7 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let id = arg.as_packed_symbol();
             define_writer(vm, self_val, id);
         } else {
-            return Err(VM::error_name(
+            return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
             ));
         }

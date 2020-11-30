@@ -29,7 +29,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(VM::error_undefined_op("+", args[0], self_val)),
+            None => Err(RubyError::undefined_op("+", args[0], self_val)),
         },
     }
 }
@@ -45,7 +45,7 @@ fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = -i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(VM::error_undefined_op("-", args[0], self_val)),
+            None => Err(RubyError::undefined_op("-", args[0], self_val)),
         },
     }
 }
@@ -61,7 +61,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(VM::error_undefined_op("-", args[0], self_val)),
+            None => Err(RubyError::undefined_op("-", args[0], self_val)),
         },
     }
 }
@@ -71,7 +71,7 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
-        None => Err(VM::error_undefined_op("div", args[0], self_val)),
+        None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }
 }
 

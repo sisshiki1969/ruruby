@@ -68,7 +68,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut lhs = self_val.as_rstring().unwrap().clone();
     let rhs = args[0].as_rstring().ok_or_else(|| {
-        VM::error_argument(format!("1st arg must be String. (given:{:?})", args[0]))
+        RubyError::argument(format!("1st arg must be String. (given:{:?})", args[0]))
     })?;
     lhs.append(rhs);
     Ok(Value::string_from_rstring(lhs))
@@ -78,7 +78,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     let count = match args[0].expect_integer("1st arg")? {
-        i if i < 0 => return Err(VM::error_argument("Negative argument.")),
+        i if i < 0 => return Err(RubyError::argument("Negative argument.")),
         i => i as usize,
     };
 
@@ -142,14 +142,14 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                             _ => return Ok(Value::nil()),
                         }
                     }
-                    _ => return Err(VM::error_argument("Index must be Integer.")),
+                    _ => return Err(RubyError::argument("Index must be Integer.")),
                 };
                 let s: String = lhs.chars().skip(start).take(end - start + 1).collect();
                 Ok(Value::string(s))
             }
-            _ => return Err(VM::error_argument("Bad type for index.")),
+            _ => return Err(RubyError::argument("Bad type for index.")),
         },
-        _ => return Err(VM::error_argument("Bad type for index.")),
+        _ => return Err(RubyError::argument("Bad type for index.")),
     }
 }
 
@@ -190,7 +190,7 @@ fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 let rhs = RString::Bytes(vec![i as i8 as u8]);
                 lhs.append(&rhs);
             }
-            None => return Err(VM::error_argument("Arg must be String or Integer.")),
+            None => return Err(RubyError::argument("Arg must be String or Integer.")),
         },
     };
     Ok(self_val)
@@ -199,7 +199,7 @@ fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn expect_char(_: &mut VM, chars: &mut std::str::Chars) -> Result<char, RubyError> {
     let ch = match chars.next() {
         Some(ch) => ch,
-        None => return Err(VM::error_argument("Invalid termination of format string.")),
+        None => return Err(RubyError::argument("Invalid termination of format string.")),
     };
     Ok(ch)
 }
@@ -243,7 +243,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             Some(c) => ch = c,
             None => {
-                return Err(VM::error_argument(
+                return Err(RubyError::argument(
                     "Incomplete format specifier. use '%%' instead.",
                 ))
             }
@@ -270,7 +270,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
         if arguments.len() <= arg_no {
-            return Err(VM::error_argument("Too few arguments"));
+            return Err(RubyError::argument("Too few arguments"));
         };
         // Specifier
         let mut val = arguments[arg_no];
@@ -322,12 +322,12 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             'c' => {
                 let val = val.expect_integer("Value for the placeholder")?;
                 let ch = char::from_u32(val as u32)
-                    .ok_or_else(|| VM::error_argument("Invalid value for placeholder."))?;
+                    .ok_or_else(|| RubyError::argument("Invalid value for placeholder."))?;
                 format!("{}", ch)
             }
             's' => val.expect_string("Value for placeholder")?.to_string(),
             _ => {
-                return Err(VM::error_argument(format!(
+                return Err(RubyError::argument(format!(
                     "Invalid format character. {}",
                     ch
                 )))
@@ -473,7 +473,7 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     } else if let Some(re) = args[0].as_regexp() {
         RegexpInfo::find_all(vm, &*re, given)?
     } else {
-        return Err(VM::error_argument("1st arg must be RegExp or String."));
+        return Err(RubyError::argument("1st arg must be RegExp or String."));
     };
     match &args.block {
         Some(block) => {
@@ -573,13 +573,13 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 Ok(ret)
             }
             _ => {
-                return Err(VM::error_argument(
+                return Err(RubyError::argument(
                     "First arg must be Integer, String, Regexp or Range.",
                 ))
             }
         },
         _ => {
-            return Err(VM::error_argument(
+            return Err(RubyError::argument(
                 "First arg must be Integer, String, Regexp or Range.",
             ))
         }
@@ -596,7 +596,7 @@ fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         };
         return Ok(res);
     } else {
-        return Err(VM::error_argument("1st arg must be RegExp."));
+        return Err(RubyError::argument("1st arg must be RegExp."));
     };
 }
 
@@ -641,7 +641,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) => {
             let rstr = match self_val.as_rstring() {
                 Some(rstr) => rstr,
-                None => return Err(VM::error_argument("Receiver must be String.")),
+                None => return Err(RubyError::argument("Receiver must be String.")),
             };
             for b in rstr.as_bytes() {
                 let byte = Value::integer(*b as i64);
@@ -664,11 +664,11 @@ fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let block = match &args.block {
         Some(block) => block,
-        None => return Err(VM::error_argument("Block is neccessary.")),
+        None => return Err(RubyError::argument("Block is neccessary.")),
     };
     let rstr = match self_val.as_rstring() {
         Some(rstr) => rstr,
-        None => return Err(VM::error_argument("Receiver must be String.")),
+        None => return Err(RubyError::argument("Receiver must be String.")),
     };
     for b in rstr.as_bytes() {
         let byte = Value::integer(*b as i64);
@@ -691,7 +691,7 @@ fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let block = match &args.block {
         Some(block) => block,
-        None => return Err(VM::error_argument("Block is neccessary.")),
+        None => return Err(RubyError::argument("Block is neccessary.")),
     };
     let chars = self_val.expect_string("Receiver")?;
     for c in chars.chars() {
@@ -743,7 +743,7 @@ fn lt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::bool(ord == std::cmp::Ordering::Less)),
-        None => Err(VM::error_argument(format!(
+        None => Err(RubyError::argument(format!(
             "Comparison of String with {:?} failed.",
             args[0]
         ))),
@@ -755,7 +755,7 @@ fn gt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
         Some(ord) => Ok(Value::bool(ord == std::cmp::Ordering::Greater)),
-        None => Err(VM::error_argument(format!(
+        None => Err(RubyError::argument(format!(
             "Comparison of String with {:?} failed.",
             args[0]
         ))),
@@ -778,7 +778,7 @@ fn center(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         " ".to_string()
     };
     if padding.len() == 0 {
-        return Err(VM::error_argument("Zero width padding."));
+        return Err(RubyError::argument("Zero width padding."));
     };
     let lhs = self_val.as_string().unwrap();
     let width = args[0].expect_integer("1st arg")?;
@@ -805,7 +805,7 @@ fn ljust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         " ".to_string()
     };
     if padding.len() == 0 {
-        return Err(VM::error_argument("Zero width padding."));
+        return Err(RubyError::argument("Zero width padding."));
     };
     let lhs = self_val.as_string().unwrap();
     let width = args[0].expect_integer("1st arg")?;
@@ -826,7 +826,7 @@ fn rjust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         " ".to_string()
     };
     if padding.len() == 0 {
-        return Err(VM::error_argument("Zero width padding."));
+        return Err(RubyError::argument("Zero width padding."));
     };
     let lhs = self_val.as_string().unwrap();
     let width = args[0].expect_integer("1st arg")?;
@@ -841,7 +841,7 @@ fn rjust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     fn char_forward(ch: char, _: &mut VM) -> Result<char, RubyError> {
         std::char::from_u32((ch as u32) + 1)
-            .ok_or_else(|| VM::error_argument("Error occurs in String#succ."))
+            .ok_or_else(|| RubyError::argument("Error occurs in String#succ."))
     }
     args.check_args_num(0)?;
     let self_ = self_val.as_string().unwrap();
@@ -916,7 +916,7 @@ fn ord(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let ch = match self_val.as_string().unwrap().chars().next() {
         Some(ch) => ch,
-        None => return Err(VM::error_argument("Empty string.")),
+        None => return Err(RubyError::argument("Empty string.")),
     };
     Ok(Value::integer(ch as u32 as i64))
 }

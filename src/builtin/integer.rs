@@ -43,7 +43,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(VM::error_undefined_op("+", args[0], self_val)),
+            None => Err(RubyError::undefined_op("+", args[0], self_val)),
         },
     }
 }
@@ -59,7 +59,7 @@ fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = -i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(VM::error_undefined_op("-", args[0], self_val)),
+            None => Err(RubyError::undefined_op("-", args[0], self_val)),
         },
     }
 }
@@ -75,7 +75,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(VM::error_undefined_op("-", args[0], self_val)),
+            None => Err(RubyError::undefined_op("-", args[0], self_val)),
         },
     }
 }
@@ -85,7 +85,7 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
         Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
-        None => Err(VM::error_undefined_op("div", args[0], self_val)),
+        None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }
 }
 
@@ -117,7 +117,7 @@ macro_rules! define_cmp {
             RV::Integer(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
             RV::Float(rhs) => return Ok(Value::bool((lhs as f64).$op(&rhs))),
             _ => {
-                return Err(VM::error_argument(format!(
+                return Err(RubyError::argument(format!(
                     "Comparison of Integer with {} failed.",
                     $args[0].get_class_name()
                 )))
@@ -216,7 +216,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let step = if args.len() == 2 {
         let step = args[1].expect_integer("Step")?;
         if step == 0 {
-            return Err(VM::error_argument("Step can not be 0."));
+            return Err(RubyError::argument("Step can not be 0."));
         }
         step
     } else {
@@ -241,7 +241,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     if 0 > num || num > 255 {
-        return Err(VM::error_unimplemented(
+        return Err(RubyError::unimplemented(
             "Currently, receiver must be 0..255.",
         ));
     };

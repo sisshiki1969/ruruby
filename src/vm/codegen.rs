@@ -449,7 +449,7 @@ impl Codegen {
     fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
-            None => return Err(VM::error_name("undefined local variable.")),
+            None => return Err(RubyError::name("undefined local variable.")),
         };
         if outer == 0 {
             iseq.push(Inst::GET_LOCAL);
@@ -465,7 +465,7 @@ impl Codegen {
     fn gen_check_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
-            None => return Err(VM::error_name("undefined local variable.")),
+            None => return Err(RubyError::name("undefined local variable.")),
         };
         iseq.push(Inst::CHECK_LOCAL);
         Codegen::push32(iseq, lvar_id.as_u32());
@@ -482,7 +482,7 @@ impl Codegen {
     ) -> Result<(), RubyError> {
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
-            None => return Err(VM::error_name("undefined local variable.")),
+            None => return Err(RubyError::name("undefined local variable.")),
         };
         if outer == 0 {
             let loc = self.loc;

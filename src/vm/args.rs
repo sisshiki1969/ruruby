@@ -101,7 +101,7 @@ impl Args {
         if len == num {
             Ok(())
         } else {
-            Err(VM::error_argument(format!(
+            Err(RubyError::argument(format!(
                 "Wrong number of arguments. (given {}, expected {})",
                 len, num
             )))
@@ -113,7 +113,7 @@ impl Args {
         if min <= len && len <= max {
             Ok(())
         } else {
-            Err(VM::error_argument(format!(
+            Err(RubyError::argument(format!(
                 "Wrong number of arguments. (given {}, expected {}..{})",
                 len, min, max
             )))
@@ -130,7 +130,7 @@ impl Args {
         if min <= len && len <= max {
             Ok(())
         } else {
-            Err(VM::error_argument(format!(
+            Err(RubyError::argument(format!(
                 "Wrong number of arguments. (given {}, expected {}..{})",
                 len, min, max
             )))
@@ -142,7 +142,7 @@ impl Args {
         if min <= len {
             Ok(())
         } else {
-            Err(VM::error_argument(format!(
+            Err(RubyError::argument(format!(
                 "Wrong number of arguments. (given {}, expected {}+)",
                 len, min
             )))

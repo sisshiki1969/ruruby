@@ -91,7 +91,7 @@ fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let arg = args[0].expect_integer("Argument")?;
     if arg < 0 {
-        return Err(VM::error_argument("Negative array size"));
+        return Err(RubyError::argument("Negative array size"));
     };
     let mut v = vec![];
     if start + arg - 1 < end {
@@ -113,7 +113,7 @@ fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let arg = args[0].expect_integer("Argument")?;
     if arg < 0 {
-        return Err(VM::error_argument("Negative array size"));
+        return Err(RubyError::argument("Negative array size"));
     };
     let mut v = vec![];
     if end - arg + 1 > start {

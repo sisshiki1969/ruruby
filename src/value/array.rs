@@ -16,7 +16,7 @@ fn get_array_index(index: i64, len: usize) -> Result<usize, RubyError> {
     if index < 0 {
         let i = len as i64 + index;
         if i < 0 {
-            return Err(VM::error_unimplemented("Index too small for array."));
+            return Err(RubyError::unimplemented("Index too small for array."));
         };
         Ok(i as usize)
     } else {
@@ -96,7 +96,7 @@ impl ArrayInfo {
             let index = get_array_index(index, len)?;
             let length = args[1].expect_integer("Length")?;
             if length < 0 {
-                return Err(VM::error_index(format!("Negative length. {}", length)));
+                return Err(RubyError::index(format!("Negative length. {}", length)));
             };
             let length = length as usize;
             let end = std::cmp::min(len, index + length);

@@ -87,7 +87,7 @@ fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             "Assertion error: Expected: {:?} Actual: {:?}",
             args[0], args[1],
         );
-        Err(VM::error_argument(res))
+        Err(RubyError::argument(res))
     } else {
         println!("Assert OK: {:?}", args[0]);
         Ok(Value::nil())
@@ -98,10 +98,10 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = match &args.block {
         Some(block) => block,
-        None => return Err(VM::error_argument("assert_error(): Block not given.")),
+        None => return Err(RubyError::argument("assert_error(): Block not given.")),
     };
     match vm.eval_block(method, &Args::new0()) {
-        Ok(val) => Err(VM::error_argument(format!(
+        Ok(val) => Err(RubyError::argument(format!(
             "Assertion error: No error occured. returned {:?}",
             val
         ))),
@@ -118,7 +118,7 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let file_name = match args[0].as_string() {
         Some(string) => string,
-        None => return Err(VM::error_argument("file name must be a string.")),
+        None => return Err(RubyError::argument("file name must be a string.")),
     };
     let mut path = PathBuf::from(file_name);
     if path.is_absolute() {
@@ -153,7 +153,7 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             return Ok(Value::bool(false));
         }
     }
-    Err(VM::error_load(format!(
+    Err(RubyError::load(format!(
         "Can not load such file -- {:?}",
         file_name
     )))
@@ -164,7 +164,7 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut path = vm.get_source_path();
     let file_name = match args[0].as_string() {
         Some(string) => PathBuf::from(string),
-        None => return Err(VM::error_argument("file name must be a string.")),
+        None => return Err(RubyError::argument("file name must be a string.")),
     };
     path.pop();
     for p in file_name.iter() {
@@ -182,7 +182,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let file_name = match args[0].as_string() {
         Some(string) => string,
-        None => return Err(VM::error_argument("file name must be a string.")),
+        None => return Err(RubyError::argument("file name must be a string.")),
     };
     let path = PathBuf::from(file_name);
     if path.exists() {
@@ -192,7 +192,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
     let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
         Some(path) => path,
-        None => return Err(VM::error_internal("Load path not found.")),
+        None => return Err(RubyError::internal("Load path not found.")),
     };
 
     let mut load_ary = load_path.expect_array("LOAD_PATH($:)")?.elements.clone();
@@ -204,7 +204,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             return Ok(Value::true_val());
         }
     }
-    Err(VM::error_load(format!(
+    Err(RubyError::load(format!(
         "Can not load such file -- {:?}",
         file_name
     )))
@@ -261,7 +261,7 @@ fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
     }*/
     if args.len() == 1 && args[0].is_class() {
         if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
-            return Err(VM::error_stop_iteration(""));
+            return Err(RubyError::stop_iteration(""));
         };
     }
     let error_msg = match args.len() {
@@ -269,7 +269,7 @@ fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
         2 => format!("Raised. {:?} {:?}", args[0], args[1]),
         _ => "Raised.".to_string(),
     };
-    Err(VM::error_unimplemented(error_msg))
+    Err(RubyError::unimplemented(error_msg))
 }
 
 fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
@@ -328,10 +328,10 @@ fn sleep(_: &mut VM, _: Value, args: &Args) -> VMResult {
         let secs = match args[0].unpack() {
             RV::Integer(i) => i as f64,
             RV::Float(f) => f,
-            _ => return Err(VM::error_argument("Arg must be Integer or Float.")),
+            _ => return Err(RubyError::argument("Arg must be Integer or Float.")),
         };
         if secs < 0.0 {
-            return Err(VM::error_argument("Negative number."));
+            return Err(RubyError::argument("Negative number."));
         }
         secs
     };
@@ -365,7 +365,7 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 Some(num) => num,
                 None => {
                     let inspect = vm.val_inspect(args[0])?;
-                    return Err(VM::error_type(format!(
+                    return Err(RubyError::typeerr(format!(
                         "Invalid value for Integer(): {}",
                         inspect
                     )));
@@ -373,7 +373,7 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             },
             _ => {
                 let inspect = vm.val_inspect(args[0])?;
-                return Err(VM::error_type(format!(
+                return Err(RubyError::typeerr(format!(
                     "Can not convert {} into Integer.",
                     inspect
                 )));
@@ -381,7 +381,7 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         },
         _ => {
             let inspect = vm.val_inspect(args[0])?;
-            return Err(VM::error_type(format!(
+            return Err(RubyError::typeerr(format!(
                 "Can not convert {} into Integer.",
                 inspect
             )));
@@ -400,7 +400,7 @@ fn kernel_complex(_: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     if !r.is_real() || !i.is_real() {
         if ex {
-            return Err(VM::error_argument("Not a real."));
+            return Err(RubyError::argument("Not a real."));
         } else {
             return Ok(Value::nil());
         }
@@ -440,7 +440,7 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let output = match Command::new(command).args(input).output() {
         Ok(ok) => ok,
         Err(err) => {
-            return Err(VM::error_internal(format!(
+            return Err(RubyError::internal(format!(
                 "Command failed. {:?}",
                 err.kind()
             )))

@@ -96,7 +96,7 @@ fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     let mut matches = HashSet::new();
     match traverse_dir(&fullpath, &path, &glob, 0, &mut matches) {
         Ok(_) => {}
-        Err(err) => return Err(VM::error_internal(format!("{:?}", err))),
+        Err(err) => return Err(RubyError::internal(format!("{:?}", err))),
     };
     Ok(Value::array_from(matches.into_iter().collect()))
 }

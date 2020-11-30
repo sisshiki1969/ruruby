@@ -15,7 +15,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             match s.chars().nth(0) {
                 Some(c) if c.is_ascii_uppercase() => {}
                 _ => {
-                    return Err(VM::error_name(format!(
+                    return Err(RubyError::name(format!(
                         "Identifier `{}` needs to be constant.",
                         s
                     )))
@@ -40,7 +40,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for index in i..args.len() {
         let v = args[index];
         if v.as_symbol().is_none() {
-            return Err(VM::error_type(format!(
+            return Err(RubyError::typeerr(format!(
                 "{:?} is not a symbol.",
                 args[index]
             )));
@@ -68,7 +68,7 @@ fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
-        return Err(VM::error_argument("Struct size differs."));
+        return Err(RubyError::argument("Struct size differs."));
     };
     for (i, arg) in args.iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
@@ -87,13 +87,13 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     };
     let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {
         Some(name) => name,
-        None => return Err(VM::error_internal("No /members.")),
+        None => return Err(RubyError::internal("No /members.")),
     };
     //eprintln!("{:?}", name);
     let members = match name.as_array() {
         Some(aref) => aref,
         None => {
-            return Err(VM::error_internal(format!(
+            return Err(RubyError::internal(format!(
                 "Illegal _members value. {:?}",
                 name
             )))

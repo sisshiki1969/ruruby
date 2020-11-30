@@ -75,14 +75,14 @@ fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
             RV::Integer(num) if num >= 0 => vec![Value::nil(); num as usize],
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
-                _ => return Err(VM::error_argument("Invalid arguments")),
+                _ => return Err(RubyError::argument("Invalid arguments")),
             },
-            _ => return Err(VM::error_argument("Invalid arguments")),
+            _ => return Err(RubyError::argument("Invalid arguments")),
         },
         2 => {
             let arg_num = args[0]
                 .as_integer()
-                .ok_or(VM::error_argument("Invalid arguments"))?;
+                .ok_or(RubyError::argument("Invalid arguments"))?;
             vec![args[1]; arg_num as usize]
         }
         _ => unreachable!(),
@@ -177,7 +177,7 @@ fn shift(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     } else {
         let i = args[0].expect_integer("1st arg")?;
         if i < 0 {
-            return Err(VM::error_argument("Negative array size."));
+            return Err(RubyError::argument("Negative array size."));
         }
         array_flag = true;
         i as usize
@@ -232,7 +232,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.as_array().unwrap();
     if let Some(num) = args[0].as_integer() {
         let v = match num {
-            i if i < 0 => return Err(VM::error_argument("Negative argument.")),
+            i if i < 0 => return Err(RubyError::argument("Negative argument.")),
             0 => vec![],
             1 => aref.elements.clone(),
             _ => {
@@ -269,7 +269,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
     } else {
-        return Err(VM::error_undefined_op("*", args[0], self_val));
+        return Err(RubyError::undefined_op("*", args[0], self_val));
     }
 }
 
@@ -467,7 +467,7 @@ fn rotate_(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     } else {
         match args[0].as_integer() {
             Some(i) => i,
-            None => return Err(VM::error_argument("Must be Integer.")),
+            None => return Err(RubyError::argument("Must be Integer.")),
         }
     };
     let mut aref = self_val.as_mut_array().unwrap();
@@ -531,7 +531,7 @@ fn transpose(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     for elem in &mut aref.elements {
         let ary = elem
             .as_array()
-            .ok_or(VM::error_argument(
+            .ok_or(RubyError::argument(
                 "Each element of receiver must be an array.",
             ))?
             .elements
@@ -544,7 +544,7 @@ fn transpose(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let mut temp = vec![];
         for v in &vec {
             if v.len() != len {
-                return Err(VM::error_index("Element size differs."));
+                return Err(RubyError::index("Element size differs."));
             }
             temp.push(v[i]);
         }
@@ -563,7 +563,9 @@ fn min(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         } else if val.is_packed_num() {
             Ok(val.as_packed_flonum())
         } else {
-            Err(VM::error_type("Currently, each element must be Numeric."))
+            Err(RubyError::typeerr(
+                "Currently, each element must be Numeric.",
+            ))
         }
     }
 
@@ -643,11 +645,11 @@ fn slice_(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
     let start = args[0].expect_integer("Currently, first arg must be Integer.")?;
     if start < 0 {
-        return Err(VM::error_argument("First arg must be positive value."));
+        return Err(RubyError::argument("First arg must be positive value."));
     };
     let len = args[1].expect_integer("Currently, second arg must be Integer")?;
     if len < 0 {
-        return Err(VM::error_argument("Second arg must be positive value."));
+        return Err(RubyError::argument("Second arg must be positive value."));
     };
     let start = start as usize;
     let len = len as usize;
@@ -689,7 +691,7 @@ fn pack(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for elem in &aref.elements {
         let i = match elem.as_integer() {
             Some(i) => i as i8 as u8,
-            None => return Err(VM::error_argument("Must be Array of Integer.")),
+            None => return Err(RubyError::argument("Must be Array of Integer.")),
         };
         v.push(i);
     }
@@ -703,7 +705,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     } else {
         match args[0].as_string() {
             Some(s) => s,
-            None => return Err(VM::error_argument("Seperator must be String.")),
+            None => return Err(RubyError::argument("Seperator must be String.")),
         }
     };
     let aref = self_val.as_array().unwrap();
@@ -785,7 +787,7 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         None => {
             vm.sort_array(&mut ary)?;
         }
-        Some(_block) => return Err(VM::error_argument("Currently, can not use block.")),
+        Some(_block) => return Err(RubyError::argument("Currently, can not use block.")),
     };
     Ok(Value::array_from(ary))
 }
@@ -804,7 +806,7 @@ fn uniq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 };
             }
         }
-        Some(_block) => return Err(VM::error_argument("Currently, can not use block.")),
+        Some(_block) => return Err(RubyError::argument("Currently, can not use block.")),
     };
     Ok(Value::array_from(v))
 }
@@ -878,7 +880,7 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     if args.block.is_some() {
-        return Err(VM::error_argument("Currently, block is not supported."));
+        return Err(RubyError::argument("Currently, block is not supported."));
     }
     let ary = self_val.expect_array("").unwrap();
     match args.len() {
@@ -904,7 +906,7 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let block = match args.block.clone() {
         Some(block) => block,
-        None => return Err(VM::error_argument("Currently, block is neccessory.")),
+        None => return Err(RubyError::argument("Currently, block is neccessory.")),
     };
     let ary = self_val.expect_array("").unwrap();
     let mut res = args[0];

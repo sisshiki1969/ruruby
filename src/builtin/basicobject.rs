@@ -24,12 +24,12 @@ fn alias_method(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 .add_method(&mut vm.globals, new, method);
         }
         (true, false) => {
-            return Err(VM::error_argument(
+            return Err(RubyError::argument(
                 "2nd arg of alias must be a global variable.",
             ))
         }
         (false, true) => {
-            return Err(VM::error_argument(
+            return Err(RubyError::argument(
                 "2nd arg of alias must be a method name.",
             ))
         }

@@ -209,7 +209,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                         args[1]
                     } else {
                         // TODO: Should be KeyError.
-                        return Err(VM::error_argument("Key not found."));
+                        return Err(RubyError::argument("Key not found."));
                     }
                 }
             }
