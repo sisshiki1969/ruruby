@@ -337,7 +337,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let block = vm.expect_block(&args.block)?;
-    let param_num = block.to_iseq()?.params.req;
+    let param_num = block.to_iseq().params.req;
     let mut arg = Args::new(param_num);
 
     let aref = self_val.as_mut_array().unwrap();

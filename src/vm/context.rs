@@ -135,6 +135,27 @@ impl Context {
         }
     }
 
+    fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
+        let len = slice.len();
+        if index + len <= LVAR_ARRAY_SIZE {
+            self.lvar_ary[index..index + len].copy_from_slice(slice);
+        } else if index >= LVAR_ARRAY_SIZE {
+            self.lvar_vec[index - LVAR_ARRAY_SIZE..index + len - LVAR_ARRAY_SIZE]
+                .copy_from_slice(slice)
+        } else {
+            self.lvar_ary[index..LVAR_ARRAY_SIZE]
+                .copy_from_slice(&slice[..LVAR_ARRAY_SIZE - index]);
+            self.lvar_vec[0..index + len - LVAR_ARRAY_SIZE]
+                .copy_from_slice(&slice[LVAR_ARRAY_SIZE - index..])
+        }
+    }
+
+    fn fill(&mut self, range: Range<usize>, val: Value) {
+        for i in range {
+            self[i] = val;
+        }
+    }
+
     pub fn from_args(
         vm: &mut VM,
         self_value: Value,
@@ -158,18 +179,18 @@ impl Context {
             } else {
                 let req_len = iseq.params.req;
                 args.check_args_num(req_len)?;
-                for i in 0..req_len {
-                    context[i] = args[i];
-                }
+                context.copy_from_slice(0, args);
             }
             return Ok(context);
         }
         let params = &iseq.params;
+        let mut keyword_flag = false;
         let kw = if params.keyword.is_empty() && !params.kwrest {
             // if no keyword param nor kwrest param exists in formal parameters,
             // make Hash.
             args.kw_arg
         } else {
+            keyword_flag = !args.kw_arg.is_nil();
             Value::nil()
         };
         if !iseq.is_block() {
@@ -183,29 +204,32 @@ impl Context {
                 args.check_args_range_ofs(kw, min, min + params.opt)?;
             }
         }
+
         context.set_arguments(args, kw);
-        let mut kwrest = FxHashMap::default();
-        if !args.kw_arg.is_nil() && kw.is_nil() {
-            let keyword = args.kw_arg.as_hash().unwrap();
-            for (k, v) in keyword.iter() {
-                let id = k.as_symbol().unwrap();
-                match params.keyword.get(&id) {
-                    Some(lvar) => {
-                        context[*lvar] = v;
-                    }
-                    None => {
-                        if params.kwrest {
-                            kwrest.insert(HashKey(k), v);
-                        } else {
-                            return Err(VM::error_argument("Undefined keyword."));
+        if params.kwrest || keyword_flag {
+            let mut kwrest = FxHashMap::default();
+            if keyword_flag {
+                let keyword = args.kw_arg.as_hash().unwrap();
+                for (k, v) in keyword.iter() {
+                    let id = k.as_symbol().unwrap();
+                    match params.keyword.get(&id) {
+                        Some(lvar) => {
+                            context[*lvar] = v;
                         }
-                    }
-                };
+                        None => {
+                            if params.kwrest {
+                                kwrest.insert(HashKey(k), v);
+                            } else {
+                                return Err(VM::error_argument("Undefined keyword."));
+                            }
+                        }
+                    };
+                }
+            };
+            if let Some(id) = iseq.lvar.kwrest_param() {
+                context[id] = Value::hash_from_map(kwrest);
             }
         };
-        if let Some(id) = iseq.lvar.kwrest_param() {
-            context[id] = Value::hash_from_map(kwrest);
-        }
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match &args.block {
                 Some(Block::Method(method)) => {
@@ -221,46 +245,31 @@ impl Context {
 
     fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
         #[inline]
-        fn fill_arguments_opt(
-            context: &mut Context,
-            args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
-            args_len: usize,
-            req_len: usize,
-        ) {
+        fn fill_arguments_opt(context: &mut Context, args: &[Value], req_len: usize) {
+            let args_len = args.len();
             if req_len <= args_len {
                 // fill req params.
-                for i in 0..req_len {
-                    context[i] = args[i];
-                }
+                context.copy_from_slice(0, &args[0..req_len]);
             } else {
                 // fill req params.
-                for i in 0..args_len {
-                    context[i] = args[i];
-                }
+                context.copy_from_slice(0, args);
                 // fill the remaining req params with nil.
-                for i in args_len..req_len {
-                    context[i] = Value::nil();
-                }
+                context.fill(args_len..req_len, Value::nil());
             }
         }
 
         let args_len = args.len();
         let req_len = params.req;
-
         if args_len == 1 && req_len > 1 {
-            match args[0].as_array() {
-                // if a single array argument is given for the block which has multiple parameters,
+            if let Some(ary) = args[0].as_array() {
+                // if a single array argument is given for the block with multiple formal parameters,
                 // the arguments must be expanded.
-                Some(ary) => {
-                    let args = &ary.elements;
-                    fill_arguments_opt(self, args, args.len(), req_len);
-                    return Ok(());
-                }
-                _ => {}
-            }
+                fill_arguments_opt(self, &ary.elements, req_len);
+                return Ok(());
+            };
         }
 
-        fill_arguments_opt(self, args, args_len, req_len);
+        fill_arguments_opt(self, args, req_len);
         Ok(())
     }
 
@@ -269,51 +278,37 @@ impl Context {
         let req_len = iseq.params.req;
         let post_len = iseq.params.post;
         if iseq.is_block() && args.len() == 1 && req_len + post_len > 1 {
-            match args[0].as_array() {
-                Some(ary) => {
-                    let args = &ary.elements;
-                    self.fill_arguments(args, args.len(), &iseq.params, kw_arg);
-                    return;
-                }
-                _ => {}
+            if let Some(ary) = args[0].as_array() {
+                self.fill_arguments(&ary.elements, &iseq.params, kw_arg);
+                return;
             }
         }
 
-        self.fill_arguments(args, args.len(), &iseq.params, kw_arg);
+        self.fill_arguments(args, &iseq.params, kw_arg);
     }
 
-    fn fill_arguments(
-        &mut self,
-        args: &(impl Index<usize, Output = Value> + Index<Range<usize>, Output = [Value]>),
-        args_len: usize,
-        params: &ISeqParams,
-        kw_arg: Value,
-    ) {
-        //let params = &iseq.params;
+    fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
+        let args_len = args.len();
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;
-        let opt_len = params.opt;
         let rest_len = if params.rest { 1 } else { 0 };
         let post_len = params.post;
-        let arg_len = args_len + kw_len;
+        let arg_len = args_len + kw_len - post_len;
+        let optreq_len = req_len + params.opt;
         if post_len != 0 {
             // fill post_req params.
-            let post_pos = req_len + opt_len + rest_len;
-            for i in 0..post_len - kw_len {
-                self[post_pos + i] = args[arg_len - post_len + i];
-            }
+            let post_pos = optreq_len + rest_len;
+            self.copy_from_slice(post_pos, &args[arg_len..args_len]);
             if kw_len == 1 {
                 // fill keyword params as a hash.
                 self[post_pos + post_len - 1] = kw_arg;
                 kw_len = 0;
             }
         }
-        let req_opt = std::cmp::min(opt_len + req_len, arg_len - post_len);
+        let req_opt = std::cmp::min(optreq_len, arg_len);
         if req_opt != 0 {
             // fill req and opt params.
-            for i in 0..req_opt - kw_len {
-                self[i] = args[i];
-            }
+            self.copy_from_slice(0, &args[0..req_opt - kw_len]);
             if kw_len == 1 {
                 // fill keyword params as a hash.
                 self[req_opt - 1] = kw_arg;
@@ -321,22 +316,20 @@ impl Context {
             }
             if req_opt < req_len {
                 // fill rest req params with nil.
-                for i in req_opt..req_len {
-                    self[i] = Value::nil();
-                }
+                self.fill(req_opt..req_len, Value::nil());
             }
         }
         if rest_len == 1 {
-            let ary = if req_len + opt_len + post_len >= arg_len {
+            let ary = if optreq_len >= arg_len {
                 vec![]
             } else {
-                let mut v = args[req_len + opt_len..arg_len - post_len - kw_len].to_vec();
+                let mut v = args[optreq_len..arg_len - kw_len].to_vec();
                 if kw_len == 1 {
                     v.push(kw_arg);
                 }
                 v
             };
-            self[req_len + opt_len] = Value::array_from(ary);
+            self[optreq_len] = Value::array_from(ary);
         }
     }
 }

@@ -11,20 +11,19 @@ pub enum Block {
 }
 
 impl Block {
-    pub fn to_iseq(&self) -> Result<ISeqRef, RubyError> {
+    pub fn to_iseq(&self) -> ISeqRef {
         match self {
             Block::Proc(val) => {
-                let val = *val;
-                Ok(val
-                    .as_proc()
-                    .ok_or_else(|| {
-                        VM::error_argument(format!("Block argument must be Proc. given:{:?}", val))
-                    })?
+                //let val = *val;
+                val.as_proc()
+                    .unwrap_or_else(|| {
+                        unimplemented!("Block argument must be Proc. given:{:?}", val)
+                    })
                     .context
                     .iseq_ref
-                    .unwrap())
+                    .unwrap()
             }
-            Block::Method(methodref) => methodref.expect_iseq(),
+            Block::Method(methodref) => methodref.as_iseq(),
         }
     }
 }

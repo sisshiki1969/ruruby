@@ -294,9 +294,7 @@ impl VM {
 
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
         let parser = Parser::new();
-        //std::mem::swap(&mut parser.ident_table, &mut self.globals.ident_table);
         let result = parser.parse_program(path, program)?;
-        //self.globals.ident_table = result.ident_table;
 
         #[cfg(feature = "perf")]
         self.perf.set_prev_inst(Perf::INVALID);
@@ -346,12 +344,12 @@ impl VM {
         let val = self.eval_send(method, self_value, &arg)?;
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::INVALID);
-
-        let stack_len = self.exec_stack.len();
-        if stack_len != 0 {
-            VM::error_internal(format!("Error: stack length is illegal. {}", stack_len));
-        };
-
+        assert_eq!(
+            0,
+            self.exec_stack.len(),
+            "exec_stack length must be 0. {}",
+            self.exec_stack.len()
+        );
         Ok(val)
     }
 
@@ -422,10 +420,7 @@ impl VM {
 impl VM {
     fn gc(&mut self) {
         //self.gc_counter += 1;
-        if !self.globals.gc_enabled {
-            return;
-        }
-        if !self.globals.allocator.is_allocated() {
+        if !self.globals.gc_enabled || !self.globals.allocator.is_allocated() {
             return;
         };
         #[cfg(feature = "perf")]
@@ -456,8 +451,7 @@ impl VM {
         match self.run_context_main(context) {
             Ok(val) => {
                 self.context_pop().unwrap();
-                #[cfg(debug_assertions)]
-                assert_eq!(stack_len, self.exec_stack.len());
+                debug_assert_eq!(stack_len, self.exec_stack.len());
                 self.pc = pc;
                 #[cfg(feature = "trace")]
                 println!("<--- Ok({:?})", val);
@@ -489,14 +483,8 @@ impl VM {
                     Ok(val) => self.stack_push(val),
                     Err(err) => match err.kind {
                         RubyErrorKind::BlockReturn(val) => self.stack_push(val),
-                        _ => {
-                            let res = match err.kind {
-                                RubyErrorKind::BlockReturn(val) => Ok(val),
-                                RubyErrorKind::MethodReturn(val) if self.is_method() => Ok(val),
-                                _ => Err(err),
-                            };
-                            return res;
-                        }
+                        RubyErrorKind::MethodReturn(val) if self.is_method() => return Ok(val),
+                        _ => return Err(err),
                     },
                 };
             };
