@@ -166,6 +166,12 @@ impl Index<Range<usize>> for Args {
     }
 }
 
+impl IndexMut<Range<usize>> for Args {
+    fn index_mut(&mut self, range: Range<usize>) -> &mut Self::Output {
+        unsafe { self.elems.get_unchecked_mut(range) }
+    }
+}
+
 impl IndexMut<usize> for Args {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         unsafe { self.elems.get_unchecked_mut(index) }

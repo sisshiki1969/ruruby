@@ -135,7 +135,7 @@ impl Context {
         }
     }
 
-    fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
+    pub fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
         let len = slice.len();
         if index + len <= LVAR_ARRAY_SIZE {
             self.lvar_ary[index..index + len].copy_from_slice(slice);

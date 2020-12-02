@@ -1471,21 +1471,28 @@ impl VM {
             Some(method) => return self.eval_send(method, receiver, args),
             None => {}
         }
+        self.send_method_missing(method_id, receiver, args)
+    }
+
+    fn send_method_missing(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+        args: &Args,
+    ) -> VMResult {
         match self
             .globals
             .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
         {
             Some(method) => {
-                let mut new_args = Args::new(args.len() + 1);
+                let len = args.len();
+                let mut new_args = Args::new(len + 1);
                 new_args[0] = Value::symbol(method_id);
-                for i in 0..args.len() {
-                    new_args[i + 1] = args[i];
-                }
-                return self.eval_send(method, receiver, &new_args);
+                new_args[1..len + 1].copy_from_slice(args);
+                self.eval_send(method, receiver, &new_args)
             }
-            None => {}
-        };
-        Err(RubyError::undefined_method(method_id, receiver))
+            None => Err(RubyError::undefined_method(method_id, receiver)),
+        }
     }
 
     pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
@@ -2236,11 +2243,60 @@ impl VM {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
         let cache = iseq.read32(self.pc + 7);
-
         let len = self.exec_stack.len();
-        let args = Args::from_slice(&self.exec_stack[len - args_num..]);
-        self.exec_stack.truncate(len - args_num);
-        self.send_icache(cache, method_id, receiver, &args)
+        let arg_slice = &self.exec_stack[len - args_num..];
+
+        match self
+            .globals
+            .find_method_from_icache(cache, receiver, method_id)
+        {
+            Some(method) => match &*method {
+                MethodInfo::BuiltinFunc { func, .. } => {
+                    let args = Args::from_slice(arg_slice);
+                    self.exec_stack.truncate(len - args_num);
+                    self.invoke_native(func, receiver, &args)
+                }
+                MethodInfo::AttrReader { id } => {
+                    if args_num != 0 {
+                        return Err(RubyError::argument("Attr reader can not have any args."));
+                    }
+                    Self::invoke_getter(*id, receiver)
+                }
+                MethodInfo::AttrWriter { id } => {
+                    if args_num != 1 {
+                        return Err(RubyError::argument("Attr writer must not have one arg."));
+                    }
+                    Self::invoke_setter(*id, receiver, self.stack_pop())
+                }
+                MethodInfo::RubyFunc { iseq } => {
+                    if iseq.opt_flag {
+                        let mut context =
+                            Context::new(receiver, None, *iseq, None, self.latest_context());
+                        let req_len = iseq.params.req;
+                        if args_num != req_len {
+                            return Err(RubyError::argument(format!(
+                                "Wrong number of arguments. (given {}, expected {})",
+                                args_num, req_len
+                            )));
+                        };
+                        context.copy_from_slice(0, arg_slice);
+                        self.exec_stack.truncate(len - args_num);
+                        self.run_context(&context)
+                    } else {
+                        let args = Args::from_slice(arg_slice);
+                        self.exec_stack.truncate(len - args_num);
+                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                        let res = self.run_context(&context);
+                        res
+                    }
+                }
+            },
+            None => {
+                let args = Args::from_slice(arg_slice);
+                self.exec_stack.truncate(len - args_num);
+                self.send_method_missing(method_id, receiver, &args)
+            }
+        }
     }
 }
 
@@ -2320,41 +2376,51 @@ impl VM {
     pub fn eval_method(
         &mut self,
         methodref: MethodRef,
-        mut self_val: Value,
+        self_val: Value,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
         match &*methodref {
-            MethodInfo::BuiltinFunc { func, .. } => {
-                #[cfg(feature = "perf")]
-                self.perf.get_perf(Perf::EXTERN);
-
-                let len = self.temp_stack.len();
-                self.temp_push(self_val);
-                self.temp_push_args(args);
-                let res = func(self, self_val, args);
-                self.temp_stack.truncate(len);
-                res
-            }
-            MethodInfo::AttrReader { id } => match self_val.as_rvalue() {
-                Some(oref) => match oref.get_var(*id) {
-                    Some(v) => Ok(v),
-                    None => Ok(Value::nil()),
-                },
-                None => unreachable!("AttrReader must be used only for class instance."),
-            },
-            MethodInfo::AttrWriter { id } => match self_val.as_mut_rvalue() {
-                Some(oref) => {
-                    oref.set_var(*id, args[0]);
-                    Ok(args[0])
-                }
-                None => unreachable!("AttrReader must be used only for class instance."),
-            },
+            MethodInfo::BuiltinFunc { func, .. } => self.invoke_native(func, self_val, args),
+            MethodInfo::AttrReader { id } => Self::invoke_getter(*id, self_val),
+            MethodInfo::AttrWriter { id } => Self::invoke_setter(*id, self_val, args[0]),
             MethodInfo::RubyFunc { iseq } => {
                 let context = Context::from_args(self, self_val, *iseq, args, outer)?;
                 let res = self.run_context(&context);
                 res
             }
+        }
+    }
+
+    fn invoke_native(&mut self, func: &BuiltinFunc, self_val: Value, args: &Args) -> VMResult {
+        #[cfg(feature = "perf")]
+        self.perf.get_perf(Perf::EXTERN);
+
+        let len = self.temp_stack.len();
+        self.temp_push(self_val);
+        self.temp_push_args(args);
+        let res = func(self, self_val, args);
+        self.temp_stack.truncate(len);
+        res
+    }
+
+    fn invoke_getter(id: IdentId, self_val: Value) -> VMResult {
+        match self_val.as_rvalue() {
+            Some(oref) => match oref.get_var(id) {
+                Some(v) => Ok(v),
+                None => Ok(Value::nil()),
+            },
+            None => unreachable!("AttrReader must be used only for class instance."),
+        }
+    }
+
+    fn invoke_setter(id: IdentId, mut self_val: Value, val: Value) -> VMResult {
+        match self_val.as_mut_rvalue() {
+            Some(oref) => {
+                oref.set_var(id, val);
+                Ok(val)
+            }
+            None => unreachable!("AttrReader must be used only for class instance."),
         }
     }
 }
