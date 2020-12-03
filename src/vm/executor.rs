@@ -212,23 +212,23 @@ impl VM {
         self.current_context().iseq_ref.unwrap().is_method()
     }
 
-    pub fn stack_push(&mut self, val: Value) {
+    fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
 
-    pub fn stack_pop(&mut self) -> Value {
+    fn stack_pop(&mut self) -> Value {
         self.exec_stack.pop().unwrap()
     }
 
-    pub fn stack_top(&mut self) -> Value {
+    fn stack_top(&mut self) -> Value {
         self.exec_stack.last().unwrap().clone()
     }
 
-    pub fn stack_len(&self) -> usize {
+    fn stack_len(&self) -> usize {
         self.exec_stack.len()
     }
 
-    pub fn set_stack_len(&mut self, len: usize) {
+    fn set_stack_len(&mut self, len: usize) {
         self.exec_stack.truncate(len);
     }
 
@@ -346,9 +346,9 @@ impl VM {
         self.perf.get_perf(Perf::INVALID);
         assert_eq!(
             0,
-            self.exec_stack.len(),
-            "exec_stack length must be 0. {}",
-            self.exec_stack.len()
+            self.stack_len(),
+            "exec_stack length must be 0. actual:{}",
+            self.stack_len()
         );
         Ok(val)
     }
@@ -376,7 +376,7 @@ impl VM {
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::INVALID);
 
-        let stack_len = self.exec_stack.len();
+        let stack_len = self.stack_len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
         };
@@ -439,7 +439,7 @@ impl VM {
 
     pub fn run_context(&mut self, context: impl Into<ContextRef>) -> VMResult {
         let context = context.into();
-        let stack_len = self.exec_stack.len();
+        let stack_len = self.stack_len();
         let pc = self.pc;
         self.context_push(context);
         self.pc = 0;
@@ -451,7 +451,7 @@ impl VM {
         match self.run_context_main(context) {
             Ok(val) => {
                 self.context_pop().unwrap();
-                debug_assert_eq!(stack_len, self.exec_stack.len());
+                debug_assert_eq!(stack_len, self.stack_len());
                 self.pc = pc;
                 #[cfg(feature = "trace")]
                 println!("<--- Ok({:?})", val);
@@ -460,7 +460,7 @@ impl VM {
             Err(mut err) => {
                 err.info.push((self.source_info(), self.get_loc()));
                 self.context_pop().unwrap();
-                self.exec_stack.truncate(stack_len);
+                self.set_stack_len(stack_len);
                 self.pc = pc;
                 #[cfg(feature = "trace")]
                 println!("<--- Err({:?})", err.kind);
@@ -490,6 +490,20 @@ impl VM {
             };
         }
 
+        /// Evaluate expr, and discard return value.
+        macro_rules! try_no_push {
+            ($eval:expr) => {
+                match $eval {
+                    Ok(_) => {}
+                    Err(err) => match err.kind {
+                        RubyErrorKind::BlockReturn(_) => {}
+                        RubyErrorKind::MethodReturn(val) if self.is_method() => return Ok(val),
+                        _ => return Err(err),
+                    },
+                };
+            };
+        }
+
         loop {
             #[cfg(feature = "perf")]
             self.perf.get_perf(iseq[self.pc]);
@@ -499,7 +513,7 @@ impl VM {
                     "{:>4x}:{:<15} stack:{}",
                     self.pc,
                     Inst::inst_info(&self.globals, context.iseq_ref.unwrap(), self.pc),
-                    self.exec_stack.len()
+                    self.stack_len()
                 );
             }
             match iseq[self.pc] {
@@ -782,7 +796,7 @@ impl VM {
                 }
                 Inst::CONCAT_STRING => {
                     let num = iseq.read32(self.pc + 1) as usize;
-                    let stack_len = self.exec_stack.len();
+                    let stack_len = self.stack_len();
                     let mut res = String::new();
                     for v in self.exec_stack.drain(stack_len - num..stack_len) {
                         res += v.as_string().unwrap();
@@ -1133,12 +1147,39 @@ impl VM {
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
-                    try_push!(self.vm_opt_send(iseq, receiver));
+                    try_push!(self.vm_fast_send(iseq, receiver));
+                    self.pc += 11;
+                }
+                Inst::OPT_NSEND => {
+                    let receiver = self.stack_pop();
+                    try_no_push!(self.vm_fast_send(iseq, receiver));
                     self.pc += 11;
                 }
                 Inst::OPT_SEND_SELF => {
-                    try_push!(self.vm_opt_send(iseq, self_value));
+                    try_push!(self.vm_fast_send(iseq, self_value));
                     self.pc += 11;
+                }
+                Inst::OPT_NSEND_SELF => {
+                    try_no_push!(self.vm_fast_send(iseq, self_value));
+                    self.pc += 11;
+                }
+                Inst::OPT_SEND_BLK => {
+                    let receiver = self.stack_pop();
+                    try_push!(self.vm_fast_send_with_block(iseq, receiver));
+                    self.pc += 19;
+                }
+                Inst::OPT_NSEND_BLK => {
+                    let receiver = self.stack_pop();
+                    try_no_push!(self.vm_fast_send_with_block(iseq, receiver));
+                    self.pc += 19;
+                }
+                Inst::OPT_SEND_SELF_BLK => {
+                    try_push!(self.vm_fast_send_with_block(iseq, self_value));
+                    self.pc += 19;
+                }
+                Inst::OPT_NSEND_SELF_BLK => {
+                    try_no_push!(self.vm_fast_send_with_block(iseq, self_value));
+                    self.pc += 19;
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
@@ -1209,7 +1250,7 @@ impl VM {
                 }
                 Inst::DUP => {
                     let len = iseq.read_usize(self.pc + 1);
-                    let stack_len = self.exec_stack.len();
+                    let stack_len = self.stack_len();
                     for i in stack_len - len..stack_len {
                         let val = self.exec_stack[i];
                         self.stack_push(val);
@@ -1219,13 +1260,13 @@ impl VM {
                 Inst::SINKN => {
                     let len = iseq.read_usize(self.pc + 1);
                     let val = self.stack_pop();
-                    let stack_len = self.exec_stack.len();
+                    let stack_len = self.stack_len();
                     self.exec_stack.insert(stack_len - len, val);
                     self.pc += 5;
                 }
                 Inst::TOPN => {
                     let len = iseq.read_usize(self.pc + 1);
-                    let val = self.exec_stack.remove(self.exec_stack.len() - 1 - len);
+                    let val = self.exec_stack.remove(self.stack_len() - 1 - len);
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -2238,12 +2279,90 @@ impl VM {
         self.send_icache(cache, method_id, receiver, &args)
     }
 
-    fn vm_opt_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+    fn vm_fast_send_with_block(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+        // With block and no keyword/block/splat arguments for OPT_SEND.
+        let method_id = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5) as usize;
+        let block = iseq.read64(self.pc + 7);
+        assert!(block != 0);
+        let block = MethodRef::from_u64(block);
+        let cache = iseq.read32(self.pc + 15);
+        let len = self.stack_len();
+        let arg_slice = &self.exec_stack[len - args_num..];
+
+        match self
+            .globals
+            .find_method_from_icache(cache, receiver, method_id)
+        {
+            Some(method) => match &*method {
+                MethodInfo::BuiltinFunc { func, .. } => {
+                    let mut args = Args::from_slice(arg_slice);
+                    args.block = Some(Block::Method(block));
+                    self.set_stack_len(len - args_num);
+                    self.invoke_native(func, receiver, &args)
+                }
+                MethodInfo::AttrReader { id } => {
+                    if args_num != 0 {
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 0)",
+                            args_num
+                        )));
+                    }
+                    Self::invoke_getter(*id, receiver)
+                }
+                MethodInfo::AttrWriter { id } => {
+                    if args_num != 1 {
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 1)",
+                            args_num
+                        )));
+                    }
+                    Self::invoke_setter(*id, receiver, self.stack_pop())
+                }
+                MethodInfo::RubyFunc { iseq } => {
+                    if iseq.opt_flag {
+                        let mut context = Context::new(
+                            receiver,
+                            Some(Block::Method(block)),
+                            *iseq,
+                            None,
+                            self.latest_context(),
+                        );
+                        let req_len = iseq.params.req;
+                        if args_num != req_len {
+                            return Err(RubyError::argument(format!(
+                                "Wrong number of arguments. (given {}, expected {})",
+                                args_num, req_len
+                            )));
+                        };
+                        context.copy_from_slice(0, arg_slice);
+                        self.set_stack_len(len - args_num);
+                        self.run_context(&context)
+                    } else {
+                        let mut args = Args::from_slice(arg_slice);
+                        args.block = Some(Block::Method(block));
+                        self.set_stack_len(len - args_num);
+                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                        let res = self.run_context(&context);
+                        res
+                    }
+                }
+            },
+            None => {
+                let mut args = Args::from_slice(arg_slice);
+                args.block = Some(Block::Method(block));
+                self.set_stack_len(len - args_num);
+                self.send_method_missing(method_id, receiver, &args)
+            }
+        }
+    }
+
+    fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
         // No block nor keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
         let cache = iseq.read32(self.pc + 7);
-        let len = self.exec_stack.len();
+        let len = self.stack_len();
         let arg_slice = &self.exec_stack[len - args_num..];
 
         match self
@@ -2253,18 +2372,24 @@ impl VM {
             Some(method) => match &*method {
                 MethodInfo::BuiltinFunc { func, .. } => {
                     let args = Args::from_slice(arg_slice);
-                    self.exec_stack.truncate(len - args_num);
+                    self.set_stack_len(len - args_num);
                     self.invoke_native(func, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
-                        return Err(RubyError::argument("Attr reader can not have any args."));
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 0)",
+                            args_num
+                        )));
                     }
                     Self::invoke_getter(*id, receiver)
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
-                        return Err(RubyError::argument("Attr writer must not have one arg."));
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 1)",
+                            args_num
+                        )));
                     }
                     Self::invoke_setter(*id, receiver, self.stack_pop())
                 }
@@ -2280,11 +2405,11 @@ impl VM {
                             )));
                         };
                         context.copy_from_slice(0, arg_slice);
-                        self.exec_stack.truncate(len - args_num);
+                        self.set_stack_len(len - args_num);
                         self.run_context(&context)
                     } else {
                         let args = Args::from_slice(arg_slice);
-                        self.exec_stack.truncate(len - args_num);
+                        self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
                         let res = self.run_context(&context);
                         res
@@ -2293,7 +2418,7 @@ impl VM {
             },
             None => {
                 let args = Args::from_slice(arg_slice);
-                self.exec_stack.truncate(len - args_num);
+                self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
         }
@@ -2550,7 +2675,7 @@ impl VM {
 
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
         let mut args = Args::new(0);
-        let len = self.exec_stack.len();
+        let len = self.stack_len();
 
         for val in self.exec_stack[len - arg_num..].iter() {
             match val.as_splat() {
@@ -2583,7 +2708,7 @@ impl VM {
                 None => args.push(*val),
             };
         }
-        self.exec_stack.truncate(len - arg_num);
+        self.set_stack_len(len - arg_num);
         args
     }
 

@@ -110,11 +110,9 @@ impl Context {
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec,
             iseq_ref: Some(iseq_ref),
-            //pc: 0,
             outer,
             caller,
             on_stack: true,
-            //stack_len: 0,
             kind: iseq_ref.kind,
         }
     }
@@ -126,11 +124,9 @@ impl Context {
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec: vec![],
             iseq_ref: None,
-            //pc: 0,
             outer: None,
             caller: None,
             on_stack: true,
-            //stack_len: 0,
             kind: ISeqKind::Block,
         }
     }

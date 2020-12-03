@@ -663,11 +663,29 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
+        block: Option<MethodRef>,
+        use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        iseq.push(Inst::OPT_SEND);
+        if block.is_none() {
+            if use_value {
+                iseq.push(Inst::OPT_SEND);
+            } else {
+                iseq.push(Inst::OPT_NSEND)
+            }
+        } else {
+            if use_value {
+                iseq.push(Inst::OPT_SEND_BLK);
+            } else {
+                iseq.push(Inst::OPT_NSEND_BLK);
+            }
+        }
+
         Codegen::push32(iseq, method.into());
         Codegen::push16(iseq, args_num as u32 as u16);
+        if let Some(block) = block {
+            Codegen::push64(iseq, block.id());
+        }
         Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
@@ -677,11 +695,28 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
+        block: Option<MethodRef>,
+        use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        iseq.push(Inst::OPT_SEND_SELF);
+        if block.is_none() {
+            if use_value {
+                iseq.push(Inst::OPT_SEND_SELF);
+            } else {
+                iseq.push(Inst::OPT_NSEND_SELF)
+            }
+        } else {
+            if use_value {
+                iseq.push(Inst::OPT_SEND_SELF_BLK);
+            } else {
+                iseq.push(Inst::OPT_NSEND_SELF_BLK);
+            }
+        }
         Codegen::push32(iseq, method.into());
         Codegen::push16(iseq, args_num as u32 as u16);
+        if let Some(block) = block {
+            Codegen::push64(iseq, block.id());
+        }
         Codegen::push32(iseq, globals.add_inline_cache_entry());
     }
 
@@ -712,8 +747,8 @@ impl Codegen {
                 let assign_id = IdentId::get_id(name);
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
-                self.gen_opt_send(globals, iseq, assign_id, 1);
-                self.gen_pop(iseq);
+                self.gen_opt_send(globals, iseq, assign_id, 1, None, false);
+                //self.gen_pop(iseq);
             }
             NodeKind::Index { base, index } => {
                 self.gen(globals, iseq, base, true)?;
@@ -817,8 +852,8 @@ impl Codegen {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen(globals, iseq, &receiver, true)?;
                 self.loc = lhs.loc();
-                self.gen_opt_send(globals, iseq, assign_id, 1);
-                self.gen_pop(iseq);
+                self.gen_opt_send(globals, iseq, assign_id, 1, None, false);
+                //self.gen_pop(iseq);
             }
             NodeKind::Index { base, index } => {
                 self.gen(globals, iseq, base, true)?;
@@ -1429,7 +1464,8 @@ impl Codegen {
                         self.gen(globals, iseq, rhs, true)?;
                         self.gen(globals, iseq, lhs, true)?;
                         self.loc = loc;
-                        self.gen_opt_send(globals, iseq, method, 1);
+                        self.gen_opt_send(globals, iseq, method, 1, None, use_value);
+                        return Ok(());
                     }
                     BinOp::Ge => binop_imm!(Inst::GE, Inst::GEI),
                     BinOp::Gt => binop_imm!(Inst::GT, Inst::GTI),
@@ -1817,10 +1853,7 @@ impl Codegen {
             }
             NodeKind::Command(content) => {
                 self.gen(globals, iseq, content, true)?;
-                self.gen_opt_send_self(globals, iseq, IdentId::get_id("`"), 1);
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
+                self.gen_opt_send_self(globals, iseq, IdentId::get_id("`"), 1, None, use_value);
             }
             NodeKind::Send {
                 receiver,
@@ -1881,13 +1914,21 @@ impl Codegen {
                 // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
                 if !block_flag
                     && !kw_flag
-                    && block_ref.is_none()
+                    //&& block_ref.is_none()
                     && no_splat_flag
                     && arglist.kw_rest.is_empty()
                 {
                     if NodeKind::SelfValue == receiver.kind {
                         self.loc = loc;
-                        self.gen_opt_send_self(globals, iseq, *method, arglist.args.len());
+                        self.gen_opt_send_self(
+                            globals,
+                            iseq,
+                            *method,
+                            arglist.args.len(),
+                            block_ref,
+                            use_value,
+                        );
+                        return Ok(());
                     } else {
                         self.gen(globals, iseq, receiver, true)?;
                         if *safe_nav {
@@ -1896,11 +1937,27 @@ impl Codegen {
                             iseq.push(Inst::NE);
                             let src = self.gen_jmp_if_f(iseq);
                             self.loc = loc;
-                            self.gen_opt_send(globals, iseq, *method, arglist.args.len());
+                            self.gen_opt_send(
+                                globals,
+                                iseq,
+                                *method,
+                                arglist.args.len(),
+                                block_ref,
+                                use_value,
+                            );
                             Codegen::write_disp_from_cur(iseq, src);
+                            return Ok(());
                         } else {
                             self.loc = loc;
-                            self.gen_opt_send(globals, iseq, *method, arglist.args.len());
+                            self.gen_opt_send(
+                                globals,
+                                iseq,
+                                *method,
+                                arglist.args.len(),
+                                block_ref,
+                                use_value,
+                            );
+                            return Ok(());
                         }
                     }
                 } else {
@@ -2140,10 +2197,7 @@ impl Codegen {
             NodeKind::AliasMethod(new, old) => {
                 self.gen_symbol(iseq, *new);
                 self.gen_symbol(iseq, *old);
-                self.gen_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2);
-                if !use_value {
-                    self.gen_pop(iseq);
-                }
+                self.gen_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
             }
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
