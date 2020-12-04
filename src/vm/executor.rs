@@ -96,15 +96,9 @@ impl VM {
             perf: Perf::new(),
         };
 
-        use std::process::Command;
-        let load_path = match Command::new("ruby").args(&["-e", "p($:)"]).output() {
-            Ok(output) => match std::str::from_utf8(&output.stdout) {
-                Ok(s) => s.to_string(),
-                Err(_) => "[]".to_string(),
-            },
-            Err(_) => "[]".to_string(),
-        };
-        match vm.run(PathBuf::from("(startup)"), &load_path) {
+        let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
+        //eprintln!("{}", load_path);
+        match vm.run(PathBuf::from("(startup)"), load_path) {
             Ok(val) => globals.set_global_var_by_str("$:", val),
             Err(_) => {}
         };
