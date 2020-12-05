@@ -19,10 +19,9 @@ jobs:
       - name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2020-11-16
           override: true
       - name: Run tests
         run: cargo +nightly tarpaulin -v --out Xml --all-features --workspace
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
-
