@@ -314,7 +314,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
             let args = Args::new0();
             vm.class_push(self_val);
-            let res = vm.eval_method(method, self_val, Some(context), &args);
+            let res = vm.invoke_method(method, self_val, Some(context), &args);
             vm.class_pop();
             res
         }

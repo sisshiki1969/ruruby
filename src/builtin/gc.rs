@@ -20,15 +20,15 @@ fn count(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn enable(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let last_state = vm.globals.gc_enabled;
-    vm.globals.gc_enabled = true;
+    let last_state = vm.globals.allocator.gc_enabled;
+    vm.globals.allocator.gc_enabled = true;
     Ok(Value::bool(last_state))
 }
 
 fn disable(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let last_state = vm.globals.gc_enabled;
-    vm.globals.gc_enabled = false;
+    let last_state = vm.globals.allocator.gc_enabled;
+    vm.globals.allocator.gc_enabled = false;
     Ok(Value::bool(last_state))
 }
 

@@ -414,7 +414,7 @@ impl VM {
 impl VM {
     fn gc(&mut self) {
         //self.gc_counter += 1;
-        if !self.globals.gc_enabled || !self.globals.allocator.is_allocated() {
+        if !self.globals.allocator.is_allocated() {
             return;
         };
         #[cfg(feature = "perf")]
@@ -1300,6 +1300,208 @@ impl VM {
     }
 }
 
+// helper functions for run_context_main.
+impl VM {
+    fn vm_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+        let method_id = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5);
+        let kw_rest_num = iseq.read8(self.pc + 7);
+        let flag = iseq.read8(self.pc + 8);
+        let block = iseq.read64(self.pc + 9);
+        let cache = iseq.read32(self.pc + 17);
+
+        let mut kwrest = vec![];
+        for _ in 0..kw_rest_num {
+            let val = self.stack_pop();
+            kwrest.push(val);
+        }
+
+        let keyword = if flag & 0b01 == 1 {
+            let mut val = self.stack_pop();
+            let hash = val.as_mut_hash().unwrap();
+            for h in kwrest {
+                for (k, v) in h.expect_hash("Arg")? {
+                    hash.insert(k, v);
+                }
+            }
+            val
+        } else if kwrest.len() == 0 {
+            Value::nil()
+        } else {
+            let mut hash = FxHashMap::default();
+            for h in kwrest {
+                for (k, v) in h.expect_hash("Arg")? {
+                    hash.insert(HashKey(k), v);
+                }
+            }
+            Value::hash_from_map(hash)
+        };
+
+        let block = if block != 0 {
+            let method = MethodRef::from_u64(block);
+            Some(Block::Method(method))
+        } else if flag & 0b10 == 2 {
+            let val = self.stack_pop();
+            if val.is_nil() {
+                None
+            } else {
+                Some(Block::Proc(val))
+            }
+        } else {
+            None
+        };
+        let mut args = self.pop_args_to_args(args_num as usize);
+        args.block = block;
+        args.kw_arg = keyword;
+        self.send_icache(cache, method_id, receiver, &args)
+    }
+
+    fn vm_fast_send_with_block(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+        // With block and no keyword/block/splat arguments for OPT_SEND.
+        let method_id = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5) as usize;
+        let block = iseq.read64(self.pc + 7);
+        assert!(block != 0);
+        let block = MethodRef::from_u64(block);
+        let cache = iseq.read32(self.pc + 15);
+        let len = self.stack_len();
+        let arg_slice = &self.exec_stack[len - args_num..];
+
+        match self
+            .globals
+            .find_method_from_icache(cache, receiver, method_id)
+        {
+            Some(method) => match &*method {
+                MethodInfo::BuiltinFunc { func, .. } => {
+                    let mut args = Args::from_slice(arg_slice);
+                    args.block = Some(Block::Method(block));
+                    self.set_stack_len(len - args_num);
+                    self.invoke_native(func, receiver, &args)
+                }
+                MethodInfo::AttrReader { id } => {
+                    if args_num != 0 {
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 0)",
+                            args_num
+                        )));
+                    }
+                    Self::invoke_getter(*id, receiver)
+                }
+                MethodInfo::AttrWriter { id } => {
+                    if args_num != 1 {
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 1)",
+                            args_num
+                        )));
+                    }
+                    Self::invoke_setter(*id, receiver, self.stack_pop())
+                }
+                MethodInfo::RubyFunc { iseq } => {
+                    if iseq.opt_flag {
+                        let mut context = Context::new(
+                            receiver,
+                            Some(Block::Method(block)),
+                            *iseq,
+                            None,
+                            self.latest_context(),
+                        );
+                        let req_len = iseq.params.req;
+                        if args_num != req_len {
+                            return Err(RubyError::argument(format!(
+                                "Wrong number of arguments. (given {}, expected {})",
+                                args_num, req_len
+                            )));
+                        };
+                        context.copy_from_slice(0, arg_slice);
+                        self.set_stack_len(len - args_num);
+                        self.run_context(&context)
+                    } else {
+                        let mut args = Args::from_slice(arg_slice);
+                        args.block = Some(Block::Method(block));
+                        self.set_stack_len(len - args_num);
+                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                        let res = self.run_context(&context);
+                        res
+                    }
+                }
+            },
+            None => {
+                let mut args = Args::from_slice(arg_slice);
+                args.block = Some(Block::Method(block));
+                self.set_stack_len(len - args_num);
+                self.send_method_missing(method_id, receiver, &args)
+            }
+        }
+    }
+
+    fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+        // No block nor keyword/block/splat arguments for OPT_SEND.
+        let method_id = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5) as usize;
+        let cache = iseq.read32(self.pc + 7);
+        let len = self.stack_len();
+        let arg_slice = &self.exec_stack[len - args_num..];
+
+        match self
+            .globals
+            .find_method_from_icache(cache, receiver, method_id)
+        {
+            Some(method) => match &*method {
+                MethodInfo::BuiltinFunc { func, .. } => {
+                    let args = Args::from_slice(arg_slice);
+                    self.set_stack_len(len - args_num);
+                    self.invoke_native(func, receiver, &args)
+                }
+                MethodInfo::AttrReader { id } => {
+                    if args_num != 0 {
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 0)",
+                            args_num
+                        )));
+                    }
+                    Self::invoke_getter(*id, receiver)
+                }
+                MethodInfo::AttrWriter { id } => {
+                    if args_num != 1 {
+                        return Err(RubyError::argument(format!(
+                            "Wrong number of arguments. (given {}, expected 1)",
+                            args_num
+                        )));
+                    }
+                    Self::invoke_setter(*id, receiver, self.stack_pop())
+                }
+                MethodInfo::RubyFunc { iseq } => {
+                    if iseq.opt_flag {
+                        let mut context =
+                            Context::new(receiver, None, *iseq, None, self.latest_context());
+                        let req_len = iseq.params.req;
+                        if args_num != req_len {
+                            return Err(RubyError::argument(format!(
+                                "Wrong number of arguments. (given {}, expected {})",
+                                args_num, req_len
+                            )));
+                        };
+                        context.copy_from_slice(0, arg_slice);
+                        self.set_stack_len(len - args_num);
+                        self.run_context(&context)
+                    } else {
+                        let args = Args::from_slice(arg_slice);
+                        self.set_stack_len(len - args_num);
+                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                        let res = self.run_context(&context);
+                        res
+                    }
+                }
+            },
+            None => {
+                let args = Args::from_slice(arg_slice);
+                self.set_stack_len(len - args_num);
+                self.send_method_missing(method_id, receiver, &args)
+            }
+        }
+    }
+}
+
 impl<'a> VM {
     pub fn expect_block(&self, block: &'a Option<Block>) -> Result<&'a Block, RubyError> {
         match block {
@@ -1468,28 +1670,18 @@ impl VM {
 }
 
 // Utilities for method call
-
 impl VM {
     pub fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
         match self.globals.find_method_from_receiver(receiver, method_id) {
             Some(method) => return self.eval_send(method, receiver, args),
             None => {}
         };
-        match self
-            .globals
-            .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
-        {
-            Some(method) => {
-                let mut new_args = Args::new(args.len() + 1);
-                new_args[0] = Value::symbol(method_id);
-                for i in 0..args.len() {
-                    new_args[i + 1] = args[i];
-                }
-                return self.eval_send(method, receiver, &new_args);
-            }
-            None => {}
-        };
-        Err(RubyError::undefined_method(method_id, receiver))
+        self.send_method_missing(method_id, receiver, args)
+    }
+
+    pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
+        let args = Args::new0();
+        self.send(method_id, receiver, &args)
     }
 
     fn send_icache(
@@ -1528,11 +1720,6 @@ impl VM {
             }
             None => Err(RubyError::undefined_method(method_id, receiver)),
         }
-    }
-
-    pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
-        let args = Args::new0();
-        self.send(method_id, receiver, &args)
     }
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
@@ -2219,211 +2406,10 @@ impl VM {
 }
 
 impl VM {
-    fn vm_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
-        let method_id = iseq.read_id(self.pc + 1);
-        let args_num = iseq.read16(self.pc + 5);
-        let kw_rest_num = iseq.read8(self.pc + 7);
-        let flag = iseq.read8(self.pc + 8);
-        let block = iseq.read64(self.pc + 9);
-        let cache = iseq.read32(self.pc + 17);
-
-        let mut kwrest = vec![];
-        for _ in 0..kw_rest_num {
-            let val = self.stack_pop();
-            kwrest.push(val);
-        }
-
-        let keyword = if flag & 0b01 == 1 {
-            let mut val = self.stack_pop();
-            let hash = val.as_mut_hash().unwrap();
-            for h in kwrest {
-                for (k, v) in h.expect_hash("Arg")? {
-                    hash.insert(k, v);
-                }
-            }
-            val
-        } else if kwrest.len() == 0 {
-            Value::nil()
-        } else {
-            let mut hash = FxHashMap::default();
-            for h in kwrest {
-                for (k, v) in h.expect_hash("Arg")? {
-                    hash.insert(HashKey(k), v);
-                }
-            }
-            Value::hash_from_map(hash)
-        };
-
-        let block = if block != 0 {
-            let method = MethodRef::from_u64(block);
-            Some(Block::Method(method))
-        } else if flag & 0b10 == 2 {
-            let val = self.stack_pop();
-            if val.is_nil() {
-                None
-            } else {
-                Some(Block::Proc(val))
-            }
-        } else {
-            None
-        };
-        let mut args = self.pop_args_to_args(args_num as usize);
-        args.block = block;
-        args.kw_arg = keyword;
-        self.send_icache(cache, method_id, receiver, &args)
-    }
-
-    fn vm_fast_send_with_block(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
-        // With block and no keyword/block/splat arguments for OPT_SEND.
-        let method_id = iseq.read_id(self.pc + 1);
-        let args_num = iseq.read16(self.pc + 5) as usize;
-        let block = iseq.read64(self.pc + 7);
-        assert!(block != 0);
-        let block = MethodRef::from_u64(block);
-        let cache = iseq.read32(self.pc + 15);
-        let len = self.stack_len();
-        let arg_slice = &self.exec_stack[len - args_num..];
-
-        match self
-            .globals
-            .find_method_from_icache(cache, receiver, method_id)
-        {
-            Some(method) => match &*method {
-                MethodInfo::BuiltinFunc { func, .. } => {
-                    let mut args = Args::from_slice(arg_slice);
-                    args.block = Some(Block::Method(block));
-                    self.set_stack_len(len - args_num);
-                    self.invoke_native(func, receiver, &args)
-                }
-                MethodInfo::AttrReader { id } => {
-                    if args_num != 0 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 0)",
-                            args_num
-                        )));
-                    }
-                    Self::invoke_getter(*id, receiver)
-                }
-                MethodInfo::AttrWriter { id } => {
-                    if args_num != 1 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 1)",
-                            args_num
-                        )));
-                    }
-                    Self::invoke_setter(*id, receiver, self.stack_pop())
-                }
-                MethodInfo::RubyFunc { iseq } => {
-                    if iseq.opt_flag {
-                        let mut context = Context::new(
-                            receiver,
-                            Some(Block::Method(block)),
-                            *iseq,
-                            None,
-                            self.latest_context(),
-                        );
-                        let req_len = iseq.params.req;
-                        if args_num != req_len {
-                            return Err(RubyError::argument(format!(
-                                "Wrong number of arguments. (given {}, expected {})",
-                                args_num, req_len
-                            )));
-                        };
-                        context.copy_from_slice(0, arg_slice);
-                        self.set_stack_len(len - args_num);
-                        self.run_context(&context)
-                    } else {
-                        let mut args = Args::from_slice(arg_slice);
-                        args.block = Some(Block::Method(block));
-                        self.set_stack_len(len - args_num);
-                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
-                        let res = self.run_context(&context);
-                        res
-                    }
-                }
-            },
-            None => {
-                let mut args = Args::from_slice(arg_slice);
-                args.block = Some(Block::Method(block));
-                self.set_stack_len(len - args_num);
-                self.send_method_missing(method_id, receiver, &args)
-            }
-        }
-    }
-
-    fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
-        // No block nor keyword/block/splat arguments for OPT_SEND.
-        let method_id = iseq.read_id(self.pc + 1);
-        let args_num = iseq.read16(self.pc + 5) as usize;
-        let cache = iseq.read32(self.pc + 7);
-        let len = self.stack_len();
-        let arg_slice = &self.exec_stack[len - args_num..];
-
-        match self
-            .globals
-            .find_method_from_icache(cache, receiver, method_id)
-        {
-            Some(method) => match &*method {
-                MethodInfo::BuiltinFunc { func, .. } => {
-                    let args = Args::from_slice(arg_slice);
-                    self.set_stack_len(len - args_num);
-                    self.invoke_native(func, receiver, &args)
-                }
-                MethodInfo::AttrReader { id } => {
-                    if args_num != 0 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 0)",
-                            args_num
-                        )));
-                    }
-                    Self::invoke_getter(*id, receiver)
-                }
-                MethodInfo::AttrWriter { id } => {
-                    if args_num != 1 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 1)",
-                            args_num
-                        )));
-                    }
-                    Self::invoke_setter(*id, receiver, self.stack_pop())
-                }
-                MethodInfo::RubyFunc { iseq } => {
-                    if iseq.opt_flag {
-                        let mut context =
-                            Context::new(receiver, None, *iseq, None, self.latest_context());
-                        let req_len = iseq.params.req;
-                        if args_num != req_len {
-                            return Err(RubyError::argument(format!(
-                                "Wrong number of arguments. (given {}, expected {})",
-                                args_num, req_len
-                            )));
-                        };
-                        context.copy_from_slice(0, arg_slice);
-                        self.set_stack_len(len - args_num);
-                        self.run_context(&context)
-                    } else {
-                        let args = Args::from_slice(arg_slice);
-                        self.set_stack_len(len - args_num);
-                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
-                        let res = self.run_context(&context);
-                        res
-                    }
-                }
-            },
-            None => {
-                let args = Args::from_slice(arg_slice);
-                self.set_stack_len(len - args_num);
-                self.send_method_missing(method_id, receiver, &args)
-            }
-        }
-    }
-}
-
-impl VM {
     /// Evaluate method with given `self_val`, `args` and no outer context.
     #[inline]
     pub fn eval_send(&mut self, methodref: MethodRef, self_val: Value, args: &Args) -> VMResult {
-        self.eval_method(methodref, self_val, None, args)
+        self.invoke_method(methodref, self_val, None, args)
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
@@ -2431,9 +2417,9 @@ impl VM {
         match block {
             Block::Method(method) => {
                 let outer = self.current_context();
-                self.eval_method(*method, outer.self_value, Some(outer), args)
+                self.invoke_method(*method, outer.self_value, Some(outer), args)
             }
-            Block::Proc(proc) => self.eval_proc(*proc, args),
+            Block::Proc(proc) => self.invoke_proc(*proc, args),
         }
     }
 
@@ -2442,7 +2428,7 @@ impl VM {
         match block {
             Block::Method(method) => {
                 let outer = self.current_context();
-                self.eval_method(*method, self_val, Some(outer), args)
+                self.invoke_method(*method, self_val, Some(outer), args)
             }
             Block::Proc(proc) => {
                 let pref = proc.as_proc().unwrap();
@@ -2471,14 +2457,14 @@ impl VM {
 
         match block {
             Block::Method(method) => {
-                self.eval_method(*method, caller.self_value, Some(caller), args)
+                self.invoke_method(*method, caller.self_value, Some(caller), args)
             }
-            Block::Proc(proc) => self.eval_proc(*proc, args),
+            Block::Proc(proc) => self.invoke_proc(*proc, args),
         }
     }
 
     /// Evaluate Proc object.
-    pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
+    pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> VMResult {
         let pref = proc.as_proc().unwrap();
         let context = Context::from_args(
             self,
@@ -2487,30 +2473,30 @@ impl VM {
             args,
             pref.context.outer,
         )?;
-        let res = self.run_context(&context)?;
-        Ok(res)
+        self.run_context(&context)
     }
 
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
-    pub fn eval_method(
+    pub fn invoke_method(
         &mut self,
         methodref: MethodRef,
         self_val: Value,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
+        use MethodInfo::*;
         match &*methodref {
-            MethodInfo::BuiltinFunc { func, .. } => self.invoke_native(func, self_val, args),
-            MethodInfo::AttrReader { id } => Self::invoke_getter(*id, self_val),
-            MethodInfo::AttrWriter { id } => Self::invoke_setter(*id, self_val, args[0]),
-            MethodInfo::RubyFunc { iseq } => {
+            BuiltinFunc { func, .. } => self.invoke_native(func, self_val, args),
+            AttrReader { id } => Self::invoke_getter(*id, self_val),
+            AttrWriter { id } => Self::invoke_setter(*id, self_val, args[0]),
+            RubyFunc { iseq } => {
                 let context = Context::from_args(self, self_val, *iseq, args, outer)?;
-                let res = self.run_context(&context);
-                res
+                self.run_context(&context)
             }
         }
     }
 
+    // helper methods
     fn invoke_native(&mut self, func: &BuiltinFunc, self_val: Value, args: &Args) -> VMResult {
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::EXTERN);

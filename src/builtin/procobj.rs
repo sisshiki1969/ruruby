@@ -45,7 +45,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.eval_proc(self_val, args)
+    vm.invoke_proc(self_val, args)
 }
 
 #[cfg(test)]

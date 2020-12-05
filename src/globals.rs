@@ -22,8 +22,7 @@ pub struct Globals {
     pub class_version: u32,
     pub const_version: u32,
     pub main_object: Value,
-    pub gc_enabled: bool,
-
+    //pub gc_enabled: bool,
     pub fibers: Vec<VMRef>,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
     source_files: Vec<PathBuf>,
@@ -181,7 +180,6 @@ impl Globals {
             const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
-            gc_enabled: true,
             fibers: vec![],
             regexp_cache: FxHashMap::default(),
             source_files: vec![],

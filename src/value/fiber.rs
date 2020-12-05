@@ -113,7 +113,7 @@ impl FiberInfo {
         let method = vm.get_method_from_receiver(receiver, method_id)?;
         let context = Context::new_noiseq();
         vm.context_push(ContextRef::from_ref(&context));
-        vm.eval_method(method, receiver, None, args)?;
+        vm.invoke_method(method, receiver, None, args)?;
         vm.context_pop();
         let res = Err(RubyError::stop_iteration("msg"));
         res

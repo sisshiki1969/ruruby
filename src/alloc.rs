@@ -166,8 +166,8 @@ pub struct Allocator {
     count: usize,
     /// Flag for GC timing.
     alloc_flag: bool,
-    /// Flag for stress mode (for debug).
-    stress_flag: bool,
+    /// Flag whether GC is enabled or not.
+    pub gc_enabled: bool,
 }
 
 pub type AllocatorRef = Ref<Allocator>;
@@ -189,13 +189,13 @@ impl Allocator {
             free_pages: vec![],
             count: 0,
             alloc_flag: false,
-            stress_flag: false,
+            gc_enabled: true,
         };
         alloc
     }
 
     pub fn is_allocated(&self) -> bool {
-        self.stress_flag || self.alloc_flag
+        self.alloc_flag
     }
 
     /// Returns number of objects in the free list.
@@ -257,7 +257,7 @@ impl Allocator {
             self.current.get_data_ptr(0)
         } else {
             // Bump allocation.
-            if self.used_in_current == THRESHOLD {
+            if self.used_in_current == THRESHOLD && self.gc_enabled {
                 self.alloc_flag = true;
             }
             let ptr = self.current.get_data_ptr(self.used_in_current);
