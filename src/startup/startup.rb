@@ -48,6 +48,9 @@ end
 class NilClass
 end
 
+class SystemExit
+end
+
 class Module
   def undef_method(sym); end
   def define_method(sym); end

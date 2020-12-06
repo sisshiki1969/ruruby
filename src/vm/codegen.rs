@@ -1705,19 +1705,30 @@ impl Codegen {
                         if let Some(prev) = prev {
                             Codegen::write_disp_from_cur(iseq, prev);
                         }
-                        let ex = &exception_list[0];
-
-                        self.gen_dup(iseq, 1);
-                        self.gen(globals, iseq, ex, true)?;
-                        //self.gen_sinkn(iseq, 1);
-                        self.save_loc(iseq, ex.loc);
-                        iseq.push(Inst::TEQ);
-                        prev = Some(self.gen_jmp_if_f(iseq));
+                        if !exception_list.is_empty() {
+                            self.gen_dup(iseq, 1);
+                            let ex = &exception_list[0];
+                            self.gen(globals, iseq, ex, true)?;
+                            self.gen_sinkn(iseq, 1);
+                            self.save_loc(iseq, ex.loc);
+                            iseq.push(Inst::TEQ);
+                            prev = Some(self.gen_jmp_if_f(iseq));
+                        } else {
+                            prev = None;
+                        }
                         // assign the error value.
-                        self.gen_assign(globals, iseq, assign)?;
+                        match assign {
+                            Some(assign) => self.gen_assign(globals, iseq, assign)?,
+                            None => self.gen_pop(iseq),
+                        }
                         self.gen(globals, iseq, body, use_value)?;
                         ensure_dest.push(Self::gen_jmp(iseq));
                     }
+                    if let Some(prev) = prev {
+                        Codegen::write_disp_from_cur(iseq, prev);
+                    }
+                    self.gen_pop(iseq);
+                    ensure_dest.push(Self::gen_jmp(iseq));
                 }
                 // Else clause.
                 Codegen::write_disp_from_cur(iseq, else_dest);
@@ -1728,9 +1739,6 @@ impl Codegen {
                     self.gen(globals, iseq, else_, use_value)?
                 };
                 // Ensure clause.
-                if let Some(prev) = prev {
-                    Codegen::write_disp_from_cur(iseq, prev);
-                }
                 for src in ensure_dest {
                     Codegen::write_disp_from_cur(iseq, src);
                 }

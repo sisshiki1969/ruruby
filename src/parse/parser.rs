@@ -207,16 +207,19 @@ pub struct RescueEntry {
     /// The exception classes for this rescue clause.
     pub exception_list: Vec<Node>,
     /// Assignment destination for error value in rescue clause.
-    pub assign: Box<Node>,
+    pub assign: Option<Box<Node>>,
     /// The body of this rescue clause.
     pub body: Box<Node>,
 }
 
 impl RescueEntry {
-    pub fn new(exception_list: Vec<Node>, assign: Node, body: Node) -> Self {
+    pub fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
         Self {
             exception_list,
-            assign: Box::new(assign),
+            assign: match assign {
+                Some(assign) => Some(Box::new(assign)),
+                None => None,
+            },
             body: Box::new(body),
         }
     }
@@ -2507,7 +2510,7 @@ impl Parser {
                 break;
             };
             let mut exception = vec![];
-            let mut assign = Node::new_nop(body.loc());
+            let mut assign = None;
             if !self.consume_term()? {
                 loop {
                     if self.peek_punct_no_term(Punct::FatArrow) {
@@ -2519,8 +2522,9 @@ impl Parser {
                     };
                 }
                 if self.consume_punct_no_term(Punct::FatArrow)? {
-                    assign = self.parse_primary(true)?;
-                    self.check_lhs(&assign)?;
+                    let lhs = self.parse_primary(true)?;
+                    self.check_lhs(&lhs)?;
+                    assign = Some(lhs);
                 }
                 self.parse_then()?;
             };

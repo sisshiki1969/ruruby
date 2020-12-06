@@ -1449,3 +1449,130 @@ fn defined() {
     "##;
     assert_script(program);
 }
+
+#[test]
+fn exception1() {
+    let program = r##"
+    a = []
+    begin
+      a << "begin"
+      a << "unreachable"
+    rescue StandardError => ex
+      a << "StandardError"
+    rescue Exception => ex
+      a << "Exception"
+    else
+      a << "else"
+    ensure
+      a << "ensure"
+    end
+    assert ["begin", "unreachable", "else", "ensure"], a
+
+    a = []
+    begin
+      a << "begin"
+      a << "unreachable"
+    rescue StandardError => ex
+      a << "StandardError"
+    rescue Exception => ex
+      a << "Exception"
+    ensure
+      a << "ensure"
+    end
+    assert ["begin", "unreachable", "ensure"], a
+
+    a = []
+    begin
+      a << "begin"
+      a << "unreachable"
+    rescue StandardError => ex
+      a << "StandardError"
+    rescue Exception => ex
+      a << "Exception"
+    end
+    assert ["begin", "unreachable"], a
+    "##;
+    assert_script(program);
+}
+
+#[test]
+fn exception2() {
+    let program = r##"
+    a = []
+    begin
+      a << "begin"
+      raise Exception.new
+      a << "unreachable"
+    rescue StandardError => ex
+      a << "StandardError"
+    rescue Exception => ex
+      a << "Exception"
+    else
+      a << "else"
+    ensure
+      a << "ensure"
+    end
+    assert ["begin", "Exception", "ensure"], a
+
+    a = []
+    begin
+      a << "begin"
+      raise Exception.new
+      a << "unreachable"
+    rescue StandardError => ex
+      a << "StandardError"
+    rescue Exception => ex
+      a << "Exception"
+    ensure
+      a << "ensure"
+    end
+    assert ["begin", "Exception", "ensure"], a
+
+    a = []
+    begin
+      a << "begin"
+      raise Exception.new
+      a << "unreachable"
+    rescue StandardError => ex
+      a << "StandardError"
+    rescue Exception => ex
+      a << "Exception"
+    end
+    assert ["begin", "Exception"], a
+
+    a = []
+    begin
+      a << "begin"
+      raise Exception.new
+      a << "unreachable"
+    rescue StandardError
+      a << "StandardError"
+    rescue Exception
+      a << "Exception"
+    end
+    assert ["begin", "Exception"], a
+
+    a = []
+    begin
+      a << "begin"
+      raise Exception.new
+      a << "unreachable"
+    rescue StandardError
+      a << "StandardError"
+    rescue
+      a << "Exception"
+    end
+    assert ["begin", "Exception"], a
+
+    a = []
+    begin
+      a << "begin"
+      raise Exception.new
+      a << "unreachable"
+    rescue
+      a << "Exception"
+    end
+    assert ["begin", "Exception"], a
+    "##;
+    assert_script(program);
+}

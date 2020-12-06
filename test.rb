@@ -1,13 +1,11 @@
-  begin
-    p "begin"
-    raise Exception.new
-    p "unreachable"
-  rescue StandardError => ex
-    p "StandardError #{ex.inspect}"
-  rescue Exception => ex
-    p "Exception #{ex.inspect}"
-  else
-    p "else"
-  ensure
-    p "ensure"
-  end
+a = []
+begin
+  a << "begin"
+  raise Exception.new
+  a << "unreachable"
+rescue StandardError
+  a << "StandardError"
+rescue
+  a << "Exception"
+end
+assert ["begin", "Exception"], a
