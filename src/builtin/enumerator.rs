@@ -22,7 +22,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     let receiver = args[0];
     let (method, new_args) = if args.len() == 1 {
-        let method = IdentId::get_id("each");
+        let method = IdentId::EACH;
         let new_args = Args::new0();
         (method, new_args)
     } else {
@@ -129,7 +129,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = IdentId::get_id("map");
+            let id = IdentId::MAP;
             let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }

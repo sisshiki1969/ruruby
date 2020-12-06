@@ -2,7 +2,7 @@ use crate::error::RubyError;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Value::class_from(globals.builtins.object);
+    let mut class = Value::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("to_a", toa);
@@ -315,7 +315,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = match &args.block {
         Some(method) => method,
         None => {
-            let id = IdentId::get_id("map");
+            let id = IdentId::MAP;
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
@@ -371,7 +371,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let method = match &args.block {
         Some(method) => method,
         None => {
-            let id = IdentId::get_id("each");
+            let id = IdentId::EACH;
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }

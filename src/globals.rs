@@ -116,6 +116,18 @@ impl BuiltinClass {
     pub fn float() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().float)
     }
+
+    pub fn complex() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().complex)
+    }
+
+    pub fn array() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().array)
+    }
+
+    pub fn exception() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().exception)
+    }
 }
 
 impl GC for BuiltinClass {
@@ -250,7 +262,7 @@ impl Globals {
         init_class!("Time", time);
         init_class!("Comparable", comparable);
 
-        globals.set_toplevel_constant("StopIteration", Value::class_from(object));
+        globals.set_toplevel_constant("StopIteration", Value::class_under(object));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         std::env::vars()

@@ -442,23 +442,43 @@ impl VM {
             print!("--->");
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
         }
-        match self.run_context_main(context) {
-            Ok(val) => {
-                self.context_pop().unwrap();
-                debug_assert_eq!(stack_len, self.stack_len());
-                self.pc = pc;
-                #[cfg(feature = "trace")]
-                println!("<--- Ok({:?})", val);
-                Ok(val)
-            }
-            Err(mut err) => {
-                err.info.push((self.source_info(), self.get_loc()));
-                self.context_pop().unwrap();
-                self.set_stack_len(stack_len);
-                self.pc = pc;
-                #[cfg(feature = "trace")]
-                println!("<--- Err({:?})", err.kind);
-                Err(err)
+        loop {
+            match self.run_context_main(context) {
+                Ok(val) => {
+                    self.context_pop().unwrap();
+                    debug_assert_eq!(stack_len, self.stack_len());
+                    self.pc = pc;
+                    #[cfg(feature = "trace")]
+                    println!("<--- Ok({:?})", val);
+                    return Ok(val);
+                }
+                Err(mut err) => {
+                    err.info.push((self.source_info(), self.get_loc()));
+                    let iseq = self.current_context().iseq_ref.unwrap();
+                    //eprintln!("{:?}", iseq.exception_table);
+                    let catch = iseq.exception_table.iter().find(|x| x.include(self.pc));
+                    if let Some(entry) = catch {
+                        self.pc = entry.dest.to_usize();
+                        self.set_stack_len(stack_len);
+                        let val = match err.kind {
+                            RubyErrorKind::Value(val) => val,
+                            RubyErrorKind::RuntimeErr { .. } => {
+                                Value::exception(self.globals.builtins.exception, err)
+                            }
+                            _ => Value::nil(),
+                        };
+                        self.stack_push(val);
+                    } else {
+                        self.context_pop().unwrap();
+                        self.set_stack_len(stack_len);
+                        self.pc = pc;
+                        #[cfg(feature = "trace")]
+                        {
+                            println!("<--- Err({:?})", err.kind);
+                        }
+                        return Err(err);
+                    }
+                }
             }
         }
     }
@@ -2294,7 +2314,7 @@ impl VM {
                         super_val.expect_class(self, "Superclass")?;
                         super_val
                     };
-                    Value::class_from(super_val)
+                    Value::class_under(super_val)
                 };
                 let mut singleton = self.get_singleton_class(val)?;
                 let singleton_class = singleton.as_mut_class();
@@ -2395,6 +2415,7 @@ impl VM {
                 ObjKind::Ordinary => oref.inspect(self)?,
                 ObjKind::Hash(href) => href.to_s(self)?,
                 ObjKind::Complex { .. } => format!("{:?}", oref.kind),
+                ObjKind::Exception(err) => format!("#<Exception {:?} >", err),
                 _ => {
                     let id = IdentId::get_id("inspect");
                     self.send0(id, val)?.as_string().unwrap().to_string()

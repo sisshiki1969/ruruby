@@ -2,7 +2,7 @@ use crate::vm::*;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut string_class = Value::class_from(globals.builtins.object);
+    let mut string_class = Value::class_under(globals.builtins.object);
     string_class.add_builtin_method_by_str("to_s", to_s);
     string_class.add_builtin_method_by_str("inspect", inspect);
     string_class.add_builtin_method_by_str("+", add);

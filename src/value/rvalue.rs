@@ -29,6 +29,7 @@ pub enum ObjKind {
     Fiber(Box<FiberInfo>),
     Enumerator(Box<FiberInfo>),
     Time(TimeInfo),
+    Exception(RubyError),
 }
 
 impl std::fmt::Debug for ObjKind {
@@ -101,6 +102,7 @@ impl std::fmt::Debug for ObjKind {
             ObjKind::Enumerator(_) => write!(f, "Enumerator"),
             ObjKind::Fiber(_) => write!(f, "Fiber"),
             ObjKind::Time(time) => write!(f, "{:?}", time),
+            ObjKind::Exception(err) => write!(f, "Exception {:?}", err),
         }
     }
 }
@@ -183,6 +185,7 @@ impl RValue {
                 ObjKind::Splat(v) => ObjKind::Splat(*v),
                 ObjKind::String(rstr) => ObjKind::String(rstr.clone()),
                 ObjKind::Time(time) => ObjKind::Time(time.clone()),
+                ObjKind::Exception(err) => ObjKind::Exception(err.clone()),
             },
         }
     }
@@ -239,7 +242,7 @@ impl RValue {
     }
 
     pub fn new_complex(r: Value, i: Value) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().complex);
+        let class = BuiltinClass::complex();
         RValue {
             class,
             var_table: None,
@@ -288,7 +291,7 @@ impl RValue {
     }
 
     pub fn new_array(array_info: ArrayInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().array);
+        let class = BuiltinClass::array();
         RValue {
             class,
             var_table: None,
@@ -379,6 +382,14 @@ impl RValue {
             class: time_class,
             var_table: None,
             kind: ObjKind::Time(time),
+        }
+    }
+
+    pub fn new_exception(exception_class: Value, err: RubyError) -> Self {
+        RValue {
+            class: exception_class,
+            var_table: None,
+            kind: ObjKind::Exception(err),
         }
     }
 }

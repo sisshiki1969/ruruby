@@ -1,6 +1,7 @@
 use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
+use crate::parse::parser::RescueEntry;
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,7 @@ pub struct Codegen {
     pub source_info: SourceInfoRef,
 }
 
+/// Infomation for loops.
 #[derive(Debug, Clone, PartialEq)]
 struct LoopInfo {
     state: LoopState,
@@ -38,7 +40,9 @@ impl LoopInfo {
 
 #[derive(Debug, Clone, PartialEq)]
 enum LoopState {
+    /// in a loop
     Loop,
+    /// top level (outside a loop)
     Top,
 }
 
@@ -64,18 +68,41 @@ enum EscapeKind {
 pub struct Context {
     lvar_info: FxHashMap<IdentId, LvarId>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
-    exceptions: Vec<Exceptions>,
+    exception_table: Vec<ExceptionEntry>,
     kind: ContextKind,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct Exceptions {
-    entry: Vec<ISeqPos>,
+#[derive(Clone, PartialEq)]
+pub struct ExceptionEntry {
+    /// start position in ISeq.
+    pub start: ISeqPos,
+    /// end position in ISeq.
+    pub end: ISeqPos,
+    pub dest: ISeqPos,
 }
 
-impl Exceptions {
-    fn new() -> Self {
-        Exceptions { entry: vec![] }
+impl fmt::Debug for ExceptionEntry {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_fmt(format_args!(
+            "ExceptionEntry ({}, {}) => {}",
+            self.start.to_usize(),
+            self.end.to_usize(),
+            self.dest.to_usize(),
+        ))
+    }
+}
+
+impl ExceptionEntry {
+    fn new(start: usize, end: usize, dest: ISeqPos) -> Self {
+        Self {
+            start: ISeqPos::from(start),
+            end: ISeqPos::from(end),
+            dest,
+        }
+    }
+
+    pub fn include(&self, pc: usize) -> bool {
+        self.start.to_usize() <= pc && pc < self.end.to_usize()
     }
 }
 
@@ -91,7 +118,7 @@ impl Context {
         Context {
             lvar_info: FxHashMap::default(),
             iseq_sourcemap: vec![],
-            exceptions: vec![],
+            exception_table: vec![],
             kind: ContextKind::Eval,
         }
     }
@@ -100,7 +127,7 @@ impl Context {
         Context {
             lvar_info,
             iseq_sourcemap: vec![],
-            exceptions: vec![],
+            exception_table: vec![],
             kind,
         }
     }
@@ -206,8 +233,14 @@ impl ISeq {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ISeqPos(usize);
+
+impl std::fmt::Debug for ISeqPos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("ISeqPos({})", self.0))
+    }
+}
 
 impl ISeqPos {
     pub fn from(pos: usize) -> Self {
@@ -1032,6 +1065,7 @@ impl Codegen {
         self.gen(globals, &mut iseq, node, use_value)?;
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
+        let exception_table = context.exception_table;
         self.gen_end(&mut iseq);
         self.loc = save_loc;
 
@@ -1042,6 +1076,7 @@ impl Codegen {
                 params,
                 iseq,
                 lvar_collector.clone(),
+                exception_table,
                 iseq_sourcemap,
                 self.source_info,
                 match kind {
@@ -1064,11 +1099,7 @@ impl Codegen {
         *methodref = info;
         #[cfg(feature = "emit-iseq")]
         {
-            let iseq = if let MethodInfo::RubyFunc { iseq } = *methodref {
-                iseq
-            } else {
-                panic!("CodeGen: Illegal methodref.")
-            };
+            let iseq = methodref.as_iseq();
             println!("-----------------------------------------");
             let method_name = match iseq.name {
                 Some(id) => format!("{:?}", id),
@@ -1605,7 +1636,7 @@ impl Codegen {
                     _ => unreachable!(),
                 };
                 self.gen(globals, iseq, iter, true)?;
-                self.gen_send(globals, iseq, IdentId::get_id("each"), 0, 0, 0, Some(block));
+                self.gen_send(globals, iseq, IdentId::EACH, 0, 0, 0, Some(block));
                 if !use_value {
                     self.gen_pop(iseq)
                 };
@@ -1648,18 +1679,70 @@ impl Codegen {
             }
             NodeKind::Begin {
                 body,
-                rescue: _,
-                else_: _,
+                rescue,
+                else_,
                 ensure,
             } => {
-                self.context_mut().exceptions.push(Exceptions::new());
+                let mut ensure_dest = vec![];
+                let body_start = iseq.len();
                 self.gen(globals, iseq, body, use_value)?;
-                let exceptions = self.context_mut().exceptions.pop().unwrap();
-                for src in exceptions.entry {
+                let body_end = iseq.len();
+                let mut dest = None;
+                let mut prev = None;
+                let else_dest = Self::gen_jmp(iseq);
+
+                if !rescue.is_empty() {
+                    // Rescue clauses.
+                    for RescueEntry {
+                        exception_list,
+                        assign,
+                        body,
+                    } in rescue
+                    {
+                        if dest.is_none() {
+                            dest = Some(Self::current(iseq))
+                        };
+                        if let Some(prev) = prev {
+                            Codegen::write_disp_from_cur(iseq, prev);
+                        }
+                        let ex = &exception_list[0];
+
+                        self.gen_dup(iseq, 1);
+                        self.gen(globals, iseq, ex, true)?;
+                        //self.gen_sinkn(iseq, 1);
+                        self.save_loc(iseq, ex.loc);
+                        iseq.push(Inst::TEQ);
+                        prev = Some(self.gen_jmp_if_f(iseq));
+                        // assign the error value.
+                        self.gen_assign(globals, iseq, assign)?;
+                        self.gen(globals, iseq, body, use_value)?;
+                        ensure_dest.push(Self::gen_jmp(iseq));
+                    }
+                }
+                // Else clause.
+                Codegen::write_disp_from_cur(iseq, else_dest);
+                if let Some(else_) = else_ {
+                    if use_value {
+                        self.gen_pop(iseq)
+                    };
+                    self.gen(globals, iseq, else_, use_value)?
+                };
+                // Ensure clause.
+                if let Some(prev) = prev {
+                    Codegen::write_disp_from_cur(iseq, prev);
+                }
+                for src in ensure_dest {
                     Codegen::write_disp_from_cur(iseq, src);
                 }
-                // Ensure clauses must not return value.
-                self.gen(globals, iseq, ensure, false)?;
+                if let Some(dest) = dest {
+                    self.context_mut()
+                        .exception_table
+                        .push(ExceptionEntry::new(body_start, body_end, dest));
+                }
+                // Ensure clause does not return value.
+                if let Some(ensure) = ensure {
+                    self.gen(globals, iseq, ensure, false)?;
+                }
             }
             NodeKind::Case { cond, when_, else_ } => {
                 let mut end = vec![];
@@ -2100,19 +2183,11 @@ impl Codegen {
                 self.gen(globals, iseq, val, true)?;
                 // Call ensure clauses.
                 // Note ensure routine return no value.
-                match self.context_mut().exceptions.last_mut() {
-                    Some(ex) => {
-                        let src = Codegen::gen_jmp(iseq);
-                        ex.entry.push(src);
-                    }
-                    None => {
-                        self.save_loc(iseq, node.loc);
-                        if self.context().kind == ContextKind::Block {
-                            self.gen_method_return(iseq);
-                        } else {
-                            self.gen_end(iseq);
-                        }
-                    }
+                self.save_loc(iseq, node.loc);
+                if self.context().kind == ContextKind::Block {
+                    self.gen_method_return(iseq);
+                } else {
+                    self.gen_end(iseq);
                 }
             }
             NodeKind::Break(val) => {

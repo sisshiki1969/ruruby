@@ -80,6 +80,7 @@ pub struct ISeqInfo {
     /// This field is set to None when IseqInfo was created by Codegen.
     /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
     /// Set to Some() in class definition context, or None in the top level.
+    pub exception_table: Vec<ExceptionEntry>,
     pub class_defined: Option<ClassListRef>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
@@ -162,6 +163,7 @@ impl ISeqInfo {
         params: ISeqParams,
         iseq: ISeq,
         lvar: LvarCollector,
+        exception_table: Vec<ExceptionEntry>,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
         kind: ISeqKind,
@@ -175,6 +177,7 @@ impl ISeqInfo {
             iseq,
             lvar,
             lvars,
+            exception_table,
             opt_flag,
             class_defined: None,
             iseq_sourcemap,
@@ -190,6 +193,7 @@ impl ISeqInfo {
             ISeqParams::default(),
             ISeq::new(),
             LvarCollector::new(),
+            vec![],
             vec![],
             SourceInfoRef::empty(),
             ISeqKind::Method(IdentId::from(0)),

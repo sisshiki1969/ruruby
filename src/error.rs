@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct RubyError(Box<ErrorInfo>);
 
 impl std::ops::Deref for RubyError {
@@ -16,11 +16,31 @@ impl std::ops::DerefMut for RubyError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl std::fmt::Debug for RubyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct ErrorInfo {
     pub kind: RubyErrorKind,
     pub info: Vec<(SourceInfoRef, Loc)>,
     level: usize,
+}
+
+impl std::fmt::Debug for ErrorInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.kind {
+            RubyErrorKind::RuntimeErr { kind, message } => {
+                write!(f, "RuntimeErr: {:?} {}", kind, message)
+            }
+            RubyErrorKind::ParseErr(kind) => write!(f, "ParseErr: {:?}", kind),
+            RubyErrorKind::Value(val) => write!(f, "{:?}", val),
+            RubyErrorKind::MethodReturn(val) => write!(f, "MethodReturn {:?}", val),
+            RubyErrorKind::BlockReturn(val) => write!(f, "BlockReturn {:?}", val),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,6 +50,7 @@ pub enum RubyErrorKind {
         kind: RuntimeErrKind,
         message: String,
     },
+    Value(Value),
     MethodReturn(Value),
     BlockReturn(Value),
 }
@@ -161,6 +182,7 @@ impl RubyError {
                 };
                 eprintln!("({})", message);
             }
+            RubyErrorKind::Value(val) => eprintln!("{:?}", val),
             RubyErrorKind::MethodReturn(_) => {
                 eprintln!("LocalJumpError");
             }
@@ -279,6 +301,10 @@ impl RubyError {
 
     pub fn block_return(val: Value) -> RubyError {
         RubyError::new(RubyErrorKind::BlockReturn(val), 0)
+    }
+
+    pub fn value(val: Value) -> RubyError {
+        RubyError::new(RubyErrorKind::Value(val), 0)
     }
 
     pub fn stop_iteration(msg: impl Into<String>) -> RubyError {

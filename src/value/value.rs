@@ -380,6 +380,7 @@ impl Value {
                 ObjKind::Fiber(_) => "Fiber".to_string(),
                 ObjKind::Enumerator(_) => "Enumerator".to_string(),
                 ObjKind::Time(_) => "Time".to_string(),
+                ObjKind::Exception(_) => "Exception".to_string(),
             },
         }
     }
@@ -986,6 +987,16 @@ impl Value {
         }
     }
 
+    pub fn if_exception(&self) -> Option<&RubyError> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Exception(err) => Some(err),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     pub fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
             Some(self.as_packed_symbol())
@@ -1011,7 +1022,9 @@ impl Value {
     pub fn as_packed_symbol(&self) -> IdentId {
         IdentId::from((self.0 >> 32) as u32)
     }
+}
 
+impl Value {
     pub const fn uninitialized() -> Self {
         Value(UNINITIALIZED)
     }
@@ -1099,7 +1112,7 @@ impl Value {
         RValue::new_class(cinfo).pack()
     }
 
-    pub fn class_from(superclass: impl Into<Option<Value>>) -> Self {
+    pub fn class_under(superclass: impl Into<Option<Value>>) -> Self {
         RValue::new_class(ClassInfo::from(superclass)).pack()
     }
 
@@ -1158,6 +1171,10 @@ impl Value {
 
     pub fn time(time_class: Value, time: TimeInfo) -> Self {
         RValue::new_time(time_class, time).pack()
+    }
+
+    pub fn exception(exception_class: Value, err: RubyError) -> Self {
+        RValue::new_exception(exception_class, err).pack()
     }
 }
 
@@ -1460,7 +1477,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class_from(None);
+        let expect = Value::class_under(None);
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

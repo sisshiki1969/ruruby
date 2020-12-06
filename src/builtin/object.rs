@@ -290,7 +290,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Err(RubyError::argument("Curently, block is not allowed."));
     };
     let (method, new_args) = if args.len() == 0 {
-        let method = IdentId::get_id("each");
+        let method = IdentId::EACH;
         let mut new_args = Args::new0();
         new_args.block = Some(Block::Method(*METHODREF_ENUM));
         (method, new_args)

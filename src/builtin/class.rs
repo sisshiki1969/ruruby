@@ -22,7 +22,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         args[0]
     };
-    let val = Value::class_from(superclass);
+    let val = Value::class_under(superclass);
 
     match &args.block {
         Some(block) => {

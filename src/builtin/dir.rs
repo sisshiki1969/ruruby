@@ -4,7 +4,7 @@ use std::fs;
 use std::path::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Value::class_from(globals.builtins.object);
+    let mut class = Value::class_under(globals.builtins.object);
     class.add_builtin_class_method("home", home);
     class.add_builtin_class_method("pwd", pwd);
     class.add_builtin_class_method("glob", glob);

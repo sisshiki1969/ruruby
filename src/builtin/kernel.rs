@@ -259,17 +259,22 @@ fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
     /*for arg in args.iter() {
         eprintln!("{}", vm.val_inspect(*arg));
     }*/
-    if args.len() == 1 && args[0].is_class() {
-        if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
-            return Err(RubyError::stop_iteration(""));
-        };
+    if args.len() == 1 {
+        if args[0].is_class() {
+            if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
+                return Err(RubyError::stop_iteration(""));
+            };
+        }
+        if args[0].if_exception().is_some() {
+            return Err(RubyError::value(args[0]));
+        }
     }
     let error_msg = match args.len() {
-        1 => format!("Raised. {:?}", args[0]),
-        2 => format!("Raised. {:?} {:?}", args[0], args[1]),
-        _ => "Raised.".to_string(),
+        1 => format!("{:?}", args[0]),
+        2 => format!("{:?} {:?}", args[0], args[1]),
+        _ => "".to_string(),
     };
-    Err(RubyError::unimplemented(error_msg))
+    Err(RubyError::runtime(error_msg))
 }
 
 fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {

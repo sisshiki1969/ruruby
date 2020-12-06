@@ -174,7 +174,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => {
             // return Enumerator
-            let id = IdentId::get_id("each");
+            let id = IdentId::EACH;
             let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }

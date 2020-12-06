@@ -1,4 +1,4 @@
-use super::parser::LvarCollector;
+use super::parser::{LvarCollector, RescueEntry};
 use crate::id_table::IdentId;
 use crate::util::{Annot, Loc};
 use crate::value::real::Real;
@@ -70,9 +70,9 @@ pub enum NodeKind {
     },
     Begin {
         body: Box<Node>,
-        rescue: Vec<(Node, Node)>, // (ex_class_list, ex_param)
-        else_: Box<Node>,
-        ensure: Box<Node>,
+        rescue: Vec<RescueEntry>, // (ex_class_list, ex_param)
+        else_: Option<Box<Node>>,
+        ensure: Option<Box<Node>>,
     },
     Proc {
         params: Vec<FormalParam>,
@@ -605,17 +605,23 @@ impl Node {
 
     pub fn new_begin(
         body: Node,
-        rescue: Vec<(Node, Node)>,
-        else_: Node,
-        ensure: Node,
+        rescue: Vec<RescueEntry>, //Vec<(Vec<Node>, Box<Node>)>,
+        else_: Option<Node>,
+        ensure: Option<Node>,
         loc: Loc,
     ) -> Self {
         Node::new(
             NodeKind::Begin {
                 body: Box::new(body),
                 rescue,
-                else_: Box::new(else_),
-                ensure: Box::new(ensure),
+                else_: match else_ {
+                    Some(else_) => Some(Box::new(else_)),
+                    None => None,
+                },
+                ensure: match ensure {
+                    Some(ensure) => Some(Box::new(ensure)),
+                    None => None,
+                },
             },
             loc,
         )

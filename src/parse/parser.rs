@@ -203,6 +203,26 @@ impl ParseContext {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct RescueEntry {
+    /// The exception classes for this rescue clause.
+    pub exception_list: Vec<Node>,
+    /// Assignment destination for error value in rescue clause.
+    pub assign: Box<Node>,
+    /// The body of this rescue clause.
+    pub body: Box<Node>,
+}
+
+impl RescueEntry {
+    pub fn new(exception_list: Vec<Node>, assign: Node, body: Node) -> Self {
+        Self {
+            exception_list,
+            assign: Box::new(assign),
+            body: Box::new(body),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 enum ContextKind {
     Class,
     Method,
@@ -2475,41 +2495,50 @@ impl Parser {
     }
 
     fn parse_begin(&mut self) -> Result<Node, RubyError> {
-        // "begin" COMPSTMT [ "rescue" THEN ]* "end"
+        // begin式 :: "begin"  複合文  rescue節*  else節?  ensure節?  "end"
+        // rescue節 :: "rescue" [行終端子禁止] 例外クラスリスト?  例外変数代入?  then節
+        // 例外クラスリスト :: 演算子式 | 多重代入右辺
+        // 例外変数代入 :: "=>" 左辺
+        // ensure節 :: "ensure" 複合文
         let body = self.parse_comp_stmt()?;
+        let mut rescue = vec![];
         loop {
             if !self.consume_reserved(Reserved::Rescue)? {
                 break;
             };
+            let mut exception = vec![];
+            let mut assign = Node::new_nop(body.loc());
             if !self.consume_term()? {
                 loop {
                     if self.peek_punct_no_term(Punct::FatArrow) {
                         break;
                     }
-                    self.parse_arg()?;
+                    exception.push(self.parse_arg()?);
                     if !self.consume_punct_no_term(Punct::Comma)? {
                         break;
                     };
                 }
                 if self.consume_punct_no_term(Punct::FatArrow)? {
-                    self.expect_ident()?;
+                    assign = self.parse_primary(true)?;
+                    self.check_lhs(&assign)?;
                 }
                 self.parse_then()?;
-            }
-            self.parse_comp_stmt()?;
+            };
+            let rescue_body = self.parse_comp_stmt()?;
+            rescue.push(RescueEntry::new(exception, assign, rescue_body));
         }
         let else_ = if self.consume_reserved(Reserved::Else)? {
-            self.parse_comp_stmt()?
+            Some(self.parse_comp_stmt()?)
         } else {
-            Node::new_nop(body.loc())
+            None
         };
         let ensure = if self.consume_reserved(Reserved::Ensure)? {
-            self.parse_comp_stmt()?
+            Some(self.parse_comp_stmt()?)
         } else {
-            Node::new_nop(body.loc())
+            None
         };
         self.expect_reserved(Reserved::End)?;
         let loc = body.loc();
-        Ok(Node::new_begin(body, vec![], else_, ensure, loc))
+        Ok(Node::new_begin(body, rescue, else_, ensure, loc))
     }
 }

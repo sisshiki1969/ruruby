@@ -25,8 +25,14 @@ impl<T> Annot<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Loc(pub u32, pub u32);
+
+impl std::fmt::Debug for Loc {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_fmt(format_args!("Loc ({}, {})", self.0, self.1,))
+    }
+}
 
 impl Loc {
     pub fn new(loc: Loc) -> Self {
