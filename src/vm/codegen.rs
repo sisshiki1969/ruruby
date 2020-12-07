@@ -68,8 +68,21 @@ enum EscapeKind {
 pub struct Context {
     lvar_info: FxHashMap<IdentId, LvarId>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+    /// Unsolved destinations of local jumps.
+    jump_dest: Vec<LocalJumpDest>,
     exception_table: Vec<ExceptionEntry>,
     kind: ContextKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct LocalJumpDest {
+    entry: Vec<ISeqPos>,
+}
+
+impl LocalJumpDest {
+    fn new() -> Self {
+        LocalJumpDest { entry: vec![] }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -118,6 +131,7 @@ impl Context {
         Context {
             lvar_info: FxHashMap::default(),
             iseq_sourcemap: vec![],
+            jump_dest: vec![],
             exception_table: vec![],
             kind: ContextKind::Eval,
         }
@@ -127,6 +141,7 @@ impl Context {
         Context {
             lvar_info,
             iseq_sourcemap: vec![],
+            jump_dest: vec![],
             exception_table: vec![],
             kind,
         }
@@ -436,11 +451,11 @@ impl Codegen {
         ISeqPos(iseq.len())
     }
 
-    fn gen_end(&self, iseq: &mut ISeq) {
+    fn gen_return(&self, iseq: &mut ISeq) {
         iseq.push(Inst::RETURN);
     }
 
-    fn gen_return(&self, iseq: &mut ISeq) {
+    fn gen_break(&self, iseq: &mut ISeq) {
         iseq.push(Inst::BREAK);
     }
 
@@ -1066,7 +1081,7 @@ impl Codegen {
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
         let exception_table = context.exception_table;
-        self.gen_end(&mut iseq);
+        self.gen_return(&mut iseq);
         self.loc = save_loc;
 
         let info = MethodInfo::RubyFunc {
@@ -1685,6 +1700,7 @@ impl Codegen {
             } => {
                 let mut ensure_dest = vec![];
                 let body_start = iseq.len();
+                self.context_mut().jump_dest.push(LocalJumpDest::new());
                 self.gen(globals, iseq, body, use_value)?;
                 let body_end = iseq.len();
                 let mut dest = None;
@@ -1739,6 +1755,10 @@ impl Codegen {
                     self.gen(globals, iseq, else_, use_value)?
                 };
                 // Ensure clause.
+                let jump_dest = self.context_mut().jump_dest.pop().unwrap();
+                for src in jump_dest.entry {
+                    Codegen::write_disp_from_cur(iseq, src);
+                }
                 for src in ensure_dest {
                     Codegen::write_disp_from_cur(iseq, src);
                 }
@@ -2190,13 +2210,18 @@ impl Codegen {
             NodeKind::Return(val) => {
                 self.gen(globals, iseq, val, true)?;
                 // Call ensure clauses.
-                // Note ensure routine return no value.
-                self.save_loc(iseq, node.loc);
-                if self.context().kind == ContextKind::Block {
-                    self.gen_method_return(iseq);
+                // Note ensure clause does not return any value.
+                if let Some(ex) = self.context_mut().jump_dest.last_mut() {
+                    let src = Codegen::gen_jmp(iseq);
+                    ex.entry.push(src);
                 } else {
-                    self.gen_end(iseq);
-                }
+                    self.save_loc(iseq, node.loc);
+                    if self.context().kind == ContextKind::Block {
+                        self.gen_method_return(iseq);
+                    } else {
+                        self.gen_return(iseq);
+                    }
+                };
             }
             NodeKind::Break(val) => {
                 let loc = node.loc();
@@ -2206,7 +2231,7 @@ impl Codegen {
                         ContextKind::Block => {
                             self.gen(globals, iseq, val, true)?;
                             self.save_loc(iseq, loc);
-                            self.gen_return(iseq);
+                            self.gen_break(iseq);
                         }
                         ContextKind::Method => {
                             return Err(self.error_syntax("Invalid break.", loc.merge(self.loc)));
@@ -2233,7 +2258,7 @@ impl Codegen {
                     match self.context_stack.last().unwrap().kind {
                         ContextKind::Block => {
                             self.gen(globals, iseq, val, true)?;
-                            self.gen_end(iseq);
+                            self.gen_return(iseq);
                         }
                         ContextKind::Method => {
                             return Err(self.error_syntax("Invalid next.", loc.merge(self.loc)));
