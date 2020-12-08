@@ -295,9 +295,9 @@ impl VM {
 
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
-            &vec![],
-            &result.node,
-            &result.lvar_collector,
+            vec![],
+            result.node,
+            result.lvar_collector,
             true,
             ContextKind::Method,
             None,
@@ -321,9 +321,9 @@ impl VM {
         codegen.set_external_context(extern_context);
         let method = codegen.gen_iseq(
             &mut self.globals,
-            &vec![],
-            &result.node,
-            &result.lvar_collector,
+            vec![],
+            result.node,
+            result.lvar_collector,
             true,
             ContextKind::Eval,
             None,
@@ -348,15 +348,15 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(&mut self, result: &ParseResult, mut context: ContextRef) -> VMResult {
+    pub fn run_repl(&mut self, result: ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
         self.perf.set_prev_inst(Perf::CODEGEN);
 
         let method = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
-            &vec![],
-            &result.node,
-            &result.lvar_collector,
+            vec![],
+            result.node,
+            result.lvar_collector,
             true,
             ContextKind::Method,
             None,
