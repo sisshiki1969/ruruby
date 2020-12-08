@@ -458,6 +458,7 @@ impl VM {
                     //eprintln!("{:?}", iseq.exception_table);
                     let catch = iseq.exception_table.iter().find(|x| x.include(self.pc));
                     if let Some(entry) = catch {
+                        // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.to_usize();
                         self.set_stack_len(stack_len);
                         let val = match err.kind {
@@ -469,6 +470,7 @@ impl VM {
                         };
                         self.stack_push(val);
                     } else {
+                        // Exception raised outside of begin-end.
                         self.context_pop().unwrap();
                         self.set_stack_len(stack_len);
                         self.pc = pc;

@@ -1574,24 +1574,24 @@ fn exception2() {
     end
     assert ["begin", "Exception"], a
 
-    #def fn 
-    #  a = []
-    #  begin
-    #    a << "begin"
-    #    return 100
-    #    a << "unreachable"
-    #  rescue StandardError => ex
-    #    a << "StandardError"
-    #  rescue Exception => ex
-    #    a << "Exception"
-    #  else
-    #    a << "else"
-    #  ensure
-    #    a << "ensure"
-    #  end
-    #  a
-    #end
-    #assert 100, fn
+    def fn 
+      a = []
+      begin
+        a << "begin"
+        return 100
+        a << "unreachable"
+      rescue StandardError => ex
+        a << "StandardError"
+      rescue Exception => ex
+        a << "Exception"
+      else
+        a << "else"
+      ensure
+        a << "ensure"
+      end
+      a
+    end
+    assert 100, fn
     "##;
     assert_script(program);
 }

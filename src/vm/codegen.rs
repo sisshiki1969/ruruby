@@ -76,12 +76,20 @@ pub struct Context {
 
 #[derive(Debug, Clone, PartialEq)]
 struct LocalJumpDest {
-    entry: Vec<ISeqPos>,
+    return_entries: Vec<ISeqPos>,
+    mreturn_entries: Vec<ISeqPos>,
 }
 
 impl LocalJumpDest {
     fn new() -> Self {
-        LocalJumpDest { entry: vec![] }
+        LocalJumpDest {
+            return_entries: vec![],
+            mreturn_entries: vec![],
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.return_entries.is_empty() && self.mreturn_entries.is_empty()
     }
 }
 
@@ -1754,11 +1762,30 @@ impl Codegen {
                     };
                     self.gen(globals, iseq, else_, use_value)?
                 };
-                // Ensure clause.
-                let jump_dest = self.context_mut().jump_dest.pop().unwrap();
-                for src in jump_dest.entry {
-                    Codegen::write_disp_from_cur(iseq, src);
+                if !self.context().jump_dest.last().unwrap().is_empty() {
+                    let ensure_label = Self::gen_jmp(iseq);
+                    let jump_dest = self.context_mut().jump_dest.pop().unwrap();
+                    for dest in &jump_dest.return_entries {
+                        Codegen::write_disp_from_cur(iseq, *dest);
+                    }
+                    if !jump_dest.return_entries.is_empty() {
+                        if let Some(ensure) = ensure {
+                            self.gen(globals, iseq, ensure, false)?;
+                        }
+                        self.gen_return(iseq);
+                    }
+                    for dest in &jump_dest.mreturn_entries {
+                        Codegen::write_disp_from_cur(iseq, *dest);
+                    }
+                    if !jump_dest.mreturn_entries.is_empty() {
+                        if let Some(ensure) = ensure {
+                            self.gen(globals, iseq, ensure, false)?;
+                        }
+                        self.gen_method_return(iseq);
+                    }
+                    Codegen::write_disp_from_cur(iseq, ensure_label);
                 }
+                // Ensure clause.
                 for src in ensure_dest {
                     Codegen::write_disp_from_cur(iseq, src);
                 }
@@ -2211,12 +2238,17 @@ impl Codegen {
                 self.gen(globals, iseq, val, true)?;
                 // Call ensure clauses.
                 // Note ensure clause does not return any value.
+                let is_block = self.context().kind == ContextKind::Block;
                 if let Some(ex) = self.context_mut().jump_dest.last_mut() {
-                    let src = Codegen::gen_jmp(iseq);
-                    ex.entry.push(src);
+                    let dest = Codegen::gen_jmp(iseq);
+                    if is_block {
+                        ex.mreturn_entries.push(dest)
+                    } else {
+                        ex.return_entries.push(dest)
+                    };
                 } else {
                     self.save_loc(iseq, node.loc);
-                    if self.context().kind == ContextKind::Block {
+                    if is_block {
                         self.gen_method_return(iseq);
                     } else {
                         self.gen_return(iseq);
