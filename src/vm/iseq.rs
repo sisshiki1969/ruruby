@@ -127,11 +127,13 @@ impl ISeq {
         self.push((num >> 56) as u8);
     }
 
+    /// Write a 32-bit `disp`lacement from `dest` on current ISeqPos.
     pub fn write_disp_from_cur(&mut self, src: ISeqPos) {
         let dest = self.current();
         self.write_disp(src, dest);
     }
 
+    /// Write a 32-bit `disp`lacement of `dest` from `src` on `src` ISeqPos.
     pub fn write_disp(&mut self, src: ISeqPos, dest: ISeqPos) {
         let num = src.disp(dest) as u32;
         self[src.0 - 4] = (num >> 0) as u8;
@@ -169,7 +171,7 @@ impl ISeq {
         self.gen_const_val(id);
     }
 
-    pub fn gen_imaginary(&mut self, globals: &mut Globals, i: Real) {
+    pub fn gen_complex(&mut self, globals: &mut Globals, i: Real) {
         let val = Value::complex(Value::integer(0), i.to_val());
         let id = globals.const_values.insert(val);
         self.gen_const_val(id);
@@ -267,6 +269,21 @@ impl ISeq {
         if use_value {
             self.gen_get_instance_var(id);
         }
+    }
+
+    pub fn gen_get_global_var(&mut self, id: IdentId) {
+        self.push(Inst::GET_GVAR);
+        self.push32(id.into());
+    }
+
+    pub fn gen_set_global_var(&mut self, id: IdentId) {
+        self.push(Inst::SET_GVAR);
+        self.push32(id.into());
+    }
+
+    pub fn gen_set_const(&mut self, id: IdentId) {
+        self.push(Inst::SET_CONST);
+        self.push32(id.into());
     }
 }
 

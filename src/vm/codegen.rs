@@ -334,21 +334,6 @@ impl Codegen {
         iseq.push32(id.into());
     }
 
-    fn gen_get_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::GET_GVAR);
-        iseq.push32(id.into());
-    }
-
-    fn gen_set_global_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::SET_GVAR);
-        iseq.push32(id.into());
-    }
-
-    fn gen_set_const(&mut self, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::SET_CONST);
-        iseq.push32(id.into());
-    }
-
     fn gen_get_const(&mut self, globals: &mut Globals, iseq: &mut ISeq, id: IdentId) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
@@ -488,14 +473,14 @@ impl Codegen {
             NodeKind::Ident(id) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, *id),
             NodeKind::Const { id, toplevel: _ } => {
                 iseq.gen_push_nil();
-                self.gen_set_const(iseq, *id);
+                iseq.gen_set_const(*id);
             }
             NodeKind::InstanceVar(id) => iseq.gen_set_instance_var(*id),
-            NodeKind::GlobalVar(id) => self.gen_set_global_var(iseq, *id),
+            NodeKind::GlobalVar(id) => iseq.gen_set_global_var(*id),
             NodeKind::ClassVar(id) => self.gen_set_class_var(iseq, *id),
             NodeKind::Scope(parent, id) => {
                 self.gen(globals, iseq, parent, true)?;
-                self.gen_set_const(iseq, *id);
+                iseq.gen_set_const(*id);
             }
             NodeKind::Send {
                 receiver, method, ..
@@ -582,7 +567,7 @@ impl Codegen {
             NodeKind::Const { id, toplevel: _ } => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 iseq.gen_push_nil();
-                self.gen_set_const(iseq, *id);
+                iseq.gen_set_const(*id);
             }
             NodeKind::InstanceVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
@@ -594,12 +579,12 @@ impl Codegen {
             }
             NodeKind::GlobalVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
-                self.gen_set_global_var(iseq, *id);
+                iseq.gen_set_global_var(*id);
             }
             NodeKind::Scope(parent, id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen(globals, iseq, parent, true)?;
-                self.gen_set_const(iseq, *id);
+                iseq.gen_set_const(*id);
             }
             NodeKind::Send {
                 receiver, method, ..
@@ -736,10 +721,7 @@ impl Codegen {
         name: Option<IdentId>,
     ) -> Result<MethodRef, RubyError> {
         let mut methodref = MethodRef::new(MethodInfo::default());
-        let is_block = match kind {
-            ContextKind::Method => false,
-            _ => true,
-        };
+        let is_block = !(kind == ContextKind::Method);
         if !is_block {
             self.method_stack.push(methodref)
         }
@@ -955,7 +937,7 @@ impl Codegen {
                 iseq.push64(f64::to_bits(*num));
             }
             NodeKind::Imaginary(r) => {
-                iseq.gen_imaginary(globals, *r);
+                iseq.gen_complex(globals, *r);
             }
             NodeKind::String(s) => {
                 iseq.gen_string(globals, s);
@@ -979,7 +961,7 @@ impl Codegen {
                             c += 1;
                         }
                         NodeKind::GlobalVar(id) => {
-                            self.gen_get_global_var(iseq, *id);
+                            iseq.gen_get_global_var(*id);
                             iseq.push(Inst::TO_S);
                             c += 1;
                         }
@@ -1102,7 +1084,7 @@ impl Codegen {
                 };
             }
             NodeKind::GlobalVar(id) => {
-                self.gen_get_global_var(iseq, *id);
+                iseq.gen_get_global_var(*id);
                 if !use_value {
                     self.gen_pop(iseq)
                 };
