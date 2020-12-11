@@ -51,6 +51,21 @@ fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
+pub fn set_attr_accessor(globals: &mut Globals, self_val: Value, args: &Args) -> VMResult {
+    for arg in args.iter() {
+        if arg.is_packed_symbol() {
+            let id = arg.as_packed_symbol();
+            define_reader(globals, self_val, id);
+            define_writer(globals, self_val, id);
+        } else {
+            return Err(RubyError::name(
+                "Each of args for attr_accessor must be a symbol.",
+            ));
+        }
+    }
+    Ok(Value::nil())
+}
+
 fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val;
@@ -154,26 +169,15 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-pub fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for arg in args.iter() {
-        if arg.is_packed_symbol() {
-            let id = arg.as_packed_symbol();
-            define_reader(vm, self_val, id);
-            define_writer(vm, self_val, id);
-        } else {
-            return Err(RubyError::name(
-                "Each of args for attr_accessor must be a symbol.",
-            ));
-        }
-    }
-    Ok(Value::nil())
+fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    set_attr_accessor(&mut vm.globals, self_val, args)
 }
 
 fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(vm, self_val, id);
+            define_reader(&mut vm.globals, self_val, id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -187,7 +191,7 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_writer(vm, self_val, id);
+            define_writer(&mut vm.globals, self_val, id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -197,7 +201,7 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
+fn define_reader(globals: &mut Globals, mut class: Value, id: IdentId) {
     let instance_var_id = IdentId::add_prefix(id, "@");
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
@@ -206,10 +210,10 @@ fn define_reader(vm: &mut VM, mut class: Value, id: IdentId) {
     class
         .if_mut_mod_class()
         .unwrap()
-        .add_method(&mut vm.globals, id, methodref);
+        .add_method(globals, id, methodref);
 }
 
-fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
+fn define_writer(globals: &mut Globals, mut class: Value, id: IdentId) {
     let instance_var_id = IdentId::add_prefix(id, "@");
     let assign_id = IdentId::add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
@@ -219,7 +223,7 @@ fn define_writer(vm: &mut VM, mut class: Value, id: IdentId) {
     class
         .if_mut_mod_class()
         .unwrap()
-        .add_method(&mut vm.globals, assign_id, methodref);
+        .add_method(globals, assign_id, methodref);
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {

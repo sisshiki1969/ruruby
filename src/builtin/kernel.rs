@@ -445,7 +445,7 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let output = match Command::new(command).args(input).output() {
         Ok(ok) => ok,
         Err(err) => {
-            return Err(RubyError::internal(format!(
+            return Err(RubyError::runtime(format!(
                 "Command failed. {:?}",
                 err.kind()
             )))
