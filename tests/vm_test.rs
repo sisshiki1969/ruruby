@@ -1595,3 +1595,13 @@ fn exception2() {
     "##;
     assert_script(program);
 }
+
+#[test]
+fn exception3() {
+    let program = "
+    e = Exception.new
+    assert(true, String === e.message)
+    assert(true, Array === e.backtrace)
+    ";
+    assert_script(program);
+}

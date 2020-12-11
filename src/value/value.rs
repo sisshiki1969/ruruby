@@ -1095,6 +1095,10 @@ impl Value {
         Value((id as u64) << 32 | TAG_SYMBOL)
     }
 
+    pub fn symbol_from_str(sym: &str) -> Self {
+        Value::symbol(IdentId::get_id(sym))
+    }
+
     pub fn range(start: Value, end: Value, exclude: bool) -> Self {
         let info = RangeInfo::new(start, end, exclude);
         RValue::new_range(info).pack()

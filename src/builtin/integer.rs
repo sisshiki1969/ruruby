@@ -241,9 +241,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     if 0 > num || num > 255 {
-        return Err(RubyError::unimplemented(
-            "Currently, receiver must be 0..255.",
-        ));
+        return Err(RubyError::internal("Currently, receiver must be 0..255."));
     };
     Ok(Value::bytes(vec![num as u8]))
 }

@@ -76,13 +76,15 @@ pub struct Context {
 
 #[derive(Debug, Clone, PartialEq)]
 struct LocalJumpDest {
+    has_ensure: bool,
     return_entries: Vec<ISeqPos>,
     mreturn_entries: Vec<ISeqPos>,
 }
 
 impl LocalJumpDest {
-    fn new() -> Self {
+    fn new(has_ensure: bool) -> Self {
         LocalJumpDest {
+            has_ensure,
             return_entries: vec![],
             mreturn_entries: vec![],
         }
@@ -1397,14 +1399,17 @@ impl Codegen {
             } => {
                 let mut ensure_dest = vec![];
                 let body_start = iseq.len();
-                self.context_mut().jump_dest.push(LocalJumpDest::new());
+                self.context_mut()
+                    .jump_dest
+                    .push(LocalJumpDest::new(ensure.is_some()));
                 self.gen(globals, iseq, *body, use_value)?;
+                let jump_dest = self.context_mut().jump_dest.pop().unwrap();
                 let body_end = iseq.len();
                 let mut dest = None;
                 let mut prev = None;
-                let else_dest = iseq.gen_jmp();
 
                 if !rescue.is_empty() {
+                    let else_dest = iseq.gen_jmp();
                     // Rescue clauses.
                     for RescueEntry {
                         mut exception_list,
@@ -1442,19 +1447,21 @@ impl Codegen {
                         iseq.write_disp_from_cur(prev);
                     }
                     self.gen_pop(iseq);
+                    if use_value {
+                        iseq.gen_push_nil()
+                    };
                     ensure_dest.push(iseq.gen_jmp());
+                    iseq.write_disp_from_cur(else_dest);
                 }
                 // Else clause.
-                iseq.write_disp_from_cur(else_dest);
                 if let Some(else_) = else_ {
                     if use_value {
                         self.gen_pop(iseq)
                     };
                     self.gen(globals, iseq, *else_, use_value)?
                 };
-                if !self.context().jump_dest.last().unwrap().is_empty() {
+                if !jump_dest.is_empty() {
                     let ensure_label = iseq.gen_jmp();
-                    let jump_dest = self.context_mut().jump_dest.pop().unwrap();
                     for dest in &jump_dest.return_entries {
                         iseq.write_disp_from_cur(*dest);
                     }
@@ -1462,6 +1469,7 @@ impl Codegen {
                         if let Some(box ensure) = ensure.clone() {
                             self.gen(globals, iseq, ensure, false)?;
                         }
+                        self.save_loc(iseq, node.loc);
                         iseq.gen_return();
                     }
                     for dest in &jump_dest.mreturn_entries {
@@ -1471,6 +1479,7 @@ impl Codegen {
                         if let Some(box ensure) = ensure.clone() {
                             self.gen(globals, iseq, ensure, false)?;
                         }
+                        self.save_loc(iseq, node.loc);
                         iseq.gen_method_return();
                     }
                     iseq.write_disp_from_cur(ensure_label);
@@ -1925,20 +1934,22 @@ impl Codegen {
                 // Note ensure clause does not return any value.
                 let is_block = self.context().kind == ContextKind::Block;
                 if let Some(ex) = self.context_mut().jump_dest.last_mut() {
-                    let dest = iseq.gen_jmp();
-                    if is_block {
-                        ex.mreturn_entries.push(dest)
-                    } else {
-                        ex.return_entries.push(dest)
-                    };
-                } else {
-                    self.save_loc(iseq, node.loc);
-                    if is_block {
-                        iseq.gen_method_return();
-                    } else {
-                        iseq.gen_return();
+                    if ex.has_ensure {
+                        let dest = iseq.gen_jmp();
+                        if is_block {
+                            ex.mreturn_entries.push(dest)
+                        } else {
+                            ex.return_entries.push(dest)
+                        };
+                        return Ok(());
                     }
-                };
+                }
+                self.save_loc(iseq, node.loc);
+                if is_block {
+                    iseq.gen_method_return();
+                } else {
+                    iseq.gen_return();
+                }
             }
             NodeKind::Break(val) => {
                 if self.loop_stack.last().unwrap().state == LoopState::Top {

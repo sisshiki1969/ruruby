@@ -39,6 +39,7 @@ impl std::fmt::Debug for ErrorInfo {
             RubyErrorKind::Value(val) => write!(f, "{:?}", val),
             RubyErrorKind::MethodReturn(val) => write!(f, "MethodReturn {:?}", val),
             RubyErrorKind::BlockReturn(val) => write!(f, "BlockReturn {:?}", val),
+            RubyErrorKind::Internal(msg) => write!(f, "InternalError {}", msg),
         }
     }
 }
@@ -53,6 +54,7 @@ pub enum RubyErrorKind {
     Value(Value),
     MethodReturn(Value),
     BlockReturn(Value),
+    Internal(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -65,8 +67,6 @@ pub enum ParseErrKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeErrKind {
-    Unimplemented,
-    Internal,
     Name,
     NoMethod,
     Argument,
@@ -156,6 +156,13 @@ impl RubyError {
         }
     }
 
+    pub fn show_all_loc(&self) {
+        for i in 0..self.info.len() {
+            eprint!("{}:", i);
+            self.show_loc(i);
+        }
+    }
+
     pub fn show_err(&self) {
         match &self.0.kind {
             RubyErrorKind::ParseErr(e) => match e {
@@ -169,8 +176,6 @@ impl RubyError {
                     RuntimeErrKind::Name => eprint!("NoNameError"),
                     RuntimeErrKind::NoMethod => eprint!("NoMethodError"),
                     RuntimeErrKind::Type => eprint!("TypeError"),
-                    RuntimeErrKind::Unimplemented => eprint!("UnimplementedError"),
-                    RuntimeErrKind::Internal => eprint!("InternalError"),
                     RuntimeErrKind::Argument => eprint!("ArgumentError"),
                     RuntimeErrKind::Index => eprint!("IndexError"),
                     RuntimeErrKind::Regexp => eprint!("RegexpError"),
@@ -188,6 +193,10 @@ impl RubyError {
             }
             RubyErrorKind::BlockReturn(_) => {
                 eprintln!("LocalJumpError");
+            }
+            RubyErrorKind::Internal(msg) => {
+                eprintln!("InternalError");
+                eprintln!("({})", msg);
             }
         }
     }
@@ -254,12 +263,8 @@ impl RubyError {
         ))
     }
 
-    pub fn unimplemented(msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Unimplemented, msg.into())
-    }
-
     pub fn internal(msg: impl Into<String>) -> RubyError {
-        RubyError::new_runtime_err(RuntimeErrKind::Internal, msg.into())
+        RubyError::new(RubyErrorKind::Internal(msg.into()), 0)
     }
 
     pub fn name(msg: impl Into<String>) -> RubyError {

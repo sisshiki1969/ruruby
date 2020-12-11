@@ -16,7 +16,7 @@ fn get_array_index(index: i64, len: usize) -> Result<usize, RubyError> {
     if index < 0 {
         let i = len as i64 + index;
         if i < 0 {
-            return Err(RubyError::unimplemented("Index too small for array."));
+            return Err(RubyError::internal("Index too small for array."));
         };
         Ok(i as usize)
     } else {

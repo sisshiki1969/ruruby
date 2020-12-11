@@ -386,11 +386,16 @@ impl RValue {
     }
 
     pub fn new_exception(exception_class: Value, err: RubyError) -> Self {
-        RValue {
+        let mut rval = RValue {
             class: exception_class,
             var_table: None,
             kind: ObjKind::Exception(err),
-        }
+        };
+        let val = Value::string("Exception");
+        rval.set_var(IdentId::get_id("@message"), val);
+        let val = Value::array_from(vec![]);
+        rval.set_var(IdentId::get_id("@backtrace"), val);
+        rval
     }
 }
 
