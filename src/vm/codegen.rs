@@ -2096,7 +2096,7 @@ impl Codegen {
 }
 
 impl Codegen {
-    pub fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
+    fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(msg.into()),
             self.source_info,
@@ -2104,18 +2104,18 @@ impl Codegen {
             loc,
         )
     }
-    pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
+    /*pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
         RubyError::new_parse_err(
             ParseErrKind::Name(msg.into()),
             self.source_info,
             0,
             self.loc,
         )
-    }
+    }*/
 }
 
 impl Codegen {
-    /// Construct constant expression and return the value.
+    /// Evaluate constant expression and return the value.
     fn const_expr(&self, globals: &mut Globals, node: Node) -> Result<Value, RubyError> {
         let loc = node.loc();
         match node.kind {

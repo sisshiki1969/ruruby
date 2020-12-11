@@ -51,6 +51,11 @@ end
 class SystemExit
 end
 
+class Errno
+  class ENOENT; end;
+  class ENOTDIR; end;
+end
+
 class Module
   def undef_method(sym); end
   def define_method(sym); end

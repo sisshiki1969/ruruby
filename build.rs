@@ -15,4 +15,5 @@ fn main() {
         Err(_) => "[]",
     };
     fs::write(&dest_path, load_path).unwrap();
+    println!("cargo:rerun-if-changed=build.rs");
 }
