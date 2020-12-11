@@ -10,9 +10,9 @@ An alternative Ruby implementation by Rust.
 - Virtual machine execution.
 - :ribbon: Simple mark & sweep garbage collector is implemented.
 
-## Related article (sorry, currently only in Japanese)
+## Related articles (sorry, currently only in Japanese)
 
-[Qiita: Rust でつくる（つくれるかもしれない）Ruby](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)
+[Qiita: Rust でつくる（つくれるかもしれない）Ruby](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)  
 [Qiita: ruruby: Rust でつくっている Ruby](https://qiita.com/sisshiki1969/items/4d76e69545ca1c26ed48)
 
 ## Implementation status

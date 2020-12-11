@@ -60,6 +60,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("count", count);
     class.add_builtin_method_by_str("inject", inject);
     class.add_builtin_method_by_str("reduce", inject);
+    class.add_builtin_method_by_str("find_index", find_index);
+    class.add_builtin_method_by_str("index", find_index);
 
     class.add_builtin_class_method("new", array_new);
     class
@@ -919,6 +921,31 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
+fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0,1)?;
+    let ary = self_val.expect_array("").unwrap();
+    if args.len() == 1 {
+        if args.block.is_some() {eprintln!("Warning: given block not used.")};
+        for (i,v) in ary.elements.iter().enumerate() {
+            if *v==args[0] {return Ok(Value::integer(i as i64))};
+        }
+        return Ok(Value::nil())
+    };
+    let block = match args.block.clone() {
+        Some(block) => block,
+        None => {    let id = IdentId::get_id("find_index");
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            return Ok(val);}
+    };
+
+    let mut args = Args::new1(Value::nil());
+    for (i,elem) in ary.elements.iter().enumerate() {
+        args[0] = *elem;
+        if vm.eval_block(&block, &args)?.to_bool() {return Ok(Value::integer(i as i64))};
+    }
+    Ok(Value::nil())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1309,4 +1336,18 @@ mod tests {
         "#;
         assert_script(program);
     }
+
+    #[test]
+    fn index() {
+        let program = r#"
+        assert 0, [1, 2, 3, 4, 5].index(1)
+        assert 3, [1, 2, 3, 4, 5].index(4)
+        assert nil, [1, 2, 3, 4, 5].index(2.5)
+        assert 0, [3, 0, 0, 1, 0].index {|v| v > 0}
+        assert 3, [0, 0, 0, 1, 0].index {|v| v > 0}
+        assert nil, [-40, -1, -5, -11, 0].index {|v| v > 0}
+        "#;
+        assert_script(program);
+    }
+
 }
