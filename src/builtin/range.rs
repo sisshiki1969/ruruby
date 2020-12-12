@@ -131,7 +131,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = vm.expect_block(&args.block)?;
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     let mut res = vec![];
     for i in start..end {
         arg[0] = Value::integer(i);
@@ -149,7 +149,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = vm.expect_block(&args.block)?;
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     let mut res = vec![];
     for i in start..end {
         arg[0] = Value::integer(i);

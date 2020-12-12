@@ -63,6 +63,10 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("find_index", find_index);
     class.add_builtin_method_by_str("index", find_index);
 
+    class.add_builtin_method_by_str("reject", reject);
+    class.add_builtin_method_by_str("select", select);
+    class.add_builtin_method_by_str("filter", select);
+
     class.add_builtin_class_method("new", array_new);
     class
 }
@@ -311,19 +315,35 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
+macro_rules! to_enum_id {
+    ($vm:ident, $self_val:ident, $args:ident, $id:expr) => {
+        match &$args.block {
+            Some(method) => method,
+            None => {
+                let val = $vm.create_enumerator($id, $self_val, $args.clone())?;
+                return Ok(val);
+            }
+        }
+    };
+}
+
+macro_rules! to_enum_str {
+    ($vm:ident, $self_val:ident, $args:ident, $id:expr) => {
+        match &$args.block {
+            Some(method) => method,
+            None => {
+                let val = $vm.create_enumerator(IdentId::get_id($id), $self_val, $args.clone())?;
+                return Ok(val);
+            }
+        }
+    };
+}
+
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let aref = self_val.as_array().unwrap();
-    let block = match &args.block {
-        Some(method) => method,
-        None => {
-            let id = IdentId::MAP;
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
-            return Ok(val);
-        }
-    };
-
-    let mut args = Args::new1(Value::nil());
+    let block = to_enum_id!(vm, self_val, args, IdentId::MAP);
+    let mut args = Args::new(1);
 
     let mut res = vec![];
     for elem in &aref.elements {
@@ -370,17 +390,9 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let method = match &args.block {
-        Some(method) => method,
-        None => {
-            let id = IdentId::EACH;
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
-            return Ok(val);
-        }
-    };
-
+    let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.as_mut_array().unwrap();
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     for i in &aref.elements {
         arg[0] = *i;
         vm.eval_block(method, &arg)?;
@@ -390,15 +402,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let method = match &args.block {
-        Some(method) => method,
-        None => {
-            let id = IdentId::get_id("each_with_index");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
-            return Ok(val);
-        }
-    };
-
+    let method = to_enum_str!(vm, self_val, args, "each_with_index");
     let aref = self_val.as_mut_array().unwrap();
     let mut arg = Args::new(2);
     for (i, v) in aref.elements.iter().enumerate() {
@@ -411,17 +415,9 @@ fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn partition(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let method = match &args.block {
-        Some(method) => method,
-        None => {
-            let id = IdentId::get_id("partition");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
-            return Ok(val);
-        }
-    };
-
+    let method = to_enum_str!(vm, self_val, args, "partition");
     let aref = self_val.as_mut_array().unwrap();
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     let mut res_true = vec![];
     let mut res_false = vec![];
     for i in &aref.elements {
@@ -631,7 +627,7 @@ fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => {
             let aref = self_val.as_mut_array().unwrap();
-            let mut block_args = Args::new1(Value::nil());
+            let mut block_args = Args::new(1);
             aref.elements.retain(|x| {
                 block_args[0] = *x;
                 let res = vm.eval_block(block, &block_args).unwrap();
@@ -752,7 +748,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     match &args.block {
         Some(block) => {
-            let mut arg = Args::new1(Value::nil());
+            let mut arg = Args::new(1);
             vm.temp_push_vec(&ary);
             for val in ary {
                 arg[0] = val;
@@ -829,7 +825,7 @@ fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
 
     if let Some(method) = &args.block {
-        let mut args = Args::new1(Value::nil());
+        let mut args = Args::new(1);
         for v in aref.elements.iter() {
             args[0] = *v;
             if vm.eval_block(method, &args)?.to_bool() {
@@ -862,7 +858,7 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
 
     if let Some(method) = &args.block {
-        let mut args = Args::new1(Value::nil());
+        let mut args = Args::new(1);
         for v in aref.elements.iter() {
             args[0] = *v;
             if !vm.eval_block(method, &args)?.to_bool() {
@@ -912,7 +908,7 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     let ary = self_val.expect_array("").unwrap();
     let mut res = args[0];
-    let mut args = Args::new2(Value::nil(), Value::nil());
+    let mut args = Args::new(2);
     for elem in ary.elements.iter() {
         args[0] = res;
         args[1] = *elem;
@@ -935,16 +931,8 @@ fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
         return Ok(Value::nil());
     };
-    let block = match args.block.clone() {
-        Some(block) => block,
-        None => {
-            let id = IdentId::get_id("find_index");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
-            return Ok(val);
-        }
-    };
-
-    let mut args = Args::new1(Value::nil());
+    let block = to_enum_str!(vm, self_val, args, "find_index");
+    let mut args = Args::new(1);
     for (i, elem) in ary.elements.iter().enumerate() {
         args[0] = *elem;
         if vm.eval_block(&block, &args)?.to_bool() {
@@ -952,6 +940,36 @@ fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         };
     }
     Ok(Value::nil())
+}
+
+fn reject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let ary = self_val.as_mut_array().unwrap();
+    let block = to_enum_str!(vm, self_val, args, "reject");
+    let mut args = Args::new(1);
+    let mut res = vec![];
+    for elem in ary.elements.iter() {
+        args[0] = *elem;
+        if !vm.eval_block(&block, &args)?.to_bool() {
+            res.push(*elem);
+        };
+    }
+    Ok(Value::array_from(res))
+}
+
+fn select(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let ary = self_val.as_mut_array().unwrap();
+    let block = to_enum_str!(vm, self_val, args, "select");
+    let mut args = Args::new(1);
+    let mut res = vec![];
+    for elem in ary.elements.iter() {
+        args[0] = *elem;
+        if vm.eval_block(&block, &args)?.to_bool() {
+            res.push(*elem);
+        };
+    }
+    Ok(Value::array_from(res))
 }
 
 #[cfg(test)]
@@ -1376,6 +1394,22 @@ mod tests {
         assert 0, [3, 0, 0, 1, 0].index {|v| v > 0}
         assert 3, [0, 0, 0, 1, 0].index {|v| v > 0}
         assert nil, [-40, -1, -5, -11, 0].index {|v| v > 0}
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn reject() {
+        let program = r#"
+        assert [1, 3, 5], [1, 2, 3, 4, 5, 6].reject {|i| i % 2 == 0 }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn select() {
+        let program = r#"
+        assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select {|i| i % 2 != 0 }
         "#;
         assert_script(program);
     }

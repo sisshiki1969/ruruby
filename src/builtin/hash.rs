@@ -94,7 +94,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = vm.expect_block(&args.block)?;
     let mut res = FxHashMap::default();
-    let mut arg = Args::new2(Value::nil(), Value::nil());
+    let mut arg = Args::new(2);
     for (k, v) in hash.iter() {
         arg[0] = k;
         arg[1] = v;
@@ -143,7 +143,7 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = vm.expect_block(&args.block)?;
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     for (_, v) in hash.iter() {
         arg[0] = v;
         vm.eval_block(&block, &arg)?;
@@ -156,7 +156,7 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = vm.expect_block(&args.block)?;
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
 
     for (k, _) in hash.iter() {
         arg[0] = k;
@@ -170,7 +170,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = vm.expect_block(&args.block)?;
-    let mut arg = Args::new2(Value::nil(), Value::nil());
+    let mut arg = Args::new(2);
 
     for (k, v) in hash.iter() {
         arg[0] = k;

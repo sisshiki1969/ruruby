@@ -51,9 +51,12 @@ end
 class SystemExit
 end
 
-class Errno
+class Errno < StandardError
   class ENOENT; end;
   class ENOTDIR; end;
+end
+
+class FrozenError < RuntimeError
 end
 
 class Module

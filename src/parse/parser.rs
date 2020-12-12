@@ -2393,10 +2393,7 @@ impl Parser {
         let paren_flag = self.consume_punct(Punct::LParen)?;
 
         if paren_flag && self.consume_punct(Punct::RParen)? {
-            if !self.consume_term()? {
-                let loc = self.loc();
-                return Err(self.error_unexpected(loc, "Expect terminator"));
-            }
+            self.consume_term()?;
             return Ok(vec![]);
         }
 
@@ -2405,10 +2402,7 @@ impl Parser {
         if paren_flag {
             self.expect_punct(Punct::RParen)?
         };
-        if !self.consume_term()? {
-            let loc = self.loc();
-            return Err(self.error_unexpected(loc, "Expect terminator."));
-        }
+        self.consume_term()?;
         Ok(args)
     }
 

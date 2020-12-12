@@ -62,18 +62,14 @@ fn func4(b: &mut Bencher) {
 #[test]
 fn optional_param() {
     let program = "
-        def fn(a = 0, b = 1, c = 2)
-            [a,b,c]
-        end
+        def fn(a = 0, b = 1, c = 2) [a,b,c] end
     
         assert([0,1,2], fn())
         assert([5,1,2], fn(5))
         assert([5,7,2], fn(5,7))
         assert([5,7,10], fn(5,7,10))
 
-        def fx(a, b = 1, c = 2)
-            [a,b,c]
-        end
+        def fx(a, b = 1, c = 2) [a,b,c] end
 
         assert([5,1,2], fx(5))
         assert([5,7,2], fx(5,7))

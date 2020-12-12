@@ -171,7 +171,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if num < 1 {
         return Ok(self_val);
     };
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     for i in 0..num {
         arg[0] = Value::integer(i);
         vm.eval_block(method, &arg)?;
@@ -192,7 +192,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
-        let mut arg = Args::new1(Value::nil());
+        let mut arg = Args::new(1);
         for i in num..max + 1 {
             arg[0] = Value::integer(i);
             vm.eval_block(method, &arg)?;
@@ -223,7 +223,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         1
     };
 
-    let mut arg = Args::new1(Value::nil());
+    let mut arg = Args::new(1);
     let mut i = start;
     loop {
         if step > 0 && i > limit || step < 0 && limit > i {
