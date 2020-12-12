@@ -203,16 +203,20 @@ impl SourceInfo {
         }
     }
 
-    pub fn show_file_name(&self) {
-        eprintln!("{}", self.path.to_string_lossy());
+    pub fn get_file_name(&self) -> String {
+        self.path.to_string_lossy().to_string()
     }
 
-    /// Show the location of `loc` in the source code using '^^^'.
     pub fn show_loc(&self, loc: &Loc) {
+        eprint!("{}", self.get_location(loc));
+    }
+
+    /// Return a string represents the location of `loc` in the source code using '^^^'.
+    pub fn get_location(&self, loc: &Loc) -> String {
         if self.code.len() == 0 {
-            eprintln!("(internal)");
-            return;
+            return "(internal)".to_string();
         }
+        let mut res_string = String::new();
         let term_width = term_size::dimensions_stderr().unwrap_or((80, 25)).0 as u32;
         let mut line_top: u32 = 0;
         let mut lines: Vec<Line> = self
@@ -239,7 +243,7 @@ impl SourceInfo {
             .filter(|line| line.end >= loc.0 && line.top <= loc.1)
         {
             if !found {
-                eprintln!("{}:{}", self.path.to_string_lossy(), line.no);
+                res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.no);
                 found = true;
             };
 
@@ -262,7 +266,7 @@ impl SourceInfo {
                     }
                 }
             }
-            eprintln!("{}", self[start..=end].iter().collect::<String>());
+            res_string += &(self[start..=end].iter().collect::<String>() + "\n");
             use std::cmp::*;
             let lead = if loc.0 <= line.top {
                 0usize
@@ -272,11 +276,13 @@ impl SourceInfo {
             let range_start = max(loc.0, line.top);
             let range_end = min(loc.1, line.end);
             let length: usize = calc_width(&self[range_start..range_end]);
-            eprintln!("{}{}", " ".repeat(lead), "^".repeat(length + 1));
+            res_string += &" ".repeat(lead);
+            res_string += &"^".repeat(length + 1);
+            res_string += "\n";
         }
 
         if !found {
-            eprintln!("NOT FOUND");
+            res_string += "NOT FOUND\n";
             let line = match lines.last() {
                 Some(line) => (line.no + 1, line.end + 1, loc.1),
                 None => (1, 0, loc.1),
@@ -284,17 +290,17 @@ impl SourceInfo {
             let lead = calc_width(&self[line.1..loc.0]);
             let length = calc_width(&self[loc.0..loc.1]);
             let is_cr = loc.1 as usize >= self.code.len() || self[loc.1] == '\n';
-            eprintln!("{}:{}", self.path.to_string_lossy(), line.0);
-            eprintln!(
-                "{}",
-                if !is_cr {
-                    self[line.1..=loc.1].iter().collect::<String>()
-                } else {
-                    self[line.1..loc.1].iter().collect::<String>()
-                }
-            );
-            eprintln!("{}{}", " ".repeat(lead), "^".repeat(length + 1));
+            res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.0);
+            res_string += &(if !is_cr {
+                self[line.1..=loc.1].iter().collect::<String>()
+            } else {
+                self[line.1..loc.1].iter().collect::<String>()
+            });
+            res_string += &" ".repeat(lead);
+            res_string += &"^".repeat(length + 1);
+            res_string += "\n";
         }
+        return res_string;
 
         fn calc_width(chars: &[char]) -> usize {
             let str: String = chars.iter().collect();

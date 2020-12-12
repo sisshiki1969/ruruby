@@ -49,7 +49,7 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(err) => err,
         _ => unreachable!("Not a Exception."),
     };
-    Ok(Value::string(format!("#<Exception {:?} >", err)))
+    Ok(Value::string(format!("#<Exception {:?} >", err.message())))
 }
 
 fn standard_inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

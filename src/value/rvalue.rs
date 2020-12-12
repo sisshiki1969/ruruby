@@ -386,15 +386,19 @@ impl RValue {
     }
 
     pub fn new_exception(exception_class: Value, err: RubyError) -> Self {
+        let message = Value::string(err.message());
+        let mut backtrace = vec![];
+        for pos in 0..err.info.len() {
+            backtrace.push(Value::string(err.get_location(pos)));
+        }
+        let backtrace = Value::array_from(backtrace);
         let mut rval = RValue {
             class: exception_class,
             var_table: None,
             kind: ObjKind::Exception(err),
         };
-        let val = Value::string("Exception");
-        rval.set_var(IdentId::get_id("@message"), val);
-        let val = Value::array_from(vec![]);
-        rval.set_var(IdentId::get_id("@backtrace"), val);
+        rval.set_var(IdentId::get_id("@message"), message);
+        rval.set_var(IdentId::get_id("@backtrace"), backtrace);
         rval
     }
 }

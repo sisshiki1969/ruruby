@@ -140,6 +140,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("compile", regexp_new);
     class.add_builtin_class_method("escape", regexp_escape);
     class.add_builtin_class_method("quote", regexp_escape);
+    class.add_builtin_method_by_str("=~", regexp_match);
     class
 }
 
@@ -159,6 +160,18 @@ fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let string = arg0.expect_string("1st arg")?;
     let regexp = Value::string(regex::escape(string));
     Ok(regexp)
+}
+
+fn regexp_match(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let mut args0 = args[0];
+    let regex = self_val.as_regexp().unwrap();
+    let given = args0.expect_string("1st Arg")?;
+    let res = match RegexpInfo::find_one(vm, &regex, given).unwrap() {
+        Some(mat) => Value::integer(mat.start() as i64),
+        None => Value::nil(),
+    };
+    return Ok(res);
 }
 
 // Instance methods
@@ -372,6 +385,8 @@ impl RegexpInfo {
         }
     }
 
+    /// Find the leftmost-first match for `given`.
+    /// Returns Matchs.
     pub fn find_one<'a>(
         vm: &mut VM,
         re: &Regex,
@@ -452,6 +467,9 @@ mod test {
     fn regexp2() {
         let program = r#"
         assert 3, "aaazzz" =~ /\172+/
+        assert 0, /foo/ =~ "foo"  # => 0
+        assert 1, /foo/ =~ "afoo" # => 1
+        assert nil, /foo/ =~ "bar"  # => nil
         "#;
         assert_script(program);
     }

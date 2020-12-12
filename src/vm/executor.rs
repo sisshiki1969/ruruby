@@ -471,10 +471,7 @@ impl VM {
                         self.set_stack_len(stack_len);
                         let val = match &err.kind {
                             RubyErrorKind::Value(val) => *val,
-                            RubyErrorKind::RuntimeErr { .. } => {
-                                Value::exception(self.globals.builtins.exception, err)
-                            }
-                            _ => Value::nil(),
+                            _ => err.to_exception_val(),
                         };
                         self.stack_push(val);
                     } else {
@@ -2425,7 +2422,6 @@ impl VM {
                 ObjKind::Ordinary => oref.inspect(self)?,
                 ObjKind::Hash(href) => href.to_s(self)?,
                 ObjKind::Complex { .. } => format!("{:?}", oref.kind),
-                ObjKind::Exception(err) => format!("#<Exception {:?} >", err),
                 _ => {
                     let id = IdentId::get_id("inspect");
                     self.send0(id, val)?.as_string().unwrap().to_string()

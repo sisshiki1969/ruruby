@@ -922,26 +922,34 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0,1)?;
+    args.check_args_range(0, 1)?;
     let ary = self_val.expect_array("").unwrap();
     if args.len() == 1 {
-        if args.block.is_some() {eprintln!("Warning: given block not used.")};
-        for (i,v) in ary.elements.iter().enumerate() {
-            if *v==args[0] {return Ok(Value::integer(i as i64))};
+        if args.block.is_some() {
+            eprintln!("Warning: given block not used.")
+        };
+        for (i, v) in ary.elements.iter().enumerate() {
+            if *v == args[0] {
+                return Ok(Value::integer(i as i64));
+            };
         }
-        return Ok(Value::nil())
+        return Ok(Value::nil());
     };
     let block = match args.block.clone() {
         Some(block) => block,
-        None => {    let id = IdentId::get_id("find_index");
+        None => {
+            let id = IdentId::get_id("find_index");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
-            return Ok(val);}
+            return Ok(val);
+        }
     };
 
     let mut args = Args::new1(Value::nil());
-    for (i,elem) in ary.elements.iter().enumerate() {
+    for (i, elem) in ary.elements.iter().enumerate() {
         args[0] = *elem;
-        if vm.eval_block(&block, &args)?.to_bool() {return Ok(Value::integer(i as i64))};
+        if vm.eval_block(&block, &args)?.to_bool() {
+            return Ok(Value::integer(i as i64));
+        };
     }
     Ok(Value::nil())
 }
@@ -1017,6 +1025,28 @@ mod tests {
         a[2,3] = 100
         assert [1,2,100,6,7], a
         ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_range() {
+        let program = r##"
+        a = [ "a", "b", "c", "d", "e" ]
+        assert a[0..1], ["a", "b"]
+        assert a[0...1], ["a"]
+        assert a[0..-1], ["a", "b", "c", "d", "e"]
+        assert a[-2..-1], ["d", "e"]
+        assert a[-2..4], ["d", "e"]  #(start は末尾から -2 番目、end は先頭から (4+1) 番目となる。)
+        assert a[0..10], ["a", "b", "c", "d", "e"]
+        assert a[10..11], nil
+        assert a[2..1], []
+        assert a[-1..-2], []
+        assert a[5..10], []
+
+        # 特殊なケース。first が自身の長さと同じ場合には以下のようになります。
+        #a[5]                   #=> nil
+        #a[5, 1]                #=> []
+        "##;
         assert_script(program);
     }
 
@@ -1349,5 +1379,4 @@ mod tests {
         "#;
         assert_script(program);
     }
-
 }

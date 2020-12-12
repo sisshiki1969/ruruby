@@ -144,9 +144,19 @@ impl RubyError {
         self.0.level = level;
     }
 
-    pub fn show_file_name(&self, pos: usize) {
+    /*fn get_file_name(&self, pos: usize) -> String {
         if let Some(info) = self.0.info.get(pos) {
-            info.0.show_file_name()
+            info.0.get_file_name()
+        } else {
+            "".to_string()
+        }
+    }*/
+
+    pub fn get_location(&self, pos: usize) -> String {
+        if let Some(info) = self.0.info.get(pos) {
+            info.0.get_location(&self.0.info[pos].1)
+        } else {
+            "".to_string()
         }
     }
 
@@ -164,41 +174,44 @@ impl RubyError {
     }
 
     pub fn show_err(&self) {
+        eprintln!("{}", self.message());
+    }
+
+    pub fn message(&self) -> String {
         match &self.0.kind {
             RubyErrorKind::ParseErr(e) => match e {
-                ParseErrKind::UnexpectedEOF => eprintln!("Unexpected EOF"),
-                ParseErrKind::UnexpectedToken => eprintln!("Unexpected token"),
-                ParseErrKind::SyntaxError(n) => eprintln!("SyntaxError: {}", n),
-                ParseErrKind::Name(n) => eprintln!("NameError: {}", n),
+                ParseErrKind::UnexpectedEOF => "Unexpected EOF".to_string(),
+                ParseErrKind::UnexpectedToken => "Unexpected token".to_string(),
+                ParseErrKind::SyntaxError(n) => format!("SyntaxError: {}", n),
+                ParseErrKind::Name(n) => format!("NameError: {}", n),
             },
             RubyErrorKind::RuntimeErr { kind, message } => {
-                match kind {
-                    RuntimeErrKind::Name => eprint!("NoNameError"),
-                    RuntimeErrKind::NoMethod => eprint!("NoMethodError"),
-                    RuntimeErrKind::Type => eprint!("TypeError"),
-                    RuntimeErrKind::Argument => eprint!("ArgumentError"),
-                    RuntimeErrKind::Index => eprint!("IndexError"),
-                    RuntimeErrKind::Regexp => eprint!("RegexpError"),
-                    RuntimeErrKind::Fiber => eprint!("FiberError"),
-                    RuntimeErrKind::LocalJump => eprint!("LocalJumpError"),
-                    RuntimeErrKind::StopIteration => eprint!("StopIteration"),
-                    RuntimeErrKind::Runtime => eprint!("RuntimeError"),
-                    RuntimeErrKind::LoadError => eprintln!("LoadError"),
+                let s = match kind {
+                    RuntimeErrKind::Name => "NoNameError",
+                    RuntimeErrKind::NoMethod => "NoMethodError",
+                    RuntimeErrKind::Type => "TypeError",
+                    RuntimeErrKind::Argument => "ArgumentError",
+                    RuntimeErrKind::Index => "IndexError",
+                    RuntimeErrKind::Regexp => "RegexpError",
+                    RuntimeErrKind::Fiber => "FiberError",
+                    RuntimeErrKind::LocalJump => "LocalJumpError",
+                    RuntimeErrKind::StopIteration => "StopIteration",
+                    RuntimeErrKind::Runtime => "RuntimeError",
+                    RuntimeErrKind::LoadError => "LoadError",
                 };
-                eprintln!("({})", message);
+                format!("{}({})", s, message)
             }
-            RubyErrorKind::Value(val) => eprintln!("{:?}", val),
-            RubyErrorKind::MethodReturn(_) => {
-                eprintln!("LocalJumpError");
-            }
-            RubyErrorKind::BlockReturn(_) => {
-                eprintln!("LocalJumpError");
-            }
+            RubyErrorKind::Value(val) => format!("{:?}", val),
+            RubyErrorKind::MethodReturn(_) => "LocalJumpError".to_string(),
+            RubyErrorKind::BlockReturn(_) => "LocalJumpError".to_string(),
             RubyErrorKind::Internal(msg) => {
-                eprintln!("InternalError");
-                eprintln!("({})", msg);
+                format!("InternalError\n{}", msg)
             }
         }
+    }
+
+    pub fn to_exception_val(&self) -> Value {
+        Value::exception(BuiltinClass::exception(), self.clone())
     }
 }
 

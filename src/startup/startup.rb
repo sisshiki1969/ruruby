@@ -62,7 +62,7 @@ class Module
 end
 
 RUBY_PLATFORM = "x86_64-linux"
-RUBY_VERSION = "2.5.0"
+RUBY_VERSION = "2.7.0"
 RUBY_ENGINE = "ruruby"
 RUBY_DESCRIPTION = "ruruby [x86_64-linux]"
 
