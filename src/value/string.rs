@@ -16,7 +16,7 @@ impl fmt::Debug for RString {
         fn write(s: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             for ch in s.chars() {
                 match ch {
-                    c @ '\'' | c @ '"' | c @ '?' | c @ '\\' => {
+                    c @ '\'' | c @ '"' | c @ '\\' => {
                         write!(f, "\\{}", c)?;
                     }
                     '\x07' => write!(f, "\\a")?,

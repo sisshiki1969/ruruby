@@ -265,7 +265,7 @@ impl Lexer {
                     '"' => return self.read_string_literal_double(None, '\"', 0),
                     '`' => return self.read_command_literal(None, '`', 0),
                     '\'' => {
-                        let s = self.read_string_literal_single(None, '\'')?;
+                        let s = self.read_string_literal_single(None, '\'', false)?;
                         return Ok(self.new_stringlit(s));
                     }
                     ';' => return Ok(self.new_punct(Punct::Semi)),
@@ -718,6 +718,7 @@ impl Lexer {
         &mut self,
         open: Option<char>,
         term: char,
+        escape_backslash: bool,
     ) -> Result<String, RubyError> {
         let mut s = "".to_string();
         let mut level = 0;
@@ -739,6 +740,11 @@ impl Lexer {
                     let c = self.get()?;
                     if c == '\'' {
                         s.push('\'');
+                    } else if c == '\\' {
+                        s.push('\\');
+                        if escape_backslash {
+                            s.push('\\');
+                        }
                     } else {
                         s.push('\\');
                         s.push(c);
@@ -840,12 +846,16 @@ impl Lexer {
 
         match kind {
             Some('q') => {
-                let s = self.read_string_literal_single(open, term)?;
+                let s = self.read_string_literal_single(open, term, false)?;
                 Ok(self.new_stringlit(s))
             }
             Some('Q') | None => Ok(self.read_string_literal_double(open, term, 0)?),
+            Some('r') => {
+                let s = self.read_string_literal_single(open, term, true)?;
+                Ok(self.new_percent('r', s))
+            }
             Some(kind) => {
-                let s = self.read_string_literal_single(open, term)?;
+                let s = self.read_string_literal_single(open, term, false)?;
                 Ok(self.new_percent(kind, s))
             }
         }

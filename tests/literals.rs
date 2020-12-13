@@ -1,6 +1,5 @@
 #![feature(test)]
 extern crate ruruby;
-extern crate test;
 use ruruby::test::*;
 use ruruby::*;
 
@@ -92,6 +91,18 @@ fn string_lit3() {
         assert("剪", ?\u526a)
         assert("剪", ?\u526A)
         #assert_error { ?\uffff }
+    "##;
+    assert_script(program);
+}
+
+#[test]
+fn string_lit4() {
+    let program = r##"
+    assert '\\', "\\"
+    assert '\'', "\'"
+    assert '"', "\""
+    assert '\g', "\\g"
+    assert %w!you are crazy!, ["you", "are", "crazy"]
     "##;
     assert_script(program);
 }
