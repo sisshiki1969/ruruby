@@ -1,3 +1,3 @@
 #!/bin/sh
 cargo build --release
-../mspec/bin/mspec ../spec/core -t target/release/ruruby
+../mspec/bin/mspec ../spec/core/array -t target/release/ruruby

@@ -8,6 +8,9 @@ end
 
 class ARGF_CLASS
   include Enumerable
+  def argv
+    ARGV
+  end
 end
 
 ARGF = ARGF_CLASS.new

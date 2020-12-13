@@ -48,6 +48,7 @@ pub fn init(globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("rstrip", rstrip);
     string_class.add_builtin_method_by_str("ord", ord);
     string_class.add_builtin_method_by_str("empty?", empty);
+    string_class.add_builtin_method_by_str("codepoints", codepoints);
 
     string_class
 }
@@ -931,6 +932,20 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(len == 0))
 }
 
+fn codepoints(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    if args.block.is_some() {
+        return Err(RubyError::argument("Currently, block is not supported."));
+    }
+    let res = self_val
+        .as_string()
+        .unwrap()
+        .chars()
+        .map(|c| Value::integer(c as u32 as i64))
+        .collect();
+    Ok(Value::array_from(res))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -1322,6 +1337,14 @@ mod test {
     fn string_ord() {
         let program = r#"
         assert 97, 'abcdefg'.ord
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_codepoints() {
+        let program = r#"
+        assert [104, 101, 108, 108, 111, 32, 12431, 12540, 12427, 12393], "hello わーるど".codepoints
         "#;
         assert_script(program);
     }

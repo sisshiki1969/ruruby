@@ -88,7 +88,6 @@ impl VM {
             exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
-            //exception: false,
             pc: 0,
             parent_fiber: None,
             handle: None,
@@ -97,7 +96,6 @@ impl VM {
         };
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
-        //eprintln!("{}", load_path);
         match vm.run(PathBuf::from("(startup)"), load_path) {
             Ok(val) => globals.set_global_var_by_str("$:", val),
             Err(_) => {}
@@ -126,13 +124,11 @@ impl VM {
     pub fn create_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<FiberMsg>) -> Self {
         let vm = VM {
             globals: self.globals,
-            //root_path: self.root_path.clone(),
             fiber_state: FiberState::Created,
             exec_context: vec![],
             temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
-            //exception: false,
             pc: 0,
             parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             handle: None,
@@ -469,10 +465,7 @@ impl VM {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.to_usize();
                         self.set_stack_len(stack_len);
-                        let val = match &err.kind {
-                            RubyErrorKind::Value(val) => *val,
-                            _ => err.to_exception_val(),
-                        };
+                        let val = err.to_exception_val();
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.

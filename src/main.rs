@@ -16,7 +16,7 @@ fn main() {
     let app = App::new("ruruby")
         .version("0.0.1")
         .author("monochrome")
-        .about("A toy Ruby interpreter")
+        .about("An alternative Ruby interpreter")
         .setting(AppSettings::TrailingVarArg)
         .arg(Arg::from_usage("[command] -e 'Eval string as program'").takes_value(true))
         .arg(Arg::from_usage("[file]... 'Input file name'").multiple(true));

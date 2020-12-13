@@ -344,12 +344,10 @@ impl Globals {
         }
     }
 
-    /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_toplevel_constant(&mut self, class_name: &str, class_object: Value) {
-        let mut object = self.builtins.object;
-        object
-            .as_mut_module()
-            .set_const_by_str(class_name, class_object);
+    /// Bind `object` to the constant `name` of the root object.
+    pub fn set_toplevel_constant(&mut self, name: &str, object: Value) {
+        let mut object_class = self.builtins.object;
+        object_class.as_mut_module().set_const_by_str(name, object);
         self.const_version += 1;
     }
 

@@ -265,8 +265,8 @@ fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
                 return Err(RubyError::stop_iteration(""));
             };
         }
-        if args[0].if_exception().is_some() {
-            return Err(RubyError::value(args[0]));
+        if let Some(err) = args[0].if_exception() {
+            return Err(err.clone());
         }
     }
     let error_msg = match args.len() {
