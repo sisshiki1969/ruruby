@@ -231,15 +231,16 @@ impl VM {
     }
 
     pub fn temp_push_args(&mut self, args: &Args) {
-        for a in args.iter() {
-            self.temp_stack.push(*a);
-        }
+        self.temp_stack.extend_from_slice(args);
         self.temp_stack.push(args.kw_arg);
+        if let Some(Block::Proc(val)) = args.block {
+            self.temp_stack.push(val)
+        }
     }
 
     /// Push objects to the temporary area.
-    pub fn temp_push_vec(&mut self, vec: &Vec<Value>) {
-        self.temp_stack.extend_from_slice(vec);
+    pub fn temp_push_vec(&mut self, slice: &[Value]) {
+        self.temp_stack.extend_from_slice(slice);
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
@@ -448,7 +449,7 @@ impl VM {
                     debug_assert_eq!(stack_len, self.stack_len());
                     self.pc = pc;
                     #[cfg(feature = "trace")]
-                    println!("<--- Ok({:?})", val);
+                    println!("<--- Ok()"); //, val);
                     return Ok(val);
                 }
                 Err(mut err) => {
@@ -1432,7 +1433,7 @@ impl VM {
                                 args_num, req_len
                             )));
                         };
-                        context.copy_from_slice(0, arg_slice);
+                        context.copy_from_slice0(arg_slice);
                         self.set_stack_len(len - args_num);
                         self.run_context(&context)
                     } else {
@@ -1501,7 +1502,7 @@ impl VM {
                                 args_num, req_len
                             )));
                         };
-                        context.copy_from_slice(0, arg_slice);
+                        context.copy_from_slice0(arg_slice);
                         self.set_stack_len(len - args_num);
                         self.run_context(&context)
                     } else {
@@ -2451,7 +2452,10 @@ impl VM {
                 self.invoke_method(*method, self_val, Some(outer), args)
             }
             Block::Proc(proc) => {
-                let pref = proc.as_proc().unwrap();
+                let pref = match proc.as_proc() {
+                    Some(proc) => proc,
+                    None => unreachable!("Illegal proc."),
+                };
                 let context = Context::from_args(
                     self,
                     self_val,
@@ -2782,22 +2786,41 @@ impl VM {
 
     /// Move outer execution contexts on the stack to the heap.
     fn move_outer_to_heap(&mut self) {
-        let mut prev_ctx: Option<ContextRef> = None;
-
-        for context in self.exec_context.iter_mut().rev() {
+        let context = self.current_context();
+        if !context.on_stack {
+            return;
+        };
+        let mut prev_ctx = context.dup();
+        prev_ctx.on_stack = false;
+        *self.exec_context.last_mut().unwrap() = prev_ctx;
+        let mut iter = self.exec_context.iter_mut().rev();
+        loop {
+            let context = match prev_ctx.outer {
+                Some(context) => context,
+                None => return,
+            };
             if !context.on_stack {
-                break;
+                return;
             };
             let mut heap_context = context.dup();
             heap_context.on_stack = false;
-            *context = heap_context;
-            if let Some(mut ctx) = prev_ctx {
-                ctx.outer = Some(heap_context);
-            };
-            if heap_context.outer.is_none() {
-                break;
+
+            loop {
+                match iter.next() {
+                    Some(ctx) => {
+                        if *ctx == context {
+                            *ctx = heap_context;
+                            break;
+                        };
+                    }
+                    None => {
+                        eprintln!("warining illegal exec context.");
+                        break;
+                    }
+                };
             }
-            prev_ctx = Some(heap_context);
+            prev_ctx.outer = Some(heap_context);
+            prev_ctx = heap_context;
         }
     }
 

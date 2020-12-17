@@ -131,7 +131,7 @@ impl Context {
         }
     }
 
-    pub fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
+    fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
         let len = slice.len();
         if index + len <= LVAR_ARRAY_SIZE {
             self.lvar_ary[index..index + len].copy_from_slice(slice);
@@ -143,6 +143,16 @@ impl Context {
                 .copy_from_slice(&slice[..LVAR_ARRAY_SIZE - index]);
             self.lvar_vec[0..index + len - LVAR_ARRAY_SIZE]
                 .copy_from_slice(&slice[LVAR_ARRAY_SIZE - index..])
+        }
+    }
+
+    pub fn copy_from_slice0(&mut self, slice: &[Value]) {
+        let len = slice.len();
+        if len <= LVAR_ARRAY_SIZE {
+            self.lvar_ary[0..len].copy_from_slice(slice);
+        } else {
+            self.lvar_ary[0..LVAR_ARRAY_SIZE].copy_from_slice(&slice[..LVAR_ARRAY_SIZE]);
+            self.lvar_vec[0..len - LVAR_ARRAY_SIZE].copy_from_slice(&slice[LVAR_ARRAY_SIZE..])
         }
     }
 
@@ -175,7 +185,7 @@ impl Context {
             } else {
                 let req_len = iseq.params.req;
                 args.check_args_num(req_len)?;
-                context.copy_from_slice(0, args);
+                context.copy_from_slice0(args);
             }
             return Ok(context);
         }
@@ -274,7 +284,7 @@ impl Context {
         let req_opt = std::cmp::min(optreq_len, arg_len);
         if req_opt != 0 {
             // fill req and opt params.
-            self.copy_from_slice(0, &args[0..req_opt - kw_len]);
+            self.copy_from_slice0(&args[0..req_opt - kw_len]);
             if kw_len == 1 {
                 // fill keyword params as a hash.
                 self[req_opt - 1] = kw_arg;
@@ -305,10 +315,10 @@ impl Context {
             let args_len = args.len();
             if req_len <= args_len {
                 // fill req params.
-                context.copy_from_slice(0, &args[0..req_len]);
+                context.copy_from_slice0(&args[0..req_len]);
             } else {
                 // fill req params.
-                context.copy_from_slice(0, args);
+                context.copy_from_slice0(args);
                 // fill the remaining req params with nil.
                 context.fill(args_len..req_len, Value::nil());
             }

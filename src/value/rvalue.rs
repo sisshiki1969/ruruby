@@ -57,28 +57,36 @@ impl std::fmt::Debug for ObjKind {
                 None => write!(f, "#<Module:0x{:x}>", cinfo.id()),
             },
             ObjKind::Array(aref) => {
-                write!(f, "[")?;
-                match aref.elements.len() {
-                    0 => {}
-                    1 => write!(f, "{:#?}", aref.elements[0])?,
-                    2 => write!(f, "{:#?}, {:#?}", aref.elements[0], aref.elements[1])?,
-                    3 => write!(
-                        f,
-                        "{:#?}, {:#?}, {:#?}",
-                        aref.elements[0], aref.elements[1], aref.elements[2]
-                    )?,
-                    4 => write!(
-                        f,
-                        "{:#?}, {:#?}, {:#?}, {:#?}",
-                        aref.elements[0], aref.elements[1], aref.elements[2], aref.elements[3]
-                    )?,
-                    n => write!(
-                        f,
-                        "{:#?}, {:#?}, {:#?}, {:#?}.. {} items",
-                        aref.elements[0], aref.elements[1], aref.elements[2], aref.elements[3], n
-                    )?,
+                if f.alternate() {
+                    write!(f, "[Array]")
+                } else {
+                    write!(f, "[")?;
+                    match aref.elements.len() {
+                        0 => {}
+                        1 => write!(f, "{:#?}", aref.elements[0])?,
+                        2 => write!(f, "{:#?}, {:#?}", aref.elements[0], aref.elements[1])?,
+                        3 => write!(
+                            f,
+                            "{:#?}, {:#?}, {:#?}",
+                            aref.elements[0], aref.elements[1], aref.elements[2]
+                        )?,
+                        4 => write!(
+                            f,
+                            "{:#?}, {:#?}, {:#?}, {:#?}",
+                            aref.elements[0], aref.elements[1], aref.elements[2], aref.elements[3]
+                        )?,
+                        n => write!(
+                            f,
+                            "{:#?}, {:#?}, {:#?}, {:#?}.. {} items",
+                            aref.elements[0],
+                            aref.elements[1],
+                            aref.elements[2],
+                            aref.elements[3],
+                            n
+                        )?,
+                    }
+                    write!(f, "]")
                 }
-                write!(f, "]")
             }
             ObjKind::Hash(href) => {
                 write!(f, "{{")?;
