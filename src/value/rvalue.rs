@@ -291,63 +291,56 @@ impl RValue {
     }
 
     pub fn new_array(array_info: ArrayInfo) -> Self {
-        let class = BuiltinClass::array();
         RValue {
-            class,
+            class: BuiltinClass::array(),
             var_table: None,
             kind: ObjKind::Array(array_info),
         }
     }
 
     pub fn new_range(range: RangeInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().range);
         RValue {
-            class,
+            class: BuiltinClass::range(),
             var_table: None,
             kind: ObjKind::Range(range),
         }
     }
 
     pub fn new_splat(val: Value) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().array);
         RValue {
-            class,
+            class: BuiltinClass::array(),
             var_table: None,
             kind: ObjKind::Splat(val),
         }
     }
 
     pub fn new_hash(hash: HashInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().hash);
         RValue {
-            class,
+            class: BuiltinClass::hash(),
             var_table: None,
             kind: ObjKind::Hash(Box::new(hash)),
         }
     }
 
     pub fn new_regexp(regexp: RegexpInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().regexp);
         RValue {
-            class,
+            class: BuiltinClass::regexp(),
             var_table: None,
             kind: ObjKind::Regexp(regexp),
         }
     }
 
     pub fn new_proc(proc_info: ProcInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().procobj);
         RValue {
-            class,
+            class: BuiltinClass::procobj(),
             var_table: None,
             kind: ObjKind::Proc(proc_info),
         }
     }
 
     pub fn new_method(method_info: MethodObjInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().method);
         RValue {
-            class,
+            class: BuiltinClass::method(),
             var_table: None,
             kind: ObjKind::Method(method_info),
         }
@@ -360,18 +353,16 @@ impl RValue {
         tx: std::sync::mpsc::SyncSender<FiberMsg>,
     ) -> Self {
         let fiber = FiberInfo::new(vm, context, rec, tx);
-        let class = BUILTINS.with(|b| b.borrow().unwrap().fiber);
         RValue {
-            class,
+            class: BuiltinClass::fiber(),
             var_table: None,
             kind: ObjKind::Fiber(Box::new(fiber)),
         }
     }
 
     pub fn new_enumerator(fiber: FiberInfo) -> Self {
-        let class = BUILTINS.with(|b| b.borrow().unwrap().enumerator);
         RValue {
-            class,
+            class: BuiltinClass::enumerator(),
             var_table: None,
             kind: ObjKind::Enumerator(Box::new(fiber)),
         }

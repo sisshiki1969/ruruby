@@ -142,7 +142,7 @@ impl FiberInfo {
                     fiber_vm.fiberstate_running();
                     //#[cfg(debug_assertions)]
                     //eprintln!("running {:?}", std::thread::current().id());
-                    fiber_vm.set_allocator();
+                    fiber_vm.globals.set_allocator();
                     let res = match fiber_kind {
                         FiberKind::Fiber(context) => fiber_vm.run_context(context),
                         FiberKind::Enum(receiver, method_id, args) => {

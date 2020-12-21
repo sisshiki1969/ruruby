@@ -31,7 +31,7 @@ pub struct Globals {
 pub type GlobalsRef = Ref<Globals>;
 
 thread_local!(
-    pub static BUILTINS: RefCell<Option<BuiltinRef>> = RefCell::new(None);
+    static BUILTINS: RefCell<Option<BuiltinRef>> = RefCell::new(None);
 );
 
 #[derive(Debug, Clone)]
@@ -121,8 +121,36 @@ impl BuiltinClass {
         BUILTINS.with(|b| b.borrow().unwrap().complex)
     }
 
+    pub fn range() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().range)
+    }
+
     pub fn array() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().array)
+    }
+
+    pub fn hash() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().hash)
+    }
+
+    pub fn fiber() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().fiber)
+    }
+
+    pub fn enumerator() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().enumerator)
+    }
+
+    pub fn procobj() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().procobj)
+    }
+
+    pub fn regexp() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().regexp)
+    }
+
+    pub fn method() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().method)
     }
 
     pub fn exception() -> Value {
@@ -139,6 +167,7 @@ impl GC for BuiltinClass {
 impl GC for Globals {
     fn mark(&self, alloc: &mut Allocator) {
         self.const_values.mark(alloc);
+        self.main_object.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
         self.method_cache
             .cache
@@ -272,6 +301,17 @@ impl Globals {
         globals.set_toplevel_constant("ENV", env);
 
         globals
+    }
+
+    /// Set ALLOC to Globals' Allocator for Fiber.
+    /// This method should be called in the thread where `self` is to be run.
+    pub fn set_allocator(&self) {
+        ALLOC.with(|a| {
+            *a.borrow_mut() = Some(self.allocator);
+        });
+        BUILTINS.with(|b| {
+            *b.borrow_mut() = Some(self.builtins);
+        });
     }
 
     pub fn gc(&self) {
