@@ -139,17 +139,6 @@ impl VM {
         vm
     }
 
-    /// Set ALLOC to Globals' Allocator for Fiber.
-    /// This method should be called in the thread where `self` is to be run.
-    pub fn set_allocator(&self) {
-        ALLOC.with(|a| {
-            *a.borrow_mut() = Some(self.globals.allocator);
-        });
-        BUILTINS.with(|b| {
-            *b.borrow_mut() = Some(self.globals.builtins);
-        });
-    }
-
     pub fn current_context(&self) -> ContextRef {
         self.exec_context.last().unwrap().to_owned()
     }
