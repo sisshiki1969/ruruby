@@ -289,6 +289,10 @@ impl Allocator {
     }
 
     pub fn gc(&mut self, root: &Globals) {
+        #[cfg(feature = "trace")]
+        {
+            println!("#### GC Start");
+        }
         #[cfg(feature = "gc-debug")]
         {
             eprintln!("--GC start thread:{:?}", std::thread::current().id());
@@ -314,6 +318,10 @@ impl Allocator {
         self.count += 1;
         #[cfg(feature = "gc-debug")]
         eprintln!("--GC completed");
+        #[cfg(feature = "trace")]
+        {
+            println!("#### GC End");
+        }
     }
 
     /// Clear all mark bitmaps.

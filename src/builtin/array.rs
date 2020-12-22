@@ -66,6 +66,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("reject", reject);
     class.add_builtin_method_by_str("select", select);
     class.add_builtin_method_by_str("filter", select);
+    class.add_builtin_method_by_str("bsearch", bsearch);
+    class.add_builtin_method_by_str("bsearch_index", bsearch_index);
 
     class.add_builtin_class_method("new", array_new);
     class
@@ -130,11 +132,10 @@ fn set_elem(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = &self_val.as_array().unwrap().elements;
-    let rhs = &(match args[0].as_array() {
-        Some(aref) => aref,
+    let rhs = match args[0].as_array() {
+        Some(aref) => &aref.elements,
         None => return Ok(Value::nil()),
-    }
-    .elements);
+    };
     if lhs.len() >= rhs.len() {
         for (i, rhs_v) in rhs.iter().enumerate() {
             match vm.eval_compare(*rhs_v, lhs[i])?.as_integer() {
@@ -972,6 +973,60 @@ fn select(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
+fn binary_search(
+    vm: &mut VM,
+    ary: &mut ArrayInfo,
+    block: &Block,
+) -> Result<Option<usize>, RubyError> {
+    if ary.len() == 0 {
+        return Ok(None);
+    };
+    let mut args = Args::new(1);
+    let mut i_min = 0;
+    let mut i_max = ary.len() - 1;
+    args[0] = ary.elements[0];
+    if vm.eval_block(block, &args)?.to_bool() {
+        return Ok(Some(0));
+    };
+    args[0] = ary.elements[i_max];
+    if !vm.eval_block(block, &args)?.to_bool() {
+        return Ok(None);
+    };
+
+    loop {
+        let i_mid = i_min + (i_max - i_min) / 2;
+        if i_mid == i_min {
+            return Ok(Some(i_max));
+        };
+        args[0] = ary.elements[i_mid];
+        if vm.eval_block(block, &args)?.to_bool() {
+            i_max = i_mid;
+        } else {
+            i_min = i_mid;
+        };
+    }
+}
+
+fn bsearch(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let ary = self_val.as_mut_array().unwrap();
+    let block = to_enum_str!(vm, self_val, args, "bsearch");
+    match binary_search(vm, ary, block)? {
+        Some(i) => Ok(ary.elements[i]),
+        None => Ok(Value::nil()),
+    }
+}
+
+fn bsearch_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let ary = self_val.as_mut_array().unwrap();
+    let block = to_enum_str!(vm, self_val, args, "bsearch_index");
+    match binary_search(vm, ary, block)? {
+        Some(i) => Ok(Value::integer(i as i64)),
+        None => Ok(Value::nil()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1410,6 +1465,30 @@ mod tests {
     fn select() {
         let program = r#"
         assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select {|i| i % 2 != 0 }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn bsearch() {
+        let program = r#"
+        ary = [0, 4, 7, 10, 12]
+        assert 4, ary.bsearch {|x| x >=  4 } # => 4
+        assert 7, ary.bsearch {|x| x >=  6 } # => 7
+        assert 0, ary.bsearch {|x| x >= -1 } # => 0
+        assert nil, ary.bsearch {|x| x >= 100 } # => nil
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn bsearch_index() {
+        let program = r#"
+        ary = [0, 4, 7, 10, 12]
+        assert 1, ary.bsearch_index {|x| x >=  4 }
+        assert 2, ary.bsearch_index {|x| x >=  6 }
+        assert 0, ary.bsearch_index {|x| x >= -1 }
+        assert nil, ary.bsearch_index {|x| x >= 100 }
         "#;
         assert_script(program);
     }

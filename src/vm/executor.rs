@@ -381,28 +381,10 @@ impl VM {
     #[allow(dead_code)]
     #[cfg(not(tarpaulin_include))]
     pub fn dump_context(&self) {
-        fn dump_single_context(context: ContextRef) {
-            eprintln!("self: {:#?}", context.self_value);
-            match context.iseq_ref {
-                Some(iseq_ref) => {
-                    for i in 0..iseq_ref.lvars {
-                        let id = LvarId::from_usize(i);
-                        let (k, _) = iseq_ref
-                            .lvar
-                            .table()
-                            .iter()
-                            .find(|(_, v)| **v == id)
-                            .unwrap();
-                        eprintln!("lvar({}): {:?} {:#?}", id.as_u32(), k, context[id]);
-                    }
-                }
-                None => {}
-            }
-        }
         eprintln!("---dump");
         for (i, context) in self.exec_context.iter().rev().enumerate() {
             eprintln!("context: {}", i);
-            dump_single_context(*context);
+            context.dump();
         }
         for v in &self.exec_stack {
             eprintln!("stack: {:#?}", *v);
@@ -441,6 +423,7 @@ impl VM {
         {
             print!("--->");
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
+            context.dump();
         }
         loop {
             match self.run_context_main(context) {
@@ -449,7 +432,7 @@ impl VM {
                     debug_assert_eq!(stack_len, self.stack_len());
                     self.pc = pc;
                     #[cfg(feature = "trace")]
-                    println!("<--- Ok()"); //, val);
+                    println!("<--- Ok({:?})", val);
                     return Ok(val);
                 }
                 Err(mut err) => {
@@ -525,10 +508,11 @@ impl VM {
             #[cfg(feature = "trace")]
             {
                 println!(
-                    "{:>4x}:{:<15} stack:{}",
+                    "{:>4x}:{:<25} stack:{:<3} top:{:?}",
                     self.pc,
                     Inst::inst_info(&self.globals, context.iseq_ref.unwrap(), self.pc),
-                    self.stack_len()
+                    self.stack_len(),
+                    self.exec_stack.last()
                 );
             }
             match iseq[self.pc] {
@@ -1028,7 +1012,8 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = iseq.read_methodref(self.pc + 1);
-                    let proc_obj = self.create_proc(&Block::Method(method))?;
+                    let ctx = self.current_context();
+                    let proc_obj = self.create_proc(&Block::Method(method, ctx))?;
                     self.stack_push(proc_obj);
                     self.pc += 9;
                 }
@@ -1360,12 +1345,15 @@ impl VM {
 
         let block = if block != 0 {
             let method = MethodRef::from_u64(block);
-            Some(Block::Method(method))
+            Some(Block::Method(method, self.current_context()))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop()?;
             if val.is_nil() {
                 None
             } else {
+                if val.as_proc().is_none() {
+                    return Err(RubyError::internal(format!("Must be Proc. {:?}", val)));
+                }
                 Some(Block::Proc(val))
             }
         } else {
@@ -1393,11 +1381,11 @@ impl VM {
             .find_method_from_icache(cache, receiver, method_id)
         {
             Some(method) => match &*method {
-                MethodInfo::BuiltinFunc { func, .. } => {
+                MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(arg_slice);
-                    args.block = Some(Block::Method(block));
+                    args.block = Some(Block::Method(block, self.current_context()));
                     self.set_stack_len(len - args_num);
-                    self.invoke_native(func, receiver, &args)
+                    self.invoke_native(func, *name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
@@ -1421,10 +1409,9 @@ impl VM {
                     if iseq.opt_flag {
                         let mut context = Context::new(
                             receiver,
-                            Some(Block::Method(block)),
+                            Some(Block::Method(block, self.current_context())),
                             *iseq,
                             None,
-                            self.latest_context(),
                         );
                         let req_len = iseq.params.req;
                         if args_num != req_len {
@@ -1438,7 +1425,7 @@ impl VM {
                         self.run_context(&context)
                     } else {
                         let mut args = Args::from_slice(arg_slice);
-                        args.block = Some(Block::Method(block));
+                        args.block = Some(Block::Method(block, self.current_context()));
                         self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
                         let res = self.run_context(&context);
@@ -1448,7 +1435,7 @@ impl VM {
             },
             None => {
                 let mut args = Args::from_slice(arg_slice);
-                args.block = Some(Block::Method(block));
+                args.block = Some(Block::Method(block, self.current_context()));
                 self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
@@ -1468,10 +1455,10 @@ impl VM {
             .find_method_from_icache(cache, receiver, method_id)
         {
             Some(method) => match &*method {
-                MethodInfo::BuiltinFunc { func, .. } => {
+                MethodInfo::BuiltinFunc { func, name } => {
                     let args = Args::from_slice(arg_slice);
                     self.set_stack_len(len - args_num);
-                    self.invoke_native(func, receiver, &args)
+                    self.invoke_native(func, *name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
@@ -1493,8 +1480,7 @@ impl VM {
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     if iseq.opt_flag {
-                        let mut context =
-                            Context::new(receiver, None, *iseq, None, self.latest_context());
+                        let mut context = Context::new(receiver, None, *iseq, None);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument(format!(
@@ -2436,9 +2422,8 @@ impl VM {
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
-            Block::Method(method) => {
-                let outer = self.current_context();
-                self.invoke_method(*method, outer.self_value, Some(outer), args)
+            Block::Method(method, outer) => {
+                self.invoke_method(*method, outer.self_value, Some(*outer), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
         }
@@ -2447,14 +2432,13 @@ impl VM {
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block_self(&mut self, block: &Block, self_val: Value, args: &Args) -> VMResult {
         match block {
-            Block::Method(method) => {
-                let outer = self.current_context();
-                self.invoke_method(*method, self_val, Some(outer), args)
+            Block::Method(method, outer) => {
+                self.invoke_method(*method, self_val, Some(*outer), args)
             }
             Block::Proc(proc) => {
                 let pref = match proc.as_proc() {
                     Some(proc) => proc,
-                    None => unreachable!("Illegal proc."),
+                    None => return Err(RubyError::internal("Illegal proc.")),
                 };
                 let context = Context::from_args(
                     self,
@@ -2471,17 +2455,17 @@ impl VM {
     /// Evaluate given block with given `args`.
     pub fn eval_yield(&mut self, args: &Args) -> VMResult {
         let context = self.current_context().get_outermost();
-        let caller = context
-            .caller
-            .ok_or_else(|| RubyError::local_jump("No block given."))?;
+        /*let caller = context
+        .caller
+        .ok_or_else(|| RubyError::local_jump("No block given."))?;*/
         let block = context
             .block
             .as_ref()
             .ok_or_else(|| RubyError::local_jump("No block given."))?;
 
         match block {
-            Block::Method(method) => {
-                self.invoke_method(*method, caller.self_value, Some(caller), args)
+            Block::Method(method, ctx) => {
+                self.invoke_method(*method, ctx.self_value, Some(*ctx), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
         }
@@ -2510,7 +2494,7 @@ impl VM {
     ) -> VMResult {
         use MethodInfo::*;
         match &*methodref {
-            BuiltinFunc { func, .. } => self.invoke_native(func, self_val, args),
+            BuiltinFunc { func, name } => self.invoke_native(func, *name, self_val, args),
             AttrReader { id } => Self::invoke_getter(*id, self_val),
             AttrWriter { id } => Self::invoke_setter(*id, self_val, args[0]),
             RubyFunc { iseq } => {
@@ -2521,15 +2505,30 @@ impl VM {
     }
 
     // helper methods
-    fn invoke_native(&mut self, func: &BuiltinFunc, self_val: Value, args: &Args) -> VMResult {
+    fn invoke_native(
+        &mut self,
+        func: &BuiltinFunc,
+        _name: IdentId,
+        self_val: Value,
+        args: &Args,
+    ) -> VMResult {
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::EXTERN);
 
+        #[cfg(feature = "trace")]
+        {
+            print!("--->");
+            println!(" BuiltinFunc {:?}", _name);
+        }
         let len = self.temp_stack.len();
         self.temp_push(self_val);
         self.temp_push_args(args);
         let res = func(self, self_val, args);
         self.temp_stack.truncate(len);
+        #[cfg(feature = "trace")]
+        {
+            println!("<--- {:?}", res);
+        }
         res
     }
 
@@ -2727,9 +2726,8 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_proc(&mut self, block: &Block) -> VMResult {
         match block {
-            Block::Method(method) => {
-                //self.move_outer_to_heap();
-                let context = self.create_block_context(*method)?;
+            Block::Method(method, outer) => {
+                let context = self.create_block_context(*method, *outer)?;
                 Ok(Value::procobj(context))
             }
             Block::Proc(proc) => Ok(proc.dup()),
@@ -2740,9 +2738,8 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
-            Block::Method(method) => {
-                //self.move_outer_to_heap();
-                let mut context = self.create_block_context(*method)?;
+            Block::Method(method, outer) => {
+                let mut context = self.create_block_context(*method, *outer)?;
                 context.kind = ISeqKind::Method(IdentId::get_id(""));
                 Ok(Value::procobj(context))
             }
@@ -2779,62 +2776,61 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Some(Block::Method(*METHODREF_ENUM));
+        args.block = Some(Block::Method(*METHODREF_ENUM, self.current_context()));
         let fiber = self.create_enum_info(method_id, receiver, args);
         Ok(Value::enumerator(fiber))
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    fn move_outer_to_heap(&mut self) {
-        let context = self.current_context();
-        if !context.on_stack {
-            return;
-        };
-        let mut prev_ctx = context.dup();
-        prev_ctx.on_stack = false;
-        *self.exec_context.last_mut().unwrap() = prev_ctx;
-        let mut iter = self.exec_context.iter_mut().rev();
+    fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
+        //eprintln!("****moving...");
+        let mut stack_context = outer;
+        let mut prev_ctx: Option<ContextRef> = None;
         loop {
-            let context = match prev_ctx.outer {
-                Some(context) => context,
-                None => return,
+            if !stack_context.on_stack {
+                break;
             };
-            if !context.on_stack {
-                return;
+            let heap_context = stack_context.move_to_heap();
+            if let Some(mut ctx) = prev_ctx {
+                ctx.outer = Some(heap_context)
             };
-            let mut heap_context = context.dup();
-            heap_context.on_stack = false;
+            prev_ctx = Some(heap_context);
 
-            loop {
-                match iter.next() {
-                    Some(ctx) => {
-                        if *ctx == context {
-                            *ctx = heap_context;
-                            break;
-                        };
-                    }
-                    None => {
-                        eprintln!("warining illegal exec context.");
-                        break;
-                    }
-                };
-            }
-            prev_ctx.outer = Some(heap_context);
-            prev_ctx = heap_context;
+            stack_context = match heap_context.outer {
+                Some(context) => context,
+                None => break,
+            };
         }
+        for ctx in self.exec_context.iter_mut().rev() {
+            //ctx.dump();
+            if ctx.on_stack {
+                if let Some(heap) = ctx.moved_to_heap {
+                    *ctx = heap;
+                    //eprintln!("-- moved to heap.");
+                } else {
+                    //eprintln!("-- no move.");
+                }
+            } else {
+                //eprintln!("-- on heap.");
+                break;
+            }
+        }
+        outer.moved_to_heap.unwrap()
     }
 
     /// Create a new execution context for a block.
-    pub fn create_block_context(&mut self, method: MethodRef) -> Result<ContextRef, RubyError> {
-        self.move_outer_to_heap();
+    pub fn create_block_context(
+        &mut self,
+        method: MethodRef,
+        outer: ContextRef,
+    ) -> Result<ContextRef, RubyError> {
+        let outer = self.move_outer_to_heap(outer);
         let iseq = method.as_iseq();
-        let outer = self.current_context();
         Ok(ContextRef::new_heap(
             outer.self_value,
             None,
             iseq,
             Some(outer),
-            None,
         ))
     }
 

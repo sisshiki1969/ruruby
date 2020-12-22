@@ -9,7 +9,7 @@ pub struct RValue {
     pub kind: ObjKind,
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum ObjKind {
     Invalid,
     Ordinary,
@@ -30,89 +30,6 @@ pub enum ObjKind {
     Enumerator(Box<FiberInfo>),
     Time(TimeInfo),
     Exception(RubyError),
-}
-
-impl std::fmt::Debug for ObjKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ObjKind::Invalid => write!(f, "[Invalid]"),
-            ObjKind::Ordinary => write!(f, "Ordinary"),
-            ObjKind::String(rs) => write!(f, r#""{:?}""#, rs),
-            ObjKind::Integer(i) => write!(f, "{}", *i),
-            ObjKind::Float(i) => write!(f, "{}", *i),
-            ObjKind::Complex { r, i } => {
-                let (r, i) = (r.to_real().unwrap(), i.to_real().unwrap());
-                if !i.is_negative() {
-                    write!(f, "({:?}+{:?}i)", r, i)
-                } else {
-                    write!(f, "({:?}{:?}i)", r, i)
-                }
-            }
-            ObjKind::Class(cinfo) => match cinfo.name() {
-                Some(id) => write!(f, "{:?}", id),
-                None => write!(f, "#<Class:0x{:x}>", cinfo.id()),
-            },
-            ObjKind::Module(cinfo) => match cinfo.name() {
-                Some(id) => write!(f, "{:?}", id),
-                None => write!(f, "#<Module:0x{:x}>", cinfo.id()),
-            },
-            ObjKind::Array(aref) => {
-                if f.alternate() {
-                    write!(f, "[Array]")
-                } else {
-                    write!(f, "[")?;
-                    match aref.elements.len() {
-                        0 => {}
-                        1 => write!(f, "{:#?}", aref.elements[0])?,
-                        2 => write!(f, "{:#?}, {:#?}", aref.elements[0], aref.elements[1])?,
-                        3 => write!(
-                            f,
-                            "{:#?}, {:#?}, {:#?}",
-                            aref.elements[0], aref.elements[1], aref.elements[2]
-                        )?,
-                        4 => write!(
-                            f,
-                            "{:#?}, {:#?}, {:#?}, {:#?}",
-                            aref.elements[0], aref.elements[1], aref.elements[2], aref.elements[3]
-                        )?,
-                        n => write!(
-                            f,
-                            "{:#?}, {:#?}, {:#?}, {:#?}.. {} items",
-                            aref.elements[0],
-                            aref.elements[1],
-                            aref.elements[2],
-                            aref.elements[3],
-                            n
-                        )?,
-                    }
-                    write!(f, "]")
-                }
-            }
-            ObjKind::Hash(href) => {
-                write!(f, "{{")?;
-                let mut flag = false;
-                for (k, v) in href.iter() {
-                    if flag {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{:#?}=>{:#?}", k, v)?;
-                    flag = true;
-                }
-                write!(f, "}}")
-            }
-            ObjKind::Range(RangeInfo { start, end, .. }) => {
-                write!(f, "Range({:?}, {:?})", start, end)
-            }
-            ObjKind::Regexp(rref) => write!(f, "/{}/", rref.as_str()),
-            ObjKind::Splat(v) => write!(f, "Splat[{:#?}]", v),
-            ObjKind::Proc(_) => write!(f, "Proc"),
-            ObjKind::Method(_) => write!(f, "Method"),
-            ObjKind::Enumerator(_) => write!(f, "Enumerator"),
-            ObjKind::Fiber(_) => write!(f, "Fiber"),
-            ObjKind::Time(time) => write!(f, "{:?}", time),
-            ObjKind::Exception(err) => write!(f, "Exception {:?}", err),
-        }
-    }
 }
 
 impl GC for RValue {

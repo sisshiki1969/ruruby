@@ -6,7 +6,7 @@ const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
-    Method(MethodRef),
+    Method(MethodRef, ContextRef),
     Proc(Value),
 }
 
@@ -23,7 +23,7 @@ impl Block {
                     .iseq_ref
                     .unwrap()
             }
-            Block::Method(methodref) => methodref.as_iseq(),
+            Block::Method(methodref, _) => methodref.as_iseq(),
         }
     }
 }

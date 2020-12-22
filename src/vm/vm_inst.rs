@@ -513,7 +513,7 @@ impl Inst {
                 iseq.read16(pc + 5)
             ),
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF
-            | Inst::OPT_SEND_BLK | Inst::OPT_SEND_SELF_BLK => format!(
+            | Inst::OPT_SEND_BLK | Inst::OPT_SEND_SELF_BLK | Inst::OPT_NSEND_BLK | Inst::OPT_NSEND_SELF_BLK=> format!(
                 "{} '{}' {} items",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),

@@ -35,8 +35,7 @@ pub fn repl_vm() {
     let mut level = parser.get_context_depth();
     let method = MethodRef::new(MethodInfo::default());
     let info = ISeqInfo::default(method);
-    let context =
-        ContextRef::new_heap(vm.globals.main_object, None, ISeqRef::new(info), None, None);
+    let context = ContextRef::new_heap(vm.globals.main_object, None, ISeqRef::new(info), None);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline = rl.readline(&format!(
@@ -73,10 +72,7 @@ pub fn repl_vm() {
                 match vm.run_repl(parse_result, context) {
                     Ok(result) => {
                         parser.lexer.source_info = source_info;
-                        match vm.val_inspect(result) {
-                            Ok(inspect) => println!("=> {}", inspect),
-                            Err(err) => println!("Error occurs in result_val.inspect. {:?}", err),
-                        }
+                        println!("=> {:?}", result);
                     }
                     Err(err) => {
                         for (info, loc) in &err.info {

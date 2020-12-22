@@ -281,7 +281,8 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
     let method = vm.parse_program_eval(path, program)?;
     let args = Args::new0();
-    let res = vm.eval_block(&Block::Method(method), &args)?;
+    let outer = vm.current_context();
+    let res = vm.eval_block(&Block::Method(method, outer), &args)?;
     Ok(res)
 }
 
@@ -289,10 +290,11 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.block.is_some() {
         return Err(RubyError::argument("Curently, block is not allowed."));
     };
+    let outer = vm.current_context();
     let (method, new_args) = if args.len() == 0 {
         let method = IdentId::EACH;
         let mut new_args = Args::new0();
-        new_args.block = Some(Block::Method(*METHODREF_ENUM));
+        new_args.block = Some(Block::Method(*METHODREF_ENUM, outer));
         (method, new_args)
     } else {
         if !args[0].is_packed_symbol() {
@@ -303,7 +305,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         for i in 0..args.len() - 1 {
             new_args[i] = args[i + 1];
         }
-        new_args.block = Some(Block::Method(*METHODREF_ENUM));
+        new_args.block = Some(Block::Method(*METHODREF_ENUM, outer));
         (method, new_args)
     };
     let val = vm.create_enumerator(method, self_val, new_args)?;

@@ -54,12 +54,29 @@ end
 class SystemExit
 end
 
+class Encoding
+  UTF_8 = self.new
+  def self.default_external
+    UTF_8
+  end
+  def self.default_external=(val)
+  end
+  def self.default_internal
+    UTF_8
+  end
+  def self.default_internal=(val)
+  end
+end
+
 class Errno < StandardError
   class ENOENT; end;
   class ENOTDIR; end;
 end
 
 class FrozenError < RuntimeError
+end
+
+class ArgumentError < RuntimeError
 end
 
 class Module

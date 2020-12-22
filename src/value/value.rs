@@ -132,23 +132,7 @@ impl Default for Value {
 
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if !self.is_packed_value() {
-            write!(f, "{:?}", self.rvalue().kind)
-        } else if self.is_packed_fixnum() {
-            write!(f, "{}", self.as_packed_fixnum())
-        } else if self.is_packed_num() {
-            write!(f, "{}", self.as_packed_flonum())
-        } else if self.is_packed_symbol() {
-            write!(f, ":\"{:?}\"", self.as_packed_symbol())
-        } else {
-            match self.0 {
-                NIL_VALUE => write!(f, "Nil"),
-                TRUE_VALUE => write!(f, "True"),
-                FALSE_VALUE => write!(f, "False"),
-                UNINITIALIZED => write!(f, "[Uninitialized]"),
-                _ => write!(f, "[ILLEGAL]"),
-            }
-        }
+        write!(f, "{}", self.format(2))
     }
 }
 
@@ -195,6 +179,110 @@ impl Value {
                 UNINITIALIZED => RV::Uninitialized,
                 _ => unreachable!("Illegal packed value."),
             }
+        }
+    }
+
+    fn format(&self, level: usize) -> String {
+        match self.unpack() {
+            RV::Nil => format!("nil"),
+            RV::Bool(b) => {
+                if b {
+                    format!("true")
+                } else {
+                    format!("false")
+                }
+            }
+            RV::Uninitialized => "[Uninitialized]".to_string(),
+            RV::Integer(i) => format!("{}", i),
+            RV::Float(f) => format!("{}", f),
+            RV::Symbol(id) => format!(":\"{:?}\"", id),
+            RV::Object(rval) => match &rval.kind {
+                ObjKind::Invalid => format!("[Invalid]"),
+                ObjKind::Ordinary => format!("#<{}:0x{:x}>", self.get_class_name(), self.id()),
+                ObjKind::String(rs) => format!(r#""{:?}""#, rs),
+                ObjKind::Integer(i) => format!("{}", i),
+                ObjKind::Float(f) => format!("{}", f),
+                ObjKind::Complex { r, i } => {
+                    let (r, i) = (r.to_real().unwrap(), i.to_real().unwrap());
+                    if !i.is_negative() {
+                        format!("({:?}+{:?}i)", r, i)
+                    } else {
+                        format!("({:?}{:?}i)", r, i)
+                    }
+                }
+                ObjKind::Class(cinfo) => match cinfo.name() {
+                    Some(id) => format!("{:?}", id),
+                    None => format!("#<Class:0x{:x}>", cinfo.id()),
+                },
+                ObjKind::Module(cinfo) => match cinfo.name() {
+                    Some(id) => format!("{:?}", id),
+                    None => format!("#<Module:0x{:x}>", cinfo.id()),
+                },
+                ObjKind::Array(aref) => {
+                    if level == 0 {
+                        format!("[Array]")
+                    } else {
+                        let s = match aref.elements.len() {
+                            0 => String::new(),
+                            1 => format!("{}", aref.elements[0].format(level - 1)),
+                            2 => format!(
+                                "{}, {}",
+                                aref.elements[0].format(level - 1),
+                                aref.elements[1].format(level - 1)
+                            ),
+                            3 => format!(
+                                "{}, {}, {}",
+                                aref.elements[0].format(level - 1),
+                                aref.elements[1].format(level - 1),
+                                aref.elements[2].format(level - 1)
+                            ),
+                            4 => format!(
+                                "{}, {}, {}, {}",
+                                aref.elements[0].format(level - 1),
+                                aref.elements[1].format(level - 1),
+                                aref.elements[2].format(level - 1),
+                                aref.elements[3].format(level - 1)
+                            ),
+                            n => format!(
+                                "{}, {}, {}, {}.. {} items",
+                                aref.elements[0].format(level - 1),
+                                aref.elements[1].format(level - 1),
+                                aref.elements[2].format(level - 1),
+                                aref.elements[3].format(level - 1),
+                                n
+                            ),
+                        };
+                        format!("[{}]", s)
+                    }
+                }
+                ObjKind::Hash(href) => {
+                    if level == 0 {
+                        format!("[Hash]")
+                    } else {
+                        let mut s = String::new();
+                        let mut flag = false;
+                        for (k, v) in href.iter() {
+                            if flag {
+                                s += ", ";
+                            }
+                            s += &format!("{}=>{}", k.format(level - 1), v.format(level - 1));
+                            flag = true;
+                        }
+                        format!("{{{}}}", s)
+                    }
+                }
+                ObjKind::Range(RangeInfo { start, end, .. }) => {
+                    format!("Range({:?}, {:?})", start, end)
+                }
+                ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
+                ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
+                ObjKind::Proc(_) => format!("Proc"),
+                ObjKind::Method(_) => format!("Method"),
+                ObjKind::Enumerator(_) => format!("Enumerator"),
+                ObjKind::Fiber(_) => format!("Fiber"),
+                ObjKind::Time(time) => format!("{:?}", time),
+                ObjKind::Exception(err) => format!("Exception {:?}", err),
+            },
         }
     }
 
@@ -714,10 +802,7 @@ impl Value {
     pub fn as_module(&self) -> &ClassInfo {
         match self.if_mod_class() {
             Some(cinfo) => cinfo,
-            None => panic!(format!(
-                "as_module(): Not a class or module object. {:?}",
-                self
-            )),
+            None => panic!("as_module(): Not a class or module object. {:?}", self),
         }
     }
 
@@ -727,10 +812,7 @@ impl Value {
         let self_ = *self;
         match self.if_mut_mod_class() {
             Some(cinfo) => cinfo,
-            None => panic!(format!(
-                "as_mut_module(): Not a class or module object. {:?}",
-                self_
-            )),
+            None => panic!("as_mut_module(): Not a class or module object. {:?}", self_),
         }
     }
 
