@@ -52,13 +52,13 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     builtin::module::set_attr_accessor(&mut vm.globals, class_val, &attr_args)?;
 
     match &args.block {
-        Some(method) => {
+        Block::None => {}
+        method => {
             vm.class_push(class_val);
             let arg = Args::new1(class_val);
             vm.eval_block_self(method, class_val, &arg)?;
             vm.class_pop();
         }
-        None => {}
     };
     Ok(class_val)
 }

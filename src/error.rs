@@ -290,6 +290,13 @@ impl RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
     }
 
+    pub fn argument_wrong(given: usize, expected: usize) -> RubyError {
+        RubyError::argument(format!(
+            "Wrong number of arguments. (given {}, expected {})",
+            given, expected
+        ))
+    }
+
     pub fn regexp(err: fancy_regex::Error) -> RubyError {
         RubyError::new_runtime_err(
             RuntimeErrKind::Regexp,

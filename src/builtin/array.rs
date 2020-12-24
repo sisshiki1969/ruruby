@@ -70,6 +70,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("bsearch_index", bsearch_index);
 
     class.add_builtin_class_method("new", array_new);
+    class.add_builtin_class_method("[]", array_elem);
     class
 }
 
@@ -96,6 +97,13 @@ fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
         _ => unreachable!(),
     };
     let array = Value::array_from(array_vec);
+    Ok(array)
+}
+
+fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let array_vec = args.to_vec();
+    let mut array = Value::array_from(array_vec);
+    array.set_class(self_val);
     Ok(array)
 }
 
@@ -319,11 +327,11 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 macro_rules! to_enum_id {
     ($vm:ident, $self_val:ident, $args:ident, $id:expr) => {
         match &$args.block {
-            Some(method) => method,
-            None => {
+            Block::None => {
                 let val = $vm.create_enumerator($id, $self_val, $args.clone())?;
                 return Ok(val);
             }
+            block => block,
         }
     };
 }
@@ -331,11 +339,11 @@ macro_rules! to_enum_id {
 macro_rules! to_enum_str {
     ($vm:ident, $self_val:ident, $args:ident, $id:expr) => {
         match &$args.block {
-            Some(method) => method,
-            None => {
+            Block::None => {
                 let val = $vm.create_enumerator(IdentId::get_id($id), $self_val, $args.clone())?;
                 return Ok(val);
             }
+            block => block,
         }
     };
 }
@@ -359,7 +367,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let param_num = block.to_iseq().params.req;
     let mut arg = Args::new(param_num);
 
@@ -621,12 +629,12 @@ fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
     let mut set = std::collections::HashSet::new();
     match &args.block {
-        None => {
+        Block::None => {
             let aref = self_val.as_mut_array().unwrap();
             aref.elements.retain(|x| set.insert(HashKey(*x)));
             Ok(self_val)
         }
-        Some(block) => {
+        block => {
             let aref = self_val.as_mut_array().unwrap();
             let mut block_args = Args::new(1);
             aref.elements.retain(|x| {
@@ -724,7 +732,10 @@ fn drop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let aref = self_val.as_array().unwrap();
     let num = args[0].expect_integer("An argument must be Integer.")? as usize;
-    let ary = &aref.elements[num..aref.elements.len()];
+    if num >= aref.len() {
+        return Err(RubyError::argument(format!("An argument too big. {}", num)));
+    };
+    let ary = &aref.elements[num..];
     Ok(Value::array_from(ary.to_vec()))
 }
 
@@ -748,7 +759,8 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         ary.push(zip);
     }
     match &args.block {
-        Some(block) => {
+        Block::None => Ok(Value::array_from(ary)),
+        block => {
             let mut arg = Args::new(1);
             vm.temp_push_vec(&ary);
             for val in ary {
@@ -757,7 +769,6 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             Ok(Value::nil())
         }
-        None => Ok(Value::array_from(ary)),
     }
 }
 
@@ -765,7 +776,7 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let aref = self_val.as_array().unwrap();
     let ary = match &args.block {
-        None => aref
+        Block::None => aref
             .elements
             .iter()
             .filter_map(|x| match vm.eval_teq(*x, args[0]) {
@@ -773,7 +784,7 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 _ => None,
             })
             .collect(),
-        Some(_block) => vec![],
+        _ => unimplemented!(),
     };
     Ok(Value::array_from(ary))
 }
@@ -783,10 +794,10 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut ary = self_val.expect_array("Receiver")?.elements.clone();
     match &args.block {
-        None => {
+        Block::None => {
             vm.sort_array(&mut ary)?;
         }
-        Some(_block) => return Err(RubyError::argument("Currently, can not use block.")),
+        _ => return Err(RubyError::argument("Currently, can not use block.")),
     };
     Ok(Value::array_from(ary))
 }
@@ -798,14 +809,14 @@ fn uniq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut h: FxHashSet<HashKey> = FxHashSet::default();
     let mut v = vec![];
     match &args.block {
-        None => {
+        Block::None => {
             for elem in &aref.elements {
                 if h.insert(HashKey(*elem)) {
                     v.push(*elem);
                 };
             }
         }
-        Some(_block) => return Err(RubyError::argument("Currently, can not use block.")),
+        _ => return Err(RubyError::argument("Currently, can not use block.")),
     };
     Ok(Value::array_from(v))
 }
@@ -825,19 +836,22 @@ fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     args.check_args_num(0)?;
 
-    if let Some(method) = &args.block {
-        let mut args = Args::new(1);
-        for v in aref.elements.iter() {
-            args[0] = *v;
-            if vm.eval_block(method, &args)?.to_bool() {
-                return Ok(Value::true_val());
-            };
+    match &args.block {
+        Block::None => {
+            for v in aref.elements.iter() {
+                if v.to_bool() {
+                    return Ok(Value::true_val());
+                };
+            }
         }
-    } else {
-        for v in aref.elements.iter() {
-            if v.to_bool() {
-                return Ok(Value::true_val());
-            };
+        method => {
+            let mut args = Args::new(1);
+            for v in aref.elements.iter() {
+                args[0] = *v;
+                if vm.eval_block(method, &args)?.to_bool() {
+                    return Ok(Value::true_val());
+                };
+            }
         }
     }
     Ok(Value::false_val())
@@ -858,19 +872,22 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     args.check_args_num(0)?;
 
-    if let Some(method) = &args.block {
-        let mut args = Args::new(1);
-        for v in aref.elements.iter() {
-            args[0] = *v;
-            if !vm.eval_block(method, &args)?.to_bool() {
-                return Ok(Value::false_val());
-            };
+    match &args.block {
+        Block::None => {
+            for v in aref.elements.iter() {
+                if !v.to_bool() {
+                    return Ok(Value::false_val());
+                };
+            }
         }
-    } else {
-        for v in aref.elements.iter() {
-            if !v.to_bool() {
-                return Ok(Value::false_val());
-            };
+        method => {
+            let mut args = Args::new(1);
+            for v in aref.elements.iter() {
+                args[0] = *v;
+                if !vm.eval_block(method, &args)?.to_bool() {
+                    return Ok(Value::false_val());
+                };
+            }
         }
     }
     Ok(Value::true_val())
@@ -903,9 +920,9 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let block = match args.block.clone() {
-        Some(block) => block,
-        None => return Err(RubyError::argument("Currently, block is neccessory.")),
+    let block = match &args.block {
+        Block::None => return Err(RubyError::argument("Currently, block is neccessory.")),
+        block => block,
     };
     let ary = self_val.expect_array("").unwrap();
     let mut res = args[0];
@@ -913,7 +930,7 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     for elem in ary.elements.iter() {
         args[0] = res;
         args[1] = *elem;
-        res = vm.eval_block(&block, &args)?;
+        res = vm.eval_block(block, &args)?;
     }
     Ok(res)
 }
@@ -1097,6 +1114,18 @@ mod tests {
         assert [3,4,5], a[2,3]
         a[2,3] = 100
         assert [1,2,100,6,7], a
+        ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_bracket() {
+        let program = "
+        class MyArray < Array
+        end
+        a = MyArray[0,1,2]
+        assert(1, a[1])
+        assert(MyArray, a.class)
         ";
         assert_script(program);
     }

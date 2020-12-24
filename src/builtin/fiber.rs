@@ -15,18 +15,16 @@ pub fn init(globals: &mut Globals) -> Value {
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let context = match vm.expect_block(&args.block)? {
-        Block::Method(method, outer) => vm.create_block_context(*method, *outer)?,
+    let context = match args.expect_block()? {
+        Block::Block(method, outer) => vm.create_block_context(*method, *outer)?,
         Block::Proc(proc) => proc.expect_proc(vm)?.context,
+        _ => unreachable!(),
     };
     assert!(!context.on_stack);
     assert!(context.moved_to_heap == Some(context));
 
-    let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
-    let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-    let new_fiber = vm.create_fiber(tx0, rx1);
     //vm.globals.fibers.push(VMRef::from_ref(&new_fiber));
-    let val = Value::fiber(new_fiber, context, rx0, tx1);
+    let val = Value::fiber(vm, context);
     Ok(val)
 }
 
@@ -137,7 +135,7 @@ mod test2 {
     fn fiber_gc_test1() {
         let program = r#"
         10000.times do |x|
-        f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
         end
         "#;
         assert_script(program);
@@ -147,7 +145,7 @@ mod test2 {
     fn fiber_gc_test2() {
         let program = r#"
         10000.times do |x|
-        f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
             f.resume
         end
         "#;

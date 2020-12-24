@@ -306,12 +306,7 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = vm.current_context();
     match &args.block {
-        Some(block) => {
-            args.check_args_num(0)?;
-            let args = Args::new0();
-            vm.eval_block_self(block, self_val, &args)
-        }
-        None => {
+        Block::None => {
             args.check_args_num(1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string("1st arg")?;
@@ -321,6 +316,11 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let res = vm.invoke_method(method, self_val, Some(context), &args);
             vm.class_pop();
             res
+        }
+        block => {
+            args.check_args_num(0)?;
+            let args = Args::new0();
+            vm.eval_block_self(block, self_val, &args)
         }
     }
 }

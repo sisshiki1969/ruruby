@@ -96,10 +96,7 @@ fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let method = match &args.block {
-        Some(block) => block,
-        None => return Err(RubyError::argument("assert_error(): Block not given.")),
-    };
+    let method = args.expect_block()?;
     match vm.eval_block(method, &Args::new0()) {
         Ok(val) => Err(RubyError::argument(format!(
             "Assertion error: No error occured. returned {:?}",
@@ -283,7 +280,7 @@ fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
 }
 
 fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let arg = Args::new0();
     loop {
         let res = vm.eval_block(&block, &arg);
@@ -348,14 +345,14 @@ fn sleep(_: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn proc(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let procobj = vm.create_proc(block)?;
     Ok(procobj)
 }
 
 fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let procobj = vm.create_lambda(block)?;
     Ok(procobj)
 }

@@ -222,7 +222,7 @@ impl VM {
     pub fn temp_push_args(&mut self, args: &Args) {
         self.temp_stack.extend_from_slice(args);
         self.temp_stack.push(args.kw_arg);
-        if let Some(Block::Proc(val)) = args.block {
+        if let Block::Proc(val) = args.block {
             self.temp_stack.push(val)
         }
     }
@@ -1002,7 +1002,7 @@ impl VM {
                 Inst::CREATE_PROC => {
                     let method = iseq.read_methodref(self.pc + 1);
                     let ctx = self.current_context();
-                    let proc_obj = self.create_proc(&Block::Method(method, ctx))?;
+                    let proc_obj = self.create_proc(&Block::Block(method, ctx))?;
                     self.stack_push(proc_obj);
                     self.pc += 9;
                 }
@@ -1334,19 +1334,19 @@ impl VM {
 
         let block = if block != 0 {
             let method = MethodRef::from_u64(block);
-            Some(Block::Method(method, self.current_context()))
+            Block::Block(method, self.current_context())
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop()?;
             if val.is_nil() {
-                None
+                Block::None
             } else {
                 if val.as_proc().is_none() {
                     return Err(RubyError::internal(format!("Must be Proc. {:?}", val)));
                 }
-                Some(Block::Proc(val))
+                Block::Proc(val)
             }
         } else {
-            None
+            Block::None
         };
         let mut args = self.pop_args_to_args(args_num as usize);
         args.block = block;
@@ -1372,49 +1372,36 @@ impl VM {
             Some(method) => match &*method {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(arg_slice);
-                    args.block = Some(Block::Method(block, self.current_context()));
+                    args.block = Block::Block(block, self.current_context());
                     self.set_stack_len(len - args_num);
                     self.invoke_native(func, *name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 0)",
-                            args_num
-                        )));
+                        return Err(RubyError::argument_wrong(args_num, 0));
                     }
                     Self::invoke_getter(*id, receiver)
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 1)",
-                            args_num
-                        )));
+                        return Err(RubyError::argument_wrong(args_num, 1));
                     }
                     Self::invoke_setter(*id, receiver, self.stack_pop()?)
                 }
                 MethodInfo::RubyFunc { iseq } => {
+                    let block = Block::Block(block, self.current_context());
                     if iseq.opt_flag {
-                        let mut context = Context::new(
-                            receiver,
-                            Some(Block::Method(block, self.current_context())),
-                            *iseq,
-                            None,
-                        );
+                        let mut context = Context::new(receiver, block, *iseq, None);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
-                            return Err(RubyError::argument(format!(
-                                "Wrong number of arguments. (given {}, expected {})",
-                                args_num, req_len
-                            )));
+                            return Err(RubyError::argument_wrong(args_num, req_len));
                         };
                         context.copy_from_slice0(arg_slice);
                         self.set_stack_len(len - args_num);
                         self.run_context(&context)
                     } else {
                         let mut args = Args::from_slice(arg_slice);
-                        args.block = Some(Block::Method(block, self.current_context()));
+                        args.block = block;
                         self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
                         let res = self.run_context(&context);
@@ -1424,7 +1411,7 @@ impl VM {
             },
             None => {
                 let mut args = Args::from_slice(arg_slice);
-                args.block = Some(Block::Method(block, self.current_context()));
+                args.block = Block::Block(block, self.current_context());
                 self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
@@ -1451,31 +1438,22 @@ impl VM {
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 0)",
-                            args_num
-                        )));
+                        return Err(RubyError::argument_wrong(args_num, 0));
                     }
                     Self::invoke_getter(*id, receiver)
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
-                        return Err(RubyError::argument(format!(
-                            "Wrong number of arguments. (given {}, expected 1)",
-                            args_num
-                        )));
+                        return Err(RubyError::argument_wrong(args_num, 1));
                     }
                     Self::invoke_setter(*id, receiver, self.stack_pop()?)
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     if iseq.opt_flag {
-                        let mut context = Context::new(receiver, None, *iseq, None);
+                        let mut context = Context::new(receiver, Block::None, *iseq, None);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
-                            return Err(RubyError::argument(format!(
-                                "Wrong number of arguments. (given {}, expected {})",
-                                args_num, req_len
-                            )));
+                            return Err(RubyError::argument_wrong(args_num, req_len));
                         };
                         context.copy_from_slice0(arg_slice);
                         self.set_stack_len(len - args_num);
@@ -1494,15 +1472,6 @@ impl VM {
                 self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
-        }
-    }
-}
-
-impl<'a> VM {
-    pub fn expect_block(&self, block: &'a Option<Block>) -> Result<&'a Block, RubyError> {
-        match block {
-            Some(block) => Ok(block),
-            None => return Err(RubyError::argument("Currently, needs block.")),
         }
     }
 }
@@ -2113,6 +2082,9 @@ impl VM {
     }
 
     pub fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
+        if rhs.id() == lhs.id() {
+            return Ok(Value::integer(0));
+        };
         let res = match lhs.unpack() {
             RV::Integer(lhs) => match rhs.unpack() {
                 RV::Integer(rhs) => lhs.partial_cmp(&rhs),
@@ -2125,8 +2097,7 @@ impl VM {
                 _ => return Ok(Value::nil()),
             },
             _ => {
-                let id = IdentId::get_id("<=>");
-                return self.fallback_for_binop(id, lhs, rhs);
+                return self.fallback_for_binop(IdentId::_CMP, lhs, rhs);
             }
         };
         match res {
@@ -2411,17 +2382,18 @@ impl VM {
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
-            Block::Method(method, outer) => {
+            Block::Block(method, outer) => {
                 self.invoke_method(*method, outer.self_value, Some(*outer), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
+            _ => unreachable!(),
         }
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block_self(&mut self, block: &Block, self_val: Value, args: &Args) -> VMResult {
         match block {
-            Block::Method(method, outer) => {
+            Block::Block(method, outer) => {
                 self.invoke_method(*method, self_val, Some(*outer), args)
             }
             Block::Proc(proc) => {
@@ -2438,25 +2410,19 @@ impl VM {
                 )?;
                 self.run_context(&context)
             }
+            _ => unreachable!(),
         }
     }
 
     /// Evaluate given block with given `args`.
     pub fn eval_yield(&mut self, args: &Args) -> VMResult {
         let context = self.current_context().get_outermost();
-        /*let caller = context
-        .caller
-        .ok_or_else(|| RubyError::local_jump("No block given."))?;*/
-        let block = context
-            .block
-            .as_ref()
-            .ok_or_else(|| RubyError::local_jump("No block given."))?;
-
-        match block {
-            Block::Method(method, ctx) => {
+        match &context.block {
+            Block::Block(method, ctx) => {
                 self.invoke_method(*method, ctx.self_value, Some(*ctx), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
+            Block::None => return Err(RubyError::local_jump("No block given.")),
         }
     }
 
@@ -2482,6 +2448,7 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         use MethodInfo::*;
+        let outer = outer.map(|ctx| ctx.get_current());
         match &*methodref {
             BuiltinFunc { func, name } => self.invoke_native(func, *name, self_val, args),
             AttrReader { id } => Self::invoke_getter(*id, self_val),
@@ -2715,11 +2682,12 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_proc(&mut self, block: &Block) -> VMResult {
         match block {
-            Block::Method(method, outer) => {
+            Block::Block(method, outer) => {
                 let context = self.create_block_context(*method, *outer)?;
                 Ok(Value::procobj(context))
             }
             Block::Proc(proc) => Ok(proc.dup()),
+            _ => unreachable!(),
         }
     }
 
@@ -2727,12 +2695,13 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
-            Block::Method(method, outer) => {
+            Block::Block(method, outer) => {
                 let mut context = self.create_block_context(*method, *outer)?;
                 context.kind = ISeqKind::Method(IdentId::get_id(""));
                 Ok(Value::procobj(context))
             }
             Block::Proc(proc) => Ok(proc.dup()),
+            _ => unreachable!(),
         }
     }
 
@@ -2765,23 +2734,34 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Some(Block::Method(*METHODREF_ENUM, self.current_context()));
+        args.block = Block::Block(*METHODREF_ENUM, self.current_context());
         let fiber = self.create_enum_info(method_id, receiver, args);
         Ok(Value::enumerator(fiber))
     }
 
     /// Move outer execution contexts on the stack to the heap.
     fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
-        //eprintln!("****moving...");
         let mut stack_context = outer;
         let mut prev_ctx: Option<ContextRef> = None;
+        let mut iter = self.exec_context.iter_mut().rev();
         loop {
             if !stack_context.on_stack {
                 break;
             };
             let heap_context = stack_context.move_to_heap();
+            loop {
+                match iter.next() {
+                    None => unreachable!("not found."),
+                    Some(ctx) if *ctx == stack_context => {
+                        assert!(ctx.on_stack);
+                        *ctx = heap_context;
+                        break;
+                    }
+                    _ => {}
+                }
+            }
             if let Some(mut ctx) = prev_ctx {
-                ctx.outer = Some(heap_context)
+                (*ctx).outer = Some(heap_context)
             };
             prev_ctx = Some(heap_context);
 
@@ -2790,20 +2770,8 @@ impl VM {
                 None => break,
             };
         }
-        for ctx in self.exec_context.iter_mut().rev() {
-            //ctx.dump();
-            if ctx.on_stack {
-                if let Some(heap) = ctx.moved_to_heap {
-                    *ctx = heap;
-                    //eprintln!("-- moved to heap.");
-                } else {
-                    //eprintln!("-- no move.");
-                }
-            } else {
-                //eprintln!("-- on heap.");
-                break;
-            }
-        }
+        //eprintln!("****moved.");
+
         outer.moved_to_heap.unwrap()
     }
 
@@ -2817,7 +2785,7 @@ impl VM {
         let iseq = method.as_iseq();
         Ok(ContextRef::new_heap(
             outer.self_value,
-            None,
+            Block::None,
             iseq,
             Some(outer),
         ))

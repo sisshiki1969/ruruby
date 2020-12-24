@@ -6,7 +6,7 @@ const LVAR_ARRAY_SIZE: usize = 4;
 #[derive(Debug, Clone)]
 pub struct Context {
     pub self_value: Value,
-    pub block: Option<Block>,
+    pub block: Block,
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
     pub iseq_ref: Option<ISeqRef>,
@@ -69,12 +69,8 @@ impl Into<ContextRef> for &Context {
 
 impl GC for Context {
     fn mark(&self, alloc: &mut Allocator) {
-        if self.on_stack {
-            if let Some(heap) = self.moved_to_heap {
-                eprintln!("Warining: ref to stack for heap-allocated context.");
-                heap.mark(alloc);
-                return;
-            }
+        if let (true, Some(_heap)) = (self.on_stack, self.moved_to_heap) {
+            panic!("Warining: ref to stack for heap-allocated context.");
         }
         self.self_value.mark(alloc);
         match self.iseq_ref {
@@ -86,9 +82,9 @@ impl GC for Context {
             None => {}
         }
         match self.block {
-            Some(Block::Proc(proc)) => proc.mark(alloc),
-            Some(Block::Method(_, outer)) => outer.mark(alloc),
-            None => {}
+            Block::Proc(proc) => proc.mark(alloc),
+            Block::Block(_, outer) => outer.get_current().mark(alloc),
+            Block::None => {}
         }
         match self.outer {
             Some(c) => c.mark(alloc),
@@ -100,7 +96,7 @@ impl GC for Context {
 impl Context {
     pub fn new(
         self_value: Value,
-        block: Option<Block>,
+        block: Block,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
     ) -> Self {
@@ -126,7 +122,7 @@ impl Context {
     pub fn new_noiseq() -> Self {
         Context {
             self_value: Value::nil(),
-            block: None,
+            block: Block::None,
             lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
             lvar_vec: vec![],
             iseq_ref: None,
@@ -139,8 +135,8 @@ impl Context {
 
     pub fn dump(&self) {
         println!(
-            "  context:{:?} on_stack:{:?} moved_to:{:?}",
-            self as *const Context, self.on_stack, self.moved_to_heap
+            "  context:{:?} on_stack:{:?} moved_to:{:?} outer:{:?}",
+            self as *const Context, self.on_stack, self.moved_to_heap, self.outer
         );
         println!("  self: {:#?}", self.self_value);
         match self.iseq_ref {
@@ -261,12 +257,12 @@ impl Context {
         };
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match &args.block {
-                Some(Block::Method(method, ctx)) => {
+                Block::Block(method, ctx) => {
                     let proc_context = vm.create_block_context(*method, *ctx)?;
                     Value::procobj(proc_context)
                 }
-                Some(Block::Proc(proc)) => *proc,
-                None => Value::nil(),
+                Block::Proc(proc) => *proc,
+                Block::None => Value::nil(),
             }
         }
         Ok(context)
@@ -366,7 +362,7 @@ impl Context {
 impl ContextRef {
     pub fn new_heap(
         self_value: Value,
-        block: Option<Block>,
+        block: Block,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
     ) -> Self {
@@ -375,6 +371,13 @@ impl ContextRef {
         let mut ctxref = ContextRef::new(context);
         ctxref.moved_to_heap = Some(ctxref);
         ctxref
+    }
+
+    pub fn get_current(self) -> Self {
+        match self.moved_to_heap {
+            None => self,
+            Some(heap) => heap,
+        }
     }
 
     pub fn move_to_heap(mut self) -> Self {

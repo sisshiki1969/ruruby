@@ -6,8 +6,9 @@ const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
-    Method(MethodRef, ContextRef),
+    Block(MethodRef, ContextRef),
     Proc(Value),
+    None,
 }
 
 impl Block {
@@ -23,14 +24,23 @@ impl Block {
                     .iseq_ref
                     .unwrap()
             }
-            Block::Method(methodref, _) => methodref.as_iseq(),
+            Block::Block(methodref, _) => methodref.as_iseq(),
+            Block::None => unreachable!(),
         }
+    }
+
+    pub fn is_none(&self) -> bool {
+        *self == Block::None
+    }
+
+    pub fn is_some(&self) -> bool {
+        !self.is_none()
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Args {
-    pub block: Option<Block>,
+    pub block: Block,
     pub kw_arg: Value,
     elems: SmallVec<[Value; ARG_ARRAY_SIZE]>,
 }
@@ -38,7 +48,7 @@ pub struct Args {
 impl Args {
     pub fn new(len: usize) -> Self {
         Args {
-            block: None,
+            block: Block::None,
             kw_arg: Value::nil(),
             elems: smallvec![Value::nil(); len],
         }
@@ -50,7 +60,7 @@ impl Args {
 
     pub fn from_slice(data: &[Value]) -> Self {
         Args {
-            block: None,
+            block: Block::None,
             kw_arg: Value::nil(),
             elems: SmallVec::from_slice(data),
         }
@@ -58,7 +68,7 @@ impl Args {
 
     pub fn new0() -> Self {
         Args {
-            block: None,
+            block: Block::None,
             kw_arg: Value::nil(),
             elems: smallvec![],
         }
@@ -66,7 +76,7 @@ impl Args {
 
     pub fn new1(arg: Value) -> Self {
         Args {
-            block: None,
+            block: Block::None,
             kw_arg: Value::nil(),
             elems: smallvec![arg],
         }
@@ -74,13 +84,13 @@ impl Args {
 
     pub fn new2(arg0: Value, arg1: Value) -> Self {
         Args {
-            block: None,
+            block: Block::None,
             kw_arg: Value::nil(),
             elems: smallvec![arg0, arg1],
         }
     }
 
-    pub fn new3(block: impl Into<Option<Block>>, arg0: Value, arg1: Value, arg2: Value) -> Self {
+    pub fn new3(block: impl Into<Block>, arg0: Value, arg1: Value, arg2: Value) -> Self {
         Args {
             block: block.into(),
             kw_arg: Value::nil(),
@@ -146,6 +156,13 @@ impl Args {
                 "Wrong number of arguments. (given {}, expected {}+)",
                 len, min
             )))
+        }
+    }
+
+    pub fn expect_block(&self) -> Result<&Block, RubyError> {
+        match &self.block {
+            Block::None => return Err(RubyError::argument("Currently, needs block.")),
+            block => Ok(block),
         }
     }
 }
@@ -226,7 +243,7 @@ mod tests {
     #[test]
     fn args3() {
         let args = Args::new3(
-            None,
+            Block::None,
             Value::integer(0),
             Value::integer(1),
             Value::integer(2),

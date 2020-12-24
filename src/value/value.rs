@@ -1,6 +1,6 @@
 use crate::*;
 use std::borrow::Cow;
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc;
 
 const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
@@ -1242,13 +1242,11 @@ impl Value {
         RValue::new_method(MethodObjInfo::new(name, receiver, method)).pack()
     }
 
-    pub fn fiber(
-        vm: VM,
-        context: ContextRef,
-        rec: Receiver<VMResult>,
-        tx: SyncSender<FiberMsg>,
-    ) -> Self {
-        RValue::new_fiber(vm, context, rec, tx).pack()
+    pub fn fiber(parent_vm: &mut VM, context: ContextRef) -> Self {
+        let (tx0, rx0) = mpsc::sync_channel(0);
+        let (tx1, rx1) = mpsc::sync_channel(0);
+        let new_fiber = parent_vm.create_fiber(tx0, rx1);
+        RValue::new_fiber(new_fiber, context, rx0, tx1).pack()
     }
 
     pub fn enumerator(fiber: FiberInfo) -> Self {

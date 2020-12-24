@@ -4,6 +4,8 @@ pub fn init(globals: &mut Globals) {
     let mut basic_object = globals.builtins.object.superclass().unwrap();
     let basic_class = basic_object.as_mut_class();
     basic_class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
+    basic_class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);
+    basic_class.add_builtin_method_by_str("__id__", basicobject_id);
 }
 
 /// An alias statement is compiled to method call for this func.
@@ -37,6 +39,25 @@ fn alias_method(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
+fn method_missing(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_min(1)?;
+    let method_id = match args[0].as_symbol() {
+        Some(id) => id,
+        None => {
+            return Err(RubyError::argument(format!(
+                "1st arg for method_missing must be symbol. {:?}",
+                args[0]
+            )))
+        }
+    };
+    Err(RubyError::undefined_method(method_id, self_val))
+}
+
+fn basicobject_id(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    Ok(Value::integer(self_val.id() as i64))
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -56,6 +77,24 @@ mod test {
         assert 42, boo
         assert 42, bee
         assert 42, bzz
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn method_missing() {
+        let program = r#"
+        assert_error {4.a}
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn basicobject_id() {
+        let program = r#"
+        assert 11, 5.__id__
+        assert true, 5.__id__ == 5.__id__
+        assert false, "ruby".__id__ == "ruby".__id__
         "#;
         assert_script(program);
     }

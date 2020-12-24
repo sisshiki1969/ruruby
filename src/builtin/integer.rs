@@ -159,13 +159,13 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let method = match &args.block {
-        Some(method) => method,
-        None => {
+    let block = match &args.block {
+        Block::None => {
             let id = IdentId::get_id("times");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
+        method => method,
     };
     let num = self_val.as_integer().unwrap();
     if num < 1 {
@@ -174,7 +174,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut arg = Args::new(1);
     for i in 0..num {
         arg[0] = Value::integer(i);
-        vm.eval_block(method, &arg)?;
+        vm.eval_block(block, &arg)?;
     }
     Ok(self_val)
 }
@@ -182,12 +182,12 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let method = match &args.block {
-        Some(method) => method,
-        None => {
+        Block::None => {
             let id = IdentId::get_id("upto");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
+        method => method,
     };
     let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer("Arg")?;
@@ -204,12 +204,12 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     let method = match &args.block {
-        Some(method) => method,
-        None => {
+        Block::None => {
             let id = IdentId::get_id("step");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
+        method => method,
     };
     let start = self_val.expect_integer("Start")?;
     let limit = args[0].expect_integer("Limit")?;

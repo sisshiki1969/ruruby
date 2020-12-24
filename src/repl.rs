@@ -35,7 +35,12 @@ pub fn repl_vm() {
     let mut level = parser.get_context_depth();
     let method = MethodRef::new(MethodInfo::default());
     let info = ISeqInfo::default(method);
-    let context = ContextRef::new_heap(vm.globals.main_object, None, ISeqRef::new(info), None);
+    let context = ContextRef::new_heap(
+        vm.globals.main_object,
+        Block::None,
+        ISeqRef::new(info),
+        None,
+    );
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline = rl.readline(&format!(

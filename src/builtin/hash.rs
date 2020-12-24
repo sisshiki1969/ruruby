@@ -92,7 +92,7 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = self_val.as_hash().unwrap();
-    let method = vm.expect_block(&args.block)?;
+    let method = args.expect_block()?;
     let mut res = FxHashMap::default();
     let mut arg = Args::new(2);
     for (k, v) in hash.iter() {
@@ -142,7 +142,7 @@ fn values(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let mut arg = Args::new(1);
     for (_, v) in hash.iter() {
         arg[0] = v;
@@ -155,7 +155,7 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let mut arg = Args::new(1);
 
     for (k, _) in hash.iter() {
@@ -169,7 +169,7 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let mut arg = Args::new(2);
 
     for (k, v) in hash.iter() {
@@ -203,8 +203,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => {
             match &args.block {
                 // TODO: If arg[1] exists, Should warn "block supersedes default value argument".
-                Some(block) => vm.eval_block(block, &Args::new1(key))?,
-                None => {
+                Block::None => {
                     if args.len() == 2 {
                         args[1]
                     } else {
@@ -212,6 +211,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                         return Err(RubyError::argument("Key not found."));
                     }
                 }
+                block => vm.eval_block(block, &Args::new1(key))?,
             }
         }
     };

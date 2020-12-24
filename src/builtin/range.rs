@@ -128,7 +128,7 @@ fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new(1);
@@ -146,7 +146,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new(1);
@@ -171,13 +171,13 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let method = match &args.block {
-        Some(method) => method,
-        None => {
+        Block::None => {
             // return Enumerator
             let id = IdentId::EACH;
             let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
+        method => method,
     };
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
@@ -191,7 +191,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
-    let block = vm.expect_block(&args.block)?;
+    let block = args.expect_block()?;
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {

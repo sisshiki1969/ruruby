@@ -429,7 +429,7 @@ fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         let replace = arg1.expect_string("2nd arg")?;
         RegexpInfo::replace_one(vm, args[0], given, replace)?
     } else {
-        let block = vm.expect_block(&args.block)?;
+        let block = args.expect_block()?;
         let (res, _) = RegexpInfo::replace_one_block(vm, args[0], given, &block)?;
         res
     };
@@ -450,17 +450,17 @@ fn gsub_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args) -> Result<(String, bool), RubyError> {
     match &args.block {
-        Some(block) => {
-            args.check_args_num(1)?;
-            let given = self_val.expect_string("Receiver")?;
-            RegexpInfo::replace_all_block(vm, args[0], given, block)
-        }
-        None => {
+        Block::None => {
             args.check_args_num(2)?;
             let given = self_val.expect_string("Receiver")?;
             let mut arg1 = args[1];
             let replace = arg1.expect_string("2nd arg")?;
             RegexpInfo::replace_all(vm, args[0], given, replace)
+        }
+        block => {
+            args.check_args_num(1)?;
+            let given = self_val.expect_string("Receiver")?;
+            RegexpInfo::replace_all_block(vm, args[0], given, block)
         }
     }
 }
@@ -477,7 +477,8 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         return Err(RubyError::argument("1st arg must be RegExp or String."));
     };
     match &args.block {
-        Some(block) => {
+        Block::None => Ok(Value::array_from(vec)),
+        block => {
             vm.temp_push_vec(&vec);
             for arg in vec {
                 match arg.as_array() {
@@ -493,7 +494,6 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             }
             Ok(self_val)
         }
-        None => Ok(Value::array_from(vec)),
     }
 }
 
@@ -614,8 +614,8 @@ fn str_match(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
     };
     match &args.block {
-        Some(block) => RegexpInfo::match_one_block(vm, &re, given, block, pos),
-        None => RegexpInfo::match_one(vm, &re, given, pos),
+        Block::None => RegexpInfo::match_one(vm, &re, given, pos),
+        block => RegexpInfo::match_one_block(vm, &re, given, block, pos),
     }
 }
 
@@ -639,7 +639,15 @@ fn size(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     match &args.block {
-        Some(block) => {
+        Block::None => {
+            let bytes = self_val.expect_bytes("Receiver")?;
+            let mut ary = vec![];
+            for b in bytes {
+                ary.push(Value::integer(*b as i64));
+            }
+            Ok(Value::array_from(ary))
+        }
+        block => {
             let rstr = match self_val.as_rstring() {
                 Some(rstr) => rstr,
                 None => return Err(RubyError::argument("Receiver must be String.")),
@@ -650,23 +658,12 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             Ok(self_val)
         }
-        None => {
-            let bytes = self_val.expect_bytes("Receiver")?;
-            let mut ary = vec![];
-            for b in bytes {
-                ary.push(Value::integer(*b as i64));
-            }
-            Ok(Value::array_from(ary))
-        }
     }
 }
 
 fn each_byte(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let block = match &args.block {
-        Some(block) => block,
-        None => return Err(RubyError::argument("Block is neccessary.")),
-    };
+    let block = args.expect_block()?;
     let rstr = match self_val.as_rstring() {
         Some(rstr) => rstr,
         None => return Err(RubyError::argument("Receiver must be String.")),
@@ -690,10 +687,7 @@ fn chars(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn each_char(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let block = match &args.block {
-        Some(block) => block,
-        None => return Err(RubyError::argument("Block is neccessary.")),
-    };
+    let block = args.expect_block()?;
     let chars = self_val.expect_string("Receiver")?;
     for c in chars.chars() {
         let char = Value::string(c.to_string());
