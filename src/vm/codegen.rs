@@ -2040,8 +2040,8 @@ impl Codegen {
                 }
             }
             NodeKind::AliasMethod(new, old) => {
-                iseq.gen_symbol(new);
-                iseq.gen_symbol(old);
+                self.gen(globals, iseq, *new, true)?;
+                self.gen(globals, iseq, *old, true)?;
                 self.gen_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
             }
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),

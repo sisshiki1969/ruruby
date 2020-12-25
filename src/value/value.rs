@@ -412,7 +412,7 @@ impl Value {
                 } else if self.is_packed_num() {
                     BuiltinClass::float()
                 } else if self.is_packed_symbol() {
-                    BuiltinClass::object()
+                    BuiltinClass::symbol()
                 } else {
                     BuiltinClass::object()
                 }
@@ -431,7 +431,7 @@ impl Value {
                 } else if self.is_packed_num() {
                     BuiltinClass::float()
                 } else if self.is_packed_symbol() {
-                    BuiltinClass::object()
+                    BuiltinClass::symbol()
                 } else {
                     BuiltinClass::object()
                 }

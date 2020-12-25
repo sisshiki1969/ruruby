@@ -64,6 +64,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("index", find_index);
 
     class.add_builtin_method_by_str("reject", reject);
+    class.add_builtin_method_by_str("find", find);
+    class.add_builtin_method_by_str("detect", find);
     class.add_builtin_method_by_str("select", select);
     class.add_builtin_method_by_str("filter", select);
     class.add_builtin_method_by_str("bsearch", bsearch);
@@ -990,6 +992,20 @@ fn select(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
+fn find(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let ary = self_val.as_mut_array().unwrap();
+    let block = to_enum_str!(vm, self_val, args, "find");
+    let mut args = Args::new(1);
+    for elem in ary.elements.iter() {
+        args[0] = *elem;
+        if vm.eval_block(&block, &args)?.to_bool() {
+            return Ok(*elem);
+        };
+    }
+    Ok(Value::nil())
+}
+
 fn binary_search(
     vm: &mut VM,
     ary: &mut ArrayInfo,
@@ -1494,6 +1510,15 @@ mod tests {
     fn select() {
         let program = r#"
         assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select {|i| i % 2 != 0 }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn find() {
+        let program = r#"
+        assert 3, [1, 2, 3, 4, 5].find {|i| i % 3 == 0 }
+        assert nil, [2, 2, 2, 2, 2].find {|i| i % 3 == 0 }
         "#;
         assert_script(program);
     }

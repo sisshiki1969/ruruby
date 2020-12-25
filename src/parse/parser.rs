@@ -1425,21 +1425,20 @@ impl Parser {
         Ok(Some(Box::new(node)))
     }
 
-    fn alias_name(&mut self) -> Result<IdentId, RubyError> {
+    fn alias_name(&mut self) -> Result<Node, RubyError> {
         if self.consume_punct_no_term(Punct::Colon)? {
-            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
-                Ok(id)
-            } else {
-                unreachable!("parse_symbol() returned illegal node type.")
-            }
+            self.parse_symbol()
         } else if let TokenKind::GlobalVar(_) = self.peek_no_term()?.kind {
             let tok = self.get()?;
-            match tok.kind {
-                TokenKind::GlobalVar(name) => Ok(IdentId::get_id(name)),
+            match &tok.kind {
+                TokenKind::GlobalVar(name) => Ok(Node::new_symbol(IdentId::get_id(name), tok.loc)),
                 _ => unreachable!(),
             }
         } else {
-            self.parse_method_def_name()
+            Ok(Node::new_symbol(
+                self.parse_method_def_name()?,
+                self.prev_loc(),
+            ))
         }
     }
 

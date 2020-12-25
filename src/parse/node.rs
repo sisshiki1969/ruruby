@@ -112,7 +112,7 @@ pub enum NodeKind {
     },
 
     Defined(Box<Node>),
-    AliasMethod(IdentId, IdentId), // (new_method, old_method)
+    AliasMethod(Box<Node>, Box<Node>), // (new_method, old_method)
 }
 
 pub type FormalParam = Annot<ParamKind>;
@@ -373,8 +373,8 @@ impl Node {
         Node::new(NodeKind::Defined(Box::new(node)), loc)
     }
 
-    pub fn new_alias(new: IdentId, old: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::AliasMethod(new, old), loc)
+    pub fn new_alias(new: Node, old: Node, loc: Loc) -> Self {
+        Node::new(NodeKind::AliasMethod(Box::new(new), Box::new(old)), loc)
     }
 
     pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {
