@@ -142,7 +142,7 @@ impl Context {
         match self.iseq_ref {
             Some(iseq_ref) => {
                 for i in 0..iseq_ref.lvars {
-                    let id = LvarId::from_usize(i);
+                    let id = i.into();
                     let (k, _) = iseq_ref
                         .lvar
                         .table()

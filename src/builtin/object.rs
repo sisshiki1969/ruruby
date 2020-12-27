@@ -293,8 +293,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let outer = vm.current_context();
     let (method, new_args) = if args.len() == 0 {
         let method = IdentId::EACH;
-        let mut new_args = Args::new0();
-        new_args.block = Block::Block(*METHODREF_ENUM, outer);
+        let new_args = Args::new0_block(Block::Block(*METHODREF_ENUM, outer));
         (method, new_args)
     } else {
         if !args[0].is_packed_symbol() {

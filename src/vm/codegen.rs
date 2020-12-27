@@ -215,10 +215,7 @@ impl Codegen {
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
-            None => panic!(format!(
-                "CodeGen: Illegal LvarId in gen_set_local(). id:{:?}",
-                id
-            )),
+            None => unreachable!("CodeGen: Illegal LvarId in gen_set_local(). id:{:?}", id),
         };
         if outer == 0 {
             iseq.push(Inst::SET_LOCAL);
@@ -462,6 +459,22 @@ impl Codegen {
             iseq.push64(block.id());
         }
         iseq.push32(globals.add_inline_cache_entry());
+    }
+
+    fn gen_for(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        block: MethodRef,
+        use_value: bool,
+    ) {
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::FOR);
+        iseq.push64(block.id());
+        iseq.push32(globals.add_inline_cache_entry());
+        if !use_value {
+            self.gen_pop(iseq);
+        }
     }
 
     /// stack: val
@@ -762,7 +775,7 @@ impl Codegen {
                 }
                 ParamKind::Keyword(id, default) => {
                     params.param_ident.push(id);
-                    params.keyword.insert(id, LvarId::from_usize(lvar_id));
+                    params.keyword.insert(id, lvar_id.into());
                     if let Some(default) = default {
                         self.gen_default_expr(globals, &mut iseq, id, *default)?
                     }
@@ -822,8 +835,10 @@ impl Codegen {
                 None => "<unnamed>".to_string(),
             };
             println!(
-                "{} {:?} opt_flag:{:?}",
-                method_name, methodref, iseq.opt_flag
+                "{} methodref:{:x} opt_flag:{:?}",
+                method_name,
+                methodref.id(),
+                iseq.opt_flag
             );
             print!("local var: ");
             for (k, v) in iseq.lvar.table() {
@@ -1242,25 +1257,21 @@ impl Codegen {
                 };
             }
             NodeKind::UnOp(op, lhs) => {
+                self.gen(globals, iseq, *lhs, true)?;
                 match op {
                     UnOp::BitNot => {
-                        self.gen(globals, iseq, *lhs, true)?;
                         self.save_loc(iseq, node_loc);
                         iseq.push(Inst::BNOT);
                     }
                     UnOp::Not => {
-                        self.gen(globals, iseq, *lhs, true)?;
                         self.save_loc(iseq, node_loc);
                         iseq.push(Inst::NOT);
                     }
                     UnOp::Neg => {
-                        self.gen(globals, iseq, *lhs, true)?;
                         self.save_loc(iseq, node_loc);
                         iseq.push(Inst::NEG);
                     }
-                    UnOp::Pos => {
-                        self.gen(globals, iseq, *lhs, true)?;
-                    }
+                    UnOp::Pos => {}
                 }
                 if !use_value {
                     self.gen_pop(iseq)
@@ -1348,7 +1359,7 @@ impl Codegen {
                     _ => unreachable!(),
                 };
                 self.gen(globals, iseq, *iter, true)?;
-                self.gen_opt_send(globals, iseq, IdentId::EACH, 0, Some(block), use_value);
+                self.gen_for(globals, iseq, block, use_value);
             }
             NodeKind::While {
                 cond,

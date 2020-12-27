@@ -52,6 +52,7 @@ impl Inst {
     pub const OPT_SEND_SELF_BLK: u8 = 67;
     pub const OPT_NSEND_BLK: u8 = 68;
     pub const OPT_NSEND_SELF_BLK: u8 = 69;
+    pub const FOR: u8 = 70;
 
     pub const POP: u8 = 80;
     pub const DUP: u8 = 81;
@@ -225,6 +226,7 @@ impl Inst {
             Inst::OPT_SEND_SELF_BLK => "O_SEND_SLF_B",
             Inst::OPT_NSEND_BLK => "O_NSEND_B",
             Inst::OPT_NSEND_SELF_BLK => "O_NSEND_SLF_B",
+            Inst::FOR => "FOR",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
@@ -373,6 +375,7 @@ impl Inst {
             => 9,
             Inst::DEF_METHOD            // method_id: u32 / method: u64
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u64
+            | Inst::FOR                 // method: u64 / cache: u32
             => 13,
             Inst::DEF_CLASS => 14,      // is_module: u8 / method_id: u32 / block: u64
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF => 11,
@@ -414,7 +417,7 @@ impl Inst {
             ),
             Inst::LVAR_ADDI => {
                 let id = iseq.read32(pc + 1);
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
+                let ident_id = iseq_ref.lvar.get_name(id.into());
                 format!(
                     "LVAR_ADDI '{}' LvarId:{} +{}",
                     IdentId::get_ident_name(ident_id),
@@ -458,7 +461,7 @@ impl Inst {
             ),
             Inst::SET_LOCAL | Inst::GET_LOCAL => {
                 let id = iseq.read32(pc + 1);
-                let ident_name = match iseq_ref.lvar.get_name(LvarId::from_u32(id)) {
+                let ident_name = match iseq_ref.lvar.get_name(id.into()) {
                     Some(id) => format!("{:?}", id),
                     None => "<unnamed>".to_string(),
                 };
@@ -484,7 +487,7 @@ impl Inst {
             Inst::CHECK_LOCAL => {
                 let frame = iseq.read32(pc + 5);
                 let id = iseq.read32(pc + 1) as usize;
-                let ident_id = iseq_ref.lvar.get_name(LvarId::from_usize(id));
+                let ident_id = iseq_ref.lvar.get_name(id.into());
                 format!("CHECK_LOCAL '{:?}' outer:{} LvarId:{}", ident_id, frame, id)
             }
             Inst::PUSH_SYMBOL
@@ -518,6 +521,10 @@ impl Inst {
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5)
+            ),
+            Inst::FOR => format!(
+                "FOR methodref:{:x}",
+                iseq.read64(pc + 1)
             ),
             Inst::CREATE_ARRAY
             | Inst::CREATE_PROC

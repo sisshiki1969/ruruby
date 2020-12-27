@@ -290,10 +290,7 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 RubyErrorKind::RuntimeErr {
                     kind: RuntimeErrKind::StopIteration,
                     ..
-                } => {
-                    return Ok(Value::nil());
-                }
-
+                } => return Ok(Value::nil()),
                 _ => return Err(err),
             },
         }

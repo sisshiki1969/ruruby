@@ -59,12 +59,16 @@ impl LvarId {
     pub fn as_u32(&self) -> u32 {
         self.0 as u32
     }
+}
 
-    pub fn from_usize(id: usize) -> Self {
+impl From<usize> for LvarId {
+    fn from(id: usize) -> Self {
         LvarId(id)
     }
+}
 
-    pub fn from_u32(id: u32) -> Self {
+impl From<u32> for LvarId {
+    fn from(id: u32) -> Self {
         LvarId(id as usize)
     }
 }
@@ -1610,11 +1614,11 @@ impl Parser {
                         //   COMP_STMT
                         // end
                         //let loc = self.prev_loc();
-                        let mut var = vec![];
+                        let mut vars = vec![];
                         loop {
                             let var_id = self.expect_ident()?;
                             self.add_local_var_if_new(var_id);
-                            var.push(Node::new_lvar(var_id, self.prev_loc()));
+                            vars.push(Node::new_lvar(var_id, self.prev_loc()));
                             if !self.consume_punct(Punct::Comma)? {
                                 break;
                             }
@@ -1631,11 +1635,11 @@ impl Parser {
                         };
                         let mut new_body = vec![];
                         let mut formal_params = vec![];
-                        for (i, var_id) in var.iter().enumerate() {
+                        for (i, var) in vars.iter().enumerate() {
                             let dummy_var = IdentId::get_id(format!("_{}", i));
                             self.new_param(dummy_var, loc)?;
                             new_body.push(Node::new_single_assign(
-                                var_id.clone(),
+                                var.clone(),
                                 Node::new_lvar(dummy_var, loc),
                             ));
                             formal_params.push(FormalParam::req_param(dummy_var, loc));
@@ -1654,7 +1658,7 @@ impl Parser {
                         self.expect_reserved(Reserved::End)?;
                         let node = Node::new(
                             NodeKind::For {
-                                param: var,
+                                param: vars,
                                 iter: Box::new(iter),
                                 body: Box::new(body),
                             },
@@ -2172,7 +2176,7 @@ impl Parser {
     /// "xxxx!=" or "xxxx?=" is invalid.
     fn method_def_ext(&mut self, s: &str) -> Result<IdentId, RubyError> {
         let id = if !self.lexer.trailing_space()
-            && !(s.ends_with('!') || s.ends_with('?'))
+            && !(s.ends_with(&['!', '?'][..]))
             && self.consume_punct_no_term(Punct::Assign)?
         {
             self.get_ident_id(&format!("{}=", s))

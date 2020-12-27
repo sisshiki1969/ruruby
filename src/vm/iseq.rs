@@ -83,15 +83,15 @@ impl ISeq {
     }
 
     pub fn read_id(&self, offset: usize) -> IdentId {
-        IdentId::from(self.read32(offset))
+        self.read32(offset).into()
     }
 
     pub fn read_lvar_id(&self, offset: usize) -> LvarId {
-        LvarId::from_usize(self.read_usize(offset))
+        self.read_usize(offset).into()
     }
 
     pub fn read_methodref(&self, offset: usize) -> MethodRef {
-        MethodRef::from_u64(self.read64(offset))
+        self.read64(offset).into()
     }
 
     pub fn read_disp(&self, offset: usize) -> i64 {
