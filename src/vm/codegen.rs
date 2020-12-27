@@ -739,6 +739,7 @@ impl Codegen {
         use_value: bool,
         kind: ContextKind,
         name: Option<IdentId>,
+        forvars: Option<Vec<IdentId>>,
     ) -> Result<MethodRef, RubyError> {
         let mut methodref = MethodRef::new(MethodInfo::default());
         let is_block = !(kind == ContextKind::Method);
@@ -792,6 +793,16 @@ impl Codegen {
         }
 
         self.gen(globals, &mut iseq, node, use_value)?;
+        let forvars = match forvars {
+            None => vec![],
+            Some(forvars) => forvars
+                .iter()
+                .map(|id| {
+                    let (outer, lvar) = self.get_local_var(*id).unwrap();
+                    (outer, lvar.as_u32())
+                })
+                .collect(),
+        };
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
         let exception_table = context.exception_table;
@@ -819,6 +830,7 @@ impl Codegen {
                         }
                     }
                 },
+                forvars,
             )),
         };
 
@@ -840,6 +852,7 @@ impl Codegen {
                 methodref.id(),
                 iseq.opt_flag
             );
+            println!("{:?}", iseq.forvars);
             print!("local var: ");
             for (k, v) in iseq.lvar.table() {
                 print!("{}:{:?} ", v.as_u32(), k);
@@ -1339,7 +1352,7 @@ impl Codegen {
                     }
                 }
             }
-            NodeKind::For { iter, body, .. } => {
+            NodeKind::For { param, iter, body } => {
                 let block = match body.kind {
                     NodeKind::Proc { params, body, lvar } => {
                         self.loop_stack.push(LoopInfo::new_top());
@@ -1351,6 +1364,7 @@ impl Codegen {
                             true,
                             ContextKind::Block,
                             None,
+                            Some(param),
                         )?;
                         self.loop_stack.pop().unwrap();
                         methodref
@@ -1753,6 +1767,7 @@ impl Codegen {
                                 true,
                                 ContextKind::Block,
                                 None,
+                                None,
                             )?;
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
@@ -1858,6 +1873,7 @@ impl Codegen {
                     true,
                     ContextKind::Method,
                     Some(id),
+                    None,
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 iseq.push32(id.into());
@@ -1875,6 +1891,7 @@ impl Codegen {
                     true,
                     ContextKind::Method,
                     Some(id),
+                    None,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
@@ -1900,6 +1917,7 @@ impl Codegen {
                     true,
                     ContextKind::Method,
                     None,
+                    None,
                 )?;
                 self.gen(globals, iseq, *superclass, true)?;
                 self.gen(globals, iseq, *base, true)?;
@@ -1924,6 +1942,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Method,
+                    None,
                     None,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
@@ -2023,6 +2042,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Block,
+                    None,
                     None,
                 )?;
                 self.loop_stack.pop().unwrap();

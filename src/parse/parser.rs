@@ -1618,7 +1618,7 @@ impl Parser {
                         loop {
                             let var_id = self.expect_ident()?;
                             self.add_local_var_if_new(var_id);
-                            vars.push(Node::new_lvar(var_id, self.prev_loc()));
+                            vars.push(var_id);
                             if !self.consume_punct(Punct::Comma)? {
                                 break;
                             }
@@ -1629,31 +1629,17 @@ impl Parser {
                         let loc = self.prev_loc();
 
                         self.context_stack.push(ParseContext::new_for());
-                        let mut body = match self.parse_comp_stmt()?.kind {
-                            NodeKind::CompStmt(nodes) => nodes,
-                            _ => unimplemented!(),
-                        };
-                        let mut new_body = vec![];
+                        let body = self.parse_comp_stmt()?;
                         let mut formal_params = vec![];
-                        for (i, var) in vars.iter().enumerate() {
+                        for (i, _var) in vars.iter().enumerate() {
                             let dummy_var = IdentId::get_id(format!("_{}", i));
                             self.new_param(dummy_var, loc)?;
-                            new_body.push(Node::new_single_assign(
-                                var.clone(),
-                                Node::new_lvar(dummy_var, loc),
-                            ));
                             formal_params.push(FormalParam::req_param(dummy_var, loc));
                         }
-                        new_body.append(&mut body);
                         let lvar = self.context_stack.pop().unwrap().lvar;
 
                         let loc = loc.merge(self.prev_loc());
-                        let body = Node::new_proc(
-                            formal_params,
-                            Node::new_comp_stmt(new_body, loc),
-                            lvar,
-                            loc,
-                        );
+                        let body = Node::new_proc(formal_params, body, lvar, loc);
 
                         self.expect_reserved(Reserved::End)?;
                         let node = Node::new(

@@ -85,6 +85,7 @@ pub struct ISeqInfo {
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
+    pub forvars: Vec<(u32, u32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +168,7 @@ impl ISeqInfo {
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
         kind: ISeqKind,
+        forvars: Vec<(u32, u32)>,
     ) -> Self {
         let lvars = lvar.len();
         let opt_flag = params.is_opt();
@@ -183,6 +185,7 @@ impl ISeqInfo {
             iseq_sourcemap,
             source_info,
             kind,
+            forvars,
         }
     }
 
@@ -197,6 +200,7 @@ impl ISeqInfo {
             vec![],
             SourceInfoRef::empty(),
             ISeqKind::Method(IdentId::from(0)),
+            vec![],
         )
     }
 

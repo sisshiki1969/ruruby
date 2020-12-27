@@ -290,6 +290,7 @@ impl VM {
             true,
             ContextKind::Method,
             None,
+            None,
         )?;
         Ok(methodref)
     }
@@ -315,6 +316,7 @@ impl VM {
             result.lvar_collector,
             true,
             ContextKind::Eval,
+            None,
             None,
         )?;
         Ok(method)
@@ -347,6 +349,7 @@ impl VM {
             result.lvar_collector,
             true,
             ContextKind::Method,
+            None,
             None,
         )?;
         let iseq = method.as_iseq();
@@ -461,7 +464,10 @@ impl VM {
         let self_value = context.self_value;
         let self_oref = self_value.rvalue_mut();
         self.gc();
-
+        for (i, (outer, lvar)) in context.iseq_ref.unwrap().forvars.iter().enumerate() {
+            let mut cref = self.get_outer_context(*outer);
+            cref[*lvar as usize] = context[i];
+        }
         /// Evaluate expr, and push return value to stack.
         macro_rules! try_push {
             ($eval:expr) => {

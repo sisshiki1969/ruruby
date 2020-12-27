@@ -54,7 +54,7 @@ pub enum NodeKind {
         else_: Box<Node>,
     },
     For {
-        param: Vec<Node>,
+        param: Vec<IdentId>,
         iter: Box<Node>,
         body: Box<Node>,
     },
