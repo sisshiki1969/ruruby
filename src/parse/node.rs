@@ -54,7 +54,7 @@ pub enum NodeKind {
         else_: Box<Node>,
     },
     For {
-        param: Box<Node>,
+        param: Vec<Node>,
         iter: Box<Node>,
         body: Box<Node>,
     },
@@ -123,6 +123,7 @@ pub enum ParamKind {
     Post(IdentId),
     Optional(IdentId, Box<Node>), // name, default expr
     Rest(IdentId),
+    RestDiscard,
     Keyword(IdentId, Option<Box<Node>>), // name, default expr
     KWRest(IdentId),
     Block(IdentId),
@@ -139,6 +140,10 @@ impl FormalParam {
 
     pub fn rest(id: IdentId, loc: Loc) -> Self {
         FormalParam::new(ParamKind::Rest(id), loc)
+    }
+
+    pub fn rest_discard(loc: Loc) -> Self {
+        FormalParam::new(ParamKind::RestDiscard, loc)
     }
 
     pub fn post(id: IdentId, loc: Loc) -> Self {

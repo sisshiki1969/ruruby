@@ -391,6 +391,8 @@ impl Lexer {
                     '!' => {
                         if self.consume('=') {
                             return Ok(self.new_punct(Punct::Ne));
+                        } else if self.consume('~') {
+                            return Ok(self.new_punct(Punct::Unmatch));
                         } else {
                             return Ok(self.new_punct(Punct::Not));
                         }
@@ -1239,7 +1241,7 @@ mod test {
         panic!();
     }
 
-    macro_rules! Token (
+    macro_rules! Token {
         (Ident($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_ident($item, Loc($loc_0, $loc_1))
         };
@@ -1279,7 +1281,7 @@ mod test {
         (EOF, $pos:expr) => {
             Token::new_eof($pos)
         };
-    );
+    }
 
     #[test]
     fn string_literal1() {

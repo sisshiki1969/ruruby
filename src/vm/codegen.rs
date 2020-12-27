@@ -755,7 +755,10 @@ impl Codegen {
                 }
                 ParamKind::Rest(id) => {
                     params.param_ident.push(id);
-                    params.rest = true;
+                    params.rest = Some(true);
+                }
+                ParamKind::RestDiscard => {
+                    params.rest = Some(false);
                 }
                 ParamKind::Keyword(id, default) => {
                     params.param_ident.push(id);
@@ -1325,12 +1328,7 @@ impl Codegen {
                     }
                 }
             }
-            NodeKind::For { param, iter, body } => {
-                let _id = match param.kind {
-                    NodeKind::Ident(id) | NodeKind::LocalVar(id) => id,
-                    _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
-                };
-
+            NodeKind::For { iter, body, .. } => {
                 let block = match body.kind {
                     NodeKind::Proc { params, body, lvar } => {
                         self.loop_stack.push(LoopInfo::new_top());
@@ -1350,10 +1348,7 @@ impl Codegen {
                     _ => unreachable!(),
                 };
                 self.gen(globals, iseq, *iter, true)?;
-                self.gen_send(globals, iseq, IdentId::EACH, 0, 0, 0, Some(block));
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
+                self.gen_opt_send(globals, iseq, IdentId::EACH, 0, Some(block), use_value);
             }
             NodeKind::While {
                 cond,

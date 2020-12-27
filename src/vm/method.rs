@@ -92,7 +92,7 @@ pub struct ISeqParams {
     pub param_ident: Vec<IdentId>,
     pub req: usize,
     pub opt: usize,
-    pub rest: bool,
+    pub rest: Option<bool>, // Some(true): exists and bind to param, Some(false): exists but to be discarded, None: not exists.
     pub post: usize,
     pub block: bool,
     pub keyword: FxHashMap<IdentId, LvarId>,
@@ -105,7 +105,7 @@ impl ISeqParams {
             param_ident: vec![],
             req: 0,
             opt: 0,
-            rest: false,
+            rest: None,
             post: 0,
             block: false,
             keyword: FxHashMap::default(),
@@ -115,7 +115,7 @@ impl ISeqParams {
 
     pub fn is_opt(&self) -> bool {
         self.opt == 0
-            && !self.rest
+            && self.rest.is_none()
             && self.post == 0
             && !self.block
             && self.keyword.is_empty()
