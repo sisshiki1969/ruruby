@@ -1,6 +1,6 @@
 # This benchmarking program is based on the following blog.
 # https://rheotommy.hatenablog.com/entry/2020/07/18/205343#Ruby
-# by RheoTommy
+# written by @KowerKoint2010
 
 def collatz(i)
   cnt = 0
