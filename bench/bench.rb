@@ -201,7 +201,9 @@ end
  'app_mandelbrot.rb',
  'app_fibo.rb',
  'app_aobench.rb',
- 'so_nbody.rb'].each { |x| perf x }
+ 'so_nbody.rb',
+ 'collatz.rb'
+].each { |x| perf x }
 
 @optcarrot = [@optcarrot_dir + "/bin/optcarrot", "-b", @optcarrot_dir + "/examples/Lan_Master.nes"].join(" ")
 

@@ -308,8 +308,7 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         new_args.block = Block::Block(*METHODREF_ENUM, outer);
         (method, new_args)
     };
-    let val = vm.create_enumerator(method, self_val, new_args)?;
-    Ok(val)
+    vm.create_enumerator(method, self_val, new_args)
 }
 
 fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

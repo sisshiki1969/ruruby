@@ -23,8 +23,7 @@ impl Index<LvarId> for Context {
     type Output = Value;
 
     fn index(&self, index: LvarId) -> &Self::Output {
-        let i = index.as_usize();
-        &self[i]
+        &self[index.as_usize()]
     }
 }
 
@@ -32,31 +31,26 @@ impl Index<usize> for Context {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        unsafe {
-            if index < LVAR_ARRAY_SIZE {
-                self.lvar_ary.get_unchecked(index)
-            } else {
-                self.lvar_vec.get_unchecked(index - LVAR_ARRAY_SIZE)
-            }
+        if index < LVAR_ARRAY_SIZE {
+            &self.lvar_ary[index]
+        } else {
+            &self.lvar_vec[index - LVAR_ARRAY_SIZE]
         }
     }
 }
 
 impl IndexMut<LvarId> for Context {
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
-        let i = index.as_usize();
-        &mut self[i]
+        &mut self[index.as_usize()]
     }
 }
 
 impl IndexMut<usize> for Context {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe {
-            if index < LVAR_ARRAY_SIZE {
-                self.lvar_ary.get_unchecked_mut(index)
-            } else {
-                self.lvar_vec.get_unchecked_mut(index - LVAR_ARRAY_SIZE)
-            }
+        if index < LVAR_ARRAY_SIZE {
+            &mut self.lvar_ary[index]
+        } else {
+            &mut self.lvar_vec[index - LVAR_ARRAY_SIZE]
         }
     }
 }

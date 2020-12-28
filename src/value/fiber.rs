@@ -127,9 +127,7 @@ impl FiberInfo {
             inst = _current_vm.perf.get_prev_inst();
         }
         match self.vm.fiberstate() {
-            FiberState::Dead => {
-                return Err(RubyError::fiber("Dead fiber called."));
-            }
+            FiberState::Dead => return Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
                 #[cfg(feature = "perf")]
                 _current_vm.perf.get_perf(Perf::INVALID);
