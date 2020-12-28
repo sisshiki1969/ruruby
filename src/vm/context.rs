@@ -136,7 +136,7 @@ impl Context {
         match self.iseq_ref {
             Some(iseq_ref) => {
                 for i in 0..iseq_ref.lvars {
-                    let id = LvarId::from_usize(i);
+                    let id = i.into();
                     let (k, _) = iseq_ref
                         .lvar
                         .table()
@@ -215,7 +215,7 @@ impl Context {
         if !iseq.is_block() {
             let min = params.req + params.post;
             let kw = if kw.is_nil() { 0 } else { 1 };
-            if params.rest {
+            if params.rest.is_some() {
                 if min > kw {
                     args.check_args_min(min - kw)?;
                 }
@@ -280,7 +280,7 @@ impl Context {
         let args_len = args.len();
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;
-        let rest_len = if params.rest { 1 } else { 0 };
+        let rest_len = if params.rest == Some(true) { 1 } else { 0 };
         let post_len = params.post;
         let arg_len = args_len + kw_len - post_len;
         let optreq_len = req_len + params.opt;

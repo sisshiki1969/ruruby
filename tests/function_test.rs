@@ -94,6 +94,17 @@ fn parameters() {
 }
 
 #[test]
+fn rest_parameter() {
+    let program = "
+        def fn(a,b,*,c,d)
+            [a,b,c,d]
+        end
+        assert([0,1,4,5], fn(0,1,2,3,4,5))
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn kwrest_parameters() {
     let program = "
         def fn(a, *b, **c)
@@ -421,5 +432,18 @@ fn method_missing() {
     assert "method_missing 100 amber [1, 2]", a.amber 1,2
     assert "method_missing 200 gold [3, 4]", b.gold 3,4
 "##;
+    assert_script(program);
+}
+
+#[test]
+fn double_colon() {
+    let program = r##"
+    class C
+      def self.fn
+        100
+      end
+    end
+    assert 100, C::fn
+    "##;
     assert_script(program);
 }

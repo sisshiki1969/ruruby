@@ -59,12 +59,16 @@ impl LvarId {
     pub fn as_u32(&self) -> u32 {
         self.0 as u32
     }
+}
 
-    pub fn from_usize(id: usize) -> Self {
+impl From<usize> for LvarId {
+    fn from(id: usize) -> Self {
         LvarId(id)
     }
+}
 
-    pub fn from_u32(id: u32) -> Self {
+impl From<u32> for LvarId {
+    fn from(id: u32) -> Self {
         LvarId(id as usize)
     }
 }
@@ -399,7 +403,19 @@ impl Parser {
         Ok(tok)
     }
 
-    /// If next token is an expected kind of Punctuator, get it and return true.
+    /// If the next token is Ident, consume and return Some(it).
+    /// If not, return None.
+    fn consume_ident(&mut self) -> Result<Option<IdentId>, RubyError> {
+        match self.peek()?.kind {
+            TokenKind::Ident(s) => {
+                self.get()?;
+                Ok(Some(self.get_ident_id(&s)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// If the next token is an expected kind of Punctuator, get it and return true.
     /// Otherwise, return false.
     fn consume_punct(&mut self, expect: Punct) -> Result<bool, RubyError> {
         match self.peek()?.kind {
@@ -493,9 +509,7 @@ impl Parser {
     fn expect_ident(&mut self) -> Result<IdentId, RubyError> {
         match &self.get()?.kind {
             TokenKind::Ident(s) => Ok(self.get_ident_id(s)),
-            _ => {
-                return Err(self.error_unexpected(self.prev_loc(), "Expect identifier."));
-            }
+            _ => Err(self.error_unexpected(self.prev_loc(), "Expect identifier.")),
         }
     }
 
@@ -503,13 +517,10 @@ impl Parser {
     /// Return IdentId of the Const.
     /// If not, return RubyError.
     fn expect_const(&mut self) -> Result<String, RubyError> {
-        let name = match &self.get()?.kind {
-            TokenKind::Const(s) => s.to_owned(),
-            _ => {
-                return Err(self.error_unexpected(self.prev_loc(), "Expect constant."));
-            }
-        };
-        Ok(name)
+        match self.get()?.kind {
+            TokenKind::Const(s) => Ok(s),
+            _ => Err(self.error_unexpected(self.prev_loc(), "Expect constant.")),
+        }
     }
 
     fn token_as_symbol(&self, token: &Token) -> String {
@@ -963,7 +974,6 @@ impl Parser {
     // 4==4==4 => SyntaxError
     fn parse_arg_eq(&mut self) -> Result<Node, RubyError> {
         let lhs = self.parse_arg_comp()?;
-        // TODO: Support <==> === !~
         if self.consume_punct_no_term(Punct::Eq)? {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Eq, lhs, rhs))
@@ -976,6 +986,11 @@ impl Parser {
         } else if self.consume_punct_no_term(Punct::Match)? {
             let rhs = self.parse_arg_comp()?;
             Ok(Node::new_binop(BinOp::Match, lhs, rhs))
+        } else if self.consume_punct_no_term(Punct::Unmatch)? {
+            let rhs = self.parse_arg_comp()?;
+            let loc = lhs.loc().merge(rhs.loc());
+            let node = Node::new_binop(BinOp::Match, lhs, rhs);
+            Ok(Node::new_unop(UnOp::Not, node, loc))
         } else {
             Ok(lhs)
         }
@@ -1159,8 +1174,12 @@ impl Parser {
                 self.parse_primary_method(node, true)?
             } else if self.consume_punct_no_term(Punct::Scope)? {
                 let loc = self.prev_loc();
-                let name = self.expect_const()?;
-                Node::new_scope(node, &name, loc)
+                if let TokenKind::Const(_) = self.peek()?.kind {
+                    let name = self.expect_const()?;
+                    Node::new_scope(node, &name, loc)
+                } else {
+                    self.parse_primary_method(node, false)?
+                }
             } else if self.consume_punct_no_term(Punct::LBracket)? {
                 let member_loc = self.prev_loc();
                 let args = self.parse_arg_list(Punct::RBracket)?;
@@ -1425,21 +1444,20 @@ impl Parser {
         Ok(Some(Box::new(node)))
     }
 
-    fn alias_name(&mut self) -> Result<IdentId, RubyError> {
+    fn alias_name(&mut self) -> Result<Node, RubyError> {
         if self.consume_punct_no_term(Punct::Colon)? {
-            if let NodeKind::Symbol(id) = self.parse_symbol()?.kind {
-                Ok(id)
-            } else {
-                unreachable!("parse_symbol() returned illegal node type.")
-            }
+            self.parse_symbol()
         } else if let TokenKind::GlobalVar(_) = self.peek_no_term()?.kind {
             let tok = self.get()?;
-            match tok.kind {
-                TokenKind::GlobalVar(name) => Ok(IdentId::get_id(name)),
+            match &tok.kind {
+                TokenKind::GlobalVar(name) => Ok(Node::new_symbol(IdentId::get_id(name), tok.loc)),
                 _ => unreachable!(),
             }
         } else {
-            self.parse_method_def_name()
+            Ok(Node::new_symbol(
+                self.parse_method_def_name()?,
+                self.prev_loc(),
+            ))
         }
     }
 
@@ -1588,49 +1606,45 @@ impl Parser {
                         Ok(node)
                     }
                     Reserved::For => {
-                        // for <ident> in <iter>
+                        // for <ident>, .. in <iter>
                         //   COMP_STMT
                         // end
                         //
-                        // for <ident> in <iter> do
+                        // for <ident>, .. in <iter> do
                         //   COMP_STMT
                         // end
                         //let loc = self.prev_loc();
-                        let var_id = self.expect_ident()?;
-                        self.add_local_var_if_new(var_id);
-                        let var = Node::new_lvar(var_id, self.prev_loc());
+                        let mut vars = vec![];
+                        loop {
+                            let var_id = self.expect_ident()?;
+                            self.add_local_var_if_new(var_id);
+                            vars.push(var_id);
+                            if !self.consume_punct(Punct::Comma)? {
+                                break;
+                            }
+                        }
                         self.expect_reserved(Reserved::In)?;
                         let iter = self.parse_expr()?;
-
                         self.parse_do()?;
                         let loc = self.prev_loc();
+
                         self.context_stack.push(ParseContext::new_for());
-                        let mut body = match self.parse_comp_stmt()?.kind {
-                            NodeKind::CompStmt(nodes) => nodes,
-                            _ => unimplemented!(),
-                        };
-                        let dummy_var = IdentId::get_id("_0");
-                        self.new_param(dummy_var, loc)?;
-                        let prolog = Node::new_single_assign(
-                            Node::new_lvar(var_id, loc),
-                            Node::new_lvar(dummy_var, loc),
-                        );
-                        let mut new_body = vec![prolog];
-                        new_body.append(&mut body);
+                        let body = self.parse_comp_stmt()?;
+                        let mut formal_params = vec![];
+                        for (i, _var) in vars.iter().enumerate() {
+                            let dummy_var = IdentId::get_id(format!("_{}", i));
+                            self.new_param(dummy_var, loc)?;
+                            formal_params.push(FormalParam::req_param(dummy_var, loc));
+                        }
                         let lvar = self.context_stack.pop().unwrap().lvar;
 
                         let loc = loc.merge(self.prev_loc());
-                        let body = Node::new_proc(
-                            vec![FormalParam::req_param(IdentId::get_id("_0"), loc)],
-                            Node::new_comp_stmt(new_body, loc),
-                            lvar,
-                            loc,
-                        );
+                        let body = Node::new_proc(formal_params, body, lvar, loc);
 
                         self.expect_reserved(Reserved::End)?;
                         let node = Node::new(
                             NodeKind::For {
-                                param: Box::new(var),
+                                param: vars,
                                 iter: Box::new(iter),
                                 body: Box::new(body),
                             },
@@ -2148,7 +2162,7 @@ impl Parser {
     /// "xxxx!=" or "xxxx?=" is invalid.
     fn method_def_ext(&mut self, s: &str) -> Result<IdentId, RubyError> {
         let id = if !self.lexer.trailing_space()
-            && !(s.ends_with('!') || s.ends_with('?'))
+            && !(s.ends_with(&['!', '?'][..]))
             && self.consume_punct_no_term(Punct::Assign)?
         {
             self.get_ident_id(&format!("{}=", s))
@@ -2289,17 +2303,20 @@ impl Parser {
                 break;
             } else if self.consume_punct(Punct::Mul)? {
                 // Splat(Rest) param
-                let id = self.expect_ident()?;
                 loc = loc.merge(self.prev_loc());
                 if state >= Kind::Rest {
                     return Err(self
                         .error_unexpected(loc, "Splat parameter is not allowed in ths position."));
                 } else {
                     state = Kind::Rest;
+                };
+                match self.consume_ident()? {
+                    Some(id) => {
+                        args.push(FormalParam::rest(id, loc));
+                        self.new_param(id, self.prev_loc())?;
+                    }
+                    None => args.push(FormalParam::rest_discard(loc)),
                 }
-
-                args.push(FormalParam::rest(id, loc));
-                self.new_param(id, self.prev_loc())?;
             } else if self.consume_punct(Punct::DMul)? {
                 // Keyword rest param
                 let id = self.expect_ident()?;

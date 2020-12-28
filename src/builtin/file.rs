@@ -12,6 +12,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("dirname", dirname);
     class.add_builtin_class_method("binread", binread);
     class.add_builtin_class_method("read", read);
+    class.add_builtin_class_method("readlines", readlines);
     class.add_builtin_class_method("write", write);
     class.add_builtin_class_method("expand_path", expand_path);
     class.add_builtin_class_method("exist?", exist);
@@ -167,6 +168,28 @@ fn read(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::string(contents))
 }
 
+/// IO.readlines(path)
+fn readlines(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let filename = string_to_path(vm, args[0], "1st arg")?;
+    let mut file = match File::open(&filename) {
+        Ok(file) => file,
+        Err(_) => {
+            return Err(RubyError::internal(format!(
+                "Can not open file. {:?}",
+                &filename
+            )))
+        }
+    };
+    let mut contents = String::new();
+    match file.read_to_string(&mut contents) {
+        Ok(file) => file,
+        Err(_) => return Err(RubyError::internal("Could not read the file.")),
+    };
+    let ary = contents.split('\n').map(|s| Value::string(s)).collect();
+    Ok(Value::array_from(ary))
+}
+
 /// IO.write(path, string)
 fn write(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
@@ -281,6 +304,8 @@ mod tests {
         let program = r###"
             File.write("file.txt","foo")
             assert "foo", File.read("file.txt")
+            File.write("file.txt","foo\nbar\nboo")
+            assert ["foo", "bar", "boo"], File.readlines("file.txt")
             File.write("file.txt","bar")
             assert "bar", File.read("file.txt")
             assert "file.txt", File.basename("/home/usr/file.txt")

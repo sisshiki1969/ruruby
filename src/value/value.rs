@@ -202,6 +202,10 @@ impl Value {
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
                 ObjKind::Integer(i) => format!("{}", i),
                 ObjKind::Float(f) => format!("{}", f),
+                ObjKind::Range(r) => {
+                    let sym = if r.exclude { "..." } else { ".." };
+                    format!("{}{}{}", r.start.format(0), sym, r.end.format(0))
+                }
                 ObjKind::Complex { r, i } => {
                     let (r, i) = (r.to_real().unwrap(), i.to_real().unwrap());
                     if !i.is_negative() {
@@ -271,12 +275,9 @@ impl Value {
                         format!("{{{}}}", s)
                     }
                 }
-                ObjKind::Range(RangeInfo { start, end, .. }) => {
-                    format!("Range({:?}, {:?})", start, end)
-                }
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
                 ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
-                ObjKind::Proc(_) => format!("Proc"),
+                ObjKind::Proc(_p) => format!("#<Proc:0x{:x}>", rval.id()),
                 ObjKind::Method(_) => format!("Method"),
                 ObjKind::Enumerator(_) => format!("Enumerator"),
                 ObjKind::Fiber(_) => format!("Fiber"),
@@ -412,7 +413,7 @@ impl Value {
                 } else if self.is_packed_num() {
                     BuiltinClass::float()
                 } else if self.is_packed_symbol() {
-                    BuiltinClass::object()
+                    BuiltinClass::symbol()
                 } else {
                     BuiltinClass::object()
                 }
@@ -431,7 +432,7 @@ impl Value {
                 } else if self.is_packed_num() {
                     BuiltinClass::float()
                 } else if self.is_packed_symbol() {
-                    BuiltinClass::object()
+                    BuiltinClass::symbol()
                 } else {
                     BuiltinClass::object()
                 }

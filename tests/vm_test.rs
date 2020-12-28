@@ -555,6 +555,19 @@ fn for5() {
 }
 
 #[test]
+fn for6() {
+    let program = "
+        ary = []
+        for a,b in [[0,1],[2,3],[4,5]] do
+            ary << a
+            ary << b
+        end
+        assert [0,1,2,3,4,5], ary
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn while1() {
     let program = "
         assert((a = 0; while a < 5 do puts a; a+=1 end; a), 5)

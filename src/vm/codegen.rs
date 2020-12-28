@@ -215,10 +215,7 @@ impl Codegen {
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
-            None => panic!(format!(
-                "CodeGen: Illegal LvarId in gen_set_local(). id:{:?}",
-                id
-            )),
+            None => unreachable!("CodeGen: Illegal LvarId in gen_set_local(). id:{:?}", id),
         };
         if outer == 0 {
             iseq.push(Inst::SET_LOCAL);
@@ -462,6 +459,22 @@ impl Codegen {
             iseq.push64(block.id());
         }
         iseq.push32(globals.add_inline_cache_entry());
+    }
+
+    fn gen_for(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        block: MethodRef,
+        use_value: bool,
+    ) {
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::FOR);
+        iseq.push64(block.id());
+        iseq.push32(globals.add_inline_cache_entry());
+        if !use_value {
+            self.gen_pop(iseq);
+        }
     }
 
     /// stack: val
@@ -726,6 +739,7 @@ impl Codegen {
         use_value: bool,
         kind: ContextKind,
         name: Option<IdentId>,
+        forvars: Option<Vec<IdentId>>,
     ) -> Result<MethodRef, RubyError> {
         let mut methodref = MethodRef::new(MethodInfo::default());
         let is_block = !(kind == ContextKind::Method);
@@ -755,11 +769,14 @@ impl Codegen {
                 }
                 ParamKind::Rest(id) => {
                     params.param_ident.push(id);
-                    params.rest = true;
+                    params.rest = Some(true);
+                }
+                ParamKind::RestDiscard => {
+                    params.rest = Some(false);
                 }
                 ParamKind::Keyword(id, default) => {
                     params.param_ident.push(id);
-                    params.keyword.insert(id, LvarId::from_usize(lvar_id));
+                    params.keyword.insert(id, lvar_id.into());
                     if let Some(default) = default {
                         self.gen_default_expr(globals, &mut iseq, id, *default)?
                     }
@@ -776,6 +793,16 @@ impl Codegen {
         }
 
         self.gen(globals, &mut iseq, node, use_value)?;
+        let forvars = match forvars {
+            None => vec![],
+            Some(forvars) => forvars
+                .iter()
+                .map(|id| {
+                    let (outer, lvar) = self.get_local_var(*id).unwrap();
+                    (outer, lvar.as_u32())
+                })
+                .collect(),
+        };
         let context = self.context_stack.pop().unwrap();
         let iseq_sourcemap = context.iseq_sourcemap;
         let exception_table = context.exception_table;
@@ -803,6 +830,7 @@ impl Codegen {
                         }
                     }
                 },
+                forvars,
             )),
         };
 
@@ -819,9 +847,12 @@ impl Codegen {
                 None => "<unnamed>".to_string(),
             };
             println!(
-                "{} {:?} opt_flag:{:?}",
-                method_name, methodref, iseq.opt_flag
+                "{} methodref:{:x} opt_flag:{:?}",
+                method_name,
+                methodref.id(),
+                iseq.opt_flag
             );
+            println!("{:?}", iseq.forvars);
             print!("local var: ");
             for (k, v) in iseq.lvar.table() {
                 print!("{}:{:?} ", v.as_u32(), k);
@@ -1239,25 +1270,21 @@ impl Codegen {
                 };
             }
             NodeKind::UnOp(op, lhs) => {
+                self.gen(globals, iseq, *lhs, true)?;
                 match op {
                     UnOp::BitNot => {
-                        self.gen(globals, iseq, *lhs, true)?;
                         self.save_loc(iseq, node_loc);
                         iseq.push(Inst::BNOT);
                     }
                     UnOp::Not => {
-                        self.gen(globals, iseq, *lhs, true)?;
                         self.save_loc(iseq, node_loc);
                         iseq.push(Inst::NOT);
                     }
                     UnOp::Neg => {
-                        self.gen(globals, iseq, *lhs, true)?;
                         self.save_loc(iseq, node_loc);
                         iseq.push(Inst::NEG);
                     }
-                    UnOp::Pos => {
-                        self.gen(globals, iseq, *lhs, true)?;
-                    }
+                    UnOp::Pos => {}
                 }
                 if !use_value {
                     self.gen_pop(iseq)
@@ -1326,11 +1353,6 @@ impl Codegen {
                 }
             }
             NodeKind::For { param, iter, body } => {
-                let _id = match param.kind {
-                    NodeKind::Ident(id) | NodeKind::LocalVar(id) => id,
-                    _ => return Err(self.error_syntax("Expected an identifier.", param.loc())),
-                };
-
                 let block = match body.kind {
                     NodeKind::Proc { params, body, lvar } => {
                         self.loop_stack.push(LoopInfo::new_top());
@@ -1342,6 +1364,7 @@ impl Codegen {
                             true,
                             ContextKind::Block,
                             None,
+                            Some(param),
                         )?;
                         self.loop_stack.pop().unwrap();
                         methodref
@@ -1350,10 +1373,7 @@ impl Codegen {
                     _ => unreachable!(),
                 };
                 self.gen(globals, iseq, *iter, true)?;
-                self.gen_send(globals, iseq, IdentId::EACH, 0, 0, 0, Some(block));
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
+                self.gen_for(globals, iseq, block, use_value);
             }
             NodeKind::While {
                 cond,
@@ -1747,6 +1767,7 @@ impl Codegen {
                                 true,
                                 ContextKind::Block,
                                 None,
+                                None,
                             )?;
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
@@ -1852,6 +1873,7 @@ impl Codegen {
                     true,
                     ContextKind::Method,
                     Some(id),
+                    None,
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 iseq.push32(id.into());
@@ -1869,6 +1891,7 @@ impl Codegen {
                     true,
                     ContextKind::Method,
                     Some(id),
+                    None,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
@@ -1894,6 +1917,7 @@ impl Codegen {
                     true,
                     ContextKind::Method,
                     None,
+                    None,
                 )?;
                 self.gen(globals, iseq, *superclass, true)?;
                 self.gen(globals, iseq, *base, true)?;
@@ -1918,6 +1942,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Method,
+                    None,
                     None,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
@@ -2018,6 +2043,7 @@ impl Codegen {
                     true,
                     ContextKind::Block,
                     None,
+                    None,
                 )?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
@@ -2040,8 +2066,8 @@ impl Codegen {
                 }
             }
             NodeKind::AliasMethod(new, old) => {
-                iseq.gen_symbol(new);
-                iseq.gen_symbol(old);
+                self.gen(globals, iseq, *new, true)?;
+                self.gen(globals, iseq, *old, true)?;
                 self.gen_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
             }
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),

@@ -85,6 +85,7 @@ pub struct ISeqInfo {
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
+    pub forvars: Vec<(u32, u32)>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,7 +93,7 @@ pub struct ISeqParams {
     pub param_ident: Vec<IdentId>,
     pub req: usize,
     pub opt: usize,
-    pub rest: bool,
+    pub rest: Option<bool>, // Some(true): exists and bind to param, Some(false): exists but to be discarded, None: not exists.
     pub post: usize,
     pub block: bool,
     pub keyword: FxHashMap<IdentId, LvarId>,
@@ -105,7 +106,7 @@ impl ISeqParams {
             param_ident: vec![],
             req: 0,
             opt: 0,
-            rest: false,
+            rest: None,
             post: 0,
             block: false,
             keyword: FxHashMap::default(),
@@ -115,7 +116,7 @@ impl ISeqParams {
 
     pub fn is_opt(&self) -> bool {
         self.opt == 0
-            && !self.rest
+            && self.rest.is_none()
             && self.post == 0
             && !self.block
             && self.keyword.is_empty()
@@ -167,6 +168,7 @@ impl ISeqInfo {
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
         kind: ISeqKind,
+        forvars: Vec<(u32, u32)>,
     ) -> Self {
         let lvars = lvar.len();
         let opt_flag = params.is_opt();
@@ -183,6 +185,7 @@ impl ISeqInfo {
             iseq_sourcemap,
             source_info,
             kind,
+            forvars,
         }
     }
 
@@ -197,6 +200,7 @@ impl ISeqInfo {
             vec![],
             SourceInfoRef::empty(),
             ISeqKind::Method(IdentId::from(0)),
+            vec![],
         )
     }
 

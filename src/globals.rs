@@ -40,6 +40,7 @@ pub struct BuiltinClass {
     pub float: Value,
     pub complex: Value,
     pub array: Value,
+    pub symbol: Value,
     pub class: Value,
     pub module: Value,
     pub procobj: Value,
@@ -78,6 +79,7 @@ impl BuiltinClass {
             float: nil,
             complex: nil,
             array: nil,
+            symbol: nil,
             class,
             module,
             procobj: nil,
@@ -115,6 +117,10 @@ impl BuiltinClass {
 
     pub fn float() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().float)
+    }
+
+    pub fn symbol() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().symbol)
     }
 
     pub fn complex() -> Value {
@@ -267,6 +273,7 @@ impl Globals {
         init_builtin_class!("Complex", complex);
         init_builtin_class!("Float", float);
         init_builtin_class!("Array", array);
+        init_builtin_class!("Symbol", symbol);
         init_builtin_class!("Proc", procobj);
         init_builtin_class!("Range", range);
         init_builtin_class!("String", string);

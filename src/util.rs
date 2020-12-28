@@ -81,8 +81,10 @@ impl<T> Ref<T> {
     pub fn id(&self) -> u64 {
         self.0.as_ptr() as u64
     }
+}
 
-    pub fn from_u64(val: u64) -> Self {
+impl<T> From<u64> for Ref<T> {
+    fn from(val: u64) -> Ref<T> {
         unsafe { Ref(NonNull::new_unchecked(val as *mut T)) }
     }
 }

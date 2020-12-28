@@ -54,7 +54,7 @@ pub enum NodeKind {
         else_: Box<Node>,
     },
     For {
-        param: Box<Node>,
+        param: Vec<IdentId>,
         iter: Box<Node>,
         body: Box<Node>,
     },
@@ -112,7 +112,7 @@ pub enum NodeKind {
     },
 
     Defined(Box<Node>),
-    AliasMethod(IdentId, IdentId), // (new_method, old_method)
+    AliasMethod(Box<Node>, Box<Node>), // (new_method, old_method)
 }
 
 pub type FormalParam = Annot<ParamKind>;
@@ -123,6 +123,7 @@ pub enum ParamKind {
     Post(IdentId),
     Optional(IdentId, Box<Node>), // name, default expr
     Rest(IdentId),
+    RestDiscard,
     Keyword(IdentId, Option<Box<Node>>), // name, default expr
     KWRest(IdentId),
     Block(IdentId),
@@ -139,6 +140,10 @@ impl FormalParam {
 
     pub fn rest(id: IdentId, loc: Loc) -> Self {
         FormalParam::new(ParamKind::Rest(id), loc)
+    }
+
+    pub fn rest_discard(loc: Loc) -> Self {
+        FormalParam::new(ParamKind::RestDiscard, loc)
     }
 
     pub fn post(id: IdentId, loc: Loc) -> Self {
@@ -373,8 +378,8 @@ impl Node {
         Node::new(NodeKind::Defined(Box::new(node)), loc)
     }
 
-    pub fn new_alias(new: IdentId, old: IdentId, loc: Loc) -> Self {
-        Node::new(NodeKind::AliasMethod(new, old), loc)
+    pub fn new_alias(new: Node, old: Node, loc: Loc) -> Self {
+        Node::new(NodeKind::AliasMethod(Box::new(new), Box::new(old)), loc)
     }
 
     pub fn new_comp_stmt(nodes: Vec<Node>, mut loc: Loc) -> Self {

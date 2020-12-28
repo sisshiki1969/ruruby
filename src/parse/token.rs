@@ -136,6 +136,7 @@ pub enum Punct {
     LAnd,
     LOr,
     Match,
+    Unmatch,
     SafeNav,
 
     Backslash,

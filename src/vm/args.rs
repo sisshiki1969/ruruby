@@ -74,6 +74,14 @@ impl Args {
         }
     }
 
+    pub fn new0_block(block: Block) -> Self {
+        Args {
+            block: block,
+            kw_arg: Value::nil(),
+            elems: smallvec![],
+        }
+    }
+
     pub fn new1(arg: Value) -> Self {
         Args {
             block: Block::None,

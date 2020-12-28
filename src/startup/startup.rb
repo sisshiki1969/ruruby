@@ -39,9 +39,6 @@ class RubyVM
   end
 end
 
-class Symbol
-end
-
 class TrueClass
 end
 
