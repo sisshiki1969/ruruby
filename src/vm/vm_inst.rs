@@ -77,7 +77,9 @@ impl Inst {
     pub const OPT_CASE: u8 = 106;
     pub const MRETURN: u8 = 107;
     pub const YIELD: u8 = 108;
-
+    pub const RESCUE: u8 = 109;
+    pub const THROW: u8 = 110;
+    
     pub const ADD: u8 = 120;
     pub const SUB: u8 = 121;
     pub const MUL: u8 = 122;
@@ -258,6 +260,8 @@ impl Inst {
             Inst::OPT_CASE => "OPT_CASE",
             Inst::MRETURN => "MRETURN",
             Inst::YIELD => "YIELD",
+            Inst::RESCUE => "RESCUE",
+            Inst::THROW => "THROW",
 
             _ => return format!("undefined {}", inst),
         };
@@ -301,7 +305,8 @@ impl Inst {
             | Inst::SPLAT
             | Inst::POP
             | Inst::BREAK
-            | Inst::MRETURN => 1,
+            | Inst::MRETURN
+            | Inst::THROW => 1,
                                         // operand
             Inst::PUSH_SYMBOL           // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32
@@ -353,6 +358,7 @@ impl Inst {
             | Inst::LEI                 // immediate: i32
             | Inst::CREATE_HASH         // number of items: u32
             | Inst::YIELD               // number of items: u32
+            | Inst::RESCUE              // number of items: u32
             => 5,
 
             Inst::PUSH_FIXNUM           // value:i64
@@ -533,7 +539,9 @@ impl Inst {
             | Inst::TAKE
             | Inst::SINKN
             | Inst::TOPN
-            | Inst::CONCAT_STRING => format!(
+            | Inst::CONCAT_STRING
+            | Inst::YIELD
+            | Inst::RESCUE => format!(
                 "{} {} items",
                 Inst::inst_name(iseq[pc]),
                 iseq.read32(pc + 1)

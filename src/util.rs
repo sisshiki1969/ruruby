@@ -250,15 +250,11 @@ impl SourceInfo {
             };
 
             let mut start = line.top;
-            let mut end = if line.end as usize >= self.code.len() {
-                self.code.len() as u32 - 1
-            } else {
-                line.end
-            };
+            let mut end = std::cmp::min(self.code.len() as u32 - 1, line.end);
             if self[end] == '\n' && end > 0 {
                 end -= 1
             }
-            start += (loc.0 - start) / term_width * term_width;
+            start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
             if calc_width(&self[start..=end]) >= term_width as usize {
                 for e in loc.1..=end {
                     if calc_width(&self[start..=e]) < term_width as usize {

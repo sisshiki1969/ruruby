@@ -70,12 +70,6 @@ class Errno < StandardError
   class ENOTDIR; end;
 end
 
-class FrozenError < RuntimeError
-end
-
-class ArgumentError < RuntimeError
-end
-
 class Module
   def undef_method(sym); end
   def define_method(sym); end
@@ -85,5 +79,3 @@ RUBY_PLATFORM = "x86_64-linux"
 RUBY_VERSION = "2.7.0"
 RUBY_ENGINE = "ruruby"
 RUBY_DESCRIPTION = "ruruby [x86_64-linux]"
-
-#$: = eval(`ruby -e p($:)`)

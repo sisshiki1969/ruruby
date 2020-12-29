@@ -253,17 +253,15 @@ fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
 fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
-    /*for arg in args.iter() {
-        eprintln!("{}", vm.val_inspect(*arg));
-    }*/
     if args.len() == 1 {
         if args[0].is_class() {
             if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
                 return Err(RubyError::stop_iteration(""));
             };
-        }
-        if let Some(err) = args[0].if_exception() {
-            return Err(err.clone());
+        } else if args[0].if_exception().is_some() {
+            return Err(RubyError::value(args[0]));
+        } else {
+            return Err(RubyError::typeerr("Exception class/object expected."));
         }
     }
     let error_msg = match args.len() {

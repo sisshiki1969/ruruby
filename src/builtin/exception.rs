@@ -19,6 +19,10 @@ pub fn init(globals: &mut Globals) -> Value {
     globals.set_toplevel_constant("StandardError", standard_error);
     let runtime_error = Value::class_under(standard_error);
     globals.set_toplevel_constant("RuntimeError", runtime_error);
+    let frozen_error = Value::class_under(runtime_error);
+    globals.set_toplevel_constant("FrozenError", frozen_error);
+    let argument_error = Value::class_under(runtime_error);
+    globals.set_toplevel_constant("ArgumentError", argument_error);
     exception
 }
 

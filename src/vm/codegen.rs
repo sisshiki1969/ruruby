@@ -1432,7 +1432,7 @@ impl Codegen {
                     let else_dest = iseq.gen_jmp();
                     // Rescue clauses.
                     for RescueEntry {
-                        mut exception_list,
+                        exception_list,
                         assign,
                         body,
                     } in rescue
@@ -1443,18 +1443,21 @@ impl Codegen {
                         if let Some(prev) = prev {
                             iseq.write_disp_from_cur(prev);
                         }
+                        self.gen_dup(iseq, 1);
                         if !exception_list.is_empty() {
-                            self.gen_dup(iseq, 1);
-                            let ex = exception_list.remove(0); // TODO: Support exception class list.
-                            let ex_loc = ex.loc;
-                            self.gen(globals, iseq, ex, true)?;
-                            self.gen_sinkn(iseq, 1);
-                            self.save_loc(iseq, ex_loc);
-                            iseq.push(Inst::TEQ);
-                            prev = Some(iseq.gen_jmp_if_f());
+                            let len = exception_list.len();
+                            for ex in exception_list {
+                                self.gen(globals, iseq, ex, true)?;
+                            }
+                            iseq.push(Inst::RESCUE);
+                            iseq.push32(len as u32);
                         } else {
-                            prev = None;
+                            // When no error_type were given, use "StandardError".
+                            self.gen_get_const_top(iseq, IdentId::get_id("StandardError"));
+                            iseq.push(Inst::RESCUE);
+                            iseq.push32(1);
                         }
+                        prev = Some(iseq.gen_jmp_if_f());
                         // assign the error value.
                         match assign {
                             Some(assign) => self.gen_assign(globals, iseq, *assign)?,
@@ -1463,17 +1466,23 @@ impl Codegen {
                         self.gen(globals, iseq, *body, use_value)?;
                         ensure_dest.push(iseq.gen_jmp());
                     }
+                    // When no rescue clause were matched
                     if let Some(prev) = prev {
                         iseq.write_disp_from_cur(prev);
                     }
-                    self.gen_pop(iseq);
-                    if use_value {
-                        iseq.gen_push_nil()
-                    };
-                    ensure_dest.push(iseq.gen_jmp());
+                    if let Some(box ensure) = ensure.clone() {
+                        self.gen(globals, iseq, ensure, false)?;
+                    }
+                    self.save_loc(iseq, node.loc);
+                    iseq.push(Inst::THROW);
+                    //self.gen_pop(iseq);
+                    //if use_value {
+                    //    iseq.gen_push_nil()
+                    //};
+                    //ensure_dest.push(iseq.gen_jmp());
                     iseq.write_disp_from_cur(else_dest);
                 }
-                // Else clause.
+                // If no exception occured, execute else clause.
                 if let Some(else_) = else_ {
                     if use_value {
                         self.gen_pop(iseq)
@@ -1481,6 +1490,7 @@ impl Codegen {
                     self.gen(globals, iseq, *else_, use_value)?
                 };
                 if !jump_dest.is_empty() {
+                    // Ensure clause for exception return path.
                     let ensure_label = iseq.gen_jmp();
                     for dest in &jump_dest.return_entries {
                         iseq.write_disp_from_cur(*dest);
@@ -1504,7 +1514,7 @@ impl Codegen {
                     }
                     iseq.write_disp_from_cur(ensure_label);
                 }
-                // Ensure clause.
+                // Ensure clause for noraml return path.
                 for src in ensure_dest {
                     iseq.write_disp_from_cur(src);
                 }

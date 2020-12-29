@@ -533,6 +533,11 @@ impl VM {
                     let err = RubyError::method_return(val);
                     return Err(err);
                 }
+                Inst::THROW => {
+                    // - raise error
+                    let val = self.stack_pop()?;
+                    return Err(RubyError::value(val));
+                }
                 Inst::PUSH_NIL => {
                     self.stack_push(Value::nil());
                     self.pc += 1;
@@ -787,13 +792,27 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 1;
                 }
+                Inst::RESCUE => {
+                    let len = iseq.read32(self.pc + 1) as usize;
+                    let stack_len = self.exec_stack.len();
+                    let val = self.exec_stack[stack_len - len - 1];
+                    let ex = &self.exec_stack[stack_len - len..];
+                    let b = self.eval_rescue(val, ex)?;
+                    self.set_stack_len(stack_len - len - 1);
+                    self.stack_push(Value::bool(b));
+                    self.pc += 5;
+                }
                 Inst::CONCAT_STRING => {
                     let num = iseq.read32(self.pc + 1) as usize;
                     let stack_len = self.stack_len();
-                    let mut res = String::new();
+                    /*let mut res = String::new();
                     for v in self.exec_stack.drain(stack_len - num..stack_len) {
                         res += v.as_string().unwrap();
-                    }
+                    }*/
+                    let res = self
+                        .exec_stack
+                        .drain(stack_len - num..)
+                        .fold(String::new(), |acc, x| acc + x.as_string().unwrap());
 
                     let val = Value::string(res);
                     self.stack_push(val);
@@ -1297,7 +1316,12 @@ impl VM {
 
                     self.pc += 5;
                 }
-                _ => return Err(RubyError::internal("Unimplemented instruction.")),
+                inst => {
+                    return Err(RubyError::internal(format!(
+                        "Unimplemented instruction. {}",
+                        Inst::inst_name(inst)
+                    )))
+                }
             }
         }
     }
@@ -2066,9 +2090,9 @@ impl VM {
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(_) | ObjKind::Module(_) => Ok(self
-                    .fallback_for_binop(IdentId::get_id("==="), lhs, rhs)?
-                    .to_bool()),
+                ObjKind::Class(_) | ObjKind::Module(_) => {
+                    Ok(self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?.to_bool())
+                }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
                         RV::Symbol(sym) => IdentId::get_name(sym),
@@ -2085,6 +2109,33 @@ impl VM {
             },
             None => Ok(self.eval_eq(lhs, rhs)?),
         }
+    }
+
+    fn eval_rescue(&self, val: Value, exceptions: &[Value]) -> Result<bool, RubyError> {
+        let mut module = if val.is_class() { val } else { val.get_class() };
+        loop {
+            if module.is_class() {
+                if exceptions.iter().any(|x| {
+                    if let Some(ary) = x.as_splat() {
+                        ary.as_array()
+                            .unwrap()
+                            .elements
+                            .iter()
+                            .any(|elem| elem.id() == module.id())
+                    } else {
+                        x.id() == module.id()
+                    }
+                }) {
+                    return Ok(true);
+                }
+            };
+
+            match module.upper() {
+                Some(upper) => module = upper,
+                None => break,
+            }
+        }
+        Ok(false)
     }
 
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {

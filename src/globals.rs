@@ -53,6 +53,7 @@ pub struct BuiltinClass {
     pub object: Value,
     pub enumerator: Value,
     pub exception: Value,
+    pub standard: Value,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -92,6 +93,7 @@ impl BuiltinClass {
             enumerator: nil,
             object,
             exception: nil,
+            standard: nil,
         }
     }
 
@@ -161,6 +163,10 @@ impl BuiltinClass {
 
     pub fn exception() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().exception)
+    }
+
+    pub fn standard() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().standard)
     }
 }
 
@@ -287,6 +293,7 @@ impl Globals {
         let kernel = kernel::init(&mut globals);
         object.as_mut_class().append_include(kernel, &mut globals);
         globals.set_toplevel_constant("Kernel", kernel);
+        globals.builtins.standard = globals.get_toplevel_constant("StandardError").unwrap();
 
         init_class!("Math", math);
         init_class!("IO", io);

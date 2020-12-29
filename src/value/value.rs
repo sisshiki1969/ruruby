@@ -282,7 +282,7 @@ impl Value {
                 ObjKind::Enumerator(_) => format!("Enumerator"),
                 ObjKind::Fiber(_) => format!("Fiber"),
                 ObjKind::Time(time) => format!("{:?}", time),
-                ObjKind::Exception(err) => format!("Exception {:?}", err),
+                ObjKind::Exception(err) => format!("#<{}:{:?}>", self.get_class_name(), err),
             },
         }
     }
@@ -450,26 +450,12 @@ impl Value {
             RV::Integer(_) => "Integer".to_string(),
             RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
-            RV::Object(oref) => match oref.kind {
+            RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-                ObjKind::String(_) => "String".to_string(),
-                ObjKind::Array(_) => "Array".to_string(),
-                ObjKind::Range(_) => "Range".to_string(),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                ObjKind::Hash(_) => "Hash".to_string(),
-                ObjKind::Regexp(_) => "Regexp".to_string(),
-                ObjKind::Class(_) => "Class".to_string(),
-                ObjKind::Module(_) => "Module".to_string(),
-                ObjKind::Proc(_) => "Proc".to_string(),
-                ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => oref.class_name().to_string(),
-                ObjKind::Integer(_) => "Integer".to_string(),
-                ObjKind::Float(_) => "Float".to_string(),
-                ObjKind::Complex { .. } => "Complex".to_string(),
-                ObjKind::Fiber(_) => "Fiber".to_string(),
-                ObjKind::Enumerator(_) => "Enumerator".to_string(),
-                ObjKind::Time(_) => "Time".to_string(),
-                ObjKind::Exception(_) => "Exception".to_string(),
+                ObjKind::Class(cref) => format!("{:?}", cref.name()),
+                ObjKind::Module(cref) => format!("{:?}", cref.name()),
+                _ => oref.class().as_class().name_str(),
             },
         }
     }
