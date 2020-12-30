@@ -39,9 +39,6 @@ class RubyVM
   end
 end
 
-class TrueClass
-end
-
 class SystemExit
 end
 

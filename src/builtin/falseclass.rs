@@ -55,6 +55,21 @@ mod tests {
         assert false, false | nil
         assert true, false | 3
 
+        assert false, false.send(:"&", true)
+        assert false, false.send(:"&", false)
+        assert false, false.send(:"&", nil)
+        assert false, false.send(:"&", 3)
+
+        assert true, false.send(:"^", true)
+        assert false, false.send(:"^", false)
+        assert false, false.send(:"^", nil)
+        assert true, false.send(:"^", 3)
+
+        assert true, false.send(:"|", true)
+        assert false, false.send(:"|", false)
+        assert false, false.send(:"|", nil)
+        assert true, false.send(:"|", 3)
+
         assert "false", false.inspect
         assert "false", false.to_s
         assert FalseClass, false.class

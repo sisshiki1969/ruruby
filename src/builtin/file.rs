@@ -52,7 +52,7 @@ fn canonicalize_path(_: &mut VM, path: PathBuf) -> Result<PathBuf, RubyError> {
 }
 
 /// Convert Ruby String value`string` to canonicalized PathBuf.
-fn string_to_canonicalized_path(
+pub fn string_to_canonicalized_path(
     vm: &mut VM,
     string: Value,
     msg: &str,
