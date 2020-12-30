@@ -3,8 +3,9 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub fn init(_globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let mut kernel = Value::module();
+    globals.set_toplevel_constant("Kernel", kernel);
     kernel.add_builtin_module_func("puts", puts);
     kernel.add_builtin_module_func("p", p);
     kernel.add_builtin_module_func("print", print);
@@ -30,7 +31,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("Array", kernel_array);
     kernel.add_builtin_module_func("at_exit", at_exit);
     kernel.add_builtin_module_func("`", command);
-    return kernel;
+    kernel
 }
 /// Built-in function "puts".
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {

@@ -570,9 +570,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::ADD => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_add(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_add(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -584,9 +584,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SUB => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_sub(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_sub(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -598,44 +598,44 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::MUL => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_mul(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_mul(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::POW => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_exp(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_exp(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::DIV => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_div(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_div(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::REM => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_rem(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_rem(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::SHR => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_shr(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_shr(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::SHL => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_shl(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_shl(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -646,9 +646,9 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::BAND => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_bitand(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_bitand(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -660,9 +660,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::BOR => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_bitor(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_bitor(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -674,9 +674,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::BXOR => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_bitxor(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_bitxor(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -1922,8 +1922,11 @@ impl VM {
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Ok(Value::bool(rhs.to_bool())),
+            (RV::False, _) => Ok(Value::false_val()),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs & rhs)),
-            (_, _) => return Err(RubyError::undefined_op("&", rhs, lhs)),
+            (RV::Nil, _) => Ok(Value::false_val()),
+            (_, _) => self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs),
         }
     }
 
@@ -1933,8 +1936,11 @@ impl VM {
             return Ok(Value::integer(lhs.as_packed_fixnum() & i));
         }
         match lhs.unpack() {
+            RV::True => Ok(Value::true_val()),
+            RV::False => Ok(Value::false_val()),
             RV::Integer(lhs) => Ok(Value::integer(lhs & i)),
-            _ => return Err(RubyError::undefined_op("&", Value::integer(i), lhs)),
+            RV::Nil => Ok(Value::false_val()),
+            _ => self.fallback_for_binop(IdentId::get_id("&"), lhs, Value::integer(i)),
         }
     }
 
@@ -1945,8 +1951,11 @@ impl VM {
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Ok(Value::true_val()),
+            (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs | rhs)),
-            (_, _) => return Err(RubyError::undefined_op("|", rhs, lhs)),
+            (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
+            (_, _) => self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs),
         }
     }
 
@@ -1956,16 +1965,21 @@ impl VM {
             return Ok(Value::integer(lhs.as_packed_fixnum() | i));
         }
         match lhs.unpack() {
+            RV::True => Ok(Value::true_val()),
+            RV::False => Ok(Value::true_val()),
             RV::Integer(lhs) => Ok(Value::integer(lhs | i)),
-            _ => return Err(RubyError::undefined_op("|", Value::integer(i), lhs)),
+            RV::Nil => Ok(Value::true_val()),
+            _ => self.fallback_for_binop(IdentId::get_id("|"), lhs, Value::integer(i)),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Bool(b), _) => Ok(Value::bool(b ^ rhs.to_bool())),
+            (RV::True, _) => Ok(Value::bool(!rhs.to_bool())),
+            (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
-            (_, _) => return Err(RubyError::undefined_op("^", rhs, lhs)),
+            (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
+            (_, _) => return self.fallback_for_binop(IdentId::get_id("^"), lhs, rhs),
         }
     }
 
@@ -2415,10 +2429,8 @@ impl VM {
         let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "nil".to_string(),
-            RV::Bool(b) => match b {
-                true => "true".to_string(),
-                false => "false".to_string(),
-            },
+            RV::True => "true".to_string(),
+            RV::False => "false".to_string(),
             RV::Integer(i) => i.to_string(),
             RV::Float(f) => {
                 if f.fract() == 0.0 {

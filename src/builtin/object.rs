@@ -11,8 +11,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("clone", dup);
     object_class.add_builtin_method_by_str("dup", dup);
     object_class.add_builtin_method_by_str("eql?", eql);
-    object_class.add_builtin_method_by_str("nil?", nil);
-    object_class.add_builtin_method_by_str("to_i", toi);
+    object_class.add_builtin_method_by_str("nil?", nil_);
     object_class.add_builtin_method_by_str("method", method);
     object_class.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
     object_class.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
@@ -31,8 +30,7 @@ pub fn init(globals: &mut Globals) {
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let class = self_val.get_class();
-    Ok(class)
+    Ok(self_val.get_class())
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -45,11 +43,6 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let s = match self_val.unpack() {
         RV::Uninitialized => "[Uninitialized]".to_string(),
-        RV::Nil => "".to_string(),
-        RV::Bool(b) => match b {
-            true => "true".to_string(),
-            false => "false".to_string(),
-        },
         RV::Integer(i) => i.to_string(),
         RV::Float(f) => {
             if f.fract() == 0.0 {
@@ -72,6 +65,7 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             ObjKind::Regexp(rref) => format!("({})", rref.as_str()),
             _ => format!("{:?}", oref.kind),
         },
+        _ => unreachable!(),
     };
 
     Ok(Value::string(s))
@@ -105,21 +99,9 @@ fn eql(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(self_val == args[0]))
 }
 
-fn nil(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    Ok(Value::bool(self_val.is_nil()))
-}
-
-fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    //args.check_args_num( 1, 1)?;
-    if self_val.is_nil() {
-        Ok(Value::integer(0))
-    } else {
-        Err(RubyError::undefined_method(
-            IdentId::get_id("to_i"),
-            self_val,
-        ))
-    }
+    Ok(Value::false_val())
 }
 
 fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

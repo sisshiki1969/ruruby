@@ -54,6 +54,9 @@ pub struct BuiltinClass {
     pub enumerator: Value,
     pub exception: Value,
     pub standard: Value,
+    pub nilclass: Value,
+    pub trueclass: Value,
+    pub falseclass: Value,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -94,6 +97,9 @@ impl BuiltinClass {
             object,
             exception: nil,
             standard: nil,
+            nilclass: nil,
+            trueclass: nil,
+            falseclass: nil,
         }
     }
 
@@ -167,6 +173,18 @@ impl BuiltinClass {
 
     pub fn standard() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().standard)
+    }
+
+    pub fn nilclass() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().nilclass)
+    }
+
+    pub fn trueclass() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().trueclass)
+    }
+
+    pub fn falseclass() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().falseclass)
     }
 }
 
@@ -273,11 +291,14 @@ impl Globals {
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
 
-        init_class!("Numeric", numeric);
+        numeric::init(&mut globals);
 
         init_builtin_class!("Integer", integer);
         init_builtin_class!("Complex", complex);
-        init_builtin_class!("Float", float);
+        builtins.float = float::init(&mut globals);
+        builtins.nilclass = nilclass::init(&mut globals);
+        builtins.trueclass = trueclass::init(&mut globals);
+        builtins.falseclass = falseclass::init(&mut globals);
         init_builtin_class!("Array", array);
         init_builtin_class!("Symbol", symbol);
         init_builtin_class!("Proc", procobj);
@@ -292,14 +313,13 @@ impl Globals {
 
         let kernel = kernel::init(&mut globals);
         object.as_mut_class().append_include(kernel, &mut globals);
-        globals.set_toplevel_constant("Kernel", kernel);
         globals.builtins.standard = globals.get_toplevel_constant("StandardError").unwrap();
 
-        init_class!("Math", math);
-        init_class!("IO", io);
-        init_class!("File", file);
-        init_class!("Dir", dir);
-        init_class!("Process", process);
+        math::init(&mut globals);
+        io::init(&mut globals);
+        file::init(&mut globals);
+        dir::init(&mut globals);
+        process::init(&mut globals);
         init_class!("GC", gc);
         init_class!("Struct", structobj);
         init_class!("Time", time);

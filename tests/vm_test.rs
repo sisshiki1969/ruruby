@@ -301,39 +301,6 @@ fn int_index() {
 }
 
 #[test]
-fn objects() {
-    let program = r#"
-        assert(nil, BasicObject.superclass)
-        assert(BasicObject, Object.superclass)
-        assert(Object, Module.superclass)
-        assert(Module, Class.superclass)
-        assert(Object, Numeric.superclass)
-        assert(Numeric, Integer.superclass)
-        assert(Numeric, Float.superclass)
-        assert(Numeric, Complex.superclass)
-        assert(Object, Regexp.superclass)
-        assert(Object, String.superclass)
-        assert(Object, Range.superclass)
-        assert(Object, Proc.superclass)
-        assert(Object, Method.superclass)
-
-        assert(Class, Object.class)
-        assert(Class, BasicObject.class)
-        assert(Class, Module.class)
-        assert(Class, Class.class)
-        assert(Class, Integer.class)
-        assert(Class, Regexp.class)
-        assert(Class, String.class)
-        assert(Class, Range.class)
-        assert(Class, Proc.class)
-        assert(Class, Method.class)
-
-        assert(Regexp, Regexp.new("a").class)
-    "#;
-    assert_script(program);
-}
-
-#[test]
 fn triple_equal() {
     let program = r#"
         assert true, 1 === 1

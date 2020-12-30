@@ -16,7 +16,8 @@ const ZERO: u64 = (0b1000 << 60) | 0b10;
 pub enum RV<'a> {
     Uninitialized,
     Nil,
-    Bool(bool),
+    True,
+    False,
     Integer(i64),
     Float(f64),
     Symbol(IdentId),
@@ -28,8 +29,8 @@ impl<'a> RV<'a> {
         match self {
             RV::Uninitialized => Value::uninitialized(),
             RV::Nil => Value::nil(),
-            RV::Bool(true) => Value::true_val(),
-            RV::Bool(false) => Value::false_val(),
+            RV::True => Value::true_val(),
+            RV::False => Value::false_val(),
             RV::Integer(num) => Value::integer(*num),
             RV::Float(num) => Value::float(*num),
             RV::Symbol(id) => Value::symbol(*id),
@@ -174,8 +175,8 @@ impl Value {
         } else {
             match self.0 {
                 NIL_VALUE => RV::Nil,
-                TRUE_VALUE => RV::Bool(true),
-                FALSE_VALUE => RV::Bool(false),
+                TRUE_VALUE => RV::True,
+                FALSE_VALUE => RV::False,
                 UNINITIALIZED => RV::Uninitialized,
                 _ => unreachable!("Illegal packed value."),
             }
@@ -185,13 +186,8 @@ impl Value {
     fn format(&self, level: usize) -> String {
         match self.unpack() {
             RV::Nil => format!("nil"),
-            RV::Bool(b) => {
-                if b {
-                    format!("true")
-                } else {
-                    format!("false")
-                }
-            }
+            RV::True => format!("true"),
+            RV::False => format!("false"),
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Integer(i) => format!("{}", i),
             RV::Float(f) => format!("{}", f),
@@ -361,10 +357,8 @@ impl Value {
         let s = match self.unpack() {
             RV::Uninitialized => Cow::from("[Uninitialized]"),
             RV::Nil => Cow::from(""),
-            RV::Bool(b) => match b {
-                true => Cow::from("true"),
-                false => Cow::from("false"),
-            },
+            RV::True => Cow::from("true"),
+            RV::False => Cow::from("false"),
             RV::Integer(i) => Cow::from(i.to_string()),
             RV::Float(f) => {
                 if f.fract() == 0.0 {
@@ -406,38 +400,30 @@ impl Value {
     /// ### panic
     /// panic if `self` was Invalid.
     pub fn get_class_for_method(&self) -> Value {
-        match self.as_rvalue() {
-            None => {
-                if self.is_packed_fixnum() {
-                    BuiltinClass::integer()
-                } else if self.is_packed_num() {
-                    BuiltinClass::float()
-                } else if self.is_packed_symbol() {
-                    BuiltinClass::symbol()
-                } else {
-                    BuiltinClass::object()
-                }
-            }
-            Some(info) => info.class(),
+        match self.unpack() {
+            RV::Integer(_) => BuiltinClass::integer(),
+            RV::Float(_) => BuiltinClass::float(),
+            RV::Symbol(_) => BuiltinClass::symbol(),
+            RV::Nil => BuiltinClass::nilclass(),
+            RV::True => BuiltinClass::trueclass(),
+            RV::False => BuiltinClass::falseclass(),
+            RV::Object(info) => info.class(),
+            RV::Uninitialized => unreachable!("[Uninitialized]"),
         }
     }
 
     /// Get class of `self`.
     /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
     pub fn get_class(&self) -> Value {
-        match self.as_rvalue() {
-            None => {
-                if self.is_packed_fixnum() {
-                    BuiltinClass::integer()
-                } else if self.is_packed_num() {
-                    BuiltinClass::float()
-                } else if self.is_packed_symbol() {
-                    BuiltinClass::symbol()
-                } else {
-                    BuiltinClass::object()
-                }
-            }
-            Some(info) => info.search_class(),
+        match self.unpack() {
+            RV::Integer(_) => BuiltinClass::integer(),
+            RV::Float(_) => BuiltinClass::float(),
+            RV::Symbol(_) => BuiltinClass::symbol(),
+            RV::Nil => BuiltinClass::nilclass(),
+            RV::True => BuiltinClass::trueclass(),
+            RV::False => BuiltinClass::falseclass(),
+            RV::Object(info) => info.search_class(),
+            RV::Uninitialized => unreachable!("[Uninitialized]"),
         }
     }
 
@@ -445,8 +431,8 @@ impl Value {
         match self.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "NilClass".to_string(),
-            RV::Bool(true) => "TrueClass".to_string(),
-            RV::Bool(false) => "FalseClass".to_string(),
+            RV::True => "TrueClass".to_string(),
+            RV::False => "FalseClass".to_string(),
             RV::Integer(_) => "Integer".to_string(),
             RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
@@ -1372,7 +1358,7 @@ mod tests {
     #[test]
     fn pack_bool1() {
         let _globals = GlobalsRef::new_globals();
-        let expect = RV::Bool(true);
+        let expect = RV::True;
         let packed = expect.pack();
         let got = packed.unpack();
         if expect != got {
@@ -1383,7 +1369,7 @@ mod tests {
     #[test]
     fn pack_bool2() {
         let _globals = GlobalsRef::new_globals();
-        let expect = RV::Bool(false);
+        let expect = RV::False;
         let packed = expect.pack();
         let got = packed.unpack();
         if expect != got {
