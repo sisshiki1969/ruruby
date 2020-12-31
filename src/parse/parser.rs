@@ -1568,9 +1568,22 @@ impl Parser {
                         self.new_param(id, self.prev_loc())?;
                         params.push(FormalParam::req_param(id, self.prev_loc()));
                     };
-                    self.expect_punct(Punct::LBrace)?;
-                    let body = self.parse_comp_stmt()?;
-                    self.expect_punct(Punct::RBrace)?;
+                    let body = if self.consume_punct(Punct::LBrace)? {
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_punct(Punct::RBrace)?;
+                        body
+                    } else if self.consume_reserved(Reserved::Do)? {
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_reserved(Reserved::End)?;
+                        body
+                    } else {
+                        let loc = self.loc();
+                        let tok = self.get()?;
+                        return Err(self.error_unexpected(
+                            loc,
+                            format!("Expected 'do' or '{{'. Actual:{:?}", tok.kind),
+                        ));
+                    };
                     let lvar = self.context_stack.pop().unwrap().lvar;
                     Ok(Node::new_proc(params, body, lvar, loc))
                 }

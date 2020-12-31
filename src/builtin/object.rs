@@ -293,7 +293,10 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 1)?;
+    args.check_args_range(1, 2)?;
+    if args.len() == 2 {
+        eprintln!("Warining: 2nd arg will not used. respont_to?()")
+    };
     let method = args[0].expect_string_or_symbol("1st arg")?;
     let b = vm
         .globals
