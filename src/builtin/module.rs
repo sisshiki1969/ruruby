@@ -322,7 +322,10 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             args.check_args_num(0)?;
             let args = Args::new0();
             // The scopes of constants and class variables are outer of the block.
-            vm.eval_block_self(block, self_val, &args)
+            vm.class_push(self_val);
+            let res = vm.eval_block_self(block, self_val, &args);
+            vm.class_pop();
+            res
         }
     }
 }
@@ -558,6 +561,28 @@ mod test {
         assert("mew", C.new.bar)
         assert("view", x)
         assert(111, C.module_eval { D })
+        "##;
+        assert_script(program);
+    }
+
+    #[test]
+    fn module_eval2() {
+        let program = r##"
+        class C; end
+        D = 0
+        C.class_eval "def fn; 77; end; D = 1"
+        assert 77, C.new.fn
+        assert 1, C::D
+        assert 0, D
+        C.class_eval do
+          def gn
+            99
+          end
+          D = 2
+        end
+        assert 99, C.new.gn
+        assert 1, C::D
+        assert 2, D
         "##;
         assert_script(program);
     }

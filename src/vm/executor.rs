@@ -140,7 +140,9 @@ impl VM {
     }
 
     pub fn current_context(&self) -> ContextRef {
-        self.exec_context.last().unwrap().to_owned()
+        let ctx = self.exec_context.last().unwrap();
+        assert!(!ctx.on_stack || ctx.moved_to_heap.is_none());
+        ctx.to_owned()
     }
 
     pub fn latest_context(&self) -> Option<ContextRef> {
@@ -1217,8 +1219,8 @@ impl VM {
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(val);
                     try_push!(self.eval_send(method, val, &Args::new0()));
-                    self.pc += 14;
                     self.class_pop();
+                    self.pc += 14;
                 }
                 Inst::DEF_SCLASS => {
                     let method = iseq.read_methodref(self.pc + 1);
@@ -1227,8 +1229,8 @@ impl VM {
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(singleton);
                     try_push!(self.eval_send(method, singleton, &Args::new0()));
-                    self.pc += 9;
                     self.class_pop();
+                    self.pc += 9;
                 }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
@@ -1372,7 +1374,15 @@ impl VM {
                 Block::None
             } else {
                 if val.as_proc().is_none() {
-                    return Err(RubyError::internal(format!("Must be Proc. {:?}", val)));
+                    return Err(RubyError::internal(format!(
+                        "Must be Proc. {:?}:{}",
+                        val,
+                        val.get_class_name()
+                    )));
+                    /*return Err(RubyError::typeerr(format!(
+                        "Wrong argument type {:?} (expected Proc).",
+                        val,
+                    )));*/
                 }
                 Block::Proc(val)
             }

@@ -229,6 +229,14 @@ impl RValue {
         }
     }
 
+    pub fn new_array_with_class(array_info: ArrayInfo, class: Value) -> Self {
+        RValue {
+            class,
+            var_table: None,
+            kind: ObjKind::Array(array_info),
+        }
+    }
+
     pub fn new_range(range: RangeInfo) -> Self {
         RValue {
             class: BuiltinClass::range(),

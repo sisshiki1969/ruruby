@@ -3,6 +3,7 @@ use crate::*;
 pub fn init(globals: &mut Globals) {
     let mut object = globals.builtins.object;
     let object_class = object.as_mut_class();
+    object_class.add_builtin_method_by_str("initialize", initialize);
     object_class.add_builtin_method_by_str("class", class);
     object_class.add_builtin_method_by_str("object_id", object_id);
     object_class.add_builtin_method_by_str("to_s", to_s);
@@ -27,6 +28,10 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("enum_for", to_enum);
     object_class.add_builtin_method_by_str("respond_to?", respond_to);
     object_class.add_builtin_method_by_str("instance_exec", instance_exec);
+}
+
+fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    Ok(self_val)
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {

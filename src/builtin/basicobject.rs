@@ -10,7 +10,7 @@ pub fn init(globals: &mut Globals) {
 
 /// An alias statement is compiled to method call for this func.
 /// TODO: Currently, aliasing of global vars does not work.
-fn alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn alias_method(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
     let new = args[0].as_symbol().unwrap();
     let org = args[1].as_symbol().unwrap();
@@ -20,11 +20,7 @@ fn alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         (true, true) => {}
         (false, false) => {
             // TODO: Is it right?
-            let mut class = if self_val.is_class() {
-                self_val
-            } else {
-                self_val.get_class_for_method()
-            };
+            let mut class = vm.class();
             let method = vm.get_method(class, org)?;
             class
                 .as_mut_class()

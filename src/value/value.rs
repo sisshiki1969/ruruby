@@ -1189,6 +1189,10 @@ impl Value {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }
 
+    pub fn array_from_with_class(ary: Vec<Value>, class: Value) -> Self {
+        RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
+    }
+
     pub fn splat(val: Value) -> Self {
         RValue::new_splat(val).pack()
     }
