@@ -3,6 +3,7 @@ use crate::*;
 pub fn init(globals: &mut Globals) {
     let mut class = globals.builtins.class;
     class.add_builtin_method_by_str("new", new);
+    class.add_builtin_method_by_str("allocate", allocate);
     class.add_builtin_method_by_str("superclass", superclass);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("name", name);
@@ -43,6 +44,13 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, new_instance, args)?;
     };
+    Ok(new_instance)
+}
+
+/// Create new instance of `self` without initialization.
+fn allocate(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let new_instance = Value::ordinary_object(self_val);
     Ok(new_instance)
 }
 

@@ -27,10 +27,6 @@ fn objects() {
         assert(Object, Fiber.superclass)
         assert(Object, Enumerator.superclass)
         assert(Object, Exception.superclass)
-        assert(Exception, StandardError.superclass)
-        assert(StandardError, RuntimeError.superclass)
-        assert(RuntimeError, FrozenError.superclass)
-        assert(RuntimeError, ArgumentError.superclass)
 
         assert(Class, Object.class)
         assert(Class, BasicObject.class)

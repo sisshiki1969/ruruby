@@ -49,6 +49,8 @@ pub fn init(globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("ord", ord);
     string_class.add_builtin_method_by_str("empty?", empty);
     string_class.add_builtin_method_by_str("codepoints", codepoints);
+    string_class.add_builtin_method_by_str("frozen?", frozen_);
+    string_class.add_builtin_method_by_str("lines", lines);
 
     string_class
 }
@@ -928,9 +930,7 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn codepoints(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    if args.block.is_some() {
-        return Err(RubyError::argument("Currently, block is not supported."));
-    }
+    args.expect_no_block()?;
     let res = self_val
         .as_string()
         .unwrap()
@@ -938,6 +938,23 @@ fn codepoints(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         .map(|c| Value::integer(c as u32 as i64))
         .collect();
     Ok(Value::array_from(res))
+}
+
+fn frozen_(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    Ok(Value::false_val())
+}
+
+fn lines(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let mut receiver = self_val;
+    args.check_args_num(0)?;
+    args.expect_no_block()?;
+    let string = receiver.expect_string("Receiver")?;
+    let ary = string
+        .split_inclusive('\n')
+        .map(|line| Value::string(line))
+        .collect();
+    Ok(Value::array_from(ary))
 }
 
 #[cfg(test)]
@@ -1339,6 +1356,23 @@ mod test {
     fn string_codepoints() {
         let program = r#"
         assert [104, 101, 108, 108, 111, 32, 12431, 12540, 12427, 12393], "hello わーるど".codepoints
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn frozen() {
+        let program = r#"
+        assert false, "Ruby".frozen?
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn lines() {
+        let program = r#"
+        assert ["aa\n", "bb\n", "cc\n"], "aa\nbb\ncc\n".lines
+        assert ["aa\n", "bb\n", "cc"], "aa\nbb\ncc".lines
         "#;
         assert_script(program);
     }

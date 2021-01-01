@@ -33,13 +33,14 @@ impl std::fmt::Debug for ErrorInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             RubyErrorKind::RuntimeErr { kind, message } => {
-                write!(f, "RuntimeErr: {:?} {}", kind, message)
+                write!(f, "{:?} {}", kind, message)
             }
             RubyErrorKind::ParseErr(kind) => write!(f, "ParseErr: {:?}", kind),
             RubyErrorKind::MethodReturn(val) => write!(f, "MethodReturn {:?}", val),
             RubyErrorKind::BlockReturn(val) => write!(f, "BlockReturn {:?}", val),
             RubyErrorKind::Value(val) => write!(f, "{:?}", val),
             RubyErrorKind::Internal(msg) => write!(f, "InternalError {}", msg),
+            RubyErrorKind::None(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -55,6 +56,7 @@ pub enum RubyErrorKind {
     MethodReturn(Value),
     BlockReturn(Value),
     Internal(String),
+    None(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -185,36 +187,44 @@ impl RubyError {
                 ParseErrKind::SyntaxError(n) => format!("SyntaxError: {}", n),
                 ParseErrKind::Name(n) => format!("NameError: {}", n),
             },
-            RubyErrorKind::RuntimeErr { kind, message } => {
-                let s = match kind {
-                    RuntimeErrKind::Name => "NoNameError",
-                    RuntimeErrKind::NoMethod => "NoMethodError",
-                    RuntimeErrKind::Type => "TypeError",
-                    RuntimeErrKind::Argument => "ArgumentError",
-                    RuntimeErrKind::Index => "IndexError",
-                    RuntimeErrKind::Regexp => "RegexpError",
-                    RuntimeErrKind::Fiber => "FiberError",
-                    RuntimeErrKind::LocalJump => "LocalJumpError",
-                    RuntimeErrKind::StopIteration => "StopIteration",
-                    RuntimeErrKind::Runtime => "RuntimeError",
-                    RuntimeErrKind::LoadError => "LoadError",
-                };
-                format!("{}({})", s, message)
-            }
+            RubyErrorKind::RuntimeErr { message, .. } => message.to_owned(),
             RubyErrorKind::MethodReturn(_) => "LocalJumpError".to_string(),
             RubyErrorKind::BlockReturn(_) => "LocalJumpError".to_string(),
-            RubyErrorKind::Value(val) => format!("{:?}", val),
+            RubyErrorKind::Value(val) => val.if_exception().unwrap().message(),
+            RubyErrorKind::None(msg) => msg.to_owned(),
             RubyErrorKind::Internal(msg) => {
                 format!("InternalError\n{}", msg)
             }
         }
     }
 
-    pub fn to_exception_val(&self) -> Value {
+    pub fn to_exception_val(&self, globals: &Globals) -> Value {
         match &self.kind {
             RubyErrorKind::Value(val) => *val,
+            RubyErrorKind::RuntimeErr { kind, .. } => match &kind {
+                RuntimeErrKind::Type => {
+                    let err_class = globals.get_toplevel_constant("TypeError").unwrap();
+                    Value::exception(err_class, self.clone())
+                }
+                RuntimeErrKind::Argument => {
+                    let err_class = globals.get_toplevel_constant("ArgumentError").unwrap();
+                    Value::exception(err_class, self.clone())
+                }
+                RuntimeErrKind::NoMethod => {
+                    let err_class = globals.get_toplevel_constant("NoMethodError").unwrap();
+                    Value::exception(err_class, self.clone())
+                }
+                RuntimeErrKind::Runtime => {
+                    let err_class = globals.get_toplevel_constant("RuntimeError").unwrap();
+                    Value::exception(err_class, self.clone())
+                }
+                _ => {
+                    let standard = globals.builtins.standard;
+                    Value::exception(standard, self.clone())
+                }
+            },
             _ => {
-                let standard = BuiltinClass::standard();
+                let standard = globals.builtins.standard;
                 Value::exception(standard, self.clone())
             }
         }
@@ -284,6 +294,10 @@ impl RubyError {
 
     pub fn internal(msg: impl Into<String>) -> RubyError {
         RubyError::new(RubyErrorKind::Internal(msg.into()), 0)
+    }
+
+    pub fn none(msg: impl Into<String>) -> RubyError {
+        RubyError::new(RubyErrorKind::None(msg.into()), 0)
     }
 
     pub fn name(msg: impl Into<String>) -> RubyError {

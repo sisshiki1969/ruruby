@@ -169,8 +169,15 @@ impl Args {
 
     pub fn expect_block(&self) -> Result<&Block, RubyError> {
         match &self.block {
-            Block::None => return Err(RubyError::argument("Currently, needs block.")),
+            Block::None => Err(RubyError::argument("Currently, needs block.")),
             block => Ok(block),
+        }
+    }
+
+    pub fn expect_no_block(&self) -> Result<(), RubyError> {
+        match &self.block {
+            Block::None => Ok(()),
+            _ => Err(RubyError::argument("Currently, block is not supported.")),
         }
     }
 }

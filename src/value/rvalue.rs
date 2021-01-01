@@ -59,6 +59,12 @@ impl GC for RValue {
             ObjKind::Proc(pref) => pref.context.mark(alloc),
             ObjKind::Method(mref) => mref.mark(alloc),
             ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
+            ObjKind::Exception(err) => match &err.kind {
+                RubyErrorKind::Value(val) => val.mark(alloc),
+                RubyErrorKind::BlockReturn(val) => val.mark(alloc),
+                RubyErrorKind::MethodReturn(val) => val.mark(alloc),
+                _ => {}
+            },
             _ => {}
         }
     }

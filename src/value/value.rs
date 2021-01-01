@@ -278,7 +278,9 @@ impl Value {
                 ObjKind::Enumerator(_) => format!("Enumerator"),
                 ObjKind::Fiber(_) => format!("Fiber"),
                 ObjKind::Time(time) => format!("{:?}", time),
-                ObjKind::Exception(err) => format!("#<{}:{:?}>", self.get_class_name(), err),
+                ObjKind::Exception(err) => {
+                    format!("#<{}: {}>", self.get_class_name(), err.message())
+                }
             },
         }
     }
@@ -439,8 +441,6 @@ impl Value {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                ObjKind::Class(cref) => format!("{:?}", cref.name()),
-                ObjKind::Module(cref) => format!("{:?}", cref.name()),
                 _ => oref.class().as_class().name_str(),
             },
         }
@@ -593,7 +593,7 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(RubyError::argument(format!(
+            _ => Err(RubyError::typeerr(format!(
                 "{} must be an Integer. (given:{})",
                 msg.into(),
                 self.get_class_name()
@@ -604,7 +604,7 @@ impl Value {
     pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
-            None => Err(RubyError::argument(format!(
+            None => Err(RubyError::typeerr(format!(
                 "{} must be Float. (given:{})",
                 msg,
                 self.get_class_name()
@@ -1168,11 +1168,13 @@ impl Value {
     }
 
     pub fn class(cinfo: ClassInfo) -> Self {
-        RValue::new_class(cinfo).pack()
+        let mut obj = RValue::new_class(cinfo).pack();
+        obj.get_singleton_class().unwrap();
+        obj
     }
 
     pub fn class_under(superclass: impl Into<Option<Value>>) -> Self {
-        RValue::new_class(ClassInfo::from(superclass)).pack()
+        Value::class(ClassInfo::from(superclass))
     }
 
     pub fn singleton_class_from(superclass: impl Into<Option<Value>>) -> Self {
@@ -1263,13 +1265,12 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
-    /// TODO: nil=>NilClass, true=>TrueClass, false=>FalseClass
-    pub fn get_singleton_class(&mut self) -> Option<Value> {
+    pub fn get_singleton_class(&mut self) -> VMResult {
         match self.as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
                 if class.is_singleton() {
-                    Some(class)
+                    Ok(class)
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
@@ -1288,10 +1289,14 @@ impl Value {
                         _ => Value::singleton_class_from(class),
                     };
                     oref.set_class(singleton);
-                    Some(singleton)
+                    Ok(singleton)
                 }
             }
-            _ => None,
+            _ => Err(RubyError::typeerr(format!(
+                "Can not define singleton for {:?}:{}",
+                self,
+                self.get_class_name()
+            ))),
         }
     }
 

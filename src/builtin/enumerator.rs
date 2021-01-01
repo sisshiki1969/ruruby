@@ -1,14 +1,14 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from(globals.builtins.object);
+    let mut class = Value::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("each", each);
     class.add_builtin_method_by_str("map", map);
     class.add_builtin_method_by_str("collect", map);
     class.add_builtin_method_by_str("with_index", with_index);
     class.add_builtin_method_by_str("inspect", inspect);
-    let mut class = Value::class(class);
+
     class.add_builtin_class_method("new", enum_new);
     class
 }

@@ -84,8 +84,8 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    vm.get_singleton_class(self_val)
+fn singleton_class(_: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+    self_val.get_singleton_class()
 }
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -307,7 +307,11 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
-    vm.eval_block_self(block, self_val, args)
+    let class = self_val.get_class_for_method();
+    vm.class_push(class);
+    let res = vm.eval_block_self(block, self_val, args);
+    vm.class_pop();
+    res
 }
 
 #[cfg(test)]

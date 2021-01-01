@@ -430,6 +430,7 @@ impl VM {
                     err.info.push((self.source_info(), self.get_loc()));
                     //eprintln!("{:?}", iseq.exception_table);
                     if let RubyErrorKind::Internal(msg) = &err.kind {
+                        eprintln!();
                         err.show_err();
                         err.show_all_loc();
                         unreachable!("{}", msg);
@@ -440,7 +441,7 @@ impl VM {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.to_usize();
                         self.set_stack_len(stack_len);
-                        let val = err.to_exception_val();
+                        let val = err.to_exception_val(&self.globals);
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
@@ -1221,8 +1222,7 @@ impl VM {
                 }
                 Inst::DEF_SCLASS => {
                     let method = iseq.read_methodref(self.pc + 1);
-                    let base = self.stack_pop()?;
-                    let singleton = self.get_singleton_class(base)?;
+                    let singleton = self.stack_pop()?.get_singleton_class()?;
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined(singleton);
@@ -1626,12 +1626,8 @@ impl VM {
 
     pub fn get_const(&self, parent: Value, id: IdentId) -> VMResult {
         match parent.as_module().get_const(id) {
-            Some(val) => {
-                return Ok(val);
-            }
-            None => {
-                return Err(RubyError::name(format!("Uninitialized constant {:?}.", id)));
-            }
+            Some(val) => Ok(val),
+            None => Err(RubyError::name(format!("Uninitialized constant {:?}.", id))),
         }
     }
 
@@ -2346,7 +2342,7 @@ impl VM {
                 Ok(val)
             }
             None => {
-                let val = if is_module {
+                let mut val = if is_module {
                     if !super_val.is_nil() {
                         panic!("Module can not have superclass.");
                     };
@@ -2360,7 +2356,7 @@ impl VM {
                     };
                     Value::class_under(super_val)
                 };
-                let mut singleton = self.get_singleton_class(val)?;
+                let mut singleton = val.get_singleton_class()?;
                 let singleton_class = singleton.as_mut_class();
                 singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
                 self.globals.set_const(current_class, id, val);
@@ -2625,11 +2621,11 @@ impl VM {
     /// Define a method on a singleton class of `target_obj`.
     pub fn define_singleton_method(
         &mut self,
-        target_obj: Value,
+        mut target_obj: Value,
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        let mut singleton = self.get_singleton_class(target_obj)?;
+        let mut singleton = target_obj.get_singleton_class()?;
         singleton
             .as_mut_class()
             .add_method(&mut self.globals, id, method);
@@ -2646,11 +2642,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::nomethod(format!(
-                "no method `{:?}' for {}",
-                method_id,
-                rec_class.as_class().name_str()
-            ))),
+            None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
         }
     }
 
@@ -2662,13 +2654,6 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
         self.get_method(rec_class, method_id)
-    }
-
-    pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {
-        match obj.get_singleton_class() {
-            Some(val) => Ok(val),
-            None => Err(RubyError::typeerr("Can not define singleton.")),
-        }
     }
 }
 

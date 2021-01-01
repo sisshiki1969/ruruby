@@ -70,15 +70,17 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("filter", select);
     class.add_builtin_method_by_str("bsearch", bsearch);
     class.add_builtin_method_by_str("bsearch_index", bsearch_index);
+    class.add_builtin_method_by_str("delete", delete);
 
     class.add_builtin_class_method("new", array_new);
+    class.add_builtin_class_method("allocate", array_allocate);
     class.add_builtin_class_method("[]", array_elem);
     class
 }
 
 // Class methods
 
-fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
     let array_vec = match args.len() {
         0 => vec![],
@@ -98,13 +100,23 @@ fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
         }
         _ => unreachable!(),
     };
-    let array = Value::array_from(array_vec);
+    let mut array = Value::array_from(array_vec);
+    array.set_class(self_val);
+    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+        vm.eval_send(method, array, args)?;
+    };
+    Ok(array)
+}
+
+fn array_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let mut array = Value::array_from(vec![]);
+    array.set_class(self_val);
     Ok(array)
 }
 
 fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let array_vec = args.to_vec();
-    let mut array = Value::array_from(array_vec);
+    let mut array = Value::array_from(args.to_vec());
     array.set_class(self_val);
     Ok(array)
 }
@@ -233,6 +245,7 @@ fn unshift(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
+    //eprintln!("{:?} {}", self_val, self_val.get_class_name());
     let aref = self_val.as_array().unwrap();
     let res = Value::integer(aref.elements.len() as i64);
     Ok(res)
@@ -1060,6 +1073,23 @@ fn bsearch_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn delete(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let arg = args[0];
+    args.expect_no_block()?;
+    let ary = &mut self_val.as_mut_array().unwrap().elements;
+    let mut removed = None;
+    ary.retain(|x| {
+        if x.eq(&arg) {
+            removed = Some(*x);
+            false
+        } else {
+            true
+        }
+    });
+    Ok(removed.unwrap_or(Value::nil()))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1543,6 +1573,16 @@ mod tests {
         assert 2, ary.bsearch_index {|x| x >=  6 }
         assert 0, ary.bsearch_index {|x| x >= -1 }
         assert nil, ary.bsearch_index {|x| x >= 100 }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn delete() {
+        let program = r#"
+        ary = [0, nil, 7, 1, "hard", 1.0]
+        assert 1.0, ary.delete(1)
+        assert [0, nil, 7, "hard"], ary
         "#;
         assert_script(program);
     }
