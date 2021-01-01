@@ -71,6 +71,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("bsearch", bsearch);
     class.add_builtin_method_by_str("bsearch_index", bsearch_index);
     class.add_builtin_method_by_str("delete", delete);
+    class.add_builtin_method_by_str("flatten", flatten);
+    class.add_builtin_method_by_str("flatten!", flatten_);
 
     class.add_builtin_class_method("new", array_new);
     class.add_builtin_class_method("allocate", array_allocate);
@@ -1090,6 +1092,41 @@ fn delete(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(removed.unwrap_or(Value::nil()))
 }
 
+fn flatten(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let ary = &self_val.as_array().unwrap().elements;
+    let mut res = vec![];
+    ary_flatten(ary, &mut res, self_val)?;
+    Ok(Value::array_from(res))
+}
+
+fn flatten_(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let mut selfval = self_val;
+    let ary = &mut selfval.as_mut_array().unwrap().elements;
+    let mut res = vec![];
+    let flag = ary_flatten(ary, &mut res, self_val)?;
+    *ary = res;
+    Ok(if flag { self_val } else { Value::nil() })
+}
+
+fn ary_flatten(ary: &[Value], res: &mut Vec<Value>, origin: Value) -> Result<bool, RubyError> {
+    let mut flag = false;
+    for v in ary {
+        match v.as_array() {
+            Some(ainfo) => {
+                if v.id() == origin.id() {
+                    return Err(RubyError::argument("Tried to flatten recursive array."));
+                };
+                flag = true;
+                ary_flatten(&ainfo.elements, res, origin)?;
+            }
+            None => res.push(*v),
+        }
+    }
+    Ok(flag)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1583,6 +1620,23 @@ mod tests {
         ary = [0, nil, 7, 1, "hard", 1.0]
         assert 1.0, ary.delete(1)
         assert [0, nil, 7, "hard"], ary
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn flatten() {
+        let program = r#"
+        a = [1, [2, 3, [4], 5]]
+        assert [1, 2, 3, 4, 5], a.flatten
+        assert [1, [2, 3, [4], 5]], a
+        a = [1]
+        a << a
+        assert_error { a.flatten }
+        a = [1, [2, 3, [4], 5]]
+        assert [1, 2, 3, 4, 5], a.flatten!
+        assert [1, 2, 3, 4, 5], a
+        assert nil, a.flatten!
         "#;
         assert_script(program);
     }
