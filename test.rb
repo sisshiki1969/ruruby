@@ -1,19 +1,15 @@
-def fn 
-  a = []
-  begin
-    a << "begin"
-    return 100
-    a << "unreachable"
-  rescue StandardError => ex
-    a << "StandardError"
-  rescue Exception => ex
-    a << "Exception"
-  else
-    a << "else"
-  ensure
-    a << "ensure"
+class C; end
+D = 0
+C.class_eval "def fn; 77; end; D = 1"
+puts C.new.fn #77
+puts C::D #1
+puts D #0
+C.class_eval do
+  def gn
+    99
   end
-  a
+  D = 2
 end
-    
-puts fn
+puts C.new.gn #99
+puts C::D #1
+puts D #2

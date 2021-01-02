@@ -31,6 +31,7 @@ pub fn init(globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("Array", kernel_array);
     kernel.add_builtin_module_func("at_exit", at_exit);
     kernel.add_builtin_module_func("`", command);
+    kernel.add_builtin_module_func("eval", eval);
     kernel
 }
 /// Built-in function "puts".
@@ -447,6 +448,30 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::bytes(output.stdout))
 }
 
+fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_range(1, 4)?;
+    let mut arg0 = args[0];
+    let program = arg0.expect_string("1st arg")?;
+    if args.len() > 1 {
+        if !args[1].is_nil() {
+            return Err(RubyError::argument("Currently, 2nd arg must be Nil."));
+        }
+    }
+    let path = if args.len() > 2 {
+        let mut arg2 = args[2];
+        let name = arg2.expect_string("3rd arg")?;
+        std::path::PathBuf::from(name)
+    } else {
+        std::path::PathBuf::from("(eval)")
+    };
+
+    let method = vm.parse_program_eval(path, program)?;
+    let args = Args::new0();
+    let outer = vm.current_context();
+    let res = vm.eval_block(&Block::Block(method, outer), &args)?;
+    Ok(res)
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -573,18 +598,6 @@ mod test {
     }
 
     #[test]
-    fn kernel_eval() {
-        let program = r#"
-        n = 2
-        assert("n", %w{n}*"")
-        assert(2, eval(%w{n}*""))
-        assert("eval(%w{n}*\"\")", %q{eval(%w{n}*"")})
-        assert(2, eval(%q{eval(%w{n}*"")}))
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
     fn kernel_complex() {
         let program = r#"
         assert(Complex.rect(5.2, -99), Complex(5.2, -99))
@@ -612,6 +625,29 @@ mod test {
         a = "toml"
         assert("Cargo.toml\n", `ls Cargo.#{a}`)
         assert_error { `wooo` }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_eval() {
+        let program = r#"
+        a = 100
+        eval("b = 100; assert(100, b);")
+        assert(77, eval("a = 77"))
+        assert(77, a)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_eval2() {
+        let program = r#"
+        n = 2
+        assert("n", %w{n}*"")
+        assert(2, eval(%w{n}*""))
+        assert("eval(%w{n}*\"\")", %q{eval(%w{n}*"")})
+        assert(2, eval(%q{eval(%w{n}*"")}))
         "#;
         assert_script(program);
     }

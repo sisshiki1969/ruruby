@@ -311,6 +311,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn add(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let mut lhs = self_val.expect_array("Receiver")?.elements.clone();
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
@@ -319,6 +320,7 @@ fn add(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_mut_array().unwrap();
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
@@ -327,6 +329,7 @@ fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs_v = &self_val.expect_array("Receiver")?.elements;
     let mut arg0 = args[0];
     let rhs_v = &arg0.expect_array("Argument")?.elements;
@@ -388,14 +391,14 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
     let param_num = block.to_iseq().params.req;
     let mut arg = Args::new(param_num);
 
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut res = vec![];
-    for elem in &mut aref.elements {
+    for elem in &aref.elements {
         if param_num == 0 {
         } else if param_num == 1 {
             arg[0] = *elem;
@@ -419,22 +422,25 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(1);
-    for i in &aref.elements {
-        arg[0] = *i;
+    for i in 0..aref.len() {
+        if i >= aref.len() {
+            break;
+        };
+        arg[0] = aref.elements[i];
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
 }
 
-fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn each_with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "each_with_index");
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(2);
     for (i, v) in aref.elements.iter().enumerate() {
         arg[0] = *v;
@@ -444,10 +450,10 @@ fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn partition(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn partition(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "partition");
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(1);
     let mut res_true = vec![];
     let mut res_false = vec![];

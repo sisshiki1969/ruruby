@@ -30,8 +30,9 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         _ => {
             vm.class_push(val);
             let arg = Args::new1(val);
-            vm.eval_block_self(&args.block, val, &arg)?;
+            let res = vm.eval_block_self(&args.block, val, &arg);
             vm.class_pop();
+            res?;
         }
     };
     Ok(val)

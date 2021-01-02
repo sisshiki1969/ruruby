@@ -344,6 +344,7 @@ impl RValue {
         ALLOC.with(|a| {
             let mut alloc = *a.borrow().as_ref().unwrap();
             let ptr = alloc.alloc(self);
+            //assert!((ptr as u64) & 0b111 == 0);
             Value::from_ptr(ptr)
         })
     }

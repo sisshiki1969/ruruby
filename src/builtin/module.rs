@@ -311,19 +311,20 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let mut arg0 = args[0];
             let program = arg0.expect_string("1st arg")?;
             let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
-            let args = Args::new0();
             // The scopes of constants and class variables are same as module definition of `self_val`.
             vm.class_push(self_val);
-            let res = vm.invoke_method(method, self_val, Some(context), &args);
+            let mut iseq = vm.get_method_iseq();
+            iseq.class_defined.push(self_val);
+            let res = vm.invoke_method(method, self_val, Some(context), &Args::new0());
+            iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res
         }
         block => {
             args.check_args_num(0)?;
-            let args = Args::new0();
             // The scopes of constants and class variables are outer of the block.
             vm.class_push(self_val);
-            let res = vm.eval_block_self(block, self_val, &args);
+            let res = vm.eval_block_self(block, self_val, &Args::new0());
             vm.class_pop();
             res
         }

@@ -55,6 +55,12 @@ impl Loc {
 #[derive(Debug)]
 pub struct Ref<T>(NonNull<T>);
 
+impl<T: Default> Default for Ref<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
@@ -191,8 +197,8 @@ impl Line {
     }
 }
 
-impl SourceInfoRef {
-    pub fn empty() -> Self {
+impl Default for SourceInfoRef {
+    fn default() -> Self {
         SourceInfoRef::new(SourceInfo::new(PathBuf::default()))
     }
 }

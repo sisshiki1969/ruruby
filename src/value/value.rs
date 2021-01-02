@@ -113,6 +113,7 @@ impl PartialEq for Value {
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
+            (ObjKind::Proc(lhs), ObjKind::Proc(rhs)) => lhs.context.id() == rhs.context.id(),
             (ObjKind::Invalid, _) => {
                 unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
@@ -178,7 +179,7 @@ impl Value {
                 TRUE_VALUE => RV::True,
                 FALSE_VALUE => RV::False,
                 UNINITIALIZED => RV::Uninitialized,
-                _ => unreachable!("Illegal packed value."),
+                _ => unreachable!("Illegal packed value. {:x}", self.0),
             }
         }
     }
@@ -273,7 +274,7 @@ impl Value {
                 }
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
                 ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
-                ObjKind::Proc(_p) => format!("#<Proc:0x{:x}>", rval.id()),
+                ObjKind::Proc(p) => format!("#<Proc:0x{:x}>", p.context.id()),
                 ObjKind::Method(_) => format!("Method"),
                 ObjKind::Enumerator(_) => format!("Enumerator"),
                 ObjKind::Fiber(_) => format!("Fiber"),

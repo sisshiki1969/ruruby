@@ -23,7 +23,6 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("equal?", equal);
     object_class.add_builtin_method_by_str("send", send);
     object_class.add_builtin_method_by_str("__send__", send);
-    object_class.add_builtin_method_by_str("eval", eval);
     object_class.add_builtin_method_by_str("to_enum", to_enum);
     object_class.add_builtin_method_by_str("enum_for", to_enum);
     object_class.add_builtin_method_by_str("respond_to?", respond_to);
@@ -183,15 +182,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = vm.current_context();
     let iseq = context.iseq_ref.unwrap();
     if let ISeqKind::Method(m) = context.kind {
-        let class = match iseq.class_defined {
-            Some(list) => list.class,
-            None => {
-                return Err(RubyError::nomethod(format!(
-                    "no superclass method `{:?}' for {:?}.",
-                    m, self_val
-                )));
-            }
-        };
+        let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
             Some(class) => match vm.globals.find_method(class, m) {
                 Some(m) => m,
@@ -244,32 +235,6 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
     new_args.block = args.block.clone();
     let res = vm.eval_send(method, self_val, &new_args)?;
-    Ok(res)
-}
-
-fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 4)?;
-    let mut arg0 = args[0];
-    let program = arg0.expect_string("1st arg")?;
-    //#[cfg(debug_assertions)]
-    //eprintln!("eval: {}", program);
-    if args.len() > 1 {
-        if !args[1].is_nil() {
-            return Err(RubyError::argument("Currently, 2nd arg must be Nil."));
-        }
-    }
-    let path = if args.len() > 2 {
-        let mut arg2 = args[2];
-        let name = arg2.expect_string("3rd arg")?;
-        std::path::PathBuf::from(name)
-    } else {
-        std::path::PathBuf::from("(eval)")
-    };
-
-    let method = vm.parse_program_eval(path, program)?;
-    let args = Args::new0();
-    let outer = vm.current_context();
-    let res = vm.eval_block(&Block::Block(method, outer), &args)?;
     Ok(res)
 }
 
@@ -466,17 +431,6 @@ mod test {
         #    33 (同じブロックが3つのyieldで3回起動された。
         #        具体的には 10 + 3; 20 + 3; 30 + 3 を実行した)
 
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn object_eval() {
-        let program = r#"
-        a = 100
-        eval("b = 100; assert(100, b);")
-        assert(77, eval("a = 77"))
-        assert(77, a)
         "#;
         assert_script(program);
     }

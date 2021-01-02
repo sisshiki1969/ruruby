@@ -145,6 +145,20 @@ impl VM {
         ctx.to_owned()
     }
 
+    fn get_method_context(&self) -> ContextRef {
+        let mut context = self.current_context();
+        loop {
+            context = match context.outer {
+                Some(context) => context,
+                None => return context,
+            };
+        }
+    }
+
+    pub fn get_method_iseq(&self) -> ISeqRef {
+        self.get_method_context().iseq_ref.unwrap()
+    }
+
     pub fn latest_context(&self) -> Option<ContextRef> {
         self.exec_context.last().cloned()
     }
@@ -152,7 +166,7 @@ impl VM {
     pub fn source_info(&self) -> SourceInfoRef {
         match self.current_context().iseq_ref {
             Some(iseq) => iseq.source_info,
-            None => SourceInfoRef::empty(),
+            None => SourceInfoRef::default(),
         }
     }
 
@@ -326,13 +340,14 @@ impl VM {
 
     pub fn run(&mut self, path: PathBuf, program: &str) -> VMResult {
         let method = self.parse_program(path, program)?;
+        let mut iseq = method.as_iseq();
+        iseq.class_defined = self.get_class_defined();
         let self_value = self.globals.main_object;
         let val = self.eval_send(method, self_value, &Args::new0())?;
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::INVALID);
-        assert_eq!(
-            0,
-            self.stack_len(),
+        assert!(
+            self.stack_len() == 0,
             "exec_stack length must be 0. actual:{}",
             self.stack_len()
         );
@@ -417,6 +432,7 @@ impl VM {
             print!("--->");
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
             context.dump();
+            eprintln!("  -----------");
         }
         loop {
             match self.run_context_main(context) {
@@ -872,7 +888,7 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
-                        v if v.is_nil() => self.class(),
+                        v if v.is_nil() => *self.get_method_iseq().class_defined.last().unwrap(), //self.class(),
                         v => v,
                     };
                     let val = self.stack_pop()?;
@@ -885,7 +901,7 @@ impl VM {
                     let val = match self.globals.find_const_cache(slot) {
                         Some(val) => val,
                         None => {
-                            let val = match VM::get_env_const(self.current_context(), id) {
+                            let val = match self.get_env_const(id) {
                                 Some(val) => val,
                                 None => VM::get_super_const(self.class(), id)?,
                             };
@@ -1217,9 +1233,10 @@ impl VM {
                     let val = self.define_class(base, id, is_module, super_val)?;
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(val);
-                    try_push!(self.eval_send(method, val, &Args::new0()));
+                    iseq.class_defined = self.get_class_defined();
+                    let res = self.eval_send(method, val, &Args::new0());
                     self.class_pop();
+                    try_push!(res);
                     self.pc += 14;
                 }
                 Inst::DEF_SCLASS => {
@@ -1227,16 +1244,17 @@ impl VM {
                     let singleton = self.stack_pop()?.get_singleton_class()?;
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(singleton);
-                    try_push!(self.eval_send(method, singleton, &Args::new0()));
+                    iseq.class_defined = self.get_class_defined();
+                    let res = self.eval_send(method, singleton, &Args::new0());
                     self.class_pop();
+                    try_push!(res);
                     self.pc += 9;
                 }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(None);
+                    iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     self.define_method(self_value, id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self_value, id, method)?;
@@ -1247,7 +1265,7 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(None);
+                    iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     let singleton = self.stack_pop()?;
                     self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
@@ -1556,31 +1574,13 @@ impl VM {
         }
     }
 
-    /// Get class list from the nearest exec context.
-    fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
-        for context in self.exec_context.iter().rev() {
-            match context.iseq_ref.unwrap().class_defined {
-                Some(class_list) => return Some(class_list),
-                None => {}
-            }
-        }
-        None
-    }
-
     /// Get class list in the current context.
     ///
     /// At first, this method searches the class list of outer context,
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
-    fn get_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
-        match new_class.into() {
-            Some(class) => {
-                let outer = self.get_nearest_class_stack();
-                let class_list = ClassList::new(outer, class);
-                Some(ClassListRef::new(class_list))
-            }
-            None => self.get_nearest_class_stack(),
-        }
+    fn get_class_defined(&self) -> Vec<Value> {
+        self.class_context.iter().map(|(v, _)| *v).collect()
     }
 }
 
@@ -1596,20 +1596,15 @@ impl VM {
     }
 
     // Search lexical class stack for the constant.
-    fn get_env_const(context: ContextRef, id: IdentId) -> Option<Value> {
-        let mut class_list = match context.get_outermost().iseq_ref.unwrap().class_defined {
-            Some(list) => list,
-            None => return None,
-        };
-        loop {
-            match class_list.class.as_module().get_const(id) {
-                Some(val) => return Some(val),
-                None => {}
-            }
-            class_list = match class_list.outer {
-                Some(class) => class,
-                None => return None,
-            };
+    fn get_env_const(&self, id: IdentId) -> Option<Value> {
+        let class_defined = &self.get_method_iseq().class_defined;
+        match class_defined.len() {
+            0 => None,
+            1 => class_defined[0].as_module().get_const(id),
+            _ => class_defined[1..]
+                .iter()
+                .rev()
+                .find_map(|c| c.as_module().get_const(id)),
         }
     }
 
@@ -2517,7 +2512,7 @@ impl VM {
 
     /// Evaluate given block with given `args`.
     pub fn eval_yield(&mut self, args: &Args) -> VMResult {
-        let context = self.current_context().get_outermost();
+        let context = self.get_method_context();
         match &context.block {
             Block::Block(method, ctx) => {
                 self.invoke_method(*method, ctx.self_value, Some(*ctx), args)
