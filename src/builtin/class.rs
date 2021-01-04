@@ -2,13 +2,12 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) {
     let mut class = globals.builtins.class;
+    class.add_builtin_class_method("new", class_new);
+
     class.add_builtin_method_by_str("new", new);
     class.add_builtin_method_by_str("allocate", allocate);
     class.add_builtin_method_by_str("superclass", superclass);
     class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("name", name);
-
-    class.add_builtin_class_method("new", class_new);
 }
 
 // Class methods
@@ -65,22 +64,9 @@ fn superclass(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(superclass)
 }
 
-fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
-    let cref = self_val.expect_class(vm, "Receiver")?;
-    let s = match cref.name() {
-        Some(id) => format! {"{:?}", id},
-        None => format! {"#<Class:0x{:x}>", cref.id()},
-    };
-    Ok(Value::string(s))
-}
-
-fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let cref = self_val.as_class();
-    let val = match cref.name() {
-        Some(id) => Value::string(format! {"{:?}", id}),
-        None => Value::nil(),
-    };
-    Ok(val)
+fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let cref = self_val.if_mod_class().unwrap();
+    Ok(Value::string(cref.inspect_class()))
 }
 
 #[cfg(test)]
@@ -98,21 +84,7 @@ mod tests {
         }
         assert(100, A.new.a)
         assert("A", A.inspect)
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn class_name() {
-        let program = r#"
-        assert("Integer", Integer.name)
-        class A
-        end
-        assert("A", A.name)
-        a = Class.new()
-        assert(nil, a.name)
-        B = a
-        assert("B", a.name)
+        assert(0, Class.new.inspect =~ /#<Class:0x.{16}>/)
         "#;
         assert_script(program);
     }

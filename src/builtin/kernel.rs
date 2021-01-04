@@ -16,6 +16,7 @@ pub fn init(globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("load", load);
     kernel.add_builtin_module_func("block_given?", block_given);
     kernel.add_builtin_module_func("is_a?", isa);
+    kernel.add_builtin_module_func("kind_of?", isa);
     kernel.add_builtin_module_func("__dir__", dir);
     kernel.add_builtin_module_func("__FILE__", file_);
     kernel.add_builtin_module_func("raise", raise);
@@ -216,22 +217,7 @@ fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
 
 fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let mut module = self_val.get_class();
-    loop {
-        let cinfo = module.as_module();
-        let real_module = if cinfo.is_included() {
-            cinfo.origin()
-        } else {
-            module
-        };
-        if real_module.id() == args[0].id() {
-            return Ok(Value::true_val());
-        }
-        module = cinfo.upper();
-        if module.is_nil() {
-            return Ok(Value::false_val());
-        };
-    }
+    Ok(Value::bool(self_val.kind_of(args[0])))
 }
 
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -253,25 +239,29 @@ fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// fail(message, cause: $!) -> ()
 /// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
 /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
-fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
-    if args.len() == 1 {
-        if args[0].is_class() {
-            if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
-                return Err(RubyError::stop_iteration(""));
-            };
-        } else if args[0].if_exception().is_some() {
-            return Err(RubyError::value(args[0]));
-        } else {
-            return Err(RubyError::typeerr("Exception class/object expected."));
+    match args.len() {
+        0 => Err(RubyError::none("")),
+        1 => {
+            if let Some(s) = args[0].as_string() {
+                Err(RubyError::none(s))
+            } else if args[0].is_class() {
+                if args[0].is_exception_class() {
+                    let method = vm.get_method_from_receiver(args[0], IdentId::NEW)?;
+                    let val = vm.eval_send(method, args[0], &Args::new0())?;
+                    Err(RubyError::value(val))
+                } else {
+                    Err(RubyError::typeerr("Exception class/object expected."))
+                }
+            } else if args[0].if_exception().is_some() {
+                Err(RubyError::value(args[0]))
+            } else {
+                Err(RubyError::typeerr("Exception class/object expected."))
+            }
         }
+        _ => Err(RubyError::none(args[1].clone().expect_string("2nd arg")?)),
     }
-    let error_msg = match args.len() {
-        1 => format!("{:?}", args[0]),
-        2 => format!("{:?} {:?}", args[0], args[1]),
-        _ => "".to_string(),
-    };
-    Err(RubyError::runtime(error_msg))
 }
 
 fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
@@ -291,6 +281,9 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                     kind: RuntimeErrKind::StopIteration,
                     ..
                 } => return Ok(Value::nil()),
+                RubyErrorKind::Value(val) if val.get_class_name() == "StopIteration" => {
+                    return Ok(Value::nil())
+                }
                 _ => return Err(err),
             },
         }

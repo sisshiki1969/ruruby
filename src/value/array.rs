@@ -92,10 +92,7 @@ impl ArrayInfo {
             }
             Ok(Value::array_from(self.elements[start..end].to_vec()))
         } else {
-            Err(RubyError::typeerr(format!(
-                "No implicit conversion of {:?} into Integer.",
-                idx
-            )))
+            Err(RubyError::no_implicit_conv(idx, "Integer"))
         }
     }
 

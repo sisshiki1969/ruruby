@@ -3,6 +3,8 @@ use crate::*;
 pub fn init(globals: &mut Globals) -> Value {
     let numeric = globals.get_toplevel_constant("Numeric").unwrap();
     let mut class = ClassInfo::from(numeric);
+    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
@@ -18,6 +20,16 @@ pub fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 // Instance methods
+fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let f = self_val.as_float().unwrap();
+    let s = if f.fract() == 0.0 {
+        format!("{:.1}", f)
+    } else {
+        f.to_string()
+    };
+    Ok(Value::string(s))
+}
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
@@ -106,6 +118,15 @@ fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 #[cfg(test)]
 mod tests {
     use crate::test::*;
+    #[test]
+    fn float() {
+        let program = r#"
+        assert "34.5", 34.5.to_s
+        assert "34.5", 34.5.inspect
+        assert "34.0", 34.000.to_s
+        "#;
+        assert_script(program);
+    }
 
     #[test]
     fn cmp() {

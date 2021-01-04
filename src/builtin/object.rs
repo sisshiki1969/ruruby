@@ -27,6 +27,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("enum_for", to_enum);
     object_class.add_builtin_method_by_str("respond_to?", respond_to);
     object_class.add_builtin_method_by_str("instance_exec", instance_exec);
+    object_class.add_builtin_method_by_str("=~", match_);
 }
 
 fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -47,21 +48,8 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let s = match self_val.unpack() {
         RV::Uninitialized => "[Uninitialized]".to_string(),
-        RV::Integer(i) => i.to_string(),
-        RV::Float(f) => {
-            if f.fract() == 0.0 {
-                format!("{:.1}", f)
-            } else {
-                f.to_string()
-            }
-        }
-        RV::Symbol(i) => format!("{:?}", i),
         RV::Object(oref) => match &oref.kind {
             ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Class(cinfo) => match cinfo.name() {
-                Some(id) => format! {"{:?}", id},
-                None => format! {"#<Class:0x{:x}>", oref.id()},
-            },
             ObjKind::Ordinary => {
                 let class_name = self_val.get_class().as_class().name_str();
                 format!("#<{}:{:016x}>", class_name, self_val.id())
@@ -82,8 +70,9 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
             Ok(Value::string(s))
         }
         None => {
-            let s = vm.val_inspect(self_val)?;
-            Ok(Value::string(s))
+            unreachable!()
+            //let s = vm.val_inspect(self_val)?;
+            //Ok(Value::string(s))
         }
     }
 }
@@ -282,6 +271,11 @@ fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let res = vm.eval_block_self(block, self_val, args);
     vm.class_pop();
     res
+}
+
+fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    Ok(Value::nil())
 }
 
 #[cfg(test)]

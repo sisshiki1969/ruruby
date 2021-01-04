@@ -126,7 +126,7 @@ impl RValue {
     }
 
     pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
-        let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
+        let mut s = format! {"#<{}:0x{:016x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {

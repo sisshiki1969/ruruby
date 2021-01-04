@@ -1,15 +1,10 @@
-class C; end
-D = 0
-C.class_eval "def fn; 77; end; D = 1"
-puts C.new.fn #77
-puts C::D #1
-puts D #0
-C.class_eval do
-  def gn
-    99
-  end
-  D = 2
+class MyException < StandardError
 end
-puts C.new.gn #99
-puts C::D #1
-puts D #2
+
+begin
+  raise MyException
+rescue => e
+  puts e
+  puts e.class
+  puts e.message
+end

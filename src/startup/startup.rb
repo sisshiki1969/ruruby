@@ -20,12 +20,12 @@ class RbConfig
 end
 
 class Thread
-  @@current = {}.compare_by_identity
+  CURRENT = {}.compare_by_identity
   def respond_to?(*x)
     false
   end
   def self.current
-    @@current
+    CURRENT
   end
 end
 
@@ -44,6 +44,8 @@ end
 
 class Encoding
   UTF_8 = self.new
+  US_ASCII = self.new
+  IBM437 = self.new
   def self.default_external
     UTF_8
   end
@@ -60,6 +62,14 @@ class Errno < StandardError
   class ENOENT; end;
   class ENOTDIR; end;
 end
+
+class RangeError < StandardError
+end
+class FloatDomainError < RangeError
+end
+class ZeroDivisionError < StandardError
+end
+
 
 class Module
   def undef_method(sym); end

@@ -195,7 +195,7 @@ impl Value {
             RV::Symbol(id) => format!(":\"{:?}\"", id),
             RV::Object(rval) => match &rval.kind {
                 ObjKind::Invalid => format!("[Invalid]"),
-                ObjKind::Ordinary => format!("#<{}:0x{:x}>", self.get_class_name(), self.id()),
+                ObjKind::Ordinary => format!("#<{}:0x{:016x}>", self.get_class_name(), self.id()),
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
                 ObjKind::Integer(i) => format!("{}", i),
                 ObjKind::Float(f) => format!("{}", f),
@@ -211,14 +211,8 @@ impl Value {
                         format!("({:?}{:?}i)", r, i)
                     }
                 }
-                ObjKind::Class(cinfo) => match cinfo.name() {
-                    Some(id) => format!("{:?}", id),
-                    None => format!("#<Class:0x{:x}>", cinfo.id()),
-                },
-                ObjKind::Module(cinfo) => match cinfo.name() {
-                    Some(id) => format!("{:?}", id),
-                    None => format!("#<Module:0x{:x}>", cinfo.id()),
-                },
+                ObjKind::Class(cinfo) => cinfo.inspect_class(),
+                ObjKind::Module(cinfo) => cinfo.inspect_module(),
                 ObjKind::Array(aref) => {
                     if level == 0 {
                         format!("[Array]")
@@ -473,6 +467,35 @@ impl Value {
             }
             None => unreachable!("upper(): Not a Class / Module."),
         }
+    }
+
+    pub fn kind_of(&self, class: Value) -> bool {
+        let mut val = self.get_class();
+        loop {
+            if val.id() == class.id() {
+                return true;
+            }
+            val = match val.upper() {
+                Some(val) => val,
+                None => break,
+            };
+        }
+        false
+    }
+
+    pub fn is_exception_class(&self) -> bool {
+        let mut val = *self;
+        let ex = BuiltinClass::exception();
+        loop {
+            if val.id() == ex.id() {
+                return true;
+            }
+            val = match val.superclass() {
+                Some(val) => val,
+                None => break,
+            };
+        }
+        false
     }
 
     /// Examine whether `self` is a singleton class.

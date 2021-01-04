@@ -325,8 +325,6 @@ impl Globals {
         init_class!("Time", time);
         init_class!("Comparable", comparable);
 
-        globals.set_toplevel_constant("StopIteration", Value::class_under(object));
-
         let mut env_map = HashInfo::new(FxHashMap::default());
         std::env::vars()
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));

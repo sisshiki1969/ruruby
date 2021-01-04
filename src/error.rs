@@ -80,6 +80,7 @@ pub enum RuntimeErrKind {
     StopIteration,
     Runtime,
     LoadError,
+    Range,
 }
 
 impl RubyError {
@@ -218,6 +219,10 @@ impl RubyError {
                     let err_class = globals.get_toplevel_constant("RuntimeError").unwrap();
                     Value::exception(err_class, self.clone())
                 }
+                RuntimeErrKind::StopIteration => {
+                    let err_class = globals.get_toplevel_constant("StopIteration").unwrap();
+                    Value::exception(err_class, self.clone())
+                }
                 _ => {
                     let standard = globals.builtins.standard;
                     Value::exception(standard, self.clone())
@@ -308,6 +313,14 @@ impl RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into())
     }
 
+    pub fn no_implicit_conv(other: Value, msg: impl Into<String>) -> RubyError {
+        RubyError::typeerr(format!(
+            "No implicit conversion of {:?} into {}.",
+            other,
+            msg.into()
+        ))
+    }
+
     pub fn argument(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
     }
@@ -336,6 +349,10 @@ impl RubyError {
 
     pub fn load(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::LoadError, msg.into())
+    }
+
+    pub fn range(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::Range, msg.into())
     }
 }
 

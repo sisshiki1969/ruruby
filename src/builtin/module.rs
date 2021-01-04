@@ -2,8 +2,13 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let module_class = globals.builtins.module.as_mut_class();
+    let mut module_class = globals.builtins.module;
+    module_class.add_builtin_class_method("new", module_new);
+
     module_class.add_builtin_method_by_str("===", teq);
+    module_class.add_builtin_method_by_str("name", name);
+    module_class.add_builtin_method_by_str("to_s", inspect);
+    module_class.add_builtin_method_by_str("inspect", inspect);
     module_class.add_builtin_method_by_str("constants", constants);
     module_class.add_builtin_method_by_str("class_variables", class_variables);
     module_class.add_builtin_method_by_str("const_defined?", const_defined);
@@ -25,6 +30,24 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("public", public);
     module_class.add_builtin_method_by_str("private", private);
     module_class.add_builtin_method_by_str("protected", protected);
+}
+
+/// Create new module.
+/// If a block is given, eval it in the context of newly created module.
+fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let val = Value::module();
+    match &args.block {
+        Block::None => {}
+        _ => {
+            vm.class_push(val);
+            let arg = Args::new1(val);
+            let res = vm.eval_block_self(&args.block, val, &arg);
+            vm.class_pop();
+            res?;
+        }
+    };
+    Ok(val)
 }
 
 fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -49,6 +72,19 @@ fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     }
     Ok(Value::false_val())
+}
+
+fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let val = match self_val.if_mod_class().unwrap().name() {
+        Some(id) => Value::string(format! {"{:?}", id}),
+        None => Value::nil(),
+    };
+    Ok(val)
+}
+
+fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let cref = self_val.if_mod_class().unwrap();
+    Ok(Value::string(cref.inspect_module()))
 }
 
 pub fn set_attr_accessor(globals: &mut Globals, self_val: Value, args: &Args) -> VMResult {
@@ -386,6 +422,26 @@ mod test {
         assert(true, M2 === c)
         assert(true, Object === c)
         assert(false, Integer === c)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn name() {
+        let program = r#"
+        assert("Integer", Integer.name)
+        assert("Class", Class.name)
+        assert("Module", Module.name)
+        module M
+            class A; end
+        end
+        assert("M::A", M::A.name)
+        assert("M", M.name)
+        a = Class.new()
+        assert(nil, a.name)
+        B = a
+        assert("B", a.name)
+        assert(0, Module.new.inspect =~ /#<Module:0x.{16}>/)
         "#;
         assert_script(program);
     }

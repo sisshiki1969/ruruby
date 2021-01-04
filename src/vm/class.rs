@@ -110,6 +110,20 @@ impl ClassInfo {
         self.ext.name
     }
 
+    pub fn inspect_module(&self) -> String {
+        match self.name() {
+            Some(id) => format! {"{:?}", id},
+            None => format! {"#<Module:0x{:016x}>", self.id()},
+        }
+    }
+
+    pub fn inspect_class(&self) -> String {
+        match self.name() {
+            Some(id) => format! {"{:?}", id},
+            None => format! {"#<Class:0x{:016x}>", self.id()},
+        }
+    }
+
     pub fn set_name(&mut self, name: impl Into<Option<IdentId>>) {
         self.ext.name = name.into();
     }

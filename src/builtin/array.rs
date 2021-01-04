@@ -83,7 +83,7 @@ pub fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    dbg!(args).check_args_range(0, 2)?;
+    args.check_args_range(0, 2)?;
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {

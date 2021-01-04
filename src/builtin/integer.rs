@@ -4,17 +4,21 @@ pub fn init(globals: &mut Globals) -> Value {
     let numeric = globals.get_toplevel_constant("Numeric").unwrap();
 
     let mut class = ClassInfo::from(numeric);
+    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("==", eq);
+    class.add_builtin_method_by_str("===", eq);
     class.add_builtin_method_by_str("!=", neq);
     class.add_builtin_method_by_str(">=", ge);
     class.add_builtin_method_by_str(">", gt);
     class.add_builtin_method_by_str("<=", le);
     class.add_builtin_method_by_str("<", lt);
     class.add_builtin_method_by_str("<=>", cmp);
+    class.add_builtin_method_by_str("[]", index);
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
@@ -22,15 +26,24 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("chr", chr);
     class.add_builtin_method_by_str("to_f", tof);
     class.add_builtin_method_by_str("to_i", toi);
+    class.add_builtin_method_by_str("to_int", toi);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("even?", even);
+    class.add_builtin_method_by_str("odd?", odd);
     class.add_builtin_method_by_str("size", size);
+    class.add_builtin_method_by_str("next", next);
+    class.add_builtin_method_by_str("succ", next);
     Value::class(class)
 }
 
 // Class methods
 
 // Instance methods
+fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let i = self_val.as_integer().unwrap();
+    Ok(Value::string(i.to_string()))
+}
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
@@ -91,7 +104,7 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = self_val.expect_integer("Receiver")?;
+    let lhs = self_val.as_integer().unwrap();
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs == rhs)),
         RV::Float(rhs) => Ok(Value::bool(lhs as f64 == rhs)),
@@ -101,7 +114,7 @@ fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn neq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = self_val.expect_integer("Receiver")?;
+    let lhs = self_val.as_integer().unwrap();
     match args[0].unpack() {
         RV::Integer(rhs) => Ok(Value::bool(lhs != rhs)),
         RV::Float(rhs) => Ok(Value::bool(lhs as f64 != rhs)),
@@ -145,7 +158,7 @@ fn lt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     args.check_args_num(1)?;
-    let lhs = self_val.expect_integer("Receiver")?;
+    let lhs = self_val.as_integer().unwrap();
     let res = match args[0].unpack() {
         RV::Integer(rhs) => lhs.partial_cmp(&rhs),
         RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
@@ -155,6 +168,18 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(ord) => Ok(Value::integer(ord as i64)),
         None => Ok(Value::nil()),
     }
+}
+
+fn index(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let i = self_val.as_integer().unwrap();
+    let index = args[0].expect_integer("Index")?;
+    let val = if index < 0 || 63 < index {
+        0
+    } else {
+        (i >> index) & 1
+    };
+    Ok(Value::integer(val))
 }
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -211,7 +236,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         method => method,
     };
-    let start = self_val.expect_integer("Start")?;
+    let start = self_val.as_integer().unwrap();
     let limit = args[0].expect_integer("Limit")?;
     let step = if args.len() == 2 {
         let step = args[1].expect_integer("Step")?;
@@ -241,14 +266,13 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     if 0 > num || num > 255 {
-        return Err(RubyError::internal("Currently, receiver must be 0..255."));
+        return Err(RubyError::range(format!("{} Out of char range.", num)));
     };
     Ok(Value::bytes(vec![num as u8]))
 }
 
 fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    self_val.as_integer().unwrap();
+    args.check_args_range(0, 1)?;
     Ok(self_val)
 }
 
@@ -260,8 +284,7 @@ fn tof(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn toi(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let num = self_val.as_integer().unwrap();
-    Ok(Value::integer(num))
+    Ok(self_val)
 }
 
 fn even(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -270,18 +293,31 @@ fn even(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(num % 2 == 0))
 }
 
+fn odd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let num = self_val.as_integer().unwrap();
+    Ok(Value::bool(num % 2 != 0))
+}
+
 fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     Ok(Value::integer(8))
 }
 
+fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let i = self_val.as_integer().unwrap();
+    Ok(Value::integer(i + 1))
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
-
     #[test]
     fn integer1() {
         let program = r#"
+        assert("777", 777.inspect)
+        assert("777", 777.to_s)
         assert(4.0, 4.to_f)
         assert(-4.0, -4.to_f)
         assert(4, 4.floor)

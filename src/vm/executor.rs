@@ -1879,24 +1879,18 @@ impl VM {
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
-        match lhs.as_mut_rvalue() {
-            None => match lhs.unpack() {
-                RV::Integer(lhs) => {
-                    match rhs.as_integer() {
-                        Some(rhs) => return Ok(Value::integer(lhs << rhs)),
-                        _ => {}
-                    };
-                }
-                _ => {}
-            },
-            Some(lhs_o) => match lhs_o.kind {
-                ObjKind::Array(ref mut aref) => {
-                    aref.elements.push(rhs);
+        match (lhs.unpack(), rhs.unpack()) {
+            (RV::Integer(lhs), RV::Integer(rhs)) => return Ok(Value::integer(lhs << rhs)),
+            (RV::Integer(_), _) => return Err(RubyError::no_implicit_conv(rhs, "Integer")),
+            (RV::Object(rval), _) => match rval.kind {
+                ObjKind::Array(_) => {
+                    lhs.as_mut_array().unwrap().elements.push(rhs);
                     return Ok(lhs);
                 }
                 _ => {}
             },
-        };
+            _ => {}
+        }
         let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
         Ok(val)
     }
@@ -1909,6 +1903,7 @@ impl VM {
         }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs >> rhs)),
+            (RV::Integer(_), _) => Err(RubyError::no_implicit_conv(rhs, "Integer")),
             (_, _) => {
                 let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
                 Ok(val)
@@ -2270,17 +2265,7 @@ impl VM {
                 },
                 _ => self.send(IdentId::_INDEX, receiver, &Args::new1(idx))?,
             },
-            None if receiver.is_packed_fixnum() => {
-                let i = receiver.as_packed_fixnum();
-                let index = idx.expect_integer("Index")?;
-                let val = if index < 0 || 63 < index {
-                    0
-                } else {
-                    (i >> index) & 1
-                };
-                Value::integer(val)
-            }
-            _ => return Err(RubyError::undefined_method(IdentId::_INDEX, receiver)),
+            _ => self.fallback_for_binop(IdentId::_INDEX, receiver, idx)?,
         };
         self.stack_pop()?;
         Ok(val)
@@ -2309,7 +2294,7 @@ impl VM {
                 let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
                 Value::integer(val)
             }
-            _ => return Err(RubyError::undefined_method(IdentId::_INDEX, receiver)),
+            _ => self.fallback_for_binop(IdentId::_INDEX, receiver, Value::integer(idx as i64))?,
         };
         self.stack_pop()?;
         Ok(val)
@@ -2347,7 +2332,7 @@ impl VM {
                 Ok(val)
             }
             None => {
-                let mut val = if is_module {
+                let val = if is_module {
                     if !super_val.is_nil() {
                         panic!("Module can not have superclass.");
                     };
@@ -2361,26 +2346,10 @@ impl VM {
                     };
                     Value::class_under(super_val)
                 };
-                let mut singleton = val.get_singleton_class()?;
-                let singleton_class = singleton.as_mut_class();
-                singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
                 self.globals.set_const(current_class, id, val);
                 Ok(val)
             }
         }
-    }
-
-    fn singleton_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        let superclass = match self_val.superclass() {
-            Some(class) => class,
-            None => return Err(RubyError::nomethod("`new` method not found.")),
-        };
-        let mut obj = vm.send(IdentId::NEW, superclass, args)?;
-        obj.set_class(self_val);
-        if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
-            vm.eval_send(method, obj, args)?;
-        };
-        Ok(obj)
     }
 
     pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
@@ -2445,14 +2414,8 @@ impl VM {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self)?,
-                ObjKind::Class(cref) => match cref.name() {
-                    Some(id) => format! {"{:?}", id},
-                    None => format! {"#<Class:0x{:x}>", cref.id()},
-                },
-                ObjKind::Module(cref) => match cref.name() {
-                    Some(id) => format! {"{:?}", id},
-                    None => format! {"#<Module:0x{:x}>", cref.id()},
-                },
+                ObjKind::Class(cref) => cref.inspect_class(),
+                ObjKind::Module(cref) => cref.inspect_module(),
                 ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect(self)?,
