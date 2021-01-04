@@ -3,6 +3,8 @@ name = "ruruby"
 version = "0.2.0"
 authors = ["monochrome <sisshiki@mac.com>"]
 edition = "2018"
+license-file = "LICENSE"
+repository = "https://github.com/sisshiki1969/ruruby"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
