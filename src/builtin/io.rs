@@ -8,6 +8,7 @@ pub fn init(globals: &mut Globals) -> Value {
     io_class.add_builtin_method_by_str("flush", flush);
 
     let io_obj = Value::class(io_class);
+    globals.set_toplevel_constant("IO", io_obj);
     let stdout = Value::ordinary_object(io_obj);
     globals.set_toplevel_constant("STDOUT", stdout);
     globals.set_global_var_by_str("$>", stdout);

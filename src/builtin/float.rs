@@ -1,9 +1,10 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let numeric = globals.get_toplevel_constant("Numeric").unwrap();
+    let mut class = ClassInfo::from(globals.builtins.numeric);
 
-    let mut class = ClassInfo::from(numeric);
+    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
@@ -11,12 +12,24 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("to_i", toi);
-    Value::class(class)
+    let class_obj = Value::class(class);
+    globals.set_toplevel_constant("Float", class_obj);
+    class_obj
 }
 
 // Class methods
 
 // Instance methods
+fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let f = self_val.as_float().unwrap();
+    let s = if f.fract() == 0.0 {
+        format!("{:.1}", f)
+    } else {
+        f.to_string()
+    };
+    Ok(Value::string(s))
+}
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
@@ -70,7 +83,12 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
-        Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
+        Some(rhs) => {
+            if rhs.is_zero() {
+                return Err(RubyError::zero_div("Divided by zero."));
+            }
+            Ok((lhs.quo(rhs)).to_val())
+        }
         None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }
 }
@@ -105,6 +123,15 @@ fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 #[cfg(test)]
 mod tests {
     use crate::test::*;
+    #[test]
+    fn float() {
+        let program = r#"
+        assert "34.5", 34.5.to_s
+        assert "34.5", 34.5.inspect
+        assert "34.0", 34.000.to_s
+        "#;
+        assert_script(program);
+    }
 
     #[test]
     fn cmp() {

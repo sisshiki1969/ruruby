@@ -756,7 +756,7 @@ impl Parser {
             return Err(self.error_unexpected(loc, "Expected '='."));
         }
 
-        let mrhs = self.parse_mul_assign_rhs()?;
+        let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
         for lhs in &mlhs {
             self.check_lhs(lhs)?;
         }
@@ -766,17 +766,21 @@ impl Parser {
 
     /// Parse rhs of multiple assignment.
     /// If Parser.mul_assign_rhs is true, only a single assignment is allowed.
-    fn parse_mul_assign_rhs(&mut self) -> Result<Vec<Node>, RubyError> {
+    fn parse_mul_assign_rhs_if_allowed(&mut self) -> Result<Vec<Node>, RubyError> {
         if self.supress_mul_assign {
             let node = vec![self.parse_arg()?];
             Ok(node)
         } else {
-            let mrhs = self.parse_arg_list(None)?;
+            let mrhs = self.parse_mul_assign_rhs(None)?;
             Ok(mrhs)
         }
     }
 
-    fn parse_arg_list(&mut self, term: impl Into<Option<Punct>>) -> Result<Vec<Node>, RubyError> {
+    /// Parse rhs of multiple assignment. cf: a,b,*c,d
+    fn parse_mul_assign_rhs(
+        &mut self,
+        term: impl Into<Option<Punct>>,
+    ) -> Result<Vec<Node>, RubyError> {
         let term = term.into();
         let old = self.supress_mul_assign;
         // multiple assignment must be suppressed in parsing arg list.
@@ -862,7 +866,7 @@ impl Parser {
             return Ok(lhs);
         }
         if self.consume_punct_no_term(Punct::Assign)? {
-            let mrhs = self.parse_arg_list(None)?;
+            let mrhs = self.parse_mul_assign_rhs(None)?;
             self.check_lhs(&lhs)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
         } else if let Some(op) = self.consume_assign_op_no_term()? {
@@ -1182,7 +1186,7 @@ impl Parser {
                 }
             } else if self.consume_punct_no_term(Punct::LBracket)? {
                 let member_loc = self.prev_loc();
-                let args = self.parse_arg_list(Punct::RBracket)?;
+                let args = self.parse_mul_assign_rhs(Punct::RBracket)?;
                 let member_loc = member_loc.merge(self.prev_loc());
                 Node::new_array_member(node, args, member_loc)
             } else {
@@ -1311,7 +1315,7 @@ impl Parser {
     fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, RubyError> {
         if !self.supress_acc_assign {
             if self.consume_punct_no_term(Punct::Assign)? {
-                let mrhs = self.parse_mul_assign_rhs()?;
+                let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
                 self.check_lhs(&lhs)?;
                 return Ok(Some(Node::new_mul_assign(vec![lhs.clone()], mrhs)));
             } else if let Some(op) = self.consume_assign_op_no_term()? {
@@ -1537,7 +1541,7 @@ impl Parser {
                 }
                 Punct::LBracket => {
                     // Array literal
-                    let nodes = self.parse_arg_list(Punct::RBracket)?;
+                    let nodes = self.parse_mul_assign_rhs(Punct::RBracket)?;
                     let loc = loc.merge(self.prev_loc());
                     Ok(Node::new_array(nodes, loc))
                 }
@@ -1564,9 +1568,22 @@ impl Parser {
                         self.new_param(id, self.prev_loc())?;
                         params.push(FormalParam::req_param(id, self.prev_loc()));
                     };
-                    self.expect_punct(Punct::LBrace)?;
-                    let body = self.parse_comp_stmt()?;
-                    self.expect_punct(Punct::RBrace)?;
+                    let body = if self.consume_punct(Punct::LBrace)? {
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_punct(Punct::RBrace)?;
+                        body
+                    } else if self.consume_reserved(Reserved::Do)? {
+                        let body = self.parse_comp_stmt()?;
+                        self.expect_reserved(Reserved::End)?;
+                        body
+                    } else {
+                        let loc = self.loc();
+                        let tok = self.get()?;
+                        return Err(self.error_unexpected(
+                            loc,
+                            format!("Expected 'do' or '{{'. Actual:{:?}", tok.kind),
+                        ));
+                    };
                     let lvar = self.context_stack.pop().unwrap().lvar;
                     Ok(Node::new_proc(params, body, lvar, loc))
                 }
@@ -1680,7 +1697,7 @@ impl Parser {
                         self.consume_term()?;
                         let mut when_ = vec![];
                         while self.consume_reserved(Reserved::When)? {
-                            let arg = self.parse_arg_list(None)?;
+                            let arg = self.parse_mul_assign_rhs(None)?;
                             self.parse_then()?;
                             let body = self.parse_comp_stmt()?;
                             when_.push(CaseBranch::new(arg, body));
@@ -2520,18 +2537,12 @@ impl Parser {
             if !self.consume_reserved(Reserved::Rescue)? {
                 break;
             };
-            let mut exception = vec![];
             let mut assign = None;
+            let mut exception = vec![];
             if !self.consume_term()? {
-                loop {
-                    if self.peek_punct_no_term(Punct::FatArrow) {
-                        break;
-                    }
-                    exception.push(self.parse_arg()?);
-                    if !self.consume_punct_no_term(Punct::Comma)? {
-                        break;
-                    };
-                }
+                if !self.peek_punct_no_term(Punct::FatArrow) {
+                    exception = self.parse_mul_assign_rhs(None)?;
+                };
                 if self.consume_punct_no_term(Punct::FatArrow)? {
                     let lhs = self.parse_primary(true)?;
                     self.check_lhs(&lhs)?;
@@ -2553,7 +2564,6 @@ impl Parser {
             None
         };
         self.expect_reserved(Reserved::End)?;
-        let loc = body.loc();
-        Ok(Node::new_begin(body, rescue, else_, ensure, loc))
+        Ok(Node::new_begin(body, rescue, else_, ensure))
     }
 }

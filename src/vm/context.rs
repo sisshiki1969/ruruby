@@ -391,14 +391,4 @@ impl ContextRef {
             //panic!();
         }
     }
-
-    pub fn get_outermost(&self) -> ContextRef {
-        let mut context = *self;
-        loop {
-            context = match context.outer {
-                Some(context) => context,
-                None => return context,
-            };
-        }
-    }
 }

@@ -922,7 +922,7 @@ impl Lexer {
         enum Mode {
             Normal,
             AllowIndent,
-        };
+        }
         let mut mode = Mode::Normal;
         let mut delimiter = vec![];
         match self.peek() {

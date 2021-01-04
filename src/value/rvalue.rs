@@ -59,6 +59,12 @@ impl GC for RValue {
             ObjKind::Proc(pref) => pref.context.mark(alloc),
             ObjKind::Method(mref) => mref.mark(alloc),
             ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
+            ObjKind::Exception(err) => match &err.kind {
+                RubyErrorKind::Value(val) => val.mark(alloc),
+                RubyErrorKind::BlockReturn(val) => val.mark(alloc),
+                RubyErrorKind::MethodReturn(val) => val.mark(alloc),
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -120,7 +126,7 @@ impl RValue {
     }
 
     pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
-        let mut s = format! {"#<{}:0x{:x}", self.class_name(), self.id()};
+        let mut s = format! {"#<{}:0x{:016x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {
@@ -218,6 +224,14 @@ impl RValue {
     pub fn new_array(array_info: ArrayInfo) -> Self {
         RValue {
             class: BuiltinClass::array(),
+            var_table: None,
+            kind: ObjKind::Array(array_info),
+        }
+    }
+
+    pub fn new_array_with_class(array_info: ArrayInfo, class: Value) -> Self {
+        RValue {
+            class,
             var_table: None,
             kind: ObjKind::Array(array_info),
         }
@@ -330,6 +344,7 @@ impl RValue {
         ALLOC.with(|a| {
             let mut alloc = *a.borrow().as_ref().unwrap();
             let ptr = alloc.alloc(self);
+            //assert!((ptr as u64) & 0b111 == 0);
             Value::from_ptr(ptr)
         })
     }

@@ -173,6 +173,22 @@ impl RString {
         }
     }
 
+    pub fn len(&self) -> usize {
+        match self {
+            RString::Str(s) => s.len(),
+            RString::SmallStr(s) => s.as_str().len(),
+            RString::Bytes(_) => panic!(),
+        }
+    }
+
+    pub fn chars(&self) -> std::str::Chars<'_> {
+        match self {
+            RString::Str(s) => s.chars(),
+            RString::SmallStr(s) => s.as_str().chars(),
+            RString::Bytes(_) => panic!(),
+        }
+    }
+
     pub fn char_indices(&self) -> std::str::CharIndices<'_> {
         match self {
             RString::Str(s) => s.char_indices(),
@@ -237,26 +253,30 @@ impl RString {
             Some(s) => s,
             None => return None,
         };
+        Some(RString::string_cmp(lhs, rhs))
+    }
+
+    pub fn string_cmp(lhs: &[u8], rhs: &[u8]) -> Ordering {
         if lhs.len() >= rhs.len() {
             for (i, rhs_v) in rhs.iter().enumerate() {
                 match lhs[i].cmp(rhs_v) {
                     Ordering::Equal => {}
-                    ord => return Some(ord),
+                    ord => return ord,
                 }
             }
             if lhs.len() == rhs.len() {
-                Some(Ordering::Equal)
+                Ordering::Equal
             } else {
-                Some(Ordering::Greater)
+                Ordering::Greater
             }
         } else {
             for (i, lhs_v) in lhs.iter().enumerate() {
                 match lhs_v.cmp(&rhs[i]) {
                     Ordering::Equal => {}
-                    ord => return Some(ord),
+                    ord => return ord,
                 }
             }
-            Some(Ordering::Less)
+            Ordering::Less
         }
     }
 }

@@ -613,18 +613,24 @@ impl Node {
         rescue: Vec<RescueEntry>, //Vec<(Vec<Node>, Box<Node>)>,
         else_: Option<Node>,
         ensure: Option<Node>,
-        loc: Loc,
     ) -> Self {
+        let mut loc = body.loc();
         Node::new(
             NodeKind::Begin {
                 body: Box::new(body),
                 rescue,
                 else_: match else_ {
-                    Some(else_) => Some(Box::new(else_)),
+                    Some(else_) => {
+                        loc = loc.merge(else_.loc);
+                        Some(Box::new(else_))
+                    }
                     None => None,
                 },
                 ensure: match ensure {
-                    Some(ensure) => Some(Box::new(ensure)),
+                    Some(ensure) => {
+                        loc = loc.merge(ensure.loc());
+                        Some(Box::new(ensure))
+                    }
                     None => None,
                 },
             },

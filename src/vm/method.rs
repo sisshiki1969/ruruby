@@ -27,12 +27,20 @@ pub enum MethodInfo {
 impl GC for MethodInfo {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
-            MethodInfo::RubyFunc { iseq } => match iseq.class_defined {
-                Some(list) => list.mark(alloc),
-                None => return,
-            },
+            MethodInfo::RubyFunc { iseq } => iseq.class_defined.iter().for_each(|c| c.mark(alloc)),
             _ => return,
         };
+    }
+}
+
+impl std::fmt::Debug for MethodInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MethodInfo::RubyFunc { iseq } => write!(f, "RubyFunc {:?}", *iseq),
+            MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
+            MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
+            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
+        }
     }
 }
 
@@ -52,15 +60,36 @@ impl MethodInfo {
     }
 }
 
-impl std::fmt::Debug for MethodInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MethodInfo::RubyFunc { iseq } => write!(f, "RubyFunc {:?}", *iseq),
-            MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
-            MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
-            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
-        }
+//----------------------------------------------------------------------------------
+
+#[derive(Default, Debug, Clone)]
+pub struct ISeqParams {
+    pub param_ident: Vec<IdentId>,
+    pub req: usize,
+    pub opt: usize,
+    pub rest: Option<bool>, // Some(true): exists and bind to param, Some(false): exists but to be discarded, None: not exists.
+    pub post: usize,
+    pub block: bool,
+    pub keyword: FxHashMap<IdentId, LvarId>,
+    pub kwrest: bool,
+}
+
+impl ISeqParams {
+    pub fn is_opt(&self) -> bool {
+        self.opt == 0
+            && self.rest.is_none()
+            && self.post == 0
+            && !self.block
+            && self.keyword.is_empty()
+            && !self.kwrest
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ISeqKind {
+    Other,           // eval or unnamed method
+    Method(IdentId), // method or lambda
+    Block,           // block or proc
 }
 
 pub type ISeqRef = Ref<ISeqInfo>;
@@ -81,80 +110,28 @@ pub struct ISeqInfo {
     /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
     /// Set to Some() in class definition context, or None in the top level.
     pub exception_table: Vec<ExceptionEntry>,
-    pub class_defined: Option<ClassListRef>,
+    pub class_defined: Vec<Value>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
     pub forvars: Vec<(u32, u32)>,
 }
 
-#[derive(Debug, Clone)]
-pub struct ISeqParams {
-    pub param_ident: Vec<IdentId>,
-    pub req: usize,
-    pub opt: usize,
-    pub rest: Option<bool>, // Some(true): exists and bind to param, Some(false): exists but to be discarded, None: not exists.
-    pub post: usize,
-    pub block: bool,
-    pub keyword: FxHashMap<IdentId, LvarId>,
-    pub kwrest: bool,
-}
-
-impl ISeqParams {
-    pub fn default() -> Self {
-        ISeqParams {
-            param_ident: vec![],
-            req: 0,
-            opt: 0,
-            rest: None,
-            post: 0,
-            block: false,
-            keyword: FxHashMap::default(),
-            kwrest: false,
-        }
+impl Default for ISeqInfo {
+    fn default() -> Self {
+        ISeqInfo::new(
+            MethodRef::new(MethodInfo::default()),
+            None,
+            ISeqParams::default(),
+            ISeq::new(),
+            LvarCollector::new(),
+            vec![],
+            vec![],
+            SourceInfoRef::default(),
+            ISeqKind::Method(IdentId::from(0)),
+            vec![],
+        )
     }
-
-    pub fn is_opt(&self) -> bool {
-        self.opt == 0
-            && self.rest.is_none()
-            && self.post == 0
-            && !self.block
-            && self.keyword.is_empty()
-            && !self.kwrest
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClassList {
-    /// The outer class of `class`.
-    pub outer: Option<ClassListRef>,
-    /// The class where ISeqInfo was described.
-    pub class: Value,
-}
-
-pub type ClassListRef = Ref<ClassList>;
-
-impl ClassList {
-    pub fn new(outer: Option<ClassListRef>, class: Value) -> Self {
-        ClassList { outer, class }
-    }
-}
-
-impl GC for ClassList {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.class.mark(alloc);
-        match self.outer {
-            Some(list) => list.mark(alloc),
-            None => return,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ISeqKind {
-    Other,           // eval or unnamed method
-    Method(IdentId), // method or lambda
-    Block,           // block or proc
 }
 
 impl ISeqInfo {
@@ -181,27 +158,12 @@ impl ISeqInfo {
             lvars,
             exception_table,
             opt_flag,
-            class_defined: None,
+            class_defined: vec![],
             iseq_sourcemap,
             source_info,
             kind,
             forvars,
         }
-    }
-
-    pub fn default(method: MethodRef) -> Self {
-        ISeqInfo::new(
-            method,
-            None,
-            ISeqParams::default(),
-            ISeq::new(),
-            LvarCollector::new(),
-            vec![],
-            vec![],
-            SourceInfoRef::empty(),
-            ISeqKind::Method(IdentId::from(0)),
-            vec![],
-        )
     }
 
     pub fn is_block(&self) -> bool {

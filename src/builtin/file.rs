@@ -6,6 +6,7 @@ use std::path::*;
 pub fn init(globals: &mut Globals) -> Value {
     let io_class = globals.get_toplevel_constant("IO").unwrap();
     let mut class = Value::class_under(io_class);
+    globals.set_toplevel_constant("File", class);
     class.add_builtin_class_method("join", join);
     class.add_builtin_class_method("basename", basename);
     class.add_builtin_class_method("extname", extname);
@@ -51,7 +52,7 @@ fn canonicalize_path(_: &mut VM, path: PathBuf) -> Result<PathBuf, RubyError> {
 }
 
 /// Convert Ruby String value`string` to canonicalized PathBuf.
-fn string_to_canonicalized_path(
+pub fn string_to_canonicalized_path(
     vm: &mut VM,
     string: Value,
     msg: &str,

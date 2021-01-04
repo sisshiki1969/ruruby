@@ -37,8 +37,8 @@ pub fn load_exec(vm: &mut VM, path: &PathBuf, allow_repeat: bool) -> Result<bool
     let program = vm.load_file(&absolute_path)?;
     #[cfg(feature = "verbose")]
     eprintln!("reading:{}", absolute_path.to_string_lossy());
-    vm.class_push(BuiltinClass::object());
+    //vm.class_push(BuiltinClass::object());
     vm.run(absolute_path, &program)?;
-    vm.class_pop();
+    //vm.class_pop();
     Ok(true)
 }

@@ -70,42 +70,59 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("filter", select);
     class.add_builtin_method_by_str("bsearch", bsearch);
     class.add_builtin_method_by_str("bsearch_index", bsearch_index);
+    class.add_builtin_method_by_str("delete", delete);
+    class.add_builtin_method_by_str("flatten", flatten);
+    class.add_builtin_method_by_str("flatten!", flatten_);
 
     class.add_builtin_class_method("new", array_new);
+    class.add_builtin_class_method("allocate", array_allocate);
     class.add_builtin_class_method("[]", array_elem);
     class
 }
 
 // Class methods
 
-fn array_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
-            RV::Integer(num) if num >= 0 => vec![Value::nil(); num as usize],
+            RV::Integer(num) => {
+                if num < 0 {
+                    return Err(RubyError::argument("Negative array size."));
+                };
+                vec![Value::nil(); num as usize]
+            }
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
-                _ => return Err(RubyError::argument("Invalid arguments")),
+                _ => return Err(RubyError::typeerr("1st arg must be Integer or Array.")),
             },
-            _ => return Err(RubyError::argument("Invalid arguments")),
+            _ => return Err(RubyError::typeerr("1st arg must be Integer or Array.")),
         },
         2 => {
-            let arg_num = args[0]
-                .as_integer()
-                .ok_or(RubyError::argument("Invalid arguments"))?;
-            vec![args[1]; arg_num as usize]
+            let num = args[0].expect_integer("1st arg")?;
+            if num < 0 {
+                return Err(RubyError::argument("Negative array size."));
+            };
+            vec![args[1]; num as usize]
         }
         _ => unreachable!(),
     };
-    let array = Value::array_from(array_vec);
+    let array = Value::array_from_with_class(array_vec, self_val);
+    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+        vm.eval_send(method, array, args)?;
+    };
+    Ok(array)
+}
+
+fn array_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let array = Value::array_from_with_class(vec![], self_val);
     Ok(array)
 }
 
 fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let array_vec = args.to_vec();
-    let mut array = Value::array_from(array_vec);
-    array.set_class(self_val);
+    let array = Value::array_from_with_class(args.to_vec(), self_val);
     Ok(array)
 }
 
@@ -233,6 +250,7 @@ fn unshift(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
+    //eprintln!("{:?} {}", self_val, self_val.get_class_name());
     let aref = self_val.as_array().unwrap();
     let res = Value::integer(aref.elements.len() as i64);
     Ok(res)
@@ -256,7 +274,6 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let len = aref.elements.len();
                 let src = &aref.elements[0..len];
                 let mut v = vec![Value::nil(); len * num as usize];
-                //println!("dest:{:?} src:{:?}", aref.elements, src);
                 let mut i = 0;
                 for _ in 0..num {
                     for src_val in src[0..len].iter() {
@@ -267,7 +284,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 v
             }
         };
-        let res = Value::array_from(v);
+        let res = Value::array_from_with_class(v, self_val.get_class());
         Ok(res)
     } else if let Some(s) = args[0].as_string() {
         match aref.elements.len() {
@@ -286,11 +303,15 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
     } else {
-        return Err(RubyError::undefined_op("*", args[0], self_val));
+        return Err(RubyError::typeerr(format!(
+            "No implicit conversion from {:?} to Integer.",
+            args[0]
+        )));
     }
 }
 
 fn add(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let mut lhs = self_val.expect_array("Receiver")?.elements.clone();
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
@@ -299,6 +320,7 @@ fn add(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_mut_array().unwrap();
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
@@ -307,6 +329,7 @@ fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 }
 
 fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let lhs_v = &self_val.expect_array("Receiver")?.elements;
     let mut arg0 = args[0];
     let rhs_v = &arg0.expect_array("Argument")?.elements;
@@ -368,14 +391,14 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
     let param_num = block.to_iseq().params.req;
     let mut arg = Args::new(param_num);
 
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut res = vec![];
-    for elem in &mut aref.elements {
+    for elem in &aref.elements {
         if param_num == 0 {
         } else if param_num == 1 {
             arg[0] = *elem;
@@ -399,22 +422,25 @@ fn flat_map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(1);
-    for i in &aref.elements {
-        arg[0] = *i;
+    for i in 0..aref.len() {
+        if i >= aref.len() {
+            break;
+        };
+        arg[0] = aref.elements[i];
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
 }
 
-fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn each_with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "each_with_index");
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(2);
     for (i, v) in aref.elements.iter().enumerate() {
         arg[0] = *v;
@@ -424,10 +450,10 @@ fn each_with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn partition(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn partition(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "partition");
-    let aref = self_val.as_mut_array().unwrap();
+    let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(1);
     let mut res_true = vec![];
     let mut res_false = vec![];
@@ -1060,6 +1086,97 @@ fn bsearch_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn delete(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let arg = args[0];
+    args.expect_no_block()?;
+    let ary = &mut self_val.as_mut_array().unwrap().elements;
+    let mut removed = None;
+    ary.retain(|x| {
+        if x.eq(&arg) {
+            removed = Some(*x);
+            false
+        } else {
+            true
+        }
+    });
+    Ok(removed.unwrap_or(Value::nil()))
+}
+
+fn flatten(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let level = if args.len() == 0 {
+        None
+    } else {
+        let i = args[0].expect_integer("1st arg")?;
+        if i < 0 {
+            None
+        } else {
+            Some(i as usize)
+        }
+    };
+    let mut res = vec![];
+    for v in &self_val.as_array().unwrap().elements {
+        ary_flatten(*v, &mut res, level, self_val)?;
+    }
+    Ok(Value::array_from(res))
+}
+
+fn flatten_(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let level = if args.len() == 0 {
+        None
+    } else {
+        let i = args[0].expect_integer("1st arg")?;
+        if i < 0 {
+            None
+        } else {
+            Some(i as usize)
+        }
+    };
+    let mut res = vec![];
+    let mut flag = false;
+    for v in &self_val.as_array().unwrap().elements {
+        flag |= ary_flatten(*v, &mut res, level, self_val)?;
+    }
+    self_val.as_mut_array().unwrap().elements = res;
+    Ok(if flag { self_val } else { Value::nil() })
+}
+
+fn ary_flatten(
+    val: Value,
+    res: &mut Vec<Value>,
+    level: Option<usize>,
+    origin: Value,
+) -> Result<bool, RubyError> {
+    let mut flag = false;
+    match level {
+        None => match val.as_array() {
+            Some(ainfo) => {
+                if val.id() == origin.id() {
+                    return Err(RubyError::argument("Tried to flatten recursive array."));
+                };
+                flag = true;
+                for v in &ainfo.elements {
+                    ary_flatten(*v, res, None, origin)?;
+                }
+            }
+            None => res.push(val),
+        },
+        Some(0) => res.push(val),
+        Some(level) => match val.as_array() {
+            Some(ainfo) => {
+                flag = true;
+                for v in &ainfo.elements {
+                    ary_flatten(*v, res, Some(level - 1), origin)?;
+                }
+            }
+            None => res.push(val),
+        },
+    }
+    Ok(flag)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test::*;
@@ -1187,7 +1304,6 @@ mod tests {
 
     #[test]
     fn array_shift() {
-        // TODO: 'a.unshift [0]' is parsed as 'a.unshift[0]'. This is wrong.
         let program = "
         a = [0, 1, 2, 3, 4]
         assert 0, a.shift
@@ -1201,7 +1317,7 @@ mod tests {
         a = [1,2,3]
         a.unshift 0
         assert [0, 1, 2, 3], a
-        a.unshift([0])
+        a.unshift [0]
         assert [[0], 0, 1, 2, 3], a
         a.unshift 1, 2
         assert [1, 2, [0], 0, 1, 2, 3], a
@@ -1226,6 +1342,12 @@ mod tests {
     fn array_mul() {
         let program = r#"
         assert [1,2,3,1,2,3,1,2,3], [1,2,3] * 3 
+        assert_error { [1,2,3] * nil } 
+        assert_error { [1,2,3] * -1 } 
+
+        class MyArray < Array; end
+        assert MyArray[1,2,1,2], MyArray[1,2] * 2
+
         assert "1,2,3", [1,2,3] * ","
         assert "Ruby", ["Ruby"] * ","
         a = ["Ruby"] * 5
@@ -1543,6 +1665,58 @@ mod tests {
         assert 2, ary.bsearch_index {|x| x >=  6 }
         assert 0, ary.bsearch_index {|x| x >= -1 }
         assert nil, ary.bsearch_index {|x| x >= 100 }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn delete() {
+        let program = r#"
+        ary = [0, nil, 7, 1, "hard", 1.0]
+        assert 1.0, ary.delete(1)
+        assert [0, nil, 7, "hard"], ary
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn flatten() {
+        let program = r#"
+        a = [1, [2, 3, [4], 5]]
+        assert [1, 2, 3, 4, 5], a.flatten
+        assert [1, [2, 3, [4], 5]], a
+        assert [1, [2, 3, [4], 5]], a.flatten(0)
+        assert [1, 2, 3, [4], 5], a.flatten(1)
+        assert [1, 2, 3, 4, 5], a.flatten(2)
+        assert [1, 2, 3, 4, 5], a.flatten(3)
+
+        a = [1]
+        a << a
+        assert_error { a.flatten }
+        assert_error { a.flatten(-1) }
+        assert_error { a.flatten("1") }
+        assert [1, a], a.flatten(0)
+        assert [1, 1, a], a.flatten(1)
+
+        a = [1, [2, 3, [4], 5]]
+        assert [1, 2, 3, 4, 5], a.flatten!
+        assert [1, 2, 3, 4, 5], a
+        assert nil, a.flatten!
+
+        a = [1, [2, 3, [4], 5]]
+        assert nil, a.flatten!(0)
+        assert [1, 2, 3, [4], 5], a.flatten!(1)
+        assert [1, 2, 3, 4, 5], a.flatten!(2)
+        assert nil, a.flatten!(2)
+
+        a = [1]
+        a << a
+        assert_error { a.flatten! }
+        assert_error { a.flatten!(-1) }
+        assert_error { a.flatten!("1") }
+        assert [1, a], a
+        assert nil, a.flatten!(0)
+        assert [1, 1, 1, a], a.flatten!(2)
         "#;
         assert_script(program);
     }

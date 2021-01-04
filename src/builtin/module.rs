@@ -2,8 +2,13 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let module_class = globals.builtins.module.as_mut_class();
+    let mut module_class = globals.builtins.module;
+    module_class.add_builtin_class_method("new", module_new);
+
     module_class.add_builtin_method_by_str("===", teq);
+    module_class.add_builtin_method_by_str("name", name);
+    module_class.add_builtin_method_by_str("to_s", inspect);
+    module_class.add_builtin_method_by_str("inspect", inspect);
     module_class.add_builtin_method_by_str("constants", constants);
     module_class.add_builtin_method_by_str("class_variables", class_variables);
     module_class.add_builtin_method_by_str("const_defined?", const_defined);
@@ -25,30 +30,44 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("public", public);
     module_class.add_builtin_method_by_str("private", private);
     module_class.add_builtin_method_by_str("protected", protected);
+    module_class.add_builtin_method_by_str("include?", include_);
+}
+
+/// Create new module.
+/// If a block is given, eval it in the context of newly created module.
+fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let val = Value::module();
+    match &args.block {
+        Block::None => {}
+        _ => {
+            vm.class_push(val);
+            let arg = Args::new1(val);
+            let res = vm.eval_block_self(&args.block, val, &arg);
+            vm.class_pop();
+            res?;
+        }
+    };
+    Ok(val)
 }
 
 fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let mut module = args[0].get_class();
-    loop {
-        let minfo = match module.if_mod_class() {
-            Some(info) => info,
-            None => return Err(RubyError::argument("Must be module or class.")),
-        };
-        let true_module = if minfo.is_included() {
-            minfo.origin()
-        } else {
-            module
-        };
-        if true_module.id() == self_val.id() {
-            return Ok(Value::true_val());
-        };
-        match module.upper() {
-            Some(upper) => module = upper,
-            None => break,
-        }
-    }
-    Ok(Value::false_val())
+    let class = args[0].get_class();
+    Ok(Value::bool(class.include_module(self_val)))
+}
+
+fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let val = match self_val.if_mod_class().unwrap().name() {
+        Some(id) => Value::string(format! {"{:?}", id}),
+        None => Value::nil(),
+    };
+    Ok(val)
+}
+
+fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let cref = self_val.if_mod_class().unwrap();
+    Ok(Value::string(cref.inspect_module()))
 }
 
 pub fn set_attr_accessor(globals: &mut Globals, self_val: Value, args: &Args) -> VMResult {
@@ -250,8 +269,8 @@ fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let cinfo = self_val.expect_mod_class(vm)?;
-    let mut module = args[0];
-    module.expect_module(vm, "1st arg")?;
+    let module = args[0];
+    module.expect_module("1st arg")?;
     cinfo.append_include(module, &mut vm.globals);
     Ok(Value::nil())
 }
@@ -260,8 +279,8 @@ fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let self_val2 = self_val.clone();
     let cinfo = self_val.expect_mod_class(vm)?;
-    let mut module = args[0];
-    module.expect_module(vm, "1st arg")?;
+    let module = args[0];
+    module.expect_module("1st arg")?;
     cinfo.append_prepend(self_val2, module, &mut vm.globals);
     Ok(Value::nil())
 }
@@ -311,16 +330,22 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let mut arg0 = args[0];
             let program = arg0.expect_string("1st arg")?;
             let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
-            let args = Args::new0();
+            // The scopes of constants and class variables are same as module definition of `self_val`.
             vm.class_push(self_val);
-            let res = vm.invoke_method(method, self_val, Some(context), &args);
+            let mut iseq = vm.get_method_iseq();
+            iseq.class_defined.push(self_val);
+            let res = vm.invoke_method(method, self_val, Some(context), &Args::new0());
+            iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res
         }
         block => {
             args.check_args_num(0)?;
-            let args = Args::new0();
-            vm.eval_block_self(block, self_val, &args)
+            // The scopes of constants and class variables are outer of the block.
+            vm.class_push(self_val);
+            let res = vm.eval_block_self(block, self_val, &Args::new0());
+            vm.class_pop();
+            res
         }
     }
 }
@@ -346,6 +371,14 @@ fn private(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn protected(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(self_val)
+}
+
+fn include_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let val = self_val;
+    let module = args[0];
+    module.expect_module("1st arg")?;
+    Ok(Value::bool(val.include_module(module)))
 }
 
 #[cfg(test)]
@@ -380,6 +413,26 @@ mod test {
         assert(true, M2 === c)
         assert(true, Object === c)
         assert(false, Integer === c)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn name() {
+        let program = r#"
+        assert("Integer", Integer.name)
+        assert("Class", Class.name)
+        assert("Module", Module.name)
+        module M
+            class A; end
+        end
+        assert("M::A", M::A.name)
+        assert("M", M.name)
+        a = Class.new()
+        assert(nil, a.name)
+        B = a
+        assert("B", a.name)
+        assert(0, Module.new.inspect =~ /#<Module:0x.{16}>/)
         "#;
         assert_script(program);
     }
@@ -561,6 +614,28 @@ mod test {
     }
 
     #[test]
+    fn module_eval2() {
+        let program = r##"
+        class C; end
+        D = 0
+        C.class_eval "def fn; 77; end; D = 1"
+        assert 77, C.new.fn
+        assert 1, C::D
+        assert 0, D
+        C.class_eval do
+          def gn
+            99
+          end
+          D = 2
+        end
+        assert 99, C.new.gn
+        assert 1, C::D
+        assert 2, D
+        "##;
+        assert_script(program);
+    }
+
+    #[test]
     fn alias_method() {
         let program = r##"
         class Foo
@@ -670,6 +745,16 @@ mod test {
         assert "M2", C.new.f
         assert [C, M2, M1, S, M0, Object, Kernel, BasicObject], C.ancestors
         "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include() {
+        let program = "
+        assert true, Integer.include?(Kernel)
+        assert true, Integer.include?(Comparable)
+        assert_error { Integer.include?(Numeric) }
+        ";
         assert_script(program);
     }
 }

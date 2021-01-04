@@ -140,7 +140,23 @@ impl VM {
     }
 
     pub fn current_context(&self) -> ContextRef {
-        self.exec_context.last().unwrap().to_owned()
+        let ctx = self.exec_context.last().unwrap();
+        assert!(!ctx.on_stack || ctx.moved_to_heap.is_none());
+        ctx.to_owned()
+    }
+
+    fn get_method_context(&self) -> ContextRef {
+        let mut context = self.current_context();
+        loop {
+            context = match context.outer {
+                Some(context) => context,
+                None => return context,
+            };
+        }
+    }
+
+    pub fn get_method_iseq(&self) -> ISeqRef {
+        self.get_method_context().iseq_ref.unwrap()
     }
 
     pub fn latest_context(&self) -> Option<ContextRef> {
@@ -150,7 +166,7 @@ impl VM {
     pub fn source_info(&self) -> SourceInfoRef {
         match self.current_context().iseq_ref {
             Some(iseq) => iseq.source_info,
-            None => SourceInfoRef::empty(),
+            None => SourceInfoRef::default(),
         }
     }
 
@@ -324,13 +340,14 @@ impl VM {
 
     pub fn run(&mut self, path: PathBuf, program: &str) -> VMResult {
         let method = self.parse_program(path, program)?;
+        let mut iseq = method.as_iseq();
+        iseq.class_defined = self.get_class_defined();
         let self_value = self.globals.main_object;
         let val = self.eval_send(method, self_value, &Args::new0())?;
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::INVALID);
-        assert_eq!(
-            0,
-            self.stack_len(),
+        assert!(
+            self.stack_len() == 0,
             "exec_stack length must be 0. actual:{}",
             self.stack_len()
         );
@@ -415,6 +432,7 @@ impl VM {
             print!("--->");
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
             context.dump();
+            eprintln!("  -----------");
         }
         loop {
             match self.run_context_main(context) {
@@ -430,6 +448,7 @@ impl VM {
                     err.info.push((self.source_info(), self.get_loc()));
                     //eprintln!("{:?}", iseq.exception_table);
                     if let RubyErrorKind::Internal(msg) = &err.kind {
+                        eprintln!();
                         err.show_err();
                         err.show_all_loc();
                         unreachable!("{}", msg);
@@ -440,7 +459,7 @@ impl VM {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.to_usize();
                         self.set_stack_len(stack_len);
-                        let val = err.to_exception_val();
+                        let val = err.to_exception_val(&self.globals);
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
@@ -533,6 +552,11 @@ impl VM {
                     let err = RubyError::method_return(val);
                     return Err(err);
                 }
+                Inst::THROW => {
+                    // - raise error
+                    let val = self.stack_pop()?;
+                    return Err(RubyError::value(val));
+                }
                 Inst::PUSH_NIL => {
                     self.stack_push(Value::nil());
                     self.pc += 1;
@@ -565,9 +589,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::ADD => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_add(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_add(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -579,9 +603,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SUB => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_sub(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_sub(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -593,44 +617,44 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::MUL => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_mul(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_mul(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::POW => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_exp(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_exp(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::DIV => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_div(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_div(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::REM => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_rem(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_rem(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::SHR => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_shr(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_shr(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
                 Inst::SHL => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_shl(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_shl(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -641,9 +665,9 @@ impl VM {
                     self.pc += 1;
                 }
                 Inst::BAND => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_bitand(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_bitand(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -655,9 +679,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::BOR => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_bitor(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_bitor(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -669,9 +693,9 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::BXOR => {
-                    let lhs = self.stack_pop()?;
                     let rhs = self.stack_pop()?;
-                    let val = self.eval_bitxor(lhs, rhs)?;
+                    let lhs = self.stack_pop()?;
+                    let val = self.eval_bitxor(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
                 }
@@ -787,13 +811,27 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 1;
                 }
+                Inst::RESCUE => {
+                    let len = iseq.read32(self.pc + 1) as usize;
+                    let stack_len = self.exec_stack.len();
+                    let val = self.exec_stack[stack_len - len - 1];
+                    let ex = &self.exec_stack[stack_len - len..];
+                    let b = self.eval_rescue(val, ex)?;
+                    self.set_stack_len(stack_len - len - 1);
+                    self.stack_push(Value::bool(b));
+                    self.pc += 5;
+                }
                 Inst::CONCAT_STRING => {
                     let num = iseq.read32(self.pc + 1) as usize;
                     let stack_len = self.stack_len();
-                    let mut res = String::new();
+                    /*let mut res = String::new();
                     for v in self.exec_stack.drain(stack_len - num..stack_len) {
                         res += v.as_string().unwrap();
-                    }
+                    }*/
+                    let res = self
+                        .exec_stack
+                        .drain(stack_len - num..)
+                        .fold(String::new(), |acc, x| acc + x.as_string().unwrap());
 
                     let val = Value::string(res);
                     self.stack_push(val);
@@ -850,7 +888,7 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
-                        v if v.is_nil() => self.class(),
+                        v if v.is_nil() => *self.get_method_iseq().class_defined.last().unwrap(), //self.class(),
                         v => v,
                     };
                     let val = self.stack_pop()?;
@@ -863,7 +901,7 @@ impl VM {
                     let val = match self.globals.find_const_cache(slot) {
                         Some(val) => val,
                         None => {
-                            let val = match VM::get_env_const(self.current_context(), id) {
+                            let val = match self.get_env_const(id) {
                                 Some(val) => val,
                                 None => VM::get_super_const(self.class(), id)?,
                             };
@@ -1195,27 +1233,28 @@ impl VM {
                     let val = self.define_class(base, id, is_module, super_val)?;
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(val);
-                    try_push!(self.eval_send(method, val, &Args::new0()));
-                    self.pc += 14;
+                    iseq.class_defined = self.get_class_defined();
+                    let res = self.eval_send(method, val, &Args::new0());
                     self.class_pop();
+                    try_push!(res);
+                    self.pc += 14;
                 }
                 Inst::DEF_SCLASS => {
                     let method = iseq.read_methodref(self.pc + 1);
-                    let base = self.stack_pop()?;
-                    let singleton = self.get_singleton_class(base)?;
+                    let singleton = self.stack_pop()?.get_singleton_class()?;
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(singleton);
-                    try_push!(self.eval_send(method, singleton, &Args::new0()));
-                    self.pc += 9;
+                    iseq.class_defined = self.get_class_defined();
+                    let res = self.eval_send(method, singleton, &Args::new0());
                     self.class_pop();
+                    try_push!(res);
+                    self.pc += 9;
                 }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(None);
+                    iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     self.define_method(self_value, id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self_value, id, method)?;
@@ -1226,7 +1265,7 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_methodref(self.pc + 5);
                     let mut iseq = method.as_iseq();
-                    iseq.class_defined = self.get_class_defined(None);
+                    iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     let singleton = self.stack_pop()?;
                     self.define_singleton_method(singleton, id, method)?;
                     if self.define_mode().module_function {
@@ -1297,7 +1336,12 @@ impl VM {
 
                     self.pc += 5;
                 }
-                _ => return Err(RubyError::internal("Unimplemented instruction.")),
+                inst => {
+                    return Err(RubyError::internal(format!(
+                        "Unimplemented instruction. {}",
+                        Inst::inst_name(inst)
+                    )))
+                }
             }
         }
     }
@@ -1348,7 +1392,15 @@ impl VM {
                 Block::None
             } else {
                 if val.as_proc().is_none() {
-                    return Err(RubyError::internal(format!("Must be Proc. {:?}", val)));
+                    return Err(RubyError::internal(format!(
+                        "Must be Proc. {:?}:{}",
+                        val,
+                        val.get_class_name()
+                    )));
+                    /*return Err(RubyError::typeerr(format!(
+                        "Wrong argument type {:?} (expected Proc).",
+                        val,
+                    )));*/
                 }
                 Block::Proc(val)
             }
@@ -1522,31 +1574,13 @@ impl VM {
         }
     }
 
-    /// Get class list from the nearest exec context.
-    fn get_nearest_class_stack(&self) -> Option<ClassListRef> {
-        for context in self.exec_context.iter().rev() {
-            match context.iseq_ref.unwrap().class_defined {
-                Some(class_list) => return Some(class_list),
-                None => {}
-            }
-        }
-        None
-    }
-
     /// Get class list in the current context.
     ///
     /// At first, this method searches the class list of outer context,
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
-    fn get_class_defined(&self, new_class: impl Into<Option<Value>>) -> Option<ClassListRef> {
-        match new_class.into() {
-            Some(class) => {
-                let outer = self.get_nearest_class_stack();
-                let class_list = ClassList::new(outer, class);
-                Some(ClassListRef::new(class_list))
-            }
-            None => self.get_nearest_class_stack(),
-        }
+    fn get_class_defined(&self) -> Vec<Value> {
+        self.class_context.iter().map(|(v, _)| *v).collect()
     }
 }
 
@@ -1562,20 +1596,15 @@ impl VM {
     }
 
     // Search lexical class stack for the constant.
-    fn get_env_const(context: ContextRef, id: IdentId) -> Option<Value> {
-        let mut class_list = match context.get_outermost().iseq_ref.unwrap().class_defined {
-            Some(list) => list,
-            None => return None,
-        };
-        loop {
-            match class_list.class.as_module().get_const(id) {
-                Some(val) => return Some(val),
-                None => {}
-            }
-            class_list = match class_list.outer {
-                Some(class) => class,
-                None => return None,
-            };
+    fn get_env_const(&self, id: IdentId) -> Option<Value> {
+        let class_defined = &self.get_method_iseq().class_defined;
+        match class_defined.len() {
+            0 => None,
+            1 => class_defined[0].as_module().get_const(id),
+            _ => class_defined[1..]
+                .iter()
+                .rev()
+                .find_map(|c| c.as_module().get_const(id)),
         }
     }
 
@@ -1602,12 +1631,8 @@ impl VM {
 
     pub fn get_const(&self, parent: Value, id: IdentId) -> VMResult {
         match parent.as_module().get_const(id) {
-            Some(val) => {
-                return Ok(val);
-            }
-            None => {
-                return Err(RubyError::name(format!("Uninitialized constant {:?}.", id)));
-            }
+            Some(val) => Ok(val),
+            None => Err(RubyError::name(format!("Uninitialized constant {:?}.", id))),
         }
     }
 
@@ -1796,6 +1821,9 @@ impl VM {
 
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Div;
+        if rhs.is_zero() {
+            return Err(RubyError::zero_div("Divided by zero."));
+        }
         eval_op!(self, rhs, lhs, div, IdentId::_DIV);
     }
 
@@ -1854,24 +1882,18 @@ impl VM {
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
-        match lhs.as_mut_rvalue() {
-            None => match lhs.unpack() {
-                RV::Integer(lhs) => {
-                    match rhs.as_integer() {
-                        Some(rhs) => return Ok(Value::integer(lhs << rhs)),
-                        _ => {}
-                    };
-                }
-                _ => {}
-            },
-            Some(lhs_o) => match lhs_o.kind {
-                ObjKind::Array(ref mut aref) => {
-                    aref.elements.push(rhs);
+        match (lhs.unpack(), rhs.unpack()) {
+            (RV::Integer(lhs), RV::Integer(rhs)) => return Ok(Value::integer(lhs << rhs)),
+            (RV::Integer(_), _) => return Err(RubyError::no_implicit_conv(rhs, "Integer")),
+            (RV::Object(rval), _) => match rval.kind {
+                ObjKind::Array(_) => {
+                    lhs.as_mut_array().unwrap().elements.push(rhs);
                     return Ok(lhs);
                 }
                 _ => {}
             },
-        };
+            _ => {}
+        }
         let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
         Ok(val)
     }
@@ -1884,6 +1906,7 @@ impl VM {
         }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs >> rhs)),
+            (RV::Integer(_), _) => Err(RubyError::no_implicit_conv(rhs, "Integer")),
             (_, _) => {
                 let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
                 Ok(val)
@@ -1898,8 +1921,11 @@ impl VM {
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Ok(Value::bool(rhs.to_bool())),
+            (RV::False, _) => Ok(Value::false_val()),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs & rhs)),
-            (_, _) => return Err(RubyError::undefined_op("&", rhs, lhs)),
+            (RV::Nil, _) => Ok(Value::false_val()),
+            (_, _) => self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs),
         }
     }
 
@@ -1909,8 +1935,11 @@ impl VM {
             return Ok(Value::integer(lhs.as_packed_fixnum() & i));
         }
         match lhs.unpack() {
+            RV::True => Ok(Value::true_val()),
+            RV::False => Ok(Value::false_val()),
             RV::Integer(lhs) => Ok(Value::integer(lhs & i)),
-            _ => return Err(RubyError::undefined_op("&", Value::integer(i), lhs)),
+            RV::Nil => Ok(Value::false_val()),
+            _ => self.fallback_for_binop(IdentId::get_id("&"), lhs, Value::integer(i)),
         }
     }
 
@@ -1921,8 +1950,11 @@ impl VM {
             ));
         }
         match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Ok(Value::true_val()),
+            (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs | rhs)),
-            (_, _) => return Err(RubyError::undefined_op("|", rhs, lhs)),
+            (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
+            (_, _) => self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs),
         }
     }
 
@@ -1932,16 +1964,21 @@ impl VM {
             return Ok(Value::integer(lhs.as_packed_fixnum() | i));
         }
         match lhs.unpack() {
+            RV::True => Ok(Value::true_val()),
+            RV::False => Ok(Value::true_val()),
             RV::Integer(lhs) => Ok(Value::integer(lhs | i)),
-            _ => return Err(RubyError::undefined_op("|", Value::integer(i), lhs)),
+            RV::Nil => Ok(Value::true_val()),
+            _ => self.fallback_for_binop(IdentId::get_id("|"), lhs, Value::integer(i)),
         }
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
-            (RV::Bool(b), _) => Ok(Value::bool(b ^ rhs.to_bool())),
+            (RV::True, _) => Ok(Value::bool(!rhs.to_bool())),
+            (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
-            (_, _) => return Err(RubyError::undefined_op("^", rhs, lhs)),
+            (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
+            (_, _) => return self.fallback_for_binop(IdentId::get_id("^"), lhs, rhs),
         }
     }
 
@@ -2066,9 +2103,9 @@ impl VM {
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(_) | ObjKind::Module(_) => Ok(self
-                    .fallback_for_binop(IdentId::get_id("==="), lhs, rhs)?
-                    .to_bool()),
+                ObjKind::Class(_) | ObjKind::Module(_) => {
+                    Ok(self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?.to_bool())
+                }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
                         RV::Symbol(sym) => IdentId::get_name(sym),
@@ -2085,6 +2122,33 @@ impl VM {
             },
             None => Ok(self.eval_eq(lhs, rhs)?),
         }
+    }
+
+    fn eval_rescue(&self, val: Value, exceptions: &[Value]) -> Result<bool, RubyError> {
+        let mut module = if val.is_class() { val } else { val.get_class() };
+        loop {
+            if module.is_class() {
+                if exceptions.iter().any(|x| {
+                    if let Some(ary) = x.as_splat() {
+                        ary.as_array()
+                            .unwrap()
+                            .elements
+                            .iter()
+                            .any(|elem| elem.id() == module.id())
+                    } else {
+                        x.id() == module.id()
+                    }
+                }) {
+                    return Ok(true);
+                }
+            };
+
+            match module.upper() {
+                Some(upper) => module = upper,
+                None => break,
+            }
+        }
+        Ok(false)
     }
 
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
@@ -2204,17 +2268,7 @@ impl VM {
                 },
                 _ => self.send(IdentId::_INDEX, receiver, &Args::new1(idx))?,
             },
-            None if receiver.is_packed_fixnum() => {
-                let i = receiver.as_packed_fixnum();
-                let index = idx.expect_integer("Index")?;
-                let val = if index < 0 || 63 < index {
-                    0
-                } else {
-                    (i >> index) & 1
-                };
-                Value::integer(val)
-            }
-            _ => return Err(RubyError::undefined_method(IdentId::_INDEX, receiver)),
+            _ => self.fallback_for_binop(IdentId::_INDEX, receiver, idx)?,
         };
         self.stack_pop()?;
         Ok(val)
@@ -2243,7 +2297,7 @@ impl VM {
                 let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
                 Value::integer(val)
             }
-            _ => return Err(RubyError::undefined_method(IdentId::_INDEX, receiver)),
+            _ => self.fallback_for_binop(IdentId::_INDEX, receiver, Value::integer(idx as i64))?,
         };
         self.stack_pop()?;
         Ok(val)
@@ -2295,26 +2349,10 @@ impl VM {
                     };
                     Value::class_under(super_val)
                 };
-                let mut singleton = self.get_singleton_class(val)?;
-                let singleton_class = singleton.as_mut_class();
-                singleton_class.add_builtin_method(IdentId::NEW, Self::singleton_new);
                 self.globals.set_const(current_class, id, val);
                 Ok(val)
             }
         }
-    }
-
-    fn singleton_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-        let superclass = match self_val.superclass() {
-            Some(class) => class,
-            None => return Err(RubyError::nomethod("`new` method not found.")),
-        };
-        let mut obj = vm.send(IdentId::NEW, superclass, args)?;
-        obj.set_class(self_val);
-        if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
-            vm.eval_send(method, obj, args)?;
-        };
-        Ok(obj)
     }
 
     pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
@@ -2364,10 +2402,8 @@ impl VM {
         let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "nil".to_string(),
-            RV::Bool(b) => match b {
-                true => "true".to_string(),
-                false => "false".to_string(),
-            },
+            RV::True => "true".to_string(),
+            RV::False => "false".to_string(),
             RV::Integer(i) => i.to_string(),
             RV::Float(f) => {
                 if f.fract() == 0.0 {
@@ -2381,14 +2417,8 @@ impl VM {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self)?,
-                ObjKind::Class(cref) => match cref.name() {
-                    Some(id) => format! {"{:?}", id},
-                    None => format! {"#<Class:0x{:x}>", cref.id()},
-                },
-                ObjKind::Module(cref) => match cref.name() {
-                    Some(id) => format! {"{:?}", id},
-                    None => format! {"#<Module:0x{:x}>", cref.id()},
-                },
+                ObjKind::Class(cref) => cref.inspect_class(),
+                ObjKind::Module(cref) => cref.inspect_module(),
                 ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect(self)?,
@@ -2448,7 +2478,7 @@ impl VM {
 
     /// Evaluate given block with given `args`.
     pub fn eval_yield(&mut self, args: &Args) -> VMResult {
-        let context = self.current_context().get_outermost();
+        let context = self.get_method_context();
         match &context.block {
             Block::Block(method, ctx) => {
                 self.invoke_method(*method, ctx.self_value, Some(*ctx), args)
@@ -2562,11 +2592,11 @@ impl VM {
     /// Define a method on a singleton class of `target_obj`.
     pub fn define_singleton_method(
         &mut self,
-        target_obj: Value,
+        mut target_obj: Value,
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        let mut singleton = self.get_singleton_class(target_obj)?;
+        let mut singleton = target_obj.get_singleton_class()?;
         singleton
             .as_mut_class()
             .add_method(&mut self.globals, id, method);
@@ -2583,11 +2613,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::nomethod(format!(
-                "no method `{:?}' for {}",
-                method_id,
-                rec_class.as_class().name_str()
-            ))),
+            None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
         }
     }
 
@@ -2599,13 +2625,6 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         let rec_class = receiver.get_class_for_method();
         self.get_method(rec_class, method_id)
-    }
-
-    pub fn get_singleton_class(&mut self, mut obj: Value) -> VMResult {
-        match obj.get_singleton_class() {
-            Some(val) => Ok(val),
-            None => Err(RubyError::typeerr("Can not define singleton.")),
-        }
     }
 }
 

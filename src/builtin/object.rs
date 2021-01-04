@@ -3,6 +3,9 @@ use crate::*;
 pub fn init(globals: &mut Globals) {
     let mut object = globals.builtins.object;
     let object_class = object.as_mut_class();
+    object_class.append_include(globals.builtins.kernel, globals);
+
+    object_class.add_builtin_method_by_str("initialize", initialize);
     object_class.add_builtin_method_by_str("class", class);
     object_class.add_builtin_method_by_str("object_id", object_id);
     object_class.add_builtin_method_by_str("to_s", to_s);
@@ -11,8 +14,7 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("clone", dup);
     object_class.add_builtin_method_by_str("dup", dup);
     object_class.add_builtin_method_by_str("eql?", eql);
-    object_class.add_builtin_method_by_str("nil?", nil);
-    object_class.add_builtin_method_by_str("to_i", toi);
+    object_class.add_builtin_method_by_str("nil?", nil_);
     object_class.add_builtin_method_by_str("method", method);
     object_class.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
     object_class.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
@@ -23,16 +25,19 @@ pub fn init(globals: &mut Globals) {
     object_class.add_builtin_method_by_str("equal?", equal);
     object_class.add_builtin_method_by_str("send", send);
     object_class.add_builtin_method_by_str("__send__", send);
-    object_class.add_builtin_method_by_str("eval", eval);
     object_class.add_builtin_method_by_str("to_enum", to_enum);
     object_class.add_builtin_method_by_str("enum_for", to_enum);
     object_class.add_builtin_method_by_str("respond_to?", respond_to);
     object_class.add_builtin_method_by_str("instance_exec", instance_exec);
+    object_class.add_builtin_method_by_str("=~", match_);
+}
+
+fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    Ok(self_val)
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let class = self_val.get_class();
-    Ok(class)
+    Ok(self_val.get_class())
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -45,26 +50,8 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let s = match self_val.unpack() {
         RV::Uninitialized => "[Uninitialized]".to_string(),
-        RV::Nil => "".to_string(),
-        RV::Bool(b) => match b {
-            true => "true".to_string(),
-            false => "false".to_string(),
-        },
-        RV::Integer(i) => i.to_string(),
-        RV::Float(f) => {
-            if f.fract() == 0.0 {
-                format!("{:.1}", f)
-            } else {
-                f.to_string()
-            }
-        }
-        RV::Symbol(i) => format!("{:?}", i),
         RV::Object(oref) => match &oref.kind {
             ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Class(cinfo) => match cinfo.name() {
-                Some(id) => format! {"{:?}", id},
-                None => format! {"#<Class:0x{:x}>", oref.id()},
-            },
             ObjKind::Ordinary => {
                 let class_name = self_val.get_class().as_class().name_str();
                 format!("#<{}:{:016x}>", class_name, self_val.id())
@@ -72,6 +59,7 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             ObjKind::Regexp(rref) => format!("({})", rref.as_str()),
             _ => format!("{:?}", oref.kind),
         },
+        _ => unreachable!(),
     };
 
     Ok(Value::string(s))
@@ -84,14 +72,15 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
             Ok(Value::string(s))
         }
         None => {
-            let s = vm.val_inspect(self_val)?;
-            Ok(Value::string(s))
+            unreachable!()
+            //let s = vm.val_inspect(self_val)?;
+            //Ok(Value::string(s))
         }
     }
 }
 
-fn singleton_class(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    vm.get_singleton_class(self_val)
+fn singleton_class(_: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+    self_val.get_singleton_class()
 }
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -105,21 +94,9 @@ fn eql(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(self_val == args[0]))
 }
 
-fn nil(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    Ok(Value::bool(self_val.is_nil()))
-}
-
-fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    //args.check_args_num( 1, 1)?;
-    if self_val.is_nil() {
-        Ok(Value::integer(0))
-    } else {
-        Err(RubyError::undefined_method(
-            IdentId::get_id("to_i"),
-            self_val,
-        ))
-    }
+    Ok(Value::false_val())
 }
 
 fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -196,15 +173,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let context = vm.current_context();
     let iseq = context.iseq_ref.unwrap();
     if let ISeqKind::Method(m) = context.kind {
-        let class = match iseq.class_defined {
-            Some(list) => list.class,
-            None => {
-                return Err(RubyError::nomethod(format!(
-                    "no superclass method `{:?}' for {:?}.",
-                    m, self_val
-                )));
-            }
-        };
+        let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
             Some(class) => match vm.globals.find_method(class, m) {
                 Some(m) => m,
@@ -260,32 +229,6 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 4)?;
-    let mut arg0 = args[0];
-    let program = arg0.expect_string("1st arg")?;
-    //#[cfg(debug_assertions)]
-    //eprintln!("eval: {}", program);
-    if args.len() > 1 {
-        if !args[1].is_nil() {
-            return Err(RubyError::argument("Currently, 2nd arg must be Nil."));
-        }
-    }
-    let path = if args.len() > 2 {
-        let mut arg2 = args[2];
-        let name = arg2.expect_string("3rd arg")?;
-        std::path::PathBuf::from(name)
-    } else {
-        std::path::PathBuf::from("(eval)")
-    };
-
-    let method = vm.parse_program_eval(path, program)?;
-    let args = Args::new0();
-    let outer = vm.current_context();
-    let res = vm.eval_block(&Block::Block(method, outer), &args)?;
-    Ok(res)
-}
-
 fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.block.is_some() {
         return Err(RubyError::argument("Curently, block is not allowed."));
@@ -311,7 +254,10 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 1)?;
+    args.check_args_range(1, 2)?;
+    if args.len() == 2 {
+        eprintln!("Warining: 2nd arg will not used. respont_to?()")
+    };
     let method = args[0].expect_string_or_symbol("1st arg")?;
     let b = vm
         .globals
@@ -322,7 +268,16 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
-    vm.eval_block_self(block, self_val, args)
+    let class = self_val.get_class_for_method();
+    vm.class_push(class);
+    let res = vm.eval_block_self(block, self_val, args);
+    vm.class_pop();
+    res
+}
+
+fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    Ok(Value::nil())
 }
 
 #[cfg(test)]
@@ -472,17 +427,6 @@ mod test {
         #    33 (同じブロックが3つのyieldで3回起動された。
         #        具体的には 10 + 3; 20 + 3; 30 + 3 を実行した)
 
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn object_eval() {
-        let program = r#"
-        a = 100
-        eval("b = 100; assert(100, b);")
-        assert(77, eval("a = 77"))
-        assert(77, a)
         "#;
         assert_script(program);
     }

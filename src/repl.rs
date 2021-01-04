@@ -6,11 +6,11 @@ use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
 
 pub fn repl_vm() {
-    println!("RV: {}", std::mem::size_of::<RV>());
     assert_eq!(8, std::mem::size_of::<Value>());
     assert_eq!(56, std::mem::size_of::<RValue>());
     #[cfg(debug_assertions)]
     {
+        println!("RV: {}", std::mem::size_of::<RV>());
         println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
         println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
         println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
@@ -33,12 +33,10 @@ pub fn repl_vm() {
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
     let mut level = parser.get_context_depth();
-    let method = MethodRef::new(MethodInfo::default());
-    let info = ISeqInfo::default(method);
     let context = ContextRef::new_heap(
         vm.globals.main_object,
         Block::None,
-        ISeqRef::new(info),
+        ISeqRef::default(),
         None,
     );
     loop {

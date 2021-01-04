@@ -16,7 +16,8 @@ const ZERO: u64 = (0b1000 << 60) | 0b10;
 pub enum RV<'a> {
     Uninitialized,
     Nil,
-    Bool(bool),
+    True,
+    False,
     Integer(i64),
     Float(f64),
     Symbol(IdentId),
@@ -28,8 +29,8 @@ impl<'a> RV<'a> {
         match self {
             RV::Uninitialized => Value::uninitialized(),
             RV::Nil => Value::nil(),
-            RV::Bool(true) => Value::true_val(),
-            RV::Bool(false) => Value::false_val(),
+            RV::True => Value::true_val(),
+            RV::False => Value::false_val(),
             RV::Integer(num) => Value::integer(*num),
             RV::Float(num) => Value::float(*num),
             RV::Symbol(id) => Value::symbol(*id),
@@ -112,6 +113,7 @@ impl PartialEq for Value {
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
+            (ObjKind::Proc(lhs), ObjKind::Proc(rhs)) => lhs.context.id() == rhs.context.id(),
             (ObjKind::Invalid, _) => {
                 unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
@@ -174,10 +176,10 @@ impl Value {
         } else {
             match self.0 {
                 NIL_VALUE => RV::Nil,
-                TRUE_VALUE => RV::Bool(true),
-                FALSE_VALUE => RV::Bool(false),
+                TRUE_VALUE => RV::True,
+                FALSE_VALUE => RV::False,
                 UNINITIALIZED => RV::Uninitialized,
-                _ => unreachable!("Illegal packed value."),
+                _ => unreachable!("Illegal packed value. {:x}", self.0),
             }
         }
     }
@@ -185,20 +187,15 @@ impl Value {
     fn format(&self, level: usize) -> String {
         match self.unpack() {
             RV::Nil => format!("nil"),
-            RV::Bool(b) => {
-                if b {
-                    format!("true")
-                } else {
-                    format!("false")
-                }
-            }
+            RV::True => format!("true"),
+            RV::False => format!("false"),
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Integer(i) => format!("{}", i),
             RV::Float(f) => format!("{}", f),
             RV::Symbol(id) => format!(":\"{:?}\"", id),
             RV::Object(rval) => match &rval.kind {
                 ObjKind::Invalid => format!("[Invalid]"),
-                ObjKind::Ordinary => format!("#<{}:0x{:x}>", self.get_class_name(), self.id()),
+                ObjKind::Ordinary => format!("#<{}:0x{:016x}>", self.get_class_name(), self.id()),
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
                 ObjKind::Integer(i) => format!("{}", i),
                 ObjKind::Float(f) => format!("{}", f),
@@ -214,14 +211,8 @@ impl Value {
                         format!("({:?}{:?}i)", r, i)
                     }
                 }
-                ObjKind::Class(cinfo) => match cinfo.name() {
-                    Some(id) => format!("{:?}", id),
-                    None => format!("#<Class:0x{:x}>", cinfo.id()),
-                },
-                ObjKind::Module(cinfo) => match cinfo.name() {
-                    Some(id) => format!("{:?}", id),
-                    None => format!("#<Module:0x{:x}>", cinfo.id()),
-                },
+                ObjKind::Class(cinfo) => cinfo.inspect_class(),
+                ObjKind::Module(cinfo) => cinfo.inspect_module(),
                 ObjKind::Array(aref) => {
                     if level == 0 {
                         format!("[Array]")
@@ -277,12 +268,14 @@ impl Value {
                 }
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
                 ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
-                ObjKind::Proc(_p) => format!("#<Proc:0x{:x}>", rval.id()),
+                ObjKind::Proc(p) => format!("#<Proc:0x{:x}>", p.context.id()),
                 ObjKind::Method(_) => format!("Method"),
                 ObjKind::Enumerator(_) => format!("Enumerator"),
                 ObjKind::Fiber(_) => format!("Fiber"),
                 ObjKind::Time(time) => format!("{:?}", time),
-                ObjKind::Exception(err) => format!("Exception {:?}", err),
+                ObjKind::Exception(err) => {
+                    format!("#<{}: {}>", self.get_class_name(), err.message())
+                }
             },
         }
     }
@@ -309,6 +302,14 @@ impl Value {
     pub fn is_real(&self) -> bool {
         match self.unpack() {
             RV::Float(_) | RV::Integer(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self.unpack() {
+            RV::Float(f) => f == 0.0,
+            RV::Integer(i) => i == 0,
             _ => false,
         }
     }
@@ -361,10 +362,8 @@ impl Value {
         let s = match self.unpack() {
             RV::Uninitialized => Cow::from("[Uninitialized]"),
             RV::Nil => Cow::from(""),
-            RV::Bool(b) => match b {
-                true => Cow::from("true"),
-                false => Cow::from("false"),
-            },
+            RV::True => Cow::from("true"),
+            RV::False => Cow::from("false"),
             RV::Integer(i) => Cow::from(i.to_string()),
             RV::Float(f) => {
                 if f.fract() == 0.0 {
@@ -406,38 +405,30 @@ impl Value {
     /// ### panic
     /// panic if `self` was Invalid.
     pub fn get_class_for_method(&self) -> Value {
-        match self.as_rvalue() {
-            None => {
-                if self.is_packed_fixnum() {
-                    BuiltinClass::integer()
-                } else if self.is_packed_num() {
-                    BuiltinClass::float()
-                } else if self.is_packed_symbol() {
-                    BuiltinClass::symbol()
-                } else {
-                    BuiltinClass::object()
-                }
-            }
-            Some(info) => info.class(),
+        match self.unpack() {
+            RV::Integer(_) => BuiltinClass::integer(),
+            RV::Float(_) => BuiltinClass::float(),
+            RV::Symbol(_) => BuiltinClass::symbol(),
+            RV::Nil => BuiltinClass::nilclass(),
+            RV::True => BuiltinClass::trueclass(),
+            RV::False => BuiltinClass::falseclass(),
+            RV::Object(info) => info.class(),
+            RV::Uninitialized => unreachable!("[Uninitialized]"),
         }
     }
 
     /// Get class of `self`.
     /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
     pub fn get_class(&self) -> Value {
-        match self.as_rvalue() {
-            None => {
-                if self.is_packed_fixnum() {
-                    BuiltinClass::integer()
-                } else if self.is_packed_num() {
-                    BuiltinClass::float()
-                } else if self.is_packed_symbol() {
-                    BuiltinClass::symbol()
-                } else {
-                    BuiltinClass::object()
-                }
-            }
-            Some(info) => info.search_class(),
+        match self.unpack() {
+            RV::Integer(_) => BuiltinClass::integer(),
+            RV::Float(_) => BuiltinClass::float(),
+            RV::Symbol(_) => BuiltinClass::symbol(),
+            RV::Nil => BuiltinClass::nilclass(),
+            RV::True => BuiltinClass::trueclass(),
+            RV::False => BuiltinClass::falseclass(),
+            RV::Object(info) => info.search_class(),
+            RV::Uninitialized => unreachable!("[Uninitialized]"),
         }
     }
 
@@ -445,31 +436,15 @@ impl Value {
         match self.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "NilClass".to_string(),
-            RV::Bool(true) => "TrueClass".to_string(),
-            RV::Bool(false) => "FalseClass".to_string(),
+            RV::True => "TrueClass".to_string(),
+            RV::False => "FalseClass".to_string(),
             RV::Integer(_) => "Integer".to_string(),
             RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
-            RV::Object(oref) => match oref.kind {
+            RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-                ObjKind::String(_) => "String".to_string(),
-                ObjKind::Array(_) => "Array".to_string(),
-                ObjKind::Range(_) => "Range".to_string(),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                ObjKind::Hash(_) => "Hash".to_string(),
-                ObjKind::Regexp(_) => "Regexp".to_string(),
-                ObjKind::Class(_) => "Class".to_string(),
-                ObjKind::Module(_) => "Module".to_string(),
-                ObjKind::Proc(_) => "Proc".to_string(),
-                ObjKind::Method(_) => "Method".to_string(),
-                ObjKind::Ordinary => oref.class_name().to_string(),
-                ObjKind::Integer(_) => "Integer".to_string(),
-                ObjKind::Float(_) => "Float".to_string(),
-                ObjKind::Complex { .. } => "Complex".to_string(),
-                ObjKind::Fiber(_) => "Fiber".to_string(),
-                ObjKind::Enumerator(_) => "Enumerator".to_string(),
-                ObjKind::Time(_) => "Time".to_string(),
-                ObjKind::Exception(_) => "Exception".to_string(),
+                _ => oref.class().as_class().name_str(),
             },
         }
     }
@@ -500,6 +475,56 @@ impl Value {
             }
             None => unreachable!("upper(): Not a Class / Module."),
         }
+    }
+
+    pub fn kind_of(&self, class: Value) -> bool {
+        let mut val = self.get_class();
+        loop {
+            if val.id() == class.id() {
+                return true;
+            }
+            val = match val.upper() {
+                Some(val) => val,
+                None => break,
+            };
+        }
+        false
+    }
+
+    /// Check whether `module` exists in the ancestors of `self`.
+    pub fn include_module(&self, target_module: Value) -> bool {
+        let mut val = *self;
+        loop {
+            let minfo = val.if_mod_class().unwrap();
+            let true_module = if minfo.is_included() {
+                minfo.origin()
+            } else {
+                val
+            };
+            if true_module.id() == target_module.id() {
+                return true;
+            };
+            match val.upper() {
+                Some(upper) => val = upper,
+                None => break,
+            }
+        }
+        false
+    }
+
+    pub fn is_exception_class(&self) -> bool {
+        let mut val = *self;
+        let ex = BuiltinClass::exception();
+        loop {
+            if val.id() == ex.id() {
+                return true;
+            }
+            val = match val.superclass() {
+                Some(val) => val,
+                None => break,
+            };
+        }
+        false
     }
 
     /// Examine whether `self` is a singleton class.
@@ -621,7 +646,7 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(RubyError::argument(format!(
+            _ => Err(RubyError::typeerr(format!(
                 "{} must be an Integer. (given:{})",
                 msg.into(),
                 self.get_class_name()
@@ -632,7 +657,7 @@ impl Value {
     pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
-            None => Err(RubyError::argument(format!(
+            None => Err(RubyError::typeerr(format!(
                 "{} must be Float. (given:{})",
                 msg,
                 self.get_class_name()
@@ -858,6 +883,16 @@ impl Value {
         }
     }
 
+    pub fn if_module(&self) -> Option<&ClassInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Module(cinfo) => Some(cinfo),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
@@ -873,17 +908,15 @@ impl Value {
         }
     }
 
-    /// Returns `ClassRef` if `self` is a Module.
-    /// When `self` is not a Class, returns `TypeError`.
-    pub fn expect_module(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
-        let self_ = self.clone();
-        if let Some(cinfo) = self.if_mut_module() {
+    /// Returns `&ClassInfo` if `self` is a Module.
+    /// When `self` is not a Module, returns `TypeError`.
+    pub fn expect_module(&self, msg: &str) -> Result<&ClassInfo, RubyError> {
+        if let Some(cinfo) = self.if_module() {
             Ok(cinfo)
         } else {
-            let val = vm.val_inspect(self_)?;
             Err(RubyError::typeerr(format!(
-                "{} must be Module. (given:{})",
-                msg, val
+                "{} must be Module. (given:{:?})",
+                msg, self
             )))
         }
     }
@@ -1196,11 +1229,13 @@ impl Value {
     }
 
     pub fn class(cinfo: ClassInfo) -> Self {
-        RValue::new_class(cinfo).pack()
+        let mut obj = RValue::new_class(cinfo).pack();
+        obj.get_singleton_class().unwrap();
+        obj
     }
 
     pub fn class_under(superclass: impl Into<Option<Value>>) -> Self {
-        RValue::new_class(ClassInfo::from(superclass)).pack()
+        Value::class(ClassInfo::from(superclass))
     }
 
     pub fn singleton_class_from(superclass: impl Into<Option<Value>>) -> Self {
@@ -1213,6 +1248,10 @@ impl Value {
 
     pub fn array_from(ary: Vec<Value>) -> Self {
         RValue::new_array(ArrayInfo::new(ary)).pack()
+    }
+
+    pub fn array_from_with_class(ary: Vec<Value>, class: Value) -> Self {
+        RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
     }
 
     pub fn splat(val: Value) -> Self {
@@ -1291,13 +1330,12 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
-    /// TODO: nil=>NilClass, true=>TrueClass, false=>FalseClass
-    pub fn get_singleton_class(&mut self) -> Option<Value> {
+    pub fn get_singleton_class(&mut self) -> VMResult {
         match self.as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
                 if class.is_singleton() {
-                    Some(class)
+                    Ok(class)
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
@@ -1316,10 +1354,14 @@ impl Value {
                         _ => Value::singleton_class_from(class),
                     };
                     oref.set_class(singleton);
-                    Some(singleton)
+                    Ok(singleton)
                 }
             }
-            _ => None,
+            _ => Err(RubyError::typeerr(format!(
+                "Can not define singleton for {:?}:{}",
+                self,
+                self.get_class_name()
+            ))),
         }
     }
 
@@ -1386,7 +1428,7 @@ mod tests {
     #[test]
     fn pack_bool1() {
         let _globals = GlobalsRef::new_globals();
-        let expect = RV::Bool(true);
+        let expect = RV::True;
         let packed = expect.pack();
         let got = packed.unpack();
         if expect != got {
@@ -1397,7 +1439,7 @@ mod tests {
     #[test]
     fn pack_bool2() {
         let _globals = GlobalsRef::new_globals();
-        let expect = RV::Bool(false);
+        let expect = RV::False;
         let packed = expect.pack();
         let got = packed.unpack();
         if expect != got {

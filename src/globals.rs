@@ -53,6 +53,13 @@ pub struct BuiltinClass {
     pub object: Value,
     pub enumerator: Value,
     pub exception: Value,
+    pub standard: Value,
+    pub nilclass: Value,
+    pub trueclass: Value,
+    pub falseclass: Value,
+    pub kernel: Value,
+    pub comparable: Value,
+    pub numeric: Value,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -92,6 +99,13 @@ impl BuiltinClass {
             enumerator: nil,
             object,
             exception: nil,
+            standard: nil,
+            nilclass: nil,
+            trueclass: nil,
+            falseclass: nil,
+            kernel: nil,
+            comparable: nil,
+            numeric: nil,
         }
     }
 
@@ -161,6 +175,34 @@ impl BuiltinClass {
 
     pub fn exception() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().exception)
+    }
+
+    pub fn standard() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().standard)
+    }
+
+    pub fn nilclass() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().nilclass)
+    }
+
+    pub fn trueclass() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().trueclass)
+    }
+
+    pub fn falseclass() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().falseclass)
+    }
+
+    pub fn kernel() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().kernel)
+    }
+
+    pub fn numeric() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().numeric)
+    }
+
+    pub fn comparable() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().comparable)
     }
 }
 
@@ -236,6 +278,10 @@ impl Globals {
         let singleton_obj = Value::class(singleton_class);
         object.set_class(singleton_obj);
 
+        builtins.comparable = comparable::init(&mut globals);
+        builtins.numeric = numeric::init(&mut globals);
+        builtins.kernel = kernel::init(&mut globals);
+
         module::init(&mut globals);
         class::init(&mut globals);
         object::init(&mut globals);
@@ -267,11 +313,12 @@ impl Globals {
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
 
-        init_class!("Numeric", numeric);
-
         init_builtin_class!("Integer", integer);
         init_builtin_class!("Complex", complex);
-        init_builtin_class!("Float", float);
+        builtins.float = float::init(&mut globals);
+        builtins.nilclass = nilclass::init(&mut globals);
+        builtins.trueclass = trueclass::init(&mut globals);
+        builtins.falseclass = falseclass::init(&mut globals);
         init_builtin_class!("Array", array);
         init_builtin_class!("Symbol", symbol);
         init_builtin_class!("Proc", procobj);
@@ -284,21 +331,16 @@ impl Globals {
         init_builtin_class!("Enumerator", enumerator);
         init_builtin_class!("Exception", exception);
 
-        let kernel = kernel::init(&mut globals);
-        object.as_mut_class().append_include(kernel, &mut globals);
-        globals.set_toplevel_constant("Kernel", kernel);
+        globals.builtins.standard = globals.get_toplevel_constant("StandardError").unwrap();
 
-        init_class!("Math", math);
-        init_class!("IO", io);
-        init_class!("File", file);
-        init_class!("Dir", dir);
-        init_class!("Process", process);
+        math::init(&mut globals);
+        io::init(&mut globals);
+        file::init(&mut globals);
+        dir::init(&mut globals);
+        process::init(&mut globals);
         init_class!("GC", gc);
         init_class!("Struct", structobj);
         init_class!("Time", time);
-        init_class!("Comparable", comparable);
-
-        globals.set_toplevel_constant("StopIteration", Value::class_under(object));
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         std::env::vars()

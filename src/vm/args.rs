@@ -169,8 +169,15 @@ impl Args {
 
     pub fn expect_block(&self) -> Result<&Block, RubyError> {
         match &self.block {
-            Block::None => return Err(RubyError::argument("Currently, needs block.")),
+            Block::None => Err(RubyError::argument("Currently, needs block.")),
             block => Ok(block),
+        }
+    }
+
+    pub fn expect_no_block(&self) -> Result<(), RubyError> {
+        match &self.block {
+            Block::None => Ok(()),
+            _ => Err(RubyError::argument("Currently, block is not supported.")),
         }
     }
 }
@@ -179,7 +186,7 @@ impl Index<usize> for Args {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        unsafe { self.elems.get_unchecked(index) }
+        &self.elems[index]
     }
 }
 
@@ -187,19 +194,19 @@ impl Index<Range<usize>> for Args {
     type Output = [Value];
 
     fn index(&self, range: Range<usize>) -> &Self::Output {
-        unsafe { self.elems.get_unchecked(range) }
+        &self.elems[range]
     }
 }
 
 impl IndexMut<Range<usize>> for Args {
     fn index_mut(&mut self, range: Range<usize>) -> &mut Self::Output {
-        unsafe { self.elems.get_unchecked_mut(range) }
+        &mut self.elems[range]
     }
 }
 
 impl IndexMut<usize> for Args {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe { self.elems.get_unchecked_mut(index) }
+        &mut self.elems[index]
     }
 }
 

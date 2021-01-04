@@ -5,10 +5,12 @@ use std::path::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let mut class = Value::class_under(globals.builtins.object);
+    globals.set_toplevel_constant("Dir", class);
     class.add_builtin_class_method("home", home);
     class.add_builtin_class_method("pwd", pwd);
     class.add_builtin_class_method("glob", glob);
     class.add_builtin_class_method("[]", glob);
+    class.add_builtin_class_method("exist?", exist);
     class
 }
 
@@ -24,6 +26,15 @@ fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let cur_dir = std::env::current_dir().unwrap_or(PathBuf::new());
     Ok(Value::string(cur_dir.to_string_lossy()))
+}
+
+fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let res = match super::file::string_to_canonicalized_path(vm, args[0], "1st arg") {
+        Ok(path) => path,
+        Err(_) => return Ok(Value::false_val()),
+    };
+    Ok(Value::bool(res.is_dir()))
 }
 
 fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -180,6 +191,9 @@ mod test {
         assert ENV["PWD"], Dir.pwd
         assert ["src/builtin/enumerator.rs"], Dir["**/en*?.rs"]
         assert ["src/alloc.rs","src/builtin/array.rs", "src/value/array.rs","src/vm/args.rs"].sort, Dir["src/**/a*s"].sort
+        assert true, Dir.exist?("src")
+        assert false, Dir.exist?("srd")
+        assert false, Dir.exist?("Cargo.toml")
     "##;
         assert_script(program);
     }

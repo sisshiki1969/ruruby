@@ -210,7 +210,11 @@ fn lambda_literal() {
         f2 = ->(x,y){x*y}
         assert 100, f0.call
         assert 300, f1.call(50)
-        assert 35, f2.call(5,7)";
+        assert 35, f2.call(5,7)
+        f3 = -> do 100 end
+        f4 = ->(x,y) do x*y end
+        assert 100, f3.call
+        assert 35, f4.call(5,7)";
     assert_script(program);
 }
 

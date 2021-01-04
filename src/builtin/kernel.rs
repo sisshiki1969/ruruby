@@ -3,8 +3,9 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub fn init(_globals: &mut Globals) -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let mut kernel = Value::module();
+    globals.set_toplevel_constant("Kernel", kernel);
     kernel.add_builtin_module_func("puts", puts);
     kernel.add_builtin_module_func("p", p);
     kernel.add_builtin_module_func("print", print);
@@ -15,6 +16,7 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("load", load);
     kernel.add_builtin_module_func("block_given?", block_given);
     kernel.add_builtin_module_func("is_a?", isa);
+    kernel.add_builtin_module_func("kind_of?", isa);
     kernel.add_builtin_module_func("__dir__", dir);
     kernel.add_builtin_module_func("__FILE__", file_);
     kernel.add_builtin_module_func("raise", raise);
@@ -30,7 +32,8 @@ pub fn init(_globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("Array", kernel_array);
     kernel.add_builtin_module_func("at_exit", at_exit);
     kernel.add_builtin_module_func("`", command);
-    return kernel;
+    kernel.add_builtin_module_func("eval", eval);
+    kernel
 }
 /// Built-in function "puts".
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -214,22 +217,7 @@ fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
 
 fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let mut module = self_val.get_class();
-    loop {
-        let cinfo = module.as_module();
-        let real_module = if cinfo.is_included() {
-            cinfo.origin()
-        } else {
-            module
-        };
-        if real_module.id() == args[0].id() {
-            return Ok(Value::true_val());
-        }
-        module = cinfo.upper();
-        if module.is_nil() {
-            return Ok(Value::false_val());
-        };
-    }
+    Ok(Value::bool(self_val.kind_of(args[0])))
 }
 
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -251,27 +239,29 @@ fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// fail(message, cause: $!) -> ()
 /// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
 /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
-fn raise(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
-    /*for arg in args.iter() {
-        eprintln!("{}", vm.val_inspect(*arg));
-    }*/
-    if args.len() == 1 {
-        if args[0].is_class() {
-            if Some(IdentId::get_id("StopIteration")) == args[0].as_class().name() {
-                return Err(RubyError::stop_iteration(""));
-            };
+    match args.len() {
+        0 => Err(RubyError::none("")),
+        1 => {
+            if let Some(s) = args[0].as_string() {
+                Err(RubyError::none(s))
+            } else if args[0].is_class() {
+                if args[0].is_exception_class() {
+                    let method = vm.get_method_from_receiver(args[0], IdentId::NEW)?;
+                    let val = vm.eval_send(method, args[0], &Args::new0())?;
+                    Err(RubyError::value(val))
+                } else {
+                    Err(RubyError::typeerr("Exception class/object expected."))
+                }
+            } else if args[0].if_exception().is_some() {
+                Err(RubyError::value(args[0]))
+            } else {
+                Err(RubyError::typeerr("Exception class/object expected."))
+            }
         }
-        if let Some(err) = args[0].if_exception() {
-            return Err(err.clone());
-        }
+        _ => Err(RubyError::none(args[1].clone().expect_string("2nd arg")?)),
     }
-    let error_msg = match args.len() {
-        1 => format!("{:?}", args[0]),
-        2 => format!("{:?} {:?}", args[0], args[1]),
-        _ => "".to_string(),
-    };
-    Err(RubyError::runtime(error_msg))
 }
 
 fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
@@ -291,6 +281,9 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                     kind: RuntimeErrKind::StopIteration,
                     ..
                 } => return Ok(Value::nil()),
+                RubyErrorKind::Value(val) if val.get_class_name() == "StopIteration" => {
+                    return Ok(Value::nil())
+                }
                 _ => return Err(err),
             },
         }
@@ -448,6 +441,30 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::bytes(output.stdout))
 }
 
+fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_range(1, 4)?;
+    let mut arg0 = args[0];
+    let program = arg0.expect_string("1st arg")?;
+    if args.len() > 1 {
+        if !args[1].is_nil() {
+            return Err(RubyError::argument("Currently, 2nd arg must be Nil."));
+        }
+    }
+    let path = if args.len() > 2 {
+        let mut arg2 = args[2];
+        let name = arg2.expect_string("3rd arg")?;
+        std::path::PathBuf::from(name)
+    } else {
+        std::path::PathBuf::from("(eval)")
+    };
+
+    let method = vm.parse_program_eval(path, program)?;
+    let args = Args::new0();
+    let outer = vm.current_context();
+    let res = vm.eval_block(&Block::Block(method, outer), &args)?;
+    Ok(res)
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
@@ -574,18 +591,6 @@ mod test {
     }
 
     #[test]
-    fn kernel_eval() {
-        let program = r#"
-        n = 2
-        assert("n", %w{n}*"")
-        assert(2, eval(%w{n}*""))
-        assert("eval(%w{n}*\"\")", %q{eval(%w{n}*"")})
-        assert(2, eval(%q{eval(%w{n}*"")}))
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
     fn kernel_complex() {
         let program = r#"
         assert(Complex.rect(5.2, -99), Complex(5.2, -99))
@@ -613,6 +618,29 @@ mod test {
         a = "toml"
         assert("Cargo.toml\n", `ls Cargo.#{a}`)
         assert_error { `wooo` }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_eval() {
+        let program = r#"
+        a = 100
+        eval("b = 100; assert(100, b);")
+        assert(77, eval("a = 77"))
+        assert(77, a)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn kernel_eval2() {
+        let program = r#"
+        n = 2
+        assert("n", %w{n}*"")
+        assert(2, eval(%w{n}*""))
+        assert("eval(%w{n}*\"\")", %q{eval(%w{n}*"")})
+        assert(2, eval(%q{eval(%w{n}*"")}))
         "#;
         assert_script(program);
     }

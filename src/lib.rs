@@ -1,7 +1,7 @@
-//#![feature(test)]
 #![feature(box_patterns)]
 #![feature(assoc_char_funcs)]
 #![feature(pattern)]
+#![feature(split_inclusive)]
 extern crate fancy_regex;
 #[macro_use]
 extern crate lazy_static;

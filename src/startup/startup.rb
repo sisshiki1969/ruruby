@@ -20,12 +20,12 @@ class RbConfig
 end
 
 class Thread
-  @@current = {}.compare_by_identity
+  CURRENT = {}.compare_by_identity
   def respond_to?(*x)
     false
   end
   def self.current
-    @@current
+    CURRENT
   end
 end
 
@@ -39,20 +39,13 @@ class RubyVM
   end
 end
 
-class TrueClass
-end
-
-class FalseClass
-end
-
-class NilClass
-end
-
 class SystemExit
 end
 
 class Encoding
   UTF_8 = self.new
+  US_ASCII = self.new
+  IBM437 = self.new
   def self.default_external
     UTF_8
   end
@@ -70,11 +63,15 @@ class Errno < StandardError
   class ENOTDIR; end;
 end
 
-class FrozenError < RuntimeError
+class RangeError < StandardError
+end
+class FloatDomainError < RangeError
+end
+class ZeroDivisionError < StandardError
+end
+class LoadError < StandardError
 end
 
-class ArgumentError < RuntimeError
-end
 
 class Module
   def undef_method(sym); end
@@ -85,5 +82,3 @@ RUBY_PLATFORM = "x86_64-linux"
 RUBY_VERSION = "2.7.0"
 RUBY_ENGINE = "ruruby"
 RUBY_DESCRIPTION = "ruruby [x86_64-linux]"
-
-#$: = eval(`ruby -e p($:)`)
