@@ -69,6 +69,8 @@ class FloatDomainError < RangeError
 end
 class ZeroDivisionError < StandardError
 end
+class LoadError < StandardError
+end
 
 
 class Module
