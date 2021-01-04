@@ -20,6 +20,12 @@ impl Real {
             Real::Float(f) => f < 0.0,
         }
     }
+    pub fn is_zero(self) -> bool {
+        match self {
+            Real::Integer(i) => i == 0,
+            Real::Float(f) => f == 0.0,
+        }
+    }
     pub fn sqrt(self) -> Self {
         match self {
             Real::Integer(i) => Real::Float((i as f64).sqrt()),

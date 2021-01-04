@@ -3,6 +3,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let mut string_class = Value::class_under(globals.builtins.object);
+    string_class.add_builtin_class_method("new", string_new);
     string_class.add_builtin_method_by_str("to_s", to_s);
     string_class.add_builtin_method_by_str("inspect", inspect);
     string_class.add_builtin_method_by_str("+", add);
@@ -53,6 +54,22 @@ pub fn init(globals: &mut Globals) -> Value {
     string_class.add_builtin_method_by_str("lines", lines);
 
     string_class
+}
+
+fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let s = if args.len() == 0 {
+        String::new()
+    } else {
+        let mut arg = args[0];
+        arg.expect_string("1st arg")?.to_string()
+    };
+    let mut array = Value::string(s);
+    array.set_class(self_val);
+    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+        vm.eval_send(method, array, args)?;
+    };
+    Ok(array)
 }
 
 fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -159,17 +176,27 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 fn index_assign(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(2, 3)?;
     let string = self_val.as_mut_rstring().unwrap();
-    let pos = args[0].expect_integer("1st arg")? as usize;
+    let str_len = string.chars().count();
+    let start_pos = args[0].expect_integer("1st arg")? as usize;
     let (len, mut subst_val) = match args.len() {
         2 => (0, args[1]),
         3 => (args[1].expect_integer("2nd arg")? as usize - 1, args[2]),
         _ => unreachable!(),
     };
+    if start_pos >= str_len {
+        return Err(RubyError::index(format!(
+            "Index {:?} out of string.",
+            args[0]
+        )));
+    }
     let (start, end) = (
-        string.char_indices().nth(pos).unwrap().0,
-        string.char_indices().nth(pos + len).unwrap().0,
+        string.char_indices().nth(start_pos).unwrap().0,
+        match string.char_indices().nth(start_pos + len + 1) {
+            Some((p, _)) => p,
+            None => string.len(),
+        },
     );
-    string.replace_range(start..=end, subst_val.expect_string("Value")?);
+    string.replace_range(start..end, subst_val.expect_string("Value")?);
     Ok(Value::nil())
 }
 

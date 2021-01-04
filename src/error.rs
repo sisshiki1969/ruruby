@@ -81,6 +81,7 @@ pub enum RuntimeErrKind {
     Runtime,
     LoadError,
     Range,
+    ZeroDivision,
 }
 
 impl RubyError {
@@ -353,6 +354,10 @@ impl RubyError {
 
     pub fn range(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Range, msg.into())
+    }
+
+    pub fn zero_div(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::ZeroDivision, msg.into())
     }
 }
 

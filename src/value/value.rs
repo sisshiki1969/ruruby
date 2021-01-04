@@ -306,6 +306,14 @@ impl Value {
         }
     }
 
+    pub fn is_zero(&self) -> bool {
+        match self.unpack() {
+            RV::Float(f) => f == 0.0,
+            RV::Integer(i) => i == 0,
+            _ => false,
+        }
+    }
+
     pub fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
         if self.is_packed_value() {
             None

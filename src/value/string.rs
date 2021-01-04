@@ -173,6 +173,22 @@ impl RString {
         }
     }
 
+    pub fn len(&self) -> usize {
+        match self {
+            RString::Str(s) => s.len(),
+            RString::SmallStr(s) => s.as_str().len(),
+            RString::Bytes(_) => panic!(),
+        }
+    }
+
+    pub fn chars(&self) -> std::str::Chars<'_> {
+        match self {
+            RString::Str(s) => s.chars(),
+            RString::SmallStr(s) => s.as_str().chars(),
+            RString::Bytes(_) => panic!(),
+        }
+    }
+
     pub fn char_indices(&self) -> std::str::CharIndices<'_> {
         match self {
             RString::Str(s) => s.char_indices(),

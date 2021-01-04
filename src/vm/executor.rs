@@ -1821,6 +1821,9 @@ impl VM {
 
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Div;
+        if rhs.is_zero() {
+            return Err(RubyError::zero_div("Divided by zero."));
+        }
         eval_op!(self, rhs, lhs, div, IdentId::_DIV);
     }
 

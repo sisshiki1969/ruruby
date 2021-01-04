@@ -97,7 +97,12 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
-        Some(rhs) => Ok((lhs.quo(rhs)).to_val()),
+        Some(rhs) => {
+            if rhs.is_zero() {
+                return Err(RubyError::zero_div("Divided by zero."));
+            }
+            Ok((lhs.quo(rhs)).to_val())
+        }
         None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }
 }
