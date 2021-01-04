@@ -491,6 +491,27 @@ impl Value {
         false
     }
 
+    /// Check whether `module` exists in the ancestors of `self`.
+    pub fn include_module(&self, target_module: Value) -> bool {
+        let mut val = *self;
+        loop {
+            let minfo = val.if_mod_class().unwrap();
+            let true_module = if minfo.is_included() {
+                minfo.origin()
+            } else {
+                val
+            };
+            if true_module.id() == target_module.id() {
+                return true;
+            };
+            match val.upper() {
+                Some(upper) => val = upper,
+                None => break,
+            }
+        }
+        false
+    }
+
     pub fn is_exception_class(&self) -> bool {
         let mut val = *self;
         let ex = BuiltinClass::exception();
@@ -862,6 +883,16 @@ impl Value {
         }
     }
 
+    pub fn if_module(&self) -> Option<&ClassInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Module(cinfo) => Some(cinfo),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
     pub fn expect_class(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
@@ -877,17 +908,15 @@ impl Value {
         }
     }
 
-    /// Returns `ClassRef` if `self` is a Module.
-    /// When `self` is not a Class, returns `TypeError`.
-    pub fn expect_module(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
-        let self_ = self.clone();
-        if let Some(cinfo) = self.if_mut_module() {
+    /// Returns `&ClassInfo` if `self` is a Module.
+    /// When `self` is not a Module, returns `TypeError`.
+    pub fn expect_module(&self, msg: &str) -> Result<&ClassInfo, RubyError> {
+        if let Some(cinfo) = self.if_module() {
             Ok(cinfo)
         } else {
-            let val = vm.val_inspect(self_)?;
             Err(RubyError::typeerr(format!(
-                "{} must be Module. (given:{})",
-                msg, val
+                "{} must be Module. (given:{:?})",
+                msg, self
             )))
         }
     }

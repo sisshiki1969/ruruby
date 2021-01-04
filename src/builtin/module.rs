@@ -30,6 +30,7 @@ pub fn init(globals: &mut Globals) {
     module_class.add_builtin_method_by_str("public", public);
     module_class.add_builtin_method_by_str("private", private);
     module_class.add_builtin_method_by_str("protected", protected);
+    module_class.add_builtin_method_by_str("include?", include_);
 }
 
 /// Create new module.
@@ -52,26 +53,8 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let mut module = args[0].get_class();
-    loop {
-        let minfo = match module.if_mod_class() {
-            Some(info) => info,
-            None => return Err(RubyError::argument("Must be module or class.")),
-        };
-        let true_module = if minfo.is_included() {
-            minfo.origin()
-        } else {
-            module
-        };
-        if true_module.id() == self_val.id() {
-            return Ok(Value::true_val());
-        };
-        match module.upper() {
-            Some(upper) => module = upper,
-            None => break,
-        }
-    }
-    Ok(Value::false_val())
+    let class = args[0].get_class();
+    Ok(Value::bool(class.include_module(self_val)))
 }
 
 fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
@@ -286,8 +269,8 @@ fn singleton_class(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
 fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let cinfo = self_val.expect_mod_class(vm)?;
-    let mut module = args[0];
-    module.expect_module(vm, "1st arg")?;
+    let module = args[0];
+    module.expect_module("1st arg")?;
     cinfo.append_include(module, &mut vm.globals);
     Ok(Value::nil())
 }
@@ -296,8 +279,8 @@ fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let self_val2 = self_val.clone();
     let cinfo = self_val.expect_mod_class(vm)?;
-    let mut module = args[0];
-    module.expect_module(vm, "1st arg")?;
+    let module = args[0];
+    module.expect_module("1st arg")?;
     cinfo.append_prepend(self_val2, module, &mut vm.globals);
     Ok(Value::nil())
 }
@@ -388,6 +371,14 @@ fn private(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn protected(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(self_val)
+}
+
+fn include_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let val = self_val;
+    let module = args[0];
+    module.expect_module("1st arg")?;
+    Ok(Value::bool(val.include_module(module)))
 }
 
 #[cfg(test)]
@@ -754,6 +745,16 @@ mod test {
         assert "M2", C.new.f
         assert [C, M2, M1, S, M0, Object, Kernel, BasicObject], C.ancestors
         "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include() {
+        let program = "
+        assert true, Integer.include?(Kernel)
+        assert true, Integer.include?(Comparable)
+        assert_error { Integer.include?(Numeric) }
+        ";
         assert_script(program);
     }
 }

@@ -57,6 +57,9 @@ pub struct BuiltinClass {
     pub nilclass: Value,
     pub trueclass: Value,
     pub falseclass: Value,
+    pub kernel: Value,
+    pub comparable: Value,
+    pub numeric: Value,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -100,6 +103,9 @@ impl BuiltinClass {
             nilclass: nil,
             trueclass: nil,
             falseclass: nil,
+            kernel: nil,
+            comparable: nil,
+            numeric: nil,
         }
     }
 
@@ -186,6 +192,18 @@ impl BuiltinClass {
     pub fn falseclass() -> Value {
         BUILTINS.with(|b| b.borrow().unwrap().falseclass)
     }
+
+    pub fn kernel() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().kernel)
+    }
+
+    pub fn numeric() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().numeric)
+    }
+
+    pub fn comparable() -> Value {
+        BUILTINS.with(|b| b.borrow().unwrap().comparable)
+    }
 }
 
 impl GC for BuiltinClass {
@@ -260,6 +278,10 @@ impl Globals {
         let singleton_obj = Value::class(singleton_class);
         object.set_class(singleton_obj);
 
+        builtins.comparable = comparable::init(&mut globals);
+        builtins.numeric = numeric::init(&mut globals);
+        builtins.kernel = kernel::init(&mut globals);
+
         module::init(&mut globals);
         class::init(&mut globals);
         object::init(&mut globals);
@@ -291,8 +313,6 @@ impl Globals {
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
 
-        numeric::init(&mut globals);
-
         init_builtin_class!("Integer", integer);
         init_builtin_class!("Complex", complex);
         builtins.float = float::init(&mut globals);
@@ -311,8 +331,6 @@ impl Globals {
         init_builtin_class!("Enumerator", enumerator);
         init_builtin_class!("Exception", exception);
 
-        let kernel = kernel::init(&mut globals);
-        object.as_mut_class().append_include(kernel, &mut globals);
         globals.builtins.standard = globals.get_toplevel_constant("StandardError").unwrap();
 
         math::init(&mut globals);
@@ -323,7 +341,6 @@ impl Globals {
         init_class!("GC", gc);
         init_class!("Struct", structobj);
         init_class!("Time", time);
-        init_class!("Comparable", comparable);
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         std::env::vars()

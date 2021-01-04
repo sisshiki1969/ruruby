@@ -3,6 +3,8 @@ use crate::*;
 pub fn init(globals: &mut Globals) {
     let mut object = globals.builtins.object;
     let object_class = object.as_mut_class();
+    object_class.append_include(globals.builtins.kernel, globals);
+
     object_class.add_builtin_method_by_str("initialize", initialize);
     object_class.add_builtin_method_by_str("class", class);
     object_class.add_builtin_method_by_str("object_id", object_id);

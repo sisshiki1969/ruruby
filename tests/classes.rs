@@ -3,7 +3,7 @@ extern crate ruruby;
 use ruruby::test::*;
 
 #[test]
-fn objects() {
+fn superclass() {
     let program = r#"
         assert(nil, BasicObject.superclass)
         assert(BasicObject, Object.superclass)
@@ -27,7 +27,13 @@ fn objects() {
         assert(Object, Fiber.superclass)
         assert(Object, Enumerator.superclass)
         assert(Object, Exception.superclass)
+        "#;
+    assert_script(program);
+}
 
+#[test]
+fn class1() {
+    let program = r#"
         assert(Class, Object.class)
         assert(Class, BasicObject.class)
         assert(Class, Module.class)
@@ -41,7 +47,13 @@ fn objects() {
         assert(Class, Range.class)
         assert(Class, Proc.class)
         assert(Class, Method.class)
+        "#;
+    assert_script(program);
+}
 
+#[test]
+fn class2() {
+    let program = r#"
         assert(NilClass, nil.class)
         assert(TrueClass, true.class)
         assert(FalseClass, false.class)
@@ -49,7 +61,9 @@ fn objects() {
         assert(Float, (5.0).class)
         assert(Complex, (1 + 3i).class)
 
-        assert([Integer, Numeric, Object, Kernel, BasicObject], Integer.ancestors)
+        assert([Integer, Numeric, Comparable, Object, Kernel, BasicObject], Integer.ancestors)
+        assert([Float, Numeric, Comparable, Object, Kernel, BasicObject], Float.ancestors)
+        assert([Comparable, Kernel], Integer.included_modules)
         assert([Kernel], Object.included_modules)
         assert([Kernel], Class.included_modules)
 
