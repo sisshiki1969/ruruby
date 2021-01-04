@@ -220,6 +220,10 @@ impl RubyError {
                     let err_class = globals.get_toplevel_constant("RuntimeError").unwrap();
                     Value::exception(err_class, self.clone())
                 }
+                RuntimeErrKind::LoadError => {
+                    let err_class = globals.get_toplevel_constant("LoadError").unwrap();
+                    Value::exception(err_class, self.clone())
+                }
                 RuntimeErrKind::StopIteration => {
                     let err_class = globals.get_toplevel_constant("StopIteration").unwrap();
                     Value::exception(err_class, self.clone())
