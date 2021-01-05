@@ -427,11 +427,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(1);
-    for i in 0..aref.len() {
-        if i >= aref.len() {
-            break;
-        };
-        arg[0] = aref.elements[i];
+    for elem in &aref.elements {
+        arg[0] = *elem;
         vm.eval_block(method, &arg)?;
     }
     Ok(self_val)
