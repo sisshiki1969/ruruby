@@ -132,7 +132,6 @@ mod test1 {
 mod test2 {
     use crate::test::*;
     #[test]
-    #[ignore]
     fn fiber_gc_test1() {
         let program = r#"
         10000.times do |x|
@@ -143,7 +142,6 @@ mod test2 {
     }
 
     #[test]
-    #[ignore]
     fn fiber_gc_test2() {
         let program = r#"
         10000.times do |x|
@@ -155,7 +153,6 @@ mod test2 {
     }
 
     #[test]
-    #[ignore]
     fn fiber_gc_test3() {
         let program = r#"
         10000.times do |x|

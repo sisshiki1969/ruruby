@@ -514,7 +514,6 @@ mod tests {
     use crate::test::*;
 
     #[test]
-    #[ignore]
     fn gc_test() {
         let program = r#"
             class Vec
