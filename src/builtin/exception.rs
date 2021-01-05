@@ -40,7 +40,7 @@ pub fn init(globals: &mut Globals) -> Value {
 fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     let new_instance = if args.len() == 0 {
-        let class_name = self_val.as_class().name_str();
+        let class_name = self_val.as_class().name();
         Value::exception(self_val, RubyError::none(class_name))
     } else {
         let mut arg = args[0];

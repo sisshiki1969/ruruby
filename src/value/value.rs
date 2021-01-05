@@ -211,8 +211,8 @@ impl Value {
                         format!("({:?}{:?}i)", r, i)
                     }
                 }
-                ObjKind::Class(cinfo) => cinfo.inspect_class(),
-                ObjKind::Module(cinfo) => cinfo.inspect_module(),
+                ObjKind::Class(cinfo) => cinfo.inspect(),
+                ObjKind::Module(cinfo) => cinfo.inspect(),
                 ObjKind::Array(aref) => {
                     if level == 0 {
                         format!("[Array]")
@@ -444,7 +444,7 @@ impl Value {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                _ => oref.class().as_class().name_str(),
+                _ => oref.class().as_class().name(),
             },
         }
     }
@@ -1242,21 +1242,22 @@ impl Value {
     }
 
     pub fn class(cinfo: ClassInfo) -> Self {
+        assert!(!cinfo.is_module());
         let mut obj = RValue::new_class(cinfo).pack();
         obj.get_singleton_class().unwrap();
         obj
     }
 
     pub fn class_under(superclass: impl Into<Option<Value>>) -> Self {
-        Value::class(ClassInfo::from(superclass))
+        Value::class(ClassInfo::class_from(superclass))
     }
 
-    pub fn singleton_class_from(superclass: impl Into<Option<Value>>) -> Self {
-        RValue::new_class(ClassInfo::singleton_from(superclass)).pack()
+    pub fn singleton_class_from(superclass: impl Into<Option<Value>>, target: Value) -> Self {
+        RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack()
     }
 
     pub fn module() -> Self {
-        RValue::new_module(ClassInfo::from(None)).pack()
+        RValue::new_module(ClassInfo::module_from(None)).pack()
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {
@@ -1344,6 +1345,7 @@ impl Value {
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
     pub fn get_singleton_class(&mut self) -> VMResult {
+        let self_ = *self;
         match self.as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
@@ -1354,9 +1356,12 @@ impl Value {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
                             let mut superclass = cinfo.superclass();
                             let mut singleton = if superclass.is_nil() {
-                                Value::singleton_class_from(None)
+                                Value::singleton_class_from(None, self_)
                             } else {
-                                Value::singleton_class_from(superclass.get_singleton_class()?)
+                                Value::singleton_class_from(
+                                    superclass.get_singleton_class()?,
+                                    self_,
+                                )
                             };
                             singleton.set_class(class);
                             singleton
@@ -1364,7 +1369,7 @@ impl Value {
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => Value::singleton_class_from(class),
+                        _ => Value::singleton_class_from(class, self_),
                     };
                     oref.set_class(singleton);
                     Ok(singleton)

@@ -298,7 +298,7 @@ impl RubyError {
         Self::nomethod(format!(
             "no method `{:?}' for {}",
             method,
-            class.as_class().name_str()
+            class.as_class().name()
         ))
     }
 

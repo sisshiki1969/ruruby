@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from(globals.builtins.object);
+    let mut class = ClassInfo::class_from(globals.builtins.object);
     class.add_builtin_method_by_str("&", and);
     class.add_builtin_method_by_str("|", or);
     class.add_builtin_method_by_str("^", xor);

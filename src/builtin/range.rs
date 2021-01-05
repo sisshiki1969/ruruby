@@ -32,7 +32,7 @@ impl RangeInfo {
 }
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from(globals.builtins.object);
+    let mut class = ClassInfo::class_from(globals.builtins.object);
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("map", map);

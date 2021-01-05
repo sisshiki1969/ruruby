@@ -66,7 +66,7 @@ fn superclass(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 
 fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let cref = self_val.if_mod_class().unwrap();
-    Ok(Value::string(cref.inspect_class()))
+    Ok(Value::string(cref.inspect()))
 }
 
 #[cfg(test)]

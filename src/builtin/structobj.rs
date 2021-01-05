@@ -9,8 +9,11 @@ pub fn init(globals: &mut Globals) -> Value {
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_min(1)?;
     let mut i = 0;
-    let name = match args[0].as_string() {
-        None => None,
+
+    let mut class_val = Value::class_under(self_val);
+    let class = class_val.as_mut_class();
+    match args[0].as_string() {
+        None => {}
         Some(s) => {
             match s.chars().nth(0) {
                 Some(c) if c.is_ascii_uppercase() => {}
@@ -22,14 +25,9 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             };
             i = 1;
-            let s = IdentId::get_id(format!("Struct::{}", s));
-            Some(s)
+            class.set_name(format!("Struct::{}", s))
         }
     };
-
-    let mut class_val = Value::class_under(self_val);
-    let class = class_val.as_mut_class();
-    class.set_name(name);
     class.add_builtin_method_by_str("initialize", initialize);
     class.add_builtin_method_by_str("inspect", inspect);
     class_val.add_builtin_class_method("[]", builtin::class::new);
@@ -82,8 +80,8 @@ fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 use std::borrow::Cow;
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut inspect = format!("#<struct ");
-    match self_val.get_class().as_class().name() {
-        Some(id) => inspect += &IdentId::get_ident_name(id),
+    match self_val.get_class().as_class().op_name() {
+        Some(name) => inspect += &name,
         None => {}
     };
     let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {

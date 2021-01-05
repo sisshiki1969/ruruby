@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = ClassInfo::from(globals.builtins.object);
+    let class = ClassInfo::class_from(globals.builtins.object);
     let mut class_val = Value::class(class);
     globals.set_toplevel_constant("Math", class_val);
     class_val.add_builtin_class_method("sqrt", sqrt);

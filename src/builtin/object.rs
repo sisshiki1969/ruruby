@@ -52,7 +52,7 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         RV::Uninitialized => "[Uninitialized]".to_string(),
         RV::Object(oref) => match &oref.kind {
             ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Ordinary => oref.to_s()?,
+            ObjKind::Ordinary => oref.to_s(),
             ObjKind::Regexp(rref) => format!("({})", rref.as_str()),
             _ => format!("{:?}", oref.kind),
         },

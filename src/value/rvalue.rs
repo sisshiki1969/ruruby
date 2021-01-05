@@ -122,7 +122,7 @@ impl RValue {
     }
 
     pub fn class_name(&self) -> String {
-        IdentId::get_ident_name(self.search_class().as_class().name())
+        self.search_class().as_class().name()
     }
 
     pub fn inspect(&self) -> Result<String, RubyError> {
@@ -139,9 +139,8 @@ impl RValue {
         Ok(s + ">")
     }
 
-    pub fn to_s(&self) -> Result<String, RubyError> {
-        let s = format! {"#<{}:0x{:016x}>", self.class_name(), self.id()};
-        Ok(s)
+    pub fn to_s(&self) -> String {
+        format! {"#<{}:0x{:016x}>", self.class_name(), self.id()}
     }
 
     pub fn new_invalid() -> Self {

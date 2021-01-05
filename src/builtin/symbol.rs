@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut symbol_class = ClassInfo::from(globals.builtins.object);
+    let mut symbol_class = ClassInfo::class_from(globals.builtins.object);
     symbol_class.add_builtin_method_by_str("to_sym", to_sym);
     symbol_class.add_builtin_method_by_str("intern", to_sym);
     symbol_class.add_builtin_method_by_str("to_s", tos);

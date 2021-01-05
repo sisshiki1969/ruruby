@@ -58,8 +58,8 @@ fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let val = match self_val.if_mod_class().unwrap().name() {
-        Some(id) => Value::string(format! {"{:?}", id}),
+    let val = match self_val.if_mod_class().unwrap().op_name() {
+        Some(name) => Value::string(name.to_owned()),
         None => Value::nil(),
     };
     Ok(val)
@@ -67,7 +67,7 @@ fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let cref = self_val.if_mod_class().unwrap();
-    Ok(Value::string(cref.inspect_module()))
+    Ok(Value::string(cref.inspect()))
 }
 
 pub fn set_attr_accessor(globals: &mut Globals, self_val: Value, args: &Args) -> VMResult {

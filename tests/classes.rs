@@ -83,3 +83,19 @@ fn singleton() {
         "#;
     assert_script(program);
 }
+
+#[test]
+fn class_name() {
+    let program = r##"
+        class A; end
+        assert "A", A.to_s
+        assert 0, A.singleton_class.to_s =~ /#<Class:A>/
+        c = Class.new
+        assert 0, c.to_s =~ /#<Class:0x.{16}>/
+        assert 0, c.singleton_class.to_s =~ /#<Class:#<Class:0x.{16}>>/
+        C = c
+        assert "C", c.to_s
+        assert "#<Class:C>", c.singleton_class.to_s
+        "##;
+    assert_script(program);
+}

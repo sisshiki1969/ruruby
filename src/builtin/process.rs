@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::from(globals.builtins.object);
+    let mut class = ClassInfo::class_from(globals.builtins.object);
     class.set_const_by_str("CLOCK_MONOTONIC", Value::integer(0));
     let mut class_val = Value::class(class);
     globals.set_toplevel_constant("Process", class_val);

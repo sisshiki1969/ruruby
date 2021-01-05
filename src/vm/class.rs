@@ -10,23 +10,23 @@ pub struct ClassInfo {
 /// ClassFlags:
 /// 0000 0000
 ///       |||
-///       ||+-- 1 = singleton
+///       ||+-- 0 = class, 1 = module
 ///       |+--- 1 = included module
 ///       +---- 1 = module which has prepend
 #[derive(Debug, Clone, PartialEq)]
 struct ClassFlags(u8);
 
-const SINGLETON: u8 = 1 << 0;
+const IS_MODULE: u8 = 1 << 0;
 const INCLUDED: u8 = 1 << 1;
 const HAS_PREPEND: u8 = 1 << 2;
 
 impl ClassFlags {
-    fn new(is_singleton: bool) -> Self {
-        ClassFlags(if is_singleton { SINGLETON } else { 0 })
+    fn new(is_module: bool) -> Self {
+        ClassFlags(if is_module { IS_MODULE } else { 0 })
     }
 
-    fn is_singleton(&self) -> bool {
-        self.0 & SINGLETON != 0
+    fn is_module(&self) -> bool {
+        self.0 & IS_MODULE != 0
     }
 
     fn is_included(&self) -> bool {
@@ -55,24 +55,28 @@ impl GC for ClassInfo {
 }
 
 impl ClassInfo {
-    fn new(superclass: impl Into<Option<Value>>, info: ClassExt, is_singleton: bool) -> Self {
+    fn new(is_module: bool, superclass: impl Into<Option<Value>>, info: ClassExt) -> Self {
         let superclass = match superclass.into() {
             Some(superclass) => superclass,
             None => Value::nil(),
         };
         ClassInfo {
             upper: superclass,
-            flags: ClassFlags::new(is_singleton),
+            flags: ClassFlags::new(is_module),
             ext: ClassRef::new(info),
         }
     }
 
-    pub fn from(superclass: impl Into<Option<Value>>) -> Self {
-        Self::new(superclass, ClassExt::new(), false)
+    pub fn class_from(superclass: impl Into<Option<Value>>) -> Self {
+        Self::new(false, superclass, ClassExt::new())
     }
 
-    pub fn singleton_from(superclass: impl Into<Option<Value>>) -> Self {
-        Self::new(superclass, ClassExt::new(), true)
+    pub fn module_from(superclass: impl Into<Option<Value>>) -> Self {
+        Self::new(true, superclass, ClassExt::new())
+    }
+
+    pub fn singleton_from(superclass: impl Into<Option<Value>>, target: Value) -> Self {
+        Self::new(false, superclass, ClassExt::new_singleton(target))
     }
 
     pub fn upper(&self) -> Value {
@@ -106,34 +110,71 @@ impl ClassInfo {
         }
     }
 
-    pub fn name(&self) -> Option<IdentId> {
-        self.ext.name
-    }
-
-    pub fn inspect_module(&self) -> String {
-        match self.name() {
-            Some(id) => format! {"{:?}", id},
-            None => format! {"#<Module:0x{:016x}>", self.id()},
+    fn default_name(&self) -> String {
+        if self.is_module() {
+            format!("#<Module:0x{:016x}>", self.id())
+        } else {
+            format!("#<Class:0x{:016x}>", self.id())
         }
     }
 
-    pub fn inspect_class(&self) -> String {
-        match self.name() {
-            Some(id) => format! {"{:?}", id},
-            None => format! {"#<Class:0x{:016x}>", self.id()},
+    pub fn name(&self) -> String {
+        match self.op_name() {
+            Some(name) => name,
+            None => self.default_name(),
         }
     }
 
-    pub fn set_name(&mut self, name: impl Into<Option<IdentId>>) {
-        self.ext.name = name.into();
+    pub fn op_name(&self) -> Option<String> {
+        let mut ext = self.ext;
+        match &ext.name {
+            Some(name) => Some(name.to_owned()),
+            None => {
+                if let Some(target) = ext.singleton_for {
+                    let s = format!(
+                        "#<Class:{}>",
+                        if let Some(c) = target.if_mod_class() {
+                            match c.op_name() {
+                                Some(name) => {
+                                    ext.name = Some(name.clone());
+                                    name
+                                }
+                                None => self.default_name(),
+                            }
+                        } else if let Some(o) = target.as_rvalue() {
+                            let name = o.to_s();
+                            ext.name = Some(name.clone());
+                            name
+                        } else {
+                            unreachable!()
+                        }
+                    );
+                    Some(s)
+                } else {
+                    None
+                }
+            }
+        }
     }
 
-    pub fn name_str(&self) -> String {
-        IdentId::get_ident_name(self.ext.name)
+    pub fn inspect(&self) -> String {
+        self.name()
+    }
+
+    pub fn set_name(&mut self, name: impl Into<String>) {
+        self.ext.name = Some(name.into());
     }
 
     pub fn is_singleton(&self) -> bool {
-        self.flags.is_singleton()
+        self.ext.singleton_for.is_some()
+    }
+
+    pub fn singleton_for(&self) -> Option<Value> {
+        self.ext.singleton_for
+    }
+
+    pub fn is_module(&self) -> bool {
+        self.flags.is_module()
     }
 
     pub fn is_included(&self) -> bool {
@@ -239,23 +280,20 @@ impl ClassInfo {
     /// If `val` is a module or class, set the name of the class/module to the name of the constant.
     /// If the constant was already initialized, output warning.
     pub fn set_const(&mut self, id: IdentId, mut val: Value) {
-        match val.if_mut_mod_class() {
-            Some(cinfo) => {
-                if cinfo.name().is_none() {
-                    cinfo.set_name(if self == BuiltinClass::object().as_module() {
-                        Some(id)
-                    } else {
-                        match self.name() {
-                            Some(parent_name) => {
-                                let name = IdentId::get_id(format!("{:?}::{:?}", parent_name, id));
-                                Some(name)
-                            }
-                            None => None,
+        if let Some(cinfo) = val.if_mut_mod_class() {
+            if cinfo.ext.name.is_none() {
+                if self == BuiltinClass::object().as_module() {
+                    cinfo.set_name(IdentId::get_name(id));
+                } else {
+                    match &self.ext.name {
+                        Some(parent_name) => {
+                            let name = format!("{}::{:?}", parent_name, id);
+                            cinfo.set_name(name);
                         }
-                    });
-                }
+                        None => {}
+                    }
+                };
             }
-            None => {}
         }
 
         if self.ext.const_table.insert(id, val).is_some() {
@@ -280,9 +318,10 @@ impl ClassInfo {
 
 #[derive(Debug, Clone, PartialEq)]
 struct ClassExt {
-    name: Option<IdentId>,
+    name: Option<String>,
     method_table: MethodTable,
     const_table: ValueTable,
+    singleton_for: Option<Value>,
     /// This slot holds original module Value for include modules.
     origin: Value,
 }
@@ -295,6 +334,17 @@ impl ClassExt {
             name: None,
             method_table: FxHashMap::default(),
             const_table: FxHashMap::default(),
+            singleton_for: None,
+            origin: Value::nil(),
+        }
+    }
+
+    fn new_singleton(target: Value) -> Self {
+        ClassExt {
+            name: None,
+            method_table: FxHashMap::default(),
+            const_table: FxHashMap::default(),
+            singleton_for: Some(target),
             origin: Value::nil(),
         }
     }

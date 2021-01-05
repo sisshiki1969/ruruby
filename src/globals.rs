@@ -66,13 +66,13 @@ type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
     fn new() -> Self {
-        let basic_class = ClassInfo::from(None);
+        let basic_class = ClassInfo::class_from(None);
         let mut basic = Value::bootstrap_class(basic_class);
-        let object_class = ClassInfo::from(basic);
+        let object_class = ClassInfo::class_from(basic);
         let mut object = Value::bootstrap_class(object_class);
-        let module_class = ClassInfo::from(object);
+        let module_class = ClassInfo::class_from(object);
         let mut module = Value::bootstrap_class(module_class);
-        let class_class = ClassInfo::from(module);
+        let class_class = ClassInfo::class_from(module);
         let mut class = Value::bootstrap_class(class_class);
 
         basic.set_class(class);
@@ -274,7 +274,7 @@ impl Globals {
             source_files: vec![],
         };
         // Generate singleton class for BasicObject
-        let singleton_class = ClassInfo::singleton_from(class);
+        let singleton_class = ClassInfo::singleton_from(class, basic);
         let singleton_obj = RValue::new_class(singleton_class).pack();
         basic.set_class(singleton_obj);
 

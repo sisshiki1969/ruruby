@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut io_class = ClassInfo::from(globals.builtins.object);
+    let mut io_class = ClassInfo::class_from(globals.builtins.object);
     io_class.add_builtin_method_by_str("<<", output);
     io_class.add_builtin_method_by_str("isatty", isatty);
     io_class.add_builtin_method_by_str("tty?", isatty);
