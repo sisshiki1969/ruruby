@@ -250,8 +250,8 @@ impl Globals {
         ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
         let mut builtins = BuiltinRef::new(BuiltinClass::new());
         BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
-        let mut object = builtins.object;
-        let basic = object.superclass().unwrap();
+        let object = builtins.object;
+        let mut basic = object.superclass().unwrap();
         let module = builtins.module;
         let class = builtins.class;
         let main_object = Value::ordinary_object(object);
@@ -273,10 +273,10 @@ impl Globals {
             regexp_cache: FxHashMap::default(),
             source_files: vec![],
         };
-        // Generate singleton class for Object
+        // Generate singleton class for BasicObject
         let singleton_class = ClassInfo::singleton_from(class);
-        let singleton_obj = Value::class(singleton_class);
-        object.set_class(singleton_obj);
+        let singleton_obj = RValue::new_class(singleton_class).pack();
+        basic.set_class(singleton_obj);
 
         builtins.comparable = comparable::init(&mut globals);
         builtins.numeric = numeric::init(&mut globals);

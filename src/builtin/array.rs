@@ -10,6 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("size", length);
     class.add_builtin_method_by_str("empty?", empty);
     class.add_builtin_method_by_str("[]", get_elem);
+    class.add_builtin_method_by_str("at", get_elem);
     class.add_builtin_method_by_str("[]=", set_elem);
     class.add_builtin_method_by_str("push", push);
     class.add_builtin_method_by_str("<<", push);

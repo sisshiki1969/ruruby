@@ -52,10 +52,7 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         RV::Uninitialized => "[Uninitialized]".to_string(),
         RV::Object(oref) => match &oref.kind {
             ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Ordinary => {
-                let class_name = self_val.get_class().as_class().name_str();
-                format!("#<{}:{:016x}>", class_name, self_val.id())
-            }
+            ObjKind::Ordinary => oref.to_s()?,
             ObjKind::Regexp(rref) => format!("({})", rref.as_str()),
             _ => format!("{:?}", oref.kind),
         },
@@ -65,17 +62,10 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
-        Some(oref) => {
-            let s = oref.inspect(vm)?;
-            Ok(Value::string(s))
-        }
-        None => {
-            unreachable!()
-            //let s = vm.val_inspect(self_val)?;
-            //Ok(Value::string(s))
-        }
+        Some(oref) => Ok(Value::string(oref.inspect()?)),
+        None => unreachable!(),
     }
 }
 
@@ -114,13 +104,7 @@ fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
     let name = args[0];
     let val = args[1];
-    let var_id = match name.as_symbol() {
-        Some(symbol) => symbol,
-        None => match name.as_string() {
-            Some(s) => IdentId::get_id(s),
-            None => return Err(RubyError::typeerr("1st arg must be Symbol or String.")),
-        },
-    };
+    let var_id = name.expect_symbol_or_string("1st arg")?;
     let self_obj = self_val.rvalue_mut();
     self_obj.set_var(var_id, val);
     Ok(val)
@@ -129,13 +113,7 @@ fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn instance_variable_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = args[0];
-    let var_id = match name.as_symbol() {
-        Some(symbol) => symbol,
-        None => match name.as_string() {
-            Some(s) => IdentId::get_id(s),
-            None => return Err(RubyError::typeerr("1st arg must be Symbol or String.")),
-        },
-    };
+    let var_id = name.expect_symbol_or_string("1st arg")?;
     let self_obj = self_val.rvalue();
     let val = match self_obj.get_var(var_id) {
         Some(val) => val,
@@ -299,6 +277,15 @@ mod test {
         assert("[:foo]", [:foo].to_s)
         assert("{}", {}.to_s)
         assert('{:foo=>"bar"}', {foo:"bar"}.to_s)
+        assert 0, Object.new.to_s =~ /#<Object:0x.{16}>/
+        assert 0, Object.new.inspect =~ /#<Object:0x.{16}>/
+        o = Object.new
+        def o.a=(x)
+          @a = x
+        end
+        o.a = 100
+        assert 0, o.to_s =~ /#<Object:0x.{16}>/
+        assert 0, o.inspect =~ /#<Object:0x.{16} @a=100>/
         "#;
         assert_script(program);
     }
@@ -346,7 +333,11 @@ mod test {
         obj.instance_variable_set("@foo", "foo")
         obj.instance_variable_set(:@bar, 777)
         assert(777, obj.instance_variable_get("@bar"))
+        assert(nil, obj.instance_variable_get("@boo"))
         assert("foo", obj.instance_variable_get(:@foo))
+        assert_error { obj.instance_variable_get(7) }
+        assert_error { obj.instance_variable_set(:@foo) }
+        assert_error { obj.instance_variable_set(9, 10) }
 
         def ary_cmp(a,b)
             return false if a - b != []

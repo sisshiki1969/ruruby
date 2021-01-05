@@ -125,19 +125,23 @@ impl RValue {
         IdentId::get_ident_name(self.search_class().as_class().name())
     }
 
-    pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
+    pub fn inspect(&self) -> Result<String, RubyError> {
         let mut s = format! {"#<{}:0x{:016x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
                 for (k, v) in table {
-                    let inspect = v.val_to_s(vm)?;
-                    s = format!("{} {:?}={}", s, k, inspect);
+                    s = format!("{} {:?}={:?}", s, k, *v);
                 }
             }
             None => {}
         }
 
         Ok(s + ">")
+    }
+
+    pub fn to_s(&self) -> Result<String, RubyError> {
+        let s = format! {"#<{}:0x{:016x}>", self.class_name(), self.id()};
+        Ok(s)
     }
 
     pub fn new_invalid() -> Self {
@@ -361,7 +365,7 @@ impl RValue {
         let mut class = self.class;
         loop {
             if class.is_singleton() {
-                class = class.rvalue().class;
+                class = class.superclass().unwrap();
             } else {
                 return class;
             }

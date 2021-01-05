@@ -888,7 +888,10 @@ impl VM {
                 Inst::SET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
-                        v if v.is_nil() => *self.get_method_iseq().class_defined.last().unwrap(), //self.class(),
+                        v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
+                            Some(class) => *class,
+                            None => self.globals.builtins.object,
+                        }, //self.class(),
                         v => v,
                     };
                     let val = self.stack_pop()?;
@@ -2421,7 +2424,7 @@ impl VM {
                 ObjKind::Module(cref) => cref.inspect_module(),
                 ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
-                ObjKind::Ordinary => oref.inspect(self)?,
+                ObjKind::Ordinary => oref.inspect()?,
                 ObjKind::Hash(href) => href.to_s(self)?,
                 ObjKind::Complex { .. } => format!("{:?}", oref.kind),
                 _ => {

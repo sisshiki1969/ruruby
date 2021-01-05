@@ -767,13 +767,26 @@ impl Value {
         Ok(IdentId::get_id(str))
     }
 
+    pub fn expect_symbol_or_string(&self, msg: &str) -> Result<IdentId, RubyError> {
+        match self.as_symbol() {
+            Some(symbol) => Ok(symbol),
+            None => match self.as_string() {
+                Some(s) => Ok(IdentId::get_id(s)),
+                None => Err(RubyError::typeerr(format!(
+                    "{} must be Symbol or String.",
+                    msg
+                ))),
+            },
+        }
+    }
+
     pub fn expect_regexp_or_string(&self, vm: &mut VM, msg: &str) -> Result<RegexpInfo, RubyError> {
         if let Some(re) = self.as_regexp() {
             Ok(re)
         } else if let Some(string) = self.as_string() {
             vm.regexp_from_string(string)
         } else {
-            Err(RubyError::argument(format!(
+            Err(RubyError::typeerr(format!(
                 "{} arg must be RegExp or String.",
                 msg
             )))

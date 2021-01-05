@@ -71,3 +71,15 @@ fn class2() {
     "#;
     assert_script(program);
 }
+
+#[test]
+fn singleton() {
+    let program = r#"
+        assert(Class, Class.singleton_class.class)
+        assert(Class.singleton_class, Class.singleton_class)
+        assert(Module.singleton_class, Class.singleton_class.superclass)
+        assert(Object.singleton_class, Class.singleton_class.superclass.superclass)
+        assert(BasicObject.singleton_class, Class.singleton_class.superclass.superclass.superclass)
+        "#;
+    assert_script(program);
+}
