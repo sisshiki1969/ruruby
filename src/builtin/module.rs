@@ -2,35 +2,35 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let mut module_class = globals.builtins.module;
-    module_class.add_builtin_class_method("new", module_new);
+    let class = globals.builtins.module;
+    class.add_builtin_class_method("new", module_new);
 
-    module_class.add_builtin_method_by_str("===", teq);
-    module_class.add_builtin_method_by_str("name", name);
-    module_class.add_builtin_method_by_str("to_s", inspect);
-    module_class.add_builtin_method_by_str("inspect", inspect);
-    module_class.add_builtin_method_by_str("constants", constants);
-    module_class.add_builtin_method_by_str("class_variables", class_variables);
-    module_class.add_builtin_method_by_str("const_defined?", const_defined);
-    module_class.add_builtin_method_by_str("instance_methods", instance_methods);
-    module_class.add_builtin_method_by_str("attr_accessor", attr_accessor);
-    module_class.add_builtin_method_by_str("attr", attr_reader);
-    module_class.add_builtin_method_by_str("attr_reader", attr_reader);
-    module_class.add_builtin_method_by_str("attr_writer", attr_writer);
-    module_class.add_builtin_method_by_str("module_function", module_function);
-    module_class.add_builtin_method_by_str("singleton_class?", singleton_class);
-    module_class.add_builtin_method_by_str("const_get", const_get);
-    module_class.add_builtin_method_by_str("include", include);
-    module_class.add_builtin_method_by_str("prepend", prepend);
-    module_class.add_builtin_method_by_str("included_modules", included_modules);
-    module_class.add_builtin_method_by_str("ancestors", ancestors);
-    module_class.add_builtin_method_by_str("module_eval", module_eval);
-    module_class.add_builtin_method_by_str("class_eval", module_eval);
-    module_class.add_builtin_method_by_str("alias_method", module_alias_method);
-    module_class.add_builtin_method_by_str("public", public);
-    module_class.add_builtin_method_by_str("private", private);
-    module_class.add_builtin_method_by_str("protected", protected);
-    module_class.add_builtin_method_by_str("include?", include_);
+    class.add_builtin_method_by_str("===", teq);
+    class.add_builtin_method_by_str("name", name);
+    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("constants", constants);
+    class.add_builtin_method_by_str("class_variables", class_variables);
+    class.add_builtin_method_by_str("const_defined?", const_defined);
+    class.add_builtin_method_by_str("instance_methods", instance_methods);
+    class.add_builtin_method_by_str("attr_accessor", attr_accessor);
+    class.add_builtin_method_by_str("attr", attr_reader);
+    class.add_builtin_method_by_str("attr_reader", attr_reader);
+    class.add_builtin_method_by_str("attr_writer", attr_writer);
+    class.add_builtin_method_by_str("module_function", module_function);
+    class.add_builtin_method_by_str("singleton_class?", singleton_class);
+    class.add_builtin_method_by_str("const_get", const_get);
+    class.add_builtin_method_by_str("include", include);
+    class.add_builtin_method_by_str("prepend", prepend);
+    class.add_builtin_method_by_str("included_modules", included_modules);
+    class.add_builtin_method_by_str("ancestors", ancestors);
+    class.add_builtin_method_by_str("module_eval", module_eval);
+    class.add_builtin_method_by_str("class_eval", module_eval);
+    class.add_builtin_method_by_str("alias_method", module_alias_method);
+    class.add_builtin_method_by_str("public", public);
+    class.add_builtin_method_by_str("private", private);
+    class.add_builtin_method_by_str("protected", protected);
+    class.add_builtin_method_by_str("include?", include_);
 }
 
 /// Create new module.
@@ -176,11 +176,12 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     )
                     .cloned()
                     .collect();
-                if module.upper().is_nil() {
-                    break;
-                } else {
-                    self_val = module.upper();
-                    module = self_val.as_mut_module();
+                match module.upper() {
+                    None => break,
+                    Some(upper) => {
+                        self_val = upper;
+                        module = self_val.as_mut_module();
+                    }
                 }
             }
             Ok(Value::array_from(v.iter().cloned().collect()))
@@ -249,7 +250,7 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         vm.module_function(true);
     } else {
-        let mut class = vm.class();
+        let class = vm.class();
         let mut singleton = class.get_singleton_class().unwrap();
         let classinfo = singleton.as_mut_class();
         for arg in args.iter() {
@@ -287,37 +288,41 @@ fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let mut module = self_val;
+    let mut module = Some(self_val);
     let mut ary = vec![];
     loop {
-        if module.is_nil() {
-            break;
+        match module {
+            None => break,
+            Some(m) => {
+                let cinfo = m.as_module();
+                if cinfo.is_included() {
+                    ary.push(cinfo.origin())
+                };
+                module = cinfo.upper();
+            }
         }
-        let cinfo = module.as_module();
-        if cinfo.is_included() {
-            ary.push(cinfo.origin())
-        };
-        module = cinfo.upper();
     }
     Ok(Value::array_from(ary))
 }
 
 fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let mut module = self_val;
+    let mut module = Some(self_val);
     let mut ary = vec![];
     loop {
-        if module.is_nil() {
-            break;
+        match module {
+            None => break,
+            Some(m) => {
+                let cinfo = m.as_module();
+                if cinfo.is_included() {
+                    ary.push(cinfo.origin())
+                } else {
+                    ary.push(m)
+                };
+                let cinfo = m.as_module();
+                module = cinfo.upper();
+            }
         }
-        let cinfo = module.as_module();
-        if cinfo.is_included() {
-            ary.push(cinfo.origin())
-        } else {
-            ary.push(module)
-        };
-        let cinfo = module.as_module();
-        module = cinfo.upper();
     }
     Ok(Value::array_from(ary))
 }

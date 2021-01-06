@@ -5,7 +5,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("resume", resume);
 
-    let mut class_val = Value::class(class);
+    let class_val = Value::class(class);
     class_val.add_builtin_class_method("new", new);
     class_val.add_builtin_class_method("yield", yield_);
     class_val

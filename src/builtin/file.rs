@@ -5,7 +5,7 @@ use std::path::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let io_class = globals.get_toplevel_constant("IO").unwrap();
-    let mut class = Value::class_under(io_class);
+    let class = Value::class_under(io_class);
     globals.set_toplevel_constant("File", class);
     class.add_builtin_class_method("join", join);
     class.add_builtin_class_method("basename", basename);

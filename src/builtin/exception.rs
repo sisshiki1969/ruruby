@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut exception = Value::class_under(globals.builtins.object);
+    let exception = Value::class_under(globals.builtins.object);
     exception.add_builtin_class_method("new", exception_new);
     exception.add_builtin_class_method("exception", exception_new);
     exception.add_builtin_class_method("allocate", exception_allocate);

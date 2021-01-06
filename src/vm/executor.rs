@@ -2594,7 +2594,7 @@ impl VM {
     /// Define a method on a singleton class of `target_obj`.
     pub fn define_singleton_method(
         &mut self,
-        mut target_obj: Value,
+        target_obj: Value,
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {

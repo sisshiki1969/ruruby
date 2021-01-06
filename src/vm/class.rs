@@ -2,7 +2,7 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
-    upper: Value,
+    upper: Option<Value>,
     flags: ClassFlags,
     ext: ClassRef,
 }
@@ -48,7 +48,9 @@ impl ClassFlags {
 
 impl GC for ClassInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        self.upper.mark(alloc);
+        if let Some(upper) = self.upper {
+            upper.mark(alloc);
+        }
         self.ext.const_table.values().for_each(|v| v.mark(alloc));
         self.ext.origin.mark(alloc);
     }
@@ -56,12 +58,8 @@ impl GC for ClassInfo {
 
 impl ClassInfo {
     fn new(is_module: bool, superclass: impl Into<Option<Value>>, info: ClassExt) -> Self {
-        let superclass = match superclass.into() {
-            Some(superclass) => superclass,
-            None => Value::nil(),
-        };
         ClassInfo {
-            upper: superclass,
+            upper: superclass.into(),
             flags: ClassFlags::new(is_module),
             ext: ClassRef::new(info),
         }
@@ -79,34 +77,38 @@ impl ClassInfo {
         Self::new(false, superclass, ClassExt::new_singleton(target))
     }
 
-    pub fn upper(&self) -> Value {
+    pub fn upper(&self) -> Option<Value> {
         let mut upper = self.upper;
         loop {
-            if upper.is_nil() {
-                return upper;
-            };
-            let cinfo = upper.as_module();
-            if !cinfo.has_prepend() {
-                return upper;
+            match upper {
+                None => return None,
+                Some(m) => {
+                    let cinfo = m.as_module();
+                    if !cinfo.has_prepend() {
+                        return Some(m);
+                    }
+                    upper = cinfo.upper;
+                }
             }
-            upper = cinfo.upper;
         }
     }
 
     /// Get superclass of `self`.
     ///
     /// If `self` has no superclass, return nil.
-    pub fn superclass(&self) -> Value {
+    pub fn superclass(&self) -> Option<Value> {
         let mut upper = self.upper;
         loop {
-            if upper.is_nil() {
-                return upper;
+            match upper {
+                None => return None,
+                Some(m) => {
+                    let cinfo = m.as_module();
+                    if !cinfo.is_included() {
+                        return Some(m);
+                    };
+                    upper = cinfo.upper;
+                }
             }
-            let cinfo = upper.as_module();
-            if !cinfo.is_included() {
-                return upper;
-            };
-            upper = cinfo.upper;
         }
     }
 
@@ -199,7 +201,7 @@ impl ClassInfo {
     pub fn append_include(&mut self, mut module: Value, globals: &mut Globals) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
-        self.upper = imodule;
+        self.upper = Some(imodule);
         loop {
             module = match module.upper() {
                 Some(module) => module,
@@ -207,7 +209,7 @@ impl ClassInfo {
             };
             let mut prev = imodule;
             imodule = module.generate_included();
-            prev.as_mut_module().upper = imodule;
+            prev.as_mut_module().upper = Some(imodule);
         }
         imodule.as_mut_module().upper = superclass;
         globals.class_version += 1;
@@ -216,7 +218,7 @@ impl ClassInfo {
     pub fn append_prepend(&mut self, base: Value, mut module: Value, globals: &mut Globals) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
-        self.upper = imodule;
+        self.upper = Some(imodule);
         loop {
             module = match module.upper() {
                 Some(module) => module,
@@ -224,14 +226,14 @@ impl ClassInfo {
             };
             let mut prev = imodule;
             imodule = module.generate_included();
-            prev.as_mut_module().upper = imodule;
+            prev.as_mut_module().upper = Some(imodule);
         }
         if !self.has_prepend() {
             let mut dummy = base.dup();
             let mut dinfo = dummy.as_mut_module();
             dinfo.upper = superclass;
             dinfo.set_include(base);
-            imodule.as_mut_module().upper = dummy;
+            imodule.as_mut_module().upper = Some(dummy);
             self.set_prepend();
         } else {
             imodule.as_mut_module().upper = superclass;

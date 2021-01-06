@@ -69,7 +69,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn singleton_class(_: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     self_val.get_singleton_class()
 }
 

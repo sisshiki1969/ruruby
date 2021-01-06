@@ -47,7 +47,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("exclude_end?", exclude_end);
     class.add_builtin_method_by_str("include?", include);
 
-    let mut class_val = Value::class(class);
+    let class_val = Value::class(class);
     class_val.add_builtin_class_method("new", range_new);
     class_val
 }

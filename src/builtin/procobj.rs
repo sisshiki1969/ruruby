@@ -18,7 +18,7 @@ pub fn init(globals: &mut Globals) -> Value {
     proc_class.add_builtin_method_by_str("call", proc_call);
     proc_class.add_builtin_method_by_str("[]", proc_call);
 
-    let mut class_val = Value::class(proc_class);
+    let class_val = Value::class(proc_class);
     class_val.add_builtin_class_method("new", proc_new);
     class_val
 }

@@ -1,15 +1,15 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class_val = Value::class_under(globals.builtins.object);
+    let class = Value::class_under(globals.builtins.object);
     //class.add_builtin_instance_method( "to_s", to_s);
-    class_val.add_builtin_class_method("count", count);
-    class_val.add_builtin_class_method("enable", enable);
-    class_val.add_builtin_class_method("disable", disable);
-    class_val.add_builtin_class_method("start", start);
-    class_val.add_builtin_class_method("stat", stat);
-    class_val.add_builtin_class_method("print_mark", print_mark);
-    class_val
+    class.add_builtin_class_method("count", count);
+    class.add_builtin_class_method("enable", enable);
+    class.add_builtin_class_method("disable", disable);
+    class.add_builtin_class_method("start", start);
+    class.add_builtin_class_method("stat", stat);
+    class.add_builtin_class_method("print_mark", print_mark);
+    class
 }
 
 fn count(vm: &mut VM, _: Value, args: &Args) -> VMResult {

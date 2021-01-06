@@ -454,7 +454,7 @@ impl Value {
     /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
     pub fn superclass(&self) -> Option<Value> {
         match self.if_mod_class() {
-            Some(cinfo) => Some(cinfo.superclass()),
+            Some(cinfo) => cinfo.superclass(),
             None => None,
         }
     }
@@ -465,14 +465,7 @@ impl Value {
     /// Panic if `self` is not Class/Module.
     pub fn upper(&self) -> Option<Value> {
         match self.if_mod_class() {
-            Some(class) => {
-                let superclass = class.upper();
-                if superclass.is_nil() {
-                    None
-                } else {
-                    Some(superclass)
-                }
-            }
+            Some(class) => class.upper(),
             None => unreachable!("upper(): Not a Class / Module."),
         }
     }
@@ -569,20 +562,20 @@ impl Value {
         cref.method_table().get(&id).cloned()
     }
 
-    pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
+    pub fn add_builtin_class_method(self, name: &str, func: BuiltinFunc) {
         let mut singleton = self.get_singleton_class().unwrap();
         let classinfo = singleton.as_mut_class();
         classinfo.add_builtin_method_by_str(name, func);
     }
 
-    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+    pub fn add_builtin_method_by_str(mut self, name: &str, func: BuiltinFunc) {
         let name = IdentId::get_id(name);
         self.as_mut_module().add_builtin_method(name, func);
     }
 
     /// Add module function to `self`.
     /// `self` must be Module or Class.
-    pub fn add_builtin_module_func(&mut self, name: &str, func: BuiltinFunc) {
+    pub fn add_builtin_module_func(mut self, name: &str, func: BuiltinFunc) {
         let classref = self.if_mut_mod_class().unwrap();
         classref.add_builtin_method_by_str(name, func);
         let mut singleton = self.get_singleton_class().unwrap();
@@ -1243,7 +1236,7 @@ impl Value {
 
     pub fn class(cinfo: ClassInfo) -> Self {
         assert!(!cinfo.is_module());
-        let mut obj = RValue::new_class(cinfo).pack();
+        let obj = RValue::new_class(cinfo).pack();
         obj.get_singleton_class().unwrap();
         obj
     }
@@ -1344,9 +1337,8 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
-    pub fn get_singleton_class(&mut self) -> VMResult {
-        let self_ = *self;
-        match self.as_mut_rvalue() {
+    pub fn get_singleton_class(self) -> VMResult {
+        match self.clone().as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
                 if class.is_singleton() {
@@ -1354,22 +1346,16 @@ impl Value {
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
-                            let mut superclass = cinfo.superclass();
-                            let mut singleton = if superclass.is_nil() {
-                                Value::singleton_class_from(None, self_)
-                            } else {
-                                Value::singleton_class_from(
-                                    superclass.get_singleton_class()?,
-                                    self_,
-                                )
+                            let superclass = match cinfo.superclass() {
+                                None => None,
+                                Some(superclass) => Some(superclass.get_singleton_class()?),
                             };
-                            singleton.set_class(class);
-                            singleton
+                            Value::singleton_class_from(superclass, self)
                         }
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => Value::singleton_class_from(class, self_),
+                        _ => Value::singleton_class_from(class, self),
                     };
                     oref.set_class(singleton);
                     Ok(singleton)
@@ -1384,8 +1370,8 @@ impl Value {
     }
 
     /// Get method for a receiver class (`self`) and method (IdentId).
-    pub fn get_method(&self, method: IdentId) -> Option<MethodRef> {
-        let mut temp_class = *self;
+    pub fn get_method(self, method: IdentId) -> Option<MethodRef> {
+        let mut temp_class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
             match temp_class.get_instance_method(method) {
