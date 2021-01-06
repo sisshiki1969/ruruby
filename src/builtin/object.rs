@@ -3,7 +3,7 @@ use crate::*;
 pub fn init(globals: &mut Globals) {
     let mut object = globals.builtins.object;
     let object_class = object.as_mut_class();
-    object_class.append_include(globals.builtins.kernel, globals);
+    object_class.append_include(Module::new(globals.builtins.kernel), globals);
 
     object_class.add_builtin_method_by_str("initialize", initialize);
     object_class.add_builtin_method_by_str("class", class);
@@ -37,7 +37,7 @@ fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    Ok(self_val.get_class())
+    Ok(*self_val.get_class())
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -70,7 +70,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    self_val.get_singleton_class()
+    self_val.get_singleton_class().map(|c| *c)
 }
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -153,7 +153,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let ISeqKind::Method(m) = context.kind {
         let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
-            Some(class) => match vm.globals.find_method(class, m) {
+            Some(class) => match vm.globals.find_method(Module::new(*class), m) {
                 Some(m) => m,
                 None => {
                     return Err(RubyError::nomethod(format!(

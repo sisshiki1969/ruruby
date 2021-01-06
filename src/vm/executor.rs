@@ -19,7 +19,7 @@ pub struct VM {
     // VM state
     fiber_state: FiberState,
     exec_context: Vec<ContextRef>,
-    class_context: Vec<(Value, DefineMode)>,
+    class_context: Vec<(Module, DefineMode)>,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     //exception: bool,
@@ -262,7 +262,7 @@ impl VM {
         self.exec_context.clear();
     }
 
-    pub fn class_push(&mut self, val: Value) {
+    pub fn class_push(&mut self, val: Module) {
         self.class_context.push((val, DefineMode::default()));
     }
 
@@ -271,7 +271,7 @@ impl VM {
     }
 
     /// Get Class of current class context.
-    pub fn class(&self) -> Value {
+    pub fn class(&self) -> Module {
         self.class_context.last().unwrap().0
     }
 
@@ -889,8 +889,8 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
                         v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
-                            Some(class) => *class,
-                            None => self.globals.builtins.object,
+                            Some(class) => **class,
+                            None => *self.globals.builtins.object,
                         }, //self.class(),
                         v => v,
                     };
@@ -906,7 +906,7 @@ impl VM {
                         None => {
                             let val = match self.get_env_const(id) {
                                 Some(val) => val,
-                                None => VM::get_super_const(self.class(), id)?,
+                                None => VM::get_super_const(*self.class(), id)?,
                             };
                             self.globals.set_const_cache(slot, val);
                             val
@@ -919,7 +919,7 @@ impl VM {
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = self.globals.builtins.object;
-                    let val = self.get_const(parent, id)?;
+                    let val = self.get_const(*parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -1237,7 +1237,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, val, &Args::new0());
+                    let res = self.eval_send(method, *val, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 14;
@@ -1248,7 +1248,7 @@ impl VM {
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, singleton, &Args::new0());
+                    let res = self.eval_send(method, *singleton, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 9;
@@ -1582,7 +1582,7 @@ impl VM {
     /// At first, this method searches the class list of outer context,
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
-    fn get_class_defined(&self) -> Vec<Value> {
+    fn get_class_defined(&self) -> Vec<Module> {
         self.class_context.iter().map(|(v, _)| *v).collect()
     }
 }
@@ -1618,7 +1618,7 @@ impl VM {
             match class.as_module().get_const(id) {
                 Some(val) => return Ok(val),
                 None => match class.upper() {
-                    Some(upper) => class = upper,
+                    Some(upper) => class = *upper,
                     None => {
                         if is_module {
                             if let Some(val) = BuiltinClass::object().as_module().get_const(id) {
@@ -1646,7 +1646,7 @@ impl VM {
         let self_val = self.current_context().self_value;
         let mut org_class = match self_val.if_mod_class() {
             Some(_) => self_val,
-            None => self_val.get_class(),
+            None => *self_val.get_class(),
         };
         let mut class = org_class;
         loop {
@@ -1654,7 +1654,7 @@ impl VM {
                 return Ok(());
             } else {
                 match class.upper() {
-                    Some(superclass) => class = superclass,
+                    Some(superclass) => class = *superclass,
                     None => {
                         org_class.set_var(id, val);
                         return Ok(());
@@ -1670,7 +1670,7 @@ impl VM {
         }
         let self_val = self.current_context().self_value;
         let mut class = match self_val.if_mod_class() {
-            Some(_) => self_val,
+            Some(_) => Module::new(self_val),
             None => self_val.get_class(),
         };
         loop {
@@ -2125,7 +2125,11 @@ impl VM {
     }
 
     fn eval_rescue(&self, val: Value, exceptions: &[Value]) -> Result<bool, RubyError> {
-        let mut module = if val.is_class() { val } else { val.get_class() };
+        let mut module = if val.is_class() {
+            val
+        } else {
+            *val.get_class()
+        };
         loop {
             if module.is_class() {
                 if exceptions.iter().any(|x| {
@@ -2144,7 +2148,7 @@ impl VM {
             };
 
             match module.upper() {
-                Some(upper) => module = upper,
+                Some(upper) => module = *upper,
                 None => break,
             }
         }
@@ -2310,10 +2314,15 @@ impl VM {
         id: IdentId,
         is_module: bool,
         mut super_val: Value,
-    ) -> VMResult {
-        let current_class = if base.is_nil() { self.class() } else { base };
+    ) -> Result<Module, RubyError> {
+        let current_class = if base.is_nil() {
+            self.class()
+        } else {
+            Module::new(base)
+        };
         match current_class.as_module().get_const(id) {
-            Some(mut val) => {
+            Some(val) => {
+                let mut val = Module::new(val);
                 if val.is_module() != is_module {
                     return Err(RubyError::typeerr(format!(
                         "{:?} is not {}.",
@@ -2323,7 +2332,7 @@ impl VM {
                 };
                 val.expect_mod_class(self)?;
                 let val_super = match val.superclass() {
-                    Some(v) => v,
+                    Some(v) => *v,
                     None => Value::nil(),
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
@@ -2345,11 +2354,11 @@ impl VM {
                         self.globals.builtins.object
                     } else {
                         super_val.expect_class(self, "Superclass")?;
-                        super_val
+                        Module::new(super_val)
                     };
                     Value::class_under(super_val)
                 };
-                self.globals.set_const(current_class, id, val);
+                self.globals.set_const(*current_class, id, *val);
                 Ok(val)
             }
         }
@@ -2607,12 +2616,12 @@ impl VM {
     /// If the method was not found, return NoMethodError.
     pub fn get_method(
         &mut self,
-        rec_class: Value,
+        rec_class: Module,
         method_id: IdentId,
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
+            None => Err(RubyError::undefined_method_for_class(method_id, *rec_class)),
         }
     }
 

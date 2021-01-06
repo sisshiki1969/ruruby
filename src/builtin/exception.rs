@@ -10,7 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     exception.add_builtin_method_by_str("to_s", tos);
     builtin::module::set_attr_accessor(
         globals,
-        exception,
+        *exception,
         &Args::new2(
             Value::symbol_from_str("message"),
             Value::symbol_from_str("backtrace"),
@@ -18,21 +18,21 @@ pub fn init(globals: &mut Globals) -> Value {
     )
     .unwrap();
     let standard_error = Value::class_under(exception);
-    globals.set_toplevel_constant("StandardError", standard_error);
+    globals.set_toplevel_constant("StandardError", *standard_error);
     // Subclasses of StandardError.
     let err = Value::class_under(standard_error);
-    globals.set_toplevel_constant("ArgumentError", err);
+    globals.set_toplevel_constant("ArgumentError", *err);
     let err = Value::class_under(standard_error);
-    globals.set_toplevel_constant("TypeError", err);
+    globals.set_toplevel_constant("TypeError", *err);
     let err = Value::class_under(standard_error);
-    globals.set_toplevel_constant("NoMethodError", err);
+    globals.set_toplevel_constant("NoMethodError", *err);
     let runtime_error = Value::class_under(standard_error);
-    globals.set_toplevel_constant("StopIteration", runtime_error);
+    globals.set_toplevel_constant("StopIteration", *runtime_error);
     let runtime_error = Value::class_under(standard_error);
-    globals.set_toplevel_constant("RuntimeError", runtime_error);
+    globals.set_toplevel_constant("RuntimeError", *runtime_error);
     let frozen_error = Value::class_under(runtime_error);
-    globals.set_toplevel_constant("FrozenError", frozen_error);
-    exception
+    globals.set_toplevel_constant("FrozenError", *frozen_error);
+    *exception
 }
 
 // Class methods
@@ -48,7 +48,10 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Value::exception(self_val, RubyError::none(err))
     };
     // Call initialize method if it exists.
-    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = vm
+        .globals
+        .find_method(Module::new(self_val), IdentId::INITIALIZE)
+    {
         vm.eval_send(method, new_instance, args)?;
     };
     Ok(new_instance)

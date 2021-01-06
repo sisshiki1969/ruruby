@@ -389,7 +389,7 @@ impl Value {
     ///
     /// ### panic
     /// panic if `self` was a primitive type (integer, float, etc.).
-    pub fn set_class(&mut self, class: Value) {
+    pub fn set_class(mut self, class: Module) {
         match self.as_mut_rvalue() {
             Some(rvalue) => rvalue.set_class(class),
             None => unreachable!(
@@ -404,7 +404,7 @@ impl Value {
     ///
     /// ### panic
     /// panic if `self` was Invalid.
-    pub fn get_class_for_method(&self) -> Value {
+    pub fn get_class_for_method(&self) -> Module {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
@@ -419,7 +419,7 @@ impl Value {
 
     /// Get class of `self`.
     /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
-    pub fn get_class(&self) -> Value {
+    pub fn get_class(&self) -> Module {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
@@ -449,21 +449,11 @@ impl Value {
         }
     }
 
-    /// Get superclass of `self`.
-    ///
-    /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
-    pub fn superclass(&self) -> Option<Value> {
-        match self.if_mod_class() {
-            Some(cinfo) => cinfo.superclass(),
-            None => None,
-        }
-    }
-
     /// Get an upper module/class of `self`.
     ///
     /// If `self` has no upper module/class, return None.
     /// Panic if `self` is not Class/Module.
-    pub fn upper(&self) -> Option<Value> {
+    pub fn upper(&self) -> Option<Module> {
         match self.if_mod_class() {
             Some(class) => class.upper(),
             None => unreachable!("upper(): Not a Class / Module."),
@@ -486,11 +476,11 @@ impl Value {
 
     /// Check whether `module` exists in the ancestors of `self`.
     pub fn include_module(&self, target_module: Value) -> bool {
-        let mut val = *self;
+        let mut val = Module::new(*self);
         loop {
-            let minfo = val.if_mod_class().unwrap();
+            let minfo = val.as_module();
             let true_module = if minfo.is_included() {
-                minfo.origin()
+                minfo.origin().unwrap()
             } else {
                 val
             };
@@ -506,7 +496,7 @@ impl Value {
     }
 
     pub fn is_exception_class(&self) -> bool {
-        let mut val = *self;
+        let mut val = Module::new(*self);
         let ex = BuiltinClass::exception();
         loop {
             if val.id() == ex.id() {
@@ -518,12 +508,6 @@ impl Value {
             };
         }
         false
-    }
-
-    /// Examine whether `self` is a singleton class.
-    /// Panic if `self` is not a class object.
-    pub fn is_singleton(&self) -> bool {
-        self.as_module().is_singleton()
     }
 
     /// Examine whether `self` has a singleton class.
@@ -942,17 +926,6 @@ impl Value {
         }
     }
 
-    pub fn generate_included(&self) -> Value {
-        let origin = if self.as_module().is_included() {
-            self.as_module().origin()
-        } else {
-            *self
-        };
-        let mut imodule = self.dup();
-        imodule.as_mut_module().set_include(origin);
-        imodule
-    }
-
     pub fn as_array(&self) -> Option<&ArrayInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -1226,11 +1199,11 @@ impl Value {
         RValue::new_range(info).pack()
     }
 
-    pub fn bootstrap_class(cinfo: ClassInfo) -> Self {
-        RValue::new_bootstrap(cinfo).pack()
+    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
+        Module::new(RValue::new_bootstrap(cinfo).pack())
     }
 
-    pub fn ordinary_object(class: Value) -> Self {
+    pub fn ordinary_object(class: Module) -> Self {
         RValue::new_ordinary(class).pack()
     }
 
@@ -1241,23 +1214,23 @@ impl Value {
         obj
     }
 
-    pub fn class_under(superclass: impl Into<Option<Value>>) -> Self {
-        Value::class(ClassInfo::class_from(superclass))
+    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
+        Module::new(Value::class(ClassInfo::class_from(superclass)))
     }
 
-    pub fn singleton_class_from(superclass: impl Into<Option<Value>>, target: Value) -> Self {
-        RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack()
+    pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {
+        Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
     }
 
-    pub fn module() -> Self {
-        RValue::new_module(ClassInfo::module_from(None)).pack()
+    pub fn module() -> Module {
+        Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }
 
-    pub fn array_from_with_class(ary: Vec<Value>, class: Value) -> Self {
+    pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Self {
         RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
     }
 
@@ -1300,7 +1273,7 @@ impl Value {
         RValue::new_enumerator(fiber).pack()
     }
 
-    pub fn time(time_class: Value, time: TimeInfo) -> Self {
+    pub fn time(time_class: Module, time: TimeInfo) -> Self {
         RValue::new_time(time_class, time).pack()
     }
 
@@ -1337,7 +1310,7 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
-    pub fn get_singleton_class(self) -> VMResult {
+    pub fn get_singleton_class(self) -> Result<Module, RubyError> {
         match self.clone().as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
@@ -1371,8 +1344,8 @@ impl Value {
 
     /// Get method for a receiver class (`self`) and method (IdentId).
     pub fn get_method(self, method: IdentId) -> Option<MethodRef> {
-        let mut temp_class = self;
-        let mut singleton_flag = self.is_singleton();
+        let mut temp_class = Module::new(self);
+        let mut singleton_flag = temp_class.is_singleton();
         loop {
             match temp_class.get_instance_method(method) {
                 Some(method) => {
@@ -1610,7 +1583,7 @@ mod tests {
         GlobalsRef::new_globals();
         let expect = Value::class_under(None);
         let got = expect.unpack().pack();
-        if expect != got {
+        if *expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
     }

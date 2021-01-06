@@ -42,13 +42,13 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Block::None => {}
         _ => {
             vm.class_push(val);
-            let arg = Args::new1(val);
-            let res = vm.eval_block_self(&args.block, val, &arg);
+            let arg = Args::new1(*val);
+            let res = vm.eval_block_self(&args.block, *val, &arg);
             vm.class_pop();
             res?;
         }
     };
-    Ok(val)
+    Ok(*val)
 }
 
 fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -109,7 +109,7 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
                 if superclass == BuiltinClass::object() {
                     break;
                 } else {
-                    class = superclass
+                    class = *superclass
                 };
             }
             None => break,
@@ -179,7 +179,7 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 match module.upper() {
                     None => break,
                     Some(upper) => {
-                        self_val = upper;
+                        self_val = *upper;
                         module = self_val.as_mut_module();
                     }
                 }
@@ -255,7 +255,7 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         let classinfo = singleton.as_mut_class();
         for arg in args.iter() {
             let name = arg.expect_string_or_symbol("Args")?;
-            let method = vm.get_method(class.clone(), name)?;
+            let method = vm.get_method(class, name)?;
             classinfo.add_method(&mut vm.globals, name, method);
         }
     }
@@ -272,7 +272,7 @@ fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let cinfo = self_val.expect_mod_class(vm)?;
     let module = args[0];
     module.expect_module("1st arg")?;
-    cinfo.append_include(module, &mut vm.globals);
+    cinfo.append_include(Module::new(module), &mut vm.globals);
     Ok(Value::nil())
 }
 
@@ -288,7 +288,7 @@ fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let mut module = Some(self_val);
+    let mut module = Some(Module::new(self_val));
     let mut ary = vec![];
     loop {
         match module {
@@ -296,7 +296,7 @@ fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some(m) => {
                 let cinfo = m.as_module();
                 if cinfo.is_included() {
-                    ary.push(cinfo.origin())
+                    ary.push(*cinfo.origin().unwrap())
                 };
                 module = cinfo.upper();
             }
@@ -307,7 +307,7 @@ fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let mut module = Some(self_val);
+    let mut module = Some(Module::new(self_val));
     let mut ary = vec![];
     loop {
         match module {
@@ -315,9 +315,9 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some(m) => {
                 let cinfo = m.as_module();
                 if cinfo.is_included() {
-                    ary.push(cinfo.origin())
+                    ary.push(*cinfo.origin().unwrap())
                 } else {
-                    ary.push(m)
+                    ary.push(*m)
                 };
                 let cinfo = m.as_module();
                 module = cinfo.upper();
@@ -328,6 +328,7 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let self_val = Module::new(self_val);
     let context = vm.current_context();
     match &args.block {
         Block::None => {
@@ -339,7 +340,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.class_push(self_val);
             let mut iseq = vm.get_method_iseq();
             iseq.class_defined.push(self_val);
-            let res = vm.invoke_method(method, self_val, Some(context), &Args::new0());
+            let res = vm.invoke_method(method, *self_val, Some(context), &Args::new0());
             iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res
@@ -348,7 +349,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             args.check_args_num(0)?;
             // The scopes of constants and class variables are outer of the block.
             vm.class_push(self_val);
-            let res = vm.eval_block_self(block, self_val, &Args::new0());
+            let res = vm.eval_block_self(block, *self_val, &Args::new0());
             vm.class_pop();
             res
         }
@@ -359,7 +360,7 @@ fn module_alias_method(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResul
     args.check_args_num(2)?;
     let new = args[0].expect_string_or_symbol("1st arg")?;
     let org = args[1].expect_string_or_symbol("2nd arg")?;
-    let method = vm.get_method(self_val, org)?;
+    let method = vm.get_method(Module::new(self_val), org)?;
     self_val
         .as_mut_class()
         .add_method(&mut vm.globals, new, method);

@@ -52,11 +52,11 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("codepoints", codepoints);
     class.add_builtin_method_by_str("frozen?", frozen_);
     class.add_builtin_method_by_str("lines", lines);
-
-    class
+    *class
 }
 
 fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let self_val = Module::new(self_val);
     args.check_args_range(0, 1)?;
     let s = if args.len() == 0 {
         String::new()
@@ -64,7 +64,7 @@ fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let mut arg = args[0];
         arg.expect_string("1st arg")?.to_string()
     };
-    let mut array = Value::string(s);
+    let array = Value::string(s);
     array.set_class(self_val);
     if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, array, args)?;

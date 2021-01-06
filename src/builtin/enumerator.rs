@@ -10,7 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("inspect", inspect);
 
     class.add_builtin_class_method("new", enum_new);
-    class
+    *class
 }
 
 // Class methods

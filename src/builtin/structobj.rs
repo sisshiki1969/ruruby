@@ -3,10 +3,11 @@ use crate::*;
 pub fn init(globals: &mut Globals) -> Value {
     let struct_class = Value::class_under(globals.builtins.object);
     struct_class.add_builtin_class_method("new", struct_new);
-    struct_class
+    *struct_class
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let self_val = Module::new(self_val);
     args.check_args_min(1)?;
     let mut i = 0;
 
@@ -47,19 +48,19 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         attr_args[index - i] = v;
     }
     class_val.set_var_by_str("/members", Value::array_from(vec));
-    builtin::module::set_attr_accessor(&mut vm.globals, class_val, &attr_args)?;
+    builtin::module::set_attr_accessor(&mut vm.globals, *class_val, &attr_args)?;
 
     match &args.block {
         Block::None => {}
         method => {
             vm.class_push(class_val);
-            let arg = Args::new1(class_val);
-            let res = vm.eval_block_self(method, class_val, &arg);
+            let arg = Args::new1(*class_val);
+            let res = vm.eval_block_self(method, *class_val, &arg);
             vm.class_pop();
             res?;
         }
     };
-    Ok(class_val)
+    Ok(*class_val)
 }
 
 fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {

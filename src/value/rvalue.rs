@@ -4,7 +4,7 @@ use std::borrow::Cow;
 /// Heap-allocated objects.
 #[derive(Debug, PartialEq)]
 pub struct RValue {
-    class: Value,
+    class: Module,
     var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
 }
@@ -145,7 +145,7 @@ impl RValue {
 
     pub fn new_invalid() -> Self {
         RValue {
-            class: Value::nil(),
+            class: Module::new(Value::nil()),
             kind: ObjKind::Invalid,
             var_table: None,
         }
@@ -153,7 +153,7 @@ impl RValue {
 
     pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
         RValue {
-            class: Value::nil(), // dummy for boot strapping
+            class: Module::new(Value::nil()), // dummy for boot strapping
             kind: ObjKind::Class(cinfo),
             var_table: None,
         }
@@ -200,7 +200,7 @@ impl RValue {
         RValue::new_string_from_rstring(RString::Bytes(b))
     }
 
-    pub fn new_ordinary(class: Value) -> Self {
+    pub fn new_ordinary(class: Module) -> Self {
         RValue {
             class,
             var_table: None,
@@ -232,7 +232,7 @@ impl RValue {
         }
     }
 
-    pub fn new_array_with_class(array_info: ArrayInfo, class: Value) -> Self {
+    pub fn new_array_with_class(array_info: ArrayInfo, class: Module) -> Self {
         RValue {
             class,
             var_table: None,
@@ -310,7 +310,7 @@ impl RValue {
         }
     }
 
-    pub fn new_time(time_class: Value, time: TimeInfo) -> Self {
+    pub fn new_time(time_class: Module, time: TimeInfo) -> Self {
         RValue {
             class: time_class,
             var_table: None,
@@ -326,7 +326,7 @@ impl RValue {
         }
         let backtrace = Value::array_from(backtrace);
         let mut rval = RValue {
-            class: exception_class,
+            class: Module::new(exception_class),
             var_table: None,
             kind: ObjKind::Exception(err),
         };
@@ -355,12 +355,12 @@ impl RValue {
     /// Return a class of the object.
     ///
     /// If the objetct has a sigleton class, return the singleton class.
-    pub fn class(&self) -> Value {
+    pub fn class(&self) -> Module {
         self.class
     }
 
     /// Return a "real" class of the object.
-    pub fn search_class(&self) -> Value {
+    pub fn search_class(&self) -> Module {
         let mut class = self.class;
         loop {
             if class.is_singleton() {
@@ -372,7 +372,7 @@ impl RValue {
     }
 
     /// Set a class of the object.
-    pub fn set_class(&mut self, class: Value) {
+    pub fn set_class(&mut self, class: Module) {
         self.class = class;
     }
 

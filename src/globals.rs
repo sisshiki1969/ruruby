@@ -50,7 +50,7 @@ pub struct BuiltinClass {
     pub regexp: Value,
     pub string: Value,
     pub fiber: Value,
-    pub object: Value,
+    pub object: Module,
     pub enumerator: Value,
     pub exception: Value,
     pub standard: Value,
@@ -67,13 +67,13 @@ type BuiltinRef = Ref<BuiltinClass>;
 impl BuiltinClass {
     fn new() -> Self {
         let basic_class = ClassInfo::class_from(None);
-        let mut basic = Value::bootstrap_class(basic_class);
+        let basic = Value::bootstrap_class(basic_class);
         let object_class = ClassInfo::class_from(basic);
-        let mut object = Value::bootstrap_class(object_class);
+        let object = Value::bootstrap_class(object_class);
         let module_class = ClassInfo::class_from(object);
-        let mut module = Value::bootstrap_class(module_class);
+        let module = Value::bootstrap_class(module_class);
         let class_class = ClassInfo::class_from(module);
-        let mut class = Value::bootstrap_class(class_class);
+        let class = Value::bootstrap_class(class_class);
 
         basic.set_class(class);
         object.set_class(class);
@@ -87,8 +87,8 @@ impl BuiltinClass {
             complex: nil,
             array: nil,
             symbol: nil,
-            class,
-            module,
+            class: *class,
+            module: *module,
             procobj: nil,
             method: nil,
             range: nil,
@@ -109,100 +109,100 @@ impl BuiltinClass {
         }
     }
 
-    pub fn object() -> Value {
+    pub fn object() -> Module {
         BUILTINS.with(|b| b.borrow().unwrap().object)
     }
 
-    pub fn class() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().class)
+    pub fn class() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().class))
     }
 
-    pub fn module() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().module)
+    pub fn module() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().module))
     }
 
-    pub fn string() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().string)
+    pub fn string() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().string))
     }
 
-    pub fn integer() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().integer)
+    pub fn integer() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().integer))
     }
 
-    pub fn float() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().float)
+    pub fn float() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().float))
     }
 
-    pub fn symbol() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().symbol)
+    pub fn symbol() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().symbol))
     }
 
-    pub fn complex() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().complex)
+    pub fn complex() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().complex))
     }
 
-    pub fn range() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().range)
+    pub fn range() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().range))
     }
 
-    pub fn array() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().array)
+    pub fn array() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().array))
     }
 
-    pub fn hash() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().hash)
+    pub fn hash() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().hash))
     }
 
-    pub fn fiber() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().fiber)
+    pub fn fiber() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().fiber))
     }
 
-    pub fn enumerator() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().enumerator)
+    pub fn enumerator() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().enumerator))
     }
 
-    pub fn procobj() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().procobj)
+    pub fn procobj() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().procobj))
     }
 
-    pub fn regexp() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().regexp)
+    pub fn regexp() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().regexp))
     }
 
-    pub fn method() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().method)
+    pub fn method() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().method))
     }
 
-    pub fn exception() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().exception)
+    pub fn exception() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().exception))
     }
 
-    pub fn standard() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().standard)
+    pub fn standard() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().standard))
     }
 
-    pub fn nilclass() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().nilclass)
+    pub fn nilclass() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().nilclass))
     }
 
-    pub fn trueclass() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().trueclass)
+    pub fn trueclass() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().trueclass))
     }
 
-    pub fn falseclass() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().falseclass)
+    pub fn falseclass() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().falseclass))
     }
 
-    pub fn kernel() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().kernel)
+    pub fn kernel() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().kernel))
     }
 
-    pub fn numeric() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().numeric)
+    pub fn numeric() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().numeric))
     }
 
-    pub fn comparable() -> Value {
-        BUILTINS.with(|b| b.borrow().unwrap().comparable)
+    pub fn comparable() -> Module {
+        Module::new(BUILTINS.with(|b| b.borrow().unwrap().comparable))
     }
 }
 
@@ -251,7 +251,7 @@ impl Globals {
         let mut builtins = BuiltinRef::new(BuiltinClass::new());
         BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
         let object = builtins.object;
-        let mut basic = object.superclass().unwrap();
+        let basic = *object.superclass().unwrap();
         let module = builtins.module;
         let class = builtins.class;
         let main_object = Value::ordinary_object(object);
@@ -274,9 +274,9 @@ impl Globals {
             source_files: vec![],
         };
         // Generate singleton class for BasicObject
-        let singleton_class = ClassInfo::singleton_from(class, basic);
+        let singleton_class = ClassInfo::singleton_from(Module::new(class), basic);
         let singleton_obj = RValue::new_class(singleton_class).pack();
-        basic.set_class(singleton_obj);
+        basic.set_class(Module::new(singleton_obj));
 
         builtins.comparable = comparable::init(&mut globals);
         builtins.numeric = numeric::init(&mut globals);
@@ -309,7 +309,7 @@ impl Globals {
         }
 
         set_builtin_class!("BasicObject", basic);
-        set_builtin_class!("Object", object);
+        globals.set_toplevel_constant("Object", *object);
         set_builtin_class!("Module", module);
         set_builtin_class!("Class", class);
 
@@ -448,10 +448,10 @@ impl Globals {
     /// Search global method cache with receiver class and method name.
     ///
     /// If the method was not found, return None.
-    pub fn find_method(&mut self, rec_class: Value, method_id: IdentId) -> Option<MethodRef> {
+    pub fn find_method(&mut self, rec_class: Module, method_id: IdentId) -> Option<MethodRef> {
         let class_version = self.class_version;
         self.method_cache
-            .get_method(class_version, rec_class, method_id)
+            .get_method(class_version, *rec_class, method_id)
     }
 
     /// Search global method cache with receiver object and method class_name.
@@ -684,7 +684,7 @@ pub struct InlineCache {
 #[derive(Debug, Clone)]
 pub struct InlineCacheEntry {
     pub version: u32,
-    pub entries: Option<(Value, MethodRef)>,
+    pub entries: Option<(Module, MethodRef)>,
 }
 
 impl InlineCacheEntry {

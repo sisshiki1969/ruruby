@@ -78,7 +78,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("new", array_new);
     class.add_builtin_class_method("allocate", array_allocate);
     class.add_builtin_class_method("[]", array_elem);
-    class
+    *class
 }
 
 // Class methods
@@ -109,8 +109,11 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         _ => unreachable!(),
     };
-    let array = Value::array_from_with_class(array_vec, self_val);
-    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+    let array = Value::array_from_with_class(array_vec, Module::new(self_val));
+    if let Some(method) = vm
+        .globals
+        .find_method(Module::new(self_val), IdentId::INITIALIZE)
+    {
         vm.eval_send(method, array, args)?;
     };
     Ok(array)
@@ -118,12 +121,12 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let array = Value::array_from_with_class(vec![], self_val);
+    let array = Value::array_from_with_class(vec![], Module::new(self_val));
     Ok(array)
 }
 
 fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let array = Value::array_from_with_class(args.to_vec(), self_val);
+    let array = Value::array_from_with_class(args.to_vec(), Module::new(self_val));
     Ok(array)
 }
 
@@ -136,11 +139,11 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let array = vm.globals.builtins.array;
+    let array = Module::new(vm.globals.builtins.array);
     if self_val.get_class().id() == array.id() {
         return Ok(self_val);
     };
-    let mut new_val = self_val.dup();
+    let new_val = self_val.dup();
     new_val.set_class(array);
     Ok(new_val)
 }

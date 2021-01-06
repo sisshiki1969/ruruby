@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let mut basic_object = globals.builtins.object.superclass().unwrap();
+    let mut basic_object = *globals.builtins.object.superclass().unwrap();
     let basic_class = basic_object.as_mut_class();
     basic_class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
     basic_class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);

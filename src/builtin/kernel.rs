@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) -> Value {
     let kernel = Value::module();
-    globals.set_toplevel_constant("Kernel", kernel);
+    globals.set_toplevel_constant("Kernel", *kernel);
     kernel.add_builtin_module_func("puts", puts);
     kernel.add_builtin_module_func("p", p);
     kernel.add_builtin_module_func("print", print);
@@ -33,7 +33,7 @@ pub fn init(globals: &mut Globals) -> Value {
     kernel.add_builtin_module_func("at_exit", at_exit);
     kernel.add_builtin_module_func("`", command);
     kernel.add_builtin_module_func("eval", eval);
-    kernel
+    *kernel
 }
 /// Built-in function "puts".
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {

@@ -141,7 +141,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("escape", regexp_escape);
     class.add_builtin_class_method("quote", regexp_escape);
     class.add_builtin_method_by_str("=~", regexp_match);
-    class
+    *class
 }
 
 // Class methods

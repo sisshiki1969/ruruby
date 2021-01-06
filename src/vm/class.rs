@@ -2,82 +2,48 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClassInfo {
-    upper: Option<Value>,
+    upper: Option<Module>,
     flags: ClassFlags,
     ext: ClassRef,
 }
 
-/// ClassFlags:
-/// 0000 0000
-///       |||
-///       ||+-- 0 = class, 1 = module
-///       |+--- 1 = included module
-///       +---- 1 = module which has prepend
-#[derive(Debug, Clone, PartialEq)]
-struct ClassFlags(u8);
-
-const IS_MODULE: u8 = 1 << 0;
-const INCLUDED: u8 = 1 << 1;
-const HAS_PREPEND: u8 = 1 << 2;
-
-impl ClassFlags {
-    fn new(is_module: bool) -> Self {
-        ClassFlags(if is_module { IS_MODULE } else { 0 })
-    }
-
-    fn is_module(&self) -> bool {
-        self.0 & IS_MODULE != 0
-    }
-
-    fn is_included(&self) -> bool {
-        self.0 & INCLUDED != 0
-    }
-
-    fn has_prepend(&self) -> bool {
-        self.0 & HAS_PREPEND != 0
-    }
-
-    fn set_include(&mut self) {
-        self.0 |= INCLUDED;
-    }
-
-    fn set_prepend(&mut self) {
-        self.0 |= HAS_PREPEND;
-    }
-}
-
 impl GC for ClassInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        if let Some(upper) = self.upper {
+        if let Some(upper) = &self.upper {
             upper.mark(alloc);
         }
         self.ext.const_table.values().for_each(|v| v.mark(alloc));
-        self.ext.origin.mark(alloc);
+        if let Some(module) = &self.ext.origin {
+            module.mark(alloc)
+        };
     }
 }
 
 impl ClassInfo {
-    fn new(is_module: bool, superclass: impl Into<Option<Value>>, info: ClassExt) -> Self {
+    fn new(is_module: bool, superclass: impl Into<Option<Module>>, info: ClassExt) -> Self {
         ClassInfo {
-            upper: superclass.into(),
+            upper: match superclass.into() {
+                Some(c) => Some(c),
+                None => None,
+            },
             flags: ClassFlags::new(is_module),
             ext: ClassRef::new(info),
         }
     }
 
-    pub fn class_from(superclass: impl Into<Option<Value>>) -> Self {
+    pub fn class_from(superclass: impl Into<Option<Module>>) -> Self {
         Self::new(false, superclass, ClassExt::new())
     }
 
-    pub fn module_from(superclass: impl Into<Option<Value>>) -> Self {
+    pub fn module_from(superclass: impl Into<Option<Module>>) -> Self {
         Self::new(true, superclass, ClassExt::new())
     }
 
-    pub fn singleton_from(superclass: impl Into<Option<Value>>, target: Value) -> Self {
+    pub fn singleton_from(superclass: impl Into<Option<Module>>, target: Value) -> Self {
         Self::new(false, superclass, ClassExt::new_singleton(target))
     }
 
-    pub fn upper(&self) -> Option<Value> {
+    pub fn upper(&self) -> Option<Module> {
         let mut upper = self.upper;
         loop {
             match upper {
@@ -96,7 +62,7 @@ impl ClassInfo {
     /// Get superclass of `self`.
     ///
     /// If `self` has no superclass, return nil.
-    pub fn superclass(&self) -> Option<Value> {
+    pub fn superclass(&self) -> Option<Module> {
         let mut upper = self.upper;
         loop {
             match upper {
@@ -191,14 +157,14 @@ impl ClassInfo {
         self.flags.set_prepend()
     }
 
-    pub fn set_include(&mut self, origin: Value) {
+    pub fn set_include(&mut self, origin: Module) {
         #[cfg(debug_assertions)]
         assert!(!origin.as_module().is_included());
         self.flags.set_include();
-        self.ext.origin = origin;
+        self.ext.origin = Some(origin);
     }
 
-    pub fn append_include(&mut self, mut module: Value, globals: &mut Globals) {
+    pub fn append_include(&mut self, mut module: Module, globals: &mut Globals) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -215,7 +181,9 @@ impl ClassInfo {
         globals.class_version += 1;
     }
 
-    pub fn append_prepend(&mut self, base: Value, mut module: Value, globals: &mut Globals) {
+    pub fn append_prepend(&mut self, base: Value, module: Value, globals: &mut Globals) {
+        let mut module = Module::new(module);
+        let base = Module::new(base);
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -241,7 +209,7 @@ impl ClassInfo {
         globals.class_version += 1;
     }
 
-    pub fn origin(&self) -> Value {
+    pub fn origin(&self) -> Option<Module> {
         self.ext.origin
     }
 
@@ -318,6 +286,98 @@ impl ClassInfo {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Module(Value);
+
+impl std::ops::Deref for Module {
+    type Target = Value;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Module {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Module {
+    pub fn new(val: Value) -> Self {
+        Module(val)
+    }
+
+    pub fn dup(&self) -> Self {
+        Module((**self).dup())
+    }
+
+    pub fn generate_included(&self) -> Module {
+        let origin = if self.as_module().is_included() {
+            self.as_module().origin().unwrap()
+        } else {
+            *self
+        };
+        let mut imodule = self.dup();
+        imodule.as_mut_module().set_include(origin);
+        imodule
+    }
+
+    /// Get superclass of `self`.
+    ///
+    /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
+    pub fn superclass(&self) -> Option<Module> {
+        match self.if_mod_class() {
+            Some(cinfo) => cinfo.superclass(),
+            None => None,
+        }
+    }
+
+    /// Examine whether `self` is a singleton class.
+    /// Panic if `self` is not a class object.
+    pub fn is_singleton(&self) -> bool {
+        self.as_module().is_singleton()
+    }
+}
+
+/// ClassFlags:
+/// 0000 0000
+///       |||
+///       ||+-- 0 = class, 1 = module
+///       |+--- 1 = included module
+///       +---- 1 = module which has prepend
+#[derive(Debug, Clone, PartialEq)]
+struct ClassFlags(u8);
+
+const IS_MODULE: u8 = 1 << 0;
+const INCLUDED: u8 = 1 << 1;
+const HAS_PREPEND: u8 = 1 << 2;
+
+impl ClassFlags {
+    fn new(is_module: bool) -> Self {
+        ClassFlags(if is_module { IS_MODULE } else { 0 })
+    }
+
+    fn is_module(&self) -> bool {
+        self.0 & IS_MODULE != 0
+    }
+
+    fn is_included(&self) -> bool {
+        self.0 & INCLUDED != 0
+    }
+
+    fn has_prepend(&self) -> bool {
+        self.0 & HAS_PREPEND != 0
+    }
+
+    fn set_include(&mut self) {
+        self.0 |= INCLUDED;
+    }
+
+    fn set_prepend(&mut self) {
+        self.0 |= HAS_PREPEND;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct ClassExt {
     name: Option<String>,
@@ -325,7 +385,7 @@ struct ClassExt {
     const_table: ValueTable,
     singleton_for: Option<Value>,
     /// This slot holds original module Value for include modules.
-    origin: Value,
+    origin: Option<Module>,
 }
 
 type ClassRef = Ref<ClassExt>;
@@ -337,7 +397,7 @@ impl ClassExt {
             method_table: FxHashMap::default(),
             const_table: FxHashMap::default(),
             singleton_for: None,
-            origin: Value::nil(),
+            origin: None,
         }
     }
 
@@ -347,7 +407,7 @@ impl ClassExt {
             method_table: FxHashMap::default(),
             const_table: FxHashMap::default(),
             singleton_for: Some(target),
-            origin: Value::nil(),
+            origin: None,
         }
     }
 

@@ -110,7 +110,7 @@ pub struct ISeqInfo {
     /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
     /// Set to Some() in class definition context, or None in the top level.
     pub exception_table: Vec<ExceptionEntry>,
-    pub class_defined: Vec<Value>,
+    pub class_defined: Vec<Module>,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,

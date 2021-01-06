@@ -18,7 +18,7 @@ pub fn init(globals: &mut Globals) -> Value {
 fn time_now(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let time_info = TimeInfo(Utc::now().with_timezone(&FixedOffset::east(9 * 3600)));
-    let new_obj = Value::time(self_val, time_info);
+    let new_obj = Value::time(Module::new(self_val), time_info);
     Ok(new_obj)
 }
 
