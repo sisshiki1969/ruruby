@@ -177,7 +177,7 @@ impl RString {
         match self {
             RString::Str(s) => s.len(),
             RString::SmallStr(s) => s.as_str().len(),
-            RString::Bytes(_) => panic!(),
+            RString::Bytes(b) => b.len(),
         }
     }
 

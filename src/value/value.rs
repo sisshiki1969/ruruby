@@ -2,11 +2,11 @@ use crate::*;
 use std::borrow::Cow;
 use std::sync::mpsc;
 
-const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
-const NIL_VALUE: u64 = 0x08;
 const TAG_SYMBOL: u64 = 0x0c;
 const TRUE_VALUE: u64 = 0x14;
+const FALSE_VALUE: u64 = 0x1c;
+const NIL_VALUE: u64 = 0x24;
 const MASK1: u64 = !(0b0110u64 << 60);
 const MASK2: u64 = 0b0100u64 << 60;
 
@@ -34,17 +34,17 @@ impl<'a> RV<'a> {
             RV::Integer(num) => Value::integer(*num),
             RV::Float(num) => Value::float(*num),
             RV::Symbol(id) => Value::symbol(*id),
-            RV::Object(info) => Value(info.id()),
+            RV::Object(info) => Value::from(info.id()),
         }
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct Value(u64);
+pub struct Value(std::num::NonZeroU64);
 
 impl std::ops::Deref for Value {
-    type Target = u64;
-    fn deref(&self) -> &u64 {
+    type Target = std::num::NonZeroU64;
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -174,7 +174,7 @@ impl Value {
         } else if self.is_packed_symbol() {
             RV::Symbol(self.as_packed_symbol())
         } else {
-            match self.0 {
+            match self.get() {
                 NIL_VALUE => RV::Nil,
                 TRUE_VALUE => RV::True,
                 FALSE_VALUE => RV::False,
@@ -281,15 +281,15 @@ impl Value {
     }
 
     pub fn id(&self) -> u64 {
-        self.0
+        self.get()
     }
 
     pub fn from(id: u64) -> Self {
-        Value(id)
+        Value(std::num::NonZeroU64::new(id).unwrap())
     }
 
     pub fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
-        Value(ptr as u64)
+        Value::from(ptr as u64)
     }
 
     pub fn dup(&self) -> Self {
@@ -345,15 +345,15 @@ impl Value {
     }
 
     pub fn gcbox(&self) -> &GCBox<RValue> {
-        unsafe { &*(self.0 as *const GCBox<RValue>) }
+        unsafe { &*(self.get() as *const GCBox<RValue>) }
     }
 
     pub fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.0 as *const GCBox<RValue>) }.inner()
+        unsafe { &*(self.get() as *const GCBox<RValue>) }.inner()
     }
 
     pub fn rvalue_mut(&self) -> &mut RValue {
-        unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
+        unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
     }
 }
 
@@ -586,39 +586,39 @@ impl Value {
 
 impl Value {
     pub fn is_packed_fixnum(&self) -> bool {
-        self.0 & 0b1 == 1
+        self.get() & 0b1 == 1
     }
 
     pub fn is_packed_flonum(&self) -> bool {
-        self.0 & 0b11 == 2
+        self.get() & 0b11 == 2
     }
 
     pub fn is_packed_num(&self) -> bool {
-        self.0 & 0b11 != 0
+        self.get() & 0b11 != 0
     }
 
     pub fn is_packed_symbol(&self) -> bool {
-        self.0 & 0xff == TAG_SYMBOL
+        self.get() & 0xff == TAG_SYMBOL
     }
 
     pub fn is_uninitialized(&self) -> bool {
-        self.0 == UNINITIALIZED
+        self.get() == UNINITIALIZED
     }
 
     pub fn is_nil(&self) -> bool {
-        self.0 == NIL_VALUE
+        self.get() == NIL_VALUE
     }
 
     pub fn is_true_val(&self) -> bool {
-        self.0 == TRUE_VALUE
+        self.get() == TRUE_VALUE
     }
 
     pub fn is_false_val(&self) -> bool {
-        self.0 == FALSE_VALUE
+        self.get() == FALSE_VALUE
     }
 
     pub fn is_packed_value(&self) -> bool {
-        self.0 & 0b0111 != 0 || self.0 <= 0x20
+        self.get() & 0b0111 != 0
     }
 
     pub fn as_integer(&self) -> Option<i64> {
@@ -1128,53 +1128,53 @@ impl Value {
     }
 
     pub fn as_packed_fixnum(&self) -> i64 {
-        (self.0 as i64) >> 1
+        (self.get() as i64) >> 1
     }
 
     pub fn as_packed_flonum(&self) -> f64 {
-        if self.0 == ZERO {
+        if self.get() == ZERO {
             return 0.0;
         }
-        let bit = 0b10 - ((self.0 >> 63) & 0b1);
-        let num = ((self.0 & !(0b0011u64)) | bit).rotate_right(3);
+        let bit = 0b10 - ((self.get() >> 63) & 0b1);
+        let num = ((self.get() & !(0b0011u64)) | bit).rotate_right(3);
         //eprintln!("after  unpack:{:064b}", num);
         f64::from_bits(num)
     }
 
     pub fn as_packed_symbol(&self) -> IdentId {
-        IdentId::from((self.0 >> 32) as u32)
+        IdentId::from((self.get() >> 32) as u32)
     }
 }
 
 impl Value {
     pub const fn uninitialized() -> Self {
-        Value(UNINITIALIZED)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(UNINITIALIZED) })
     }
 
     pub const fn nil() -> Self {
-        Value(NIL_VALUE)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(NIL_VALUE) })
     }
 
     pub const fn true_val() -> Self {
-        Value(TRUE_VALUE)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(TRUE_VALUE) })
     }
 
     pub const fn false_val() -> Self {
-        Value(FALSE_VALUE)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(FALSE_VALUE) })
     }
 
     pub fn bool(b: bool) -> Self {
         if b {
-            Value(TRUE_VALUE)
+            Value::from(TRUE_VALUE)
         } else {
-            Value(FALSE_VALUE)
+            Value::from(FALSE_VALUE)
         }
     }
 
     pub fn integer(num: i64) -> Self {
         let top = (num as u64) >> 62 ^ (num as u64) >> 63;
         if top & 0b1 == 0 {
-            Value((num << 1) as u64 | 0b1)
+            Value::from((num << 1) as u64 | 0b1)
         } else {
             RValue::new_integer(num).pack()
         }
@@ -1182,12 +1182,12 @@ impl Value {
 
     pub fn float(num: f64) -> Self {
         if num == 0.0 {
-            return Value(ZERO);
+            return Value::from(ZERO);
         }
         let unum = f64::to_bits(num);
         let exp = ((unum >> 60) & 0b111) + 1;
         if (exp & 0b0110) == 0b0100 {
-            Value((unum & MASK1 | MASK2).rotate_left(3))
+            Value::from((unum & MASK1 | MASK2).rotate_left(3))
         } else {
             RValue::new_float(num).pack()
         }
@@ -1214,7 +1214,7 @@ impl Value {
 
     pub fn symbol(id: IdentId) -> Self {
         let id: u32 = id.into();
-        Value((id as u64) << 32 | TAG_SYMBOL)
+        Value::from((id as u64) << 32 | TAG_SYMBOL)
     }
 
     pub fn symbol_from_str(sym: &str) -> Self {

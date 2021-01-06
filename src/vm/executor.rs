@@ -1885,16 +1885,13 @@ impl VM {
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
+        if let Some(ainfo) = lhs.as_mut_array() {
+            ainfo.elements.push(rhs);
+            return Ok(lhs);
+        }
         match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => return Ok(Value::integer(lhs << rhs)),
             (RV::Integer(_), _) => return Err(RubyError::no_implicit_conv(rhs, "Integer")),
-            (RV::Object(rval), _) => match rval.kind {
-                ObjKind::Array(_) => {
-                    lhs.as_mut_array().unwrap().elements.push(rhs);
-                    return Ok(lhs);
-                }
-                _ => {}
-            },
             _ => {}
         }
         let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;

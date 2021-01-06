@@ -11,6 +11,8 @@ pub fn repl_vm() {
     #[cfg(debug_assertions)]
     {
         println!("RV: {}", std::mem::size_of::<RV>());
+        println!("Value: {}", std::mem::size_of::<Value>());
+        println!("Option<Value>: {}", std::mem::size_of::<Option<Value>>());
         println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
         println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
         println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
