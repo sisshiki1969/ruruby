@@ -32,7 +32,7 @@ impl RangeInfo {
 }
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::class_from(globals.builtins.object);
+    let class = Value::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("map", map);
@@ -47,9 +47,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("exclude_end?", exclude_end);
     class.add_builtin_method_by_str("include?", include);
 
-    let mut class_val = Value::class(class);
-    class_val.add_builtin_class_method("new", range_new);
-    class_val
+    class.add_builtin_class_method("new", range_new);
+    class.get()
 }
 
 fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {

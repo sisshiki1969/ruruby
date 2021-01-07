@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let numeric = globals.get_toplevel_constant("Numeric").unwrap();
-    let mut class = Value::class_under(numeric);
+    let class = Value::class_under(Module::new(numeric));
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
@@ -14,7 +14,7 @@ pub fn init(globals: &mut Globals) -> Value {
     //let mut class = Value::class(classref);
     class.add_builtin_class_method("rect", complex_rect);
     class.add_builtin_class_method("rectangular", complex_rect);
-    class
+    class.get()
 }
 
 // Class methods

@@ -2,46 +2,47 @@ use crate::*;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) {
-    let mut module_class = globals.builtins.module;
-    module_class.add_builtin_class_method("new", module_new);
+    let class = globals.builtins.module;
+    class.add_builtin_class_method("new", module_new);
 
-    module_class.add_builtin_method_by_str("===", teq);
-    module_class.add_builtin_method_by_str("name", name);
-    module_class.add_builtin_method_by_str("to_s", inspect);
-    module_class.add_builtin_method_by_str("inspect", inspect);
-    module_class.add_builtin_method_by_str("constants", constants);
-    module_class.add_builtin_method_by_str("class_variables", class_variables);
-    module_class.add_builtin_method_by_str("const_defined?", const_defined);
-    module_class.add_builtin_method_by_str("instance_methods", instance_methods);
-    module_class.add_builtin_method_by_str("attr_accessor", attr_accessor);
-    module_class.add_builtin_method_by_str("attr", attr_reader);
-    module_class.add_builtin_method_by_str("attr_reader", attr_reader);
-    module_class.add_builtin_method_by_str("attr_writer", attr_writer);
-    module_class.add_builtin_method_by_str("module_function", module_function);
-    module_class.add_builtin_method_by_str("singleton_class?", singleton_class);
-    module_class.add_builtin_method_by_str("const_get", const_get);
-    module_class.add_builtin_method_by_str("include", include);
-    module_class.add_builtin_method_by_str("prepend", prepend);
-    module_class.add_builtin_method_by_str("included_modules", included_modules);
-    module_class.add_builtin_method_by_str("ancestors", ancestors);
-    module_class.add_builtin_method_by_str("module_eval", module_eval);
-    module_class.add_builtin_method_by_str("class_eval", module_eval);
-    module_class.add_builtin_method_by_str("alias_method", module_alias_method);
-    module_class.add_builtin_method_by_str("public", public);
-    module_class.add_builtin_method_by_str("private", private);
-    module_class.add_builtin_method_by_str("protected", protected);
-    module_class.add_builtin_method_by_str("include?", include_);
+    class.add_builtin_method_by_str("===", teq);
+    class.add_builtin_method_by_str("name", name);
+    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("constants", constants);
+    class.add_builtin_method_by_str("class_variables", class_variables);
+    class.add_builtin_method_by_str("const_defined?", const_defined);
+    class.add_builtin_method_by_str("instance_methods", instance_methods);
+    class.add_builtin_method_by_str("attr_accessor", attr_accessor);
+    class.add_builtin_method_by_str("attr", attr_reader);
+    class.add_builtin_method_by_str("attr_reader", attr_reader);
+    class.add_builtin_method_by_str("attr_writer", attr_writer);
+    class.add_builtin_method_by_str("module_function", module_function);
+    class.add_builtin_method_by_str("singleton_class?", singleton_class);
+    class.add_builtin_method_by_str("const_get", const_get);
+    class.add_builtin_method_by_str("include", include);
+    class.add_builtin_method_by_str("prepend", prepend);
+    class.add_builtin_method_by_str("included_modules", included_modules);
+    class.add_builtin_method_by_str("ancestors", ancestors);
+    class.add_builtin_method_by_str("module_eval", module_eval);
+    class.add_builtin_method_by_str("class_eval", module_eval);
+    class.add_builtin_method_by_str("alias_method", module_alias_method);
+    class.add_builtin_method_by_str("public", public);
+    class.add_builtin_method_by_str("private", private);
+    class.add_builtin_method_by_str("protected", protected);
+    class.add_builtin_method_by_str("include?", include_);
 }
 
 /// Create new module.
 /// If a block is given, eval it in the context of newly created module.
 fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let val = Value::module();
+    let module = Value::module();
+    let val = module.get();
     match &args.block {
         Block::None => {}
         _ => {
-            vm.class_push(val);
+            vm.class_push(module);
             let arg = Args::new1(val);
             let res = vm.eval_block_self(&args.block, val, &arg);
             vm.class_pop();
@@ -87,11 +88,10 @@ pub fn set_attr_accessor(globals: &mut Globals, self_val: Value, args: &Args) ->
 
 fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let mut v: Vec<Value> = vec![];
-    let mut class = self_val;
+    let mut class = Module::new(self_val);
     loop {
         v.append(
             &mut class
-                .as_module()
                 .const_table()
                 .keys()
                 .filter(|x| {
@@ -106,10 +106,10 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
         );
         match class.upper() {
             Some(superclass) => {
-                if superclass == BuiltinClass::object() {
+                if superclass.id() == BuiltinClass::object().id() {
                     break;
                 } else {
-                    class = superclass
+                    class = superclass;
                 };
             }
             None => break,
@@ -150,9 +150,9 @@ fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
-    let mut module = self_val.expect_mod_class(vm)?;
+    let mut module = Module::new(self_val);
     let inherited_too = args.len() == 0 || args[0].to_bool();
     match inherited_too {
         false => {
@@ -176,11 +176,11 @@ fn instance_methods(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                     )
                     .cloned()
                     .collect();
-                if module.upper().is_nil() {
-                    break;
-                } else {
-                    self_val = module.upper();
-                    module = self_val.as_mut_module();
+                match module.upper() {
+                    None => break,
+                    Some(upper) => {
+                        module = upper;
+                    }
                 }
             }
             Ok(Value::array_from(v.iter().cloned().collect()))
@@ -249,13 +249,12 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         vm.module_function(true);
     } else {
-        let mut class = vm.class();
-        let mut singleton = class.get_singleton_class().unwrap();
-        let classinfo = singleton.as_mut_class();
+        let class = vm.class();
+        let mut singleton = class.get_singleton_class();
         for arg in args.iter() {
             let name = arg.expect_string_or_symbol("Args")?;
-            let method = vm.get_method(class.clone(), name)?;
-            classinfo.add_method(&mut vm.globals, name, method);
+            let method = vm.get_method(class, name)?;
+            singleton.add_method(&mut vm.globals, name, method);
         }
     }
     Ok(Value::nil())
@@ -271,7 +270,7 @@ fn include(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let cinfo = self_val.expect_mod_class(vm)?;
     let module = args[0];
     module.expect_module("1st arg")?;
-    cinfo.append_include(module, &mut vm.globals);
+    cinfo.append_include(Module::new(module), &mut vm.globals);
     Ok(Value::nil())
 }
 
@@ -287,42 +286,40 @@ fn prepend(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let mut module = self_val;
+    let mut module = Some(Module::new(self_val));
     let mut ary = vec![];
     loop {
-        if module.is_nil() {
-            break;
+        match module {
+            None => break,
+            Some(m) => {
+                if m.is_included() {
+                    ary.push(m.origin().unwrap().get())
+                };
+                module = m.upper();
+            }
         }
-        let cinfo = module.as_module();
-        if cinfo.is_included() {
-            ary.push(cinfo.origin())
-        };
-        module = cinfo.upper();
     }
     Ok(Value::array_from(ary))
 }
 
 fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let mut module = self_val;
+    let mut module = Some(Module::new(self_val));
     let mut ary = vec![];
     loop {
-        if module.is_nil() {
-            break;
+        match module {
+            None => break,
+            Some(m) => {
+                ary.push(m.real_module().get());
+                module = m.upper();
+            }
         }
-        let cinfo = module.as_module();
-        if cinfo.is_included() {
-            ary.push(cinfo.origin())
-        } else {
-            ary.push(module)
-        };
-        let cinfo = module.as_module();
-        module = cinfo.upper();
     }
     Ok(Value::array_from(ary))
 }
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let self_val = Module::new(self_val);
     let context = vm.current_context();
     match &args.block {
         Block::None => {
@@ -334,7 +331,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.class_push(self_val);
             let mut iseq = vm.get_method_iseq();
             iseq.class_defined.push(self_val);
-            let res = vm.invoke_method(method, self_val, Some(context), &Args::new0());
+            let res = vm.invoke_method(method, self_val.get(), Some(context), &Args::new0());
             iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res
@@ -343,7 +340,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             args.check_args_num(0)?;
             // The scopes of constants and class variables are outer of the block.
             vm.class_push(self_val);
-            let res = vm.eval_block_self(block, self_val, &Args::new0());
+            let res = vm.eval_block_self(block, self_val.get(), &Args::new0());
             vm.class_pop();
             res
         }
@@ -354,7 +351,7 @@ fn module_alias_method(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResul
     args.check_args_num(2)?;
     let new = args[0].expect_string_or_symbol("1st arg")?;
     let org = args[1].expect_string_or_symbol("2nd arg")?;
-    let method = vm.get_method(self_val, org)?;
+    let method = vm.get_method(Module::new(self_val), org)?;
     self_val
         .as_mut_class()
         .add_method(&mut vm.globals, new, method);
@@ -375,7 +372,7 @@ fn protected(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 fn include_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let val = self_val;
+    let val = Module::new(self_val);
     let module = args[0];
     module.expect_module("1st arg")?;
     Ok(Value::bool(val.include_module(module)))

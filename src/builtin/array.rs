@@ -2,7 +2,7 @@ use crate::error::RubyError;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Value::class_under(globals.builtins.object);
+    let class = Value::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("to_a", toa);
@@ -78,13 +78,14 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("new", array_new);
     class.add_builtin_class_method("allocate", array_allocate);
     class.add_builtin_class_method("[]", array_elem);
-    class
+    class.get()
 }
 
 // Class methods
 
 fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
+    let self_val = Module::new(self_val);
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
@@ -118,12 +119,12 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let array = Value::array_from_with_class(vec![], self_val);
+    let array = Value::array_from_with_class(vec![], Module::new(self_val));
     Ok(array)
 }
 
 fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let array = Value::array_from_with_class(args.to_vec(), self_val);
+    let array = Value::array_from_with_class(args.to_vec(), Module::new(self_val));
     Ok(array)
 }
 
@@ -136,11 +137,11 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let array = vm.globals.builtins.array;
+    let array = Module::new(vm.globals.builtins.array);
     if self_val.get_class().id() == array.id() {
         return Ok(self_val);
     };
-    let mut new_val = self_val.dup();
+    let new_val = self_val.dup();
     new_val.set_class(array);
     Ok(new_val)
 }
@@ -969,7 +970,7 @@ fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             eprintln!("Warning: given block not used.")
         };
         for (i, v) in ary.elements.iter().enumerate() {
-            if *v == args[0] {
+            if v.eq(&args[0]) {
                 return Ok(Value::integer(i as i64));
             };
         }

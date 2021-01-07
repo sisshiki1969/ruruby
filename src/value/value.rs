@@ -2,11 +2,11 @@ use crate::*;
 use std::borrow::Cow;
 use std::sync::mpsc;
 
-const FALSE_VALUE: u64 = 0x00;
 const UNINITIALIZED: u64 = 0x04;
-const NIL_VALUE: u64 = 0x08;
 const TAG_SYMBOL: u64 = 0x0c;
 const TRUE_VALUE: u64 = 0x14;
+const FALSE_VALUE: u64 = 0x1c;
+const NIL_VALUE: u64 = 0x24;
 const MASK1: u64 = !(0b0110u64 << 60);
 const MASK2: u64 = 0b0100u64 << 60;
 
@@ -34,17 +34,17 @@ impl<'a> RV<'a> {
             RV::Integer(num) => Value::integer(*num),
             RV::Float(num) => Value::float(*num),
             RV::Symbol(id) => Value::symbol(*id),
-            RV::Object(info) => Value(info.id()),
+            RV::Object(info) => Value::from(info.id()),
         }
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct Value(u64);
+pub struct Value(std::num::NonZeroU64);
 
 impl std::ops::Deref for Value {
-    type Target = u64;
-    fn deref(&self) -> &u64 {
+    type Target = std::num::NonZeroU64;
+    fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
@@ -77,7 +77,7 @@ impl PartialEq for Value {
     /// Equality of value.
     ///
     /// This kind of equality is used for `==` operator of Ruby.
-    /// Generally, two objects which all of properties are `eq` are defined as `eq`.  
+    /// Generally, two objects which all of properties are `eq` are defined as `eq`.
     /// Some classes have original difinitions of `eq`.
     ///
     /// ex. 3.0 == 3.
@@ -105,7 +105,7 @@ impl PartialEq for Value {
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                *r1 == *r2 && *i1 == *i2
+                r1.eq(r2) && i1.eq(i2)
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
@@ -124,6 +124,7 @@ impl PartialEq for Value {
         }
     }
 }
+
 impl Eq for Value {}
 
 impl Default for Value {
@@ -174,7 +175,7 @@ impl Value {
         } else if self.is_packed_symbol() {
             RV::Symbol(self.as_packed_symbol())
         } else {
-            match self.0 {
+            match self.get() {
                 NIL_VALUE => RV::Nil,
                 TRUE_VALUE => RV::True,
                 FALSE_VALUE => RV::False,
@@ -281,15 +282,19 @@ impl Value {
     }
 
     pub fn id(&self) -> u64 {
-        self.0
+        self.get()
     }
 
     pub fn from(id: u64) -> Self {
-        Value(id)
+        Value(std::num::NonZeroU64::new(id).unwrap())
     }
 
     pub fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
-        Value(ptr as u64)
+        Value::from(ptr as u64)
+    }
+
+    pub fn into_module(self) -> Module {
+        Module::new(self)
     }
 
     pub fn dup(&self) -> Self {
@@ -345,15 +350,15 @@ impl Value {
     }
 
     pub fn gcbox(&self) -> &GCBox<RValue> {
-        unsafe { &*(self.0 as *const GCBox<RValue>) }
+        unsafe { &*(self.get() as *const GCBox<RValue>) }
     }
 
     pub fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.0 as *const GCBox<RValue>) }.inner()
+        unsafe { &*(self.get() as *const GCBox<RValue>) }.inner()
     }
 
     pub fn rvalue_mut(&self) -> &mut RValue {
-        unsafe { &mut *(self.0 as *mut GCBox<RValue>) }.inner_mut()
+        unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
     }
 }
 
@@ -389,7 +394,7 @@ impl Value {
     ///
     /// ### panic
     /// panic if `self` was a primitive type (integer, float, etc.).
-    pub fn set_class(&mut self, class: Value) {
+    pub fn set_class(mut self, class: Module) {
         match self.as_mut_rvalue() {
             Some(rvalue) => rvalue.set_class(class),
             None => unreachable!(
@@ -404,7 +409,7 @@ impl Value {
     ///
     /// ### panic
     /// panic if `self` was Invalid.
-    pub fn get_class_for_method(&self) -> Value {
+    pub fn get_class_for_method(&self) -> Module {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
@@ -419,7 +424,7 @@ impl Value {
 
     /// Get class of `self`.
     /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
-    pub fn get_class(&self) -> Value {
+    pub fn get_class(&self) -> Module {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
@@ -444,36 +449,8 @@ impl Value {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                _ => oref.class().as_class().name(),
+                _ => oref.class().name(),
             },
-        }
-    }
-
-    /// Get superclass of `self`.
-    ///
-    /// If `self` was a module/class which has no superclass or `self` was not a module/class, return None.
-    pub fn superclass(&self) -> Option<Value> {
-        match self.if_mod_class() {
-            Some(cinfo) => Some(cinfo.superclass()),
-            None => None,
-        }
-    }
-
-    /// Get an upper module/class of `self`.
-    ///
-    /// If `self` has no upper module/class, return None.
-    /// Panic if `self` is not Class/Module.
-    pub fn upper(&self) -> Option<Value> {
-        match self.if_mod_class() {
-            Some(class) => {
-                let superclass = class.upper();
-                if superclass.is_nil() {
-                    None
-                } else {
-                    Some(superclass)
-                }
-            }
-            None => unreachable!("upper(): Not a Class / Module."),
         }
     }
 
@@ -491,29 +468,8 @@ impl Value {
         false
     }
 
-    /// Check whether `module` exists in the ancestors of `self`.
-    pub fn include_module(&self, target_module: Value) -> bool {
-        let mut val = *self;
-        loop {
-            let minfo = val.if_mod_class().unwrap();
-            let true_module = if minfo.is_included() {
-                minfo.origin()
-            } else {
-                val
-            };
-            if true_module.id() == target_module.id() {
-                return true;
-            };
-            match val.upper() {
-                Some(upper) => val = upper,
-                None => break,
-            }
-        }
-        false
-    }
-
     pub fn is_exception_class(&self) -> bool {
-        let mut val = *self;
+        let mut val = Module::new(*self);
         let ex = BuiltinClass::exception();
         loop {
             if val.id() == ex.id() {
@@ -525,12 +481,6 @@ impl Value {
             };
         }
         false
-    }
-
-    /// Examine whether `self` is a singleton class.
-    /// Panic if `self` is not a class object.
-    pub fn is_singleton(&self) -> bool {
-        self.as_module().is_singleton()
     }
 
     /// Examine whether `self` has a singleton class.
@@ -561,71 +511,43 @@ impl Value {
             None => false,
         }
     }
-
-    /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
-    /// Return None if no method found.
-    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        let cref = self.as_module();
-        cref.method_table().get(&id).cloned()
-    }
-
-    pub fn add_builtin_class_method(&mut self, name: &str, func: BuiltinFunc) {
-        let mut singleton = self.get_singleton_class().unwrap();
-        let classinfo = singleton.as_mut_class();
-        classinfo.add_builtin_method_by_str(name, func);
-    }
-
-    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
-        let name = IdentId::get_id(name);
-        self.as_mut_module().add_builtin_method(name, func);
-    }
-
-    /// Add module function to `self`.
-    /// `self` must be Module or Class.
-    pub fn add_builtin_module_func(&mut self, name: &str, func: BuiltinFunc) {
-        let classref = self.if_mut_mod_class().unwrap();
-        classref.add_builtin_method_by_str(name, func);
-        let mut singleton = self.get_singleton_class().unwrap();
-        let classref = singleton.as_mut_class();
-        classref.add_builtin_method_by_str(name, func);
-    }
 }
 
 impl Value {
     pub fn is_packed_fixnum(&self) -> bool {
-        self.0 & 0b1 == 1
+        self.get() & 0b1 == 1
     }
 
     pub fn is_packed_flonum(&self) -> bool {
-        self.0 & 0b11 == 2
+        self.get() & 0b11 == 2
     }
 
     pub fn is_packed_num(&self) -> bool {
-        self.0 & 0b11 != 0
+        self.get() & 0b11 != 0
     }
 
     pub fn is_packed_symbol(&self) -> bool {
-        self.0 & 0xff == TAG_SYMBOL
+        self.get() & 0xff == TAG_SYMBOL
     }
 
     pub fn is_uninitialized(&self) -> bool {
-        self.0 == UNINITIALIZED
+        self.get() == UNINITIALIZED
     }
 
     pub fn is_nil(&self) -> bool {
-        self.0 == NIL_VALUE
+        self.get() == NIL_VALUE
     }
 
     pub fn is_true_val(&self) -> bool {
-        self.0 == TRUE_VALUE
+        self.get() == TRUE_VALUE
     }
 
     pub fn is_false_val(&self) -> bool {
-        self.0 == FALSE_VALUE
+        self.get() == FALSE_VALUE
     }
 
     pub fn is_packed_value(&self) -> bool {
-        self.0 & 0b0111 != 0 || self.0 <= 0x20
+        self.get() & 0b0111 != 0
     }
 
     pub fn as_integer(&self) -> Option<i64> {
@@ -949,17 +871,6 @@ impl Value {
         }
     }
 
-    pub fn generate_included(&self) -> Value {
-        let origin = if self.as_module().is_included() {
-            self.as_module().origin()
-        } else {
-            *self
-        };
-        let mut imodule = self.dup();
-        imodule.as_mut_module().set_include(origin);
-        imodule
-    }
-
     pub fn as_array(&self) -> Option<&ArrayInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -1135,53 +1046,53 @@ impl Value {
     }
 
     pub fn as_packed_fixnum(&self) -> i64 {
-        (self.0 as i64) >> 1
+        (self.get() as i64) >> 1
     }
 
     pub fn as_packed_flonum(&self) -> f64 {
-        if self.0 == ZERO {
+        if self.get() == ZERO {
             return 0.0;
         }
-        let bit = 0b10 - ((self.0 >> 63) & 0b1);
-        let num = ((self.0 & !(0b0011u64)) | bit).rotate_right(3);
+        let bit = 0b10 - ((self.get() >> 63) & 0b1);
+        let num = ((self.get() & !(0b0011u64)) | bit).rotate_right(3);
         //eprintln!("after  unpack:{:064b}", num);
         f64::from_bits(num)
     }
 
     pub fn as_packed_symbol(&self) -> IdentId {
-        IdentId::from((self.0 >> 32) as u32)
+        IdentId::from((self.get() >> 32) as u32)
     }
 }
 
 impl Value {
     pub const fn uninitialized() -> Self {
-        Value(UNINITIALIZED)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(UNINITIALIZED) })
     }
 
     pub const fn nil() -> Self {
-        Value(NIL_VALUE)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(NIL_VALUE) })
     }
 
     pub const fn true_val() -> Self {
-        Value(TRUE_VALUE)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(TRUE_VALUE) })
     }
 
     pub const fn false_val() -> Self {
-        Value(FALSE_VALUE)
+        Value(unsafe { std::num::NonZeroU64::new_unchecked(FALSE_VALUE) })
     }
 
     pub fn bool(b: bool) -> Self {
         if b {
-            Value(TRUE_VALUE)
+            Value::from(TRUE_VALUE)
         } else {
-            Value(FALSE_VALUE)
+            Value::from(FALSE_VALUE)
         }
     }
 
     pub fn integer(num: i64) -> Self {
         let top = (num as u64) >> 62 ^ (num as u64) >> 63;
         if top & 0b1 == 0 {
-            Value((num << 1) as u64 | 0b1)
+            Value::from((num << 1) as u64 | 0b1)
         } else {
             RValue::new_integer(num).pack()
         }
@@ -1189,12 +1100,12 @@ impl Value {
 
     pub fn float(num: f64) -> Self {
         if num == 0.0 {
-            return Value(ZERO);
+            return Value::from(ZERO);
         }
         let unum = f64::to_bits(num);
         let exp = ((unum >> 60) & 0b111) + 1;
         if (exp & 0b0110) == 0b0100 {
-            Value((unum & MASK1 | MASK2).rotate_left(3))
+            Value::from((unum & MASK1 | MASK2).rotate_left(3))
         } else {
             RValue::new_float(num).pack()
         }
@@ -1221,7 +1132,7 @@ impl Value {
 
     pub fn symbol(id: IdentId) -> Self {
         let id: u32 = id.into();
-        Value((id as u64) << 32 | TAG_SYMBOL)
+        Value::from((id as u64) << 32 | TAG_SYMBOL)
     }
 
     pub fn symbol_from_str(sym: &str) -> Self {
@@ -1233,38 +1144,38 @@ impl Value {
         RValue::new_range(info).pack()
     }
 
-    pub fn bootstrap_class(cinfo: ClassInfo) -> Self {
-        RValue::new_bootstrap(cinfo).pack()
+    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
+        Module::new(RValue::new_bootstrap(cinfo).pack())
     }
 
-    pub fn ordinary_object(class: Value) -> Self {
+    pub fn ordinary_object(class: Module) -> Self {
         RValue::new_ordinary(class).pack()
     }
 
     pub fn class(cinfo: ClassInfo) -> Self {
         assert!(!cinfo.is_module());
-        let mut obj = RValue::new_class(cinfo).pack();
+        let obj = RValue::new_class(cinfo).pack();
         obj.get_singleton_class().unwrap();
         obj
     }
 
-    pub fn class_under(superclass: impl Into<Option<Value>>) -> Self {
-        Value::class(ClassInfo::class_from(superclass))
+    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
+        Module::new(Value::class(ClassInfo::class_from(superclass)))
     }
 
-    pub fn singleton_class_from(superclass: impl Into<Option<Value>>, target: Value) -> Self {
-        RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack()
+    pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {
+        Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
     }
 
-    pub fn module() -> Self {
-        RValue::new_module(ClassInfo::module_from(None)).pack()
+    pub fn module() -> Module {
+        Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }
 
-    pub fn array_from_with_class(ary: Vec<Value>, class: Value) -> Self {
+    pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Self {
         RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
     }
 
@@ -1307,11 +1218,11 @@ impl Value {
         RValue::new_enumerator(fiber).pack()
     }
 
-    pub fn time(time_class: Value, time: TimeInfo) -> Self {
+    pub fn time(time_class: Module, time: TimeInfo) -> Self {
         RValue::new_time(time_class, time).pack()
     }
 
-    pub fn exception(exception_class: Value, err: RubyError) -> Self {
+    pub fn exception(exception_class: Module, err: RubyError) -> Self {
         RValue::new_exception(exception_class, err).pack()
     }
 }
@@ -1344,9 +1255,8 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
-    pub fn get_singleton_class(&mut self) -> VMResult {
-        let self_ = *self;
-        match self.as_mut_rvalue() {
+    pub fn get_singleton_class(self) -> Result<Module, RubyError> {
+        match self.clone().as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
                 if class.is_singleton() {
@@ -1354,22 +1264,16 @@ impl Value {
                 } else {
                     let singleton = match &oref.kind {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
-                            let mut superclass = cinfo.superclass();
-                            let mut singleton = if superclass.is_nil() {
-                                Value::singleton_class_from(None, self_)
-                            } else {
-                                Value::singleton_class_from(
-                                    superclass.get_singleton_class()?,
-                                    self_,
-                                )
+                            let superclass = match cinfo.superclass() {
+                                None => None,
+                                Some(superclass) => Some(superclass.get_singleton_class()),
                             };
-                            singleton.set_class(class);
-                            singleton
+                            Value::singleton_class_from(superclass, self)
                         }
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => Value::singleton_class_from(class, self_),
+                        _ => Value::singleton_class_from(class, self),
                     };
                     oref.set_class(singleton);
                     Ok(singleton)
@@ -1380,30 +1284,6 @@ impl Value {
                 self,
                 self.get_class_name()
             ))),
-        }
-    }
-
-    /// Get method for a receiver class (`self`) and method (IdentId).
-    pub fn get_method(&self, method: IdentId) -> Option<MethodRef> {
-        let mut temp_class = *self;
-        let mut singleton_flag = self.is_singleton();
-        loop {
-            match temp_class.get_instance_method(method) {
-                Some(method) => {
-                    return Some(method);
-                }
-                None => match temp_class.upper() {
-                    Some(superclass) => temp_class = superclass,
-                    None => {
-                        if singleton_flag {
-                            singleton_flag = false;
-                            temp_class = self.rvalue().class();
-                        } else {
-                            return None;
-                        }
-                    }
-                },
-            };
         }
     }
 }
@@ -1622,7 +1502,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class_under(None);
+        let expect = Value::class_under(None).get();
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

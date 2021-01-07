@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::class_from(globals.builtins.numeric);
+    let class = Value::class_under(Module::new(globals.builtins.numeric));
 
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
@@ -32,7 +32,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("size", size);
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("succ", next);
-    Value::class(class)
+    class.get()
 }
 
 // Class methods

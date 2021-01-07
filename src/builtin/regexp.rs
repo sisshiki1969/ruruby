@@ -135,13 +135,13 @@ impl std::ops::Deref for RegexpInfo {
 }
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Value::class_under(globals.builtins.object);
+    let class = Value::class_under(globals.builtins.object);
     class.add_builtin_class_method("new", regexp_new);
     class.add_builtin_class_method("compile", regexp_new);
     class.add_builtin_class_method("escape", regexp_escape);
     class.add_builtin_class_method("quote", regexp_escape);
     class.add_builtin_method_by_str("=~", regexp_match);
-    class
+    class.get()
 }
 
 // Class methods

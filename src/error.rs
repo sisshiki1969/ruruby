@@ -205,36 +205,54 @@ impl RubyError {
             RubyErrorKind::Value(val) => *val,
             RubyErrorKind::RuntimeErr { kind, .. } => match &kind {
                 RuntimeErrKind::Type => {
-                    let err_class = globals.get_toplevel_constant("TypeError").unwrap();
+                    let err_class = globals
+                        .get_toplevel_constant("TypeError")
+                        .unwrap()
+                        .into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::Argument => {
-                    let err_class = globals.get_toplevel_constant("ArgumentError").unwrap();
+                    let err_class = globals
+                        .get_toplevel_constant("ArgumentError")
+                        .unwrap()
+                        .into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::NoMethod => {
-                    let err_class = globals.get_toplevel_constant("NoMethodError").unwrap();
+                    let err_class = globals
+                        .get_toplevel_constant("NoMethodError")
+                        .unwrap()
+                        .into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::Runtime => {
-                    let err_class = globals.get_toplevel_constant("RuntimeError").unwrap();
+                    let err_class = globals
+                        .get_toplevel_constant("RuntimeError")
+                        .unwrap()
+                        .into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::LoadError => {
-                    let err_class = globals.get_toplevel_constant("LoadError").unwrap();
+                    let err_class = globals
+                        .get_toplevel_constant("LoadError")
+                        .unwrap()
+                        .into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::StopIteration => {
-                    let err_class = globals.get_toplevel_constant("StopIteration").unwrap();
+                    let err_class = globals
+                        .get_toplevel_constant("StopIteration")
+                        .unwrap()
+                        .into_module();
                     Value::exception(err_class, self.clone())
                 }
                 _ => {
-                    let standard = globals.builtins.standard;
+                    let standard = globals.builtins.standard.into_module();
                     Value::exception(standard, self.clone())
                 }
             },
             _ => {
-                let standard = globals.builtins.standard;
+                let standard = globals.builtins.standard.into_module();
                 Value::exception(standard, self.clone())
             }
         }

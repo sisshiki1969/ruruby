@@ -1,11 +1,10 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) {
-    let mut basic_object = globals.builtins.object.superclass().unwrap();
-    let basic_class = basic_object.as_mut_class();
-    basic_class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
-    basic_class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);
-    basic_class.add_builtin_method_by_str("__id__", basicobject_id);
+    let mut class = globals.builtins.object.superclass().unwrap();
+    class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
+    class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);
+    class.add_builtin_method_by_str("__id__", basicobject_id);
 }
 
 /// An alias statement is compiled to method call for this func.
@@ -22,9 +21,7 @@ fn alias_method(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
             // TODO: Is it right?
             let mut class = vm.class();
             let method = vm.get_method(class, org)?;
-            class
-                .as_mut_class()
-                .add_method(&mut vm.globals, new, method);
+            class.add_method(&mut vm.globals, new, method);
         }
         (true, false) => {
             return Err(RubyError::argument(
