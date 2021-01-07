@@ -122,7 +122,7 @@ impl RValue {
     }
 
     pub fn class_name(&self) -> String {
-        self.search_class().as_class().name()
+        self.search_class().name()
     }
 
     pub fn inspect(&self) -> Result<String, RubyError> {
@@ -145,7 +145,7 @@ impl RValue {
 
     pub fn new_invalid() -> Self {
         RValue {
-            class: Module::new(Value::nil()),
+            class: Module::default(),
             kind: ObjKind::Invalid,
             var_table: None,
         }
@@ -153,7 +153,7 @@ impl RValue {
 
     pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
         RValue {
-            class: Module::new(Value::nil()), // dummy for boot strapping
+            class: Module::default(), // dummy for boot strapping
             kind: ObjKind::Class(cinfo),
             var_table: None,
         }
@@ -318,7 +318,7 @@ impl RValue {
         }
     }
 
-    pub fn new_exception(exception_class: Value, err: RubyError) -> Self {
+    pub fn new_exception(exception_class: Module, err: RubyError) -> Self {
         let message = Value::string(err.message());
         let mut backtrace = vec![];
         for pos in 0..err.info.len() {
@@ -326,7 +326,7 @@ impl RValue {
         }
         let backtrace = Value::array_from(backtrace);
         let mut rval = RValue {
-            class: Module::new(exception_class),
+            class: exception_class,
             var_table: None,
             kind: ObjKind::Exception(err),
         };

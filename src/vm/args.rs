@@ -238,8 +238,8 @@ mod tests {
         }
         args[3] = Value::false_val();
         args[17] = Value::true_val();
-        assert_eq!(Value::false_val(), args[3]);
-        assert_eq!(Value::true_val(), args[17]);
+        assert!(Value::false_val().eq(&args[3]));
+        assert!(Value::true_val().eq(&args[17]));
     }
 
     #[test]

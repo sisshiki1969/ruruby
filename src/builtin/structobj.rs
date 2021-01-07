@@ -1,9 +1,9 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let struct_class = Value::class_under(globals.builtins.object);
-    struct_class.add_builtin_class_method("new", struct_new);
-    *struct_class
+    let class = Value::class_under(globals.builtins.object);
+    class.add_builtin_class_method("new", struct_new);
+    class.get()
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -11,8 +11,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_min(1)?;
     let mut i = 0;
 
-    let mut class_val = Value::class_under(self_val);
-    let class = class_val.as_mut_class();
+    let mut class = Value::class_under(self_val);
     match args[0].as_string() {
         None => {}
         Some(s) => {
@@ -31,8 +30,8 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     class.add_builtin_method_by_str("initialize", initialize);
     class.add_builtin_method_by_str("inspect", inspect);
-    class_val.add_builtin_class_method("[]", builtin::class::new);
-    class_val.add_builtin_class_method("new", builtin::class::new);
+    class.add_builtin_class_method("[]", builtin::class::new);
+    class.add_builtin_class_method("new", builtin::class::new);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
@@ -47,25 +46,27 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vec.push(v);
         attr_args[index - i] = v;
     }
-    class_val.set_var_by_str("/members", Value::array_from(vec));
-    builtin::module::set_attr_accessor(&mut vm.globals, *class_val, &attr_args)?;
+    class
+        .get()
+        .set_var_by_str("/members", Value::array_from(vec));
+    builtin::module::set_attr_accessor(&mut vm.globals, class.get(), &attr_args)?;
 
     match &args.block {
         Block::None => {}
         method => {
-            vm.class_push(class_val);
-            let arg = Args::new1(*class_val);
-            let res = vm.eval_block_self(method, *class_val, &arg);
+            vm.class_push(class);
+            let arg = Args::new1(class.get());
+            let res = vm.eval_block_self(method, class.get(), &arg);
             vm.class_pop();
             res?;
         }
     };
-    Ok(*class_val)
+    Ok(class.get())
 }
 
 fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class();
-    let name = class.get_var(IdentId::get_id("/members")).unwrap();
+    let name = class.get().get_var(IdentId::get_id("/members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
         return Err(RubyError::argument("Struct size differs."));
@@ -81,11 +82,15 @@ fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 use std::borrow::Cow;
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut inspect = format!("#<struct ");
-    match self_val.get_class().as_class().op_name() {
+    match self_val.get_class().op_name() {
         Some(name) => inspect += &name,
         None => {}
     };
-    let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {
+    let name = match self_val
+        .get_class()
+        .get()
+        .get_var(IdentId::get_id("/members"))
+    {
         Some(name) => name,
         None => return Err(RubyError::internal("No /members.")),
     };

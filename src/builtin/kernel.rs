@@ -4,36 +4,36 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let kernel = Value::module();
-    globals.set_toplevel_constant("Kernel", *kernel);
-    kernel.add_builtin_module_func("puts", puts);
-    kernel.add_builtin_module_func("p", p);
-    kernel.add_builtin_module_func("print", print);
-    kernel.add_builtin_module_func("assert", assert);
-    kernel.add_builtin_module_func("assert_error", assert_error);
-    kernel.add_builtin_module_func("require", require);
-    kernel.add_builtin_module_func("require_relative", require_relative);
-    kernel.add_builtin_module_func("load", load);
-    kernel.add_builtin_module_func("block_given?", block_given);
-    kernel.add_builtin_module_func("is_a?", isa);
-    kernel.add_builtin_module_func("kind_of?", isa);
-    kernel.add_builtin_module_func("__dir__", dir);
-    kernel.add_builtin_module_func("__FILE__", file_);
-    kernel.add_builtin_module_func("raise", raise);
-    kernel.add_builtin_module_func("rand", rand_);
-    kernel.add_builtin_module_func("loop", loop_);
-    kernel.add_builtin_module_func("exit", exit);
-    kernel.add_builtin_module_func("abort", abort);
-    kernel.add_builtin_module_func("sleep", sleep);
-    kernel.add_builtin_module_func("proc", proc);
-    kernel.add_builtin_module_func("lambda", lambda);
-    kernel.add_builtin_module_func("Integer", kernel_integer);
-    kernel.add_builtin_module_func("Complex", kernel_complex);
-    kernel.add_builtin_module_func("Array", kernel_array);
-    kernel.add_builtin_module_func("at_exit", at_exit);
-    kernel.add_builtin_module_func("`", command);
-    kernel.add_builtin_module_func("eval", eval);
-    *kernel
+    let class = Value::module();
+    globals.set_toplevel_constant("Kernel", class.get());
+    class.add_builtin_module_func("puts", puts);
+    class.add_builtin_module_func("p", p);
+    class.add_builtin_module_func("print", print);
+    class.add_builtin_module_func("assert", assert);
+    class.add_builtin_module_func("assert_error", assert_error);
+    class.add_builtin_module_func("require", require);
+    class.add_builtin_module_func("require_relative", require_relative);
+    class.add_builtin_module_func("load", load);
+    class.add_builtin_module_func("block_given?", block_given);
+    class.add_builtin_module_func("is_a?", isa);
+    class.add_builtin_module_func("kind_of?", isa);
+    class.add_builtin_module_func("__dir__", dir);
+    class.add_builtin_module_func("__FILE__", file_);
+    class.add_builtin_module_func("raise", raise);
+    class.add_builtin_module_func("rand", rand_);
+    class.add_builtin_module_func("loop", loop_);
+    class.add_builtin_module_func("exit", exit);
+    class.add_builtin_module_func("abort", abort);
+    class.add_builtin_module_func("sleep", sleep);
+    class.add_builtin_module_func("proc", proc);
+    class.add_builtin_module_func("lambda", lambda);
+    class.add_builtin_module_func("Integer", kernel_integer);
+    class.add_builtin_module_func("Complex", kernel_complex);
+    class.add_builtin_module_func("Array", kernel_array);
+    class.add_builtin_module_func("at_exit", at_exit);
+    class.add_builtin_module_func("`", command);
+    class.add_builtin_module_func("eval", eval);
+    class.get()
 }
 /// Built-in function "puts".
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {

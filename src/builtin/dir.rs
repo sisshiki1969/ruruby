@@ -5,13 +5,13 @@ use std::path::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let class = Value::class_under(globals.builtins.object);
-    globals.set_toplevel_constant("Dir", *class);
+    globals.set_toplevel_constant("Dir", class.get());
     class.add_builtin_class_method("home", home);
     class.add_builtin_class_method("pwd", pwd);
     class.add_builtin_class_method("glob", glob);
     class.add_builtin_class_method("[]", glob);
     class.add_builtin_class_method("exist?", exist);
-    *class
+    class.get()
 }
 
 // Singleton methods

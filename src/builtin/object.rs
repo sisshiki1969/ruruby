@@ -2,34 +2,33 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) {
     let mut object = globals.builtins.object;
-    let object_class = object.as_mut_class();
-    object_class.append_include(Module::new(globals.builtins.kernel), globals);
+    object.append_include(Module::new(globals.builtins.kernel), globals);
 
-    object_class.add_builtin_method_by_str("initialize", initialize);
-    object_class.add_builtin_method_by_str("class", class);
-    object_class.add_builtin_method_by_str("object_id", object_id);
-    object_class.add_builtin_method_by_str("to_s", to_s);
-    object_class.add_builtin_method_by_str("inspect", inspect);
-    object_class.add_builtin_method_by_str("singleton_class", singleton_class);
-    object_class.add_builtin_method_by_str("clone", dup);
-    object_class.add_builtin_method_by_str("dup", dup);
-    object_class.add_builtin_method_by_str("eql?", eql);
-    object_class.add_builtin_method_by_str("nil?", nil_);
-    object_class.add_builtin_method_by_str("method", method);
-    object_class.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
-    object_class.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
-    object_class.add_builtin_method_by_str("instance_variables", instance_variables);
-    object_class.add_builtin_method_by_str("instance_of?", instance_of);
-    object_class.add_builtin_method_by_str("freeze", freeze);
-    object_class.add_builtin_method_by_str("super", super_);
-    object_class.add_builtin_method_by_str("equal?", equal);
-    object_class.add_builtin_method_by_str("send", send);
-    object_class.add_builtin_method_by_str("__send__", send);
-    object_class.add_builtin_method_by_str("to_enum", to_enum);
-    object_class.add_builtin_method_by_str("enum_for", to_enum);
-    object_class.add_builtin_method_by_str("respond_to?", respond_to);
-    object_class.add_builtin_method_by_str("instance_exec", instance_exec);
-    object_class.add_builtin_method_by_str("=~", match_);
+    object.add_builtin_method_by_str("initialize", initialize);
+    object.add_builtin_method_by_str("class", class);
+    object.add_builtin_method_by_str("object_id", object_id);
+    object.add_builtin_method_by_str("to_s", to_s);
+    object.add_builtin_method_by_str("inspect", inspect);
+    object.add_builtin_method_by_str("singleton_class", singleton_class);
+    object.add_builtin_method_by_str("clone", dup);
+    object.add_builtin_method_by_str("dup", dup);
+    object.add_builtin_method_by_str("eql?", eql);
+    object.add_builtin_method_by_str("nil?", nil_);
+    object.add_builtin_method_by_str("method", method);
+    object.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
+    object.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
+    object.add_builtin_method_by_str("instance_variables", instance_variables);
+    object.add_builtin_method_by_str("instance_of?", instance_of);
+    object.add_builtin_method_by_str("freeze", freeze);
+    object.add_builtin_method_by_str("super", super_);
+    object.add_builtin_method_by_str("equal?", equal);
+    object.add_builtin_method_by_str("send", send);
+    object.add_builtin_method_by_str("__send__", send);
+    object.add_builtin_method_by_str("to_enum", to_enum);
+    object.add_builtin_method_by_str("enum_for", to_enum);
+    object.add_builtin_method_by_str("respond_to?", respond_to);
+    object.add_builtin_method_by_str("instance_exec", instance_exec);
+    object.add_builtin_method_by_str("=~", match_);
 }
 
 fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -37,7 +36,7 @@ fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    Ok(*self_val.get_class())
+    Ok(self_val.get_class().get())
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -70,7 +69,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    self_val.get_singleton_class().map(|c| *c)
+    self_val.get_singleton_class().map(|c| c.get())
 }
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -153,7 +152,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let ISeqKind::Method(m) = context.kind {
         let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
-            Some(class) => match vm.globals.find_method(Module::new(*class), m) {
+            Some(class) => match vm.globals.find_method(class, m) {
                 Some(m) => m,
                 None => {
                     return Err(RubyError::nomethod(format!(

@@ -4,14 +4,14 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let comparable = Value::module();
-    globals.set_toplevel_constant("Comparable", *comparable);
-    comparable.add_builtin_method_by_str("==", eq);
-    comparable.add_builtin_method_by_str("<=", le);
-    comparable.add_builtin_method_by_str("<", lt);
-    comparable.add_builtin_method_by_str(">=", ge);
-    comparable.add_builtin_method_by_str(">", gt);
-    *comparable
+    let class = Value::module();
+    globals.set_toplevel_constant("Comparable", class.get());
+    class.add_builtin_method_by_str("==", eq);
+    class.add_builtin_method_by_str("<=", le);
+    class.add_builtin_method_by_str("<", lt);
+    class.add_builtin_method_by_str(">=", ge);
+    class.add_builtin_method_by_str(">", gt);
+    class.get()
 }
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

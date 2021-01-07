@@ -77,7 +77,7 @@ impl PartialEq for Value {
     /// Equality of value.
     ///
     /// This kind of equality is used for `==` operator of Ruby.
-    /// Generally, two objects which all of properties are `eq` are defined as `eq`.  
+    /// Generally, two objects which all of properties are `eq` are defined as `eq`.
     /// Some classes have original difinitions of `eq`.
     ///
     /// ex. 3.0 == 3.
@@ -105,7 +105,7 @@ impl PartialEq for Value {
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                *r1 == *r2 && *i1 == *i2
+                r1.eq(r2) && i1.eq(i2)
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
@@ -124,6 +124,7 @@ impl PartialEq for Value {
         }
     }
 }
+
 impl Eq for Value {}
 
 impl Default for Value {
@@ -292,6 +293,10 @@ impl Value {
         Value::from(ptr as u64)
     }
 
+    pub fn into_module(self) -> Module {
+        Module::new(self)
+    }
+
     pub fn dup(&self) -> Self {
         match self.as_rvalue() {
             Some(rv) => rv.dup().pack(),
@@ -444,19 +449,8 @@ impl Value {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                _ => oref.class().as_class().name(),
+                _ => oref.class().name(),
             },
-        }
-    }
-
-    /// Get an upper module/class of `self`.
-    ///
-    /// If `self` has no upper module/class, return None.
-    /// Panic if `self` is not Class/Module.
-    pub fn upper(&self) -> Option<Module> {
-        match self.if_mod_class() {
-            Some(class) => class.upper(),
-            None => unreachable!("upper(): Not a Class / Module."),
         }
     }
 
@@ -470,27 +464,6 @@ impl Value {
                 Some(val) => val,
                 None => break,
             };
-        }
-        false
-    }
-
-    /// Check whether `module` exists in the ancestors of `self`.
-    pub fn include_module(&self, target_module: Value) -> bool {
-        let mut val = Module::new(*self);
-        loop {
-            let minfo = val.as_module();
-            let true_module = if minfo.is_included() {
-                minfo.origin().unwrap()
-            } else {
-                val
-            };
-            if true_module.id() == target_module.id() {
-                return true;
-            };
-            match val.upper() {
-                Some(upper) => val = upper,
-                None => break,
-            }
         }
         false
     }
@@ -537,34 +510,6 @@ impl Value {
             }
             None => false,
         }
-    }
-
-    /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
-    /// Return None if no method found.
-    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
-        let cref = self.as_module();
-        cref.method_table().get(&id).cloned()
-    }
-
-    pub fn add_builtin_class_method(self, name: &str, func: BuiltinFunc) {
-        let mut singleton = self.get_singleton_class().unwrap();
-        let classinfo = singleton.as_mut_class();
-        classinfo.add_builtin_method_by_str(name, func);
-    }
-
-    pub fn add_builtin_method_by_str(mut self, name: &str, func: BuiltinFunc) {
-        let name = IdentId::get_id(name);
-        self.as_mut_module().add_builtin_method(name, func);
-    }
-
-    /// Add module function to `self`.
-    /// `self` must be Module or Class.
-    pub fn add_builtin_module_func(mut self, name: &str, func: BuiltinFunc) {
-        let classref = self.if_mut_mod_class().unwrap();
-        classref.add_builtin_method_by_str(name, func);
-        let mut singleton = self.get_singleton_class().unwrap();
-        let classref = singleton.as_mut_class();
-        classref.add_builtin_method_by_str(name, func);
     }
 }
 
@@ -1277,7 +1222,7 @@ impl Value {
         RValue::new_time(time_class, time).pack()
     }
 
-    pub fn exception(exception_class: Value, err: RubyError) -> Self {
+    pub fn exception(exception_class: Module, err: RubyError) -> Self {
         RValue::new_exception(exception_class, err).pack()
     }
 }
@@ -1321,7 +1266,7 @@ impl Value {
                         ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
                             let superclass = match cinfo.superclass() {
                                 None => None,
-                                Some(superclass) => Some(superclass.get_singleton_class()?),
+                                Some(superclass) => Some(superclass.get_singleton_class()),
                             };
                             Value::singleton_class_from(superclass, self)
                         }
@@ -1339,30 +1284,6 @@ impl Value {
                 self,
                 self.get_class_name()
             ))),
-        }
-    }
-
-    /// Get method for a receiver class (`self`) and method (IdentId).
-    pub fn get_method(self, method: IdentId) -> Option<MethodRef> {
-        let mut temp_class = Module::new(self);
-        let mut singleton_flag = temp_class.is_singleton();
-        loop {
-            match temp_class.get_instance_method(method) {
-                Some(method) => {
-                    return Some(method);
-                }
-                None => match temp_class.upper() {
-                    Some(superclass) => temp_class = superclass,
-                    None => {
-                        if singleton_flag {
-                            singleton_flag = false;
-                            temp_class = self.rvalue().class();
-                        } else {
-                            return None;
-                        }
-                    }
-                },
-            };
         }
     }
 }
@@ -1581,9 +1502,9 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class_under(None);
+        let expect = Value::class_under(None).get();
         let got = expect.unpack().pack();
-        if *expect != got {
+        if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
     }

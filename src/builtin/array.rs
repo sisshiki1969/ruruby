@@ -78,13 +78,14 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("new", array_new);
     class.add_builtin_class_method("allocate", array_allocate);
     class.add_builtin_class_method("[]", array_elem);
-    *class
+    class.get()
 }
 
 // Class methods
 
 fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
+    let self_val = Module::new(self_val);
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
@@ -109,11 +110,8 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         _ => unreachable!(),
     };
-    let array = Value::array_from_with_class(array_vec, Module::new(self_val));
-    if let Some(method) = vm
-        .globals
-        .find_method(Module::new(self_val), IdentId::INITIALIZE)
-    {
+    let array = Value::array_from_with_class(array_vec, self_val);
+    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, array, args)?;
     };
     Ok(array)
@@ -972,7 +970,7 @@ fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
             eprintln!("Warning: given block not used.")
         };
         for (i, v) in ary.elements.iter().enumerate() {
-            if *v == args[0] {
+            if v.eq(&args[0]) {
                 return Ok(Value::integer(i as i64));
             };
         }

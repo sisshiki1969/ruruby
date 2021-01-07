@@ -52,7 +52,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("codepoints", codepoints);
     class.add_builtin_method_by_str("frozen?", frozen_);
     class.add_builtin_method_by_str("lines", lines);
-    *class
+    class.get()
 }
 
 fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

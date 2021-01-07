@@ -22,19 +22,19 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         Module::new(args[0])
     };
-    let val = Value::class_under(superclass);
-
+    let module = Value::class_under(superclass);
+    let val = module.get();
     match &args.block {
         Block::None => {}
         _ => {
-            vm.class_push(val);
-            let arg = Args::new1(*val);
-            let res = vm.eval_block_self(&args.block, *val, &arg);
+            vm.class_push(module);
+            let arg = Args::new1(val);
+            let res = vm.eval_block_self(&args.block, val, &arg);
             vm.class_pop();
             res?;
         }
     };
-    Ok(*val)
+    Ok(val)
 }
 
 /// Create new instance of `self`.
@@ -58,11 +58,10 @@ fn allocate(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 /// Get super class of `self`.
-fn superclass(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let mut self_val = Module::new(self_val);
-    self_val.expect_class(vm, "Receiver")?;
+fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let self_val = Module::new(self_val);
     let superclass = match self_val.superclass() {
-        Some(superclass) => *superclass,
+        Some(superclass) => superclass.get(),
         None => Value::nil(),
     };
     Ok(superclass)

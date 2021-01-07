@@ -30,7 +30,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("invert", invert);
 
     class.add_builtin_class_method("new", hash_new);
-    *class
+    class.get()
 }
 
 // Class methods
@@ -68,8 +68,8 @@ fn compact(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut hash = self_val.expect_hash("Receiver")?.clone();
     match hash {
-        HashInfo::Map(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
-        HashInfo::IdentMap(ref mut map) => map.retain(|_, &mut v| v != Value::nil()),
+        HashInfo::Map(ref mut map) => map.retain(|_, &mut v| !v.is_nil()),
+        HashInfo::IdentMap(ref mut map) => map.retain(|_, &mut v| !v.is_nil()),
     };
     Ok(Value::hash_from(hash))
 }

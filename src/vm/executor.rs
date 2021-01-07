@@ -889,8 +889,8 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
                         v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
-                            Some(class) => **class,
-                            None => *self.globals.builtins.object,
+                            Some(class) => class.get(),
+                            None => self.globals.builtins.object.get(),
                         }, //self.class(),
                         v => v,
                     };
@@ -906,7 +906,7 @@ impl VM {
                         None => {
                             let val = match self.get_env_const(id) {
                                 Some(val) => val,
-                                None => VM::get_super_const(*self.class(), id)?,
+                                None => VM::get_super_const(self.class().get(), id)?,
                             };
                             self.globals.set_const_cache(slot, val);
                             val
@@ -919,7 +919,7 @@ impl VM {
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = self.globals.builtins.object;
-                    let val = self.get_const(*parent, id)?;
+                    let val = self.get_const(parent.get(), id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
@@ -1237,7 +1237,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, *val, &Args::new0());
+                    let res = self.eval_send(method, val.get(), &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 14;
@@ -1248,7 +1248,7 @@ impl VM {
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, *singleton, &Args::new0());
+                    let res = self.eval_send(method, singleton.get(), &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 9;
@@ -1603,25 +1603,26 @@ impl VM {
         let class_defined = &self.get_method_iseq().class_defined;
         match class_defined.len() {
             0 => None,
-            1 => class_defined[0].as_module().get_const(id),
+            1 => class_defined[0].get_const(id),
             _ => class_defined[1..]
                 .iter()
                 .rev()
-                .find_map(|c| c.as_module().get_const(id)),
+                .find_map(|c| c.get_const(id)),
         }
     }
 
     /// Search class inheritance chain for the constant.
-    pub fn get_super_const(mut class: Value, id: IdentId) -> VMResult {
+    pub fn get_super_const(class: Value, id: IdentId) -> VMResult {
         let is_module = class.is_module();
+        let mut class = Module::new(class);
         loop {
-            match class.as_module().get_const(id) {
+            match class.get_const(id) {
                 Some(val) => return Ok(val),
                 None => match class.upper() {
-                    Some(upper) => class = *upper,
+                    Some(upper) => class = upper,
                     None => {
                         if is_module {
-                            if let Some(val) = BuiltinClass::object().as_module().get_const(id) {
+                            if let Some(val) = BuiltinClass::object().get_const(id) {
                                 return Ok(val);
                             }
                         }
@@ -1644,19 +1645,19 @@ impl VM {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.current_context().self_value;
-        let mut org_class = match self_val.if_mod_class() {
-            Some(_) => self_val,
-            None => *self_val.get_class(),
+        let org_class = match self_val.if_mod_class() {
+            Some(_) => Module::new(self_val),
+            None => self_val.get_class(),
         };
         let mut class = org_class;
         loop {
-            if class.set_var_if_exists(id, val) {
+            if class.get().set_var_if_exists(id, val) {
                 return Ok(());
             } else {
                 match class.upper() {
-                    Some(superclass) => class = *superclass,
+                    Some(superclass) => class = superclass,
                     None => {
-                        org_class.set_var(id, val);
+                        org_class.get().set_var(id, val);
                         return Ok(());
                     }
                 }
@@ -1674,7 +1675,7 @@ impl VM {
             None => self_val.get_class(),
         };
         loop {
-            match class.get_var(id) {
+            match class.get().get_var(id) {
                 Some(val) => {
                     return Ok(val);
                 }
@@ -2126,12 +2127,12 @@ impl VM {
 
     fn eval_rescue(&self, val: Value, exceptions: &[Value]) -> Result<bool, RubyError> {
         let mut module = if val.is_class() {
-            val
+            Module::new(val)
         } else {
-            *val.get_class()
+            val.get_class()
         };
         loop {
-            if module.is_class() {
+            if !module.is_module() {
                 if exceptions.iter().any(|x| {
                     if let Some(ary) = x.as_splat() {
                         ary.as_array()
@@ -2148,7 +2149,7 @@ impl VM {
             };
 
             match module.upper() {
-                Some(upper) => module = *upper,
+                Some(upper) => module = upper,
                 None => break,
             }
         }
@@ -2320,9 +2321,9 @@ impl VM {
         } else {
             Module::new(base)
         };
-        match current_class.as_module().get_const(id) {
+        match current_class.get_const(id) {
             Some(val) => {
-                let mut val = Module::new(val);
+                let val = Module::new(val);
                 if val.is_module() != is_module {
                     return Err(RubyError::typeerr(format!(
                         "{:?} is not {}.",
@@ -2330,9 +2331,8 @@ impl VM {
                         if is_module { "module" } else { "class" },
                     )));
                 };
-                val.expect_mod_class(self)?;
                 let val_super = match val.superclass() {
-                    Some(v) => *v,
+                    Some(v) => v.get(),
                     None => Value::nil(),
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
@@ -2358,7 +2358,7 @@ impl VM {
                     };
                     Value::class_under(super_val)
                 };
-                self.globals.set_const(*current_class, id, *val);
+                self.globals.set_const(current_class.get(), id, val.get());
                 Ok(val)
             }
         }
@@ -2587,13 +2587,9 @@ impl VM {
     pub fn define_method(&mut self, mut target_obj: Value, id: IdentId, method: MethodRef) {
         match target_obj.if_mut_mod_class() {
             Some(cinfo) => cinfo.add_method(&mut self.globals, id, method),
-            None => {
-                let mut class_val = target_obj.get_class();
-                class_val
-                    .if_mut_mod_class()
-                    .unwrap()
-                    .add_method(&mut self.globals, id, method)
-            }
+            None => target_obj
+                .get_class()
+                .add_method(&mut self.globals, id, method),
         };
     }
 
@@ -2604,9 +2600,8 @@ impl VM {
         id: IdentId,
         method: MethodRef,
     ) -> Result<(), RubyError> {
-        let mut singleton = target_obj.get_singleton_class()?;
-        singleton
-            .as_mut_class()
+        target_obj
+            .get_singleton_class()?
             .add_method(&mut self.globals, id, method);
         Ok(())
     }
@@ -2621,7 +2616,10 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::undefined_method_for_class(method_id, *rec_class)),
+            None => Err(RubyError::undefined_method_for_class(
+                method_id,
+                rec_class.get(),
+            )),
         }
     }
 

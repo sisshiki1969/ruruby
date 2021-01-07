@@ -6,7 +6,7 @@ use std::path::*;
 pub fn init(globals: &mut Globals) -> Value {
     let io_class = globals.get_toplevel_constant("IO").unwrap();
     let class = Value::class_under(Module::new(io_class));
-    globals.set_toplevel_constant("File", *class);
+    globals.set_toplevel_constant("File", class.get());
     class.add_builtin_class_method("join", join);
     class.add_builtin_class_method("basename", basename);
     class.add_builtin_class_method("extname", extname);
@@ -21,7 +21,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("directory?", directory);
     class.add_builtin_class_method("file?", file);
     class.add_builtin_class_method("realpath", realpath);
-    *class
+    class.get()
 }
 
 // Utils

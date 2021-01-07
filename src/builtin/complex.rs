@@ -14,7 +14,7 @@ pub fn init(globals: &mut Globals) -> Value {
     //let mut class = Value::class(classref);
     class.add_builtin_class_method("rect", complex_rect);
     class.add_builtin_class_method("rectangular", complex_rect);
-    *class
+    class.get()
 }
 
 // Class methods
