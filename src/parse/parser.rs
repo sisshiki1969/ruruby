@@ -73,7 +73,7 @@ impl From<u32> for LvarId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
     id: usize,
     table: FxHashMap<IdentId, LvarId>,

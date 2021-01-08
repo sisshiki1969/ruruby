@@ -539,6 +539,12 @@ mod test {
     assert :something, bar.cdr
     assert 9.55, bar.bar
     assert "Ruby", bar.get_boo
+    bar.send(:car=, 500) {}
+    assert 500, bar.send(:car) {}
+    assert_error { bar.send(:car=) {} }
+    assert_error { bar.send(:car, 100) {} }
+    assert_error { bar.send(:car=) }
+    assert_error { bar.send(:car, 100) }
     "#;
         assert_script(program);
     }

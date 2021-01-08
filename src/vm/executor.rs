@@ -1469,6 +1469,7 @@ impl VM {
                         res
                     }
                 }
+                _ => unreachable!(),
             },
             None => {
                 let mut args = Args::from_slice(arg_slice);
@@ -1527,6 +1528,7 @@ impl VM {
                         res
                     }
                 }
+                _ => unreachable!(),
             },
             None => {
                 let args = Args::from_slice(arg_slice);
@@ -2520,12 +2522,19 @@ impl VM {
         let outer = outer.map(|ctx| ctx.get_current());
         match &*methodref {
             BuiltinFunc { func, name } => self.invoke_native(func, *name, self_val, args),
-            AttrReader { id } => Self::invoke_getter(*id, self_val),
-            AttrWriter { id } => Self::invoke_setter(*id, self_val, args[0]),
+            AttrReader { id } => {
+                args.check_args_num(0)?;
+                Self::invoke_getter(*id, self_val)
+            }
+            AttrWriter { id } => {
+                args.check_args_num(1)?;
+                Self::invoke_setter(*id, self_val, args[0])
+            }
             RubyFunc { iseq } => {
                 let context = Context::from_args(self, self_val, *iseq, args, outer)?;
                 self.run_context(&context)
             }
+            _ => unreachable!(),
         }
     }
 
