@@ -312,12 +312,8 @@ impl RubyError {
         ))
     }
 
-    pub fn undefined_method_for_class(method: IdentId, class: Value) -> RubyError {
-        Self::nomethod(format!(
-            "no method `{:?}' for {}",
-            method,
-            class.as_class().name()
-        ))
+    pub fn undefined_method_for_class(method: IdentId, class: Module) -> RubyError {
+        Self::nomethod(format!("no method `{:?}' for {}", method, class.name()))
     }
 
     pub fn internal(msg: impl Into<String>) -> RubyError {

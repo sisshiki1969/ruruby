@@ -56,7 +56,7 @@ pub fn init(globals: &mut Globals) -> Value {
 }
 
 fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     args.check_args_range(0, 1)?;
     let s = if args.len() == 0 {
         String::new()

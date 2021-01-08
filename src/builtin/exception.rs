@@ -10,7 +10,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_s", tos);
     builtin::module::set_attr_accessor(
         globals,
-        class.get(),
+        class,
         &Args::new2(
             Value::symbol_from_str("message"),
             Value::symbol_from_str("backtrace"),
@@ -39,7 +39,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
 fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     let new_instance = if args.len() == 0 {
         let class_name = self_val.name();
         Value::exception(self_val, RubyError::none(class_name))
@@ -57,7 +57,7 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn exception_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     let new_instance = Value::exception(self_val, RubyError::none(""));
     Ok(new_instance)
 }

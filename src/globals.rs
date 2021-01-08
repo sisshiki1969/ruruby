@@ -122,87 +122,101 @@ impl BuiltinClass {
     }
 
     pub fn string() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().string))
+        BUILTINS.with(|b| b.borrow().unwrap().string).into_module()
     }
 
     pub fn integer() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().integer))
+        BUILTINS.with(|b| b.borrow().unwrap().integer).into_module()
     }
 
     pub fn float() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().float))
+        BUILTINS.with(|b| b.borrow().unwrap().float).into_module()
     }
 
     pub fn symbol() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().symbol))
+        BUILTINS.with(|b| b.borrow().unwrap().symbol).into_module()
     }
 
     pub fn complex() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().complex))
+        BUILTINS.with(|b| b.borrow().unwrap().complex).into_module()
     }
 
     pub fn range() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().range))
+        BUILTINS.with(|b| b.borrow().unwrap().range).into_module()
     }
 
     pub fn array() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().array))
+        BUILTINS.with(|b| b.borrow().unwrap().array).into_module()
     }
 
     pub fn hash() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().hash))
+        BUILTINS.with(|b| b.borrow().unwrap().hash).into_module()
     }
 
     pub fn fiber() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().fiber))
+        BUILTINS.with(|b| b.borrow().unwrap().fiber).into_module()
     }
 
     pub fn enumerator() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().enumerator))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().enumerator)
+            .into_module()
     }
 
     pub fn procobj() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().procobj))
+        BUILTINS.with(|b| b.borrow().unwrap().procobj).into_module()
     }
 
     pub fn regexp() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().regexp))
+        BUILTINS.with(|b| b.borrow().unwrap().regexp).into_module()
     }
 
     pub fn method() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().method))
+        BUILTINS.with(|b| b.borrow().unwrap().method).into_module()
     }
 
     pub fn exception() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().exception))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().exception)
+            .into_module()
     }
 
     pub fn standard() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().standard))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().standard)
+            .into_module()
     }
 
     pub fn nilclass() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().nilclass))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().nilclass)
+            .into_module()
     }
 
     pub fn trueclass() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().trueclass))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().trueclass)
+            .into_module()
     }
 
     pub fn falseclass() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().falseclass))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().falseclass)
+            .into_module()
     }
 
     pub fn kernel() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().kernel))
+        BUILTINS.with(|b| b.borrow().unwrap().kernel).into_module()
     }
 
     pub fn numeric() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().numeric))
+        BUILTINS.with(|b| b.borrow().unwrap().numeric).into_module()
     }
 
     pub fn comparable() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().comparable))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().comparable)
+            .into_module()
     }
 }
 
@@ -404,8 +418,8 @@ impl Globals {
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_const(&mut self, mut class_obj: Value, id: IdentId, val: Value) {
-        class_obj.as_mut_module().set_const(id, val);
+    pub fn set_const(&mut self, mut class_obj: Module, class_name: IdentId, val: Value) {
+        class_obj.set_const(class_name, val);
         self.const_version += 1;
     }
 

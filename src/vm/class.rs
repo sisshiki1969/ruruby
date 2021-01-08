@@ -14,13 +14,26 @@ impl std::cmp::Eq for Module {}
 impl std::ops::Deref for Module {
     type Target = ClassInfo;
     fn deref(&self) -> &Self::Target {
-        self.0.as_module()
+        match self.0.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => cinfo,
+                _ => panic!("Not a class or module object. {:?}", self.get()),
+            },
+            None => panic!("Not a class or module object. {:?}", self.get()),
+        }
     }
 }
 
 impl std::ops::DerefMut for Module {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut_module()
+        let self_ = *self;
+        match self.0.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => cinfo,
+                _ => panic!("Not a class or module object. {:?}", self_.get()),
+            },
+            None => panic!("Not a class or module object. {:?}", self_.get()),
+        }
     }
 }
 
@@ -38,7 +51,17 @@ impl GC for Module {
 
 impl Module {
     pub fn new(val: Value) -> Self {
-        val.as_module();
+        match val.as_rvalue() {
+            Some(rvalue) => match rvalue.kind {
+                ObjKind::Class(_) | ObjKind::Module(_) => {}
+                _ => panic!("Not a class or module object. {:?}", val),
+            },
+            None => panic!("Not a class or module object. {:?}", val),
+        }
+        Module(val)
+    }
+
+    pub fn new_unchecked(val: Value) -> Self {
         Module(val)
     }
 
@@ -77,8 +100,8 @@ impl Module {
         imodule
     }
 
-    /// Check whether `module` exists in the ancestors of `self`.
-    pub fn include_module(&self, target_module: Value) -> bool {
+    /// Check whether `target_module` exists in the ancestors of `self`.
+    pub fn include_module(&self, target_module: Module) -> bool {
         let mut module = *self;
         loop {
             let true_module = module.real_module();
@@ -332,9 +355,8 @@ impl ClassInfo {
         globals.class_version += 1;
     }
 
-    pub fn append_prepend(&mut self, base: Value, module: Value, globals: &mut Globals) {
-        let mut module = Module::new(module);
-        let base = Module::new(base);
+    pub fn append_prepend(&mut self, base: Module, module: Module, globals: &mut Globals) {
+        let mut module = module;
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -399,16 +421,16 @@ impl ClassInfo {
     ///
     /// If `val` is a module or class, set the name of the class/module to the name of the constant.
     /// If the constant was already initialized, output warning.
-    pub fn set_const(&mut self, id: IdentId, mut val: Value) {
-        if let Some(cinfo) = val.if_mut_mod_class() {
-            if cinfo.ext.name.is_none() {
+    pub fn set_const(&mut self, id: IdentId, val: Value) {
+        if let Some(mut module) = val.if_mod_class() {
+            if module.op_name().is_none() {
                 if self.class_id() == BuiltinClass::object().class_id() {
-                    cinfo.set_name(IdentId::get_name(id));
+                    module.set_name(IdentId::get_name(id));
                 } else {
                     match &self.ext.name {
                         Some(parent_name) => {
                             let name = format!("{}::{:?}", parent_name, id);
-                            cinfo.set_name(name);
+                            module.set_name(name);
                         }
                         None => {}
                     }

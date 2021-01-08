@@ -85,7 +85,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
 fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 2)?;
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     let array_vec = match args.len() {
         0 => vec![],
         1 => match args[0].unpack() {
@@ -119,12 +119,12 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn array_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let array = Value::array_from_with_class(vec![], Module::new(self_val));
+    let array = Value::array_from_with_class(vec![], self_val.into_module());
     Ok(array)
 }
 
 fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let array = Value::array_from_with_class(args.to_vec(), Module::new(self_val));
+    let array = Value::array_from_with_class(args.to_vec(), self_val.into_module());
     Ok(array)
 }
 
@@ -137,7 +137,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let array = Module::new(vm.globals.builtins.array);
+    let array = vm.globals.builtins.array.into_module();
     if self_val.get_class().id() == array.id() {
         return Ok(self_val);
     };

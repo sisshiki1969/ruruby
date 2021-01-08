@@ -889,10 +889,10 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
                         v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
-                            Some(class) => class.get(),
-                            None => self.globals.builtins.object.get(),
+                            Some(class) => *class,
+                            None => self.globals.builtins.object,
                         }, //self.class(),
-                        v => v,
+                        v => v.expect_mod_class()?,
                     };
                     let val = self.stack_pop()?;
                     self.globals.set_const(parent, id, val);
@@ -919,12 +919,12 @@ impl VM {
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = self.globals.builtins.object;
-                    let val = self.get_const(parent.get(), id)?;
+                    let val = self.get_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::GET_SCOPE => {
-                    let parent = self.stack_pop()?;
+                    let parent = self.stack_pop()?.expect_mod_class()?;
                     let id = iseq.read_id(self.pc + 1);
                     let val = self.get_const(parent, id)?;
                     self.stack_push(val);
@@ -1633,8 +1633,8 @@ impl VM {
         }
     }
 
-    pub fn get_const(&self, parent: Value, id: IdentId) -> VMResult {
-        match parent.as_module().get_const(id) {
+    pub fn get_const(&self, parent: Module, id: IdentId) -> VMResult {
+        match parent.get_const(id) {
             Some(val) => Ok(val),
             None => Err(RubyError::name(format!("Uninitialized constant {:?}.", id))),
         }
@@ -1646,7 +1646,7 @@ impl VM {
         }
         let self_val = self.current_context().self_value;
         let org_class = match self_val.if_mod_class() {
-            Some(_) => Module::new(self_val),
+            Some(module) => module,
             None => self_val.get_class(),
         };
         let mut class = org_class;
@@ -1671,7 +1671,7 @@ impl VM {
         }
         let self_val = self.current_context().self_value;
         let mut class = match self_val.if_mod_class() {
-            Some(_) => Module::new(self_val),
+            Some(module) => module,
             None => self_val.get_class(),
         };
         loop {
@@ -2314,7 +2314,7 @@ impl VM {
         base: Value,
         id: IdentId,
         is_module: bool,
-        mut super_val: Value,
+        super_val: Value,
     ) -> Result<Module, RubyError> {
         let current_class = if base.is_nil() {
             self.class()
@@ -2353,12 +2353,11 @@ impl VM {
                     let super_val = if super_val.is_nil() {
                         self.globals.builtins.object
                     } else {
-                        super_val.expect_class(self, "Superclass")?;
-                        Module::new(super_val)
+                        super_val.expect_class(self, "Superclass")?
                     };
                     Value::class_under(super_val)
                 };
-                self.globals.set_const(current_class.get(), id, val.get());
+                self.globals.set_const(current_class, id, val.get());
                 Ok(val)
             }
         }
@@ -2584,9 +2583,9 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub fn define_method(&mut self, mut target_obj: Value, id: IdentId, method: MethodRef) {
-        match target_obj.if_mut_mod_class() {
-            Some(cinfo) => cinfo.add_method(&mut self.globals, id, method),
+    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
+        match target_obj.if_mod_class() {
+            Some(mut module) => module.add_method(&mut self.globals, id, method),
             None => target_obj
                 .get_class()
                 .add_method(&mut self.globals, id, method),
@@ -2616,10 +2615,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::undefined_method_for_class(
-                method_id,
-                rec_class.get(),
-            )),
+            None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
         }
     }
 

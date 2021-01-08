@@ -7,7 +7,7 @@ pub fn init(globals: &mut Globals) -> Value {
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     args.check_args_min(1)?;
     let mut i = 0;
 
@@ -49,7 +49,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     class
         .get()
         .set_var_by_str("/members", Value::array_from(vec));
-    builtin::module::set_attr_accessor(&mut vm.globals, class.get(), &attr_args)?;
+    builtin::module::set_attr_accessor(&mut vm.globals, class, &attr_args)?;
 
     match &args.block {
         Block::None => {}

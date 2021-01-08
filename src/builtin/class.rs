@@ -20,7 +20,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let superclass = if args.len() == 0 {
         BuiltinClass::object()
     } else {
-        Module::new(args[0])
+        args[0].expect_class(vm, "1st arg")?
     };
     let module = Value::class_under(superclass);
     let val = module.get();
@@ -39,12 +39,10 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 /// Create new instance of `self`.
 pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let new_instance = Value::ordinary_object(Module::new(self_val));
+    let self_val = self_val.into_module();
+    let new_instance = Value::ordinary_object(self_val);
     // Call initialize method if it exists.
-    if let Some(method) = vm
-        .globals
-        .find_method(Module::new(self_val), IdentId::INITIALIZE)
-    {
+    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, new_instance, args)?;
     };
     Ok(new_instance)
@@ -53,13 +51,14 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Create new instance of `self` without initialization.
 fn allocate(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let new_instance = Value::ordinary_object(Module::new(self_val));
+    let self_val = self_val.into_module();
+    let new_instance = Value::ordinary_object(self_val);
     Ok(new_instance)
 }
 
 /// Get super class of `self`.
 fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     let superclass = match self_val.superclass() {
         Some(superclass) => superclass.get(),
         None => Value::nil(),
@@ -68,8 +67,7 @@ fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let cref = self_val.if_mod_class().unwrap();
-    Ok(Value::string(cref.inspect()))
+    Ok(Value::string(self_val.into_module().inspect()))
 }
 
 #[cfg(test)]

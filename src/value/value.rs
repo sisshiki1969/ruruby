@@ -294,7 +294,7 @@ impl Value {
     }
 
     pub fn into_module(self) -> Module {
-        Module::new(self)
+        Module::new_unchecked(self)
     }
 
     pub fn dup(&self) -> Self {
@@ -715,28 +715,6 @@ impl Value {
         }
     }
 
-    /// Take &ClassInfo from `self`.
-    /// Panic if `self` is not Class.
-    pub fn as_class(&self) -> &ClassInfo {
-        match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Class(cinfo) => cinfo,
-                _ => panic!(format!("as_class(): Not a class object. {:?}", *self)),
-            },
-            None => panic!(format!("as_class(): Not a class object. {:?}", *self)),
-        }
-    }
-
-    /// Take &mut ClassInfo from `self`.
-    /// Panic if `self` is not a Class.
-    pub fn as_mut_class(&mut self) -> &mut ClassInfo {
-        let self_ = *self;
-        match self.if_mut_class() {
-            Some(cinfo) => cinfo,
-            None => panic!(format!("as_mut_class(): Not a class object. {:?}", self_)),
-        }
-    }
-
     /// Check whether `self` is a Class.
     pub fn is_class(&self) -> bool {
         match self.as_rvalue() {
@@ -745,55 +723,6 @@ impl Value {
                 _ => false,
             },
             None => false,
-        }
-    }
-
-    pub fn if_mut_class(&mut self) -> Option<&mut ClassInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Class(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    /// Take &ClassInfo from `self`.
-    /// Panic if `self` is not a Class nor Module.
-    pub fn as_module(&self) -> &ClassInfo {
-        match self.if_mod_class() {
-            Some(cinfo) => cinfo,
-            None => panic!("as_module(): Not a class or module object. {:?}", self),
-        }
-    }
-
-    /// Take &mut ClassInfo from `self`.
-    /// Panic if `self` is not a Class nor Module.
-    pub fn as_mut_module(&mut self) -> &mut ClassInfo {
-        let self_ = *self;
-        match self.if_mut_mod_class() {
-            Some(cinfo) => cinfo,
-            None => panic!("as_mut_module(): Not a class or module object. {:?}", self_),
-        }
-    }
-
-    pub fn if_mod_class(&self) -> Option<&ClassInfo> {
-        match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    pub fn if_mut_mod_class(&mut self) -> Option<&mut ClassInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
         }
     }
 
@@ -808,10 +737,10 @@ impl Value {
         }
     }
 
-    pub fn if_mut_module(&mut self) -> Option<&mut ClassInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Module(cinfo) => Some(cinfo),
+    pub fn if_mod_class(self) -> Option<Module> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Class(_) | ObjKind::Module(_) => Some(self.into_module()),
                 _ => None,
             },
             None => None,
@@ -830,12 +759,12 @@ impl Value {
 
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
-    pub fn expect_class(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
-        let self_ = self.clone();
-        if let Some(cinfo) = self.if_mut_class() {
-            Ok(cinfo)
+    pub fn expect_class(self, vm: &mut VM, msg: &str) -> Result<Module, RubyError> {
+        //let self_ = self.clone();
+        if self.is_class() {
+            Ok(Module::new(self))
         } else {
-            let val = vm.val_inspect(self_)?;
+            let val = vm.val_inspect(self)?;
             Err(RubyError::typeerr(format!(
                 "{} must be Class. (given:{})",
                 msg, val
@@ -845,9 +774,9 @@ impl Value {
 
     /// Returns `&ClassInfo` if `self` is a Module.
     /// When `self` is not a Module, returns `TypeError`.
-    pub fn expect_module(&self, msg: &str) -> Result<&ClassInfo, RubyError> {
-        if let Some(cinfo) = self.if_module() {
-            Ok(cinfo)
+    pub fn expect_module(self, msg: &str) -> Result<Module, RubyError> {
+        if self.is_module() {
+            Ok(Module::new(self))
         } else {
             Err(RubyError::typeerr(format!(
                 "{} must be Module. (given:{:?})",
@@ -858,15 +787,13 @@ impl Value {
 
     /// Returns `ClassRef` if `self` is a Module / Class.
     /// When `self` is not a Module, returns `TypeError`.
-    pub fn expect_mod_class(&mut self, vm: &mut VM) -> Result<&mut ClassInfo, RubyError> {
-        let self_ = self.clone();
-        if let Some(cinfo) = self.if_mut_mod_class() {
-            Ok(cinfo)
+    pub fn expect_mod_class(self) -> Result<Module, RubyError> {
+        if let Some(_cinfo) = self.if_mod_class() {
+            Ok(Module::new(self))
         } else {
-            let val = vm.val_inspect(self_)?;
             Err(RubyError::typeerr(format!(
-                "Must be Module or Class. (given:{})",
-                val
+                "Must be Module or Class. (given:{:?})",
+                self
             )))
         }
     }
