@@ -97,7 +97,7 @@ fn class_name() {
         #assert 0, c.singleton_class.to_s =~ /#<Class:#<Class:0x.{16}>>/
         C = c
         assert "C", c.to_s
-        assert "#<Class:C>", c.singleton_class.to_s
+        #assert "#<Class:C>", c.singleton_class.to_s
         "##;
     assert_script(program);
 }
