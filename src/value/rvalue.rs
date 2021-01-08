@@ -16,7 +16,6 @@ pub enum ObjKind {
     Integer(i64),
     Float(f64),
     Complex { r: Value, i: Value },
-    Class(ClassInfo),
     Module(ClassInfo),
     String(RString),
     Array(ArrayInfo),
@@ -48,7 +47,7 @@ impl GC for RValue {
                 r.mark(alloc);
                 i.mark(alloc);
             }
-            ObjKind::Class(cref) | ObjKind::Module(cref) => cref.mark(alloc),
+            ObjKind::Module(cref) => cref.mark(alloc),
             ObjKind::Array(aref) => aref.mark(alloc),
             ObjKind::Hash(href) => href.mark(alloc),
             ObjKind::Range(RangeInfo { start, end, .. }) => {
@@ -101,7 +100,6 @@ impl RValue {
                     i: i.dup(),
                 },
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
-                ObjKind::Class(cinfo) => ObjKind::Class(cinfo.clone()),
                 ObjKind::Module(cinfo) => ObjKind::Module(cinfo.clone()),
                 ObjKind::Enumerator(_eref) => ObjKind::Ordinary,
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
@@ -154,7 +152,7 @@ impl RValue {
     pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
         RValue {
             class: Module::default(), // dummy for boot strapping
-            kind: ObjKind::Class(cinfo),
+            kind: ObjKind::Module(cinfo),
             var_table: None,
         }
     }
@@ -212,7 +210,7 @@ impl RValue {
         RValue {
             class: BuiltinClass::class(),
             var_table: None,
-            kind: ObjKind::Class(cinfo),
+            kind: ObjKind::Module(cinfo),
         }
     }
 

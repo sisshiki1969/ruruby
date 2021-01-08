@@ -364,19 +364,11 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 }
             },
             _ => {
-                let inspect = vm.val_inspect(args[0])?;
-                return Err(RubyError::typeerr(format!(
-                    "Can not convert {} into Integer.",
-                    inspect
-                )));
+                return Err(RubyError::no_implicit_conv(args[0], "Integer"));
             }
         },
         _ => {
-            let inspect = vm.val_inspect(args[0])?;
-            return Err(RubyError::typeerr(format!(
-                "Can not convert {} into Integer.",
-                inspect
-            )));
+            return Err(RubyError::no_implicit_conv(args[0], "Integer"));
         }
     };
     Ok(Value::integer(val))

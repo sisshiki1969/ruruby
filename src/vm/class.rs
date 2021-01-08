@@ -16,7 +16,7 @@ impl std::ops::Deref for Module {
     fn deref(&self) -> &Self::Target {
         match self.0.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => cinfo,
+                ObjKind::Module(cinfo) => cinfo,
                 _ => panic!("Not a class or module object. {:?}", self.get()),
             },
             None => panic!("Not a class or module object. {:?}", self.get()),
@@ -29,7 +29,7 @@ impl std::ops::DerefMut for Module {
         let self_ = *self;
         match self.0.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
-                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => cinfo,
+                ObjKind::Module(cinfo) => cinfo,
                 _ => panic!("Not a class or module object. {:?}", self_.get()),
             },
             None => panic!("Not a class or module object. {:?}", self_.get()),
@@ -53,7 +53,7 @@ impl Module {
     pub fn new(val: Value) -> Self {
         match val.as_rvalue() {
             Some(rvalue) => match rvalue.kind {
-                ObjKind::Class(_) | ObjKind::Module(_) => {}
+                ObjKind::Module(_) => {}
                 _ => panic!("Not a class or module object. {:?}", val),
             },
             None => panic!("Not a class or module object. {:?}", val),

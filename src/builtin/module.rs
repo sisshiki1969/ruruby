@@ -144,7 +144,7 @@ fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
-        None => return Err(RubyError::typeerr("1st arg must be Symbol.")),
+        None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
     };
     let val = VM::get_super_const(self_val, name)?;
     Ok(val)

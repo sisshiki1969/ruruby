@@ -97,9 +97,21 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
-                _ => return Err(RubyError::typeerr("1st arg must be Integer or Array.")),
+                _ => {
+                    return Err(RubyError::wrong_type(
+                        "1st arg",
+                        "Integer or Array",
+                        args[0],
+                    ))
+                }
             },
-            _ => return Err(RubyError::typeerr("1st arg must be Integer or Array.")),
+            _ => {
+                return Err(RubyError::wrong_type(
+                    "1st arg",
+                    "Integer or Array",
+                    args[0],
+                ))
+            }
         },
         2 => {
             let num = args[0].expect_integer("1st arg")?;
@@ -305,16 +317,13 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
     } else {
-        return Err(RubyError::typeerr(format!(
-            "No implicit conversion from {:?} to Integer.",
-            args[0]
-        )));
+        return Err(RubyError::no_implicit_conv(args[0], "Integer"));
     }
 }
 
-fn add(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let mut lhs = self_val.expect_array("Receiver")?.elements.clone();
+    let mut lhs = self_val.as_array().unwrap().elements.clone();
     let mut arg0 = args[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
     lhs.append(&mut rhs);

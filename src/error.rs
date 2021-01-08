@@ -332,6 +332,15 @@ impl RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into())
     }
 
+    pub fn wrong_type(kind: impl Into<String>, class: &str, val: Value) -> RubyError {
+        RubyError::typeerr(format!(
+            "{} must be an {}. (given:{})",
+            kind.into(),
+            class,
+            val.get_class_name()
+        ))
+    }
+
     pub fn no_implicit_conv(other: Value, msg: impl Into<String>) -> RubyError {
         RubyError::typeerr(format!(
             "No implicit conversion of {:?} into {}.",

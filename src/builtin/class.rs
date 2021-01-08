@@ -20,7 +20,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let superclass = if args.len() == 0 {
         BuiltinClass::object()
     } else {
-        args[0].expect_class(vm, "1st arg")?
+        args[0].expect_class("1st arg")?
     };
     let module = Module::class_under(superclass);
     let val = module.get();

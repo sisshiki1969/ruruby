@@ -2106,7 +2106,7 @@ impl VM {
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(_) | ObjKind::Module(_) => {
+                ObjKind::Module(_) => {
                     Ok(self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?.to_bool())
                 }
                 ObjKind::Regexp(re) => {
@@ -2355,7 +2355,7 @@ impl VM {
                     let super_val = if super_val.is_nil() {
                         self.globals.builtins.object
                     } else {
-                        super_val.expect_class(self, "Superclass")?
+                        super_val.expect_class("Superclass")?
                     };
                     Module::class_under(super_val)
                 };
@@ -2427,7 +2427,7 @@ impl VM {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self)?,
-                ObjKind::Class(cref) | ObjKind::Module(cref) => cref.inspect(),
+                ObjKind::Module(cref) => cref.inspect(),
                 ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect()?,
