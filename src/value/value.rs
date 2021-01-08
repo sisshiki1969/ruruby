@@ -1071,10 +1071,6 @@ impl Value {
         RValue::new_range(info).pack()
     }
 
-    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
-        Module::new(RValue::new_bootstrap(cinfo).pack())
-    }
-
     pub fn ordinary_object(class: Module) -> Self {
         RValue::new_ordinary(class).pack()
     }
@@ -1084,18 +1080,6 @@ impl Value {
         let obj = RValue::new_class(cinfo).pack();
         obj.get_singleton_class().unwrap();
         obj
-    }
-
-    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
-        Module::new(Value::class(ClassInfo::class_from(superclass)))
-    }
-
-    pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {
-        Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
-    }
-
-    pub fn module() -> Module {
-        Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {
@@ -1195,12 +1179,12 @@ impl Value {
                                 None => None,
                                 Some(superclass) => Some(superclass.get_singleton_class()),
                             };
-                            Value::singleton_class_from(superclass, self)
+                            Module::singleton_class_from(superclass, self)
                         }
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => Value::singleton_class_from(class, self),
+                        _ => Module::singleton_class_from(class, self),
                     };
                     oref.set_class(singleton);
                     Ok(singleton)
@@ -1429,7 +1413,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class_under(None).get();
+        let expect = Module::class_under(None).get();
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

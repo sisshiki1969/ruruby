@@ -22,7 +22,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     } else {
         args[0].expect_class(vm, "1st arg")?
     };
-    let module = Value::class_under(superclass);
+    let module = Module::class_under(superclass);
     let val = module.get();
     match &args.block {
         Block::None => {}

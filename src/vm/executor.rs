@@ -2348,14 +2348,14 @@ impl VM {
                     if !super_val.is_nil() {
                         panic!("Module can not have superclass.");
                     };
-                    Value::module()
+                    Module::module()
                 } else {
                     let super_val = if super_val.is_nil() {
                         self.globals.builtins.object
                     } else {
                         super_val.expect_class(self, "Superclass")?
                     };
-                    Value::class_under(super_val)
+                    Module::class_under(super_val)
                 };
                 self.globals.set_const(current_class, id, val.get());
                 Ok(val)

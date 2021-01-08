@@ -4,7 +4,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::module();
+    let class = Module::module();
     globals.set_toplevel_constant("Comparable", class.get());
     class.add_builtin_method_by_str("==", eq);
     class.add_builtin_method_by_str("<=", le);

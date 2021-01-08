@@ -161,11 +161,28 @@ impl Module {
     }
 
     /// Add module function to `self`.
-    /// `self` must be Module or Class.
     pub fn add_builtin_module_func(self, name: &str, func: BuiltinFunc) {
         self.add_builtin_method_by_str(name, func);
         self.get_singleton_class()
             .add_builtin_method_by_str(name, func);
+    }
+}
+
+impl Module {
+    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
+        Module::new(RValue::new_bootstrap(cinfo).pack())
+    }
+
+    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
+        Module::new(Value::class(ClassInfo::class_from(superclass)))
+    }
+
+    pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {
+        Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
+    }
+
+    pub fn module() -> Module {
+        Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
     }
 }
 

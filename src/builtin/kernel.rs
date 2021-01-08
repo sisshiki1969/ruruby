@@ -4,7 +4,7 @@ use rand;
 use std::path::PathBuf;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::module();
+    let class = Module::module();
     globals.set_toplevel_constant("Kernel", class.get());
     class.add_builtin_module_func("puts", puts);
     class.add_builtin_module_func("p", p);

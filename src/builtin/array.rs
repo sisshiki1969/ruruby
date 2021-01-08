@@ -2,7 +2,7 @@ use crate::error::RubyError;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::class_under(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("to_a", toa);

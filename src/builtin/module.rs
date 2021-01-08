@@ -37,7 +37,7 @@ pub fn init(globals: &mut Globals) {
 /// If a block is given, eval it in the context of newly created module.
 fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let module = Value::module();
+    let module = Module::module();
     let val = module.get();
     match &args.block {
         Block::None => {}

@@ -67,13 +67,13 @@ type BuiltinRef = Ref<BuiltinClass>;
 impl BuiltinClass {
     fn new() -> Self {
         let basic_class = ClassInfo::class_from(None);
-        let basic = Value::bootstrap_class(basic_class);
+        let basic = Module::bootstrap_class(basic_class);
         let object_class = ClassInfo::class_from(basic);
-        let object = Value::bootstrap_class(object_class);
+        let object = Module::bootstrap_class(object_class);
         let module_class = ClassInfo::class_from(object);
-        let module = Value::bootstrap_class(module_class);
+        let module = Module::bootstrap_class(module_class);
         let class_class = ClassInfo::class_from(module);
-        let class = Value::bootstrap_class(class_class);
+        let class = Module::bootstrap_class(class_class);
 
         basic.get().set_class(class);
         object.get().set_class(class);

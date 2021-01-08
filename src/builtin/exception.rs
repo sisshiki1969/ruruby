@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::class_under(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_class_method("new", exception_new);
     class.add_builtin_class_method("exception", exception_new);
     class.add_builtin_class_method("allocate", exception_allocate);
@@ -17,20 +17,20 @@ pub fn init(globals: &mut Globals) -> Value {
         ),
     )
     .unwrap();
-    let standard_error = Value::class_under(class);
+    let standard_error = Module::class_under(class);
     globals.set_toplevel_constant("StandardError", standard_error.get());
     // Subclasses of StandardError.
-    let err = Value::class_under(standard_error);
+    let err = Module::class_under(standard_error);
     globals.set_toplevel_constant("ArgumentError", err.get());
-    let err = Value::class_under(standard_error);
+    let err = Module::class_under(standard_error);
     globals.set_toplevel_constant("TypeError", err.get());
-    let err = Value::class_under(standard_error);
+    let err = Module::class_under(standard_error);
     globals.set_toplevel_constant("NoMethodError", err.get());
-    let runtime_error = Value::class_under(standard_error);
+    let runtime_error = Module::class_under(standard_error);
     globals.set_toplevel_constant("StopIteration", runtime_error.get());
-    let runtime_error = Value::class_under(standard_error);
+    let runtime_error = Module::class_under(standard_error);
     globals.set_toplevel_constant("RuntimeError", runtime_error.get());
-    let frozen_error = Value::class_under(runtime_error);
+    let frozen_error = Module::class_under(runtime_error);
     globals.set_toplevel_constant("FrozenError", frozen_error.get());
     class.get()
 }
