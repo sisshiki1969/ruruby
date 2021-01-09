@@ -57,9 +57,9 @@ pub struct BuiltinClass {
     pub nilclass: Value,
     pub trueclass: Value,
     pub falseclass: Value,
-    pub kernel: Value,
-    pub comparable: Value,
-    pub numeric: Value,
+    pub kernel: Module,
+    pub comparable: Module,
+    pub numeric: Module,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -75,12 +75,13 @@ impl BuiltinClass {
         let class_class = ClassInfo::class_from(module);
         let class = Module::bootstrap_class(class_class);
 
-        basic.get().set_class(class);
-        object.get().set_class(class);
-        module.get().set_class(class);
-        class.get().set_class(class);
+        basic.set_class(class);
+        object.set_class(class);
+        module.set_class(class);
+        class.set_class(class);
 
         let nil = Value::nil();
+        let nilmod = Module::default();
         BuiltinClass {
             integer: nil,
             float: nil,
@@ -103,9 +104,9 @@ impl BuiltinClass {
             nilclass: nil,
             trueclass: nil,
             falseclass: nil,
-            kernel: nil,
-            comparable: nil,
-            numeric: nil,
+            kernel: nilmod,
+            comparable: nilmod,
+            numeric: nilmod,
         }
     }
 
@@ -206,17 +207,15 @@ impl BuiltinClass {
     }
 
     pub fn kernel() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().kernel).into_module()
+        BUILTINS.with(|b| b.borrow().unwrap().kernel)
     }
 
     pub fn numeric() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().numeric).into_module()
+        BUILTINS.with(|b| b.borrow().unwrap().numeric)
     }
 
     pub fn comparable() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().comparable)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().unwrap().comparable)
     }
 }
 
@@ -288,9 +287,9 @@ impl Globals {
             source_files: vec![],
         };
         // Generate singleton class for BasicObject
-        let singleton_class = ClassInfo::singleton_from(class, basic.get());
+        let singleton_class = ClassInfo::singleton_from(class, basic);
         let singleton_obj = RValue::new_class(singleton_class).pack();
-        basic.get().set_class(Module::new(singleton_obj));
+        basic.set_class(Module::new(singleton_obj));
 
         builtins.comparable = comparable::init(&mut globals);
         builtins.numeric = numeric::init(&mut globals);
@@ -303,7 +302,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                globals.set_toplevel_constant($name, $class_object.get());
+                globals.set_toplevel_constant($name, $class_object);
             };
         }
 
@@ -418,7 +417,8 @@ impl Globals {
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_const(&mut self, mut class_obj: Module, class_name: IdentId, val: Value) {
+    pub fn set_const(&mut self, mut class_obj: Module, class_name: IdentId, val: impl Into<Value>) {
+        let val = val.into();
         class_obj.set_const(class_name, val);
         self.const_version += 1;
     }
@@ -448,8 +448,8 @@ impl Globals {
     }
 
     /// Bind `object` to the constant `name` of the root object.
-    pub fn set_toplevel_constant(&mut self, name: &str, object: Value) {
-        self.builtins.object.set_const_by_str(name, object);
+    pub fn set_toplevel_constant(&mut self, name: &str, object: impl Into<Value>) {
+        self.builtins.object.set_const_by_str(name, object.into());
         self.const_version += 1;
     }
 

@@ -7,8 +7,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("^", xor);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
-    globals.set_toplevel_constant("TrueClass", class.get());
-    class.get()
+    globals.set_toplevel_constant("TrueClass", class);
+    class.into()
 }
 
 // Instance methods

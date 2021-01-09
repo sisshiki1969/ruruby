@@ -9,7 +9,7 @@ pub fn init(globals: &mut Globals) -> Value {
     symbol_class.add_builtin_method_by_str("inspect", inspect);
     symbol_class.add_builtin_method_by_str("<=>", cmp);
     symbol_class.add_builtin_method_by_str("==", eq);
-    symbol_class.get()
+    symbol_class.into()
 }
 
 fn to_sym(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

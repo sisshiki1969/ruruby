@@ -48,7 +48,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("include?", include);
 
     class.add_builtin_class_method("new", range_new);
-    class.get()
+    class.into()
 }
 
 fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {

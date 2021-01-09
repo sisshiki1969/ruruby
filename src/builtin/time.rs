@@ -11,7 +11,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("+", add);
-    class.get()
+    class.into()
 }
 
 fn time_now(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

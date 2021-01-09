@@ -30,7 +30,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("invert", invert);
 
     class.add_builtin_class_method("new", hash_new);
-    class.get()
+    class.into()
 }
 
 // Class methods

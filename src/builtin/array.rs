@@ -78,7 +78,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_class_method("new", array_new);
     class.add_builtin_class_method("allocate", array_allocate);
     class.add_builtin_class_method("[]", array_elem);
-    class.get()
+    class.into()
 }
 
 // Class methods

@@ -906,7 +906,7 @@ impl VM {
                         None => {
                             let val = match self.get_env_const(id) {
                                 Some(val) => val,
-                                None => VM::get_super_const(self.class().get(), id)?,
+                                None => VM::get_super_const(self.class(), id)?,
                             };
                             self.globals.set_const_cache(slot, val);
                             val
@@ -1237,7 +1237,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, val.get(), &Args::new0());
+                    let res = self.eval_send(method, val, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 14;
@@ -1248,7 +1248,7 @@ impl VM {
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, singleton.get(), &Args::new0());
+                    let res = self.eval_send(method, singleton, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 9;
@@ -1614,9 +1614,8 @@ impl VM {
     }
 
     /// Search class inheritance chain for the constant.
-    pub fn get_super_const(class: Value, id: IdentId) -> VMResult {
+    pub fn get_super_const(mut class: Module, id: IdentId) -> VMResult {
         let is_module = class.is_module();
-        let mut class = Module::new(class);
         loop {
             match class.get_const(id) {
                 Some(val) => return Ok(val),
@@ -1653,13 +1652,13 @@ impl VM {
         };
         let mut class = org_class;
         loop {
-            if class.get().set_var_if_exists(id, val) {
+            if class.set_var_if_exists(id, val) {
                 return Ok(());
             } else {
                 match class.upper() {
                     Some(superclass) => class = superclass,
                     None => {
-                        org_class.get().set_var(id, val);
+                        org_class.set_var(id, val);
                         return Ok(());
                     }
                 }
@@ -1677,7 +1676,7 @@ impl VM {
             None => self_val.get_class(),
         };
         loop {
-            match class.get().get_var(id) {
+            match class.get_var(id) {
                 Some(val) => {
                     return Ok(val);
                 }
@@ -2334,7 +2333,7 @@ impl VM {
                     )));
                 };
                 let val_super = match val.superclass() {
-                    Some(v) => v.get(),
+                    Some(v) => v.into(),
                     None => Value::nil(),
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
@@ -2359,7 +2358,7 @@ impl VM {
                     };
                     Module::class_under(super_val)
                 };
-                self.globals.set_const(current_class, id, val.get());
+                self.globals.set_const(current_class, id, val);
                 Ok(val)
             }
         }
@@ -2446,7 +2445,13 @@ impl VM {
 impl VM {
     /// Evaluate method with given `self_val`, `args` and no outer context.
     #[inline]
-    pub fn eval_send(&mut self, methodref: MethodRef, self_val: Value, args: &Args) -> VMResult {
+    pub fn eval_send(
+        &mut self,
+        methodref: MethodRef,
+        self_val: impl Into<Value>,
+        args: &Args,
+    ) -> VMResult {
+        let self_val = self_val.into();
         self.invoke_method(methodref, self_val, None, args)
     }
 
@@ -2462,7 +2467,13 @@ impl VM {
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
-    pub fn eval_block_self(&mut self, block: &Block, self_val: Value, args: &Args) -> VMResult {
+    pub fn eval_block_self(
+        &mut self,
+        block: &Block,
+        self_val: impl Into<Value>,
+        args: &Args,
+    ) -> VMResult {
+        let self_val = self_val.into();
         match block {
             Block::Block(method, outer) => {
                 self.invoke_method(*method, self_val, Some(*outer), args)
@@ -2514,10 +2525,11 @@ impl VM {
     pub fn invoke_method(
         &mut self,
         methodref: MethodRef,
-        self_val: Value,
+        self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
+        let self_val = self_val.into();
         use MethodInfo::*;
         let outer = outer.map(|ctx| ctx.get_current());
         match &*methodref {

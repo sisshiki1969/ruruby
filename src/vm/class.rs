@@ -43,6 +43,12 @@ impl std::hash::Hash for Module {
     }
 }
 
+impl Into<Value> for Module {
+    fn into(self) -> Value {
+        self.0
+    }
+}
+
 impl GC for Module {
     fn mark(&self, alloc: &mut Allocator) {
         self.get().mark(alloc);
@@ -69,7 +75,7 @@ impl Module {
         Module(Value::nil())
     }
 
-    pub fn get(self) -> Value {
+    fn get(self) -> Value {
         self.0
     }
 
@@ -83,6 +89,10 @@ impl Module {
 
     pub fn class(&self) -> Module {
         self.get().rvalue().class()
+    }
+
+    pub fn set_class(self, class: Module) {
+        self.get().set_class(class)
     }
 
     pub fn real_module(&self) -> Module {
@@ -169,15 +179,43 @@ impl Module {
 }
 
 impl Module {
+    pub fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
+        self.get().set_var(id, val)
+    }
+
+    pub fn set_var_by_str(self, name: &str, val: Value) {
+        self.get().set_var_by_str(name, val)
+    }
+
+    pub fn get_var(&self, id: IdentId) -> Option<Value> {
+        self.get().get_var(id)
+    }
+
+    pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
+        self.get().set_var_if_exists(id, val)
+    }
+}
+
+impl Module {
+    pub fn new_class(cinfo: ClassInfo) -> Module {
+        assert!(!cinfo.is_module());
+        let obj = RValue::new_class(cinfo).pack();
+        obj.get_singleton_class().unwrap();
+        obj.into_module()
+    }
+
     pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
         Module::new(RValue::new_bootstrap(cinfo).pack())
     }
 
     pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
-        Value::class(ClassInfo::class_from(superclass))
+        Module::new_class(ClassInfo::class_from(superclass))
     }
 
-    pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {
+    pub fn singleton_class_from(
+        superclass: impl Into<Option<Module>>,
+        target: impl Into<Value>,
+    ) -> Module {
         Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
     }
 
@@ -229,7 +267,8 @@ impl ClassInfo {
         Self::new(true, superclass, ClassExt::new())
     }
 
-    pub fn singleton_from(superclass: impl Into<Option<Module>>, target: Value) -> Self {
+    pub fn singleton_from(superclass: impl Into<Option<Module>>, target: impl Into<Value>) -> Self {
+        let target = target.into();
         Self::new(false, superclass, ClassExt::new_singleton(target))
     }
 

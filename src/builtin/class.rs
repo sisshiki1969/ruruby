@@ -23,7 +23,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         args[0].expect_class("1st arg")?
     };
     let module = Module::class_under(superclass);
-    let val = module.get();
+    let val = module.into();
     match &args.block {
         Block::None => {}
         _ => {
@@ -60,7 +60,7 @@ fn allocate(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let self_val = self_val.into_module();
     let superclass = match self_val.superclass() {
-        Some(superclass) => superclass.get(),
+        Some(superclass) => superclass.into(),
         None => Value::nil(),
     };
     Ok(superclass)

@@ -4,7 +4,7 @@ pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("call", call);
     class.add_builtin_method_by_str("[]", call);
-    class.get()
+    class.into()
 }
 
 pub fn call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

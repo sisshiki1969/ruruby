@@ -13,8 +13,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_h", toh);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("to_s", tos);
-    globals.set_toplevel_constant("NilClass", class.get());
-    class.get()
+    globals.set_toplevel_constant("NilClass", class);
+    class.into()
 }
 
 // Class methods

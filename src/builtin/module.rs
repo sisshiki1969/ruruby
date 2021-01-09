@@ -38,7 +38,7 @@ pub fn init(globals: &mut Globals) {
 fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let module = Module::module();
-    let val = module.get();
+    let val = module.into();
     match &args.block {
         Block::None => {}
         _ => {
@@ -137,7 +137,9 @@ fn class_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn const_defined(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     let name = args[0].expect_string_or_symbol("1st arg")?;
-    Ok(Value::bool(VM::get_super_const(self_val, name).is_ok()))
+    Ok(Value::bool(
+        VM::get_super_const(Module::new(self_val), name).is_ok(),
+    ))
 }
 
 fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -146,7 +148,7 @@ fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
     };
-    let val = VM::get_super_const(self_val, name)?;
+    let val = VM::get_super_const(Module::new(self_val), name)?;
     Ok(val)
 }
 
@@ -286,7 +288,7 @@ fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             None => break,
             Some(m) => {
                 if m.is_included() {
-                    ary.push(m.origin().unwrap().get())
+                    ary.push(m.origin().unwrap().into())
                 };
                 module = m.upper();
             }
@@ -303,7 +305,7 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         match module {
             None => break,
             Some(m) => {
-                ary.push(m.real_module().get());
+                ary.push(m.real_module().into());
                 module = m.upper();
             }
         }
@@ -324,7 +326,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.class_push(self_val);
             let mut iseq = vm.get_method_iseq();
             iseq.class_defined.push(self_val);
-            let res = vm.invoke_method(method, self_val.get(), Some(context), &Args::new0());
+            let res = vm.invoke_method(method, self_val, Some(context), &Args::new0());
             iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res
@@ -333,7 +335,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             args.check_args_num(0)?;
             // The scopes of constants and class variables are outer of the block.
             vm.class_push(self_val);
-            let res = vm.eval_block_self(block, self_val.get(), &Args::new0());
+            let res = vm.eval_block_self(block, self_val, &Args::new0());
             vm.class_pop();
             res
         }

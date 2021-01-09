@@ -18,21 +18,21 @@ pub fn init(globals: &mut Globals) -> Value {
     )
     .unwrap();
     let standard_error = Module::class_under(class);
-    globals.set_toplevel_constant("StandardError", standard_error.get());
+    globals.set_toplevel_constant("StandardError", standard_error);
     // Subclasses of StandardError.
     let err = Module::class_under(standard_error);
-    globals.set_toplevel_constant("ArgumentError", err.get());
+    globals.set_toplevel_constant("ArgumentError", err);
     let err = Module::class_under(standard_error);
-    globals.set_toplevel_constant("TypeError", err.get());
+    globals.set_toplevel_constant("TypeError", err);
     let err = Module::class_under(standard_error);
-    globals.set_toplevel_constant("NoMethodError", err.get());
+    globals.set_toplevel_constant("NoMethodError", err);
     let runtime_error = Module::class_under(standard_error);
-    globals.set_toplevel_constant("StopIteration", runtime_error.get());
+    globals.set_toplevel_constant("StopIteration", runtime_error);
     let runtime_error = Module::class_under(standard_error);
-    globals.set_toplevel_constant("RuntimeError", runtime_error.get());
+    globals.set_toplevel_constant("RuntimeError", runtime_error);
     let frozen_error = Module::class_under(runtime_error);
-    globals.set_toplevel_constant("FrozenError", frozen_error.get());
-    class.get()
+    globals.set_toplevel_constant("FrozenError", frozen_error);
+    class.into()
 }
 
 // Class methods

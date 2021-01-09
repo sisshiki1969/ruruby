@@ -488,11 +488,11 @@ impl Value {
         self.get_class_for_method().is_singleton()
     }
 
-    pub fn set_var(&mut self, id: IdentId, val: Value) -> Option<Value> {
+    pub fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
         self.rvalue_mut().set_var(id, val)
     }
 
-    pub fn set_var_by_str(&mut self, name: &str, val: Value) {
+    pub fn set_var_by_str(self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.set_var(id, val);
     }
@@ -1028,13 +1028,6 @@ impl Value {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn class(cinfo: ClassInfo) -> Module {
-        assert!(!cinfo.is_module());
-        let obj = RValue::new_class(cinfo).pack();
-        obj.get_singleton_class().unwrap();
-        obj.into_module()
-    }
-
     pub fn array_from(ary: Vec<Value>) -> Self {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }
@@ -1366,7 +1359,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Module::class_under(None).get();
+        let expect: Value = Module::class_under(None).into();
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

@@ -7,7 +7,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
     class.add_builtin_class_method("new", new);
     class.add_builtin_class_method("yield", yield_);
-    class.get()
+    class.into()
 }
 
 // Class methods

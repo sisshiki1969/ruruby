@@ -3,7 +3,7 @@ use crate::*;
 pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(globals.builtins.object);
     class.add_builtin_class_method("new", struct_new);
-    class.get()
+    class.into()
 }
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -46,27 +46,25 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         vec.push(v);
         attr_args[index - i] = v;
     }
-    class
-        .get()
-        .set_var_by_str("/members", Value::array_from(vec));
+    class.set_var_by_str("/members", Value::array_from(vec));
     builtin::module::set_attr_accessor(&mut vm.globals, class, &attr_args)?;
 
     match &args.block {
         Block::None => {}
         method => {
             vm.class_push(class);
-            let arg = Args::new1(class.get());
-            let res = vm.eval_block_self(method, class.get(), &arg);
+            let arg = Args::new1(class.into());
+            let res = vm.eval_block_self(method, class, &arg);
             vm.class_pop();
             res?;
         }
     };
-    Ok(class.get())
+    Ok(class.into())
 }
 
-fn initialize(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn initialize(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class();
-    let name = class.get().get_var(IdentId::get_id("/members")).unwrap();
+    let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.as_array().unwrap();
     if members.elements.len() < args.len() {
         return Err(RubyError::argument("Struct size differs."));
@@ -86,11 +84,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
         Some(name) => inspect += &name,
         None => {}
     };
-    let name = match self_val
-        .get_class()
-        .get()
-        .get_var(IdentId::get_id("/members"))
-    {
+    let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {
         Some(name) => name,
         None => return Err(RubyError::internal("No /members.")),
     };
