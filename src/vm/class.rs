@@ -14,26 +14,13 @@ impl std::cmp::Eq for Module {}
 impl std::ops::Deref for Module {
     type Target = ClassInfo;
     fn deref(&self) -> &Self::Target {
-        match self.0.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(cinfo) => cinfo,
-                _ => panic!("Not a class or module object. {:?}", self.get()),
-            },
-            None => panic!("Not a class or module object. {:?}", self.get()),
-        }
+        self.0.as_class()
     }
 }
 
 impl std::ops::DerefMut for Module {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let self_ = *self;
-        match self.0.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Module(cinfo) => cinfo,
-                _ => panic!("Not a class or module object. {:?}", self_.get()),
-            },
-            None => panic!("Not a class or module object. {:?}", self_.get()),
-        }
+        self.0.as_mut_class()
     }
 }
 
@@ -56,14 +43,8 @@ impl GC for Module {
 }
 
 impl Module {
-    pub fn new(val: Value) -> Self {
-        match val.as_rvalue() {
-            Some(rvalue) => match rvalue.kind {
-                ObjKind::Module(_) => {}
-                _ => panic!("Not a class or module object. {:?}", val),
-            },
-            None => panic!("Not a class or module object. {:?}", val),
-        }
+    pub fn new(mut val: Value) -> Self {
+        val.as_mut_class();
         Module(val)
     }
 
@@ -105,9 +86,12 @@ impl Module {
 
     pub fn generate_included(&self) -> Module {
         let origin = self.real_module();
-        let mut imodule = self.dup();
-        imodule.set_include(origin);
-        imodule
+        self.dup().set_include(origin)
+    }
+
+    pub fn set_include(mut self, origin: Module) -> Module {
+        self.0.as_mut_class().set_include(origin);
+        self
     }
 
     /// Check whether `target_module` exists in the ancestors of `self`.
@@ -387,7 +371,7 @@ impl ClassInfo {
         self.flags.set_prepend()
     }
 
-    pub fn set_include(&mut self, origin: Module) {
+    fn set_include(&mut self, origin: Module) {
         #[cfg(debug_assertions)]
         assert!(!origin.is_included());
         self.flags.set_include();

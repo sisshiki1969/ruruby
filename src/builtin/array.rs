@@ -1,5 +1,6 @@
 use crate::error::RubyError;
 use crate::*;
+use fxhash::FxHashSet;
 
 pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(globals.builtins.object);
@@ -660,25 +661,51 @@ fn clear(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let aref = self_val.as_array().unwrap();
+    let mut h = FxHashSet::default();
+    let mut v = vec![];
+    match &args.block {
+        Block::None => {
+            for elem in &aref.elements {
+                if h.insert(HashKey(*elem)) {
+                    v.push(*elem);
+                };
+            }
+        }
+        block => {
+            let mut block_args = Args::new(1);
+            for elem in &aref.elements {
+                block_args[0] = *elem;
+                let res = vm.eval_block(block, &block_args)?;
+                if h.insert(HashKey(res)) {
+                    v.push(*elem);
+                };
+            }
+        }
+    };
+    Ok(Value::array_from(v))
+}
+
 fn uniq_(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-
-    let mut set = std::collections::HashSet::new();
+    let mut h = FxHashSet::default();
     match &args.block {
         Block::None => {
             let aref = self_val.as_mut_array().unwrap();
-            aref.elements.retain(|x| set.insert(HashKey(*x)));
+            aref.retain(|x| Ok(h.insert(HashKey(*x))))?;
             Ok(self_val)
         }
         block => {
             let aref = self_val.as_mut_array().unwrap();
             let mut block_args = Args::new(1);
-            aref.elements.retain(|x| {
+            aref.retain(|x| {
                 block_args[0] = *x;
-                let res = vm.eval_block(block, &block_args).unwrap();
+                let res = vm.eval_block(block, &block_args)?;
                 vm.temp_push(res);
-                set.insert(HashKey(res))
-            });
+                Ok(h.insert(HashKey(res)))
+            })?;
             Ok(self_val)
         }
     }
@@ -836,25 +863,6 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         _ => return Err(RubyError::argument("Currently, can not use block.")),
     };
     Ok(Value::array_from(ary))
-}
-
-use fxhash::FxHashSet;
-fn uniq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    let aref = self_val.as_array().unwrap();
-    let mut h: FxHashSet<HashKey> = FxHashSet::default();
-    let mut v = vec![];
-    match &args.block {
-        Block::None => {
-            for elem in &aref.elements {
-                if h.insert(HashKey(*elem)) {
-                    v.push(*elem);
-                };
-            }
-        }
-        _ => return Err(RubyError::argument("Currently, can not use block.")),
-    };
-    Ok(Value::array_from(v))
 }
 
 fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1098,16 +1106,16 @@ fn delete(_vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let arg = args[0];
     args.expect_no_block()?;
-    let ary = &mut self_val.as_mut_array().unwrap().elements;
+    let aref = self_val.as_mut_array().unwrap();
     let mut removed = None;
-    ary.retain(|x| {
+    aref.retain(|x| {
         if x.eq(&arg) {
             removed = Some(*x);
-            false
+            Ok(false)
         } else {
-            true
+            Ok(true)
         }
-    });
+    })?;
     Ok(removed.unwrap_or(Value::nil()))
 }
 
@@ -1558,8 +1566,19 @@ mod tests {
         a = [1,2,3,4,3,2,1,0,3.0]
         assert [1,2,3,4,0,3.0], a.uniq
         assert [1,2,3,4,3,2,1,0,3.0], a
-
-        assert [1,2,3,3.0], a.uniq! {|x| x % 3 }
+        100.times {|i|
+          if [1,2,3,3.0] != a.uniq {|x| x % 3 }
+            raise StandardError.new("assert failed in #{i}")
+          end
+        }
+        assert_error { a.uniq {|x| if x == 3 then raise end; x} }
+        assert [1,2,3,4,3,2,1,0,3.0], a
+        100.times {|i|
+          a = [1,2,3,4,3,2,1,0,3.0]
+          if [1,2,3,3.0] != a.uniq! {|x| x % 3 }
+            raise StandardError.new("assert failed in #{i}")
+          end
+        }
         "#;
         assert_script(program);
     }

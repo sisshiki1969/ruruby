@@ -188,4 +188,27 @@ impl ArrayInfo {
     pub fn len(&self) -> usize {
         self.elements.len()
     }
+
+    pub fn retain<F>(&mut self, mut f: F) -> Result<(), RubyError>
+    where
+        F: FnMut(&Value) -> Result<bool, RubyError>,
+    {
+        let len = self.len();
+        let mut del = 0;
+        {
+            let v = &mut *self.elements;
+
+            for i in 0..len {
+                if !f(&v[i])? {
+                    del += 1;
+                } else if del > 0 {
+                    v.swap(i - del, i);
+                }
+            }
+        }
+        if del > 0 {
+            self.elements.truncate(len - del);
+        }
+        Ok(())
+    }
 }

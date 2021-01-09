@@ -1,5 +1,5 @@
 use crate::*;
-use std::collections::HashSet;
+use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
@@ -104,7 +104,7 @@ fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         return Ok(Value::array_from(vec![]));
     }
     //eprintln!("{:?}", glob);
-    let mut matches = HashSet::new();
+    let mut matches = FxHashSet::default();
     match traverse_dir(&fullpath, &path, &glob, 0, &mut matches) {
         Ok(_) => {}
         Err(err) => return Err(RubyError::internal(format!("{:?}", err))),
@@ -117,7 +117,7 @@ fn traverse_dir(
     path: &PathBuf,
     glob: &Vec<Option<regex::Regex>>,
     level: usize,
-    matches: &mut HashSet<Value>,
+    matches: &mut FxHashSet<Value>,
 ) -> std::io::Result<()> {
     #[derive(Debug, PartialEq)]
     enum MatchState {

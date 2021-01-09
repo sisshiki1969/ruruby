@@ -55,7 +55,7 @@ impl std::hash::Hash for Value {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::Integer(lhs) => lhs.hash(state),
+                ObjKind::Integer(lhs) => (*lhs as f64).to_bits().hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
@@ -688,6 +688,26 @@ impl Value {
             vm.regexp_from_string(string)
         } else {
             Err(RubyError::wrong_type(msg, "RegExp or String.", val))
+        }
+    }
+
+    pub fn as_class(&self) -> &ClassInfo {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Module(cinfo) => cinfo,
+                _ => unreachable!(),
+            },
+            None => unreachable!(),
+        }
+    }
+
+    pub fn as_mut_class(&mut self) -> &mut ClassInfo {
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Module(cinfo) => cinfo,
+                _ => unreachable!(),
+            },
+            None => unreachable!(),
         }
     }
 
