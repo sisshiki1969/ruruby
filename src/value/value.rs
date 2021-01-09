@@ -1028,11 +1028,11 @@ impl Value {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn class(cinfo: ClassInfo) -> Self {
+    pub fn class(cinfo: ClassInfo) -> Module {
         assert!(!cinfo.is_module());
         let obj = RValue::new_class(cinfo).pack();
         obj.get_singleton_class().unwrap();
-        obj
+        obj.into_module()
     }
 
     pub fn array_from(ary: Vec<Value>) -> Self {

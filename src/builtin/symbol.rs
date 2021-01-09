@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut symbol_class = ClassInfo::class_from(globals.builtins.object);
+    let symbol_class = Module::class_under(globals.builtins.object);
     symbol_class.add_builtin_method_by_str("to_sym", to_sym);
     symbol_class.add_builtin_method_by_str("intern", to_sym);
     symbol_class.add_builtin_method_by_str("to_s", tos);
@@ -9,8 +9,7 @@ pub fn init(globals: &mut Globals) -> Value {
     symbol_class.add_builtin_method_by_str("inspect", inspect);
     symbol_class.add_builtin_method_by_str("<=>", cmp);
     symbol_class.add_builtin_method_by_str("==", eq);
-    let symbol_obj = Value::class(symbol_class);
-    symbol_obj
+    symbol_class.get()
 }
 
 fn to_sym(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

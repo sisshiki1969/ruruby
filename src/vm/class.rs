@@ -174,7 +174,7 @@ impl Module {
     }
 
     pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
-        Module::new(Value::class(ClassInfo::class_from(superclass)))
+        Value::class(ClassInfo::class_from(superclass))
     }
 
     pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {

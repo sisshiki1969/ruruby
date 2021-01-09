@@ -8,8 +8,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
     let class_obj = Value::class(class);
-    globals.set_toplevel_constant("FalseClass", class_obj);
-    class_obj
+    globals.set_toplevel_constant("FalseClass", class_obj.get());
+    class_obj.get()
 }
 
 // Instance methods
