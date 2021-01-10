@@ -65,7 +65,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn initialize(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
-    let members = name.as_array().unwrap();
+    let members = name.into_array();
     if members.elements.len() < args.len() {
         return Err(RubyError::argument("Struct size differs."));
     };

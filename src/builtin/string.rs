@@ -212,10 +212,9 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_mut_rstring().unwrap();
-    let mut arg0 = args[0];
-    match arg0.as_mut_rstring() {
+    match args[0].as_rstring() {
         Some(rhs) => lhs.append(rhs),
-        None => match arg0.as_integer() {
+        None => match args[0].as_integer() {
             Some(i) => {
                 let rhs = RString::Bytes(vec![i as i8 as u8]);
                 lhs.append(&rhs);

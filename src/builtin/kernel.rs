@@ -136,8 +136,8 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(path) => path,
         None => return Ok(Value::false_val()),
     };
-    let ainfo = load_path.expect_array("LOAD_PATH($:)")?;
-    for path in ainfo.elements.iter_mut() {
+    let mut ainfo = load_path.expect_array("LOAD_PATH($:)")?;
+    for path in ainfo.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);
         base_path.set_extension("rb");

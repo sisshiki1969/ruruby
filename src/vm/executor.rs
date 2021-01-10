@@ -1887,20 +1887,15 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, mut lhs: Value) -> VMResult {
+    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::integer(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
-        if let Some(ainfo) = lhs.as_mut_array() {
-            ainfo.elements.push(rhs);
+        if let Some(mut ainfo) = lhs.as_array() {
+            ainfo.push(rhs);
             return Ok(lhs);
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => return Ok(Value::integer(lhs << rhs)),
-            (RV::Integer(_), _) => return Err(RubyError::no_implicit_conv(rhs, "Integer")),
-            _ => {}
         }
         let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
         Ok(val)
@@ -1912,14 +1907,8 @@ impl VM {
                 lhs.as_packed_fixnum() >> rhs.as_packed_fixnum(),
             ));
         }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs >> rhs)),
-            (RV::Integer(_), _) => Err(RubyError::no_implicit_conv(rhs, "Integer")),
-            (_, _) => {
-                let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
-                Ok(val)
-            }
-        }
+        let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
+        Ok(val)
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {

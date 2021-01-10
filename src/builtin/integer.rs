@@ -18,6 +18,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("<", lt);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("[]", index);
+    class.add_builtin_method_by_str(">>", shr);
+    class.add_builtin_method_by_str("<<", shl);
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
@@ -184,6 +186,26 @@ fn index(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         (i >> index) & 1
     };
     Ok(Value::integer(val))
+}
+
+fn shr(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.as_integer().unwrap();
+    let rhs = args[0];
+    match rhs.as_integer() {
+        Some(rhs) => Ok(Value::integer(lhs >> rhs)),
+        None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+    }
+}
+
+fn shl(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.as_integer().unwrap();
+    let rhs = args[0];
+    match rhs.as_integer() {
+        Some(rhs) => Ok(Value::integer(lhs << rhs)),
+        None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+    }
 }
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -395,6 +417,14 @@ mod tests {
             assert(1, 5 <=> 3.9)
             assert(-1, 3 <=> 5.8)
             assert(nil, 3 <=> "three")
+        "#;
+        assert_script(program);
+    }
+    #[test]
+    fn integer_shift() {
+        let program = r#"
+        assert 8785458905193172896, (0x7f3d870a761a99f4 << 3) & 0x7fffffffffffffff
+        assert 1146079111924634430, 0x7f3d870a761a99f4 >> 3
         "#;
         assert_script(program);
     }

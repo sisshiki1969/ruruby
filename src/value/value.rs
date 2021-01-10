@@ -296,6 +296,10 @@ impl Value {
         Module::new_unchecked(self)
     }
 
+    pub fn into_array(self) -> Array {
+        Array::new_unchecked(self)
+    }
+
     pub fn dup(&self) -> Self {
         match self.as_rvalue() {
             Some(rv) => rv.dup().pack(),
@@ -777,31 +781,28 @@ impl Value {
         }
     }
 
-    pub fn as_array(&self) -> Option<&ArrayInfo> {
+    pub fn is_array(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => Some(aref),
-                _ => None,
+                ObjKind::Array(_) => true,
+                _ => false,
             },
-            None => None,
+            None => false,
         }
     }
 
-    pub fn as_mut_array(&mut self) -> Option<&mut ArrayInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Array(aref) => Some(aref),
-                _ => None,
-            },
-            None => None,
+    pub fn as_array(&self) -> Option<Array> {
+        if self.is_array() {
+            Some(Array::new_unchecked(*self))
+        } else {
+            None
         }
     }
 
-    pub fn expect_array(&mut self, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
-        let val = *self;
-        match self.as_mut_array() {
-            Some(ary) => Ok(ary),
-            None => Err(RubyError::wrong_type(msg, "Array", val)),
+    pub fn expect_array(&mut self, msg: &str) -> Result<Array, RubyError> {
+        match self.as_array() {
+            Some(_) => Ok(self.into_array()),
+            None => Err(RubyError::wrong_type(msg, "Array", *self)),
         }
     }
 
@@ -1048,15 +1049,15 @@ impl Value {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn array_empty() -> Self {
+    pub fn array_empty() -> Value {
         Value::array_from(vec![])
     }
 
-    pub fn array_from(ary: Vec<Value>) -> Self {
+    pub fn array_from(ary: Vec<Value>) -> Value {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }
 
-    pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Self {
+    pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Value {
         RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
     }
 

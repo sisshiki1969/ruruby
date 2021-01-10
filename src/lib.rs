@@ -34,4 +34,4 @@ pub use crate::parse::parser::{LvarCollector, LvarId, ParseResult, Parser};
 pub use crate::util::*;
 pub use crate::value::*;
 pub use crate::vm::*;
-pub use smallvec::*;
+pub use smallvec::{smallvec, SmallVec};
