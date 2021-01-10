@@ -432,7 +432,12 @@ impl VM {
             print!("--->");
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
             context.dump();
-            eprintln!("  -----------");
+            eprintln!("  ------------------------------------------------------------------");
+        }
+        #[cfg(feature = "trace-func")]
+        {
+            print!("--->");
+            println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
         }
         loop {
             match self.run_context_main(context) {
@@ -440,7 +445,7 @@ impl VM {
                     self.context_pop().unwrap();
                     debug_assert_eq!(stack_len, self.stack_len());
                     self.pc = pc;
-                    #[cfg(feature = "trace")]
+                    #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<--- Ok({:?})", val);
                     return Ok(val);
                 }
@@ -466,7 +471,7 @@ impl VM {
                         self.context_pop().unwrap();
                         self.set_stack_len(stack_len);
                         self.pc = pc;
-                        #[cfg(feature = "trace")]
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -484,8 +489,7 @@ impl VM {
         let self_oref = self_value.rvalue_mut();
         self.gc();
         for (i, (outer, lvar)) in context.iseq_ref.unwrap().forvars.iter().enumerate() {
-            let mut cref = self.get_outer_context(*outer);
-            cref[*lvar as usize] = context[i];
+            self.get_outer_context(*outer)[*lvar as usize] = context[i];
         }
         /// Evaluate expr, and push return value to stack.
         macro_rules! try_push {
@@ -521,11 +525,15 @@ impl VM {
             #[cfg(feature = "trace")]
             {
                 println!(
-                    "{:>4x}:{:<25} stack:{:<3} top:{:?}",
+                    "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                     self.pc,
                     Inst::inst_info(&self.globals, context.iseq_ref.unwrap(), self.pc),
+                    self.temp_stack.len(),
                     self.stack_len(),
-                    self.exec_stack.last()
+                    match self.exec_stack.last() {
+                        Some(x) => format!("{:?}", x),
+                        None => "".to_string(),
+                    }
                 );
             }
             match iseq[self.pc] {
@@ -1465,8 +1473,7 @@ impl VM {
                         args.block = block;
                         self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
-                        let res = self.run_context(&context);
-                        res
+                        self.run_context(&context)
                     }
                 }
                 _ => unreachable!(),
@@ -1524,8 +1531,7 @@ impl VM {
                         let args = Args::from_slice(arg_slice);
                         self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
-                        let res = self.run_context(&context);
-                        res
+                        self.run_context(&context)
                     }
                 }
                 _ => unreachable!(),
@@ -2561,20 +2567,18 @@ impl VM {
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::EXTERN);
 
-        #[cfg(feature = "trace")]
-        {
-            print!("--->");
-            println!(" BuiltinFunc {:?}", _name);
-        }
+        #[cfg(any(feature = "trace", feature = "trace-func"))]
+        println!("---> BuiltinFunc {:?}", _name);
+
         let len = self.temp_stack.len();
         self.temp_push(self_val);
         self.temp_push_args(args);
         let res = func(self, self_val, args);
         self.temp_stack.truncate(len);
-        #[cfg(feature = "trace")]
-        {
-            println!("<--- {:?}", res);
-        }
+
+        #[cfg(any(feature = "trace", feature = "trace-func"))]
+        println!("<--- {:?}", res);
+
         res
     }
 
@@ -2671,6 +2675,7 @@ impl VM {
                 #[cfg(feature = "perf")]
                 self.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
+                #[cfg(feature = "trace-func")]
                 println!("<=== yield Ok({:?})", val);
 
                 tx.send(Ok(val)).unwrap();

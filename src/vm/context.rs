@@ -129,9 +129,12 @@ impl Context {
 
     pub fn dump(&self) {
         println!(
-            "  context:{:?} on_stack:{:?} moved_to:{:?} outer:{:?}",
-            self as *const Context, self.on_stack, self.moved_to_heap, self.outer
+            "{} context:{:?} outer:{:?}",
+            if self.on_stack { "STACK" } else { "HEAP " },
+            self as *const Context,
+            self.outer
         );
+        assert!(!self.on_stack || self.moved_to_heap.is_none());
         println!("  self: {:#?}", self.self_value);
         match self.iseq_ref {
             Some(iseq_ref) => {

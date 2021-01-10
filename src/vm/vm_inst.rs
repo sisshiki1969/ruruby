@@ -423,7 +423,7 @@ impl Inst {
             ),
             Inst::LVAR_ADDI => {
                 let id = iseq.read32(pc + 1);
-                let ident_id = iseq_ref.lvar.get_name(id.into());
+                let ident_id = iseq_ref.lvar.get_name_id(id.into());
                 format!(
                     "LVAR_ADDI '{}' LvarId:{} +{}",
                     IdentId::get_ident_name(ident_id),
@@ -467,22 +467,16 @@ impl Inst {
             ),
             Inst::SET_LOCAL | Inst::GET_LOCAL => {
                 let id = iseq.read32(pc + 1);
-                let ident_name = match iseq_ref.lvar.get_name(id.into()) {
-                    Some(id) => format!("{:?}", id),
-                    None => "<unnamed>".to_string(),
-                };
+                let ident_name = iseq_ref.lvar.get_name(id.into());
                 format!(
-                    "{} '{}' LvarId:{}",
+                    "{} '{}'",
                     Inst::inst_name(iseq[pc]),
                     ident_name,
-                    id
                 )
             }
             Inst::SET_DYNLOCAL | Inst::GET_DYNLOCAL => {
                 let frame = iseq.read32(pc + 5);
                 let id = iseq.read32(pc + 1);
-                //let ident_id = iseq_ref.lvar.get_name(LvarId::from_u32(id));
-                //let name = id_lock.get_ident_name(ident_id);
                 format!(
                     "{} outer:{} LvarId:{}",
                     Inst::inst_name(iseq[pc]),
@@ -494,7 +488,7 @@ impl Inst {
                 let frame = iseq.read32(pc + 5);
                 let id = iseq.read32(pc + 1) as usize;
                 let ident_id = iseq_ref.lvar.get_name(id.into());
-                format!("CHECK_LOCAL '{:?}' outer:{} LvarId:{}", ident_id, frame, id)
+                format!("CHECK_LOCAL '{:?}' outer:{}", ident_id, frame)
             }
             Inst::PUSH_SYMBOL
             | Inst::GET_CONST

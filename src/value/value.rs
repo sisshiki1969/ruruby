@@ -1048,6 +1048,10 @@ impl Value {
         RValue::new_ordinary(class).pack()
     }
 
+    pub fn array_empty() -> Self {
+        Value::array_from(vec![])
+    }
+
     pub fn array_from(ary: Vec<Value>) -> Self {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }

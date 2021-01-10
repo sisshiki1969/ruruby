@@ -235,7 +235,7 @@ fn shift(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut aref = self_val.as_mut_array().unwrap();
     if array_flag {
         if aref.elements.len() < num {
-            return Ok(Value::array_from(vec![]));
+            return Ok(Value::array_empty());
         }
         let new = aref.elements.split_off(num);
         let res = aref.elements[0..num].to_vec();
@@ -439,10 +439,11 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.as_array().unwrap();
     let mut arg = Args::new(1);
-    for elem in &aref.elements {
-        arg[0] = *elem;
+    aref.each(|v| {
+        arg[0] = *v;
         vm.eval_block(method, &arg)?;
-    }
+        Ok(())
+    })?;
     Ok(self_val)
 }
 
@@ -569,7 +570,7 @@ fn transpose(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let aref = self_val.as_mut_array().unwrap();
     if aref.elements.len() == 0 {
-        return Ok(Value::array_from(vec![]));
+        return Ok(Value::array_empty());
     }
     let mut vec = vec![];
     for elem in &mut aref.elements {

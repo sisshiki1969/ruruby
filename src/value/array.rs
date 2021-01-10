@@ -43,7 +43,7 @@ impl ArrayInfo {
         let val = if len < 0 {
             Value::nil()
         } else if index >= self_len {
-            Value::array_from(vec![])
+            Value::array_empty()
         } else {
             let len = len as usize;
             let end = std::cmp::min(self_len, index + len);
@@ -72,7 +72,7 @@ impl ArrayInfo {
             let start = if len < i_start {
                 return Ok(Value::nil());
             } else if len == i_start {
-                return Ok(Value::array_from(vec![]));
+                return Ok(Value::array_empty());
             } else {
                 i_start as usize
             };
@@ -88,7 +88,7 @@ impl ArrayInfo {
                 (len + i_end + if range.exclude { 0 } else { 1 }) as usize
             };
             if start >= end {
-                return Ok(Value::array_from(vec![]));
+                return Ok(Value::array_empty());
             }
             Ok(Value::array_from(self.elements[start..end].to_vec()))
         } else {
@@ -187,6 +187,19 @@ impl ArrayInfo {
 
     pub fn len(&self) -> usize {
         self.elements.len()
+    }
+
+    pub fn each<F>(&self, mut f: F) -> Result<(), RubyError>
+    where
+        F: FnMut(&Value) -> Result<(), RubyError>,
+    {
+        let mut i = 0;
+        let len = self.len();
+        while i < len {
+            f(&self.elements[i])?;
+            i += 1;
+        }
+        Ok(())
     }
 
     pub fn retain<F>(&mut self, mut f: F) -> Result<(), RubyError>

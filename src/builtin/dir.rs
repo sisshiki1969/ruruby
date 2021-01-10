@@ -101,7 +101,7 @@ fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         })
         .collect();
     if glob.is_empty() {
-        return Ok(Value::array_from(vec![]));
+        return Ok(Value::array_empty());
     }
     //eprintln!("{:?}", glob);
     let mut matches = FxHashSet::default();

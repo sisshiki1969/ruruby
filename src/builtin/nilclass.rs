@@ -48,7 +48,7 @@ fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn toa(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    Ok(Value::array_from(vec![]))
+    Ok(Value::array_empty())
 }
 
 fn toc(_: &mut VM, _: Value, args: &Args) -> VMResult {
