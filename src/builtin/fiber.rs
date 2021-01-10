@@ -134,7 +134,7 @@ mod test2 {
     fn fiber_gc_test1() {
         let program = r#"
         10000.times do |x|
-            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 1000) }
         end
         "#;
         assert_script(program);
@@ -144,7 +144,7 @@ mod test2 {
     fn fiber_gc_test2() {
         let program = r#"
         10000.times do |x|
-            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 1000) }
             f.resume
         end
         "#;
@@ -155,7 +155,7 @@ mod test2 {
     fn fiber_gc_test3() {
         let program = r#"
         10000.times do |x|
-            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 1000) }
             f.resume
             f.resume
         end
