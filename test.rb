@@ -1,10 +1,9 @@
-class MyException < StandardError
-end
+h = {}
 
-begin
-  raise MyException
-rescue => e
-  puts e
-  puts e.class
-  puts e.message
-end
+10_000_000.times {|x|
+  h[x] = nil
+}
+
+10_000_000.times {|x|
+  h[x]
+}
