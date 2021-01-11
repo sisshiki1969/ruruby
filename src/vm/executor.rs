@@ -1717,6 +1717,11 @@ impl VM {
         self.send(method_id, receiver, &args)
     }
 
+    pub fn send1(&mut self, method_id: IdentId, receiver: Value, arg: Value) -> VMResult {
+        let args = Args::new1(arg);
+        self.send(method_id, receiver, &args)
+    }
+
     fn send_icache(
         &mut self,
         cache: u32,
@@ -2700,6 +2705,8 @@ impl VM {
         hash
     }
 
+    /// Pop values and store them in new `Args`. `args_num` specifies the number of values to be popped.
+    /// If there is some Array or Range with splat operator, break up the value and store each of them.
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
         let mut args = Args::new(0);
         let len = self.stack_len();
@@ -2709,25 +2716,12 @@ impl VM {
                 Some(inner) => match inner.as_rvalue() {
                     None => args.push(inner),
                     Some(obj) => match &obj.kind {
-                        ObjKind::Array(aref) => {
-                            for elem in &aref.elements {
-                                args.push(*elem);
-                            }
-                        }
-                        ObjKind::Range(rref) => {
-                            let start = if rref.start.is_packed_fixnum() {
-                                rref.start.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range start not fixnum.")
-                            };
-                            let end = if rref.end.is_packed_fixnum() {
-                                rref.end.as_packed_fixnum()
-                            } else {
-                                unimplemented!("Range end not fixnum.")
-                            } + if rref.exclude { 0 } else { 1 };
-                            for i in start..end {
-                                args.push(Value::integer(i));
-                            }
+                        ObjKind::Array(a) => args.append(&a.elements),
+                        ObjKind::Range(r) => {
+                            let start = r.start.expect_integer("Expect Integer.").unwrap();
+                            let end = r.end.expect_integer("Expect Integer.").unwrap()
+                                + if r.exclude { 0 } else { 1 };
+                            (start..end).for_each(|i| args.push(Value::integer(i)));
                         }
                         _ => args.push(inner),
                     },
@@ -2740,7 +2734,7 @@ impl VM {
     }
 
     pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
-        if start.get_class().id() != end.get_class().id() {
+        if self.eval_compare(start, end)?.is_nil() {
             return Err(RubyError::argument("Bad value for range."));
         }
         Ok(Value::range(start, end, exclude_end))

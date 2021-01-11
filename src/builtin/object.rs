@@ -9,10 +9,15 @@ pub fn init(globals: &mut Globals) {
     object.add_builtin_method_by_str("object_id", object_id);
     object.add_builtin_method_by_str("to_s", to_s);
     object.add_builtin_method_by_str("inspect", inspect);
+    object.add_builtin_method_by_str("equal?", equal);
+    object.add_builtin_method_by_str("==", equal);
+    object.add_builtin_method_by_str("===", equal);
+    object.add_builtin_method_by_str("=~", match_); // This method is deprecated from Ruby 2.6.
+    object.add_builtin_method_by_str("<=>", cmp);
+    object.add_builtin_method_by_str("eql?", eql);
     object.add_builtin_method_by_str("singleton_class", singleton_class);
     object.add_builtin_method_by_str("clone", dup);
     object.add_builtin_method_by_str("dup", dup);
-    object.add_builtin_method_by_str("eql?", eql);
     object.add_builtin_method_by_str("nil?", nil_);
     object.add_builtin_method_by_str("method", method);
     object.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
@@ -21,14 +26,12 @@ pub fn init(globals: &mut Globals) {
     object.add_builtin_method_by_str("instance_of?", instance_of);
     object.add_builtin_method_by_str("freeze", freeze);
     object.add_builtin_method_by_str("super", super_);
-    object.add_builtin_method_by_str("equal?", equal);
     object.add_builtin_method_by_str("send", send);
     object.add_builtin_method_by_str("__send__", send);
     object.add_builtin_method_by_str("to_enum", to_enum);
     object.add_builtin_method_by_str("enum_for", to_enum);
     object.add_builtin_method_by_str("respond_to?", respond_to);
     object.add_builtin_method_by_str("instance_exec", instance_exec);
-    object.add_builtin_method_by_str("=~", match_);
 }
 
 fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -257,9 +260,38 @@ fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
+fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let res = if equal(vm, self_val, args)?.to_bool() {
+        Value::integer(0)
+    } else {
+        Value::nil()
+    };
+    Ok(res)
+}
+
 #[cfg(test)]
 mod test {
     use crate::test::*;
+
+    #[test]
+    fn object_ops() {
+        let program = r#"
+        a = Object.new
+        b = Object.new
+        assert 0, a <=> a # => 0
+        assert nil, a <=> b # => nil
+        assert false, a == b
+        assert false, a === b
+        assert false, a.equal? b
+        assert false, a.eql? b
+        assert true, a == a
+        assert true, a === a
+        assert true, a.equal? a
+        assert true, a.eql? a
+        "#;
+        assert_script(program);
+    }
 
     #[test]
     fn to_s() {

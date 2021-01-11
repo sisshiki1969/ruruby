@@ -205,20 +205,40 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn to_a(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let range = self_val.as_range().unwrap();
-    let start = range.start.expect_integer(format!(
-        "Can not iterate from {}",
-        range.start.get_class_name()
-    ))?;
-    let end = range.end.expect_integer("Range.end")?;
-    let v = if range.exclude {
-        start..end
+    let RangeInfo {
+        start,
+        end,
+        exclude,
+    } = *self_val.as_range().unwrap();
+    if let Some(start) = start.as_integer() {
+        /*let start = range.start.expect_integer(format!(
+            "Can not iterate from {}",
+            range.start.get_class_name()
+        ))?;*/
+        let end = end.expect_integer("Range.end")?;
+        let v = if exclude { start..end } else { start..end + 1 }
+            .map(|i| Value::integer(i))
+            .collect();
+        Ok(Value::array_from(v))
+    } else if let Some(start) = start.as_string() {
+        let mut end = end;
+        let end = end.expect_string("Range.end")?;
+        // single character
+        if start.is_ascii() && end.is_ascii() && start.len() == 1 && end.len() == 1 {
+            let (start, end) = (start.as_bytes()[0], end.as_bytes()[0]);
+            if start > end || start == end && exclude {
+                return Ok(Value::array_empty());
+            }
+            let v = if exclude { start..end } else { start..end + 1 }
+                .map(|b| Value::string((b as char).to_string()))
+                .collect();
+            Ok(Value::array_from(v))
+        } else {
+            unimplemented!()
+        }
     } else {
-        start..end + 1
+        unimplemented!()
     }
-    .map(|i| Value::integer(i))
-    .collect();
-    Ok(Value::array_from(v))
 }
 
 fn exclude_end(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -270,6 +290,28 @@ mod tests {
     use crate::test::*;
 
     #[test]
+    fn range_check() {
+        let program = r#"
+            0..3.2
+            Object..Class
+            "a".."z"
+            assert_error { 0.."a" }
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn range_toa() {
+        let program = r#"
+            assert [2, 3, 4, 5], (2..5).to_a
+            assert [2, 3, 4], (2...5).to_a
+            assert ["Z", "[", "\\", "]", "^", "_", "`", "a"], ("Z".."a").to_a
+            assert ["Z", "[", "\\", "]", "^", "_", "`"], ("Z"..."a").to_a
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn range_test() {
         let program = r#"
             assert(3, (3..100).begin)
@@ -281,8 +323,6 @@ mod tests {
                 [2, 4, 6, 8],
                 [[1, 2], [3, 4]].flat_map{|i| i.map{|j| j * 2}}
             )
-            assert([2, 3, 4, 5], (2..5).to_a)
-            assert([2, 3, 4], (2...5).to_a)
             assert(true, (5..7).all? {|v| v > 0 })
             assert(false, (-1..3).all? {|v| v > 0 })
             assert(true, (0...3).exclude_end?)

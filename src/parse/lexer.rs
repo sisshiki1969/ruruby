@@ -795,14 +795,15 @@ impl Lexer {
                 }
                 '\\' => {
                     s.push('\\');
-                    // TODO: '\nnn' (n=0-7) is parsed as tri-octal char literal.
-                    // This may cause problems.
+                    // TODO: It is necessary to count capture groups
+                    // to determine whether backref or octal digit.
+                    // Current impl. may cause problems.
                     let ch = self.get()?;
-                    if let Some(num) = self.consume_tri_octal(ch) {
-                        let hex = format!("x{:02x}", num);
-                        for ch in hex.chars() {
-                            s.push(ch);
-                        }
+                    if '1' >= ch && ch <= '9' && !self.peek_digit() {
+                        s.push(ch);
+                    } else if '0' <= ch && ch <= '7' {
+                        let hex = format!("x{:02x}", self.consume_tri_octal(ch).unwrap());
+                        hex.chars().for_each(|c| s.push(c));
                     } else {
                         s.push(ch);
                     }
@@ -1043,6 +1044,21 @@ impl Lexer {
         }
     }
 
+    /// Consume the next char, if the char is '0' - '7'.
+    /// Return Some(ch) if the token (ch) was consumed.
+    fn consume_octal(&mut self) -> Option<u8> {
+        if self.pos as usize >= self.len {
+            return None;
+        };
+        let ch = self.source_info.code[self.pos as usize];
+        if '0' <= ch && ch <= '7' {
+            self.pos += 1;
+            Some(ch as u8 - '0' as u8)
+        } else {
+            None
+        }
+    }
+
     /// Consume the next char, if the char is ascii-whitespace char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_whitespace(&mut self) -> bool {
@@ -1057,25 +1073,17 @@ impl Lexer {
         }
     }
 
-    fn consume_tri_octal(&mut self, ch: char) -> Option<u8> {
-        fn is_octal(c: char) -> bool {
-            '0' <= c && c <= '7'
+    fn consume_tri_octal(&mut self, first_ch: char) -> Option<u8> {
+        let mut o = first_ch as u8 - '0' as u8;
+        for _ in 0..2 {
+            match self.consume_octal() {
+                Some(n) => o = o.wrapping_mul(8) + n,
+                None => break,
+            };
         }
-        let code = &self.source_info.code;
-        let pos = self.pos as usize;
-        if pos + 2 >= self.len {
-            return None;
-        };
-        if is_octal(code[pos]) && is_octal(code[pos + 1]) && is_octal(ch) {
-            let res = ((ch as u8 - '0' as u8) as u16) * 64
-                + ((code[pos] as u8 - '0' as u8) as u16) * 8
-                + (code[pos + 1] as u8 - '0' as u8) as u16;
-            self.pos += 2;
-            Some(res as u8)
-        } else {
-            None
-        }
+        Some(o)
     }
+
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
@@ -1084,6 +1092,15 @@ impl Lexer {
             None
         } else {
             Some(self.source_info.code[pos])
+        }
+    }
+
+    /// Peek the next char.
+    /// Returns Some(char) or None if the cursor reached EOF.
+    fn peek_digit(&self) -> bool {
+        match self.peek() {
+            Some(ch) => ch.is_ascii_digit(),
+            None => false,
         }
     }
 
@@ -1454,6 +1471,17 @@ mod test {
             Token![Punct(Punct::Assign), 10, 10],
             Token![NumLit(77), 13, 14],
             Token![EOF, 15],
+        ];
+        assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn octal() {
+        let program = "/173";
+        let ans = vec![
+            Token![Punct(Punct::Div), 0, 0],
+            Token![NumLit(173), 1, 3],
+            Token![EOF, 4],
         ];
         assert_tokens(program, ans);
     }

@@ -45,6 +45,7 @@ pub struct Args {
     elems: SmallVec<[Value; ARG_ARRAY_SIZE]>,
 }
 
+// Constructors for Args
 impl Args {
     pub fn new(len: usize) -> Self {
         Args {
@@ -52,10 +53,6 @@ impl Args {
             kw_arg: Value::nil(),
             elems: smallvec![Value::nil(); len],
         }
-    }
-
-    pub fn push(&mut self, val: Value) {
-        self.elems.push(val);
     }
 
     pub fn from_slice(data: &[Value]) -> Self {
@@ -105,9 +102,19 @@ impl Args {
             elems: smallvec![arg0, arg1, arg2],
         }
     }
+}
 
+impl Args {
     pub fn len(&self) -> usize {
         self.elems.len()
+    }
+
+    pub fn push(&mut self, val: Value) {
+        self.elems.push(val);
+    }
+
+    pub fn append(&mut self, slice: &[Value]) {
+        self.elems.extend_from_slice(slice);
     }
 
     pub fn into_vec(self) -> Vec<Value> {

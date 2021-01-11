@@ -861,19 +861,47 @@ fn rjust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(format!("{}{}", gen_pad(&padding, tail), lhs)))
 }
 
-fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    fn char_forward(ch: char, _: &mut VM) -> Result<char, RubyError> {
-        std::char::from_u32((ch as u32) + 1)
-            .ok_or_else(|| RubyError::argument("Error occurs in String#succ."))
-    }
+/// https://docs.ruby-lang.org/ja/latest/class/String.html#I_NEXT
+/// https://github.com/ruby/ruby/blob/11b8bb99e6722253974c73d96ed653f97495e1c5/string.c#L4273
+fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let self_ = self_val.as_string().unwrap();
+    let self_val = self_val.as_string().unwrap();
+    let val = Value::string(str_next(self_val));
+    Ok(val)
+}
+
+fn succ_char(ch: char) -> char {
+    // This logic is not compatible with CRuby.
+    let u = match ch as u32 {
+        0x7f => 0x00,
+        0xdfbf => 0xe0a080,
+        0xefbfbf => 0xf0908080,
+        0xf48fbfbf => 0xc2800,
+        i => i + 1,
+    };
+    std::char::from_u32(u).expect("Error occured in char_forward()")
+}
+
+fn str_next(self_: &str) -> String {
     if self_.len() == 0 {
-        return Ok(Value::string(""));
+        return "".to_string();
     }
     let chars = self_.chars();
     let mut buf: Vec<char> = vec![];
     let mut carry_flag = true;
+    let mut last_alnum = 0;
+    if self_.chars().all(|c| !c.is_alphanumeric()) {
+        // non-alnum mode
+        for c in chars.rev() {
+            if carry_flag {
+                buf.push(succ_char(c));
+                carry_flag = false;
+            } else {
+                buf.push(c);
+            }
+        }
+        return buf.iter().rev().collect::<String>();
+    }
     for c in chars.rev() {
         if carry_flag {
             if '0' <= c && c <= '8'
@@ -882,37 +910,42 @@ fn next(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 || '０' <= c && c <= '８'
             {
                 carry_flag = false;
-                buf.push(char_forward(c, vm)?);
+                buf.push(succ_char(c));
             } else if c == '9' {
+                last_alnum = buf.len();
                 buf.push('0');
             } else if c == '９' {
+                last_alnum = buf.len();
                 buf.push('０');
             } else if c == 'z' {
+                last_alnum = buf.len();
                 buf.push('a');
             } else if c == 'Z' {
+                last_alnum = buf.len();
                 buf.push('A');
+            } else if !c.is_alphanumeric() {
+                buf.push(c);
             } else {
                 carry_flag = false;
-                buf.push(char_forward(c, vm)?);
+                buf.push(succ_char(c));
             }
         } else {
             buf.push(c);
         }
     }
     if carry_flag {
-        let c = buf.last().unwrap();
-        if *c == '0' {
-            buf.push('1');
-        } else if *c == '０' {
-            buf.push('１');
-        } else if *c == 'a' {
-            buf.push('a');
-        } else if *c == 'A' {
-            buf.push('A');
+        let c = buf[last_alnum];
+        if c == '0' {
+            buf.insert(last_alnum + 1, '1');
+        } else if c == '０' {
+            buf.insert(last_alnum + 1, '１');
+        } else if c == 'a' {
+            buf.insert(last_alnum + 1, 'a');
+        } else if c == 'A' {
+            buf.insert(last_alnum + 1, 'A');
         }
     }
-    let val = Value::string(buf.iter().rev().collect::<String>());
-    Ok(val)
+    buf.iter().rev().collect::<String>()
 }
 
 fn count(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1321,29 +1354,29 @@ mod test {
         assert "aa".succ, "ab"
         assert "88".succ.succ, "90"
         assert "99".succ, "100"
-        assert "ZZ".succ, "AAA"
+        assert "ZZZZ".succ, "AAAAA"
         assert "a9".succ, "b0"
-        #assert "-9".succ, "-10"
+        assert "-9".succ, "-10"
         assert ".".succ, "/"
-        assert "aa".succ, "ab"
+        assert "AA".succ, "AB"
         
         # 繰り上がり
         assert "99".succ, "100"
         assert "a9".succ, "b0"
         assert "Az".succ, "Ba"
         assert "zz".succ, "aaa"
-        #assert "-9".succ, "-10"
+        assert "-9".succ, "-10"
         assert "9".succ, "10"
         assert "09".succ, "10"
         assert "０".succ, "１"
         assert "９".succ, "１０"
         
         # アルファベット・数字とそれ以外の混在
-        #assert "1.9.9".succ, "2.0.0"
+        assert "1.9.9".succ, "2.0.0"
         
         # アルファベット・数字以外のみ
         assert ".".succ, "/"
-        #assert "\0".succ, "\001"
+        assert "\0".succ, "\001"
         #assert "\377".succ, "\001\000"
         "#;
         assert_script(program);

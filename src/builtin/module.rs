@@ -6,6 +6,7 @@ pub fn init(globals: &mut Globals) {
     class.add_builtin_class_method("new", module_new);
 
     class.add_builtin_method_by_str("===", teq);
+    class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("name", name);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
@@ -35,6 +36,7 @@ pub fn init(globals: &mut Globals) {
 
 /// Create new module.
 /// If a block is given, eval it in the context of newly created module.
+/// https://docs.ruby-lang.org/ja/latest/class/Module.html#S_NEW
 fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let module = Module::module();
@@ -52,6 +54,7 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+/// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_--3D--3D--3D
 fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let class = args[0].get_class();
@@ -59,6 +62,27 @@ fn teq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(class.include_module(self_val)))
 }
 
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/=3c=3d=3e.html
+fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if self_val.id() == args[0].id() {
+        return Ok(Value::integer(0));
+    }
+    let self_val = self_val.into_module();
+    let other = match args[0].if_mod_class() {
+        Some(m) => m,
+        None => return Ok(Value::nil()),
+    };
+    if other.include_module(self_val) {
+        Ok(Value::integer(1))
+    } else if self_val.include_module(other) {
+        Ok(Value::integer(-1))
+    } else {
+        Ok(Value::nil())
+    }
+}
+
+/// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_INSPECT
 fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let val = match self_val.into_module().op_name() {
         Some(name) => Value::string(name.to_owned()),
@@ -67,6 +91,7 @@ fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(val)
 }
 
+/// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_INSPECT
 fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
@@ -377,7 +402,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn module_op() {
+    fn module_teq() {
         let program = r#"
         assert(true, Integer === 3)
         assert(false, Integer === "a")
@@ -404,6 +429,31 @@ mod test {
         assert(true, M2 === c)
         assert(true, Object === c)
         assert(false, Integer === c)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn module_cmp() {
+        let program = r#"
+        module Foo; end
+        class Bar
+          include Foo
+        end
+        class Baz < Bar; end
+        class Qux; end
+        assert 0, Foo <=> Foo
+        assert 0, Bar <=> Bar
+        assert 0, Baz <=> Baz
+        assert 1, Foo <=> Bar
+        assert 1, Bar <=> Baz
+        assert 1, Foo <=> Baz
+        assert -1, Bar <=> Foo     # => -1
+        assert -1, Baz <=> Bar     # => -1
+        assert -1, Baz <=> Foo     # => -1
+        assert nil, Baz <=> Qux     # => nil
+        assert nil, Qux <=> Baz     # => nil
+        assert nil, Baz <=> Object.new  # => nil
         "#;
         assert_script(program);
     }
