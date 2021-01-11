@@ -1,12 +1,12 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Value::class_under(globals.builtins.object);
+    let mut class = Module::class_under(globals.builtins.object);
     class.set_const_by_str("CLOCK_MONOTONIC", Value::integer(0));
-    globals.set_toplevel_constant("Process", class.get());
+    globals.set_toplevel_constant("Process", class);
     class.add_builtin_class_method("clock_gettime", clock_gettime);
     class.add_builtin_class_method("pid", pid);
-    class.get()
+    class.into()
 }
 
 // Class methods

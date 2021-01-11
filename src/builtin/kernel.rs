@@ -3,9 +3,9 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::module();
-    globals.set_toplevel_constant("Kernel", class.get());
+pub fn init(globals: &mut Globals) -> Module {
+    let class = Module::module();
+    globals.set_toplevel_constant("Kernel", class);
     class.add_builtin_module_func("puts", puts);
     class.add_builtin_module_func("p", p);
     class.add_builtin_module_func("print", print);
@@ -33,7 +33,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_module_func("at_exit", at_exit);
     class.add_builtin_module_func("`", command);
     class.add_builtin_module_func("eval", eval);
-    class.get()
+    class
 }
 /// Built-in function "puts".
 fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -136,8 +136,8 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(path) => path,
         None => return Ok(Value::false_val()),
     };
-    let ainfo = load_path.expect_array("LOAD_PATH($:)")?;
-    for path in ainfo.elements.iter_mut() {
+    let mut ainfo = load_path.expect_array("LOAD_PATH($:)")?;
+    for path in ainfo.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);
         base_path.set_extension("rb");
@@ -364,19 +364,11 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 }
             },
             _ => {
-                let inspect = vm.val_inspect(args[0])?;
-                return Err(RubyError::typeerr(format!(
-                    "Can not convert {} into Integer.",
-                    inspect
-                )));
+                return Err(RubyError::no_implicit_conv(args[0], "Integer"));
             }
         },
         _ => {
-            let inspect = vm.val_inspect(args[0])?;
-            return Err(RubyError::typeerr(format!(
-                "Can not convert {} into Integer.",
-                inspect
-            )));
+            return Err(RubyError::no_implicit_conv(args[0], "Integer"));
         }
     };
     Ok(Value::integer(val))

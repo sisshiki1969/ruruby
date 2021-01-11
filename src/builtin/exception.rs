@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::class_under(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_class_method("new", exception_new);
     class.add_builtin_class_method("exception", exception_new);
     class.add_builtin_class_method("allocate", exception_allocate);
@@ -10,36 +10,36 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_s", tos);
     builtin::module::set_attr_accessor(
         globals,
-        class.get(),
+        class,
         &Args::new2(
             Value::symbol_from_str("message"),
             Value::symbol_from_str("backtrace"),
         ),
     )
     .unwrap();
-    let standard_error = Value::class_under(class);
-    globals.set_toplevel_constant("StandardError", standard_error.get());
+    let standard_error = Module::class_under(class);
+    globals.set_toplevel_constant("StandardError", standard_error);
     // Subclasses of StandardError.
-    let err = Value::class_under(standard_error);
-    globals.set_toplevel_constant("ArgumentError", err.get());
-    let err = Value::class_under(standard_error);
-    globals.set_toplevel_constant("TypeError", err.get());
-    let err = Value::class_under(standard_error);
-    globals.set_toplevel_constant("NoMethodError", err.get());
-    let runtime_error = Value::class_under(standard_error);
-    globals.set_toplevel_constant("StopIteration", runtime_error.get());
-    let runtime_error = Value::class_under(standard_error);
-    globals.set_toplevel_constant("RuntimeError", runtime_error.get());
-    let frozen_error = Value::class_under(runtime_error);
-    globals.set_toplevel_constant("FrozenError", frozen_error.get());
-    class.get()
+    let err = Module::class_under(standard_error);
+    globals.set_toplevel_constant("ArgumentError", err);
+    let err = Module::class_under(standard_error);
+    globals.set_toplevel_constant("TypeError", err);
+    let err = Module::class_under(standard_error);
+    globals.set_toplevel_constant("NoMethodError", err);
+    let runtime_error = Module::class_under(standard_error);
+    globals.set_toplevel_constant("StopIteration", runtime_error);
+    let runtime_error = Module::class_under(standard_error);
+    globals.set_toplevel_constant("RuntimeError", runtime_error);
+    let frozen_error = Module::class_under(runtime_error);
+    globals.set_toplevel_constant("FrozenError", frozen_error);
+    class.into()
 }
 
 // Class methods
 
 fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     let new_instance = if args.len() == 0 {
         let class_name = self_val.name();
         Value::exception(self_val, RubyError::none(class_name))
@@ -57,7 +57,7 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn exception_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     let new_instance = Value::exception(self_val, RubyError::none(""));
     Ok(new_instance)
 }

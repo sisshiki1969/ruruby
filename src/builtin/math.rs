@@ -1,13 +1,13 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Value::class_under(globals.builtins.object);
-    globals.set_toplevel_constant("Math", class.get());
+    let mut class = Module::class_under(globals.builtins.object);
+    globals.set_toplevel_constant("Math", class);
     class.add_builtin_class_method("sqrt", sqrt);
     class.add_builtin_class_method("cos", cos);
     class.add_builtin_class_method("sin", sin);
     class.set_const_by_str("PI", Value::float(std::f64::consts::PI));
-    class.get()
+    class.into()
 }
 
 // Class methods

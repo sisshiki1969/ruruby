@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::class_from(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("&", and);
     class.add_builtin_method_by_str("|", or);
     class.add_builtin_method_by_str("^", xor);
@@ -13,9 +13,8 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_h", toh);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("to_s", tos);
-    let class_obj = Value::class(class);
-    globals.set_toplevel_constant("NilClass", class_obj);
-    class_obj
+    globals.set_toplevel_constant("NilClass", class);
+    class.into()
 }
 
 // Class methods
@@ -49,7 +48,7 @@ fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn toa(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    Ok(Value::array_from(vec![]))
+    Ok(Value::array_empty())
 }
 
 fn toc(_: &mut VM, _: Value, args: &Args) -> VMResult {

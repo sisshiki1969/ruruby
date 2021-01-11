@@ -57,9 +57,9 @@ pub struct BuiltinClass {
     pub nilclass: Value,
     pub trueclass: Value,
     pub falseclass: Value,
-    pub kernel: Value,
-    pub comparable: Value,
-    pub numeric: Value,
+    pub kernel: Module,
+    pub comparable: Module,
+    pub numeric: Module,
 }
 
 type BuiltinRef = Ref<BuiltinClass>;
@@ -67,20 +67,21 @@ type BuiltinRef = Ref<BuiltinClass>;
 impl BuiltinClass {
     fn new() -> Self {
         let basic_class = ClassInfo::class_from(None);
-        let basic = Value::bootstrap_class(basic_class);
+        let basic = Module::bootstrap_class(basic_class);
         let object_class = ClassInfo::class_from(basic);
-        let object = Value::bootstrap_class(object_class);
+        let object = Module::bootstrap_class(object_class);
         let module_class = ClassInfo::class_from(object);
-        let module = Value::bootstrap_class(module_class);
+        let module = Module::bootstrap_class(module_class);
         let class_class = ClassInfo::class_from(module);
-        let class = Value::bootstrap_class(class_class);
+        let class = Module::bootstrap_class(class_class);
 
-        basic.get().set_class(class);
-        object.get().set_class(class);
-        module.get().set_class(class);
-        class.get().set_class(class);
+        basic.set_class(class);
+        object.set_class(class);
+        module.set_class(class);
+        class.set_class(class);
 
         let nil = Value::nil();
+        let nilmod = Module::default();
         BuiltinClass {
             integer: nil,
             float: nil,
@@ -103,9 +104,9 @@ impl BuiltinClass {
             nilclass: nil,
             trueclass: nil,
             falseclass: nil,
-            kernel: nil,
-            comparable: nil,
-            numeric: nil,
+            kernel: nilmod,
+            comparable: nilmod,
+            numeric: nilmod,
         }
     }
 
@@ -122,87 +123,99 @@ impl BuiltinClass {
     }
 
     pub fn string() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().string))
+        BUILTINS.with(|b| b.borrow().unwrap().string).into_module()
     }
 
     pub fn integer() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().integer))
+        BUILTINS.with(|b| b.borrow().unwrap().integer).into_module()
     }
 
     pub fn float() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().float))
+        BUILTINS.with(|b| b.borrow().unwrap().float).into_module()
     }
 
     pub fn symbol() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().symbol))
+        BUILTINS.with(|b| b.borrow().unwrap().symbol).into_module()
     }
 
     pub fn complex() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().complex))
+        BUILTINS.with(|b| b.borrow().unwrap().complex).into_module()
     }
 
     pub fn range() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().range))
+        BUILTINS.with(|b| b.borrow().unwrap().range).into_module()
     }
 
     pub fn array() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().array))
+        BUILTINS.with(|b| b.borrow().unwrap().array).into_module()
     }
 
     pub fn hash() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().hash))
+        BUILTINS.with(|b| b.borrow().unwrap().hash).into_module()
     }
 
     pub fn fiber() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().fiber))
+        BUILTINS.with(|b| b.borrow().unwrap().fiber).into_module()
     }
 
     pub fn enumerator() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().enumerator))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().enumerator)
+            .into_module()
     }
 
     pub fn procobj() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().procobj))
+        BUILTINS.with(|b| b.borrow().unwrap().procobj).into_module()
     }
 
     pub fn regexp() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().regexp))
+        BUILTINS.with(|b| b.borrow().unwrap().regexp).into_module()
     }
 
     pub fn method() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().method))
+        BUILTINS.with(|b| b.borrow().unwrap().method).into_module()
     }
 
     pub fn exception() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().exception))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().exception)
+            .into_module()
     }
 
     pub fn standard() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().standard))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().standard)
+            .into_module()
     }
 
     pub fn nilclass() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().nilclass))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().nilclass)
+            .into_module()
     }
 
     pub fn trueclass() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().trueclass))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().trueclass)
+            .into_module()
     }
 
     pub fn falseclass() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().falseclass))
+        BUILTINS
+            .with(|b| b.borrow().unwrap().falseclass)
+            .into_module()
     }
 
     pub fn kernel() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().kernel))
+        BUILTINS.with(|b| b.borrow().unwrap().kernel)
     }
 
     pub fn numeric() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().numeric))
+        BUILTINS.with(|b| b.borrow().unwrap().numeric)
     }
 
     pub fn comparable() -> Module {
-        Module::new(BUILTINS.with(|b| b.borrow().unwrap().comparable))
+        BUILTINS.with(|b| b.borrow().unwrap().comparable)
     }
 }
 
@@ -274,9 +287,9 @@ impl Globals {
             source_files: vec![],
         };
         // Generate singleton class for BasicObject
-        let singleton_class = ClassInfo::singleton_from(class, basic.get());
+        let singleton_class = ClassInfo::singleton_from(class, basic);
         let singleton_obj = RValue::new_class(singleton_class).pack();
-        basic.get().set_class(Module::new(singleton_obj));
+        basic.set_class(Module::new(singleton_obj));
 
         builtins.comparable = comparable::init(&mut globals);
         builtins.numeric = numeric::init(&mut globals);
@@ -289,7 +302,7 @@ impl Globals {
 
         macro_rules! set_builtin_class {
             ($name:expr, $class_object:ident) => {
-                globals.set_toplevel_constant($name, $class_object.get());
+                globals.set_toplevel_constant($name, $class_object);
             };
         }
 
@@ -404,8 +417,9 @@ impl Globals {
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_const(&mut self, mut class_obj: Value, id: IdentId, val: Value) {
-        class_obj.as_mut_module().set_const(id, val);
+    pub fn set_const(&mut self, mut class_obj: Module, class_name: IdentId, val: impl Into<Value>) {
+        let val = val.into();
+        class_obj.set_const(class_name, val);
         self.const_version += 1;
     }
 
@@ -434,8 +448,8 @@ impl Globals {
     }
 
     /// Bind `object` to the constant `name` of the root object.
-    pub fn set_toplevel_constant(&mut self, name: &str, object: Value) {
-        self.builtins.object.set_const_by_str(name, object);
+    pub fn set_toplevel_constant(&mut self, name: &str, object: impl Into<Value>) {
+        self.builtins.object.set_const_by_str(name, object.into());
         self.const_version += 1;
     }
 

@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) {
     let mut object = globals.builtins.object;
-    object.append_include(Module::new(globals.builtins.kernel), globals);
+    object.append_include(globals.builtins.kernel, globals);
 
     object.add_builtin_method_by_str("initialize", initialize);
     object.add_builtin_method_by_str("class", class);
@@ -36,7 +36,7 @@ fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    Ok(self_val.get_class().get())
+    Ok(self_val.get_class().into())
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -69,7 +69,7 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    self_val.get_singleton_class().map(|c| c.get())
+    self_val.get_singleton_class().map(|c| c.into())
 }
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -92,7 +92,7 @@ fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(id) => id,
-        None => return Err(RubyError::typeerr("An argument must be a Symbol.")),
+        None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
     };
     let method = vm.get_method_from_receiver(self_val, name)?;
     let val = Value::method(name, self_val, method);

@@ -2,6 +2,8 @@ pub mod value;
 pub use value::*;
 mod rvalue;
 pub use rvalue::*;
+mod class;
+pub use class::*;
 mod array;
 pub use array::*;
 mod hash;

@@ -1,10 +1,10 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let mut class = ClassInfo::class_from(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("call", call);
     class.add_builtin_method_by_str("[]", call);
-    Value::class(class)
+    class.into()
 }
 
 pub fn call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

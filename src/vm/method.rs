@@ -22,6 +22,7 @@ pub enum MethodInfo {
     AttrReader { id: IdentId },
     AttrWriter { id: IdentId },
     BuiltinFunc { name: IdentId, func: BuiltinFunc },
+    Void,
 }
 
 impl GC for MethodInfo {
@@ -40,17 +41,18 @@ impl std::fmt::Debug for MethodInfo {
             MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
             MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
             MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
+            MethodInfo::Void => write!(f, "Void"),
         }
     }
 }
 
-impl MethodInfo {
-    pub fn default() -> Self {
-        MethodInfo::AttrReader {
-            id: IdentId::from(0),
-        }
+impl Default for MethodInfo {
+    fn default() -> Self {
+        MethodInfo::Void
     }
+}
 
+impl MethodInfo {
     pub fn as_iseq(&self) -> ISeqRef {
         if let MethodInfo::RubyFunc { iseq } = self {
             *iseq
@@ -92,9 +94,15 @@ pub enum ISeqKind {
     Block,           // block or proc
 }
 
+impl Default for ISeqKind {
+    fn default() -> Self {
+        ISeqKind::Other
+    }
+}
+
 pub type ISeqRef = Ref<ISeqInfo>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ISeqInfo {
     pub method: MethodRef,
     pub name: Option<IdentId>,
@@ -115,23 +123,6 @@ pub struct ISeqInfo {
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
     pub forvars: Vec<(u32, u32)>,
-}
-
-impl Default for ISeqInfo {
-    fn default() -> Self {
-        ISeqInfo::new(
-            MethodRef::new(MethodInfo::default()),
-            None,
-            ISeqParams::default(),
-            ISeq::new(),
-            LvarCollector::new(),
-            vec![],
-            vec![],
-            SourceInfoRef::default(),
-            ISeqKind::Method(IdentId::from(0)),
-            vec![],
-        )
-    }
 }
 
 impl ISeqInfo {

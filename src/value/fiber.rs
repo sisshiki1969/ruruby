@@ -131,7 +131,7 @@ impl FiberInfo {
             FiberState::Created => {
                 #[cfg(feature = "perf")]
                 _current_vm.perf.get_perf(Perf::INVALID);
-                #[cfg(feature = "trace")]
+                #[cfg(any(feature = "trace", feature = "trace-func"))]
                 println!("===> resume(spawn)");
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
                 let fiber_kind = self.kind.clone();
@@ -151,7 +151,7 @@ impl FiberInfo {
                     //eprintln!("finished {:?} {:?}", std::thread::current().id(), res);
                     // If the fiber was finished, the fiber becomes DEAD.
                     // Return a value on the stack top to the parent fiber.
-                    #[cfg(feature = "trace")]
+                    #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<=== yield {:?} and terminate fiber.", res);
                     let res = match res {
                         Err(err) => match &err.kind {
@@ -202,7 +202,7 @@ impl FiberInfo {
             FiberState::Running => {
                 #[cfg(feature = "perf")]
                 _current_vm.perf.get_perf(Perf::INVALID);
-                #[cfg(feature = "trace")]
+                #[cfg(any(feature = "trace", feature = "trace-func"))]
                 println!("===> resume");
                 //eprintln!("resume {:?}", VMRef::from_ref(&self.vm));
                 self.tx.send(FiberMsg::Resume).unwrap();

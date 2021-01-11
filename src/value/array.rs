@@ -1,5 +1,86 @@
 use crate::*;
 
+#[derive(Debug, Clone, Copy)]
+pub struct Array(Value);
+
+impl std::cmp::PartialEq for Array {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+impl std::cmp::Eq for Array {}
+
+impl std::ops::Deref for Array {
+    type Target = ArrayInfo;
+    fn deref(&self) -> &Self::Target {
+        match self.0.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Array(aref) => aref,
+                _ => unreachable!(),
+            },
+            None => unreachable!(),
+        }
+    }
+}
+
+impl std::ops::DerefMut for Array {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self.0.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Array(aref) => aref,
+                _ => unreachable!(),
+            },
+            None => unreachable!(),
+        }
+    }
+}
+
+impl std::hash::Hash for Array {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
+    }
+}
+
+impl Into<Value> for Array {
+    fn into(self) -> Value {
+        self.0
+    }
+}
+
+impl GC for Array {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.get().mark(alloc);
+    }
+}
+
+impl Array {
+    pub fn new(val: Value) -> Self {
+        val.as_array().unwrap();
+        Array(val)
+    }
+
+    pub fn new_unchecked(val: Value) -> Self {
+        Array(val)
+    }
+
+    /*pub fn default() -> Self {
+        Array(Value::nil())
+    }*/
+
+    fn get(self) -> Value {
+        self.0
+    }
+
+    pub fn id(self) -> u64 {
+        self.0.id()
+    }
+
+    pub fn dup(&self) -> Self {
+        Array(self.get().dup())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayInfo {
     pub elements: Vec<Value>,
@@ -8,6 +89,19 @@ pub struct ArrayInfo {
 impl GC for ArrayInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.elements.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
+impl std::ops::Deref for ArrayInfo {
+    type Target = Vec<Value>;
+    fn deref(&self) -> &Self::Target {
+        &self.elements
+    }
+}
+
+impl std::ops::DerefMut for ArrayInfo {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.elements
     }
 }
 
@@ -43,7 +137,7 @@ impl ArrayInfo {
         let val = if len < 0 {
             Value::nil()
         } else if index >= self_len {
-            Value::array_from(vec![])
+            Value::array_empty()
         } else {
             let len = len as usize;
             let end = std::cmp::min(self_len, index + len);
@@ -72,7 +166,7 @@ impl ArrayInfo {
             let start = if len < i_start {
                 return Ok(Value::nil());
             } else if len == i_start {
-                return Ok(Value::array_from(vec![]));
+                return Ok(Value::array_empty());
             } else {
                 i_start as usize
             };
@@ -88,7 +182,7 @@ impl ArrayInfo {
                 (len + i_end + if range.exclude { 0 } else { 1 }) as usize
             };
             if start >= end {
-                return Ok(Value::array_from(vec![]));
+                return Ok(Value::array_empty());
             }
             Ok(Value::array_from(self.elements[start..end].to_vec()))
         } else {
@@ -187,5 +281,41 @@ impl ArrayInfo {
 
     pub fn len(&self) -> usize {
         self.elements.len()
+    }
+
+    pub fn each<F>(&self, mut f: F) -> Result<(), RubyError>
+    where
+        F: FnMut(&Value) -> Result<(), RubyError>,
+    {
+        let mut i = 0;
+        let len = self.len();
+        while i < len {
+            f(&self.elements[i])?;
+            i += 1;
+        }
+        Ok(())
+    }
+
+    pub fn retain<F>(&mut self, mut f: F) -> Result<(), RubyError>
+    where
+        F: FnMut(&Value) -> Result<bool, RubyError>,
+    {
+        let len = self.len();
+        let mut del = 0;
+        {
+            let v = &mut *self.elements;
+
+            for i in 0..len {
+                if !f(&v[i])? {
+                    del += 1;
+                } else if del > 0 {
+                    v.swap(i - del, i);
+                }
+            }
+        }
+        if del > 0 {
+            self.elements.truncate(len - del);
+        }
+        Ok(())
     }
 }

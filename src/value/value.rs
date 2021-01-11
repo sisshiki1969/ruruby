@@ -55,7 +55,7 @@ impl std::hash::Hash for Value {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::Integer(lhs) => lhs.hash(state),
+                ObjKind::Integer(lhs) => (*lhs as f64).to_bits().hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
@@ -212,7 +212,6 @@ impl Value {
                         format!("({:?}{:?}i)", r, i)
                     }
                 }
-                ObjKind::Class(cinfo) => cinfo.inspect(),
                 ObjKind::Module(cinfo) => cinfo.inspect(),
                 ObjKind::Array(aref) => {
                     if level == 0 {
@@ -294,7 +293,11 @@ impl Value {
     }
 
     pub fn into_module(self) -> Module {
-        Module::new(self)
+        Module::new_unchecked(self)
+    }
+
+    pub fn into_array(self) -> Array {
+        Array::new_unchecked(self)
     }
 
     pub fn dup(&self) -> Self {
@@ -489,11 +492,11 @@ impl Value {
         self.get_class_for_method().is_singleton()
     }
 
-    pub fn set_var(&mut self, id: IdentId, val: Value) -> Option<Value> {
+    pub fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
         self.rvalue_mut().set_var(id, val)
     }
 
-    pub fn set_var_by_str(&mut self, name: &str, val: Value) {
+    pub fn set_var_by_str(self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.set_var(id, val);
     }
@@ -568,22 +571,14 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(RubyError::typeerr(format!(
-                "{} must be an Integer. (given:{})",
-                msg.into(),
-                self.get_class_name()
-            ))),
+            _ => Err(RubyError::wrong_type(msg.into(), "Integer", *self)),
         }
     }
 
     pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
-            None => Err(RubyError::typeerr(format!(
-                "{} must be Float. (given:{})",
-                msg,
-                self.get_class_name()
-            ))),
+            None => Err(RubyError::wrong_type(msg, "Float", *self)),
         }
     }
 
@@ -644,10 +639,7 @@ impl Value {
     pub fn expect_bytes(&self, msg: &str) -> Result<&[u8], RubyError> {
         match self.as_rstring() {
             Some(rs) => Ok(rs.as_bytes()),
-            None => Err(RubyError::typeerr(format!(
-                "{} must be String. (given:{:?})",
-                msg, *self
-            ))),
+            None => Err(RubyError::wrong_type(msg, "String", *self)),
         }
     }
 
@@ -665,10 +657,7 @@ impl Value {
         let val = *self;
         match self.as_mut_rstring() {
             Some(rs) => rs.as_string(),
-            None => Err(RubyError::typeerr(format!(
-                "{} must be String. (given:{:?})",
-                msg, val
-            ))),
+            None => Err(RubyError::wrong_type(msg, "String", val)),
         }
     }
 
@@ -679,61 +668,50 @@ impl Value {
         };
         let str = val
             .as_mut_rstring()
-            .ok_or_else(|| {
-                RubyError::typeerr(format!(
-                    "{} must be String or Symbol. (given:{:?})",
-                    msg, *self
-                ))
-            })?
+            .ok_or_else(|| RubyError::wrong_type(msg, "String or Symbol", *self))?
             .as_string()?;
         Ok(IdentId::get_id(str))
     }
 
     pub fn expect_symbol_or_string(&self, msg: &str) -> Result<IdentId, RubyError> {
+        let val = *self;
         match self.as_symbol() {
             Some(symbol) => Ok(symbol),
             None => match self.as_string() {
                 Some(s) => Ok(IdentId::get_id(s)),
-                None => Err(RubyError::typeerr(format!(
-                    "{} must be Symbol or String.",
-                    msg
-                ))),
+                None => Err(RubyError::wrong_type(msg, "Symbol or String", val)),
             },
         }
     }
 
     pub fn expect_regexp_or_string(&self, vm: &mut VM, msg: &str) -> Result<RegexpInfo, RubyError> {
+        let val = *self;
         if let Some(re) = self.as_regexp() {
             Ok(re)
         } else if let Some(string) = self.as_string() {
             vm.regexp_from_string(string)
         } else {
-            Err(RubyError::typeerr(format!(
-                "{} arg must be RegExp or String.",
-                msg
-            )))
+            Err(RubyError::wrong_type(msg, "RegExp or String.", val))
         }
     }
 
-    /// Take &ClassInfo from `self`.
-    /// Panic if `self` is not Class.
     pub fn as_class(&self) -> &ClassInfo {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(cinfo) => cinfo,
-                _ => panic!(format!("as_class(): Not a class object. {:?}", *self)),
+                ObjKind::Module(cinfo) => cinfo,
+                _ => unreachable!(),
             },
-            None => panic!(format!("as_class(): Not a class object. {:?}", *self)),
+            None => unreachable!(),
         }
     }
 
-    /// Take &mut ClassInfo from `self`.
-    /// Panic if `self` is not a Class.
     pub fn as_mut_class(&mut self) -> &mut ClassInfo {
-        let self_ = *self;
-        match self.if_mut_class() {
-            Some(cinfo) => cinfo,
-            None => panic!(format!("as_mut_class(): Not a class object. {:?}", self_)),
+        match self.as_mut_rvalue() {
+            Some(oref) => match &mut oref.kind {
+                ObjKind::Module(cinfo) => cinfo,
+                _ => unreachable!(),
+            },
+            None => unreachable!(),
         }
     }
 
@@ -741,59 +719,10 @@ impl Value {
     pub fn is_class(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(_) => true,
+                ObjKind::Module(cinfo) => !cinfo.is_module(),
                 _ => false,
             },
             None => false,
-        }
-    }
-
-    pub fn if_mut_class(&mut self) -> Option<&mut ClassInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Class(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    /// Take &ClassInfo from `self`.
-    /// Panic if `self` is not a Class nor Module.
-    pub fn as_module(&self) -> &ClassInfo {
-        match self.if_mod_class() {
-            Some(cinfo) => cinfo,
-            None => panic!("as_module(): Not a class or module object. {:?}", self),
-        }
-    }
-
-    /// Take &mut ClassInfo from `self`.
-    /// Panic if `self` is not a Class nor Module.
-    pub fn as_mut_module(&mut self) -> &mut ClassInfo {
-        let self_ = *self;
-        match self.if_mut_mod_class() {
-            Some(cinfo) => cinfo,
-            None => panic!("as_mut_module(): Not a class or module object. {:?}", self_),
-        }
-    }
-
-    pub fn if_mod_class(&self) -> Option<&ClassInfo> {
-        match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    pub fn if_mut_mod_class(&mut self) -> Option<&mut ClassInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
         }
     }
 
@@ -801,27 +730,17 @@ impl Value {
     pub fn is_module(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Module(_) => true,
+                ObjKind::Module(cinfo) => cinfo.is_module(),
                 _ => false,
             },
             None => false,
         }
     }
 
-    pub fn if_mut_module(&mut self) -> Option<&mut ClassInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Module(cinfo) => Some(cinfo),
-                _ => None,
-            },
-            None => None,
-        }
-    }
-
-    pub fn if_module(&self) -> Option<&ClassInfo> {
+    pub fn if_mod_class(self) -> Option<Module> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Module(cinfo) => Some(cinfo),
+                ObjKind::Module(_) => Some(self.into_module()),
                 _ => None,
             },
             None => None,
@@ -830,75 +749,60 @@ impl Value {
 
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
-    pub fn expect_class(&mut self, vm: &mut VM, msg: &str) -> Result<&mut ClassInfo, RubyError> {
-        let self_ = self.clone();
-        if let Some(cinfo) = self.if_mut_class() {
-            Ok(cinfo)
+    pub fn expect_class(self, msg: &str) -> Result<Module, RubyError> {
+        //let self_ = self.clone();
+        if self.is_class() {
+            Ok(Module::new(self))
         } else {
-            let val = vm.val_inspect(self_)?;
-            Err(RubyError::typeerr(format!(
-                "{} must be Class. (given:{})",
-                msg, val
-            )))
+            Err(RubyError::wrong_type(msg, "Class", self))
         }
     }
 
     /// Returns `&ClassInfo` if `self` is a Module.
     /// When `self` is not a Module, returns `TypeError`.
-    pub fn expect_module(&self, msg: &str) -> Result<&ClassInfo, RubyError> {
-        if let Some(cinfo) = self.if_module() {
-            Ok(cinfo)
+    pub fn expect_module(self, msg: &str) -> Result<Module, RubyError> {
+        if self.is_module() {
+            Ok(Module::new(self))
         } else {
-            Err(RubyError::typeerr(format!(
-                "{} must be Module. (given:{:?})",
-                msg, self
-            )))
+            Err(RubyError::wrong_type(msg, "Module", self))
         }
     }
 
     /// Returns `ClassRef` if `self` is a Module / Class.
     /// When `self` is not a Module, returns `TypeError`.
-    pub fn expect_mod_class(&mut self, vm: &mut VM) -> Result<&mut ClassInfo, RubyError> {
-        let self_ = self.clone();
-        if let Some(cinfo) = self.if_mut_mod_class() {
-            Ok(cinfo)
+    pub fn expect_mod_class(self) -> Result<Module, RubyError> {
+        if self.if_mod_class().is_some() {
+            Ok(Module::new(self))
         } else {
-            let val = vm.val_inspect(self_)?;
             Err(RubyError::typeerr(format!(
-                "Must be Module or Class. (given:{})",
-                val
+                "Must be Module or Class. (given:{:?})",
+                self
             )))
         }
     }
 
-    pub fn as_array(&self) -> Option<&ArrayInfo> {
+    pub fn is_array(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => Some(aref),
-                _ => None,
+                ObjKind::Array(_) => true,
+                _ => false,
             },
-            None => None,
+            None => false,
         }
     }
 
-    pub fn as_mut_array(&mut self) -> Option<&mut ArrayInfo> {
-        match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Array(aref) => Some(aref),
-                _ => None,
-            },
-            None => None,
+    pub fn as_array(&self) -> Option<Array> {
+        if self.is_array() {
+            Some(Array::new_unchecked(*self))
+        } else {
+            None
         }
     }
 
-    pub fn expect_array(&mut self, msg: &str) -> Result<&mut ArrayInfo, RubyError> {
-        let val = *self;
-        match self.as_mut_array() {
-            Some(ary) => Ok(ary),
-            None => Err(RubyError::typeerr(format!(
-                "{} must be Array. (given:{:?})",
-                msg, val
-            ))),
+    pub fn expect_array(&mut self, msg: &str) -> Result<Array, RubyError> {
+        match self.as_array() {
+            Some(_) => Ok(self.into_array()),
+            None => Err(RubyError::wrong_type(msg, "Array", *self)),
         }
     }
 
@@ -946,10 +850,7 @@ impl Value {
         let val = *self;
         match self.as_hash() {
             Some(hash) => Ok(hash),
-            None => Err(RubyError::typeerr(format!(
-                "{} must be Hash. (given:{:?})",
-                msg, val
-            ))),
+            None => Err(RubyError::wrong_type(msg, "Hash", val)),
         }
     }
 
@@ -1144,38 +1045,19 @@ impl Value {
         RValue::new_range(info).pack()
     }
 
-    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
-        Module::new(RValue::new_bootstrap(cinfo).pack())
-    }
-
     pub fn ordinary_object(class: Module) -> Self {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn class(cinfo: ClassInfo) -> Self {
-        assert!(!cinfo.is_module());
-        let obj = RValue::new_class(cinfo).pack();
-        obj.get_singleton_class().unwrap();
-        obj
+    pub fn array_empty() -> Value {
+        Value::array_from(vec![])
     }
 
-    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
-        Module::new(Value::class(ClassInfo::class_from(superclass)))
-    }
-
-    pub fn singleton_class_from(superclass: impl Into<Option<Module>>, target: Value) -> Module {
-        Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
-    }
-
-    pub fn module() -> Module {
-        Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
-    }
-
-    pub fn array_from(ary: Vec<Value>) -> Self {
+    pub fn array_from(ary: Vec<Value>) -> Value {
         RValue::new_array(ArrayInfo::new(ary)).pack()
     }
 
-    pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Self {
+    pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Value {
         RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
     }
 
@@ -1263,17 +1145,17 @@ impl Value {
                     Ok(class)
                 } else {
                     let singleton = match &oref.kind {
-                        ObjKind::Class(cinfo) | ObjKind::Module(cinfo) => {
+                        ObjKind::Module(cinfo) => {
                             let superclass = match cinfo.superclass() {
                                 None => None,
                                 Some(superclass) => Some(superclass.get_singleton_class()),
                             };
-                            Value::singleton_class_from(superclass, self)
+                            Module::singleton_class_from(superclass, self)
                         }
                         ObjKind::Invalid => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
-                        _ => Value::singleton_class_from(class, self),
+                        _ => Module::singleton_class_from(class, self),
                     };
                     oref.set_class(singleton);
                     Ok(singleton)
@@ -1502,7 +1384,7 @@ mod tests {
     #[test]
     fn pack_class() {
         GlobalsRef::new_globals();
-        let expect = Value::class_under(None).get();
+        let expect: Value = Module::class_under(None).into();
         let got = expect.unpack().pack();
         if expect != got {
             panic!("Expect:{:?} Got:{:?}", expect, got)

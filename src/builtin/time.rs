@@ -5,13 +5,13 @@ use chrono::{DateTime, Duration, FixedOffset, Utc};
 pub struct TimeInfo(DateTime<FixedOffset>);
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::class_under(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_class_method("now", time_now);
 
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("+", add);
-    class.get()
+    class.into()
 }
 
 fn time_now(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

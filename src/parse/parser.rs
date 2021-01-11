@@ -73,7 +73,7 @@ impl From<u32> for LvarId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
     id: usize,
     table: FxHashMap<IdentId, LvarId>,
@@ -139,13 +139,20 @@ impl LvarCollector {
         self.table.get(val)
     }
 
-    pub fn get_name(&self, id: LvarId) -> Option<IdentId> {
+    pub fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
         for (k, v) in self.table.iter() {
             if *v == id {
                 return Some(*k);
             }
         }
         None
+    }
+
+    pub fn get_name(&self, id: LvarId) -> String {
+        match self.get_name_id(id) {
+            Some(id) => format!("{:?}", id),
+            None => "<unnamed>".to_string(),
+        }
     }
 
     pub fn kwrest_param(&self) -> Option<LvarId> {

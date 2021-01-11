@@ -432,7 +432,12 @@ impl VM {
             print!("--->");
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
             context.dump();
-            eprintln!("  -----------");
+            eprintln!("  ------------------------------------------------------------------");
+        }
+        #[cfg(feature = "trace-func")]
+        {
+            print!("--->");
+            println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
         }
         loop {
             match self.run_context_main(context) {
@@ -440,7 +445,7 @@ impl VM {
                     self.context_pop().unwrap();
                     debug_assert_eq!(stack_len, self.stack_len());
                     self.pc = pc;
-                    #[cfg(feature = "trace")]
+                    #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<--- Ok({:?})", val);
                     return Ok(val);
                 }
@@ -466,7 +471,7 @@ impl VM {
                         self.context_pop().unwrap();
                         self.set_stack_len(stack_len);
                         self.pc = pc;
-                        #[cfg(feature = "trace")]
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
                         {
                             println!("<--- Err({:?})", err.kind);
                         }
@@ -484,8 +489,7 @@ impl VM {
         let self_oref = self_value.rvalue_mut();
         self.gc();
         for (i, (outer, lvar)) in context.iseq_ref.unwrap().forvars.iter().enumerate() {
-            let mut cref = self.get_outer_context(*outer);
-            cref[*lvar as usize] = context[i];
+            self.get_outer_context(*outer)[*lvar as usize] = context[i];
         }
         /// Evaluate expr, and push return value to stack.
         macro_rules! try_push {
@@ -521,11 +525,15 @@ impl VM {
             #[cfg(feature = "trace")]
             {
                 println!(
-                    "{:>4x}:{:<25} stack:{:<3} top:{:?}",
+                    "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                     self.pc,
                     Inst::inst_info(&self.globals, context.iseq_ref.unwrap(), self.pc),
+                    self.temp_stack.len(),
                     self.stack_len(),
-                    self.exec_stack.last()
+                    match self.exec_stack.last() {
+                        Some(x) => format!("{:?}", x),
+                        None => "".to_string(),
+                    }
                 );
             }
             match iseq[self.pc] {
@@ -889,10 +897,10 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = match self.stack_pop()? {
                         v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
-                            Some(class) => class.get(),
-                            None => self.globals.builtins.object.get(),
+                            Some(class) => *class,
+                            None => self.globals.builtins.object,
                         }, //self.class(),
-                        v => v,
+                        v => v.expect_mod_class()?,
                     };
                     let val = self.stack_pop()?;
                     self.globals.set_const(parent, id, val);
@@ -906,7 +914,7 @@ impl VM {
                         None => {
                             let val = match self.get_env_const(id) {
                                 Some(val) => val,
-                                None => VM::get_super_const(self.class().get(), id)?,
+                                None => VM::get_super_const(self.class(), id)?,
                             };
                             self.globals.set_const_cache(slot, val);
                             val
@@ -919,12 +927,12 @@ impl VM {
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
                     let parent = self.globals.builtins.object;
-                    let val = self.get_const(parent.get(), id)?;
+                    let val = self.get_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::GET_SCOPE => {
-                    let parent = self.stack_pop()?;
+                    let parent = self.stack_pop()?.expect_mod_class()?;
                     let id = iseq.read_id(self.pc + 1);
                     let val = self.get_const(parent, id)?;
                     self.stack_push(val);
@@ -1237,7 +1245,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, val.get(), &Args::new0());
+                    let res = self.eval_send(method, val, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 14;
@@ -1248,7 +1256,7 @@ impl VM {
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, singleton.get(), &Args::new0());
+                    let res = self.eval_send(method, singleton, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 9;
@@ -1465,10 +1473,10 @@ impl VM {
                         args.block = block;
                         self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
-                        let res = self.run_context(&context);
-                        res
+                        self.run_context(&context)
                     }
                 }
+                _ => unreachable!(),
             },
             None => {
                 let mut args = Args::from_slice(arg_slice);
@@ -1523,10 +1531,10 @@ impl VM {
                         let args = Args::from_slice(arg_slice);
                         self.set_stack_len(len - args_num);
                         let context = Context::from_args(self, receiver, *iseq, &args, None)?;
-                        let res = self.run_context(&context);
-                        res
+                        self.run_context(&context)
                     }
                 }
+                _ => unreachable!(),
             },
             None => {
                 let args = Args::from_slice(arg_slice);
@@ -1612,9 +1620,8 @@ impl VM {
     }
 
     /// Search class inheritance chain for the constant.
-    pub fn get_super_const(class: Value, id: IdentId) -> VMResult {
+    pub fn get_super_const(mut class: Module, id: IdentId) -> VMResult {
         let is_module = class.is_module();
-        let mut class = Module::new(class);
         loop {
             match class.get_const(id) {
                 Some(val) => return Ok(val),
@@ -1633,8 +1640,8 @@ impl VM {
         }
     }
 
-    pub fn get_const(&self, parent: Value, id: IdentId) -> VMResult {
-        match parent.as_module().get_const(id) {
+    pub fn get_const(&self, parent: Module, id: IdentId) -> VMResult {
+        match parent.get_const(id) {
             Some(val) => Ok(val),
             None => Err(RubyError::name(format!("Uninitialized constant {:?}.", id))),
         }
@@ -1646,18 +1653,18 @@ impl VM {
         }
         let self_val = self.current_context().self_value;
         let org_class = match self_val.if_mod_class() {
-            Some(_) => Module::new(self_val),
+            Some(module) => module,
             None => self_val.get_class(),
         };
         let mut class = org_class;
         loop {
-            if class.get().set_var_if_exists(id, val) {
+            if class.set_var_if_exists(id, val) {
                 return Ok(());
             } else {
                 match class.upper() {
                     Some(superclass) => class = superclass,
                     None => {
-                        org_class.get().set_var(id, val);
+                        org_class.set_var(id, val);
                         return Ok(());
                     }
                 }
@@ -1671,11 +1678,11 @@ impl VM {
         }
         let self_val = self.current_context().self_value;
         let mut class = match self_val.if_mod_class() {
-            Some(_) => Module::new(self_val),
+            Some(module) => module,
             None => self_val.get_class(),
         };
         loop {
-            match class.get().get_var(id) {
+            match class.get_var(id) {
                 Some(val) => {
                     return Ok(val);
                 }
@@ -1880,20 +1887,15 @@ impl VM {
         Ok(val)
     }
 
-    fn eval_shl(&mut self, rhs: Value, mut lhs: Value) -> VMResult {
+    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::integer(
                 lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
             ));
         }
-        if let Some(ainfo) = lhs.as_mut_array() {
-            ainfo.elements.push(rhs);
+        if let Some(mut ainfo) = lhs.as_array() {
+            ainfo.push(rhs);
             return Ok(lhs);
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => return Ok(Value::integer(lhs << rhs)),
-            (RV::Integer(_), _) => return Err(RubyError::no_implicit_conv(rhs, "Integer")),
-            _ => {}
         }
         let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
         Ok(val)
@@ -1905,14 +1907,8 @@ impl VM {
                 lhs.as_packed_fixnum() >> rhs.as_packed_fixnum(),
             ));
         }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs >> rhs)),
-            (RV::Integer(_), _) => Err(RubyError::no_implicit_conv(rhs, "Integer")),
-            (_, _) => {
-                let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
-                Ok(val)
-            }
-        }
+        let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
+        Ok(val)
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -2104,7 +2100,7 @@ impl VM {
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Class(_) | ObjKind::Module(_) => {
+                ObjKind::Module(_) => {
                     Ok(self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?.to_bool())
                 }
                 ObjKind::Regexp(re) => {
@@ -2314,7 +2310,7 @@ impl VM {
         base: Value,
         id: IdentId,
         is_module: bool,
-        mut super_val: Value,
+        super_val: Value,
     ) -> Result<Module, RubyError> {
         let current_class = if base.is_nil() {
             self.class()
@@ -2332,7 +2328,7 @@ impl VM {
                     )));
                 };
                 let val_super = match val.superclass() {
-                    Some(v) => v.get(),
+                    Some(v) => v.into(),
                     None => Value::nil(),
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
@@ -2348,17 +2344,16 @@ impl VM {
                     if !super_val.is_nil() {
                         panic!("Module can not have superclass.");
                     };
-                    Value::module()
+                    Module::module()
                 } else {
                     let super_val = if super_val.is_nil() {
                         self.globals.builtins.object
                     } else {
-                        super_val.expect_class(self, "Superclass")?;
-                        Module::new(super_val)
+                        super_val.expect_class("Superclass")?
                     };
-                    Value::class_under(super_val)
+                    Module::class_under(super_val)
                 };
-                self.globals.set_const(current_class.get(), id, val.get());
+                self.globals.set_const(current_class, id, val);
                 Ok(val)
             }
         }
@@ -2426,7 +2421,7 @@ impl VM {
                 ObjKind::Invalid => "[Invalid]".to_string(),
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self)?,
-                ObjKind::Class(cref) | ObjKind::Module(cref) => cref.inspect(),
+                ObjKind::Module(cref) => cref.inspect(),
                 ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect()?,
@@ -2445,7 +2440,13 @@ impl VM {
 impl VM {
     /// Evaluate method with given `self_val`, `args` and no outer context.
     #[inline]
-    pub fn eval_send(&mut self, methodref: MethodRef, self_val: Value, args: &Args) -> VMResult {
+    pub fn eval_send(
+        &mut self,
+        methodref: MethodRef,
+        self_val: impl Into<Value>,
+        args: &Args,
+    ) -> VMResult {
+        let self_val = self_val.into();
         self.invoke_method(methodref, self_val, None, args)
     }
 
@@ -2461,7 +2462,13 @@ impl VM {
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
-    pub fn eval_block_self(&mut self, block: &Block, self_val: Value, args: &Args) -> VMResult {
+    pub fn eval_block_self(
+        &mut self,
+        block: &Block,
+        self_val: impl Into<Value>,
+        args: &Args,
+    ) -> VMResult {
+        let self_val = self_val.into();
         match block {
             Block::Block(method, outer) => {
                 self.invoke_method(*method, self_val, Some(*outer), args)
@@ -2513,20 +2520,28 @@ impl VM {
     pub fn invoke_method(
         &mut self,
         methodref: MethodRef,
-        self_val: Value,
+        self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
     ) -> VMResult {
+        let self_val = self_val.into();
         use MethodInfo::*;
         let outer = outer.map(|ctx| ctx.get_current());
         match &*methodref {
             BuiltinFunc { func, name } => self.invoke_native(func, *name, self_val, args),
-            AttrReader { id } => Self::invoke_getter(*id, self_val),
-            AttrWriter { id } => Self::invoke_setter(*id, self_val, args[0]),
+            AttrReader { id } => {
+                args.check_args_num(0)?;
+                Self::invoke_getter(*id, self_val)
+            }
+            AttrWriter { id } => {
+                args.check_args_num(1)?;
+                Self::invoke_setter(*id, self_val, args[0])
+            }
             RubyFunc { iseq } => {
                 let context = Context::from_args(self, self_val, *iseq, args, outer)?;
                 self.run_context(&context)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -2541,20 +2556,18 @@ impl VM {
         #[cfg(feature = "perf")]
         self.perf.get_perf(Perf::EXTERN);
 
-        #[cfg(feature = "trace")]
-        {
-            print!("--->");
-            println!(" BuiltinFunc {:?}", _name);
-        }
+        #[cfg(any(feature = "trace", feature = "trace-func"))]
+        println!("---> BuiltinFunc {:?}", _name);
+
         let len = self.temp_stack.len();
         self.temp_push(self_val);
         self.temp_push_args(args);
         let res = func(self, self_val, args);
         self.temp_stack.truncate(len);
-        #[cfg(feature = "trace")]
-        {
-            println!("<--- {:?}", res);
-        }
+
+        #[cfg(any(feature = "trace", feature = "trace-func"))]
+        println!("<--- {:?}", res);
+
         res
     }
 
@@ -2584,9 +2597,9 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub fn define_method(&mut self, mut target_obj: Value, id: IdentId, method: MethodRef) {
-        match target_obj.if_mut_mod_class() {
-            Some(cinfo) => cinfo.add_method(&mut self.globals, id, method),
+    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
+        match target_obj.if_mod_class() {
+            Some(mut module) => module.add_method(&mut self.globals, id, method),
             None => target_obj
                 .get_class()
                 .add_method(&mut self.globals, id, method),
@@ -2616,10 +2629,7 @@ impl VM {
     ) -> Result<MethodRef, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::undefined_method_for_class(
-                method_id,
-                rec_class.get(),
-            )),
+            None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
         }
     }
 
@@ -2654,6 +2664,7 @@ impl VM {
                 #[cfg(feature = "perf")]
                 self.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
+                #[cfg(feature = "trace-func")]
                 println!("<=== yield Ok({:?})", val);
 
                 tx.send(Ok(val)).unwrap();

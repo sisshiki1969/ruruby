@@ -1,18 +1,18 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let io_class = Value::class_under(globals.builtins.object);
+    let io_class = Module::class_under(globals.builtins.object);
     io_class.add_builtin_method_by_str("<<", output);
     io_class.add_builtin_method_by_str("isatty", isatty);
     io_class.add_builtin_method_by_str("tty?", isatty);
     io_class.add_builtin_method_by_str("flush", flush);
-    globals.set_toplevel_constant("IO", io_class.get());
+    globals.set_toplevel_constant("IO", io_class);
     let stdout = Value::ordinary_object(io_class);
     globals.set_toplevel_constant("STDOUT", stdout);
     globals.set_global_var_by_str("$>", stdout);
     globals.set_global_var_by_str("$stdout", stdout);
 
-    io_class.get()
+    io_class.into()
 }
 
 use std::io::{self, Write};

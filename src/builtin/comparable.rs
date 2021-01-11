@@ -3,15 +3,15 @@
 ///
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::module();
-    globals.set_toplevel_constant("Comparable", class.get());
+pub fn init(globals: &mut Globals) -> Module {
+    let class = Module::module();
+    globals.set_toplevel_constant("Comparable", class);
     class.add_builtin_method_by_str("==", eq);
     class.add_builtin_method_by_str("<=", le);
     class.add_builtin_method_by_str("<", lt);
     class.add_builtin_method_by_str(">=", ge);
     class.add_builtin_method_by_str(">", gt);
-    class.get()
+    class
 }
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

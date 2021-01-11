@@ -1,13 +1,13 @@
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::class_under(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("resume", resume);
 
     class.add_builtin_class_method("new", new);
     class.add_builtin_class_method("yield", yield_);
-    class.get()
+    class.into()
 }
 
 // Class methods
@@ -131,22 +131,20 @@ mod test1 {
 mod test2 {
     use crate::test::*;
     #[test]
-    #[ignore]
     fn fiber_gc_test1() {
         let program = r#"
         10000.times do |x|
-            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 1000) }
         end
         "#;
         assert_script(program);
     }
 
     #[test]
-    #[ignore]
     fn fiber_gc_test2() {
         let program = r#"
         10000.times do |x|
-            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 1000) }
             f.resume
         end
         "#;
@@ -154,11 +152,10 @@ mod test2 {
     }
 
     #[test]
-    #[ignore]
     fn fiber_gc_test3() {
         let program = r#"
         10000.times do |x|
-            f = Fiber.new { Fiber.yield([x.to_s] * 10000) }
+            f = Fiber.new { Fiber.yield([x.to_s] * 1000) }
             f.resume
             f.resume
         end

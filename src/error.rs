@@ -312,12 +312,8 @@ impl RubyError {
         ))
     }
 
-    pub fn undefined_method_for_class(method: IdentId, class: Value) -> RubyError {
-        Self::nomethod(format!(
-            "no method `{:?}' for {}",
-            method,
-            class.as_class().name()
-        ))
+    pub fn undefined_method_for_class(method: IdentId, class: Module) -> RubyError {
+        Self::nomethod(format!("no method `{:?}' for {}", method, class.name()))
     }
 
     pub fn internal(msg: impl Into<String>) -> RubyError {
@@ -334,6 +330,15 @@ impl RubyError {
 
     pub fn typeerr(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into())
+    }
+
+    pub fn wrong_type(kind: impl Into<String>, class: &str, val: Value) -> RubyError {
+        RubyError::typeerr(format!(
+            "{} must be an {}. (given:{})",
+            kind.into(),
+            class,
+            val.get_class_name()
+        ))
     }
 
     pub fn no_implicit_conv(other: Value, msg: impl Into<String>) -> RubyError {

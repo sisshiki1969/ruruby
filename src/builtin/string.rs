@@ -2,7 +2,7 @@ use crate::vm::*;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
-    let class = Value::class_under(globals.builtins.object);
+    let class = Module::class_under(globals.builtins.object);
     class.add_builtin_class_method("new", string_new);
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);
@@ -52,11 +52,11 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("codepoints", codepoints);
     class.add_builtin_method_by_str("frozen?", frozen_);
     class.add_builtin_method_by_str("lines", lines);
-    class.get()
+    class.into()
 }
 
 fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let self_val = Module::new(self_val);
+    let self_val = self_val.into_module();
     args.check_args_range(0, 1)?;
     let s = if args.len() == 0 {
         String::new()
@@ -212,10 +212,9 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_mut_rstring().unwrap();
-    let mut arg0 = args[0];
-    match arg0.as_mut_rstring() {
+    match args[0].as_rstring() {
         Some(rhs) => lhs.append(rhs),
-        None => match arg0.as_integer() {
+        None => match args[0].as_integer() {
             Some(i) => {
                 let rhs = RString::Bytes(vec![i as i8 as u8]);
                 lhs.append(&rhs);

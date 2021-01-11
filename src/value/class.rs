@@ -14,19 +14,25 @@ impl std::cmp::Eq for Module {}
 impl std::ops::Deref for Module {
     type Target = ClassInfo;
     fn deref(&self) -> &Self::Target {
-        self.0.as_module()
+        self.0.as_class()
     }
 }
 
 impl std::ops::DerefMut for Module {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.as_mut_module()
+        self.0.as_mut_class()
     }
 }
 
 impl std::hash::Hash for Module {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id().hash(state);
+    }
+}
+
+impl Into<Value> for Module {
+    fn into(self) -> Value {
+        self.0
     }
 }
 
@@ -37,8 +43,12 @@ impl GC for Module {
 }
 
 impl Module {
-    pub fn new(val: Value) -> Self {
-        val.as_module();
+    pub fn new(mut val: Value) -> Self {
+        val.as_mut_class();
+        Module(val)
+    }
+
+    pub fn new_unchecked(val: Value) -> Self {
         Module(val)
     }
 
@@ -46,7 +56,7 @@ impl Module {
         Module(Value::nil())
     }
 
-    pub fn get(self) -> Value {
+    fn get(self) -> Value {
         self.0
     }
 
@@ -62,6 +72,10 @@ impl Module {
         self.get().rvalue().class()
     }
 
+    pub fn set_class(self, class: Module) {
+        self.get().set_class(class)
+    }
+
     pub fn real_module(&self) -> Module {
         if self.is_included() {
             self.origin().unwrap()
@@ -72,13 +86,16 @@ impl Module {
 
     pub fn generate_included(&self) -> Module {
         let origin = self.real_module();
-        let mut imodule = self.dup();
-        imodule.set_include(origin);
-        imodule
+        self.dup().set_include(origin)
     }
 
-    /// Check whether `module` exists in the ancestors of `self`.
-    pub fn include_module(&self, target_module: Value) -> bool {
+    pub fn set_include(mut self, origin: Module) -> Module {
+        self.0.as_mut_class().set_include(origin);
+        self
+    }
+
+    /// Check whether `target_module` exists in the ancestors of `self`.
+    pub fn include_module(&self, target_module: Module) -> bool {
         let mut module = *self;
         loop {
             let true_module = module.real_module();
@@ -138,11 +155,56 @@ impl Module {
     }
 
     /// Add module function to `self`.
-    /// `self` must be Module or Class.
     pub fn add_builtin_module_func(self, name: &str, func: BuiltinFunc) {
         self.add_builtin_method_by_str(name, func);
         self.get_singleton_class()
             .add_builtin_method_by_str(name, func);
+    }
+}
+
+impl Module {
+    pub fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
+        self.get().set_var(id, val)
+    }
+
+    pub fn set_var_by_str(self, name: &str, val: Value) {
+        self.get().set_var_by_str(name, val)
+    }
+
+    pub fn get_var(&self, id: IdentId) -> Option<Value> {
+        self.get().get_var(id)
+    }
+
+    pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
+        self.get().set_var_if_exists(id, val)
+    }
+}
+
+impl Module {
+    pub fn new_class(cinfo: ClassInfo) -> Module {
+        assert!(!cinfo.is_module());
+        let obj = RValue::new_class(cinfo).pack();
+        obj.get_singleton_class().unwrap();
+        obj.into_module()
+    }
+
+    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
+        Module::new(RValue::new_bootstrap(cinfo).pack())
+    }
+
+    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
+        Module::new_class(ClassInfo::class_from(superclass))
+    }
+
+    pub fn singleton_class_from(
+        superclass: impl Into<Option<Module>>,
+        target: impl Into<Value>,
+    ) -> Module {
+        Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
+    }
+
+    pub fn module() -> Module {
+        Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
     }
 }
 
@@ -189,7 +251,8 @@ impl ClassInfo {
         Self::new(true, superclass, ClassExt::new())
     }
 
-    pub fn singleton_from(superclass: impl Into<Option<Module>>, target: Value) -> Self {
+    pub fn singleton_from(superclass: impl Into<Option<Module>>, target: impl Into<Value>) -> Self {
+        let target = target.into();
         Self::new(false, superclass, ClassExt::new_singleton(target))
     }
 
@@ -308,7 +371,7 @@ impl ClassInfo {
         self.flags.set_prepend()
     }
 
-    pub fn set_include(&mut self, origin: Module) {
+    fn set_include(&mut self, origin: Module) {
         #[cfg(debug_assertions)]
         assert!(!origin.is_included());
         self.flags.set_include();
@@ -332,9 +395,8 @@ impl ClassInfo {
         globals.class_version += 1;
     }
 
-    pub fn append_prepend(&mut self, base: Value, module: Value, globals: &mut Globals) {
-        let mut module = Module::new(module);
-        let base = Module::new(base);
+    pub fn append_prepend(&mut self, base: Module, module: Module, globals: &mut Globals) {
+        let mut module = module;
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -399,16 +461,16 @@ impl ClassInfo {
     ///
     /// If `val` is a module or class, set the name of the class/module to the name of the constant.
     /// If the constant was already initialized, output warning.
-    pub fn set_const(&mut self, id: IdentId, mut val: Value) {
-        if let Some(cinfo) = val.if_mut_mod_class() {
-            if cinfo.ext.name.is_none() {
+    pub fn set_const(&mut self, id: IdentId, val: Value) {
+        if let Some(mut module) = val.if_mod_class() {
+            if module.op_name().is_none() {
                 if self.class_id() == BuiltinClass::object().class_id() {
-                    cinfo.set_name(IdentId::get_name(id));
+                    module.set_name(IdentId::get_name(id));
                 } else {
                     match &self.ext.name {
                         Some(parent_name) => {
                             let name = format!("{}::{:?}", parent_name, id);
-                            cinfo.set_name(name);
+                            module.set_name(name);
                         }
                         None => {}
                     }

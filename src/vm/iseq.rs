@@ -1,6 +1,6 @@
 use super::vm_inst::*;
 use crate::*;
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ISeq(Vec<u8>);
 
 use std::fmt;
