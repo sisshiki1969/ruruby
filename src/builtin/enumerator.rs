@@ -41,7 +41,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.fiber_yield(args)
+    FiberInfo::fiber_yield(vm, args)
 }
 
 // Instance methods

@@ -28,7 +28,7 @@ fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 }
 
 fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    vm.fiber_yield(args)
+    FiberInfo::fiber_yield(vm, args)
 }
 
 // Instance methods

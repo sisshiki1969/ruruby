@@ -2650,42 +2650,6 @@ impl VM {
 }
 
 impl VM {
-    /// Yield args to parent fiber. (execute Fiber.yield)
-    pub fn fiber_yield(&mut self, args: &Args) -> VMResult {
-        let val = match args.len() {
-            0 => Value::nil(),
-            1 => args[0],
-            _ => Value::array_from(args.to_vec()),
-        };
-        match &self.parent_fiber {
-            None => return Err(RubyError::fiber("Can not yield from main fiber.")),
-            Some(ParentFiberInfo { tx, rx, .. }) => {
-                #[cfg(feature = "perf")]
-                let mut _inst: u8;
-                #[cfg(feature = "perf")]
-                {
-                    _inst = self.perf.get_prev_inst();
-                }
-                #[cfg(feature = "perf")]
-                self.perf.get_perf(Perf::INVALID);
-                #[cfg(feature = "trace")]
-                #[cfg(feature = "trace-func")]
-                println!("<=== yield Ok({:?})", val);
-
-                tx.send(Ok(val)).unwrap();
-                // Wait for fiber's response
-                match rx.recv() {
-                    Ok(FiberMsg::Resume) => {}
-                    _ => return Err(RubyError::fiber("terminated")),
-                }
-                #[cfg(feature = "perf")]
-                self.perf.get_perf_no_count(_inst);
-                // TODO: this return value is not correct. The arg of Fiber#resume should be returned.
-                Ok(Value::nil())
-            }
-        }
-    }
-
     /// Get local variable table.
     fn get_outer_context(&mut self, outer: u32) -> ContextRef {
         let mut context = self.current_context();
