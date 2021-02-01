@@ -1,12 +1,10 @@
 #![feature(box_patterns)]
 #![feature(assoc_char_funcs)]
 #![feature(pattern)]
-#![feature(split_inclusive)]
-extern crate fancy_regex;
-#[macro_use]
-extern crate lazy_static;
 extern crate arraystring;
+extern crate fancy_regex;
 extern crate fxhash;
+extern crate once_cell;
 extern crate smallvec;
 pub use fxhash::FxHashMap;
 pub mod alloc;

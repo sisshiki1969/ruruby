@@ -1,15 +1,14 @@
 use fxhash::FxHashMap;
+use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::fmt;
 use std::num::NonZeroU32;
 use std::sync::RwLock;
 
-lazy_static! {
-    pub static ref ID: RwLock<IdentifierTable> = {
-        let id = IdentifierTable::new();
-        RwLock::new(id)
-    };
-}
+pub static ID: Lazy<RwLock<IdentifierTable>> = Lazy::new(|| {
+    let id = IdentifierTable::new();
+    RwLock::new(id)
+});
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct IdentId(NonZeroU32);

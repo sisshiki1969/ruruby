@@ -1,4 +1,5 @@
 use crate::*;
+use once_cell::sync::Lazy;
 
 pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult;
 
@@ -7,14 +8,12 @@ pub type MethodTable = FxHashMap<IdentId, MethodRef>;
 //#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub type MethodRef = Ref<MethodInfo>;
 
-lazy_static! {
-    pub static ref METHODREF_ENUM: MethodRef = {
-        MethodRef::new(MethodInfo::BuiltinFunc {
-            func: enumerator_iterate,
-            name: IdentId::_ENUM_FUNC,
-        })
-    };
-}
+pub static METHODREF_ENUM: Lazy<MethodRef> = Lazy::new(|| {
+    MethodRef::new(MethodInfo::BuiltinFunc {
+        func: enumerator_iterate,
+        name: IdentId::_ENUM_FUNC,
+    })
+});
 
 #[derive(Clone)]
 pub enum MethodInfo {
