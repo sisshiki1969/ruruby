@@ -4,16 +4,10 @@ on:
   push:
     branches:
       - master
-      - new_class
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
-
-    container:
-      image: xd009642/tarpaulin
-      options: --security-opt seccomp=unconfined
-
     steps:
       - uses: actions/checkout@v2
       - name: Install latest nightly
@@ -21,7 +15,10 @@ jobs:
         with:
           toolchain: nightly
           override: true
-      - name: Run tests
-        run: RUST_BACKTRACE=1 cargo +nightly tarpaulin -v --out Xml --all-features --workspace -- --test-threads=1
+      - name: Run cargo-tarpaulin
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          version: "0.15.0"
+          args: "-- --test-threads 1"
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
