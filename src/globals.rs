@@ -26,6 +26,8 @@ pub struct Globals {
     pub fibers: Vec<VMRef>,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
     source_files: Vec<PathBuf>,
+    #[cfg(feature = "perf")]
+    pub perf: Perf,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -285,6 +287,8 @@ impl Globals {
             fibers: vec![],
             regexp_cache: FxHashMap::default(),
             source_files: vec![],
+            #[cfg(feature = "perf")]
+            perf: Perf::new(),
         };
         // Generate singleton class for BasicObject
         let singleton_class = ClassInfo::singleton_from(class, basic);

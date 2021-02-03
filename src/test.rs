@@ -6,7 +6,7 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
     let mut vm = globals.create_main_fiber();
     let res = vm.run(PathBuf::from(""), &script.into());
     #[cfg(feature = "perf")]
-    vm.perf.print_perf();
+    vm.globals.perf.print_perf();
     #[cfg(feature = "gc-debug")]
     globals.print_mark();
     match res {
@@ -28,7 +28,7 @@ pub fn assert_script(script: impl Into<String>) {
     let mut vm = globals.create_main_fiber();
     let res = vm.run(PathBuf::from(""), &script.into());
     #[cfg(feature = "perf")]
-    vm.perf.print_perf();
+    vm.globals.perf.print_perf();
     #[cfg(feature = "gc-debug")]
     globals.print_mark();
     match res {
@@ -47,7 +47,7 @@ pub fn assert_error(script: impl Into<String>) {
     let program = script.into();
     let res = vm.run(PathBuf::from(""), &program);
     #[cfg(feature = "perf")]
-    vm.perf.print_perf();
+    vm.globals.perf.print_perf();
 
     #[cfg(feature = "gc-debug")]
     globals.print_mark();

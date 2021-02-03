@@ -46,7 +46,7 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let fiber = self_val.expect_fiber("")?;
-    fiber.resume(vm)
+    fiber.resume(&mut vm.globals)
 }
 
 #[cfg(test)]

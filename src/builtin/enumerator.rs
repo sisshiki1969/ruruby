@@ -84,7 +84,7 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     if eref.vm.is_dead() {
         return Err(RubyError::stop_iteration("Iteration reached an end."));
     };
-    match eref.resume(vm) {
+    match eref.resume(&mut vm.globals) {
         Ok(val) => Ok(val),
         Err(err) if err.is_stop_iteration() => {
             return Err(RubyError::stop_iteration("Iteration reached an end."))
@@ -104,7 +104,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     let mut args = Args::new(1);
     loop {
-        let val = match info.resume(vm) {
+        let val = match info.resume(&mut vm.globals) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
@@ -135,7 +135,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut args = Args::new(1);
     let mut ary = vec![];
     loop {
-        let val = match info.resume(vm) {
+        let val = match info.resume(&mut vm.globals) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
@@ -167,7 +167,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut c = 0;
     let mut ary = vec![];
     loop {
-        let val = match info.resume(vm) {
+        let val = match info.resume(&mut vm.globals) {
             Ok(val) => val,
             Err(err) => {
                 if err.is_stop_iteration() {

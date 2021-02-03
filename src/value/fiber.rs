@@ -119,18 +119,18 @@ impl FiberInfo {
         res
     }
 
-    pub fn resume(&mut self, _current_vm: &mut VM) -> VMResult {
+    pub fn resume(&mut self, _globals: &mut Globals) -> VMResult {
         #[allow(unused_variables, unused_assignments, unused_mut)]
         let mut inst: u8;
         #[cfg(feature = "perf")]
         {
-            inst = _current_vm.perf.get_prev_inst();
+            inst = _globals.perf.get_prev_inst();
         }
         match self.vm.fiberstate() {
             FiberState::Dead => return Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
                 #[cfg(feature = "perf")]
-                _current_vm.perf.get_perf(Perf::INVALID);
+                _globals.perf.get_perf(Perf::INVALID);
                 #[cfg(any(feature = "trace", feature = "trace-func"))]
                 println!("===> resume(spawn)");
                 let mut fiber_vm = VMRef::from_ref(&self.vm);
@@ -159,13 +159,6 @@ impl FiberInfo {
                             RubyErrorKind::RuntimeErr { kind, .. }
                                 if *kind == RuntimeErrKind::Fiber =>
                             {
-                                #[cfg(feature = "perf")]
-                                match &fiber_vm.parent_fiber {
-                                    Some(ParentFiberInfo { mut parent, .. }) => {
-                                        parent.perf.add(&fiber_vm.perf);
-                                    }
-                                    None => {}
-                                };
                                 //#[cfg(debug_assertions)]
                                 //eprintln!("killed {:?}", std::thread::current().id());
                                 fiber_vm.fiberstate_dead();
@@ -182,13 +175,6 @@ impl FiberInfo {
                         }
                         None => unreachable!(),
                     };
-                    #[cfg(feature = "perf")]
-                    match &fiber_vm.parent_fiber {
-                        Some(ParentFiberInfo { mut parent, .. }) => {
-                            parent.perf.add(&fiber_vm.perf);
-                        }
-                        None => {}
-                    };
                     //#[cfg(debug_assertions)]
                     //eprintln!("dead {:?}", std::thread::current().id());
                 });
@@ -196,12 +182,12 @@ impl FiberInfo {
                 let res = self.rec.recv().unwrap();
                 self.vm.handle = Some(join);
                 #[cfg(feature = "perf")]
-                _current_vm.perf.get_perf_no_count(inst);
+                _globals.perf.get_perf_no_count(inst);
                 res
             }
             FiberState::Running => {
                 #[cfg(feature = "perf")]
-                _current_vm.perf.get_perf(Perf::INVALID);
+                _globals.perf.get_perf(Perf::INVALID);
                 #[cfg(any(feature = "trace", feature = "trace-func"))]
                 println!("===> resume");
                 //eprintln!("resume {:?}", VMRef::from_ref(&self.vm));
@@ -209,7 +195,7 @@ impl FiberInfo {
                 // Wait for Fiber.yield.
                 let res = self.rec.recv().unwrap();
                 #[cfg(feature = "perf")]
-                _current_vm.perf.get_perf_no_count(inst);
+                _globals.perf.get_perf_no_count(inst);
                 res
             }
         }
@@ -226,13 +212,7 @@ impl FiberInfo {
             None => return Err(RubyError::fiber("Can not yield from main fiber.")),
             Some(ParentFiberInfo { tx, rx, .. }) => {
                 #[cfg(feature = "perf")]
-                let mut _inst: u8;
-                #[cfg(feature = "perf")]
-                {
-                    _inst = vm.perf.get_prev_inst();
-                }
-                #[cfg(feature = "perf")]
-                vm.perf.get_perf(Perf::INVALID);
+                vm.globals.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 #[cfg(feature = "trace-func")]
                 println!("<=== yield Ok({:?})", val);
@@ -243,8 +223,6 @@ impl FiberInfo {
                     Ok(FiberMsg::Resume) => {}
                     _ => return Err(RubyError::fiber("terminated")),
                 }
-                #[cfg(feature = "perf")]
-                vm.perf.get_perf_no_count(_inst);
                 // TODO: this return value is not correct. The arg of Fiber#resume should be returned.
                 Ok(Value::nil())
             }

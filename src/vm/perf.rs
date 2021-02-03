@@ -39,13 +39,6 @@ impl Perf {
         }
     }
 
-    pub fn add(&mut self, other: &Perf) {
-        for i in 1..256 {
-            self.counter[i].count += other.counter[i].count;
-            self.counter[i].duration += other.counter[i].duration;
-        }
-    }
-
     /// Record duration for current instruction.
     pub fn get_perf(&mut self, next_inst: u8) {
         let prev = self.prev_inst;
