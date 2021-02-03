@@ -229,10 +229,10 @@ impl FiberInfo {
                 let mut _inst: u8;
                 #[cfg(feature = "perf")]
                 {
-                    _inst = self.perf.get_prev_inst();
+                    _inst = vm.perf.get_prev_inst();
                 }
                 #[cfg(feature = "perf")]
-                self.perf.get_perf(Perf::INVALID);
+                vm.perf.get_perf(Perf::INVALID);
                 #[cfg(feature = "trace")]
                 #[cfg(feature = "trace-func")]
                 println!("<=== yield Ok({:?})", val);
@@ -244,7 +244,7 @@ impl FiberInfo {
                     _ => return Err(RubyError::fiber("terminated")),
                 }
                 #[cfg(feature = "perf")]
-                self.perf.get_perf_no_count(_inst);
+                vm.perf.get_perf_no_count(_inst);
                 // TODO: this return value is not correct. The arg of Fiber#resume should be returned.
                 Ok(Value::nil())
             }
