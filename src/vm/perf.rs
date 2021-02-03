@@ -20,6 +20,7 @@ impl PerfCounter {
 pub struct Perf {
     counter: Vec<PerfCounter>,
     timer: Instant,
+    prev_time: Duration,
     prev_inst: u8,
 }
 
@@ -35,6 +36,7 @@ impl Perf {
         Perf {
             counter: vec![PerfCounter::new(); 256],
             timer: Instant::now(),
+            prev_time: Duration::from_secs(0),
             prev_inst: Perf::INVALID,
         }
     }
@@ -44,11 +46,12 @@ impl Perf {
         let prev = self.prev_inst;
         assert!(next_inst != 0);
         assert!(prev != 0);
+        let elapsed = self.timer.elapsed();
         if prev != Perf::INVALID {
             self.counter[prev as usize].count += 1;
-            self.counter[prev as usize].duration += self.timer.elapsed();
+            self.counter[prev as usize].duration += elapsed - self.prev_time;
         }
-        self.timer = Instant::now();
+        self.prev_time = elapsed;
         self.prev_inst = next_inst;
     }
 
@@ -75,10 +78,10 @@ impl Perf {
             "Inst name", "count", "%time", "ns/inst"
         );
         eprintln!("+-------------------------------------------+");
-        let mut sum = std::time::Duration::from_secs(0);
-        for c in &self.counter {
-            sum += c.duration;
-        }
+        let sum = self
+            .counter
+            .iter()
+            .fold(Duration::from_secs(0), |acc, x| acc + x.duration);
         for (
             i,
             PerfCounter {
