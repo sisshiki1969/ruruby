@@ -40,6 +40,7 @@ impl<'a> RV<'a> {
 }
 
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct Value(std::num::NonZeroU64);
 
 impl std::ops::Deref for Value {
