@@ -6,12 +6,13 @@ const DEFAULT_STACK_SIZE: usize = 1024 * 1024 * 2;
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum FiberState {
-    Ready,
+    Created,
     Running,
     Dead,
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct FiberContext {
     stack: *mut u8,
     rsp: u64,
@@ -76,7 +77,7 @@ impl FiberContext {
             stack,
             rsp: 0,
             main_rsp: 0,
-            state: FiberState::Ready,
+            state: FiberState::Created,
         }
     }
 
@@ -93,7 +94,7 @@ impl FiberContext {
             eprintln!("The fiber is dead.");
             return None;
         }
-        if self.state == FiberState::Ready {
+        if self.state == FiberState::Created {
             self.state = FiberState::Running;
             let new = self.rsp;
             let old = &mut self.main_rsp;

@@ -53,6 +53,7 @@ impl Loc {
 //------------------------------------------------------------
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct Ref<T>(NonNull<T>);
 
 impl<T: Default> Default for Ref<T> {
