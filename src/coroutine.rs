@@ -34,7 +34,7 @@ impl FiberHandle {
 }
 
 impl FiberContext {
-    //         stack end
+    //            stack end
     //     +---------------------+
     // -8  |  *mut FiberContext  |
     //     +---------------------+
@@ -49,13 +49,13 @@ impl FiberContext {
     //     |      registers      |
     // -80 |                     | <-sp
     //     +---------------------+
-    pub fn spawn(f: fn(FiberHandle, Value) -> *mut VMResult) -> Self {
-        let mut fiber = FiberContext::new();
-        eprintln!("spawn() pointer: {:?}", &fiber as *const _);
+    pub fn spawn(f: fn(FiberHandle, Value) -> *mut VMResult) -> Box<Self> {
+        let mut fiber = Box::new(FiberContext::new());
+        eprintln!("spawn() pointer: {:?}", &*fiber as *const _);
         unsafe {
             let s_ptr = fiber.get_stack_end();
             // &fiber points to the caller's stack.
-            (s_ptr.offset(-8) as *mut u64).write(&fiber as *const _ as u64);
+            (s_ptr.offset(-8) as *mut u64).write(&*fiber as *const _ as u64);
             (s_ptr.offset(-16) as *mut u64).write(guard as u64);
             // this is a dummy function for 16bytes-align.
             (s_ptr.offset(-24) as *mut u64).write(skip as u64);
@@ -220,7 +220,7 @@ mod test {
                 println!("CHILD2 FINISHED");
                 Box::into_raw(Box::new(Ok(Value::integer(123))))
             });
-            eprintln!("obtained fiber2: {:?}", &fiber2 as *const _);
+            eprintln!("obtained fiber2: {:?}", &*fiber2 as *const _);
             println!("CHILD1 STARTING with {:?}", val);
             for i in 0..4 {
                 let res = handle.fiber_yield(Ok(Value::integer(11 * i)));
@@ -231,7 +231,7 @@ mod test {
             println!("CHILD1 FINISHED");
             Box::into_raw(Box::new(Ok(Value::integer(456))))
         });
-        eprintln!("obtained fiber1: {:?}", &fiber1 as *const _);
+        eprintln!("obtained fiber1: {:?}", &*fiber1 as *const _);
 
         println!("MAIN STARTING");
         for i in 0..6 {
