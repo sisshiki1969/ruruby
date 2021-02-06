@@ -1,3 +1,4 @@
+use crate::coroutine::*;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
@@ -22,13 +23,12 @@ fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     assert!(!context.on_stack);
     assert!(context.moved_to_heap == Some(context));
 
-    //vm.globals.fibers.push(VMRef::from_ref(&new_fiber));
     let val = Value::fiber(vm, context);
     Ok(val)
 }
 
 fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    FiberInfo::fiber_yield(vm, args)
+    FiberHandle::fiber_yield(vm, args)
 }
 
 // Instance methods
@@ -37,8 +37,7 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let fref = self_val.expect_fiber("Expect Fiber.")?;
     let inspect = format!(
         "#<Fiber:0x{:<016x} ({:?})>",
-        fref as *mut FiberInfo as u64,
-        fref.vm.fiberstate(),
+        fref as *mut _ as u64, fref.state,
     );
     Ok(Value::string(inspect))
 }

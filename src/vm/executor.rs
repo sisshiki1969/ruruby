@@ -1,11 +1,10 @@
 use super::codegen::ContextKind;
+use crate::coroutine::*;
 use crate::*;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Receiver, SyncSender};
-use std::thread;
 use vm_inst::*;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
@@ -15,40 +14,17 @@ pub type VMResult = Result<Value, RubyError>;
 pub struct VM {
     // Global info
     pub globals: GlobalsRef,
-    //pub root_path: Vec<PathBuf>,
     // VM state
-    fiber_state: FiberState,
     exec_context: Vec<ContextRef>,
     class_context: Vec<(Module, DefineMode)>,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     //exception: bool,
     pc: usize,
-    pub parent_fiber: Option<ParentFiberInfo>,
-    pub handle: Option<thread::JoinHandle<()>>,
+    pub handle: Option<FiberHandle>,
 }
 
 pub type VMRef = Ref<VM>;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum FiberState {
-    Created,
-    Running,
-    Dead,
-}
-
-#[derive(Debug)]
-pub struct ParentFiberInfo {
-    pub parent: VMRef,
-    pub tx: SyncSender<VMResult>,
-    pub rx: Receiver<FiberMsg>,
-}
-
-impl ParentFiberInfo {
-    fn new(parent: VMRef, tx: SyncSender<VMResult>, rx: Receiver<FiberMsg>) -> Self {
-        ParentFiberInfo { parent, tx, rx }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DefineMode {
@@ -71,9 +47,6 @@ impl GC for VM {
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
-        if let Some(ParentFiberInfo { parent, .. }) = self.parent_fiber {
-            parent.mark(alloc)
-        }
     }
 }
 
@@ -81,13 +54,11 @@ impl VM {
     pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            fiber_state: FiberState::Created,
             class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
             pc: 0,
-            parent_fiber: None,
             handle: None,
         };
 
@@ -117,16 +88,14 @@ impl VM {
         vm
     }
 
-    pub fn create_fiber(&mut self, tx: SyncSender<VMResult>, rx: Receiver<FiberMsg>) -> Self {
+    pub fn create_fiber(&mut self) -> Self {
         let vm = VM {
             globals: self.globals,
-            fiber_state: FiberState::Created,
             exec_context: vec![],
             temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
             pc: 0,
-            parent_fiber: Some(ParentFiberInfo::new(VMRef::from_ref(self), tx, rx)),
             handle: None,
         };
         self.globals.fibers.push(VMRef::from_ref(&vm));
@@ -171,30 +140,6 @@ impl VM {
             .source_info
             .path
             .clone()
-    }
-
-    pub fn fiberstate_created(&mut self) {
-        self.fiber_state = FiberState::Created;
-    }
-
-    pub fn fiberstate_running(&mut self) {
-        self.fiber_state = FiberState::Running;
-    }
-
-    pub fn fiberstate_dead(&mut self) {
-        self.fiber_state = FiberState::Dead;
-    }
-
-    pub fn fiberstate(&self) -> FiberState {
-        self.fiber_state
-    }
-
-    pub fn is_dead(&self) -> bool {
-        self.fiber_state == FiberState::Dead
-    }
-
-    pub fn is_running(&self) -> bool {
-        self.fiber_state == FiberState::Running
     }
 
     pub fn is_method(&self) -> bool {
@@ -2725,37 +2670,30 @@ impl VM {
         }
     }
 
-    pub fn create_enum_info(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-        args: Args,
-    ) -> FiberInfo {
-        let (tx0, rx0) = std::sync::mpsc::sync_channel(0);
-        let (tx1, rx1) = std::sync::mpsc::sync_channel(0);
-        let fiber_vm = self.create_fiber(tx0, rx1);
-        //self.globals.fibers.push(VMRef::from_ref(&fiber_vm));
-        //let context = ContextRef::new(Context::new_noiseq());
-        //fiber_vm.context_push(context);
-        FiberInfo::new_internal(fiber_vm, receiver, method_id, args, rx0, tx1)
+    pub fn create_enum_info(&mut self, info: EnumInfo) -> Box<FiberContext> {
+        let fiber_vm = self.create_fiber();
+        FiberContext::new_enumerator(fiber_vm, info)
     }
 
-    pub fn dup_enum(&mut self, eref: &FiberInfo) -> FiberInfo {
-        let (receiver, method_id, args) = match &eref.kind {
-            FiberKind::Enum(receiver, method_id, args) => (*receiver, *method_id, args.clone()),
+    pub fn dup_enum(&mut self, eref: &FiberContext) -> Box<FiberContext> {
+        match &eref.kind {
+            FiberKind::Enum(info) => self.create_enum_info((**info).clone()),
             _ => unreachable!(),
-        };
-        self.create_enum_info(method_id, receiver, args)
+        }
     }
 
     pub fn create_enumerator(
         &mut self,
-        method_id: IdentId,
+        method: IdentId,
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
         args.block = Block::Block(*METHODREF_ENUM, self.current_context());
-        let fiber = self.create_enum_info(method_id, receiver, args);
+        let fiber = self.create_enum_info(EnumInfo {
+            method,
+            receiver,
+            args,
+        });
         Ok(Value::enumerator(fiber))
     }
 

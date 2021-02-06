@@ -8,8 +8,6 @@ mod array;
 pub use array::*;
 mod hash;
 pub use hash::*;
-mod fiber;
-pub use fiber::*;
 pub mod real;
 pub use real::*;
 pub mod string;

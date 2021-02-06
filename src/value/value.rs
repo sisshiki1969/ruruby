@@ -1,6 +1,6 @@
+use crate::coroutine::*;
 use crate::*;
 use std::borrow::Cow;
-use std::sync::mpsc;
 
 const UNINITIALIZED: u64 = 0x04;
 const TAG_SYMBOL: u64 = 0x0c;
@@ -902,7 +902,7 @@ impl Value {
             }
         }
     */
-    pub fn as_enumerator(&mut self) -> Option<&mut FiberInfo> {
+    pub fn as_enumerator(&mut self) -> Option<&mut FiberContext> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Enumerator(info) => Some(info.as_mut()),
@@ -912,14 +912,14 @@ impl Value {
         }
     }
 
-    pub fn expect_enumerator(&mut self, error_msg: &str) -> Result<&mut FiberInfo, RubyError> {
+    pub fn expect_enumerator(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
             None => Err(RubyError::argument(error_msg)),
         }
     }
 
-    pub fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberInfo, RubyError> {
+    pub fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Fiber(f) => Ok(f.as_mut()),
@@ -1091,13 +1091,11 @@ impl Value {
     }
 
     pub fn fiber(parent_vm: &mut VM, context: ContextRef) -> Self {
-        let (tx0, rx0) = mpsc::sync_channel(0);
-        let (tx1, rx1) = mpsc::sync_channel(0);
-        let new_fiber = parent_vm.create_fiber(tx0, rx1);
-        RValue::new_fiber(new_fiber, context, rx0, tx1).pack()
+        let new_fiber = parent_vm.create_fiber();
+        RValue::new_fiber(new_fiber, context).pack()
     }
 
-    pub fn enumerator(fiber: FiberInfo) -> Self {
+    pub fn enumerator(fiber: Box<FiberContext>) -> Self {
         RValue::new_enumerator(fiber).pack()
     }
 

@@ -11,6 +11,16 @@ pub enum Block {
     None,
 }
 
+impl GC for Block {
+    fn mark(&self, alloc: &mut Allocator) {
+        match self {
+            Block::Block(_, ctx) => ctx.mark(alloc),
+            Block::Proc(v) => v.mark(alloc),
+            Block::None => {}
+        }
+    }
+}
+
 impl Block {
     pub fn to_iseq(&self) -> ISeqRef {
         match self {
@@ -43,6 +53,16 @@ pub struct Args {
     pub block: Block,
     pub kw_arg: Value,
     elems: SmallVec<[Value; ARG_ARRAY_SIZE]>,
+}
+
+impl GC for Args {
+    fn mark(&self, alloc: &mut Allocator) {
+        for arg in self.iter() {
+            arg.mark(alloc);
+        }
+        self.kw_arg.mark(alloc);
+        self.block.mark(alloc);
+    }
 }
 
 // Constructors for Args
