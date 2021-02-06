@@ -1,4 +1,4 @@
-1000000.times do
+100000.times do
   f = Fiber.new { Fiber.yield }
   f.resume
 end
