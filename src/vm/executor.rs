@@ -89,7 +89,7 @@ impl VM {
     }
 
     pub fn create_fiber(&mut self) -> Self {
-        let vm = VM {
+        VM {
             globals: self.globals,
             exec_context: vec![],
             temp_stack: vec![],
@@ -97,9 +97,7 @@ impl VM {
             exec_stack: vec![],
             pc: 0,
             handle: None,
-        };
-        self.globals.fibers.push(VMRef::from_ref(&vm));
-        vm
+        }
     }
 
     pub fn current_context(&self) -> ContextRef {

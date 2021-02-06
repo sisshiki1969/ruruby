@@ -22,8 +22,6 @@ pub struct Globals {
     pub class_version: u32,
     pub const_version: u32,
     pub main_object: Value,
-    //pub gc_enabled: bool,
-    pub fibers: Vec<VMRef>,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
     source_files: Vec<PathBuf>,
     #[cfg(feature = "perf")]
@@ -253,7 +251,6 @@ impl GlobalsRef {
     pub fn create_main_fiber(&mut self) -> VMRef {
         let vm = VMRef::new(VM::new(self.to_owned()));
         self.main_fiber = Some(vm);
-        self.fibers.push(vm);
         vm
     }
 }
@@ -284,7 +281,6 @@ impl Globals {
             const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
-            fibers: vec![],
             regexp_cache: FxHashMap::default(),
             source_files: vec![],
             #[cfg(feature = "perf")]
