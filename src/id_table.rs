@@ -1,14 +1,12 @@
 use fxhash::FxHashMap;
-use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::fmt;
+use std::lazy::SyncLazy;
 use std::num::NonZeroU32;
-use std::sync::RwLock;
+use std::sync::{Arc, Mutex};
 
-pub static ID: Lazy<RwLock<IdentifierTable>> = Lazy::new(|| {
-    let id = IdentifierTable::new();
-    RwLock::new(id)
-});
+static ID: SyncLazy<Arc<Mutex<IdentifierTable>>> =
+    SyncLazy::new(|| Arc::new(Mutex::new(IdentifierTable::new())));
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct IdentId(NonZeroU32);
@@ -83,11 +81,11 @@ impl IdentId {
 
 impl IdentId {
     pub fn get_id<'a>(name: impl Into<Cow<'a, str>>) -> Self {
-        ID.write().unwrap().get_ident_id(name)
+        ID.lock().unwrap().get_ident_id(name)
     }
 
     pub fn get_name(id: IdentId) -> String {
-        ID.read().unwrap().get_name(id).to_string()
+        ID.lock().unwrap().get_name(id).to_string()
     }
 
     pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
@@ -98,7 +96,7 @@ impl IdentId {
     }
 
     pub fn starts_with(id: IdentId, pat: &str) -> bool {
-        ID.read().unwrap().starts_with(id, pat)
+        ID.lock().unwrap().starts_with(id, pat)
     }
 
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {

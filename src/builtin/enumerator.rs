@@ -76,7 +76,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn next(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
@@ -85,11 +85,11 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     if eref.state == FiberState::Dead {
         return Err(RubyError::stop_iteration("Iteration reached an end."));
     };
-    match eref.resume(&mut vm.globals) {
+    match eref.resume(Value::nil()) {
         Ok(val) => Ok(val),
-        Err(err) if err.is_stop_iteration() => {
+        /*Err(err) if err.is_stop_iteration() => {
             return Err(RubyError::stop_iteration("Iteration reached an end."))
-        }
+        }*/
         Err(err) => Err(err),
     }
 }
@@ -105,12 +105,11 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     let mut args = Args::new(1);
     loop {
-        let val = match info.resume(&mut vm.globals) {
+        args[0] = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
-        args[0] = val;
         vm.eval_block(block, &args)?;
     }
 
@@ -136,7 +135,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut args = Args::new(1);
     let mut ary = vec![];
     loop {
-        let val = match info.resume(&mut vm.globals) {
+        let val = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
@@ -168,7 +167,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut c = 0;
     let mut ary = vec![];
     loop {
-        let val = match info.resume(&mut vm.globals) {
+        let val = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) => {
                 if err.is_stop_iteration() {

@@ -1,4 +1,4 @@
-h = {}
-strs = ('a'..'z').to_a.map!(&:freeze)
-strs.each { |s| h[s] = s }
-200_000.times { strs.each { |s| h[s] } }
+#100000.times {
+  enum = (0..10000000).each.to_enum
+  enum.each {}
+#}

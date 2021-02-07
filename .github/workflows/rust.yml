@@ -1,9 +1,6 @@
-name: Rust
+name: ruruby
 
-on:
-  push:
-    branches:
-      - master
+on: push
 
 jobs:
   check:
