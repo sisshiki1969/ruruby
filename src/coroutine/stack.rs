@@ -27,22 +27,37 @@ impl Stack {
         };
     }
 
-    pub fn init(
-        &mut self,
-        fiber: *const FiberContext,
-        f: extern "C" fn(FiberHandle, Value) -> *mut VMResult,
-    ) -> u64 {
+    pub fn init(&mut self, fiber: *const FiberContext) -> u64 {
         unsafe {
             let s_ptr = self.0.offset(DEFAULT_STACK_SIZE as isize);
             (s_ptr.offset(-8) as *mut u64).write(fiber as u64);
             (s_ptr.offset(-16) as *mut u64).write(guard as u64);
             // this is a dummy function for 16bytes-align.
             (s_ptr.offset(-24) as *mut u64).write(asm::skip as u64);
-            (s_ptr.offset(-32) as *mut u64).write(f as u64);
+            (s_ptr.offset(-32) as *mut u64).write(new_context as u64);
             // 48 bytes to store registers.
             s_ptr.offset(-80) as u64
         }
     }
+}
+
+extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
+    let mut fiber_vm = handle.vm();
+    fiber_vm.handle = Some(handle);
+    let res = match handle.kind() {
+        FiberKind::Fiber(context) => fiber_vm.run_context(*context),
+        FiberKind::Enum(info) => info.enumerator_fiber(&mut fiber_vm),
+    };
+    #[cfg(any(feature = "trace", feature = "trace-func"))]
+    println!("<=== yield {:?} and terminate fiber.", res);
+    let res = match res {
+        Err(err) => match &err.kind {
+            RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
+            _ => Err(err),
+        },
+        res => res,
+    };
+    Box::into_raw(Box::new(res))
 }
 
 extern "C" fn guard(fiber: *mut FiberContext, val: *mut VMResult) {

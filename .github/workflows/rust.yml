@@ -14,5 +14,7 @@ jobs:
           override: true
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
+        with:
+          args: "-v --all-features --workspace"
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1

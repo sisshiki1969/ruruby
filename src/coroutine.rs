@@ -42,6 +42,19 @@ impl GC for EnumInfo {
     }
 }
 
+impl EnumInfo {
+    /// This BuiltinFunc is called in the fiber thread of a enumerator.
+    /// `vm`: VM of created fiber.
+    pub fn enumerator_fiber(&self, vm: &mut VM) -> VMResult {
+        let method = vm.get_method_from_receiver(self.receiver, self.method)?;
+        let context = Context::new_noiseq();
+        vm.context_push(ContextRef::from_ref(&context));
+        vm.invoke_method(method, self.receiver, None, &self.args)?;
+        vm.context_pop();
+        Err(RubyError::stop_iteration("Iteration reached an end."))
+    }
+}
+
 #[derive(Debug, PartialEq)]
 #[repr(C)]
 pub struct FiberContext {
@@ -125,7 +138,7 @@ impl FiberContext {
     pub fn spawn(vm: VMRef, kind: FiberKind) -> Box<Self> {
         let mut fiber = Box::new(FiberContext::new(vm, kind));
         let ptr = &*fiber as *const _;
-        fiber.rsp = fiber.stack.init(ptr, Self::new_context);
+        fiber.rsp = fiber.stack.init(ptr);
         fiber
     }
 }
@@ -150,36 +163,6 @@ impl FiberContext {
     pub fn new_enumerator(vm: VM, info: EnumInfo) -> Box<Self> {
         let vmref = VMRef::new(vm);
         Self::spawn(vmref, FiberKind::Enum(Box::new(info)))
-    }
-
-    extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
-        let mut fiber_vm = handle.vm();
-        fiber_vm.handle = Some(handle);
-        let res = match handle.kind() {
-            FiberKind::Fiber(context) => fiber_vm.run_context(*context),
-            FiberKind::Enum(info) => Self::enumerator_fiber(&mut fiber_vm, info),
-        };
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        println!("<=== yield {:?} and terminate fiber.", res);
-        let res = match res {
-            Err(err) => match &err.kind {
-                RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
-                _ => Err(err),
-            },
-            res => res,
-        };
-        Box::into_raw(Box::new(res))
-    }
-
-    /// This BuiltinFunc is called in the fiber thread of a enumerator.
-    /// `vm`: VM of created fiber.
-    pub fn enumerator_fiber(vm: &mut VM, info: &EnumInfo) -> VMResult {
-        let method = vm.get_method_from_receiver(info.receiver, info.method)?;
-        let context = Context::new_noiseq();
-        vm.context_push(ContextRef::from_ref(&context));
-        vm.invoke_method(method, info.receiver, None, &info.args)?;
-        vm.context_pop();
-        Err(RubyError::stop_iteration("Iteration reached an end."))
     }
 }
 
