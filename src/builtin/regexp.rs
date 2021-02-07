@@ -475,8 +475,12 @@ mod test {
     }
 
     #[test]
-    fn regexp_error() {
+    fn regexp_error1() {
         assert_error(r#"/+/"#);
+    }
+
+    #[test]
+    fn regexp_error2() {
         assert_error(r#"Regexp.new("+")"#);
     }
 }

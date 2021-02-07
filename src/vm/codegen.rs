@@ -2242,22 +2242,42 @@ mod tests {
     }
 
     #[test]
-    fn codegen_invalid_break() {
+    fn codegen_invalid_break1() {
         assert_error(r#"eval("break")"#);
+    }
+
+    #[test]
+    fn codegen_invalid_break2() {
         assert_error(r#"break"#);
+    }
+
+    #[test]
+    fn codegen_invalid_break3() {
         assert_error("def foo; break; end");
     }
 
     #[test]
-    fn codegen_invalid_next() {
+    fn codegen_invalid_next1() {
         assert_error(r#"eval("next")"#);
+    }
+
+    #[test]
+    fn codegen_invalid_next2() {
         assert_error(r#"next"#);
+    }
+
+    #[test]
+    fn codegen_invalid_next3() {
         assert_error("def foo; next; end");
     }
 
     #[test]
-    fn codegen_error() {
+    fn codegen_error1() {
         assert_error(r#"a"#);
+    }
+
+    #[test]
+    fn codegen_error2() {
         assert_error(r#"a + 3 = 100"#);
     }
 }
