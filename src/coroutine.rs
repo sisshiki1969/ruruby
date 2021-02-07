@@ -1,7 +1,11 @@
 use crate::*;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod asm_arm64;
 #[cfg(all(unix, target_arch = "x86_64"))]
 mod asm_x64;
 mod stack;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+use asm_arm64 as asm;
 #[cfg(all(unix, target_arch = "x86_64"))]
 use asm_x64 as asm;
 use stack::*;
