@@ -1,15 +1,8 @@
 use super::*;
 use region::{protect, Protection};
-use std::{
-    alloc::{alloc, Layout},
-    cell::RefCell,
-};
+use std::alloc::{alloc, Layout};
 
-const DEFAULT_STACK_SIZE: usize = 1024 * 64;
-
-thread_local! {
-    static STACK_STORE: RefCell<Vec<*mut u8>> = RefCell::new(vec![]);
-}
+const DEFAULT_STACK_SIZE: usize = 1024 * 128;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
@@ -17,32 +10,21 @@ pub struct Stack(*mut u8);
 
 impl Stack {
     pub fn allocate() -> Self {
-        STACK_STORE.with(|m| {
-            let mut v = m.borrow_mut();
-            match v.pop() {
-                None => {
-                    let stack = unsafe {
-                        alloc(Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout."))
-                    };
-                    unsafe {
-                        protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
-                            .expect("Mprotect failed.");
-                    }
-                    Self(stack)
-                }
-                Some(stack) => Self(stack),
-            }
-        })
+        let stack =
+            unsafe { alloc(Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout.")) };
+        unsafe {
+            protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE).expect("Mprotect failed.");
+        }
+        Self(stack)
     }
 
     pub fn deallocate(self) {
-        STACK_STORE.with(|m| m.borrow_mut().push(self.0));
-        /*unsafe {
+        unsafe {
             std::alloc::dealloc(
                 self.0,
                 Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout."),
             )
-        };*/
+        };
     }
 
     pub fn init(&mut self, fiber: *const FiberContext) -> u64 {
