@@ -16,6 +16,10 @@ thread_local!(
 pub struct Stack(*mut u8);
 
 impl Stack {
+    pub fn default() -> Self {
+        Self(0 as _)
+    }
+
     pub fn allocate() -> Self {
         STACK_STORE.with(|m| match m.borrow_mut().pop() {
             None => unsafe {
@@ -29,8 +33,12 @@ impl Stack {
         })
     }
 
-    pub fn deallocate(self) {
+    pub fn deallocate(&mut self) {
+        if self.0 as u64 == 0 {
+            return;
+        }
         STACK_STORE.with(|m| m.borrow_mut().push(self.0));
+        self.0 = 0 as _;
         /*unsafe {
             std::alloc::dealloc(
                 self.0,
@@ -75,6 +83,7 @@ extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
 extern "C" fn guard(fiber: *mut FiberContext, val: *mut VMResult) {
     unsafe {
         (*fiber).state = FiberState::Dead;
+        (*fiber).stack.deallocate();
     }
     asm::yield_context(fiber, val);
 }

@@ -135,11 +135,11 @@ impl FiberContext {
     //     |      registers      |
     // -80 |                     | <-sp
     //     +---------------------+
-    pub fn spawn(vm: VMRef, kind: FiberKind) -> Box<Self> {
-        let mut fiber = Box::new(FiberContext::new(vm, kind));
-        let ptr = &*fiber as *const _;
-        fiber.rsp = fiber.stack.init(ptr);
-        fiber
+    pub fn initialize(&mut self) {
+        let ptr = self as *const _;
+        self.stack = Stack::allocate();
+        self.rsp = self.stack.init(ptr);
+        self.state = FiberState::Running;
     }
 }
 
@@ -148,7 +148,7 @@ impl FiberContext {
         FiberContext {
             rsp: 0,
             main_rsp: 0,
-            stack: Stack::allocate(),
+            stack: Stack::default(),
             state: FiberState::Created,
             vm,
             kind,
@@ -157,12 +157,12 @@ impl FiberContext {
 
     pub fn new_fiber(vm: VM, context: ContextRef) -> Box<Self> {
         let vmref = VMRef::new(vm);
-        Self::spawn(vmref, FiberKind::Fiber(context))
+        Box::new(FiberContext::new(vmref, FiberKind::Fiber(context)))
     }
 
     pub fn new_enumerator(vm: VM, info: EnumInfo) -> Box<Self> {
         let vmref = VMRef::new(vm);
-        Self::spawn(vmref, FiberKind::Enum(Box::new(info)))
+        Box::new(FiberContext::new(vmref, FiberKind::Enum(Box::new(info))))
     }
 }
 
@@ -175,7 +175,7 @@ impl FiberContext {
         match self.state {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
-                self.state = FiberState::Running;
+                self.initialize();
                 unsafe { *Box::from_raw(asm::invoke_context(ptr, val.get())) }
             }
             FiberState::Running => unsafe { *Box::from_raw(asm::switch_context(ptr, val.get())) },
