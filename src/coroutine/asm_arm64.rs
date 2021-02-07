@@ -1,12 +1,14 @@
 use super::FiberContext;
 use crate::VMResult;
 
+pub(super) const OFFSET: isize = -0xb0;
+
 #[naked]
 pub(super) extern "C" fn skip() {
     unsafe {
-        // rdi <- *mut FiberContext
-        // rsi <- *mut VMResult
-        asm!("mov rdi, [rsp+8]", "mov rsi, rax", "ret", options(noreturn));
+        // x0 <- *mut FiberContext
+        // x1 <- *mut VMResult
+        asm!("mov x1, x0", "ldr x0, [sp, 8]", "ret", options(noreturn));
     };
 }
 
@@ -16,24 +18,36 @@ pub(super) extern "C" fn invoke_context(
     _fiber: *mut FiberContext,
     _send_val: u64,
 ) -> *mut VMResult {
-    // rdi <- _fiber
-    // rsi <- _send_val
+    // x0 <- _fiber
+    // x1 <- _send_val
     unsafe {
         asm!(
-            "push r15",
-            "push r14",
-            "push r13",
-            "push r12",
-            "push rbx",
-            "push rbp",
-            "mov  [rdi + 8], rsp", // [f.main_rsp] <- rsp
-            "mov  rsp, [rdi]",     // rsp <- f.rsp
-            "pop  rbp",
-            "pop  rbx",
-            "pop  r12",
-            "pop  r13",
-            "pop  r14",
-            "pop  r15",
+            "sub sp, sp, #0xb0",
+            "stp d8, d9, [sp, #0x00]",
+            "stp d10, d11, [sp, #0x10]",
+            "stp d12, d13, [sp, #0x20]",
+            "stp d14, d15, [sp, #0x30]",
+            "stp x19, x20, [sp, #0x40]",
+            "stp x21, x22, [sp, #0x50]",
+            "stp x23, x24, [sp, #0x60]",
+            "stp x25, x26, [sp, #0x70]",
+            "stp x27, x28, [sp, #0x80]",
+            "stp fp, lr, [sp, #0x90]",
+            "mov x3, sp",       // [f.main_rsp] <- sp
+            "str x3, [x0, #8]", // [f.main_rsp] <- sp
+            "ldr x3, [x0]",     // sp <- f.rsp
+            "mov sp, x3",
+            "ldp d8, d9, [sp, #0x00]",
+            "ldp d10, d11, [sp, #0x10]",
+            "ldp d12, d13, [sp, #0x20]",
+            "ldp d14, d15, [sp, #0x30]",
+            "ldp x19, x20, [sp, #0x40]",
+            "ldp x21, x22, [sp, #0x50]",
+            "ldp x23, x24, [sp, #0x60]",
+            "ldp x25, x26, [sp, #0x70]",
+            "ldp x27, x28, [sp, #0x80]",
+            "ldp fp, lr, [sp, #0x90]",
+            "add sp, sp, #0xb0",
             "ret", // f(&mut Fiber, u64)
             options(noreturn)
         );
@@ -43,25 +57,37 @@ pub(super) extern "C" fn invoke_context(
 #[naked]
 #[inline(never)]
 pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext, _ret_val: u64) -> *mut VMResult {
-    // rdi <- _fiber
-    // rsi <- _ret_val
+    // x0 <- _fiber
+    // x1 <- _ret_val
     unsafe {
         asm!(
-            "push r15",
-            "push r14",
-            "push r13",
-            "push r12",
-            "push rbx",
-            "push rbp",
-            "mov  [rdi + 8], rsp", // [f.main_rsp] <- rsp
-            "mov  rsp, [rdi]",     // rsp <- f.rsp
-            "pop  rbp",
-            "pop  rbx",
-            "pop  r12",
-            "pop  r13",
-            "pop  r14",
-            "pop  r15",
-            "mov  rax, rsi", // rax <- _ret_val
+            "sub sp, sp, #0xb0",
+            "stp d8, d9, [sp, #0x00]",
+            "stp d10, d11, [sp, #0x10]",
+            "stp d12, d13, [sp, #0x20]",
+            "stp d14, d15, [sp, #0x30]",
+            "stp x19, x20, [sp, #0x40]",
+            "stp x21, x22, [sp, #0x50]",
+            "stp x23, x24, [sp, #0x60]",
+            "stp x25, x26, [sp, #0x70]",
+            "stp x27, x28, [sp, #0x80]",
+            "stp fp, lr, [sp, #0x90]",
+            "mov x3, sp",       // [f.main_rsp] <- sp
+            "str x3, [x0, #8]", // [f.main_rsp] <- rsp
+            "ldr x3, [x0]",     // rsp <- f.rsp
+            "mov sp, x3",
+            "ldp d8, d9, [sp, #0x00]",
+            "ldp d10, d11, [sp, #0x10]",
+            "ldp d12, d13, [sp, #0x20]",
+            "ldp d14, d15, [sp, #0x30]",
+            "ldp x19, x20, [sp, #0x40]",
+            "ldp x21, x22, [sp, #0x50]",
+            "ldp x23, x24, [sp, #0x60]",
+            "ldp x25, x26, [sp, #0x70]",
+            "ldp x27, x28, [sp, #0x80]",
+            "ldp fp, lr, [sp, #0x90]",
+            "add sp, sp, #0xb0",
+            "mov x0, x1", // x0 <- _ret_val
             "ret",
             options(noreturn)
         );
@@ -71,25 +97,37 @@ pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext, _ret_val: u64
 #[naked]
 #[inline(never)]
 pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut VMResult) -> u64 {
-    // rdi <- _fiber
-    // rsi <- _ret_val
+    // x0 <- _fiber
+    // x1 <- _ret_val
     unsafe {
         asm!(
-            "push r15",
-            "push r14",
-            "push r13",
-            "push r12",
-            "push rbx",
-            "push rbp",
-            "mov  [rdi], rsp",     // [f.rsp] <- rsp
-            "mov  rsp, [rdi + 8]", // rsp <- f.main_rsp
-            "pop  rbp",
-            "pop  rbx",
-            "pop  r12",
-            "pop  r13",
-            "pop  r14",
-            "pop  r15",
-            "mov  rax, rsi", // rax <- _ret_val
+            "sub sp, sp, #0xb0",
+            "stp d8, d9, [sp, #0x00]",
+            "stp d10, d11, [sp, #0x10]",
+            "stp d12, d13, [sp, #0x20]",
+            "stp d14, d15, [sp, #0x30]",
+            "stp x19, x20, [sp, #0x40]",
+            "stp x21, x22, [sp, #0x50]",
+            "stp x23, x24, [sp, #0x60]",
+            "stp x25, x26, [sp, #0x70]",
+            "stp x27, x28, [sp, #0x80]",
+            "stp fp, lr, [sp, #0x90]",
+            "mov x3, sp",
+            "str x3, [x0]",     // [f.rsp] <- rsp
+            "ldr x3, [x0, #8]", // rsp <- f.main_rsp
+            "mov sp, x3",
+            "ldp d8, d9, [sp, #0x00]",
+            "ldp d10, d11, [sp, #0x10]",
+            "ldp d12, d13, [sp, #0x20]",
+            "ldp d14, d15, [sp, #0x30]",
+            "ldp x19, x20, [sp, #0x40]",
+            "ldp x21, x22, [sp, #0x50]",
+            "ldp x23, x24, [sp, #0x60]",
+            "ldp x25, x26, [sp, #0x70]",
+            "ldp x27, x28, [sp, #0x80]",
+            "ldp fp, lr, [sp, #0x90]",
+            "add sp, sp, #0xb0",
+            "mov x0, x1", // x0 <- _ret_val
             "ret",
             options(noreturn)
         );

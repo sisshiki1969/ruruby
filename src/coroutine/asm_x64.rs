@@ -1,6 +1,8 @@
 use super::FiberContext;
 use crate::VMResult;
 
+pub const OFFSET: isize = -80;
+
 #[naked]
 pub(super) extern "C" fn skip() {
     unsafe {
