@@ -2,7 +2,7 @@ use crate::*;
 use std::cell::RefCell;
 
 thread_local!(
-    pub static ALLOC: RefCell<Option<AllocatorRef>> = RefCell::new(None);
+    pub static ALLOC: RefCell<AllocatorRef> = RefCell::new(AllocatorRef::new(Allocator::new()));
 );
 
 const SIZE: usize = 64;
@@ -514,7 +514,6 @@ mod tests {
     use crate::test::*;
 
     #[test]
-    #[ignore]
     fn gc_test() {
         let program = r#"
             class Vec

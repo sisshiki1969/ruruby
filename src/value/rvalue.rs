@@ -338,12 +338,11 @@ impl RValue {
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
-        ALLOC.with(|a| {
-            let mut alloc = *a.borrow().as_ref().unwrap();
-            let ptr = alloc.alloc(self);
+        let ptr = ALLOC.with(|alloc| {
+            alloc.borrow_mut().alloc(self)
             //assert!((ptr as u64) & 0b111 == 0);
-            Value::from_ptr(ptr)
-        })
+        });
+        Value::from_ptr(ptr)
     }
 
     /// Return a class of the object.

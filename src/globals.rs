@@ -258,8 +258,7 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
-        let allocator = AllocatorRef::new(Allocator::new());
-        ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
+        let allocator = ALLOC.with(|alloc| *alloc.borrow());
         let mut builtins = BuiltinRef::new(BuiltinClass::new());
         BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
         let object = builtins.object;
@@ -368,9 +367,6 @@ impl Globals {
     /// Set ALLOC to Globals' Allocator for Fiber.
     /// This method should be called in the thread where `self` is to be run.
     pub fn set_allocator(&self) {
-        ALLOC.with(|a| {
-            *a.borrow_mut() = Some(self.allocator);
-        });
         BUILTINS.with(|b| {
             *b.borrow_mut() = Some(self.builtins);
         });
