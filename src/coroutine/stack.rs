@@ -56,7 +56,7 @@ impl Stack {
             (s_ptr.offset(-24) as *mut u64).write(asm::skip as u64);
             (s_ptr.offset(-32) as *mut u64).write(new_context as u64);
             // 48 bytes to store registers.
-            s_ptr.offset(asm::OFFSET) as u64
+            s_ptr.offset(-32 - asm::OFFSET) as u64
         }
     }
 }

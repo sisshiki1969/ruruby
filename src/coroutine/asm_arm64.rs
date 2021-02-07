@@ -1,7 +1,7 @@
 use super::FiberContext;
 use crate::VMResult;
 
-pub(super) const OFFSET: isize = -0xb0;
+pub(super) const OFFSET: isize = 0xb0;
 
 #[naked]
 pub(super) extern "C" fn skip() {
