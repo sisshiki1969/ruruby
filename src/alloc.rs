@@ -2,7 +2,7 @@ use crate::*;
 use std::cell::RefCell;
 
 thread_local!(
-    pub static ALLOC: RefCell<Option<AllocatorRef>> = RefCell::new(None);
+    pub static ALLOC: RefCell<AllocatorRef> = RefCell::new(AllocatorRef::new(Allocator::new()));
 );
 
 const SIZE: usize = 64;
@@ -16,12 +16,14 @@ pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
 }
 
+///-----------------------------------------------------------------------------------------------------------------
 ///
 /// Heap page struct.
 ///
 /// Single page occupies `ALLOC_SIZE` bytes in memory.
 /// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
 ///
+///-----------------------------------------------------------------------------------------------------------------
 struct Page {
     data: [GCBox<RValue>; DATA_LEN],
     mark_bits: [u64; SIZE - 1],
@@ -514,7 +516,6 @@ mod tests {
     use crate::test::*;
 
     #[test]
-    #[ignore]
     fn gc_test() {
         let program = r#"
             class Vec
