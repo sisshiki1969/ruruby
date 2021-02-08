@@ -8,7 +8,13 @@ pub(super) extern "C" fn skip() {
     unsafe {
         // x0 <- *mut FiberContext
         // x1 <- *mut VMResult
-        asm!("mov x1, x0", "ldr x0, [sp, 8]", "ret", options(noreturn));
+        asm!(
+            "mov x1, x0",
+            "ldr x0, [sp, #24]",
+            "ldr lr, [sp, #16]",
+            "ret",
+            options(noreturn)
+        );
     };
 }
 
@@ -48,6 +54,7 @@ pub(super) extern "C" fn invoke_context(
             "ldp x27, x28, [sp, #0x80]",
             "ldp fp, lr, [sp, #0x90]",
             "add sp, sp, #0xb0",
+            "ldr lr, [sp, #8]", // lr <- skip
             "ldr x4, [sp]",
             "ret x4", // f(&mut Fiber, u64)
             options(noreturn)
