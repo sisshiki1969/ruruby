@@ -48,7 +48,8 @@ pub(super) extern "C" fn invoke_context(
             "ldp x27, x28, [sp, #0x80]",
             "ldp fp, lr, [sp, #0x90]",
             "add sp, sp, #0xb0",
-            "ret", // f(&mut Fiber, u64)
+            "ldr x4, [sp]",
+            "ret x4", // f(&mut Fiber, u64)
             options(noreturn)
         );
     }
