@@ -1,3 +1,4 @@
+use crate::coroutine::*;
 use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
@@ -41,7 +42,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    FiberInfo::fiber_yield(vm, args)
+    FiberHandle::fiber_yield(vm, args)
 }
 
 // Instance methods
@@ -49,7 +50,7 @@ pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     let (receiver, method, args) = match &eref.kind {
-        FiberKind::Enum(receiver, method, args) => (receiver, method, args),
+        FiberKind::Enum(info) => (info.receiver, info.method, &info.args),
         _ => unreachable!(),
     };
 
@@ -67,7 +68,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
         }
     };
 
-    let receiver_string = vm.val_inspect(*receiver)?;
+    let receiver_string = vm.val_inspect(receiver)?;
     let inspect = format!(
         "#<Enumerator: {}:{:?}{}>",
         receiver_string, method, arg_string
@@ -75,20 +76,20 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn next(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
     };
-    if eref.vm.is_dead() {
+    if eref.state == FiberState::Dead {
         return Err(RubyError::stop_iteration("Iteration reached an end."));
     };
-    match eref.resume(&mut vm.globals) {
+    match eref.resume(Value::nil()) {
         Ok(val) => Ok(val),
-        Err(err) if err.is_stop_iteration() => {
+        /*Err(err) if err.is_stop_iteration() => {
             return Err(RubyError::stop_iteration("Iteration reached an end."))
-        }
+        }*/
         Err(err) => Err(err),
     }
 }
@@ -104,17 +105,16 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     };
     let mut args = Args::new(1);
     loop {
-        let val = match info.resume(&mut vm.globals) {
+        args[0] = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
-        args[0] = val;
         vm.eval_block(block, &args)?;
     }
 
-    match info.kind {
-        FiberKind::Enum(receiver, _, _) => Ok(receiver),
+    match &info.kind {
+        FiberKind::Enum(info) => Ok(info.receiver),
         _ => unreachable!(),
     }
 }
@@ -135,7 +135,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut args = Args::new(1);
     let mut ary = vec![];
     loop {
-        let val = match info.resume(&mut vm.globals) {
+        let val = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
@@ -167,7 +167,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut c = 0;
     let mut ary = vec![];
     loop {
-        let val = match info.resume(&mut vm.globals) {
+        let val = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) => {
                 if err.is_stop_iteration() {

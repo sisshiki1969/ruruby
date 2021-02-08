@@ -53,6 +53,7 @@ impl Loc {
 //------------------------------------------------------------
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct Ref<T>(NonNull<T>);
 
 impl<T: Default> Default for Ref<T> {
@@ -91,7 +92,8 @@ impl<T> Ref<T> {
 
 impl<T> From<u64> for Ref<T> {
     fn from(val: u64) -> Ref<T> {
-        unsafe { Ref(NonNull::new_unchecked(val as *mut T)) }
+        Ref(NonNull::new(val as *mut T)
+            .unwrap_or_else(|| panic!("Ref::new(): the pointer is NULL.")))
     }
 }
 

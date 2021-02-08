@@ -18,7 +18,10 @@ pub fn repl_vm() {
         println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
         println!("RString: {}", std::mem::size_of::<RString>());
         println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
-        println!("FiberInfo: {}", std::mem::size_of::<FiberInfo>());
+        println!(
+            "FiberContext: {}",
+            std::mem::size_of::<crate::coroutine::FiberContext>()
+        );
         println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
         println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
         println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());

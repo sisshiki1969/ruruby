@@ -1,3 +1,4 @@
+use crate::coroutine::*;
 use crate::*;
 use std::borrow::Cow;
 
@@ -25,8 +26,8 @@ pub enum ObjKind {
     Proc(ProcInfo),
     Regexp(RegexpInfo),
     Method(MethodObjInfo),
-    Fiber(Box<FiberInfo>),
-    Enumerator(Box<FiberInfo>),
+    Fiber(Box<FiberContext>),
+    Enumerator(Box<FiberContext>),
     Time(TimeInfo),
     Exception(RubyError),
 }
@@ -286,25 +287,20 @@ impl RValue {
         }
     }
 
-    pub fn new_fiber(
-        vm: VM,
-        context: ContextRef,
-        rec: std::sync::mpsc::Receiver<VMResult>,
-        tx: std::sync::mpsc::SyncSender<FiberMsg>,
-    ) -> Self {
-        let fiber = FiberInfo::new(vm, context, rec, tx);
+    pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
+        let fiber = FiberContext::new_fiber(vm, context);
         RValue {
             class: BuiltinClass::fiber(),
             var_table: None,
-            kind: ObjKind::Fiber(Box::new(fiber)),
+            kind: ObjKind::Fiber(fiber),
         }
     }
 
-    pub fn new_enumerator(fiber: FiberInfo) -> Self {
+    pub fn new_enumerator(fiber: Box<FiberContext>) -> Self {
         RValue {
             class: BuiltinClass::enumerator(),
             var_table: None,
-            kind: ObjKind::Enumerator(Box::new(fiber)),
+            kind: ObjKind::Enumerator(fiber),
         }
     }
 
@@ -342,12 +338,11 @@ impl RValue {
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
     pub fn pack(self) -> Value {
-        ALLOC.with(|a| {
-            let mut alloc = *a.borrow().as_ref().unwrap();
-            let ptr = alloc.alloc(self);
+        let ptr = ALLOC.with(|alloc| {
+            alloc.borrow_mut().alloc(self)
             //assert!((ptr as u64) & 0b111 == 0);
-            Value::from_ptr(ptr)
-        })
+        });
+        Value::from_ptr(ptr)
     }
 
     /// Return a class of the object.

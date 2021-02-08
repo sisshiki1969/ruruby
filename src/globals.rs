@@ -22,8 +22,6 @@ pub struct Globals {
     pub class_version: u32,
     pub const_version: u32,
     pub main_object: Value,
-    //pub gc_enabled: bool,
-    pub fibers: Vec<VMRef>,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
     source_files: Vec<PathBuf>,
     #[cfg(feature = "perf")]
@@ -33,7 +31,7 @@ pub struct Globals {
 pub type GlobalsRef = Ref<Globals>;
 
 thread_local!(
-    static BUILTINS: RefCell<Option<BuiltinRef>> = RefCell::new(None);
+    static BUILTINS: RefCell<BuiltinRef> = RefCell::new(BuiltinRef::new(BuiltinClass::new()));
 );
 
 #[derive(Debug, Clone)]
@@ -113,111 +111,99 @@ impl BuiltinClass {
     }
 
     pub fn object() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().object)
+        BUILTINS.with(|b| b.borrow().object)
     }
 
     pub fn class() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().class)
+        BUILTINS.with(|b| b.borrow().class)
     }
 
     pub fn module() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().module)
+        BUILTINS.with(|b| b.borrow().module)
     }
 
     pub fn string() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().string).into_module()
+        BUILTINS.with(|b| b.borrow().string).into_module()
     }
 
     pub fn integer() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().integer).into_module()
+        BUILTINS.with(|b| b.borrow().integer).into_module()
     }
 
     pub fn float() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().float).into_module()
+        BUILTINS.with(|b| b.borrow().float).into_module()
     }
 
     pub fn symbol() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().symbol).into_module()
+        BUILTINS.with(|b| b.borrow().symbol).into_module()
     }
 
     pub fn complex() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().complex).into_module()
+        BUILTINS.with(|b| b.borrow().complex).into_module()
     }
 
     pub fn range() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().range).into_module()
+        BUILTINS.with(|b| b.borrow().range).into_module()
     }
 
     pub fn array() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().array).into_module()
+        BUILTINS.with(|b| b.borrow().array).into_module()
     }
 
     pub fn hash() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().hash).into_module()
+        BUILTINS.with(|b| b.borrow().hash).into_module()
     }
 
     pub fn fiber() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().fiber).into_module()
+        BUILTINS.with(|b| b.borrow().fiber).into_module()
     }
 
     pub fn enumerator() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().enumerator)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().enumerator).into_module()
     }
 
     pub fn procobj() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().procobj).into_module()
+        BUILTINS.with(|b| b.borrow().procobj).into_module()
     }
 
     pub fn regexp() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().regexp).into_module()
+        BUILTINS.with(|b| b.borrow().regexp).into_module()
     }
 
     pub fn method() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().method).into_module()
+        BUILTINS.with(|b| b.borrow().method).into_module()
     }
 
     pub fn exception() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().exception)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().exception).into_module()
     }
 
     pub fn standard() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().standard)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().standard).into_module()
     }
 
     pub fn nilclass() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().nilclass)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().nilclass).into_module()
     }
 
     pub fn trueclass() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().trueclass)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().trueclass).into_module()
     }
 
     pub fn falseclass() -> Module {
-        BUILTINS
-            .with(|b| b.borrow().unwrap().falseclass)
-            .into_module()
+        BUILTINS.with(|b| b.borrow().falseclass).into_module()
     }
 
     pub fn kernel() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().kernel)
+        BUILTINS.with(|b| b.borrow().kernel)
     }
 
     pub fn numeric() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().numeric)
+        BUILTINS.with(|b| b.borrow().numeric)
     }
 
     pub fn comparable() -> Module {
-        BUILTINS.with(|b| b.borrow().unwrap().comparable)
+        BUILTINS.with(|b| b.borrow().comparable)
     }
 }
 
@@ -253,7 +239,6 @@ impl GlobalsRef {
     pub fn create_main_fiber(&mut self) -> VMRef {
         let vm = VMRef::new(VM::new(self.to_owned()));
         self.main_fiber = Some(vm);
-        self.fibers.push(vm);
         vm
     }
 }
@@ -261,10 +246,8 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
-        let allocator = AllocatorRef::new(Allocator::new());
-        ALLOC.with(|alloc| *alloc.borrow_mut() = Some(allocator));
-        let mut builtins = BuiltinRef::new(BuiltinClass::new());
-        BUILTINS.with(|b| *b.borrow_mut() = Some(builtins));
+        let allocator = ALLOC.with(|alloc| *alloc.borrow());
+        let mut builtins = BUILTINS.with(|b| *b.borrow());
         let object = builtins.object;
         let basic = object.superclass().unwrap();
         let module = builtins.module;
@@ -284,7 +267,6 @@ impl Globals {
             const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
-            fibers: vec![],
             regexp_cache: FxHashMap::default(),
             source_files: vec![],
             #[cfg(feature = "perf")]
@@ -367,17 +349,6 @@ impl Globals {
         globals.set_toplevel_constant("ENV", env);
 
         globals
-    }
-
-    /// Set ALLOC to Globals' Allocator for Fiber.
-    /// This method should be called in the thread where `self` is to be run.
-    pub fn set_allocator(&self) {
-        ALLOC.with(|a| {
-            *a.borrow_mut() = Some(self.allocator);
-        });
-        BUILTINS.with(|b| {
-            *b.borrow_mut() = Some(self.builtins);
-        });
     }
 
     pub fn gc(&self) {
