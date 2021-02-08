@@ -33,10 +33,10 @@ pub(super) extern "C" fn invoke_context(
             "stp x25, x26, [sp, #0x70]",
             "stp x27, x28, [sp, #0x80]",
             "stp fp, lr, [sp, #0x90]",
-            "mov x3, sp",       // [f.main_rsp] <- sp
-            "str x3, [x0, #8]", // [f.main_rsp] <- sp
-            "ldr x3, [x0]",     // sp <- f.rsp
-            "mov sp, x3",
+            "mov x19, sp",       // [f.main_rsp] <- sp
+            "str x19, [x0, #8]", // [f.main_rsp] <- sp
+            "ldr x19, [x0]",     // sp <- f.rsp
+            "mov sp, x19",
             "ldp d8, d9, [sp, #0x00]",
             "ldp d10, d11, [sp, #0x10]",
             "ldp d12, d13, [sp, #0x20]",
@@ -72,10 +72,10 @@ pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext, _ret_val: u64
             "stp x25, x26, [sp, #0x70]",
             "stp x27, x28, [sp, #0x80]",
             "stp fp, lr, [sp, #0x90]",
-            "mov x3, sp",       // [f.main_rsp] <- sp
-            "str x3, [x0, #8]", // [f.main_rsp] <- rsp
-            "ldr x3, [x0]",     // rsp <- f.rsp
-            "mov sp, x3",
+            "mov x19, sp",       // [f.main_rsp] <- sp
+            "str x19, [x0, #8]", // [f.main_rsp] <- rsp
+            "ldr x19, [x0]",     // rsp <- f.rsp
+            "mov sp, x19",
             "ldp d8, d9, [sp, #0x00]",
             "ldp d10, d11, [sp, #0x10]",
             "ldp d12, d13, [sp, #0x20]",
@@ -112,10 +112,10 @@ pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut
             "stp x25, x26, [sp, #0x70]",
             "stp x27, x28, [sp, #0x80]",
             "stp fp, lr, [sp, #0x90]",
-            "mov x3, sp",
-            "str x3, [x0]",     // [f.rsp] <- rsp
-            "ldr x3, [x0, #8]", // rsp <- f.main_rsp
-            "mov sp, x3",
+            "mov x19, sp",
+            "str x19, [x0]",     // [f.rsp] <- rsp
+            "ldr x19, [x0, #8]", // rsp <- f.main_rsp
+            "mov sp, x19",
             "ldp d8, d9, [sp, #0x00]",
             "ldp d10, d11, [sp, #0x10]",
             "ldp d12, d13, [sp, #0x20]",
