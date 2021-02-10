@@ -180,9 +180,9 @@ impl FiberContext {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
                 self.initialize();
-                unsafe { *Box::from_raw(asm::invoke_context(ptr, val.get())) }
+                unsafe { *Box::from_raw(asm::invoke_context(ptr, val)) }
             }
-            FiberState::Running => unsafe { *Box::from_raw(asm::switch_context(ptr, val.get())) },
+            FiberState::Running => unsafe { *Box::from_raw(asm::switch_context(ptr, val)) },
         }
     }
 }

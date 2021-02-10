@@ -4,8 +4,8 @@ use chrono::{DateTime, Duration, FixedOffset, Utc};
 #[derive(Clone, Debug, PartialEq)]
 pub struct TimeInfo(DateTime<FixedOffset>);
 
-pub fn init(globals: &mut Globals) -> Value {
-    let class = Module::class_under(globals.builtins.object);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let class = Module::class_under(builtins.object);
     class.add_builtin_class_method("now", time_now);
 
     class.add_builtin_method_by_str("inspect", inspect);

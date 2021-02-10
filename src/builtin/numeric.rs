@@ -1,8 +1,8 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Module {
-    let mut class = Module::class_under(globals.builtins.object);
-    class.append_include(globals.builtins.comparable, globals);
-    globals.set_toplevel_constant("Numeric", class);
+pub fn init(builtins: &mut BuiltinClass) -> Module {
+    let mut class = Module::class_under(builtins.object);
+    builtins.set_toplevel_constant("Numeric", class);
+    class.append_include_without_increment_version(builtins.comparable);
     class
 }

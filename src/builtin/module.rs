@@ -1,8 +1,9 @@
 use crate::*;
 use std::path::PathBuf;
 
-pub fn init(globals: &mut Globals) {
-    let class = globals.builtins.module;
+pub fn init(builtins: &mut BuiltinClass) {
+    let class = builtins.module;
+    builtins.set_toplevel_constant("Module", class);
     class.add_builtin_class_method("new", module_new);
 
     class.add_builtin_method_by_str("===", teq);

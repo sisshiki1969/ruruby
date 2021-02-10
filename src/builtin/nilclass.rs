@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let class = Module::class_under(globals.builtins.object);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let class = Module::class_under(builtins.object);
     class.add_builtin_method_by_str("&", and);
     class.add_builtin_method_by_str("|", or);
     class.add_builtin_method_by_str("^", xor);
@@ -13,7 +13,7 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("to_h", toh);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("to_s", tos);
-    globals.set_toplevel_constant("NilClass", class);
+    builtins.set_toplevel_constant("NilClass", class);
     class.into()
 }
 

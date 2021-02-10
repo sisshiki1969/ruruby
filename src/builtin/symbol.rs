@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let symbol_class = Module::class_under(globals.builtins.object);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let symbol_class = Module::class_under(builtins.object);
     symbol_class.add_builtin_method_by_str("to_sym", to_sym);
     symbol_class.add_builtin_method_by_str("intern", to_sym);
     symbol_class.add_builtin_method_by_str("to_s", tos);

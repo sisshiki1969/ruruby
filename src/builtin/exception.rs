@@ -2,6 +2,7 @@ use crate::*;
 
 pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(globals.builtins.object);
+    globals.set_toplevel_constant("Exception", class);
     class.add_builtin_class_method("new", exception_new);
     class.add_builtin_class_method("exception", exception_new);
     class.add_builtin_class_method("allocate", exception_allocate);
@@ -18,6 +19,7 @@ pub fn init(globals: &mut Globals) -> Value {
     )
     .unwrap();
     let standard_error = Module::class_under(class);
+    globals.builtins.standard = standard_error.into();
     globals.set_toplevel_constant("StandardError", standard_error);
     // Subclasses of StandardError.
     let err = Module::class_under(standard_error);

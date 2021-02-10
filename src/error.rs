@@ -106,20 +106,6 @@ impl RubyError {
         }))
     }
 
-    pub fn is_block_return(&self) -> bool {
-        match &self.0.kind {
-            RubyErrorKind::BlockReturn(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_method_return(&self) -> bool {
-        match &self.0.kind {
-            RubyErrorKind::MethodReturn(_) => true,
-            _ => false,
-        }
-    }
-
     pub fn is_stop_iteration(&self) -> bool {
         match &self.0.kind {
             RubyErrorKind::RuntimeErr {

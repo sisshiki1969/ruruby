@@ -1,5 +1,5 @@
 use super::FiberContext;
-use crate::VMResult;
+use crate::{VMResult, Value};
 
 pub(super) const OFFSET: isize = 0xb0;
 
@@ -23,7 +23,7 @@ pub(super) extern "C" fn skip() {
 #[inline(never)]
 pub(super) extern "C" fn invoke_context(
     _fiber: *mut FiberContext,
-    _send_val: u64,
+    _send_val: Value,
 ) -> *mut VMResult {
     // x0: _fiber
     // x1: _send_val
@@ -65,7 +65,10 @@ pub(super) extern "C" fn invoke_context(
 
 #[naked]
 #[inline(never)]
-pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext, _ret_val: u64) -> *mut VMResult {
+pub(super) extern "C" fn switch_context(
+    _fiber: *mut FiberContext,
+    _ret_val: Value,
+) -> *mut VMResult {
     // x0: _fiber
     // x1: _ret_val
     unsafe {

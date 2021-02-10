@@ -3,9 +3,9 @@ use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let class = Module::class_under(globals.builtins.object);
-    globals.set_toplevel_constant("Dir", class);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let class = Module::class_under(builtins.object);
+    builtins.set_toplevel_constant("Dir", class);
     class.add_builtin_class_method("home", home);
     class.add_builtin_class_method("pwd", pwd);
     class.add_builtin_class_method("glob", glob);

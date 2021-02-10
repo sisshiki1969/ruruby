@@ -297,7 +297,7 @@ impl Allocator {
         }
         #[cfg(feature = "gc-debug")]
         {
-            eprintln!("--GC start thread:{:?}", std::thread::current().id());
+            eprintln!("--GC start");
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
                 self.allocated,

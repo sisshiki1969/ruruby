@@ -378,7 +378,12 @@ impl ClassInfo {
         self.ext.origin = Some(origin);
     }
 
-    pub fn append_include(&mut self, mut module: Module, globals: &mut Globals) {
+    pub fn append_include(&mut self, module: Module, globals: &mut Globals) {
+        self.append_include_without_increment_version(module);
+        globals.class_version += 1;
+    }
+
+    pub fn append_include_without_increment_version(&mut self, mut module: Module) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -392,7 +397,6 @@ impl ClassInfo {
             prev.upper = Some(imodule);
         }
         imodule.upper = superclass;
-        globals.class_version += 1;
     }
 
     pub fn append_prepend(&mut self, base: Module, module: Module, globals: &mut Globals) {

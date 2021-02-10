@@ -1,6 +1,5 @@
 use crate::*;
 use fancy_regex::Regex;
-use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -29,189 +28,6 @@ pub struct Globals {
 }
 
 pub type GlobalsRef = Ref<Globals>;
-
-thread_local!(
-    static BUILTINS: RefCell<BuiltinRef> = RefCell::new(BuiltinRef::new(BuiltinClass::new()));
-);
-
-#[derive(Debug, Clone)]
-pub struct BuiltinClass {
-    pub integer: Value,
-    pub float: Value,
-    pub complex: Value,
-    pub array: Value,
-    pub symbol: Value,
-    pub class: Module,
-    pub module: Module,
-    pub procobj: Value,
-    pub method: Value,
-    pub range: Value,
-    pub hash: Value,
-    pub regexp: Value,
-    pub string: Value,
-    pub fiber: Value,
-    pub object: Module,
-    pub enumerator: Value,
-    pub exception: Value,
-    pub standard: Value,
-    pub nilclass: Value,
-    pub trueclass: Value,
-    pub falseclass: Value,
-    pub kernel: Module,
-    pub comparable: Module,
-    pub numeric: Module,
-}
-
-type BuiltinRef = Ref<BuiltinClass>;
-
-impl BuiltinClass {
-    fn new() -> Self {
-        let basic_class = ClassInfo::class_from(None);
-        let basic = Module::bootstrap_class(basic_class);
-        let object_class = ClassInfo::class_from(basic);
-        let object = Module::bootstrap_class(object_class);
-        let module_class = ClassInfo::class_from(object);
-        let module = Module::bootstrap_class(module_class);
-        let class_class = ClassInfo::class_from(module);
-        let class = Module::bootstrap_class(class_class);
-
-        basic.set_class(class);
-        object.set_class(class);
-        module.set_class(class);
-        class.set_class(class);
-
-        let nil = Value::nil();
-        let nilmod = Module::default();
-        BuiltinClass {
-            integer: nil,
-            float: nil,
-            complex: nil,
-            array: nil,
-            symbol: nil,
-            class,
-            module,
-            procobj: nil,
-            method: nil,
-            range: nil,
-            hash: nil,
-            regexp: nil,
-            string: nil,
-            fiber: nil,
-            enumerator: nil,
-            object,
-            exception: nil,
-            standard: nil,
-            nilclass: nil,
-            trueclass: nil,
-            falseclass: nil,
-            kernel: nilmod,
-            comparable: nilmod,
-            numeric: nilmod,
-        }
-    }
-
-    pub fn object() -> Module {
-        BUILTINS.with(|b| b.borrow().object)
-    }
-
-    pub fn class() -> Module {
-        BUILTINS.with(|b| b.borrow().class)
-    }
-
-    pub fn module() -> Module {
-        BUILTINS.with(|b| b.borrow().module)
-    }
-
-    pub fn string() -> Module {
-        BUILTINS.with(|b| b.borrow().string).into_module()
-    }
-
-    pub fn integer() -> Module {
-        BUILTINS.with(|b| b.borrow().integer).into_module()
-    }
-
-    pub fn float() -> Module {
-        BUILTINS.with(|b| b.borrow().float).into_module()
-    }
-
-    pub fn symbol() -> Module {
-        BUILTINS.with(|b| b.borrow().symbol).into_module()
-    }
-
-    pub fn complex() -> Module {
-        BUILTINS.with(|b| b.borrow().complex).into_module()
-    }
-
-    pub fn range() -> Module {
-        BUILTINS.with(|b| b.borrow().range).into_module()
-    }
-
-    pub fn array() -> Module {
-        BUILTINS.with(|b| b.borrow().array).into_module()
-    }
-
-    pub fn hash() -> Module {
-        BUILTINS.with(|b| b.borrow().hash).into_module()
-    }
-
-    pub fn fiber() -> Module {
-        BUILTINS.with(|b| b.borrow().fiber).into_module()
-    }
-
-    pub fn enumerator() -> Module {
-        BUILTINS.with(|b| b.borrow().enumerator).into_module()
-    }
-
-    pub fn procobj() -> Module {
-        BUILTINS.with(|b| b.borrow().procobj).into_module()
-    }
-
-    pub fn regexp() -> Module {
-        BUILTINS.with(|b| b.borrow().regexp).into_module()
-    }
-
-    pub fn method() -> Module {
-        BUILTINS.with(|b| b.borrow().method).into_module()
-    }
-
-    pub fn exception() -> Module {
-        BUILTINS.with(|b| b.borrow().exception).into_module()
-    }
-
-    pub fn standard() -> Module {
-        BUILTINS.with(|b| b.borrow().standard).into_module()
-    }
-
-    pub fn nilclass() -> Module {
-        BUILTINS.with(|b| b.borrow().nilclass).into_module()
-    }
-
-    pub fn trueclass() -> Module {
-        BUILTINS.with(|b| b.borrow().trueclass).into_module()
-    }
-
-    pub fn falseclass() -> Module {
-        BUILTINS.with(|b| b.borrow().falseclass).into_module()
-    }
-
-    pub fn kernel() -> Module {
-        BUILTINS.with(|b| b.borrow().kernel)
-    }
-
-    pub fn numeric() -> Module {
-        BUILTINS.with(|b| b.borrow().numeric)
-    }
-
-    pub fn comparable() -> Module {
-        BUILTINS.with(|b| b.borrow().comparable)
-    }
-}
-
-impl GC for BuiltinClass {
-    fn mark(&self, alloc: &mut Allocator) {
-        self.object.mark(alloc);
-    }
-}
 
 impl GC for Globals {
     fn mark(&self, alloc: &mut Allocator) {
@@ -249,9 +65,6 @@ impl Globals {
         let allocator = ALLOC.with(|alloc| *alloc.borrow());
         let mut builtins = BUILTINS.with(|b| *b.borrow());
         let object = builtins.object;
-        let basic = object.superclass().unwrap();
-        let module = builtins.module;
-        let class = builtins.class;
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
             builtins,
@@ -272,29 +85,12 @@ impl Globals {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
         };
-        // Generate singleton class for BasicObject
-        let singleton_class = ClassInfo::singleton_from(class, basic);
-        let singleton_obj = RValue::new_class(singleton_class).pack();
-        basic.set_class(Module::new(singleton_obj));
 
-        builtins.comparable = comparable::init(&mut globals);
-        builtins.numeric = numeric::init(&mut globals);
-        builtins.kernel = kernel::init(&mut globals);
-
-        module::init(&mut globals);
-        class::init(&mut globals);
-        object::init(&mut globals);
-        basicobject::init(&mut globals);
-
-        macro_rules! set_builtin_class {
-            ($name:expr, $class_object:ident) => {
-                globals.set_toplevel_constant($name, $class_object);
-            };
-        }
+        builtins.initialize();
 
         macro_rules! init_builtin_class {
             ($name:expr, $module_name:ident) => {
-                let class_obj = $module_name::init(&mut globals);
+                let class_obj = $module_name::init(&mut builtins);
                 builtins.$module_name = class_obj;
                 globals.set_toplevel_constant($name, class_obj);
             };
@@ -302,22 +98,11 @@ impl Globals {
 
         macro_rules! init_class {
             ($name:expr, $module_name:ident) => {
-                let class_obj = $module_name::init(&mut globals);
+                let class_obj = $module_name::init(&mut builtins);
                 globals.set_toplevel_constant($name, class_obj);
             };
         }
 
-        set_builtin_class!("BasicObject", basic);
-        set_builtin_class!("Object", object);
-        set_builtin_class!("Module", module);
-        set_builtin_class!("Class", class);
-
-        init_builtin_class!("Integer", integer);
-        init_builtin_class!("Complex", complex);
-        builtins.float = float::init(&mut globals);
-        builtins.nilclass = nilclass::init(&mut globals);
-        builtins.trueclass = trueclass::init(&mut globals);
-        builtins.falseclass = falseclass::init(&mut globals);
         init_builtin_class!("Array", array);
         init_builtin_class!("Symbol", symbol);
         init_builtin_class!("Proc", procobj);
@@ -328,15 +113,13 @@ impl Globals {
         init_builtin_class!("Regexp", regexp);
         init_builtin_class!("Fiber", fiber);
         init_builtin_class!("Enumerator", enumerator);
-        init_builtin_class!("Exception", exception);
+        globals.builtins.exception = exception::init(&mut globals);
 
-        globals.builtins.standard = globals.get_toplevel_constant("StandardError").unwrap();
-
-        math::init(&mut globals);
+        math::init(&mut builtins);
         io::init(&mut globals);
         file::init(&mut globals);
-        dir::init(&mut globals);
-        process::init(&mut globals);
+        dir::init(&mut builtins);
+        process::init(&mut builtins);
         init_class!("GC", gc);
         init_class!("Struct", structobj);
         init_class!("Time", time);
@@ -424,7 +207,7 @@ impl Globals {
 
     /// Bind `object` to the constant `name` of the root object.
     pub fn set_toplevel_constant(&mut self, name: &str, object: impl Into<Value>) {
-        self.builtins.object.set_const_by_str(name, object.into());
+        self.builtins.set_toplevel_constant(name, object);
         self.const_version += 1;
     }
 

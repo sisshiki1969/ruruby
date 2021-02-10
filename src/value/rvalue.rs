@@ -142,6 +142,14 @@ impl RValue {
         format! {"#<{}:0x{:016x}>", self.class_name(), self.id()}
     }
 
+    pub fn new(class: Module, kind: ObjKind) -> Self {
+        RValue {
+            class,
+            kind,
+            var_table: None,
+        }
+    }
+
     pub fn new_invalid() -> Self {
         RValue {
             class: Module::default(),

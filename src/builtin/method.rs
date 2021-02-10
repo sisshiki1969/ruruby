@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let class = Module::class_under(globals.builtins.object);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let class = Module::class_under(builtins.object);
     class.add_builtin_method_by_str("call", call);
     class.add_builtin_method_by_str("[]", call);
     class.into()

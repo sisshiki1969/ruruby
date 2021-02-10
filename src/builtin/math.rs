@@ -1,8 +1,8 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Module::class_under(globals.builtins.object);
-    globals.set_toplevel_constant("Math", class);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let mut class = Module::class_under(builtins.object);
+    builtins.set_toplevel_constant("Math", class);
     class.add_builtin_class_method("sqrt", sqrt);
     class.add_builtin_class_method("cos", cos);
     class.add_builtin_class_method("sin", sin);

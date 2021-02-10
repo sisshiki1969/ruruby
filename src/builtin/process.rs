@@ -1,9 +1,9 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let mut class = Module::class_under(globals.builtins.object);
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let mut class = Module::class_under(builtins.object);
     class.set_const_by_str("CLOCK_MONOTONIC", Value::integer(0));
-    globals.set_toplevel_constant("Process", class);
+    builtins.set_toplevel_constant("Process", class);
     class.add_builtin_class_method("clock_gettime", clock_gettime);
     class.add_builtin_class_method("pid", pid);
     class.into()

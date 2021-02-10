@@ -1,9 +1,9 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) {
-    let class = globals.builtins.class;
+pub fn init(builtins: &mut BuiltinClass) {
+    let class = builtins.class;
+    builtins.set_toplevel_constant("Class", class);
     class.add_builtin_class_method("new", class_new);
-
     class.add_builtin_method_by_str("new", new);
     class.add_builtin_method_by_str("allocate", allocate);
     class.add_builtin_method_by_str("superclass", superclass);

@@ -1,8 +1,8 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let numeric = globals.get_toplevel_constant("Numeric").unwrap();
-    let class = Module::class_under(Module::new(numeric));
+pub fn init(builtins: &mut BuiltinClass) -> Value {
+    let class = Module::class_under(builtins.numeric);
+    builtins.set_toplevel_constant("Complex", class);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);

@@ -1,8 +1,9 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) {
-    let mut object = globals.builtins.object;
-    object.append_include(globals.builtins.kernel, globals);
+pub fn init(builtins: &mut BuiltinClass) {
+    let mut object = builtins.object;
+    object.append_include_without_increment_version(builtins.kernel);
+    builtins.set_toplevel_constant("Object", object);
 
     object.add_builtin_method_by_str("initialize", initialize);
     object.add_builtin_method_by_str("class", class);
