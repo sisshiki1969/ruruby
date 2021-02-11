@@ -6,7 +6,6 @@ use std::rc::Rc;
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
-    pub allocator: AllocatorRef,
     pub builtins: BuiltinRef,
     pub const_values: ConstantValues,
     global_var: ValueTable,
@@ -62,13 +61,11 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
-        let allocator = ALLOC.with(|alloc| *alloc.borrow());
         let mut builtins = BUILTINS.with(|b| *b.borrow());
         let object = builtins.object;
         let main_object = Value::ordinary_object(object);
         let mut globals = Globals {
             builtins,
-            allocator,
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
             method_cache: MethodCache::new(),
@@ -135,8 +132,7 @@ impl Globals {
     }
 
     pub fn gc(&self) {
-        let mut alloc = self.allocator;
-        alloc.gc(self);
+        ALLOC.with(|m| m.borrow_mut().gc(self));
     }
 
     pub fn add_source_file(&mut self, file_path: &PathBuf) -> Option<usize> {

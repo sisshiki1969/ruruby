@@ -341,7 +341,7 @@ impl VM {
 impl VM {
     fn gc(&mut self) {
         //self.gc_counter += 1;
-        if !self.globals.allocator.is_allocated() {
+        if !ALLOC.with(|m| m.borrow().is_allocated()) {
             return;
         };
         #[cfg(feature = "perf")]

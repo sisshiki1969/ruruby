@@ -2,7 +2,7 @@ use crate::*;
 use std::cell::RefCell;
 
 thread_local!(
-    pub static ALLOC: RefCell<AllocatorRef> = RefCell::new(AllocatorRef::new(Allocator::new()));
+    pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());
 );
 
 const SIZE: usize = 64;
@@ -171,8 +171,6 @@ pub struct Allocator {
     /// Flag whether GC is enabled or not.
     pub gc_enabled: bool,
 }
-
-pub type AllocatorRef = Ref<Allocator>;
 
 impl Allocator {
     pub fn new() -> Self {
