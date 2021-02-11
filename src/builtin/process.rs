@@ -3,7 +3,7 @@ use crate::*;
 pub fn init(builtins: &mut BuiltinClass) -> Value {
     let mut class = Module::class_under(builtins.object);
     class.set_const_by_str("CLOCK_MONOTONIC", Value::integer(0));
-    builtins.set_toplevel_constant("Process", class);
+    BuiltinClass::set_toplevel_constant("Process", class);
     class.add_builtin_class_method("clock_gettime", clock_gettime);
     class.add_builtin_class_method("pid", pid);
     class.into()

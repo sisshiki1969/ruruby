@@ -2,7 +2,7 @@ use crate::*;
 
 pub fn init(builtins: &mut BuiltinClass) -> Value {
     let mut class = Module::class_under(builtins.object);
-    builtins.set_toplevel_constant("Math", class);
+    BuiltinClass::set_toplevel_constant("Math", class);
     class.add_builtin_class_method("sqrt", sqrt);
     class.add_builtin_class_method("cos", cos);
     class.add_builtin_class_method("sin", sin);

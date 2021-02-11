@@ -5,7 +5,7 @@ use std::path::*;
 
 pub fn init(builtins: &mut BuiltinClass) -> Value {
     let class = Module::class_under(builtins.object);
-    builtins.set_toplevel_constant("Dir", class);
+    BuiltinClass::set_toplevel_constant("Dir", class);
     class.add_builtin_class_method("home", home);
     class.add_builtin_class_method("pwd", pwd);
     class.add_builtin_class_method("glob", glob);

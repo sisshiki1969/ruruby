@@ -11,7 +11,7 @@ pub fn init(builtins: &mut BuiltinClass) -> Value {
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("to_i", toi);
-    builtins.set_toplevel_constant("Float", class);
+    BuiltinClass::set_toplevel_constant("Float", class);
     class.into()
 }
 

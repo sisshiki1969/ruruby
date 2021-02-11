@@ -148,8 +148,8 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn toa(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let array = vm.globals.builtins.array.into_module();
+fn toa(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    let array = BuiltinClass::array();
     if self_val.get_class().id() == array.id() {
         return Ok(self_val);
     };

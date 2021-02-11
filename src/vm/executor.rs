@@ -401,7 +401,7 @@ impl VM {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.to_usize();
                         self.set_stack_len(stack_len);
-                        let val = err.to_exception_val(&self.globals);
+                        let val = err.to_exception_val();
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
@@ -835,7 +835,7 @@ impl VM {
                     let parent = match self.stack_pop()? {
                         v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
                             Some(class) => *class,
-                            None => self.globals.builtins.object,
+                            None => BuiltinClass::object(),
                         }, //self.class(),
                         v => v.expect_mod_class()?,
                     };
@@ -863,7 +863,7 @@ impl VM {
                 }
                 Inst::GET_CONST_TOP => {
                     let id = iseq.read_id(self.pc + 1);
-                    let parent = self.globals.builtins.object;
+                    let parent = BuiltinClass::object();
                     let val = self.get_const(parent, id)?;
                     self.stack_push(val);
                     self.pc += 5;
@@ -2289,7 +2289,7 @@ impl VM {
                     Module::module()
                 } else {
                     let super_val = if super_val.is_nil() {
-                        self.globals.builtins.object
+                        BuiltinClass::object()
                     } else {
                         super_val.expect_class("Superclass")?
                     };

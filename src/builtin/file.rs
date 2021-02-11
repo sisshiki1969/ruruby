@@ -3,10 +3,10 @@ use std::fs::File;
 use std::io::Read;
 use std::path::*;
 
-pub fn init(globals: &mut Globals) -> Value {
-    let io_class = globals.get_toplevel_constant("IO").unwrap();
+pub fn init(_: &mut Globals) -> Value {
+    let io_class = BuiltinClass::get_toplevel_constant("IO").unwrap();
     let class = Module::class_under(Module::new(io_class));
-    globals.set_toplevel_constant("File", class);
+    BuiltinClass::set_toplevel_constant("File", class);
     class.add_builtin_class_method("join", join);
     class.add_builtin_class_method("basename", basename);
     class.add_builtin_class_method("extname", extname);

@@ -7,7 +7,7 @@ pub fn init(builtins: &mut BuiltinClass) -> Value {
     class.add_builtin_method_by_str("^", xor);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", inspect);
-    builtins.set_toplevel_constant("FalseClass", class);
+    BuiltinClass::set_toplevel_constant("FalseClass", class);
     class.into()
 }
 

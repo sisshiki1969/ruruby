@@ -3,9 +3,9 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub fn init(builtins: &mut BuiltinClass) -> Module {
+pub fn init(_: &mut BuiltinClass) -> Module {
     let class = Module::module();
-    builtins.set_toplevel_constant("Kernel", class);
+    BuiltinClass::set_toplevel_constant("Kernel", class);
     class.add_builtin_module_func("puts", puts);
     class.add_builtin_module_func("p", p);
     class.add_builtin_module_func("print", print);

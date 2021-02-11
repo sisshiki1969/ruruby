@@ -35,7 +35,7 @@ use crate::*;
 use std::cell::RefCell;
 
 thread_local!(
-    pub static BUILTINS: RefCell<BuiltinRef> = RefCell::new(BuiltinRef::new(BuiltinClass::new()));
+    pub static BUILTINS: RefCell<BuiltinClass> = RefCell::new(BuiltinClass::new());
 );
 
 #[derive(Debug, Clone)]
@@ -65,8 +65,6 @@ pub struct BuiltinClass {
     pub comparable: Module,
     pub numeric: Module,
 }
-
-pub type BuiltinRef = Ref<BuiltinClass>;
 
 impl BuiltinClass {
     fn new() -> Self {
@@ -135,8 +133,14 @@ impl BuiltinClass {
         init!(float, complex, integer, nilclass, trueclass, falseclass);
     }
 
-    pub fn set_toplevel_constant(&mut self, name: &str, object: impl Into<Value>) {
-        self.object.set_const_by_str(name, object.into());
+    /// Bind `object` to the constant `name` of the root object.
+    pub(self) fn set_toplevel_constant(name: &str, object: impl Into<Value>) {
+        BuiltinClass::object().set_const_by_str(name, object.into());
+    }
+
+    /// Get object bound to the constant `name` of the root object.
+    pub fn get_toplevel_constant(class_name: &str) -> Option<Value> {
+        BuiltinClass::object().get_const_by_str(class_name)
     }
 
     pub fn object() -> Module {
