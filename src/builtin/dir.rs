@@ -3,8 +3,8 @@ use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
-pub fn init(builtins: &mut BuiltinClass) -> Value {
-    let class = Module::class_under(builtins.object);
+pub fn init() -> Value {
+    let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Dir", class);
     class.add_builtin_class_method("home", home);
     class.add_builtin_class_method("pwd", pwd);

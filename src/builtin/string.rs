@@ -1,8 +1,9 @@
 use crate::vm::*;
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) -> Value {
-    let class = Module::class_under(builtins.object);
+pub fn init() -> Value {
+    let class = Module::class_under_object();
+    BuiltinClass::set_toplevel_constant("String", class);
     class.add_builtin_class_method("new", string_new);
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);

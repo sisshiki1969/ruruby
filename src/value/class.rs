@@ -196,6 +196,10 @@ impl Module {
         Module::new_class(ClassInfo::class_from(superclass))
     }
 
+    pub fn class_under_object() -> Module {
+        Module::new_class(ClassInfo::class_from(BuiltinClass::object()))
+    }
+
     pub fn singleton_class_from(
         superclass: impl Into<Option<Module>>,
         target: impl Into<Value>,

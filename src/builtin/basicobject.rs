@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) {
-    let mut class = builtins.object.superclass().unwrap();
+pub fn init() {
+    let mut class = BuiltinClass::object().superclass().unwrap();
     BuiltinClass::set_toplevel_constant("BasicObject", class);
     class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
     class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);

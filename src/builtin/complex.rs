@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) -> Value {
-    let class = Module::class_under(builtins.numeric);
+pub fn init() -> Value {
+    let class = Module::class_under(BuiltinClass::numeric());
     BuiltinClass::set_toplevel_constant("Complex", class);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);

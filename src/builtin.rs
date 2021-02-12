@@ -118,19 +118,24 @@ impl BuiltinClass {
         builtins
     }
 
-    pub fn initialize(&mut self) {
-        macro_rules! init {
+    pub fn initialize() {
+        macro_rules! init_builtin {
             ($($module:ident),*) => {$(
-                let class_obj = $module::init(self);
-                self.$module = class_obj;
+                let class_obj = $module::init();
+                BUILTINS.with(|m| m.borrow_mut().$module = class_obj);
             )*}
         }
-        init!(comparable, numeric, kernel);
-        module::init(self);
-        class::init(self);
-        basicobject::init(self);
-        object::init(self);
-        init!(float, complex, integer, nilclass, trueclass, falseclass);
+        macro_rules! init {
+            ($($module:ident),*) => {$(
+                $module::init();
+            )*}
+        }
+        init_builtin!(comparable, numeric, kernel);
+        init!(module, class, basicobject, object);
+        init_builtin!(float, complex, integer, nilclass, trueclass, falseclass);
+        init_builtin!(array, symbol, procobj, range, string, hash);
+        init_builtin!(method, regexp, fiber, enumerator);
+        init!(math, dir, process, gc, structobj, time);
     }
 
     /// Bind `object` to the constant `name` of the root object.

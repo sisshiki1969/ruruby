@@ -1,7 +1,8 @@
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) -> Value {
-    let class = Module::class_under(builtins.object);
+pub fn init() -> Value {
+    let class = Module::class_under_object();
+    BuiltinClass::set_toplevel_constant("Hash", class);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("clear", clear);

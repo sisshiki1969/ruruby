@@ -1,8 +1,8 @@
 use crate::*;
 use std::path::PathBuf;
 
-pub fn init(builtins: &mut BuiltinClass) {
-    let class = builtins.module;
+pub fn init() {
+    let class = BuiltinClass::module();
     BuiltinClass::set_toplevel_constant("Module", class);
     class.add_builtin_class_method("new", module_new);
 

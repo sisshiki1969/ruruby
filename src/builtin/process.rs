@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) -> Value {
-    let mut class = Module::class_under(builtins.object);
+pub fn init() -> Value {
+    let mut class = Module::class_under_object();
     class.set_const_by_str("CLOCK_MONOTONIC", Value::integer(0));
     BuiltinClass::set_toplevel_constant("Process", class);
     class.add_builtin_class_method("clock_gettime", clock_gettime);

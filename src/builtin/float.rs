@@ -1,7 +1,8 @@
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) -> Value {
-    let class = Module::class_under(builtins.numeric);
+pub fn init() -> Value {
+    let class = Module::class_under(BuiltinClass::numeric());
+    BuiltinClass::set_toplevel_constant("Float", class);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("+", add);
@@ -11,7 +12,6 @@ pub fn init(builtins: &mut BuiltinClass) -> Value {
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("to_i", toi);
-    BuiltinClass::set_toplevel_constant("Float", class);
     class.into()
 }
 

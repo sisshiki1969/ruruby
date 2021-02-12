@@ -60,74 +60,40 @@ impl GlobalsRef {
 impl Globals {
     fn new() -> Self {
         use builtin::*;
-        BUILTINS.with(|b| {
-            let mut builtins = b.borrow_mut();
-            let object = builtins.object;
-            let main_object = Value::ordinary_object(object);
-            let mut globals = Globals {
-                const_values: ConstantValues::new(),
-                global_var: FxHashMap::default(),
-                method_cache: MethodCache::new(),
-                inline_cache: InlineCache::new(),
-                const_cache: ConstCache::new(),
-                main_fiber: None,
-                instant: std::time::Instant::now(),
-                class_version: 0,
-                const_version: 0,
-                main_object,
-                case_dispatch: CaseDispatchMap::new(),
-                regexp_cache: FxHashMap::default(),
-                source_files: vec![],
-                #[cfg(feature = "perf")]
-                perf: Perf::new(),
-            };
+        let object = BuiltinClass::object();
+        let main_object = Value::ordinary_object(object);
+        let mut globals = Globals {
+            const_values: ConstantValues::new(),
+            global_var: FxHashMap::default(),
+            method_cache: MethodCache::new(),
+            inline_cache: InlineCache::new(),
+            const_cache: ConstCache::new(),
+            main_fiber: None,
+            instant: std::time::Instant::now(),
+            class_version: 0,
+            const_version: 0,
+            main_object,
+            case_dispatch: CaseDispatchMap::new(),
+            regexp_cache: FxHashMap::default(),
+            source_files: vec![],
+            #[cfg(feature = "perf")]
+            perf: Perf::new(),
+        };
 
-            builtins.initialize();
+        BuiltinClass::initialize();
 
-            macro_rules! init_builtin_class {
-                ($name:expr, $module_name:ident) => {
-                    let class_obj = $module_name::init(&mut builtins);
-                    builtins.$module_name = class_obj;
-                    globals.set_toplevel_constant($name, class_obj);
-                };
-            }
+        BUILTINS.with(|m| m.borrow_mut().exception = exception::init(&mut globals));
 
-            macro_rules! init_class {
-                ($name:expr, $module_name:ident) => {
-                    let class_obj = $module_name::init(&mut builtins);
-                    globals.set_toplevel_constant($name, class_obj);
-                };
-            }
+        io::init(&mut globals);
+        file::init(&mut globals);
 
-            init_builtin_class!("Array", array);
-            init_builtin_class!("Symbol", symbol);
-            init_builtin_class!("Proc", procobj);
-            init_builtin_class!("Range", range);
-            init_builtin_class!("String", string);
-            init_builtin_class!("Hash", hash);
-            init_builtin_class!("Method", method);
-            init_builtin_class!("Regexp", regexp);
-            init_builtin_class!("Fiber", fiber);
-            init_builtin_class!("Enumerator", enumerator);
-            builtins.exception = exception::init(&mut globals);
+        let mut env_map = HashInfo::new(FxHashMap::default());
+        std::env::vars()
+            .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
 
-            math::init(&mut builtins);
-            io::init(&mut globals);
-            file::init(&mut globals);
-            dir::init(&mut builtins);
-            process::init(&mut builtins);
-            init_class!("GC", gc);
-            init_class!("Struct", structobj);
-            init_class!("Time", time);
-
-            let mut env_map = HashInfo::new(FxHashMap::default());
-            std::env::vars()
-                .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
-
-            let env = Value::hash_from(env_map);
-            globals.set_toplevel_constant("ENV", env);
-            globals
-        })
+        let env = Value::hash_from(env_map);
+        globals.set_toplevel_constant("ENV", env);
+        globals
     }
 
     pub fn gc(&self) {
@@ -151,7 +117,7 @@ impl Globals {
 
     #[cfg(feature = "gc-debug")]
     pub fn print_mark(&self) {
-        self.allocator.print_mark();
+        ALLOC.with(|m| m.borrow_mut().print_mark());
     }
 }
 

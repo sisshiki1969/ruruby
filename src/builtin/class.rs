@@ -1,7 +1,7 @@
 use crate::*;
 
-pub fn init(builtins: &mut BuiltinClass) {
-    let class = builtins.class;
+pub fn init() {
+    let class = BuiltinClass::class();
     BuiltinClass::set_toplevel_constant("Class", class);
     class.add_builtin_class_method("new", class_new);
     class.add_builtin_method_by_str("new", new);

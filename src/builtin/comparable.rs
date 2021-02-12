@@ -3,7 +3,7 @@
 ///
 use crate::*;
 
-pub fn init(_: &BuiltinClass) -> Module {
+pub fn init() -> Module {
     let class = Module::module();
     BuiltinClass::set_toplevel_constant("Comparable", class);
     class.add_builtin_method_by_str("==", eq);
