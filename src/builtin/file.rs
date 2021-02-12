@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::*;
 
-pub fn init(_: &mut Globals) -> Value {
+pub fn init() -> Value {
     let io_class = BuiltinClass::get_toplevel_constant("IO").unwrap();
     let class = Module::class_under(Module::new(io_class));
     BuiltinClass::set_toplevel_constant("File", class);

@@ -85,7 +85,7 @@ impl Globals {
         BUILTINS.with(|m| m.borrow_mut().exception = exception::init(&mut globals));
 
         io::init(&mut globals);
-        file::init(&mut globals);
+        file::init();
 
         let mut env_map = HashInfo::new(FxHashMap::default());
         std::env::vars()
