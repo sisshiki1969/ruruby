@@ -156,7 +156,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let ISeqKind::Method(m) = context.kind {
         let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
-            Some(class) => match vm.globals.find_method(class, m) {
+            Some(class) => match MethodRepo::find_method(class, m) {
                 Some(m) => m,
                 None => {
                     return Err(RubyError::nomethod(format!(
@@ -232,16 +232,13 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.create_enumerator(method, self_val, new_args)
 }
 
-fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     if args.len() == 2 {
         eprintln!("Warining: 2nd arg will not used. respont_to?()")
     };
     let method = args[0].expect_string_or_symbol("1st arg")?;
-    let b = vm
-        .globals
-        .find_method_from_receiver(self_val, method)
-        .is_some();
+    let b = MethodRepo::find_method_from_receiver(self_val, method).is_some();
     Ok(Value::bool(b))
 }
 

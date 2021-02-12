@@ -67,7 +67,7 @@ fn string_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let array = Value::string(s);
     array.set_class(self_val);
-    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, array, args)?;
     };
     Ok(array)

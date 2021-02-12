@@ -1642,7 +1642,7 @@ impl VM {
 // Utilities for method call
 impl VM {
     pub fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
-        match self.globals.find_method_from_receiver(receiver, method_id) {
+        match MethodRepo::find_method_from_receiver(receiver, method_id) {
             Some(method) => return self.eval_send(method, receiver, args),
             None => {}
         };
@@ -1682,10 +1682,7 @@ impl VM {
         receiver: Value,
         args: &Args,
     ) -> VMResult {
-        match self
-            .globals
-            .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
-        {
+        match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
             Some(method) => {
                 let len = args.len();
                 let mut new_args = Args::new(len + 1);
@@ -1699,7 +1696,7 @@ impl VM {
 
     fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
         let class = lhs.get_class_for_method();
-        match self.globals.find_method(class, method) {
+        match MethodRepo::find_method(class, method) {
             Some(mref) => {
                 let arg = Args::new1(rhs);
                 let val = self.eval_send(mref, lhs, &arg)?;
@@ -2541,10 +2538,8 @@ impl VM {
     /// If `target_obj` is not Class, use Class of it.
     pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
         match target_obj.if_mod_class() {
-            Some(mut module) => module.add_method(&mut self.globals, id, method),
-            None => target_obj
-                .get_class()
-                .add_method(&mut self.globals, id, method),
+            Some(mut module) => module.add_method(id, method),
+            None => target_obj.get_class().add_method(id, method),
         };
     }
 
@@ -2555,9 +2550,7 @@ impl VM {
         id: IdentId,
         method: MethodId,
     ) -> Result<(), RubyError> {
-        target_obj
-            .get_singleton_class()?
-            .add_method(&mut self.globals, id, method);
+        target_obj.get_singleton_class()?.add_method(id, method);
         Ok(())
     }
 
@@ -2569,7 +2562,7 @@ impl VM {
         rec_class: Module,
         method_id: IdentId,
     ) -> Result<MethodId, RubyError> {
-        match self.globals.find_method(rec_class, method_id) {
+        match MethodRepo::find_method(rec_class, method_id) {
             Some(m) => Ok(m),
             None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
         }
@@ -2831,7 +2824,7 @@ impl VM {
                 #[cfg(feature = "perf")]
                 {
                     self.globals.perf.print_perf();
-                    self.globals.print_method_cache_stats();
+                    MethodRepo::print_method_cache_stats();
                     self.globals.print_constant_cache_stats();
                 }
                 #[cfg(feature = "gc-debug")]

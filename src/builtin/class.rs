@@ -42,7 +42,7 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
     // Call initialize method if it exists.
-    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, new_instance, args)?;
     };
     Ok(new_instance)

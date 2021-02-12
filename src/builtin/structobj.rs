@@ -48,7 +48,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         attr_args[index - i] = v;
     }
     class.set_var_by_str("/members", Value::array_from(vec));
-    builtin::module::set_attr_accessor(&mut vm.globals, class, &attr_args)?;
+    builtin::module::set_attr_accessor(class, &attr_args)?;
 
     match &args.block {
         Block::None => {}

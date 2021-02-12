@@ -7,6 +7,9 @@ thread_local!(
 
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
+    class_version: u32,
+    i_cache: InlineCache,
+    m_cache: MethodCache,
 }
 
 impl std::ops::Index<MethodId> for MethodRepo {
@@ -33,6 +36,9 @@ impl MethodRepo {
                     name: IdentId::_ENUM_FUNC,
                 }, // METHOD_ENUM
             ],
+            class_version: 0,
+            i_cache: InlineCache::new(),
+            m_cache: MethodCache::new(),
         }
     }
 
@@ -52,6 +58,61 @@ impl MethodRepo {
 
     pub fn get(id: MethodId) -> MethodInfo {
         METHODS.with(|m| m.borrow()[id].clone())
+    }
+
+    pub fn inc_class_version() {
+        METHODS.with(|m| m.borrow_mut().class_version += 1)
+    }
+
+    pub fn class_version() -> u32 {
+        METHODS.with(|m| m.borrow().class_version)
+    }
+
+    pub fn add_inline_cache_entry() -> u32 {
+        METHODS.with(|m| m.borrow_mut().i_cache.add_entry())
+    }
+
+    pub fn get_inline_cache_entry(id: u32) -> InlineCacheEntry {
+        METHODS.with(|m| m.borrow().i_cache.get_entry(id))
+    }
+
+    pub fn update_inline_cache_entry(id: u32, entry: InlineCacheEntry) {
+        METHODS.with(|m| m.borrow_mut().i_cache.update_entry(id, entry))
+    }
+
+    /// Search global method cache with receiver class and method name.
+    ///
+    /// If the method was not found, return None.
+    pub fn find_method(rec_class: Module, method_id: IdentId) -> Option<MethodId> {
+        METHODS.with(|m| {
+            let mut repo = m.borrow_mut();
+            let class_version = repo.class_version;
+            repo.m_cache.get_method(class_version, rec_class, method_id)
+        })
+    }
+
+    /// Search global method cache with receiver object and method class_name.
+    ///
+    /// If the method was not found, return None.
+    pub fn find_method_from_receiver(receiver: Value, method_id: IdentId) -> Option<MethodId> {
+        let rec_class = receiver.get_class_for_method();
+        Self::find_method(rec_class, method_id)
+    }
+
+    pub fn mark(alloc: &mut Allocator) {
+        let keys: Vec<Module> =
+            METHODS.with(|m| m.borrow().m_cache.cache.keys().map(|(v, _)| *v).collect());
+        keys.iter().for_each(|m| m.mark(alloc));
+    }
+
+    #[cfg(feature = "perf")]
+    pub fn inc_inline_hit() {
+        METHODS.with(|m| m.borrow_mut().m_cache.inc_inline_hit());
+    }
+
+    #[cfg(feature = "perf")]
+    pub fn print_method_cache_stats() {
+        METHODS.with(|m| m.borrow().m_cache.print_stats());
     }
 }
 
@@ -147,6 +208,153 @@ impl MethodInfo {
         } else {
             unimplemented!("Methodref is illegal.")
         }
+    }
+}
+
+///---------------------------------------------------------------------------------------------------
+///
+///  Inline method cache
+///
+///  This module supports inline method cache which is embedded in the instruction sequence directly.
+///
+///---------------------------------------------------------------------------------------------------
+#[derive(Debug, Clone)]
+pub struct InlineCache {
+    table: Vec<InlineCacheEntry>,
+    id: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct InlineCacheEntry {
+    pub version: u32,
+    pub entries: Option<(Module, MethodId)>,
+}
+
+impl InlineCacheEntry {
+    fn new() -> Self {
+        InlineCacheEntry {
+            version: 0,
+            entries: None,
+        }
+    }
+}
+
+impl InlineCache {
+    fn new() -> Self {
+        InlineCache {
+            table: vec![],
+            id: 0,
+        }
+    }
+    fn add_entry(&mut self) -> u32 {
+        self.id += 1;
+        self.table.push(InlineCacheEntry::new());
+        self.id - 1
+    }
+
+    fn get_entry(&self, id: u32) -> InlineCacheEntry {
+        self.table[id as usize].clone()
+    }
+
+    fn update_entry(&mut self, id: u32, entry: InlineCacheEntry) {
+        self.table[id as usize] = entry;
+    }
+}
+
+///---------------------------------------------------------------------------------------------------
+///
+/// Global method cache
+///
+/// This module supports global method cache.
+///
+///---------------------------------------------------------------------------------------------------
+#[derive(Debug, Clone)]
+pub struct MethodCache {
+    cache: FxHashMap<(Module, IdentId), MethodCacheEntry>,
+    #[cfg(feature = "perf")]
+    inline_hit: usize,
+    #[cfg(feature = "perf")]
+    total: usize,
+    #[cfg(feature = "perf")]
+    missed: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MethodCacheEntry {
+    pub method: MethodId,
+    pub version: u32,
+}
+
+impl MethodCache {
+    fn new() -> Self {
+        MethodCache {
+            cache: FxHashMap::default(),
+            #[cfg(feature = "perf")]
+            inline_hit: 0,
+            #[cfg(feature = "perf")]
+            total: 0,
+            #[cfg(feature = "perf")]
+            missed: 0,
+        }
+    }
+
+    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: MethodId) {
+        self.cache
+            .insert((class, id), MethodCacheEntry { method, version });
+    }
+
+    fn get_entry(&self, class: Module, id: IdentId) -> Option<&MethodCacheEntry> {
+        self.cache.get(&(class, id))
+    }
+
+    /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
+    ///
+    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
+    /// return MethodId of the entry.
+    /// If not, search `method` by scanning a class chain.
+    /// `class` must be a Class.
+    pub fn get_method(
+        &mut self,
+        class_version: u32,
+        rec_class: Module,
+        method: IdentId,
+    ) -> Option<MethodId> {
+        #[cfg(feature = "perf")]
+        {
+            self.total += 1;
+        }
+        if let Some(MethodCacheEntry { version, method }) = self.get_entry(rec_class, method) {
+            if *version == class_version {
+                return Some(*method);
+            }
+        };
+        #[cfg(feature = "perf")]
+        {
+            self.missed += 1;
+        }
+        match rec_class.get_method(method) {
+            Some(methodref) => {
+                self.add_entry(rec_class, method, class_version, methodref);
+                Some(methodref)
+            }
+            None => None,
+        }
+    }
+}
+
+#[cfg(feature = "perf")]
+impl MethodCache {
+    fn inc_inline_hit(&mut self) {
+        self.inline_hit += 1;
+    }
+
+    pub fn print_stats(&self) {
+        eprintln!("+-------------------------------------------+");
+        eprintln!("| Method cache stats:                       |");
+        eprintln!("+-------------------------------------------+");
+        eprintln!("  hit inline cache : {:>10}", self.inline_hit);
+        eprintln!("  hit global cache : {:>10}", self.total - self.missed);
+        eprintln!("  missed           : {:>10}", self.missed);
     }
 }
 

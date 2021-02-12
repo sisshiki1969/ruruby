@@ -22,7 +22,7 @@ fn alias_method(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
             // TODO: Is it right?
             let mut class = vm.class();
             let method = vm.get_method(class, org)?;
-            class.add_method(&mut vm.globals, new, method);
+            class.add_method(new, method);
         }
         (true, false) => {
             return Err(RubyError::argument(

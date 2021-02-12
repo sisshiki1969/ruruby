@@ -8,15 +8,14 @@ pub struct Globals {
     // Global info
     pub const_values: ConstantValues,
     global_var: ValueTable,
-    method_cache: MethodCache,
-    inline_cache: InlineCache,
+    //method_cache: MethodCache,
     const_cache: ConstCache,
     pub case_dispatch: CaseDispatchMap,
 
     main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
     /// version counter: increment when new instance / class methods are defined.
-    pub class_version: u32,
+    //pub class_version: u32,
     pub const_version: u32,
     pub main_object: Value,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
@@ -32,10 +31,10 @@ impl GC for Globals {
         self.const_values.mark(alloc);
         self.main_object.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
-        self.method_cache
-            .cache
-            .keys()
-            .for_each(|(v, _)| v.mark(alloc));
+        /*self.method_cache
+        .cache
+        .keys()
+        .for_each(|(v, _)| v.mark(alloc));*/
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
@@ -65,12 +64,11 @@ impl Globals {
         let mut globals = Globals {
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
-            method_cache: MethodCache::new(),
-            inline_cache: InlineCache::new(),
+            //method_cache: MethodCache::new(),
             const_cache: ConstCache::new(),
             main_fiber: None,
             instant: std::time::Instant::now(),
-            class_version: 0,
+            //class_version: 0,
             const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
@@ -82,7 +80,7 @@ impl Globals {
 
         BuiltinClass::initialize();
 
-        BUILTINS.with(|m| m.borrow_mut().exception = exception::init(&mut globals));
+        BUILTINS.with(|m| m.borrow_mut().exception = exception::init());
 
         io::init(&mut globals);
         file::init();
@@ -108,11 +106,6 @@ impl Globals {
             self.source_files.push(file_path.to_owned());
             Some(i)
         }
-    }
-
-    #[cfg(feature = "perf")]
-    pub fn inc_inline_hit(&mut self) {
-        self.method_cache.inc_inline_hit();
     }
 
     #[cfg(feature = "gc-debug")]
@@ -171,27 +164,6 @@ impl Globals {
         BuiltinClass::object().set_const_by_str(name, object.into());
         self.const_version += 1;
     }
-
-    /// Search global method cache with receiver class and method name.
-    ///
-    /// If the method was not found, return None.
-    pub fn find_method(&mut self, rec_class: Module, method_id: IdentId) -> Option<MethodId> {
-        let class_version = self.class_version;
-        self.method_cache
-            .get_method(class_version, rec_class, method_id)
-    }
-
-    /// Search global method cache with receiver object and method class_name.
-    ///
-    /// If the method was not found, return None.
-    pub fn find_method_from_receiver(
-        &mut self,
-        receiver: Value,
-        method_id: IdentId,
-    ) -> Option<MethodId> {
-        let rec_class = receiver.get_class_for_method();
-        self.find_method(rec_class, method_id)
-    }
 }
 
 impl Globals {
@@ -207,28 +179,16 @@ impl Globals {
         let version = self.const_version;
         self.const_cache.set(id, version, val)
     }
-
-    pub fn add_inline_cache_entry(&mut self) -> u32 {
-        self.inline_cache.add_entry()
-    }
-
-    fn get_inline_cache_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
-        self.inline_cache.get_entry(id)
-    }
 }
 
 #[cfg(feature = "perf")]
 impl Globals {
-    pub fn print_method_cache_stats(&self) {
-        self.method_cache.print_stats()
-    }
-
     pub fn print_constant_cache_stats(&self) {
         self.const_cache.print_stats()
     }
 }
 
-impl GlobalsRef {
+impl Globals {
     /// Search inline method cache for receiver object and method name.
     ///
     /// If the method was not found, return None.
@@ -238,28 +198,32 @@ impl GlobalsRef {
         receiver: Value,
         method_id: IdentId,
     ) -> Option<MethodId> {
-        let mut globals = self.clone();
         let rec_class = receiver.get_class_for_method();
-        let version = self.class_version;
-        let icache = self.get_inline_cache_entry(cache);
+        let version = MethodRepo::class_version();
+        let icache = MethodRepo::get_inline_cache_entry(cache);
         if icache.version == version {
             match icache.entries {
                 Some((class, method)) if class.id() == rec_class.id() => {
                     #[cfg(feature = "perf")]
                     {
-                        self.inc_inline_hit();
+                        MethodRepo::inc_inline_hit();
                     }
                     return Some(method);
                 }
                 _ => {}
             }
         };
-        let method = match globals.find_method(rec_class, method_id) {
+        let method = match MethodRepo::find_method(rec_class, method_id) {
             Some(method) => method,
             None => return None,
         };
-        icache.version = version;
-        icache.entries = Some((rec_class, method));
+        MethodRepo::update_inline_cache_entry(
+            cache,
+            InlineCacheEntry {
+                version,
+                entries: Some((rec_class, method)),
+            },
+        );
         Some(method)
     }
 }
@@ -299,145 +263,6 @@ impl ConstantValues {
 impl GC for ConstantValues {
     fn mark(&self, alloc: &mut Allocator) {
         self.table.iter().for_each(|v| v.mark(alloc));
-    }
-}
-
-///
-/// Global method cache
-///
-/// This module supports global method cache.
-///
-#[derive(Debug, Clone)]
-pub struct MethodCache {
-    cache: FxHashMap<(Module, IdentId), MethodCacheEntry>,
-    #[cfg(feature = "perf")]
-    inline_hit: usize,
-    #[cfg(feature = "perf")]
-    total: usize,
-    #[cfg(feature = "perf")]
-    missed: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MethodCacheEntry {
-    pub method: MethodId,
-    pub version: u32,
-}
-
-impl MethodCache {
-    fn new() -> Self {
-        MethodCache {
-            cache: FxHashMap::default(),
-            #[cfg(feature = "perf")]
-            inline_hit: 0,
-            #[cfg(feature = "perf")]
-            total: 0,
-            #[cfg(feature = "perf")]
-            missed: 0,
-        }
-    }
-
-    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: MethodId) {
-        self.cache
-            .insert((class, id), MethodCacheEntry { method, version });
-    }
-
-    fn get_entry(&self, class: Module, id: IdentId) -> Option<&MethodCacheEntry> {
-        self.cache.get(&(class, id))
-    }
-
-    /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
-    ///
-    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
-    /// return MethodId of the entry.
-    /// If not, search `method` by scanning a class chain.
-    /// `class` must be a Class.
-    pub fn get_method(
-        &mut self,
-        class_version: u32,
-        rec_class: Module,
-        method: IdentId,
-    ) -> Option<MethodId> {
-        #[cfg(feature = "perf")]
-        {
-            self.total += 1;
-        }
-        if let Some(MethodCacheEntry { version, method }) = self.get_entry(rec_class, method) {
-            if *version == class_version {
-                return Some(*method);
-            }
-        };
-        #[cfg(feature = "perf")]
-        {
-            self.missed += 1;
-        }
-        match rec_class.get_method(method) {
-            Some(methodref) => {
-                self.add_entry(rec_class, method, class_version, methodref);
-                Some(methodref)
-            }
-            None => None,
-        }
-    }
-}
-
-#[cfg(feature = "perf")]
-impl MethodCache {
-    fn inc_inline_hit(&mut self) {
-        self.inline_hit += 1;
-    }
-
-    pub fn print_stats(&self) {
-        eprintln!("+-------------------------------------------+");
-        eprintln!("| Method cache stats:                       |");
-        eprintln!("+-------------------------------------------+");
-        eprintln!("  hit inline cache : {:>10}", self.inline_hit);
-        eprintln!("  hit global cache : {:>10}", self.total - self.missed);
-        eprintln!("  missed           : {:>10}", self.missed);
-    }
-}
-
-///
-///  Inline method cache
-///
-///  This module supports inline method cache which is embedded in the instruction sequence directly.
-///
-#[derive(Debug, Clone)]
-pub struct InlineCache {
-    table: Vec<InlineCacheEntry>,
-    id: u32,
-}
-
-#[derive(Debug, Clone)]
-pub struct InlineCacheEntry {
-    pub version: u32,
-    pub entries: Option<(Module, MethodId)>,
-}
-
-impl InlineCacheEntry {
-    fn new() -> Self {
-        InlineCacheEntry {
-            version: 0,
-            entries: None,
-        }
-    }
-}
-
-impl InlineCache {
-    fn new() -> Self {
-        InlineCache {
-            table: vec![],
-            id: 0,
-        }
-    }
-    fn add_entry(&mut self) -> u32 {
-        self.id += 1;
-        self.table.push(InlineCacheEntry::new());
-        self.id - 1
-    }
-
-    fn get_entry(&mut self, id: u32) -> &mut InlineCacheEntry {
-        &mut self.table[id as usize]
     }
 }
 

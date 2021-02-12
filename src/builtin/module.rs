@@ -97,12 +97,12 @@ fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
 
-pub fn set_attr_accessor(globals: &mut Globals, self_val: Module, args: &Args) -> VMResult {
+pub fn set_attr_accessor(self_val: Module, args: &Args) -> VMResult {
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(globals, self_val, id);
-            define_writer(globals, self_val, id);
+            define_reader(self_val, id);
+            define_writer(self_val, id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -216,15 +216,15 @@ fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn attr_accessor(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    set_attr_accessor(&mut vm.globals, self_val.into_module(), args)
+fn attr_accessor(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    set_attr_accessor(self_val.into_module(), args)
 }
 
-fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn attr_reader(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(&mut vm.globals, self_val.into_module(), id);
+            define_reader(self_val.into_module(), id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -234,11 +234,11 @@ fn attr_reader(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn attr_writer(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     for arg in args.iter() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_writer(&mut vm.globals, self_val.into_module(), id);
+            define_writer(self_val.into_module(), id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -248,23 +248,23 @@ fn attr_writer(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn define_reader(globals: &mut Globals, mut class: Module, id: IdentId) {
+fn define_reader(mut class: Module, id: IdentId) {
     let instance_var_id = IdentId::add_prefix(id, "@");
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
     let methodref = MethodRepo::add(info);
-    class.add_method(globals, id, methodref);
+    class.add_method(id, methodref);
 }
 
-fn define_writer(globals: &mut Globals, mut class: Module, id: IdentId) {
+fn define_writer(mut class: Module, id: IdentId) {
     let instance_var_id = IdentId::add_prefix(id, "@");
     let assign_id = IdentId::add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };
     let methodref = MethodRepo::add(info);
-    class.add_method(globals, assign_id, methodref);
+    class.add_method(assign_id, methodref);
 }
 
 fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -276,7 +276,7 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         for arg in args.iter() {
             let name = arg.expect_string_or_symbol("Args")?;
             let method = vm.get_method(class, name)?;
-            singleton.add_method(&mut vm.globals, name, method);
+            singleton.add_method(name, method);
         }
     }
     Ok(Value::nil())
@@ -286,22 +286,18 @@ fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::bool(self_val.into_module().is_singleton()))
 }
 
-fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn include(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let module = args[0].expect_module("1st arg")?;
-    self_val
-        .into_module()
-        .append_include(module, &mut vm.globals);
+    self_val.into_module().append_include(module);
     Ok(Value::nil())
 }
 
-fn prepend(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn prepend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let self_val = self_val.into_module();
     let module = args[0].expect_module("1st arg")?;
-    self_val
-        .clone()
-        .append_prepend(self_val, module, &mut vm.globals);
+    self_val.clone().append_prepend(self_val, module);
     Ok(Value::nil())
 }
 
@@ -373,9 +369,7 @@ fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let new = args[0].expect_string_or_symbol("1st arg")?;
     let org = args[1].expect_string_or_symbol("2nd arg")?;
     let method = vm.get_method(Module::new(self_val), org)?;
-    self_val
-        .into_module()
-        .add_method(&mut vm.globals, new, method);
+    self_val.into_module().add_method(new, method);
     Ok(self_val)
 }
 

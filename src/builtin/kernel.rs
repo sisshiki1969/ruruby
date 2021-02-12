@@ -398,11 +398,11 @@ fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let arg = args[0];
     let arg_class = arg.get_class_for_method();
-    match vm.globals.find_method(arg_class, IdentId::get_id("to_a")) {
+    match MethodRepo::find_method(arg_class, IdentId::get_id("to_a")) {
         Some(method) => return vm.eval_send(method, arg, &Args::new0()),
         None => {}
     };
-    match vm.globals.find_method(arg_class, IdentId::get_id("to_ary")) {
+    match MethodRepo::find_method(arg_class, IdentId::get_id("to_ary")) {
         Some(method) => return vm.eval_send(method, arg, &Args::new0()),
         None => {}
     };

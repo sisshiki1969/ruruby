@@ -382,9 +382,9 @@ impl ClassInfo {
         self.ext.origin = Some(origin);
     }
 
-    pub fn append_include(&mut self, module: Module, globals: &mut Globals) {
+    pub fn append_include(&mut self, module: Module) {
         self.append_include_without_increment_version(module);
-        globals.class_version += 1;
+        MethodRepo::inc_class_version();
     }
 
     pub fn append_include_without_increment_version(&mut self, mut module: Module) {
@@ -403,7 +403,7 @@ impl ClassInfo {
         imodule.upper = superclass;
     }
 
-    pub fn append_prepend(&mut self, base: Module, module: Module, globals: &mut Globals) {
+    pub fn append_prepend(&mut self, base: Module, module: Module) {
         let mut module = module;
         let superclass = self.upper;
         let mut imodule = module.generate_included();
@@ -426,7 +426,7 @@ impl ClassInfo {
         } else {
             imodule.upper = superclass;
         }
-        globals.class_version += 1;
+        MethodRepo::inc_class_version();
     }
 
     pub fn origin(&self) -> Option<Module> {
@@ -456,13 +456,8 @@ impl ClassInfo {
         self.add_builtin_method(name, func);
     }
 
-    pub fn add_method(
-        &mut self,
-        globals: &mut Globals,
-        id: IdentId,
-        info: MethodId,
-    ) -> Option<MethodId> {
-        self.ext.add_method(globals, id, info)
+    pub fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
+        self.ext.add_method(id, info)
     }
 
     /// Set a constant (`self`::`id`) to `val`.
@@ -578,13 +573,8 @@ impl ClassExt {
         }
     }
 
-    fn add_method(
-        &mut self,
-        globals: &mut Globals,
-        id: IdentId,
-        info: MethodId,
-    ) -> Option<MethodId> {
-        globals.class_version += 1;
+    fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
+        MethodRepo::inc_class_version();
         self.method_table.insert(id, info)
     }
 }

@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub fn init() -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Exception", class);
     class.add_builtin_class_method("new", exception_new);
@@ -10,7 +10,6 @@ pub fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("to_s", tos);
     builtin::module::set_attr_accessor(
-        globals,
         class,
         &Args::new2(
             Value::symbol_from_str("message"),
@@ -51,7 +50,7 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Value::exception(self_val, RubyError::none(err))
     };
     // Call initialize method if it exists.
-    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, new_instance, args)?;
     };
     Ok(new_instance)

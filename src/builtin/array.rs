@@ -125,7 +125,7 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         _ => unreachable!(),
     };
     let array = Value::array_from_with_class(array_vec, self_val);
-    if let Some(method) = vm.globals.find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
         vm.eval_send(method, array, args)?;
     };
     Ok(array)
