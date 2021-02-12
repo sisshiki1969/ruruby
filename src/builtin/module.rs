@@ -253,7 +253,7 @@ fn define_reader(globals: &mut Globals, mut class: Module, id: IdentId) {
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
-    let methodref = MethodRef::new(info);
+    let methodref = MethodRepo::add(info);
     class.add_method(globals, id, methodref);
 }
 
@@ -263,7 +263,7 @@ fn define_writer(globals: &mut Globals, mut class: Module, id: IdentId) {
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };
-    let methodref = MethodRef::new(info);
+    let methodref = MethodRepo::add(info);
     class.add_method(globals, assign_id, methodref);
 }
 

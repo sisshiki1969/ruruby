@@ -6,7 +6,7 @@ const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
-    Block(MethodRef, ContextRef),
+    Block(MethodId, ContextRef),
     Proc(Value),
     None,
 }

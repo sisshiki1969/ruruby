@@ -7,7 +7,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct Codegen {
     // Codegen State
-    method_stack: Vec<MethodRef>,
+    method_stack: Vec<MethodId>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
     extern_context: Option<ContextRef>,
@@ -360,7 +360,7 @@ impl Codegen {
         args_num: usize,
         kw_rest_num: usize,
         flag: u8,
-        block: Option<MethodRef>,
+        block: Option<MethodId>,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND);
@@ -369,7 +369,7 @@ impl Codegen {
         iseq.push8(kw_rest_num as u32 as u16 as u8);
         iseq.push8(flag);
         iseq.push64(match block {
-            Some(block) => block.id(),
+            Some(block) => block.into(),
             None => 0,
         });
         iseq.push32(globals.add_inline_cache_entry());
@@ -383,7 +383,7 @@ impl Codegen {
         args_num: usize,
         kw_rest_num: usize,
         flag: u8,
-        block: Option<MethodRef>,
+        block: Option<MethodId>,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::SEND_SELF);
@@ -392,7 +392,7 @@ impl Codegen {
         iseq.push8(kw_rest_num as u32 as u16 as u8);
         iseq.push8(flag);
         iseq.push64(match block {
-            Some(block) => block.id(),
+            Some(block) => block.into(),
             None => 0,
         });
         iseq.push32(globals.add_inline_cache_entry());
@@ -404,7 +404,7 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        block: Option<MethodRef>,
+        block: Option<MethodId>,
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
@@ -425,7 +425,7 @@ impl Codegen {
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         if let Some(block) = block {
-            iseq.push64(block.id());
+            iseq.push64(block.into());
         }
         iseq.push32(globals.add_inline_cache_entry());
     }
@@ -436,7 +436,7 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        block: Option<MethodRef>,
+        block: Option<MethodId>,
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
@@ -456,7 +456,7 @@ impl Codegen {
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         if let Some(block) = block {
-            iseq.push64(block.id());
+            iseq.push64(block.into());
         }
         iseq.push32(globals.add_inline_cache_entry());
     }
@@ -465,12 +465,12 @@ impl Codegen {
         &mut self,
         globals: &mut Globals,
         iseq: &mut ISeq,
-        block: MethodRef,
+        block: MethodId,
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::FOR);
-        iseq.push64(block.id());
+        iseq.push64(block.into());
         iseq.push32(globals.add_inline_cache_entry());
         if !use_value {
             self.gen_pop(iseq);
@@ -740,11 +740,11 @@ impl Codegen {
         kind: ContextKind,
         name: Option<IdentId>,
         forvars: Option<Vec<IdentId>>,
-    ) -> Result<MethodRef, RubyError> {
-        let mut methodref = MethodRef::new(MethodInfo::default());
+    ) -> Result<MethodId, RubyError> {
+        let id = MethodRepo::add(MethodInfo::default());
         let is_block = !(kind == ContextKind::Method);
         if !is_block {
-            self.method_stack.push(methodref)
+            self.method_stack.push(id)
         }
         let save_loc = self.loc;
         let mut params = ISeqParams::default();
@@ -811,7 +811,7 @@ impl Codegen {
 
         let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
-                methodref,
+                id,
                 name,
                 params,
                 iseq,
@@ -837,7 +837,7 @@ impl Codegen {
         if !is_block {
             self.method_stack.pop();
         }
-        *methodref = info;
+        MethodRepo::update(id, info);
         #[cfg(feature = "emit-iseq")]
         {
             let iseq = methodref.as_iseq();
@@ -865,7 +865,7 @@ impl Codegen {
                 pc += Inst::inst_size(iseq.iseq[pc]);
             }
         }
-        Ok(methodref)
+        Ok(id)
     }
 
     fn gen_default_expr(
@@ -1887,7 +1887,7 @@ impl Codegen {
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 iseq.push32(id.into());
-                iseq.push64(methodref.id());
+                iseq.push64(methodref.into());
                 if use_value {
                     iseq.gen_symbol(id);
                 };
@@ -1906,7 +1906,7 @@ impl Codegen {
                 self.gen(globals, iseq, *singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
                 iseq.push32((id).into());
-                iseq.push64(methodref.id());
+                iseq.push64(methodref.into());
                 if use_value {
                     iseq.gen_symbol(id);
                 };
@@ -1935,7 +1935,7 @@ impl Codegen {
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if is_module { 1 } else { 0 });
                 iseq.push32(id.into());
-                iseq.push64(methodref.id());
+                iseq.push64(methodref.into());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
@@ -1958,7 +1958,7 @@ impl Codegen {
                 self.gen(globals, iseq, *singleton, true)?;
                 self.save_loc(iseq, node_loc);
                 iseq.push(Inst::DEF_SCLASS);
-                iseq.push64(methodref.id());
+                iseq.push64(methodref.into());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
@@ -2057,7 +2057,7 @@ impl Codegen {
                 )?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
-                iseq.push64(methodref.id());
+                iseq.push64(methodref.into());
                 if !use_value {
                     self.gen_pop(iseq)
                 };

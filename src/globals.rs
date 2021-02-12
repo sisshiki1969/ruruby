@@ -175,7 +175,7 @@ impl Globals {
     /// Search global method cache with receiver class and method name.
     ///
     /// If the method was not found, return None.
-    pub fn find_method(&mut self, rec_class: Module, method_id: IdentId) -> Option<MethodRef> {
+    pub fn find_method(&mut self, rec_class: Module, method_id: IdentId) -> Option<MethodId> {
         let class_version = self.class_version;
         self.method_cache
             .get_method(class_version, rec_class, method_id)
@@ -188,7 +188,7 @@ impl Globals {
         &mut self,
         receiver: Value,
         method_id: IdentId,
-    ) -> Option<MethodRef> {
+    ) -> Option<MethodId> {
         let rec_class = receiver.get_class_for_method();
         self.find_method(rec_class, method_id)
     }
@@ -237,7 +237,7 @@ impl GlobalsRef {
         cache: u32,
         receiver: Value,
         method_id: IdentId,
-    ) -> Option<MethodRef> {
+    ) -> Option<MethodId> {
         let mut globals = self.clone();
         let rec_class = receiver.get_class_for_method();
         let version = self.class_version;
@@ -320,7 +320,7 @@ pub struct MethodCache {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
-    pub method: MethodRef,
+    pub method: MethodId,
     pub version: u32,
 }
 
@@ -337,7 +337,7 @@ impl MethodCache {
         }
     }
 
-    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: MethodRef) {
+    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: MethodId) {
         self.cache
             .insert((class, id), MethodCacheEntry { method, version });
     }
@@ -346,10 +346,10 @@ impl MethodCache {
         self.cache.get(&(class, id))
     }
 
-    /// Get corresponding instance method(MethodRef) for the class object `class` and `method`.
+    /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
     ///
     /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
-    /// return MethodRef of the entry.
+    /// return MethodId of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
     pub fn get_method(
@@ -357,7 +357,7 @@ impl MethodCache {
         class_version: u32,
         rec_class: Module,
         method: IdentId,
-    ) -> Option<MethodRef> {
+    ) -> Option<MethodId> {
         #[cfg(feature = "perf")]
         {
             self.total += 1;
@@ -411,7 +411,7 @@ pub struct InlineCache {
 #[derive(Debug, Clone)]
 pub struct InlineCacheEntry {
     pub version: u32,
-    pub entries: Option<(Module, MethodRef)>,
+    pub entries: Option<(Module, MethodId)>,
 }
 
 impl InlineCacheEntry {

@@ -1086,7 +1086,7 @@ impl Value {
         RValue::new_proc(ProcInfo::new(context)).pack()
     }
 
-    pub fn method(name: IdentId, receiver: Value, method: MethodRef) -> Self {
+    pub fn method(name: IdentId, receiver: Value, method: MethodId) -> Self {
         RValue::new_method(MethodObjInfo::new(name, receiver, method)).pack()
     }
 

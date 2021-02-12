@@ -228,7 +228,7 @@ impl VM {
         self.pc = (((self.pc + inst_offset) as i64) + disp) as usize;
     }
 
-    pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodRef, RubyError> {
+    pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodId, RubyError> {
         let parser = Parser::new();
         let result = parser.parse_program(path, program)?;
 
@@ -252,7 +252,7 @@ impl VM {
         &mut self,
         path: PathBuf,
         program: &str,
-    ) -> Result<MethodRef, RubyError> {
+    ) -> Result<MethodId, RubyError> {
         let parser = Parser::new();
         let extern_context = self.current_context();
         let result = parser.parse_program_eval(path, program, Some(extern_context))?;
@@ -991,7 +991,7 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::CREATE_PROC => {
-                    let method = iseq.read_methodref(self.pc + 1);
+                    let method = iseq.read_method(self.pc + 1);
                     let ctx = self.current_context();
                     let proc_obj = self.create_proc(&Block::Block(method, ctx))?;
                     self.stack_push(proc_obj);
@@ -1175,7 +1175,7 @@ impl VM {
                 Inst::DEF_CLASS => {
                     let is_module = iseq.read8(self.pc + 1) == 1;
                     let id = iseq.read_id(self.pc + 2);
-                    let method = iseq.read_methodref(self.pc + 6);
+                    let method = iseq.read_method(self.pc + 6);
                     let base = self.stack_pop()?;
                     let super_val = self.stack_pop()?;
                     let val = self.define_class(base, id, is_module, super_val)?;
@@ -1188,7 +1188,7 @@ impl VM {
                     self.pc += 14;
                 }
                 Inst::DEF_SCLASS => {
-                    let method = iseq.read_methodref(self.pc + 1);
+                    let method = iseq.read_method(self.pc + 1);
                     let singleton = self.stack_pop()?.get_singleton_class()?;
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
@@ -1200,7 +1200,7 @@ impl VM {
                 }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
-                    let method = iseq.read_methodref(self.pc + 5);
+                    let method = iseq.read_method(self.pc + 5);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     self.define_method(self_value, id, method);
@@ -1211,7 +1211,7 @@ impl VM {
                 }
                 Inst::DEF_SMETHOD => {
                     let id = iseq.read_id(self.pc + 1);
-                    let method = iseq.read_methodref(self.pc + 5);
+                    let method = iseq.read_method(self.pc + 5);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     let singleton = self.stack_pop()?;
@@ -1375,29 +1375,29 @@ impl VM {
             .globals
             .find_method_from_icache(cache, receiver, method_id)
         {
-            Some(method) => match &*method {
+            Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(arg_slice);
                     args.block = Block::Block(block.into(), self.current_context());
                     self.set_stack_len(len - args_num);
-                    self.invoke_native(func, *name, receiver, &args)
+                    self.invoke_native(&func, name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
                         return Err(RubyError::argument_wrong(args_num, 0));
                     }
-                    Self::invoke_getter(*id, receiver)
+                    Self::invoke_getter(id, receiver)
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
                         return Err(RubyError::argument_wrong(args_num, 1));
                     }
-                    Self::invoke_setter(*id, receiver, self.stack_pop()?)
+                    Self::invoke_setter(id, receiver, self.stack_pop()?)
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     let block = Block::Block(block.into(), self.current_context());
                     if iseq.opt_flag {
-                        let mut context = Context::new(receiver, block, *iseq, None);
+                        let mut context = Context::new(receiver, block, iseq, None);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
@@ -1409,7 +1409,7 @@ impl VM {
                         let mut args = Args::from_slice(arg_slice);
                         args.block = block;
                         self.set_stack_len(len - args_num);
-                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                        let context = Context::from_args(self, receiver, iseq, &args, None)?;
                         self.run_context(&context)
                     }
                 }
@@ -1436,27 +1436,27 @@ impl VM {
             .globals
             .find_method_from_icache(cache, receiver, method_id)
         {
-            Some(method) => match &*method {
+            Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let args = Args::from_slice(arg_slice);
                     self.set_stack_len(len - args_num);
-                    self.invoke_native(func, *name, receiver, &args)
+                    self.invoke_native(&func, name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
                         return Err(RubyError::argument_wrong(args_num, 0));
                     }
-                    Self::invoke_getter(*id, receiver)
+                    Self::invoke_getter(id, receiver)
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
                         return Err(RubyError::argument_wrong(args_num, 1));
                     }
-                    Self::invoke_setter(*id, receiver, self.stack_pop()?)
+                    Self::invoke_setter(id, receiver, self.stack_pop()?)
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     if iseq.opt_flag {
-                        let mut context = Context::new(receiver, Block::None, *iseq, None);
+                        let mut context = Context::new(receiver, Block::None, iseq, None);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
@@ -1467,7 +1467,7 @@ impl VM {
                     } else {
                         let args = Args::from_slice(arg_slice);
                         self.set_stack_len(len - args_num);
-                        let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                        let context = Context::from_args(self, receiver, iseq, &args, None)?;
                         self.run_context(&context)
                     }
                 }
@@ -1493,12 +1493,12 @@ impl VM {
             .globals
             .find_method_from_icache(cache, receiver, IdentId::EACH)
         {
-            Some(method) => match &*method {
+            Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
-                    self.invoke_native(func, *name, receiver, &args)
+                    self.invoke_native(&func, name, receiver, &args)
                 }
                 MethodInfo::RubyFunc { iseq } => {
-                    let context = Context::from_args(self, receiver, *iseq, &args, None)?;
+                    let context = Context::from_args(self, receiver, iseq, &args, None)?;
                     self.run_context(&context)
                 }
                 _ => unreachable!(),
@@ -2384,7 +2384,7 @@ impl VM {
     #[inline]
     pub fn eval_send(
         &mut self,
-        methodref: MethodRef,
+        methodref: MethodId,
         self_val: impl Into<Value>,
         args: &Args,
     ) -> VMResult {
@@ -2461,7 +2461,7 @@ impl VM {
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
     pub fn invoke_method(
         &mut self,
-        methodref: MethodRef,
+        method: MethodId,
         self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
@@ -2469,18 +2469,18 @@ impl VM {
         let self_val = self_val.into();
         use MethodInfo::*;
         let outer = outer.map(|ctx| ctx.get_current());
-        match &*methodref {
-            BuiltinFunc { func, name } => self.invoke_native(func, *name, self_val, args),
+        match MethodRepo::get(method) {
+            BuiltinFunc { func, name } => self.invoke_native(&func, name, self_val, args),
             AttrReader { id } => {
                 args.check_args_num(0)?;
-                Self::invoke_getter(*id, self_val)
+                Self::invoke_getter(id, self_val)
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
-                Self::invoke_setter(*id, self_val, args[0])
+                Self::invoke_setter(id, self_val, args[0])
             }
             RubyFunc { iseq } => {
-                let context = Context::from_args(self, self_val, *iseq, args, outer)?;
+                let context = Context::from_args(self, self_val, iseq, args, outer)?;
                 self.run_context(&context)
             }
             _ => unreachable!(),
@@ -2539,7 +2539,7 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodRef) {
+    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
         match target_obj.if_mod_class() {
             Some(mut module) => module.add_method(&mut self.globals, id, method),
             None => target_obj
@@ -2553,7 +2553,7 @@ impl VM {
         &mut self,
         target_obj: Value,
         id: IdentId,
-        method: MethodRef,
+        method: MethodId,
     ) -> Result<(), RubyError> {
         target_obj
             .get_singleton_class()?
@@ -2561,26 +2561,26 @@ impl VM {
         Ok(())
     }
 
-    /// Get method(MethodRef) for class.
+    /// Get method(MethodId) for class.
     ///
     /// If the method was not found, return NoMethodError.
     pub fn get_method(
         &mut self,
         rec_class: Module,
         method_id: IdentId,
-    ) -> Result<MethodRef, RubyError> {
+    ) -> Result<MethodId, RubyError> {
         match self.globals.find_method(rec_class, method_id) {
             Some(m) => Ok(m),
             None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
         }
     }
 
-    /// Get method(MethodRef) for receiver.
+    /// Get method(MethodId) for receiver.
     pub fn get_method_from_receiver(
         &mut self,
         receiver: Value,
         method_id: IdentId,
-    ) -> Result<MethodRef, RubyError> {
+    ) -> Result<MethodId, RubyError> {
         let rec_class = receiver.get_class_for_method();
         self.get_method(rec_class, method_id)
     }
@@ -2686,7 +2686,7 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Block::Block(*METHODREF_ENUM, self.current_context());
+        args.block = Block::Block(METHOD_ENUM, self.current_context());
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,
@@ -2734,7 +2734,7 @@ impl VM {
     /// Create a new execution context for a block.
     pub fn create_block_context(
         &mut self,
-        method: MethodRef,
+        method: MethodId,
         outer: ContextRef,
     ) -> Result<ContextRef, RubyError> {
         let outer = self.move_outer_to_heap(outer);

@@ -90,7 +90,7 @@ impl ISeq {
         self.read_usize(offset).into()
     }
 
-    pub fn read_methodref(&self, offset: usize) -> MethodRef {
+    pub fn read_method(&self, offset: usize) -> MethodId {
         self.read64(offset).into()
     }
 

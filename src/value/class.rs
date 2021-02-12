@@ -115,7 +115,7 @@ impl Module {
     }
 
     /// Get method for a receiver class (`self`) and method (IdentId).
-    pub fn get_method(self, method: IdentId) -> Option<MethodRef> {
+    pub fn get_method(self, method: IdentId) -> Option<MethodId> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
@@ -140,7 +140,7 @@ impl Module {
 
     /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
     /// Return None if no method found.
-    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodRef> {
+    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodId> {
         self.method_table().get(&id).cloned()
     }
 
@@ -447,7 +447,7 @@ impl ClassInfo {
 
     pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
         let info = MethodInfo::BuiltinFunc { name: id, func };
-        let methodref = MethodRef::new(info);
+        let methodref = MethodRepo::add(info);
         self.ext.method_table.insert(id, methodref);
     }
 
@@ -460,8 +460,8 @@ impl ClassInfo {
         &mut self,
         globals: &mut Globals,
         id: IdentId,
-        info: MethodRef,
-    ) -> Option<MethodRef> {
+        info: MethodId,
+    ) -> Option<MethodId> {
         self.ext.add_method(globals, id, info)
     }
 
@@ -582,8 +582,8 @@ impl ClassExt {
         &mut self,
         globals: &mut Globals,
         id: IdentId,
-        info: MethodRef,
-    ) -> Option<MethodRef> {
+        info: MethodId,
+    ) -> Option<MethodId> {
         globals.class_version += 1;
         self.method_table.insert(id, info)
     }

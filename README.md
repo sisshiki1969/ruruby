@@ -56,7 +56,7 @@ There are some useful options for analysis and development. Use `features` flag 
    Compiling ruruby v0.1.0
     Finished dev [unoptimized + debuginfo] target(s) in 1.83s
      Running `target/debug/ruruby tests/sample.rb`
----> MethodRef(198)
+---> MethodId(198)
    0:PUSH_STRING     stack:0
    5:SET_LOCAL       stack:1
    e:PUSH_STRING     stack:0
@@ -81,7 +81,7 @@ Hello world!
     Finished dev [unoptimized + debuginfo] target(s) in 6.72s
      Running `target/debug/ruruby tests/sample.rb`
 -----------------------------------------
-MethodRef(200)
+MethodId(200)
 local var(0): w
 block: None
   00000 PUSH_STRING 182

@@ -27,8 +27,8 @@ pub fn repl_vm() {
         println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
         println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
         println!(
-            "Option<MethodRef>: {}",
-            std::mem::size_of::<Option<MethodRef>>()
+            "Option<MethodId>: {}",
+            std::mem::size_of::<Option<MethodId>>()
         );
     }
     let mut rl = Editor::<()>::new();

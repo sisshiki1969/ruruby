@@ -1,19 +1,108 @@
 use crate::*;
-use std::lazy::SyncLazy;
+use std::cell::RefCell;
+
+thread_local!(
+    pub static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
+);
+
+pub struct MethodRepo {
+    table: Vec<MethodInfo>,
+}
+
+impl std::ops::Index<MethodId> for MethodRepo {
+    type Output = MethodInfo;
+    fn index(&self, id: MethodId) -> &MethodInfo {
+        &self.table[id.0.get() as usize]
+    }
+}
+
+impl std::ops::IndexMut<MethodId> for MethodRepo {
+    fn index_mut(&mut self, id: MethodId) -> &mut MethodInfo {
+        &mut self.table[id.0.get() as usize]
+    }
+}
+
+impl MethodRepo {
+    pub fn new() -> Self {
+        Self {
+            table: vec![
+                MethodInfo::Void, // dummy
+                MethodInfo::Void, // default
+                MethodInfo::BuiltinFunc {
+                    func: enumerator_iterate,
+                    name: IdentId::_ENUM_FUNC,
+                }, // METHOD_ENUM
+            ],
+        }
+    }
+
+    pub fn add(info: MethodInfo) -> MethodId {
+        METHODS.with(|m| {
+            let table = &mut m.borrow_mut().table;
+            table.push(info);
+            MethodId::new((table.len() - 1) as u32)
+        })
+    }
+
+    pub fn update(id: MethodId, info: MethodInfo) {
+        METHODS.with(|m| {
+            m.borrow_mut()[id] = info;
+        })
+    }
+
+    pub fn get(id: MethodId) -> MethodInfo {
+        METHODS.with(|m| m.borrow()[id].clone())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct MethodId(std::num::NonZeroU32);
+
+impl std::default::Default for MethodId {
+    fn default() -> Self {
+        Self::new(1)
+    }
+}
+
+impl MethodId {
+    fn new(id: u32) -> Self {
+        Self(std::num::NonZeroU32::new(id).unwrap())
+    }
+
+    pub fn as_iseq(&self) -> ISeqRef {
+        METHODS.with(|m| m.borrow()[*self].as_iseq())
+    }
+}
+
+impl From<u64> for MethodId {
+    fn from(id: u64) -> Self {
+        Self::new(id as u32)
+    }
+}
+
+impl Into<u64> for MethodId {
+    fn into(self) -> u64 {
+        self.0.get() as u64
+    }
+}
+
+impl From<u32> for MethodId {
+    fn from(id: u32) -> Self {
+        Self::new(id)
+    }
+}
+
+impl Into<usize> for MethodId {
+    fn into(self) -> usize {
+        self.0.get() as usize
+    }
+}
 
 pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult;
 
-pub type MethodTable = FxHashMap<IdentId, MethodRef>;
+pub type MethodTable = FxHashMap<IdentId, MethodId>;
 
-//#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub type MethodRef = Ref<MethodInfo>;
-
-pub static METHODREF_ENUM: SyncLazy<MethodRef> = SyncLazy::new(|| {
-    MethodRef::new(MethodInfo::BuiltinFunc {
-        func: enumerator_iterate,
-        name: IdentId::_ENUM_FUNC,
-    })
-});
+pub static METHOD_ENUM: MethodId = MethodId(unsafe { std::num::NonZeroU32::new_unchecked(2) });
 
 #[derive(Clone)]
 pub enum MethodInfo {
@@ -103,7 +192,7 @@ pub type ISeqRef = Ref<ISeqInfo>;
 
 #[derive(Debug, Clone, Default)]
 pub struct ISeqInfo {
-    pub method: MethodRef,
+    pub method: MethodId,
     pub name: Option<IdentId>,
     pub params: ISeqParams,
     pub iseq: ISeq,
@@ -126,7 +215,7 @@ pub struct ISeqInfo {
 
 impl ISeqInfo {
     pub fn new(
-        method: MethodRef,
+        method: MethodId,
         name: Option<IdentId>,
         params: ISeqParams,
         iseq: ISeq,
@@ -177,11 +266,11 @@ impl ISeqInfo {
 pub struct MethodObjInfo {
     pub name: IdentId,
     pub receiver: Value,
-    pub method: MethodRef,
+    pub method: MethodId,
 }
 
 impl MethodObjInfo {
-    pub fn new(name: IdentId, receiver: Value, method: MethodRef) -> Self {
+    pub fn new(name: IdentId, receiver: Value, method: MethodId) -> Self {
         MethodObjInfo {
             name,
             receiver,
