@@ -133,9 +133,20 @@ impl ExceptionEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ContextKind {
-    Method,
+    Method(Option<IdentId>),
+    Class(IdentId),
     Block,
     Eval,
+}
+
+impl ContextKind {
+    fn is_method(&self) -> bool {
+        if let Self::Method(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Context {
@@ -300,7 +311,7 @@ impl Codegen {
                 Some(id) => return Some((i as u32, *id)),
                 None => idx = i as u32,
             };
-            if context.kind == ContextKind::Method {
+            if context.kind.is_method() {
                 return None;
             }
         }
@@ -712,11 +723,11 @@ impl Codegen {
         lvar_collector: LvarCollector,
         use_value: bool,
         kind: ContextKind,
-        name: Option<IdentId>,
+        //name: Option<IdentId>,
         forvars: Option<Vec<IdentId>>,
     ) -> Result<MethodId, RubyError> {
         let id = MethodRepo::add(MethodInfo::default());
-        let is_block = !(kind == ContextKind::Method);
+        let is_block = !kind.is_method();
         if !is_block {
             self.method_stack.push(id)
         }
@@ -786,7 +797,6 @@ impl Codegen {
         let info = MethodInfo::RubyFunc {
             iseq: ISeqRef::new(ISeqInfo::new(
                 id,
-                name,
                 params,
                 iseq,
                 lvar_collector,
@@ -796,13 +806,8 @@ impl Codegen {
                 match kind {
                     ContextKind::Block => ISeqKind::Block,
                     ContextKind::Eval => ISeqKind::Other,
-                    ContextKind::Method => {
-                        if name.is_some() {
-                            ISeqKind::Method(name.unwrap())
-                        } else {
-                            ISeqKind::Other
-                        }
-                    }
+                    ContextKind::Class(name) => ISeqKind::Class(name),
+                    ContextKind::Method(name) => ISeqKind::Method(name),
                 },
                 forvars,
             )),
@@ -816,11 +821,7 @@ impl Codegen {
         {
             let iseq = id.as_iseq();
             println!("-----------------------------------------");
-            let method_name = match iseq.name {
-                Some(id) => format!("{:?}", id),
-                None => "<unnamed>".to_string(),
-            };
-            println!("{} {:?} opt_flag:{:?}", method_name, id, iseq.opt_flag);
+            println!("{:?}", *iseq);
             println!("{:?}", iseq.forvars);
             print!("local var: ");
             for (k, v) in iseq.lvar.table() {
@@ -1332,7 +1333,6 @@ impl Codegen {
                             lvar,
                             true,
                             ContextKind::Block,
-                            None,
                             Some(param),
                         )?;
                         self.loop_stack.pop().unwrap();
@@ -1746,7 +1746,6 @@ impl Codegen {
                                 true,
                                 ContextKind::Block,
                                 None,
-                                None,
                             )?;
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
@@ -1842,8 +1841,7 @@ impl Codegen {
                     *body,
                     lvar,
                     true,
-                    ContextKind::Method,
-                    Some(id),
+                    ContextKind::Method(Some(id)),
                     None,
                 )?;
                 iseq.push(Inst::DEF_METHOD);
@@ -1860,8 +1858,7 @@ impl Codegen {
                     *body,
                     lvar,
                     true,
-                    ContextKind::Method,
-                    Some(id),
+                    ContextKind::Method(Some(id)),
                     None,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
@@ -1886,8 +1883,7 @@ impl Codegen {
                     *body,
                     lvar,
                     true,
-                    ContextKind::Method,
-                    None,
+                    ContextKind::Class(id),
                     None,
                 )?;
                 self.gen(globals, iseq, *superclass, true)?;
@@ -1912,8 +1908,7 @@ impl Codegen {
                     *body,
                     lvar,
                     true,
-                    ContextKind::Method,
-                    None,
+                    ContextKind::Class(IdentId::get_id("Singleton")),
                     None,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
@@ -1956,7 +1951,7 @@ impl Codegen {
                             self.save_loc(iseq, node_loc);
                             iseq.gen_break();
                         }
-                        ContextKind::Method => {
+                        ContextKind::Method(_) | ContextKind::Class(_) => {
                             return Err(
                                 self.error_syntax("Invalid break.", node_loc.merge(self.loc))
                             );
@@ -1984,7 +1979,7 @@ impl Codegen {
                             self.gen(globals, iseq, *val, true)?;
                             iseq.gen_return();
                         }
-                        ContextKind::Method => {
+                        ContextKind::Method(_) | ContextKind::Class(_) => {
                             return Err(
                                 self.error_syntax("Invalid next.", node_loc.merge(self.loc))
                             );
@@ -2013,7 +2008,6 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Block,
-                    None,
                     None,
                 )?;
                 self.loop_stack.pop().unwrap();

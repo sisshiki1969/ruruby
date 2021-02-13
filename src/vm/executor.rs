@@ -85,6 +85,12 @@ impl VM {
             vm.globals.perf = Perf::new();
         }
 
+        #[cfg(feature = "perf-method")]
+        {
+            MethodRepo::clear_stats();
+            vm.globals.clear_const_cache();
+        }
+
         vm
     }
 
@@ -241,8 +247,7 @@ impl VM {
             result.node,
             result.lvar_collector,
             true,
-            ContextKind::Method,
-            None,
+            ContextKind::Method(None),
             None,
         )?;
         Ok(methodref)
@@ -269,7 +274,6 @@ impl VM {
             result.lvar_collector,
             true,
             ContextKind::Eval,
-            None,
             None,
         )?;
         Ok(method)
@@ -302,8 +306,7 @@ impl VM {
             result.node,
             result.lvar_collector,
             true,
-            ContextKind::Method,
-            None,
+            ContextKind::Method(None),
             None,
         )?;
         let iseq = method.as_iseq();
@@ -360,6 +363,8 @@ impl VM {
 
     pub fn run_context(&mut self, context: impl Into<ContextRef>) -> VMResult {
         let context = context.into();
+        #[cfg(feature = "perf-method")]
+        MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
         let stack_len = self.stack_len();
         let pc = self.pc;
         self.context_push(context);
@@ -1380,7 +1385,7 @@ impl VM {
                     let mut args = Args::from_slice(arg_slice);
                     args.block = Block::Block(block.into(), self.current_context());
                     self.set_stack_len(len - args_num);
-                    self.invoke_native(&func, name, receiver, &args)
+                    self.invoke_native(&func, method, name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
@@ -1440,7 +1445,7 @@ impl VM {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let args = Args::from_slice(arg_slice);
                     self.set_stack_len(len - args_num);
-                    self.invoke_native(&func, name, receiver, &args)
+                    self.invoke_native(&func, method, name, receiver, &args)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
@@ -1495,7 +1500,7 @@ impl VM {
         {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
-                    self.invoke_native(&func, name, receiver, &args)
+                    self.invoke_native(&func, method, name, receiver, &args)
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     let context = Context::from_args(self, receiver, iseq, &args, None)?;
@@ -2467,7 +2472,7 @@ impl VM {
         use MethodInfo::*;
         let outer = outer.map(|ctx| ctx.get_current());
         match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => self.invoke_native(&func, name, self_val, args),
+            BuiltinFunc { func, name } => self.invoke_native(&func, method, name, self_val, args),
             AttrReader { id } => {
                 args.check_args_num(0)?;
                 Self::invoke_getter(id, self_val)
@@ -2488,6 +2493,7 @@ impl VM {
     fn invoke_native(
         &mut self,
         func: &BuiltinFunc,
+        _method_id: MethodId,
         _name: IdentId,
         self_val: Value,
         args: &Args,
@@ -2497,6 +2503,9 @@ impl VM {
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         println!("---> BuiltinFunc {:?}", _name);
+
+        #[cfg(feature = "perf-method")]
+        MethodRepo::inc_counter(_method_id);
 
         let len = self.temp_stack.len();
         self.temp_push(self_val);
@@ -2653,7 +2662,7 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let mut context = self.create_block_context(*method, *outer)?;
-                context.kind = ISeqKind::Method(IdentId::get_id(""));
+                context.kind = ISeqKind::Method(None);
                 Ok(Value::procobj(context))
             }
             Block::Proc(proc) => Ok(proc.dup()),
@@ -2822,10 +2831,12 @@ impl VM {
         match self.run(absolute_path, program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
+                self.globals.perf.print_perf();
+                #[cfg(feature = "perf-method")]
                 {
-                    self.globals.perf.print_perf();
                     MethodRepo::print_method_cache_stats();
                     self.globals.print_constant_cache_stats();
+                    MethodRepo::print_stats();
                 }
                 #[cfg(feature = "gc-debug")]
                 self.globals.print_mark();

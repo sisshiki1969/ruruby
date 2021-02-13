@@ -11,6 +11,7 @@ repository = "https://github.com/sisshiki1969/ruruby"
 [features]
 default = []
 perf = []
+perf-method = []
 trace = []
 trace-func = []
 emit-iseq = []

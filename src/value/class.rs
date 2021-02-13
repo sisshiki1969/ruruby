@@ -1,7 +1,13 @@
 use crate::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Module(Value);
+
+impl std::fmt::Debug for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
+}
 
 impl std::cmp::PartialEq for Module {
     fn eq(&self, other: &Self) -> bool {

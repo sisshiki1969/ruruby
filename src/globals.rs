@@ -112,6 +112,11 @@ impl Globals {
     pub fn print_mark(&self) {
         ALLOC.with(|m| m.borrow_mut().print_mark());
     }
+
+    #[cfg(feature = "perf-method")]
+    pub fn clear_const_cache(&mut self) {
+        self.const_cache.clear();
+    }
 }
 
 impl Globals {
@@ -140,7 +145,7 @@ impl Globals {
     /// Return None if not found.
     pub fn find_const_cache(&mut self, slot: u32) -> Option<Value> {
         let const_version = self.const_version;
-        #[cfg(feature = "perf")]
+        #[cfg(feature = "perf-method")]
         {
             self.const_cache.total += 1;
         }
@@ -150,7 +155,7 @@ impl Globals {
                 val: Some(val),
             } if *version == const_version => Some(*val),
             _ => {
-                #[cfg(feature = "perf")]
+                #[cfg(feature = "perf-method")]
                 {
                     self.const_cache.missed += 1;
                 }
@@ -181,7 +186,7 @@ impl Globals {
     }
 }
 
-#[cfg(feature = "perf")]
+#[cfg(feature = "perf-method")]
 impl Globals {
     pub fn print_constant_cache_stats(&self) {
         self.const_cache.print_stats()
@@ -204,10 +209,9 @@ impl Globals {
         if icache.version == version {
             match icache.entries {
                 Some((class, method)) if class.id() == rec_class.id() => {
-                    #[cfg(feature = "perf")]
-                    {
-                        MethodRepo::inc_inline_hit();
-                    }
+                    #[cfg(feature = "perf-method")]
+                    MethodRepo::inc_inline_hit();
+
                     return Some(method);
                 }
                 _ => {}
@@ -275,9 +279,9 @@ impl GC for ConstantValues {
 struct ConstCache {
     table: Vec<ConstCacheEntry>,
     id: u32,
-    #[cfg(feature = "perf")]
+    #[cfg(feature = "perf-method")]
     total: usize,
-    #[cfg(feature = "perf")]
+    #[cfg(feature = "perf-method")]
     missed: usize,
 }
 
@@ -301,9 +305,9 @@ impl ConstCache {
         ConstCache {
             table: vec![],
             id: 0,
-            #[cfg(feature = "perf")]
+            #[cfg(feature = "perf-method")]
             total: 0,
-            #[cfg(feature = "perf")]
+            #[cfg(feature = "perf-method")]
             missed: 0,
         }
     }
@@ -329,9 +333,14 @@ impl ConstCache {
     }
 }
 
-#[cfg(feature = "perf")]
+#[cfg(feature = "perf-method")]
 impl ConstCache {
-    pub fn print_stats(&self) {
+    fn clear(&mut self) {
+        self.missed = 0;
+        self.total = 0;
+    }
+
+    fn print_stats(&self) {
         eprintln!("+-------------------------------------------+");
         eprintln!("| Constant cache stats:                     |");
         eprintln!("+-------------------------------------------+");

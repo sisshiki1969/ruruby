@@ -7,6 +7,7 @@ thread_local!(
 
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
+    counter: Vec<usize>,
     class_version: u32,
     i_cache: InlineCache,
     m_cache: MethodCache,
@@ -36,6 +37,7 @@ impl MethodRepo {
                     name: IdentId::_ENUM_FUNC,
                 }, // METHOD_ENUM
             ],
+            counter: vec![0, 0, 0],
             class_version: 0,
             i_cache: InlineCache::new(),
             m_cache: MethodCache::new(),
@@ -44,9 +46,10 @@ impl MethodRepo {
 
     pub fn add(info: MethodInfo) -> MethodId {
         METHODS.with(|m| {
-            let table = &mut m.borrow_mut().table;
-            table.push(info);
-            MethodId::new((table.len() - 1) as u32)
+            let m = &mut m.borrow_mut();
+            m.table.push(info);
+            m.counter.push(0);
+            MethodId::new((m.table.len() - 1) as u32)
         })
     }
 
@@ -104,15 +107,45 @@ impl MethodRepo {
             METHODS.with(|m| m.borrow().m_cache.cache.keys().map(|(v, _)| *v).collect());
         keys.iter().for_each(|m| m.mark(alloc));
     }
+}
 
-    #[cfg(feature = "perf")]
+#[cfg(feature = "perf-method")]
+impl MethodRepo {
     pub fn inc_inline_hit() {
         METHODS.with(|m| m.borrow_mut().m_cache.inc_inline_hit());
     }
 
-    #[cfg(feature = "perf")]
     pub fn print_method_cache_stats() {
         METHODS.with(|m| m.borrow().m_cache.print_stats());
+    }
+
+    pub fn inc_counter(id: MethodId) {
+        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize] += 1);
+    }
+
+    pub fn clear_stats() {
+        METHODS.with(|m| {
+            m.borrow_mut().counter.iter_mut().for_each(|c| *c = 0);
+            m.borrow_mut().m_cache.clear_stats();
+        });
+    }
+
+    pub fn print_stats() {
+        eprintln!("+-------------------------------------------+");
+        eprintln!("| Method call stats:                       |");
+        eprintln!("+-------------------------------------------+");
+        METHODS.with(|m| {
+            for (id, count) in m.borrow().counter.iter().enumerate() {
+                if *count > 0 {
+                    eprintln!(
+                        "  MethodId: {:>5}  {:>12}  {:?}",
+                        id,
+                        count,
+                        m.borrow().table[id]
+                    );
+                }
+            }
+        });
     }
 }
 
@@ -186,7 +219,7 @@ impl GC for MethodInfo {
 impl std::fmt::Debug for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MethodInfo::RubyFunc { iseq } => write!(f, "RubyFunc {:?}", *iseq),
+            MethodInfo::RubyFunc { iseq } => write!(f, "RubyFunc {:?}", **iseq),
             MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
             MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
             MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
@@ -271,11 +304,11 @@ impl InlineCache {
 #[derive(Debug, Clone)]
 pub struct MethodCache {
     cache: FxHashMap<(Module, IdentId), MethodCacheEntry>,
-    #[cfg(feature = "perf")]
+    #[cfg(feature = "perf-method")]
     inline_hit: usize,
-    #[cfg(feature = "perf")]
+    #[cfg(feature = "perf-method")]
     total: usize,
-    #[cfg(feature = "perf")]
+    #[cfg(feature = "perf-method")]
     missed: usize,
 }
 
@@ -289,11 +322,11 @@ impl MethodCache {
     fn new() -> Self {
         MethodCache {
             cache: FxHashMap::default(),
-            #[cfg(feature = "perf")]
+            #[cfg(feature = "perf-method")]
             inline_hit: 0,
-            #[cfg(feature = "perf")]
+            #[cfg(feature = "perf-method")]
             total: 0,
-            #[cfg(feature = "perf")]
+            #[cfg(feature = "perf-method")]
             missed: 0,
         }
     }
@@ -319,7 +352,7 @@ impl MethodCache {
         rec_class: Module,
         method: IdentId,
     ) -> Option<MethodId> {
-        #[cfg(feature = "perf")]
+        #[cfg(feature = "perf-method")]
         {
             self.total += 1;
         }
@@ -328,7 +361,7 @@ impl MethodCache {
                 return Some(*method);
             }
         };
-        #[cfg(feature = "perf")]
+        #[cfg(feature = "perf-method")]
         {
             self.missed += 1;
         }
@@ -342,10 +375,16 @@ impl MethodCache {
     }
 }
 
-#[cfg(feature = "perf")]
+#[cfg(feature = "perf-method")]
 impl MethodCache {
     fn inc_inline_hit(&mut self) {
         self.inline_hit += 1;
+    }
+
+    fn clear_stats(&mut self) {
+        self.inline_hit = 0;
+        self.total = 0;
+        self.missed = 0;
     }
 
     pub fn print_stats(&self) {
@@ -385,9 +424,10 @@ impl ISeqParams {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ISeqKind {
-    Other,           // eval or unnamed method
-    Method(IdentId), // method or lambda
-    Block,           // block or proc
+    Other,                   // eval or unnamed method
+    Method(Option<IdentId>), // method or lambda
+    Class(IdentId),          // class definition
+    Block,                   // block or proc
 }
 
 impl Default for ISeqKind {
@@ -398,10 +438,9 @@ impl Default for ISeqKind {
 
 pub type ISeqRef = Ref<ISeqInfo>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct ISeqInfo {
     pub method: MethodId,
-    pub name: Option<IdentId>,
     pub params: ISeqParams,
     pub iseq: ISeq,
     pub lvar: LvarCollector,
@@ -421,10 +460,28 @@ pub struct ISeqInfo {
     pub forvars: Vec<(u32, u32)>,
 }
 
+impl std::fmt::Debug for ISeqInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let class_name = match self.class_defined.last() {
+            Some(class) => format!("{:?}#", class),
+            None => "".to_string(),
+        };
+        let func_name = match self.kind {
+            ISeqKind::Block => "Block".to_string(),
+            ISeqKind::Method(id) => match id {
+                Some(id) => format!("Method: {}{:?}", class_name, id),
+                None => format!("Method: {}<unnamed>", class_name),
+            },
+            ISeqKind::Class(id) => format!("Class: {:?}", id),
+            ISeqKind::Other => "Other".to_string(),
+        };
+        write!(f, "{} opt:{:?}", func_name, self.opt_flag,)
+    }
+}
+
 impl ISeqInfo {
     pub fn new(
         method: MethodId,
-        name: Option<IdentId>,
         params: ISeqParams,
         iseq: ISeq,
         lvar: LvarCollector,
@@ -438,7 +495,6 @@ impl ISeqInfo {
         let opt_flag = params.is_opt();
         ISeqInfo {
             method,
-            name,
             params,
             iseq,
             lvar,
