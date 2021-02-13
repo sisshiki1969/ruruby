@@ -127,6 +127,8 @@ impl Context {
         }
     }
 
+    #[allow(dead_code)]
+    #[cfg(not(tarpaulin_include))]
     pub fn dump(&self) {
         println!(
             "{} context:{:?} outer:{:?}",
@@ -279,7 +281,7 @@ impl Context {
         self.fill_arguments(args, &iseq.params, kw_arg);
     }
 
-    fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
+    pub fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
         let args_len = args.len();
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;
@@ -325,33 +327,32 @@ impl Context {
         }
     }
 
-    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
-        #[inline]
-        fn fill_arguments_opt(context: &mut Context, args: &[Value], req_len: usize) {
-            let args_len = args.len();
-            if req_len <= args_len {
-                // fill req params.
-                context.copy_from_slice0(&args[0..req_len]);
-            } else {
-                // fill req params.
-                context.copy_from_slice0(args);
-                // fill the remaining req params with nil.
-                context.fill(args_len..req_len, Value::nil());
-            }
+    pub fn fill_arguments_opt(&mut self, args: &[Value], req_len: usize) {
+        let args_len = args.len();
+        if req_len <= args_len {
+            // fill req params.
+            self.copy_from_slice0(&args[0..req_len]);
+        } else {
+            // fill req params.
+            self.copy_from_slice0(args);
+            // fill the remaining req params with nil.
+            self.fill(args_len..req_len, Value::nil());
         }
+    }
 
+    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
         let args_len = args.len();
         let req_len = params.req;
         if args_len == 1 && req_len > 1 {
             if let Some(ary) = args[0].as_array() {
                 // if a single array argument is given for the block with multiple formal parameters,
                 // the arguments must be expanded.
-                fill_arguments_opt(self, &ary.elements, req_len);
+                self.fill_arguments_opt(&ary.elements, req_len);
                 return Ok(());
             };
         }
 
-        fill_arguments_opt(self, args, req_len);
+        self.fill_arguments_opt(args, req_len);
         Ok(())
     }
 }

@@ -434,12 +434,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.into_array();
-    let mut arg = Args::new(1);
-    aref.each(|v| {
-        arg[0] = *v;
-        vm.eval_block(method, &arg)?;
-        Ok(())
-    })?;
+    let iter = aref.iter().map(|v| *v);
+    vm.eval_block_iter1(method, iter)?;
     Ok(self_val)
 }
 

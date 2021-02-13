@@ -222,17 +222,14 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if num < 1 {
         return Ok(self_val);
     };
-    let mut arg = Args::new(1);
-    for i in 0..num {
-        arg[0] = Value::integer(i);
-        vm.eval_block(block, &arg)?;
-    }
+    let iter = (0..num).map(|i| Value::integer(i));
+    vm.eval_block_iter1(block, iter)?;
     Ok(self_val)
 }
 
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let method = match &args.block {
+    let block = match &args.block {
         Block::None => {
             let id = IdentId::get_id("upto");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
@@ -243,11 +240,8 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
-        let mut arg = Args::new(1);
-        for i in num..max + 1 {
-            arg[0] = Value::integer(i);
-            vm.eval_block(method, &arg)?;
-        }
+        let iter = (num..max + 1).map(|i| Value::integer(i));
+        vm.eval_block_iter1(block, iter)?;
     }
     Ok(self_val)
 }

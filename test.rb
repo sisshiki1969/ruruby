@@ -1,8 +1,3 @@
-#b = []
-#1000.times {
-  a = []
-  5000000.times {
-    a << "Ruby"
-  }
-  #b << a
-#}
+a = []
+10000000.times { |i| a << i }
+a.each{ |x| x }

@@ -2405,6 +2405,28 @@ impl VM {
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
+    pub fn eval_block_iter1(
+        &mut self,
+        block: &Block,
+        args0: impl Iterator<Item = Value>,
+    ) -> Result<(), RubyError> {
+        match block {
+            Block::Block(method, outer) => {
+                self.invoke_method_iter1(*method, outer.self_value, Some(*outer), args0)?;
+            }
+            Block::Proc(proc) => {
+                let mut args = Args::new1(Value::nil());
+                for v in args0 {
+                    args[0] = v;
+                    self.invoke_proc(*proc, &args)?;
+                }
+            }
+            _ => unreachable!(),
+        };
+        Ok(())
+    }
+
+    /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block_self(
         &mut self,
         block: &Block,
@@ -2486,6 +2508,68 @@ impl VM {
             }
             _ => unreachable!(),
         }
+    }
+
+    /// Evaluate method with given `self_val`, `outer` context, and `args`.
+    pub fn invoke_method_iter1(
+        &mut self,
+        method: MethodId,
+        self_val: Value,
+        outer: Option<ContextRef>,
+        args0: impl Iterator<Item = Value>,
+    ) -> Result<(), RubyError> {
+        use MethodInfo::*;
+        let outer = outer.map(|ctx| ctx.get_current());
+        let mut args = Args::new1(Value::nil());
+        match MethodRepo::get(method) {
+            BuiltinFunc { func, name } => {
+                for v in args0 {
+                    args[0] = v;
+                    self.invoke_native(&func, method, name, self_val, &args)?;
+                }
+            }
+            AttrWriter { id } => {
+                for v in args0 {
+                    Self::invoke_setter(id, self_val, v)?;
+                }
+            }
+            RubyFunc { iseq } => {
+                let context = Context::from_args(self, self_val, iseq, &args, outer)?;
+                let mut context = ContextRef::from_ref(&context);
+
+                if iseq.params.req + iseq.params.post > 1 {
+                    if iseq.opt_flag {
+                        for v in args0 {
+                            context = context.get_current();
+                            if let Some(ary) = v.as_array() {
+                                context.fill_arguments_opt(&ary.elements, iseq.params.req);
+                            } else {
+                                context[0] = v;
+                            }
+                            self.run_context(context)?;
+                        }
+                    } else {
+                        for v in args0 {
+                            context = context.get_current();
+                            if let Some(ary) = v.as_array() {
+                                context.fill_arguments(&ary.elements, &iseq.params, Value::nil());
+                            } else {
+                                context[0] = v;
+                            }
+                            self.run_context(context)?;
+                        }
+                    }
+                } else {
+                    for v in args0 {
+                        context = context.get_current();
+                        context[0] = v;
+                        self.run_context(context)?;
+                    }
+                }
+            }
+            _ => unreachable!(),
+        };
+        Ok(())
     }
 
     // helper methods
