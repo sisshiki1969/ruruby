@@ -108,8 +108,7 @@ fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let name = args[0];
     let val = args[1];
     let var_id = name.expect_symbol_or_string("1st arg")?;
-    let self_obj = self_val.rvalue_mut();
-    self_obj.set_var(var_id, val);
+    self_val.set_var(var_id, val);
     Ok(val)
 }
 

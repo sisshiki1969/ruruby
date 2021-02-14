@@ -185,6 +185,10 @@ impl VM {
         }
     }
 
+    pub fn temp_pop_vec(&mut self, len: usize) -> Vec<Value> {
+        self.temp_stack.split_off(len)
+    }
+
     /// Push objects to the temporary area.
     pub fn temp_push_vec(&mut self, slice: &[Value]) {
         self.temp_stack.extend_from_slice(slice);
@@ -2409,21 +2413,35 @@ impl VM {
         &mut self,
         block: &Block,
         args0: impl Iterator<Item = Value>,
-    ) -> Result<(), RubyError> {
-        match block {
-            Block::Block(method, outer) => {
-                self.invoke_method_iter1(*method, outer.self_value, Some(*outer), args0)?;
-            }
+        return_val: bool,
+    ) -> VMResult {
+        let res = match block {
+            Block::Block(method, outer) => self.invoke_method_iter1(
+                *method,
+                outer.self_value,
+                Some(*outer),
+                args0,
+                return_val,
+            )?,
             Block::Proc(proc) => {
                 let mut args = Args::new1(Value::nil());
+                let len = self.temp_stack.len();
                 for v in args0 {
                     args[0] = v;
-                    self.invoke_proc(*proc, &args)?;
+                    let val = self.invoke_proc(*proc, &args)?;
+                    if return_val {
+                        self.temp_push(val);
+                    }
+                }
+                if return_val {
+                    Value::array_from(self.temp_pop_vec(len))
+                } else {
+                    Value::nil()
                 }
             }
             _ => unreachable!(),
         };
-        Ok(())
+        Ok(res)
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
@@ -2517,20 +2535,20 @@ impl VM {
         self_val: Value,
         outer: Option<ContextRef>,
         args0: impl Iterator<Item = Value>,
-    ) -> Result<(), RubyError> {
+        return_val: bool,
+    ) -> VMResult {
         use MethodInfo::*;
         let outer = outer.map(|ctx| ctx.get_current());
         let mut args = Args::new1(Value::nil());
+        let len = self.temp_stack.len();
         match MethodRepo::get(method) {
             BuiltinFunc { func, name } => {
                 for v in args0 {
                     args[0] = v;
-                    self.invoke_native(&func, method, name, self_val, &args)?;
-                }
-            }
-            AttrWriter { id } => {
-                for v in args0 {
-                    Self::invoke_setter(id, self_val, v)?;
+                    let res = self.invoke_native(&func, method, name, self_val, &args)?;
+                    if return_val {
+                        self.temp_push(res);
+                    };
                 }
             }
             RubyFunc { iseq } => {
@@ -2546,7 +2564,10 @@ impl VM {
                             } else {
                                 context[0] = v;
                             }
-                            self.run_context(context)?;
+                            let res = self.run_context(context)?;
+                            if return_val {
+                                self.temp_push(res);
+                            };
                         }
                     } else {
                         for v in args0 {
@@ -2556,20 +2577,30 @@ impl VM {
                             } else {
                                 context[0] = v;
                             }
-                            self.run_context(context)?;
+                            let res = self.run_context(context)?;
+                            if return_val {
+                                self.temp_push(res);
+                            };
                         }
                     }
                 } else {
                     for v in args0 {
                         context = context.get_current();
                         context[0] = v;
-                        self.run_context(context)?;
+                        let res = self.run_context(context)?;
+                        if return_val {
+                            self.temp_push(res);
+                        };
                     }
                 }
             }
             _ => unreachable!(),
         };
-        Ok(())
+        if return_val {
+            Ok(Value::array_from(self.temp_pop_vec(len)))
+        } else {
+            Ok(Value::nil())
+        }
     }
 
     // helper methods
@@ -2608,7 +2639,7 @@ impl VM {
                 Some(v) => Ok(v),
                 None => Ok(Value::nil()),
             },
-            None => unreachable!("AttrReader must be used only for class instance."),
+            None => Ok(Value::nil()),
         }
     }
 

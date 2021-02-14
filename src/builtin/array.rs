@@ -385,18 +385,9 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let aref = self_val.into_array();
     let block = to_enum_id!(vm, self_val, args, IdentId::MAP);
-    let mut args = Args::new(1);
-
-    let mut res = vec![];
-    for elem in &aref.elements {
-        args[0] = *elem;
-        let val = vm.eval_block(block, &args)?;
-        vm.temp_push(val);
-        res.push(val);
-    }
-
-    let res = Value::array_from(res);
-    Ok(res.into())
+    let iter = aref.iter().map(|v| *v);
+    let res = vm.eval_block_iter1(block, iter, true)?;
+    Ok(res)
 }
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -435,7 +426,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.into_array();
     let iter = aref.iter().map(|v| *v);
-    vm.eval_block_iter1(method, iter)?;
+    vm.eval_block_iter1(method, iter, false)?;
     Ok(self_val)
 }
 
