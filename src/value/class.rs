@@ -1,5 +1,11 @@
 use crate::*;
 
+///
+/// Wrapper struct for Module/Class object.
+///
+/// This type automatically dereferences ClassInfo.
+/// Use into(self) to get inner Value.  
+///
 #[derive(Clone, Copy)]
 pub struct Module(Value);
 
@@ -49,39 +55,53 @@ impl GC for Module {
 }
 
 impl Module {
+    /// Construct new Module from `val`.
+    ///
+    /// ### Panics
+    /// panics if `val` is neither Class nor Module.
     pub fn new(mut val: Value) -> Self {
         val.as_mut_class();
         Module(val)
     }
 
+    /// Construct new Module from `val` without checking whether it is Class/Module.
     pub fn new_unchecked(val: Value) -> Self {
         Module(val)
     }
 
+    /// Construct new dummy Module.
     pub fn default() -> Self {
         Module(Value::nil())
     }
 
+    /// Get inner `Value`.
     fn get(self) -> Value {
         self.0
     }
 
+    /// Get id(u64).
     pub fn id(self) -> u64 {
         self.0.id()
     }
 
+    /// Duplicate `self`.
+    /// This fn creates a new RValue.
     pub fn dup(&self) -> Self {
         Module(self.get().dup())
     }
 
+    /// Get a class of `self`.
     pub fn class(&self) -> Module {
         self.get().rvalue().class()
     }
 
+    /// Set `class` as a class of `self`.
     pub fn set_class(self, class: Module) {
         self.get().set_class(class)
     }
 
+    /// Get a real module of `self`.
+    /// If `self` is an included module, return its origin.
     pub fn real_module(&self) -> Module {
         if self.is_included() {
             self.origin().unwrap()
@@ -120,7 +140,7 @@ impl Module {
         self.get().get_singleton_class().unwrap()
     }
 
-    /// Get method for a receiver class (`self`) and method (IdentId).
+    /// Get method for a receiver which class is `self` and `method` (IdentId).
     pub fn get_method(self, method: IdentId) -> Option<MethodId> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
@@ -150,17 +170,19 @@ impl Module {
         self.method_table().get(&id).cloned()
     }
 
+    /// Add BuiltinFunc `func` named `name` to the singleton class of `self`.
     pub fn add_builtin_class_method(self, name: &str, func: BuiltinFunc) {
         self.get_singleton_class()
             .add_builtin_method_by_str(name, func);
     }
 
+    /// Add an instance method `func` named `name` to `self`.
     pub fn add_builtin_method_by_str(mut self, name: &str, func: BuiltinFunc) {
         let name = IdentId::get_id(name);
         self.add_builtin_method(name, func);
     }
 
-    /// Add module function to `self`.
+    /// Add a module function `func` named `name` to `self`.
     pub fn add_builtin_module_func(self, name: &str, func: BuiltinFunc) {
         self.add_builtin_method_by_str(name, func);
         self.get_singleton_class()
