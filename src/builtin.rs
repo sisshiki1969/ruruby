@@ -35,38 +35,21 @@ use crate::*;
 use std::cell::RefCell;
 
 thread_local!(
+    pub static ESSENTIALS: EssentialClass = EssentialClass::new();
+);
+
+thread_local!(
     pub static BUILTINS: RefCell<BuiltinClass> = RefCell::new(BuiltinClass::new());
 );
 
 #[derive(Debug, Clone)]
-pub struct BuiltinClass {
-    pub integer: Value,
-    pub float: Value,
-    pub complex: Value,
-    pub array: Value,
-    pub symbol: Value,
+pub struct EssentialClass {
     pub class: Module,
     pub module: Module,
-    pub procobj: Value,
-    pub method: Value,
-    pub range: Value,
-    pub hash: Value,
-    pub regexp: Value,
-    pub string: Value,
-    pub fiber: Value,
     pub object: Module,
-    pub enumerator: Value,
-    pub exception: Value,
-    pub standard: Value,
-    pub nilclass: Value,
-    pub trueclass: Value,
-    pub falseclass: Value,
-    pub kernel: Module,
-    pub comparable: Module,
-    pub numeric: Module,
 }
 
-impl BuiltinClass {
+impl EssentialClass {
     fn new() -> Self {
         let basic_class = ClassInfo::class_from(None);
         let basic = Module::bootstrap_class(basic_class);
@@ -87,6 +70,43 @@ impl BuiltinClass {
         let singleton_obj = RValue::new(class, ObjKind::Module(singleton_class)).pack();
         basic.set_class(Module::new(singleton_obj));
 
+        let builtins = EssentialClass {
+            class,
+            module,
+            object,
+        };
+        builtins
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BuiltinClass {
+    pub integer: Value,
+    pub float: Value,
+    pub complex: Value,
+    pub array: Value,
+    pub symbol: Value,
+    pub procobj: Value,
+    pub method: Value,
+    pub range: Value,
+    pub hash: Value,
+    pub regexp: Value,
+    pub string: Value,
+    pub fiber: Value,
+    pub enumerator: Value,
+    pub exception: Value,
+    pub standard: Value,
+    pub nilclass: Value,
+    pub trueclass: Value,
+    pub falseclass: Value,
+    pub kernel: Module,
+    pub comparable: Module,
+    pub numeric: Module,
+}
+
+impl BuiltinClass {
+    fn new() -> Self {
+        // Generate singleton class for BasicObject
         let nil = Value::nil();
         let nilmod = Module::default();
         let builtins = BuiltinClass {
@@ -95,8 +115,6 @@ impl BuiltinClass {
             complex: nil,
             array: nil,
             symbol: nil,
-            class,
-            module,
             procobj: nil,
             method: nil,
             range: nil,
@@ -105,7 +123,6 @@ impl BuiltinClass {
             string: nil,
             fiber: nil,
             enumerator: nil,
-            object,
             exception: nil,
             standard: nil,
             nilclass: nil,
@@ -149,15 +166,15 @@ impl BuiltinClass {
     }
 
     pub fn object() -> Module {
-        BUILTINS.with(|b| b.borrow().object)
+        ESSENTIALS.with(|m| m.object)
     }
 
     pub fn class() -> Module {
-        BUILTINS.with(|b| b.borrow().class)
+        ESSENTIALS.with(|m| m.class)
     }
 
     pub fn module() -> Module {
-        BUILTINS.with(|b| b.borrow().module)
+        ESSENTIALS.with(|m| m.module)
     }
 
     pub fn string() -> Module {
@@ -245,7 +262,7 @@ impl BuiltinClass {
     }
 }
 
-impl GC for BuiltinClass {
+impl GC for EssentialClass {
     fn mark(&self, alloc: &mut Allocator) {
         self.object.mark(alloc);
     }
