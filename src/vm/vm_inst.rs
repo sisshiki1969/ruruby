@@ -32,8 +32,6 @@ impl Inst {
     pub const GET_CVAR: u8 = 42;
     pub const SET_CVAR: u8 = 43;
 
-    pub const GET_LOCAL0: u8 = 200;
-
     pub const GET_INDEX: u8 = 52;
     pub const SET_INDEX: u8 = 53;
     pub const GET_IDX_I: u8 = 54;
@@ -64,6 +62,7 @@ impl Inst {
     pub const TO_S: u8 = 85;
     pub const SINKN: u8 = 86;
     pub const TOPN: u8 = 87;
+    pub const REP_UNINIT: u8 = 88;
 
     pub const DEF_CLASS: u8 = 90;
     pub const DEF_SCLASS: u8 = 91;
@@ -203,8 +202,6 @@ impl Inst {
             Inst::SET_CONST => "SET_CONST",
             Inst::GET_CONST_TOP => "GET_CONSTTOP",
             Inst::GET_SCOPE => "GET_SCOPE",
-            
-            Inst::GET_LOCAL0 => "GET_LOCAL0",
 
             Inst::GET_IVAR => "GET_IVAR",
             Inst::SET_IVAR => "SET_IVAR",
@@ -249,6 +246,7 @@ impl Inst {
             Inst::TO_S => "TO_S",
             Inst::SINKN => "SINKN",
             Inst::TOPN => "TOPN",
+            Inst::REP_UNINIT => "REP_UNINIT",
 
             Inst::DEF_CLASS => "DEF_CLASS",
             Inst::DEF_SCLASS => "DEF_SCLASS",
@@ -311,7 +309,7 @@ impl Inst {
             | Inst::BREAK
             | Inst::MRETURN
             | Inst::THROW
-            | Inst::GET_LOCAL0 => 1,
+            | Inst::REP_UNINIT => 1,
                                         // operand
             Inst::PUSH_SYMBOL           // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32

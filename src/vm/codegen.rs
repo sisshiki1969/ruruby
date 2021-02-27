@@ -244,13 +244,8 @@ impl Codegen {
             None => return Err(RubyError::name("undefined local variable.")),
         };
         if outer == 0 {
-            match lvar_id.as_u32() {
-                0 => iseq.push(Inst::GET_LOCAL0),
-                i => {
-                    iseq.push(Inst::GET_LOCAL);
-                    iseq.push32(i);
-                }
-            };
+            iseq.push(Inst::GET_LOCAL);
+            iseq.push32(lvar_id.as_u32());
         } else {
             iseq.push(Inst::GET_DYNLOCAL);
             iseq.push32(lvar_id.as_u32());
@@ -1225,6 +1220,7 @@ impl Codegen {
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
                         self.gen(globals, iseq, *lhs, true)?;
+                        iseq.push(Inst::REP_UNINIT);
                         self.gen_dup(iseq, 1);
                         let src = iseq.gen_jmp_if_f();
                         self.gen_pop(iseq);

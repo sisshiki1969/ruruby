@@ -793,35 +793,21 @@ impl VM {
                 Inst::SET_LOCAL => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let val = self.stack_pop();
-                    self.current_context()[id] = val;
+                    context.get_current()[id] = val;
                     self.pc += 5;
                 }
                 Inst::GET_LOCAL => {
                     let id = iseq.read_lvar_id(self.pc + 1);
-                    let val = self.current_context()[id];
-                    if val.is_uninitialized() {
-                        self.current_context()[id] = Value::nil();
-                        self.stack_push(Value::nil());
-                    } else {
-                        self.stack_push(val);
-                    }
+                    let val = context.get_current()[id];
+                    self.stack_push(val);
                     self.pc += 5;
-                }
-                Inst::GET_LOCAL0 => {
-                    let val = self.current_context()[0];
-                    if val.is_uninitialized() {
-                        self.current_context()[0] = Value::nil();
-                        self.stack_push(Value::nil());
-                    } else {
-                        self.stack_push(val);
-                    }
-                    self.pc += 1;
                 }
                 Inst::LVAR_ADDI => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let i = iseq.read32(self.pc + 5) as i32;
-                    let val = self.current_context()[id];
-                    self.current_context()[id] = self.eval_addi(val, i)?;
+                    let mut ctx = context.get_current();
+                    let val = ctx[id];
+                    ctx[id] = self.eval_addi(val, i)?;
                     self.pc += 9;
                 }
                 Inst::SET_DYNLOCAL => {
@@ -1301,6 +1287,14 @@ impl VM {
                     }
 
                     self.pc += 5;
+                }
+                Inst::REP_UNINIT => {
+                    let mut val = self.stack_pop();
+                    if val.is_uninitialized() {
+                        val = Value::nil()
+                    }
+                    self.stack_push(val);
+                    self.pc += 1;
                 }
                 inst => {
                     return Err(RubyError::internal(format!(
