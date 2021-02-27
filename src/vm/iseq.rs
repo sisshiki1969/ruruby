@@ -3,8 +3,8 @@ use crate::*;
 #[derive(Clone, Default)]
 pub struct ISeq(Vec<u8>);
 
-use std::fmt;
 use std::ops::{Index, IndexMut, Range};
+use std::{convert::TryInto, fmt};
 impl Index<usize> for ISeq {
     type Output = u8;
 
@@ -59,23 +59,19 @@ impl ISeq {
     }
 
     pub fn read16(&self, pc: usize) -> u16 {
-        let ptr = self[pc..pc + 1].as_ptr() as *const u16;
-        unsafe { *ptr }
+        u16::from_ne_bytes((&self[pc..pc + 2]).try_into().unwrap())
     }
 
     pub fn read32(&self, pc: usize) -> u32 {
-        let ptr = self[pc..pc + 1].as_ptr() as *const u32;
-        unsafe { *ptr }
+        u32::from_ne_bytes((&self[pc..pc + 4]).try_into().unwrap())
     }
 
-    pub fn write32(&self, pc: usize, data: u32) {
-        let ptr = self[pc..pc + 1].as_ptr() as *mut u32;
-        unsafe { *ptr = data }
+    pub fn write32(&mut self, pc: usize, data: u32) {
+        unsafe { std::ptr::write(self[pc] as *mut _, data.to_ne_bytes()) };
     }
 
     pub fn read64(&self, pc: usize) -> u64 {
-        let ptr = self[pc..pc + 1].as_ptr() as *const u64;
-        unsafe { *ptr }
+        u64::from_ne_bytes((&self[pc..pc + 8]).try_into().unwrap())
     }
 
     pub fn read_usize(&self, pc: usize) -> usize {
