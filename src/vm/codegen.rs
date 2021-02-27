@@ -1220,6 +1220,7 @@ impl Codegen {
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
                         self.gen(globals, iseq, *lhs, true)?;
+                        iseq.push(Inst::REP_UNINIT);
                         self.gen_dup(iseq, 1);
                         let src = iseq.gen_jmp_if_f();
                         self.gen_pop(iseq);

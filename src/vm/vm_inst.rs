@@ -62,6 +62,7 @@ impl Inst {
     pub const TO_S: u8 = 85;
     pub const SINKN: u8 = 86;
     pub const TOPN: u8 = 87;
+    pub const REP_UNINIT: u8 = 88;
 
     pub const DEF_CLASS: u8 = 90;
     pub const DEF_SCLASS: u8 = 91;
@@ -245,6 +246,7 @@ impl Inst {
             Inst::TO_S => "TO_S",
             Inst::SINKN => "SINKN",
             Inst::TOPN => "TOPN",
+            Inst::REP_UNINIT => "REP_UNINIT",
 
             Inst::DEF_CLASS => "DEF_CLASS",
             Inst::DEF_SCLASS => "DEF_SCLASS",
@@ -306,7 +308,8 @@ impl Inst {
             | Inst::POP
             | Inst::BREAK
             | Inst::MRETURN
-            | Inst::THROW => 1,
+            | Inst::THROW
+            | Inst::REP_UNINIT => 1,
                                         // operand
             Inst::PUSH_SYMBOL           // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32
