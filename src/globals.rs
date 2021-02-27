@@ -11,6 +11,7 @@ pub struct Globals {
     //method_cache: MethodCache,
     const_cache: ConstCache,
     pub case_dispatch: CaseDispatchMap,
+    pub case_dispatch2: CaseDispatchMap2,
 
     main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
@@ -72,6 +73,7 @@ impl Globals {
             const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
+            case_dispatch2: CaseDispatchMap2::new(),
             regexp_cache: FxHashMap::default(),
             source_files: vec![],
             #[cfg(feature = "perf")]
@@ -379,6 +381,36 @@ impl CaseDispatchMap {
     }
 
     pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
+        &mut self.table[id as usize]
+    }
+}
+
+///
+/// Case dispatch map-2.
+///
+/// This module supports optimization for case-when syntax when all of the when-conditions were integer literals.
+///
+#[derive(Debug, Clone)]
+pub struct CaseDispatchMap2 {
+    table: Vec<(i64, i64, Vec<i32>)>, //(min, max, map)
+}
+
+impl CaseDispatchMap2 {
+    fn new() -> Self {
+        Self { table: vec![] }
+    }
+
+    pub fn new_entry(&mut self) -> u32 {
+        let len = self.table.len();
+        self.table.push((0, 0, vec![]));
+        len as u32
+    }
+
+    pub fn get_entry(&self, id: u32) -> &(i64, i64, Vec<i32>) {
+        &self.table[id as usize]
+    }
+
+    pub fn get_mut_entry(&mut self, id: u32) -> &mut (i64, i64, Vec<i32>) {
         &mut self.table[id as usize]
     }
 }

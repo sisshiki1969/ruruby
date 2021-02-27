@@ -248,6 +248,13 @@ impl ISeq {
         self.current()
     }
 
+    pub fn gen_opt_case2(&mut self, map_id: u32) -> ISeqPos {
+        self.push(Inst::OPT_CASE2);
+        self.push32(map_id);
+        self.push32(0);
+        self.current()
+    }
+
     pub fn gen_get_instance_var(&mut self, id: IdentId) {
         self.push(Inst::GET_IVAR);
         self.push32(id.into());

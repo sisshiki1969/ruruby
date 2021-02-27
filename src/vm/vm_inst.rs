@@ -80,6 +80,7 @@ impl Inst {
     pub const YIELD: u8 = 108;
     pub const RESCUE: u8 = 109;
     pub const THROW: u8 = 110;
+    pub const OPT_CASE2: u8 = 111;
     
     pub const ADD: u8 = 120;
     pub const SUB: u8 = 121;
@@ -260,6 +261,7 @@ impl Inst {
             Inst::RETURN => "RETURN",
             Inst::BREAK => "BREAK",
             Inst::OPT_CASE => "OPT_CASE",
+            Inst::OPT_CASE2 => "OPT_CASE2",
             Inst::MRETURN => "MRETURN",
             Inst::YIELD => "YIELD",
             Inst::RESCUE => "RESCUE",
@@ -371,6 +373,7 @@ impl Inst {
             | Inst::CHECK_LOCAL
             | Inst::GET_CONST           // IdentId: u32 / cache: u32
             | Inst::OPT_CASE
+            | Inst::OPT_CASE2
             | Inst::IVAR_ADDI
             | Inst::LVAR_ADDI
             | Inst::JMP_F_EQI           // immediate: i32 / disp: i32

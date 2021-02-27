@@ -110,14 +110,14 @@ impl VM {
         }
     }
 
-    pub fn current_context(&self) -> ContextRef {
+    pub fn context(&self) -> ContextRef {
         let ctx = self.cur_context.unwrap();
         debug_assert!(!ctx.on_stack || ctx.moved_to_heap.is_none());
         ctx
     }
 
     fn get_method_context(&self) -> ContextRef {
-        let mut context = self.current_context();
+        let mut context = self.context();
         loop {
             context = match context.outer {
                 Some(context) => context,
@@ -135,23 +135,18 @@ impl VM {
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
-        match self.current_context().iseq_ref {
+        match self.context().iseq_ref {
             Some(iseq) => iseq.source_info,
             None => SourceInfoRef::default(),
         }
     }
 
     pub fn get_source_path(&self) -> PathBuf {
-        self.current_context()
-            .iseq_ref
-            .unwrap()
-            .source_info
-            .path
-            .clone()
+        self.context().iseq_ref.unwrap().source_info.path.clone()
     }
 
     pub fn is_method(&self) -> bool {
-        self.current_context().iseq_ref.unwrap().is_method()
+        self.context().iseq_ref.unwrap().is_method()
     }
 
     fn stack_push(&mut self, val: Value) {
@@ -279,7 +274,7 @@ impl VM {
         program: &str,
     ) -> Result<MethodId, RubyError> {
         let parser = Parser::new();
-        let extern_context = self.current_context();
+        let extern_context = self.context();
         let result = parser.parse_program_eval(path, program, Some(extern_context))?;
 
         #[cfg(feature = "perf")]
@@ -420,7 +415,7 @@ impl VM {
                         err.show_all_loc();
                         unreachable!("{}", msg);
                     };
-                    let iseq = self.current_context().iseq_ref.unwrap();
+                    let iseq = self.context().iseq_ref.unwrap();
                     let catch = iseq.exception_table.iter().find(|x| x.include(self.pc));
                     if let Some(entry) = catch {
                         // Exception raised inside of begin-end with rescue clauses.
@@ -446,18 +441,11 @@ impl VM {
 
     /// Main routine for VM execution.
     fn run_context_main(&mut self) -> VMResult {
-        let ctx = self.current_context();
+        let ctx = self.context();
         let iseq = &mut ctx.iseq_ref.unwrap().iseq;
         let self_value = ctx.self_value;
         self.gc();
-        for (i, (outer, lvar)) in self
-            .current_context()
-            .iseq_ref
-            .unwrap()
-            .forvars
-            .iter()
-            .enumerate()
-        {
+        for (i, (outer, lvar)) in ctx.iseq_ref.unwrap().forvars.iter().enumerate() {
             self.get_outer_context(*outer)[*lvar as usize] = ctx[i];
         }
         /// Evaluate expr, and push return value to stack.
@@ -517,8 +505,8 @@ impl VM {
                     // - `break`  in block or eval AND outer of loops.
                     #[cfg(debug_assertions)]
                     assert!(
-                        self.current_context().kind == ISeqKind::Block
-                            || self.current_context().kind == ISeqKind::Other
+                        self.context().kind == ISeqKind::Block
+                            || self.context().kind == ISeqKind::Other
                     );
                     let val = self.stack_pop();
                     let err = RubyError::block_return(val);
@@ -527,7 +515,7 @@ impl VM {
                 Inst::MRETURN => {
                     // - `return` in block
                     #[cfg(debug_assertions)]
-                    assert_eq!(self.current_context().kind, ISeqKind::Block);
+                    assert_eq!(self.context().kind, ISeqKind::Block);
                     let val = self.stack_pop();
                     let err = RubyError::method_return(val);
                     return Err(err);
@@ -820,19 +808,19 @@ impl VM {
                 Inst::SET_LOCAL => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let val = self.stack_pop();
-                    context.get_current()[id] = val;
+                    self.context()[id] = val;
                     self.pc += 5;
                 }
                 Inst::GET_LOCAL => {
                     let id = iseq.read_lvar_id(self.pc + 1);
-                    let val = context.get_current()[id];
+                    let val = self.context()[id];
                     self.stack_push(val);
                     self.pc += 5;
                 }
                 Inst::LVAR_ADDI => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let i = iseq.read32(self.pc + 5) as i32;
-                    let mut ctx = context.get_current();
+                    let mut ctx = self.context();
                     let val = ctx[id];
                     ctx[id] = self.eval_addi(val, i)?;
                     self.pc += 9;
@@ -1024,7 +1012,7 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = iseq.read_method(self.pc + 1);
-                    let ctx = self.current_context();
+                    let ctx = self.context();
                     let proc_obj = self.create_proc(&Block::Block(method, ctx))?;
                     self.stack_push(proc_obj);
                     self.pc += 9;
@@ -1145,6 +1133,23 @@ impl VM {
                     let disp = match map.get(&val) {
                         Some(disp) => *disp as i64,
                         None => iseq.read_disp(self.pc + 5),
+                    };
+                    self.jump_pc(9, disp);
+                }
+                Inst::OPT_CASE2 => {
+                    let val = self.stack_pop();
+                    let disp = if let Some(i) = val.as_integer() {
+                        let map = self
+                            .globals
+                            .case_dispatch2
+                            .get_entry(iseq.read32(self.pc + 1));
+                        if map.0 <= i && i <= map.1 {
+                            map.2[(i - map.0) as usize] as i64
+                        } else {
+                            iseq.read_disp(self.pc + 5)
+                        }
+                    } else {
+                        iseq.read_disp(self.pc + 5)
                     };
                     self.jump_pc(9, disp);
                 }
@@ -1373,7 +1378,7 @@ impl VM {
         };
 
         let block = if block != 0 {
-            Block::Block(block.into(), self.current_context())
+            Block::Block(block.into(), self.context())
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
             if val.is_nil() {
@@ -1418,7 +1423,7 @@ impl VM {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(arg_slice);
-                    args.block = Block::Block(block.into(), self.current_context());
+                    args.block = Block::Block(block.into(), self.context());
                     self.set_stack_len(len - args_num);
                     self.invoke_native(&func, method, name, receiver, &args)
                 }
@@ -1435,7 +1440,7 @@ impl VM {
                     Self::invoke_setter(id, receiver, self.stack_pop())
                 }
                 MethodInfo::RubyFunc { iseq } => {
-                    let block = Block::Block(block.into(), self.current_context());
+                    let block = Block::Block(block.into(), self.context());
                     if iseq.opt_flag {
                         let mut context = Context::new(receiver, block, iseq, None);
                         let req_len = iseq.params.req;
@@ -1457,7 +1462,7 @@ impl VM {
             },
             None => {
                 let mut args = Args::from_slice(arg_slice);
-                args.block = Block::Block(block.into(), self.current_context());
+                args.block = Block::Block(block.into(), self.context());
                 self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
@@ -1525,7 +1530,7 @@ impl VM {
         // With block and no keyword/block/splat arguments for OPT_SEND.
         let block = iseq.read64(self.pc + 1);
         assert!(block != 0);
-        let block = Block::Block(block.into(), self.current_context());
+        let block = Block::Block(block.into(), self.context());
         let args = Args::new0_block(block);
         let cache = iseq.read32(self.pc + 9);
 
@@ -1550,7 +1555,7 @@ impl VM {
 
 impl VM {
     fn get_loc(&self) -> Loc {
-        match self.current_context().iseq_ref {
+        match self.context().iseq_ref {
             None => Loc(1, 1),
             Some(iseq) => {
                 iseq.iseq_sourcemap
@@ -1628,7 +1633,7 @@ impl VM {
         if self.exec_context.len() == 0 {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
-        let self_val = self.current_context().self_value;
+        let self_val = self.context().self_value;
         let org_class = match self_val.if_mod_class() {
             Some(module) => module,
             None => self_val.get_class(),
@@ -1653,7 +1658,7 @@ impl VM {
         if self.exec_context.len() == 0 {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
-        let self_val = self.current_context().self_value;
+        let self_val = self.context().self_value;
         let mut class = match self_val.if_mod_class() {
             Some(module) => module,
             None => self_val.get_class(),
@@ -2737,7 +2742,7 @@ impl VM {
 impl VM {
     /// Get local variable table.
     fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.current_context();
+        let mut context = self.context();
         for _ in 0..outer {
             context = context.outer.unwrap();
         }
@@ -2834,7 +2839,7 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Block::Block(METHOD_ENUM, self.current_context());
+        args.block = Block::Block(METHOD_ENUM, self.context());
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,

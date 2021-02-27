@@ -337,7 +337,7 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_val = self_val.into_module();
-    let context = vm.current_context();
+    let context = vm.context();
     match &args.block {
         Block::None => {
             args.check_args_num(1)?;

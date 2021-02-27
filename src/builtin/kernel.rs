@@ -212,7 +212,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 /// Built-in function "block_given?".
 fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
-    Ok(Value::bool(vm.current_context().block.is_some()))
+    Ok(Value::bool(vm.context().block.is_some()))
 }
 
 fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -452,7 +452,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
     let method = vm.parse_program_eval(path, program)?;
     let args = Args::new0();
-    let outer = vm.current_context();
+    let outer = vm.context();
     let res = vm.eval_block(&Block::Block(method, outer), &args)?;
     Ok(res)
 }

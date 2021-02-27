@@ -1504,12 +1504,21 @@ impl Codegen {
                     Some(cond) => {
                         self.gen(globals, iseq, *cond, true)?;
                         let mut opt_flag = true;
+                        let mut opt_flag2 = true;
+                        let mut opt_min = i64::max_value();
+                        let mut opt_max = i64::min_value();
                         for branch in &when_ {
                             for elem in &branch.when {
                                 match elem.kind {
-                                    NodeKind::Integer(_) => (),
-                                    NodeKind::Symbol(_) => (),
-                                    NodeKind::String(_) => (),
+                                    NodeKind::Integer(i) => {
+                                        if i < opt_min {
+                                            opt_min = i
+                                        };
+                                        if i > opt_max {
+                                            opt_max = i
+                                        };
+                                    }
+                                    NodeKind::Symbol(_) | NodeKind::String(_) => opt_flag2 = false,
                                     _ => {
                                         opt_flag = false;
                                         break;
@@ -1520,7 +1529,33 @@ impl Codegen {
                                 break;
                             }
                         }
-                        if opt_flag {
+                        if opt_flag && opt_flag2 {
+                            //eprintln!("{} {}", opt_min, opt_max);
+                            let map_id = globals.case_dispatch2.new_entry();
+                            self.save_cur_loc(iseq);
+                            let start = iseq.gen_opt_case2(map_id);
+                            let mut map = FxHashMap::default();
+                            for branch in when_ {
+                                let disp = start.disp(iseq.current()) as i32;
+                                for elem in &branch.when {
+                                    let i = match &elem.kind {
+                                        NodeKind::Integer(i) => *i,
+                                        _ => unreachable!(),
+                                    };
+                                    map.insert(i, disp);
+                                }
+                                self.gen(globals, iseq, *branch.body, use_value)?;
+                                end.push(iseq.gen_jmp());
+                            }
+                            let default_disp = start.disp(iseq.current()) as i32;
+                            let case_map = globals.case_dispatch2.get_mut_entry(map_id);
+                            let mut vec = vec![default_disp; (opt_max - opt_min + 1) as usize];
+                            map.iter()
+                                .for_each(|(i, disp)| vec[(*i - opt_min) as usize] = *disp);
+                            *case_map = (opt_min, opt_max, vec);
+
+                            iseq.write_disp_from_cur(start);
+                        } else if opt_flag {
                             let map_id = globals.case_dispatch.new_entry();
                             self.save_cur_loc(iseq);
                             let start = iseq.gen_opt_case(map_id);
