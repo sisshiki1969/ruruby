@@ -16,6 +16,7 @@ pub struct VM {
     pub globals: GlobalsRef,
     // VM state
     exec_context: Vec<ContextRef>,
+    cur_context: Option<ContextRef>,
     class_context: Vec<(Module, DefineMode)>,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
@@ -43,6 +44,7 @@ impl DefineMode {
 
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
+        self.cur_context.iter().for_each(|c| c.mark(alloc));
         self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
@@ -55,6 +57,7 @@ impl VM {
         let mut vm = VM {
             globals,
             class_context: vec![(BuiltinClass::object(), DefineMode::default())],
+            cur_context: None,
             exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
@@ -97,6 +100,7 @@ impl VM {
     pub fn create_fiber(&mut self) -> Self {
         VM {
             globals: self.globals,
+            cur_context: None,
             exec_context: vec![],
             temp_stack: vec![],
             class_context: self.class_context.clone(),
@@ -107,9 +111,9 @@ impl VM {
     }
 
     pub fn current_context(&self) -> ContextRef {
-        let ctx = self.exec_context.last().unwrap();
-        assert!(!ctx.on_stack || ctx.moved_to_heap.is_none());
-        ctx.to_owned()
+        let ctx = self.cur_context.unwrap();
+        debug_assert!(!ctx.on_stack || ctx.moved_to_heap.is_none());
+        ctx
     }
 
     fn get_method_context(&self) -> ContextRef {
@@ -127,7 +131,7 @@ impl VM {
     }
 
     pub fn latest_context(&self) -> Option<ContextRef> {
-        self.exec_context.last().cloned()
+        self.cur_context
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
@@ -195,17 +199,30 @@ impl VM {
     }
 
     pub fn context_push(&mut self, ctx: ContextRef) {
-        self.exec_context.push(ctx);
+        match self.cur_context {
+            Some(c) => {
+                self.exec_context.push(c);
+                self.cur_context = Some(ctx);
+            }
+            None => self.cur_context = Some(ctx),
+        }
     }
 
     pub fn context_pop(&mut self) -> Option<ContextRef> {
-        self.exec_context.pop()
+        match self.cur_context {
+            Some(c) => {
+                self.cur_context = self.exec_context.pop();
+                Some(c)
+            }
+            None => None,
+        }
     }
 
     pub fn clear(&mut self) {
         self.exec_stack.clear();
         self.class_context = vec![(BuiltinClass::object(), DefineMode::default())];
         self.exec_context.clear();
+        self.cur_context = None;
     }
 
     pub fn class_push(&mut self, val: Module) {
@@ -385,7 +402,7 @@ impl VM {
             println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
         }
         loop {
-            match self.run_context_main(context) {
+            match self.run_context_main() {
                 Ok(val) => {
                     self.context_pop().unwrap();
                     debug_assert_eq!(stack_len, self.stack_len());
@@ -428,13 +445,20 @@ impl VM {
     }
 
     /// Main routine for VM execution.
-    fn run_context_main(&mut self, context: ContextRef) -> VMResult {
-        let iseq = &mut context.iseq_ref.unwrap().iseq;
-        let self_value = context.self_value;
-        let self_oref = self_value.rvalue_mut();
+    fn run_context_main(&mut self) -> VMResult {
+        let ctx = self.current_context();
+        let iseq = &mut ctx.iseq_ref.unwrap().iseq;
+        let self_value = ctx.self_value;
         self.gc();
-        for (i, (outer, lvar)) in context.iseq_ref.unwrap().forvars.iter().enumerate() {
-            self.get_outer_context(*outer)[*lvar as usize] = context[i];
+        for (i, (outer, lvar)) in self
+            .current_context()
+            .iseq_ref
+            .unwrap()
+            .forvars
+            .iter()
+            .enumerate()
+        {
+            self.get_outer_context(*outer)[*lvar as usize] = ctx[i];
         }
         /// Evaluate expr, and push return value to stack.
         macro_rules! try_push {
@@ -492,7 +516,10 @@ impl VM {
                 Inst::BREAK => {
                     // - `break`  in block or eval AND outer of loops.
                     #[cfg(debug_assertions)]
-                    assert!(context.kind == ISeqKind::Block || context.kind == ISeqKind::Other);
+                    assert!(
+                        self.current_context().kind == ISeqKind::Block
+                            || self.current_context().kind == ISeqKind::Other
+                    );
                     let val = self.stack_pop();
                     let err = RubyError::block_return(val);
                     return Err(err);
@@ -500,7 +527,7 @@ impl VM {
                 Inst::MRETURN => {
                     // - `return` in block
                     #[cfg(debug_assertions)]
-                    assert_eq!(context.kind, ISeqKind::Block);
+                    assert_eq!(self.current_context().kind, ISeqKind::Block);
                     let val = self.stack_pop();
                     let err = RubyError::method_return(val);
                     return Err(err);
@@ -886,12 +913,12 @@ impl VM {
                 Inst::SET_IVAR => {
                     let var_id = iseq.read_id(self.pc + 1);
                     let new_val = self.stack_pop();
-                    self_oref.set_var(var_id, new_val);
+                    self_value.set_var(var_id, new_val);
                     self.pc += 5;
                 }
                 Inst::GET_IVAR => {
                     let var_id = iseq.read_id(self.pc + 1);
-                    let val = match self_oref.get_var(var_id) {
+                    let val = match self_value.get_var(var_id) {
                         Some(val) => val,
                         None => Value::nil(),
                     };
@@ -900,7 +927,7 @@ impl VM {
                 }
                 Inst::CHECK_IVAR => {
                     let var_id = iseq.read_id(self.pc + 1);
-                    let val = match self_oref.get_var(var_id) {
+                    let val = match self_value.get_var(var_id) {
                         Some(_) => Value::false_val(),
                         None => Value::true_val(),
                     };
@@ -910,7 +937,8 @@ impl VM {
                 Inst::IVAR_ADDI => {
                     let var_id = iseq.read_id(self.pc + 1);
                     let i = iseq.read32(self.pc + 5) as i32;
-                    let v = self_oref
+                    let v = self_value
+                        .rvalue_mut()
                         .var_table_mut()
                         .entry(var_id)
                         .or_insert(Value::nil());
@@ -2815,7 +2843,11 @@ impl VM {
     fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
         let mut stack_context = outer;
         let mut prev_ctx: Option<ContextRef> = None;
-        let mut iter = self.exec_context.iter_mut().rev();
+        let mut iter = self
+            .exec_context
+            .iter_mut()
+            .chain(self.cur_context.iter_mut())
+            .rev();
         loop {
             if !stack_context.on_stack {
                 break;
