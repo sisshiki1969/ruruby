@@ -244,8 +244,13 @@ impl Codegen {
             None => return Err(RubyError::name("undefined local variable.")),
         };
         if outer == 0 {
-            iseq.push(Inst::GET_LOCAL);
-            iseq.push32(lvar_id.as_u32());
+            match lvar_id.as_u32() {
+                0 => iseq.push(Inst::GET_LOCAL0),
+                i => {
+                    iseq.push(Inst::GET_LOCAL);
+                    iseq.push32(i);
+                }
+            };
         } else {
             iseq.push(Inst::GET_DYNLOCAL);
             iseq.push32(lvar_id.as_u32());

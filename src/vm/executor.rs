@@ -807,6 +807,16 @@ impl VM {
                     }
                     self.pc += 5;
                 }
+                Inst::GET_LOCAL0 => {
+                    let val = self.current_context()[0];
+                    if val.is_uninitialized() {
+                        self.current_context()[0] = Value::nil();
+                        self.stack_push(Value::nil());
+                    } else {
+                        self.stack_push(val);
+                    }
+                    self.pc += 1;
+                }
                 Inst::LVAR_ADDI => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let i = iseq.read32(self.pc + 5) as i32;

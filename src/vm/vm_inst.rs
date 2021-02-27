@@ -32,6 +32,8 @@ impl Inst {
     pub const GET_CVAR: u8 = 42;
     pub const SET_CVAR: u8 = 43;
 
+    pub const GET_LOCAL0: u8 = 200;
+
     pub const GET_INDEX: u8 = 52;
     pub const SET_INDEX: u8 = 53;
     pub const GET_IDX_I: u8 = 54;
@@ -201,6 +203,8 @@ impl Inst {
             Inst::SET_CONST => "SET_CONST",
             Inst::GET_CONST_TOP => "GET_CONSTTOP",
             Inst::GET_SCOPE => "GET_SCOPE",
+            
+            Inst::GET_LOCAL0 => "GET_LOCAL0",
 
             Inst::GET_IVAR => "GET_IVAR",
             Inst::SET_IVAR => "SET_IVAR",
@@ -306,7 +310,8 @@ impl Inst {
             | Inst::POP
             | Inst::BREAK
             | Inst::MRETURN
-            | Inst::THROW => 1,
+            | Inst::THROW
+            | Inst::GET_LOCAL0 => 1,
                                         // operand
             Inst::PUSH_SYMBOL           // IdentId: u32
             | Inst::SET_LOCAL           // LvarId: u32
