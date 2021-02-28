@@ -819,18 +819,18 @@ impl Codegen {
         #[cfg(feature = "emit-iseq")]
         {
             let iseq = id.as_iseq();
-            println!("-----------------------------------------");
-            println!("{:?}", *iseq);
-            println!("{:?}", iseq.forvars);
-            print!("local var: ");
+            eprintln!("-----------------------------------------");
+            eprintln!("{:?}", *iseq);
+            eprintln!("{:?}", iseq.forvars);
+            eprint!("local var: ");
             for (k, v) in iseq.lvar.table() {
-                print!("{}:{:?} ", v.as_u32(), k);
+                eprint!("{}:{:?} ", v.as_u32(), k);
             }
-            println!("");
-            println!("block: {:?}", iseq.lvar.block());
+            eprintln!("");
+            eprintln!("block: {:?}", iseq.lvar.block());
             let mut pc = ISeqPos::from(0);
             while pc.into_usize() < iseq.iseq.len() {
-                println!(
+                eprintln!(
                     "  {:05x} {}",
                     pc.into_usize(),
                     Inst::inst_info(globals, iseq, pc.into_usize())

@@ -363,9 +363,9 @@ impl ISeq {
                 let next_pos = pos + Inst::inst_size(inst) + disp;
                 self.chase(next_pos, non_conditional)
             }
-            Inst::RETURN => {
+            Inst::RETURN | Inst::BREAK | Inst::MRETURN => {
                 if non_conditional {
-                    DestKind::Inst(Inst::RETURN)
+                    DestKind::Inst(inst)
                 } else {
                     DestKind::Dest(pos)
                 }
