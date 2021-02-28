@@ -39,6 +39,13 @@ impl Index<Range<usize>> for ISeq {
     }
 }
 
+impl Index<Range<ISeqPos>> for ISeq {
+    type Output = [u8];
+    fn index(&self, range: Range<ISeqPos>) -> &Self::Output {
+        &self.0[range.start.into_usize()..range.end.into_usize()]
+    }
+}
+
 impl fmt::Debug for ISeq {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -58,7 +65,7 @@ impl ISeq {
         ISeqPos::from(self.0.len())
     }
 
-    pub fn ident_name(&self, pc: usize) -> String {
+    pub fn ident_name(&self, pc: ISeqPos) -> String {
         IdentId::get_name(self.read32(pc).into())
     }
 
@@ -66,15 +73,15 @@ impl ISeq {
         self.0.push(val);
     }
 
-    pub fn read8(&self, pc: usize) -> u8 {
+    pub fn read8(&self, pc: ISeqPos) -> u8 {
         self[pc]
     }
 
-    pub fn read16(&self, pc: usize) -> u16 {
+    pub fn read16(&self, pc: ISeqPos) -> u16 {
         u16::from_ne_bytes((&self[pc..pc + 2]).try_into().unwrap())
     }
 
-    pub fn read32(&self, pc: usize) -> u32 {
+    pub fn read32(&self, pc: ISeqPos) -> u32 {
         u32::from_ne_bytes((&self[pc..pc + 4]).try_into().unwrap())
     }
 
@@ -82,28 +89,28 @@ impl ISeq {
         unsafe { std::ptr::write(self[pc] as *mut _, data.to_ne_bytes()) };
     }
 
-    pub fn read64(&self, pc: usize) -> u64 {
+    pub fn read64(&self, pc: ISeqPos) -> u64 {
         u64::from_ne_bytes((&self[pc..pc + 8]).try_into().unwrap())
     }
 
-    pub fn read_usize(&self, pc: usize) -> usize {
+    pub fn read_usize(&self, pc: ISeqPos) -> usize {
         self.read32(pc) as usize
     }
 
-    pub fn read_id(&self, offset: usize) -> IdentId {
+    pub fn read_id(&self, offset: ISeqPos) -> IdentId {
         self.read32(offset).into()
     }
 
-    pub fn read_lvar_id(&self, offset: usize) -> LvarId {
+    pub fn read_lvar_id(&self, offset: ISeqPos) -> LvarId {
         self.read_usize(offset).into()
     }
 
-    pub fn read_method(&self, offset: usize) -> MethodId {
+    pub fn read_method(&self, offset: ISeqPos) -> MethodId {
         self.read64(offset).into()
     }
 
-    pub fn read_disp(&self, offset: impl Into<usize>) -> ISeqDisp {
-        ISeqDisp(self.read32(offset.into()) as i32)
+    pub fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
+        ISeqDisp(self.read32(offset) as i32)
     }
 }
 

@@ -21,7 +21,7 @@ pub struct VM {
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     //exception: bool,
-    pc: usize,
+    pc: ISeqPos,
     pub handle: Option<FiberHandle>,
 }
 
@@ -61,7 +61,7 @@ impl VM {
             exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
-            pc: 0,
+            pc: ISeqPos::from(0),
             handle: None,
         };
 
@@ -105,7 +105,7 @@ impl VM {
             temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
-            pc: 0,
+            pc: ISeqPos::from(0),
             handle: None,
         }
     }
@@ -246,7 +246,7 @@ impl VM {
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
-        self.pc = (ISeqPos::from(self.pc + inst_offset) + disp).into();
+        self.pc = (self.pc + inst_offset + disp).into();
     }
 
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodId, RubyError> {
@@ -383,7 +383,7 @@ impl VM {
         let stack_len = self.stack_len();
         let pc = self.pc;
         self.context_push(context);
-        self.pc = 0;
+        self.pc = ISeqPos::from(0);
         #[cfg(feature = "trace")]
         {
             print!("--->");
@@ -416,7 +416,10 @@ impl VM {
                         unreachable!("{}", msg);
                     };
                     let iseq = self.context().iseq_ref.unwrap();
-                    let catch = iseq.exception_table.iter().find(|x| x.include(self.pc));
+                    let catch = iseq
+                        .exception_table
+                        .iter()
+                        .find(|x| x.include(self.pc.into_usize()));
                     if let Some(entry) = catch {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.into();
@@ -483,7 +486,7 @@ impl VM {
             {
                 println!(
                     "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
-                    self.pc,
+                    self.pc.into_usize(),
                     Inst::inst_info(&self.globals, self.context().iseq_ref.unwrap(), self.pc),
                     self.temp_stack.len(),
                     self.stack_len(),
@@ -1560,7 +1563,7 @@ impl VM {
             Some(iseq) => {
                 iseq.iseq_sourcemap
                     .iter()
-                    .find(|x| x.0 == ISeqPos::from(self.pc))
+                    .find(|x| x.0 == self.pc)
                     .unwrap_or(&(ISeqPos::from(0), Loc(0, 0)))
                     .1
             }

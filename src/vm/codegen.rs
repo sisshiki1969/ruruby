@@ -833,7 +833,7 @@ impl Codegen {
                 eprintln!(
                     "  {:05x} {}",
                     pc.into_usize(),
-                    Inst::inst_info(globals, iseq, pc.into_usize())
+                    Inst::inst_info(globals, iseq, pc)
                 );
                 pc += Inst::inst_size(iseq.iseq[pc]);
             }

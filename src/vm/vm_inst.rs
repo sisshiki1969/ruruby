@@ -401,8 +401,8 @@ impl Inst {
         ISeqDisp::from_i32(disp)
     }
 
-    pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: usize) -> String {
-        fn imm_i32(iseq: &ISeq, pc: usize) -> String {
+    pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: ISeqPos) -> String {
+        fn imm_i32(iseq: &ISeq, pc: ISeqPos) -> String {
             format!(
                 "{} {}",
                 Inst::inst_name(iseq[pc]),
@@ -453,7 +453,7 @@ impl Inst {
             | Inst::JMP_F_LE => format!(
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
-                pc as i32 + 5 + iseq.read32(pc + 1) as i32
+                (pc + 5 + iseq.read_disp(pc + 1)).into_usize()
             ),
 
             Inst::JMP_F_EQI
@@ -465,12 +465,12 @@ impl Inst {
                 "{} {} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 iseq.read32(pc + 1) as i32,
-                pc as i32 + 9 + iseq.read32(pc + 5) as i32
+                (pc + 9 + iseq.read_disp(pc + 5)).into_usize()
             ),
 
             Inst::OPT_CASE => format!(
                 "OPT_CASE {:>05}",
-                pc as i32 + 13 + iseq.read32(pc + 9) as i32,
+                (pc  + 13 + iseq.read_disp(pc + 9)).into_usize(),
             ),
             Inst::SET_LOCAL | Inst::GET_LOCAL => {
                 let id = iseq.read32(pc + 1);
