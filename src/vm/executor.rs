@@ -245,8 +245,8 @@ impl VM {
         self.define_mode_mut().module_function = flag;
     }
 
-    pub fn jump_pc(&mut self, inst_offset: usize, disp: i64) {
-        self.pc = (((self.pc + inst_offset) as i64) + disp) as usize;
+    pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
+        self.pc = (ISeqPos::from(self.pc + inst_offset) + disp).into();
     }
 
     pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodId, RubyError> {
@@ -419,7 +419,7 @@ impl VM {
                     let catch = iseq.exception_table.iter().find(|x| x.include(self.pc));
                     if let Some(entry) = catch {
                         // Exception raised inside of begin-end with rescue clauses.
-                        self.pc = entry.dest.to_usize();
+                        self.pc = entry.dest.into();
                         self.set_stack_len(stack_len);
                         let val = err.to_exception_val();
                         self.stack_push(val);
@@ -484,7 +484,7 @@ impl VM {
                 println!(
                     "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                     self.pc,
-                    Inst::inst_info(&self.globals, context.iseq_ref.unwrap(), self.pc),
+                    Inst::inst_info(&self.globals, self.context().iseq_ref.unwrap(), self.pc),
                     self.temp_stack.len(),
                     self.stack_len(),
                     match self.exec_stack.last() {
@@ -1131,7 +1131,7 @@ impl VM {
                         .case_dispatch
                         .get_entry(iseq.read32(self.pc + 1));
                     let disp = match map.get(&val) {
-                        Some(disp) => *disp as i64,
+                        Some(disp) => *disp,
                         None => iseq.read_disp(self.pc + 5),
                     };
                     self.jump_pc(9, disp);
@@ -1144,7 +1144,7 @@ impl VM {
                             .case_dispatch2
                             .get_entry(iseq.read32(self.pc + 1));
                         if map.0 <= i && i <= map.1 {
-                            map.2[(i - map.0) as usize] as i64
+                            map.2[(i - map.0) as usize]
                         } else {
                             iseq.read_disp(self.pc + 5)
                         }

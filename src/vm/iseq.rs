@@ -5,9 +5,9 @@ pub struct ISeq(Vec<u8>);
 
 use std::ops::{Index, IndexMut, Range};
 use std::{convert::TryInto, fmt};
+
 impl Index<usize> for ISeq {
     type Output = u8;
-
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
@@ -19,9 +19,21 @@ impl IndexMut<usize> for ISeq {
     }
 }
 
+impl Index<ISeqPos> for ISeq {
+    type Output = u8;
+    fn index(&self, index: ISeqPos) -> &Self::Output {
+        &self.0[index.0]
+    }
+}
+
+impl IndexMut<ISeqPos> for ISeq {
+    fn index_mut(&mut self, index: ISeqPos) -> &mut Self::Output {
+        &mut self.0[index.0]
+    }
+}
+
 impl Index<Range<usize>> for ISeq {
     type Output = [u8];
-
     fn index(&self, range: Range<usize>) -> &Self::Output {
         &self.0[range]
     }
@@ -90,8 +102,8 @@ impl ISeq {
         self.read64(offset).into()
     }
 
-    pub fn read_disp(&self, offset: usize) -> i64 {
-        self.read32(offset) as i32 as i64
+    pub fn read_disp(&self, offset: impl Into<usize>) -> ISeqDisp {
+        ISeqDisp(self.read32(offset.into()) as i32)
     }
 }
 
@@ -131,7 +143,7 @@ impl ISeq {
 
     /// Write a 32-bit `disp`lacement of `dest` from `src` on `src` ISeqPos.
     pub fn write_disp(&mut self, src: ISeqPos, dest: ISeqPos) {
-        let num = src.disp(dest) as u32;
+        let num = (src - dest).to_i32() as u32;
         self[src.0 - 4] = (num >> 0) as u8;
         self[src.0 - 3] = (num >> 8) as u8;
         self[src.0 - 2] = (num >> 16) as u8;
@@ -218,7 +230,7 @@ impl ISeq {
     }
 
     pub fn gen_jmp_back(&mut self, pos: ISeqPos) {
-        let disp = self.current().disp(pos) - 5;
+        let disp = (self.current() - pos).to_i32() - 5;
         self.push(Inst::JMP_BACK);
         self.push32(disp as u32);
     }
@@ -288,14 +300,156 @@ impl ISeq {
         self.push(Inst::SET_CONST);
         self.push32(id.into());
     }
+
+    pub fn optimize(&mut self) {
+        let mut pos = ISeqPos::from(0);
+        loop {
+            if pos.into_usize() >= self.len() {
+                break;
+            }
+            let inst = self[pos];
+            match inst {
+                Inst::JMP | Inst::JMP_BACK => {
+                    let next_pos = pos + Inst::inst_size(inst);
+                    let jmp_dest = next_pos + self.read_disp(next_pos - 4);
+                    match self.chase(jmp_dest, true) {
+                        DestKind::Dest(dest) => self.write_disp(next_pos, dest),
+                        DestKind::Inst(term_inst) => {
+                            self[pos] = term_inst;
+                            self[pos + 1] = term_inst;
+                            self[pos + 2] = term_inst;
+                            self[pos + 3] = term_inst;
+                            self[pos + 4] = term_inst;
+                        }
+                    }
+                }
+                Inst::JMP_T
+                | Inst::JMP_F
+                | Inst::JMP_F_EQ
+                | Inst::JMP_F_NE
+                | Inst::JMP_F_GT
+                | Inst::JMP_F_GE
+                | Inst::JMP_F_LT
+                | Inst::JMP_F_LE
+                | Inst::JMP_F_EQI
+                | Inst::JMP_F_NEI
+                | Inst::JMP_F_GTI
+                | Inst::JMP_F_GEI
+                | Inst::JMP_F_LTI
+                | Inst::JMP_F_LEI => {
+                    let next_pos = pos + Inst::inst_size(inst);
+                    let jmp_dest = next_pos + self.read_disp(next_pos - 4);
+                    match self.chase(jmp_dest, false) {
+                        /*eprintln!(
+                            "Optimize {} -> {}",
+                            Inst::inst_name(inst),
+                            Inst::inst_name(term_inst)
+                        );*/
+                        DestKind::Dest(dest) => self.write_disp(next_pos, dest),
+                        DestKind::Inst(_) => unreachable!(),
+                    }
+                }
+                _ => {}
+            }
+            pos += Inst::inst_size(inst);
+        }
+    }
+
+    fn chase(&self, pos: ISeqPos, non_conditional: bool) -> DestKind {
+        let inst = self[pos];
+        match inst {
+            Inst::JMP | Inst::JMP_BACK => {
+                let disp = self.read_disp(pos + 1);
+                let next_pos = pos + Inst::inst_size(inst) + disp;
+                self.chase(next_pos, non_conditional)
+            }
+            Inst::RETURN => {
+                if non_conditional {
+                    DestKind::Inst(Inst::RETURN)
+                } else {
+                    DestKind::Dest(pos)
+                }
+            }
+            _ => DestKind::Dest(pos),
+        }
+    }
+}
+enum DestKind {
+    Dest(ISeqPos),
+    Inst(u8),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ISeqPos(usize);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ISeqDisp(i32);
+
+impl ISeqDisp {
+    pub fn from_i32(disp: i32) -> Self {
+        Self(disp)
+    }
+
+    pub fn to_i32(self) -> i32 {
+        self.0
+    }
+}
+
 impl fmt::Debug for ISeqPos {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("ISeqPos({})", self.0))
+    }
+}
+
+impl std::convert::Into<usize> for ISeqPos {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+
+impl std::ops::Add<ISeqDisp> for ISeqPos {
+    type Output = Self;
+    fn add(self, other: ISeqDisp) -> Self {
+        Self(((self.0) as i64 + other.0 as i64) as usize)
+    }
+}
+
+impl std::ops::AddAssign<ISeqDisp> for ISeqPos {
+    fn add_assign(&mut self, other: ISeqDisp) {
+        *self = *self + other
+    }
+}
+
+impl std::ops::Add<usize> for ISeqPos {
+    type Output = Self;
+    fn add(self, other: usize) -> Self {
+        Self(((self.0) as i64 + other as i64) as usize)
+    }
+}
+
+impl std::ops::AddAssign<usize> for ISeqPos {
+    fn add_assign(&mut self, other: usize) {
+        *self = *self + other
+    }
+}
+
+impl std::ops::Sub<usize> for ISeqPos {
+    type Output = Self;
+    fn sub(self, other: usize) -> Self {
+        Self(((self.0) as i64 - other as i64) as usize)
+    }
+}
+
+impl std::ops::SubAssign<usize> for ISeqPos {
+    fn sub_assign(&mut self, other: usize) {
+        *self = *self - other
+    }
+}
+
+impl std::ops::Sub<ISeqPos> for ISeqPos {
+    type Output = ISeqDisp;
+    fn sub(self, other: ISeqPos) -> Self::Output {
+        ISeqDisp((other.0 as i64 - self.0 as i64) as i32)
     }
 }
 
@@ -304,12 +458,7 @@ impl ISeqPos {
         ISeqPos(pos)
     }
 
-    pub fn to_usize(&self) -> usize {
+    pub fn into_usize(self) -> usize {
         self.0
-    }
-
-    pub fn disp(&self, dist: ISeqPos) -> i32 {
-        let dist = dist.0 as i64;
-        (dist - (self.0 as i64)) as i32
     }
 }

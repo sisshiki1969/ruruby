@@ -272,8 +272,8 @@ impl Inst {
         inst.to_string()
     }
 
-    pub fn inst_size(inst: u8) -> usize {
-        match inst {
+    pub fn inst_size(inst: u8) -> ISeqDisp {
+        let disp = match inst {
             Inst::RETURN
             | Inst::PUSH_NIL
             | Inst::PUSH_TRUE
@@ -397,7 +397,8 @@ impl Inst {
             Inst::SEND | Inst::SEND_SELF => 21,
                                 // method_id: u32 / number of args: u16 / flag: u16 / block: u64 / icache: u32
             _ => panic!(),
-        }
+        };
+        ISeqDisp::from_i32(disp)
     }
 
     pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: usize) -> String {

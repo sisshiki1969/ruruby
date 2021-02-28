@@ -107,12 +107,10 @@ pub struct ExceptionEntry {
 use std::fmt;
 
 impl fmt::Debug for ExceptionEntry {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_fmt(format_args!(
-            "ExceptionEntry ({}, {}) => {}",
-            self.start.to_usize(),
-            self.end.to_usize(),
-            self.dest.to_usize(),
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "ExceptionEntry ({:?}, {:?}) => {:?}",
+            self.start, self.end, self.dest,
         ))
     }
 }
@@ -127,7 +125,7 @@ impl ExceptionEntry {
     }
 
     pub fn include(&self, pc: usize) -> bool {
-        self.start.to_usize() <= pc && pc < self.end.to_usize()
+        self.start.into_usize() <= pc && pc < self.end.into_usize()
     }
 }
 
@@ -792,6 +790,7 @@ impl Codegen {
         let iseq_sourcemap = context.iseq_sourcemap;
         let exception_table = context.exception_table;
         iseq.gen_return();
+        iseq.optimize();
         self.loc = save_loc;
 
         let info = MethodInfo::RubyFunc {
@@ -829,9 +828,13 @@ impl Codegen {
             }
             println!("");
             println!("block: {:?}", iseq.lvar.block());
-            let mut pc = 0;
-            while pc < iseq.iseq.len() {
-                println!("  {:05x} {}", pc, Inst::inst_info(globals, iseq, pc));
+            let mut pc = ISeqPos::from(0);
+            while pc.into_usize() < iseq.iseq.len() {
+                println!(
+                    "  {:05x} {}",
+                    pc.into_usize(),
+                    Inst::inst_info(globals, iseq, pc.into_usize())
+                );
                 pc += Inst::inst_size(iseq.iseq[pc]);
             }
         }
@@ -1536,7 +1539,7 @@ impl Codegen {
                             let start = iseq.gen_opt_case2(map_id);
                             let mut map = FxHashMap::default();
                             for branch in when_ {
-                                let disp = start.disp(iseq.current()) as i32;
+                                let disp = start - iseq.current();
                                 for elem in &branch.when {
                                     let i = match &elem.kind {
                                         NodeKind::Integer(i) => *i,
@@ -1547,7 +1550,7 @@ impl Codegen {
                                 self.gen(globals, iseq, *branch.body, use_value)?;
                                 end.push(iseq.gen_jmp());
                             }
-                            let default_disp = start.disp(iseq.current()) as i32;
+                            let default_disp = start - iseq.current();
                             let case_map = globals.case_dispatch2.get_mut_entry(map_id);
                             let mut vec = vec![default_disp; (opt_max - opt_min + 1) as usize];
                             map.iter()
@@ -1561,7 +1564,7 @@ impl Codegen {
                             let start = iseq.gen_opt_case(map_id);
                             for branch in when_ {
                                 let map = globals.case_dispatch.get_mut_entry(map_id);
-                                let disp = start.disp(iseq.current()) as i32;
+                                let disp = start - iseq.current();
                                 for elem in &branch.when {
                                     let k = match &elem.kind {
                                         NodeKind::Integer(i) => Value::integer(*i),

@@ -358,7 +358,7 @@ impl ConstCache {
 ///
 #[derive(Debug, Clone)]
 pub struct CaseDispatchMap {
-    table: Vec<FxHashMap<Value, i32>>,
+    table: Vec<FxHashMap<Value, ISeqDisp>>,
     id: u32,
 }
 
@@ -376,11 +376,11 @@ impl CaseDispatchMap {
         self.id - 1
     }
 
-    pub fn get_entry(&self, id: u32) -> &FxHashMap<Value, i32> {
+    pub fn get_entry(&self, id: u32) -> &FxHashMap<Value, ISeqDisp> {
         &self.table[id as usize]
     }
 
-    pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, i32> {
+    pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, ISeqDisp> {
         &mut self.table[id as usize]
     }
 }
@@ -392,7 +392,7 @@ impl CaseDispatchMap {
 ///
 #[derive(Debug, Clone)]
 pub struct CaseDispatchMap2 {
-    table: Vec<(i64, i64, Vec<i32>)>, //(min, max, map)
+    table: Vec<(i64, i64, Vec<ISeqDisp>)>, //(min, max, map)
 }
 
 impl CaseDispatchMap2 {
@@ -406,11 +406,11 @@ impl CaseDispatchMap2 {
         len as u32
     }
 
-    pub fn get_entry(&self, id: u32) -> &(i64, i64, Vec<i32>) {
+    pub fn get_entry(&self, id: u32) -> &(i64, i64, Vec<ISeqDisp>) {
         &self.table[id as usize]
     }
 
-    pub fn get_mut_entry(&mut self, id: u32) -> &mut (i64, i64, Vec<i32>) {
+    pub fn get_mut_entry(&mut self, id: u32) -> &mut (i64, i64, Vec<ISeqDisp>) {
         &mut self.table[id as usize]
     }
 }
