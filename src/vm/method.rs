@@ -5,6 +5,69 @@ thread_local!(
     pub static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
 );
 
+#[cfg(feature = "perf-method")]
+thread_local!(
+    pub static METHOD_PERF: RefCell<MethodPerf> = RefCell::new(MethodPerf::new());
+);
+
+#[cfg(feature = "perf-method")]
+pub struct MethodPerf {
+    inline_hit: usize,
+    inline_missed: usize,
+    total: usize,
+    missed: usize,
+}
+
+#[cfg(feature = "perf-method")]
+impl MethodPerf {
+    fn new() -> Self {
+        Self {
+            inline_hit: 0,
+            inline_missed: 0,
+            total: 0,
+            missed: 0,
+        }
+    }
+
+    fn inc_inline_hit() {
+        METHOD_PERF.with(|m| m.borrow_mut().inline_hit += 1);
+    }
+
+    fn inc_inline_missed() {
+        METHOD_PERF.with(|m| m.borrow_mut().inline_missed += 1);
+    }
+
+    fn inc_total() {
+        METHOD_PERF.with(|m| m.borrow_mut().total += 1);
+    }
+
+    fn inc_missed() {
+        METHOD_PERF.with(|m| m.borrow_mut().missed += 1);
+    }
+
+    pub fn clear_stats() {
+        METHOD_PERF.with(|m| {
+            m.borrow_mut().inline_hit = 0;
+            m.borrow_mut().inline_missed = 0;
+            m.borrow_mut().total = 0;
+            m.borrow_mut().missed = 0;
+        });
+    }
+
+    pub fn print_stats() {
+        METHOD_PERF.with(|m| {
+            let perf = m.borrow();
+            eprintln!("+-------------------------------------------+");
+            eprintln!("| Method cache stats:                       |");
+            eprintln!("+-------------------------------------------+");
+            eprintln!("  hit inline cache    : {:>10}", perf.inline_hit);
+            eprintln!("  missed inline cache : {:>10}", perf.inline_missed);
+            eprintln!("  hit global cache    : {:>10}", perf.total - perf.missed);
+            eprintln!("  missed              : {:>10}", perf.missed);
+        });
+    }
+}
+
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
     counter: Vec<usize>,
@@ -86,11 +149,13 @@ impl MethodRepo {
                     method,
                 }) if *version == class_version && class.id() == rec_class.id() => {
                     #[cfg(feature = "perf-method")]
-                    m.borrow_mut().m_cache.inc_inline_hit();
+                    MethodPerf::inc_inline_hit();
                     return Some(*method);
                 }
                 _ => {}
             };
+            #[cfg(feature = "perf-method")]
+            MethodPerf::inc_inline_missed();
             None
         })
     }
@@ -132,14 +197,6 @@ impl MethodRepo {
 
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
-    pub fn inc_inline_hit() {
-        METHODS.with(|m| m.borrow_mut().m_cache.inc_inline_hit());
-    }
-
-    pub fn print_method_cache_stats() {
-        METHODS.with(|m| m.borrow().m_cache.print_stats());
-    }
-
     pub fn inc_counter(id: MethodId) {
         METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize] += 1);
     }
@@ -147,8 +204,8 @@ impl MethodRepo {
     pub fn clear_stats() {
         METHODS.with(|m| {
             m.borrow_mut().counter.iter_mut().for_each(|c| *c = 0);
-            m.borrow_mut().m_cache.clear_stats();
         });
+        MethodPerf::clear_stats();
     }
 
     pub fn print_stats() {
@@ -327,12 +384,6 @@ impl InlineCache {
 #[derive(Debug, Clone)]
 pub struct MethodCache {
     cache: FxHashMap<(Module, IdentId), MethodCacheEntry>,
-    #[cfg(feature = "perf-method")]
-    inline_hit: usize,
-    #[cfg(feature = "perf-method")]
-    total: usize,
-    #[cfg(feature = "perf-method")]
-    missed: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -345,12 +396,6 @@ impl MethodCache {
     fn new() -> Self {
         MethodCache {
             cache: FxHashMap::default(),
-            #[cfg(feature = "perf-method")]
-            inline_hit: 0,
-            #[cfg(feature = "perf-method")]
-            total: 0,
-            #[cfg(feature = "perf-method")]
-            missed: 0,
         }
     }
 
@@ -377,7 +422,7 @@ impl MethodCache {
     ) -> Option<MethodId> {
         #[cfg(feature = "perf-method")]
         {
-            self.total += 1;
+            MethodPerf::inc_total();
         }
         if let Some(MethodCacheEntry { version, method }) = self.get_entry(rec_class, method) {
             if *version == class_version {
@@ -386,7 +431,7 @@ impl MethodCache {
         };
         #[cfg(feature = "perf-method")]
         {
-            self.missed += 1;
+            MethodPerf::inc_missed();
         }
         match rec_class.get_method(method) {
             Some(methodref) => {
@@ -395,28 +440,6 @@ impl MethodCache {
             }
             None => None,
         }
-    }
-}
-
-#[cfg(feature = "perf-method")]
-impl MethodCache {
-    fn inc_inline_hit(&mut self) {
-        self.inline_hit += 1;
-    }
-
-    fn clear_stats(&mut self) {
-        self.inline_hit = 0;
-        self.total = 0;
-        self.missed = 0;
-    }
-
-    pub fn print_stats(&self) {
-        eprintln!("+-------------------------------------------+");
-        eprintln!("| Method cache stats:                       |");
-        eprintln!("+-------------------------------------------+");
-        eprintln!("  hit inline cache : {:>10}", self.inline_hit);
-        eprintln!("  hit global cache : {:>10}", self.total - self.missed);
-        eprintln!("  missed           : {:>10}", self.missed);
     }
 }
 
