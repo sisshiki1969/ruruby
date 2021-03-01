@@ -1,7 +1,7 @@
-use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use crate::parse::parser::RescueEntry;
+use crate::vm::vm_inst::*;
 use crate::*;
 
 #[derive(Debug, Clone)]
