@@ -19,9 +19,17 @@ An alternative Ruby implementation by Rust.
 
 [See Wiki.](https://github.com/sisshiki1969/ruruby/wiki/Implementation-status)
 
-## Benchmarks
+## Optcarrot benchmark
 
-[See Wiki.](https://github.com/sisshiki1969/ruruby/wiki/Benchmarks)  
+|    benchmark    |       ruby        |      ruruby      |  rate  |
+| :-------------: | :---------------: | :--------------: | :----: |
+|    optcarrot    | 39.01 ± 0.19 fps  | 15.95 ± 1.12 fps | x 2.45 |
+| optcarrot --opt | 129.49 ± 4.75 fps | 63.87 ± 1.75 fps | x 2.03 |
+
+<br/>
+
+To check other benchmark results, [see Wiki.](https://github.com/sisshiki1969/ruruby/wiki/Benchmarks)
+
 You can see the results of optcarrot benchmark for ruruby and other Ruby implementations [here](https://github.com/mame/optcarrot/blob/master/doc/benchmark.md).
 
 ## How to run ruruby

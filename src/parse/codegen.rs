@@ -532,7 +532,8 @@ impl Codegen {
                     self.gen_topn(iseq, index_len + 1);
                     self.gen_topn(iseq, index_len + 1);
                     self.loc = lhs_loc;
-                    self.gen_opt_send(iseq, IdentId::_INDEX_ASSIGN, index_len + 1, None, false);
+                    self.gen_send(iseq, IdentId::_INDEX_ASSIGN, index_len + 1, 0, 0, None);
+                    self.gen_pop(iseq);
                 };
             }
             _ => {
