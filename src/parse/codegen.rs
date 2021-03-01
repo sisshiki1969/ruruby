@@ -1,7 +1,7 @@
-use super::vm_inst::*;
 use crate::error::{ParseErrKind, RubyError};
 use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use crate::parse::parser::RescueEntry;
+use crate::vm::vm_inst::*;
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -532,8 +532,7 @@ impl Codegen {
                     self.gen_topn(iseq, index_len + 1);
                     self.gen_topn(iseq, index_len + 1);
                     self.loc = lhs_loc;
-                    self.gen_send(iseq, IdentId::_INDEX_ASSIGN, index_len + 1, 0, 0, None);
-                    self.gen_pop(iseq);
+                    self.gen_opt_send(iseq, IdentId::_INDEX_ASSIGN, index_len + 1, None, false);
                 };
             }
             _ => {
@@ -1084,10 +1083,7 @@ impl Codegen {
                 }
             }
             NodeKind::Ident(id) => {
-                self.gen_send_self(iseq, id, 0, 0, 0, None);
-                if !use_value {
-                    self.gen_pop(iseq)
-                };
+                self.gen_opt_send_self(iseq, id, 0, None, use_value);
             }
             NodeKind::LocalVar(id) => {
                 self.gen_get_local(iseq, id)?;

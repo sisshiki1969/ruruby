@@ -1,5 +1,5 @@
-use super::codegen::ContextKind;
 use crate::coroutine::*;
+use crate::parse::codegen::ContextKind;
 use crate::*;
 
 #[cfg(feature = "perf")]
