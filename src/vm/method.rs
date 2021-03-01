@@ -75,12 +75,33 @@ impl MethodRepo {
         METHODS.with(|m| m.borrow_mut().i_cache.add_entry())
     }
 
-    pub fn get_inline_cache_entry(id: u32) -> InlineCacheEntry {
-        METHODS.with(|m| m.borrow().i_cache.get_entry(id))
+    pub fn get_inline_cache_entry(id: u32, rec_class: Module) -> Option<MethodId> {
+        METHODS.with(|m| {
+            let repo = m.borrow();
+            let class_version = repo.class_version;
+            match repo.i_cache.get_entry(id) {
+                Some(InlineCacheEntry {
+                    version,
+                    class,
+                    method,
+                }) if *version == class_version && class.id() == rec_class.id() => {
+                    #[cfg(feature = "perf-method")]
+                    m.borrow_mut().m_cache.inc_inline_hit();
+                    return Some(*method);
+                }
+                _ => {}
+            };
+            None
+        })
     }
 
-    pub fn update_inline_cache_entry(id: u32, entry: InlineCacheEntry) {
-        METHODS.with(|m| m.borrow_mut().i_cache.update_entry(id, entry))
+    pub fn update_inline_cache_entry(id: u32, rec_class: Module, method: MethodId) {
+        METHODS.with(|m| {
+            let class_version = m.borrow().class_version;
+            m.borrow_mut()
+                .i_cache
+                .update_entry(id, InlineCacheEntry::new(class_version, rec_class, method))
+        })
     }
 
     /// Search global method cache with receiver class and method name.
@@ -253,21 +274,23 @@ impl MethodInfo {
 ///---------------------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
 pub struct InlineCache {
-    table: Vec<InlineCacheEntry>,
+    table: Vec<Option<InlineCacheEntry>>,
     id: u32,
 }
 
 #[derive(Debug, Clone)]
 pub struct InlineCacheEntry {
     pub version: u32,
-    pub entries: Option<(Module, MethodId)>,
+    pub class: Module,
+    pub method: MethodId,
 }
 
 impl InlineCacheEntry {
-    fn new() -> Self {
+    fn new(version: u32, class: Module, method: MethodId) -> Self {
         InlineCacheEntry {
-            version: 0,
-            entries: None,
+            version,
+            class,
+            method,
         }
     }
 }
@@ -281,16 +304,16 @@ impl InlineCache {
     }
     fn add_entry(&mut self) -> u32 {
         self.id += 1;
-        self.table.push(InlineCacheEntry::new());
+        self.table.push(None);
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> InlineCacheEntry {
-        self.table[id as usize].clone()
+    fn get_entry(&self, id: u32) -> &Option<InlineCacheEntry> {
+        &self.table[id as usize]
     }
 
     fn update_entry(&mut self, id: u32, entry: InlineCacheEntry) {
-        self.table[id as usize] = entry;
+        self.table[id as usize] = Some(entry);
     }
 }
 

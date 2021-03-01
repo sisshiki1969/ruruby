@@ -206,30 +206,14 @@ impl Globals {
         method_id: IdentId,
     ) -> Option<MethodId> {
         let rec_class = receiver.get_class_for_method();
-        let version = MethodRepo::class_version();
-        let icache = MethodRepo::get_inline_cache_entry(cache);
-        if icache.version == version {
-            match icache.entries {
-                Some((class, method)) if class.id() == rec_class.id() => {
-                    #[cfg(feature = "perf-method")]
-                    MethodRepo::inc_inline_hit();
-
-                    return Some(method);
-                }
-                _ => {}
-            }
+        if let Some(method) = MethodRepo::get_inline_cache_entry(cache, rec_class) {
+            return Some(method);
         };
         let method = match MethodRepo::find_method(rec_class, method_id) {
             Some(method) => method,
             None => return None,
         };
-        MethodRepo::update_inline_cache_entry(
-            cache,
-            InlineCacheEntry {
-                version,
-                entries: Some((rec_class, method)),
-            },
-        );
+        MethodRepo::update_inline_cache_entry(cache, rec_class, method);
         Some(method)
     }
 }
