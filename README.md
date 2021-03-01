@@ -21,10 +21,10 @@ An alternative Ruby implementation by Rust.
 
 ## Optcarrot benchmark
 
-|    benchmark    |       ruby        |      ruruby      |  rate  |
+|    benchmark    |       CRuby       |      ruruby      |  rate  |
 | :-------------: | :---------------: | :--------------: | :----: |
-|    optcarrot    | 39.01 ± 0.19 fps  | 15.95 ± 1.12 fps | x 2.45 |
-| optcarrot --opt | 129.49 ± 4.75 fps | 63.87 ± 1.75 fps | x 2.03 |
+|    optcarrot    | 56.34 ± 0.18 fps  | 26.32 ± 0.10 fps | x 2.14 |
+| optcarrot --opt | 129.34 ± 1.00 fps | 96.41 ± 1.13 fps | x 1.34 |
 
 <br/>
 
