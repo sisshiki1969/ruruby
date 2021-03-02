@@ -213,6 +213,7 @@ impl VM {
         }
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
         self.exec_stack.clear();
         self.class_context = vec![(BuiltinClass::object(), DefineMode::default())];
@@ -2953,6 +2954,7 @@ impl VM {
         }
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn exec_file(&mut self, file_name: &str) {
         use crate::loader::*;
         let path = match Path::new(file_name).canonicalize() {
@@ -2985,6 +2987,7 @@ impl VM {
         self.globals.const_values.dump();
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
         match self.run(absolute_path, program) {
             Ok(_) => {

@@ -130,10 +130,6 @@ impl MethodRepo {
         METHODS.with(|m| m.borrow_mut().class_version += 1)
     }
 
-    pub fn class_version() -> u32 {
-        METHODS.with(|m| m.borrow().class_version)
-    }
-
     pub fn add_inline_cache_entry() -> u32 {
         METHODS.with(|m| m.borrow_mut().i_cache.add_entry())
     }

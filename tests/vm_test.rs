@@ -894,11 +894,16 @@ fn mul_assign5() {
 
 #[test]
 fn mul_assign6() {
-    let program = "
-            d = (a,b,c = [1,2,3,4,5])
-            assert([a,b,c],[1,2,3])
-            assert(d,[1,2,3,4,5])
-            ";
+    let program = r#"
+            x = 77
+            $GLOBAL = 99
+            e = (a,b,c,d = [Object,x,$GLOBAL,4.to_s,5])
+            assert(a, Object)
+            assert(b, 77)
+            assert(c, 99)
+            assert(d, "4")
+            assert(e,[Object,77,99,"4",5])
+            "#;
     assert_script(program);
 }
 
