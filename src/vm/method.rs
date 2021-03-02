@@ -134,9 +134,13 @@ impl MethodRepo {
         METHODS.with(|m| m.borrow_mut().i_cache.add_entry())
     }
 
-    pub fn get_inline_cache_entry(id: u32, rec_class: Module) -> Option<MethodId> {
+    pub fn find_method_inline_cache(
+        id: u32,
+        rec_class: Module,
+        method_name: IdentId,
+    ) -> Option<MethodId> {
         METHODS.with(|m| {
-            let repo = m.borrow();
+            let mut repo = m.borrow_mut();
             let class_version = repo.class_version;
             match repo.i_cache.get_entry(id) {
                 Some(InlineCacheEntry {
@@ -152,16 +156,18 @@ impl MethodRepo {
             };
             #[cfg(feature = "perf-method")]
             MethodPerf::inc_inline_missed();
-            None
-        })
-    }
-
-    pub fn update_inline_cache_entry(id: u32, rec_class: Module, method: MethodId) {
-        METHODS.with(|m| {
-            let class_version = m.borrow().class_version;
-            m.borrow_mut()
-                .i_cache
-                .update_entry(id, InlineCacheEntry::new(class_version, rec_class, method))
+            if let Some(method_id) = repo
+                .m_cache
+                .get_method(class_version, rec_class, method_name)
+            {
+                repo.i_cache.update_entry(
+                    id,
+                    InlineCacheEntry::new(class_version, rec_class, method_id),
+                );
+                Some(method_id)
+            } else {
+                None
+            }
         })
     }
 

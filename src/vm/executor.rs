@@ -1419,11 +1419,8 @@ impl VM {
         let cache = iseq.read32(self.pc + 15);
         let len = self.stack_len();
         let arg_slice = &self.exec_stack[len - args_num..];
-
-        match self
-            .globals
-            .find_method_from_icache(cache, receiver, method_id)
-        {
+        let rec_class = receiver.get_class_for_method();
+        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(arg_slice);
@@ -1480,11 +1477,8 @@ impl VM {
         let cache = iseq.read32(self.pc + 7);
         let len = self.stack_len();
         let arg_slice = &self.exec_stack[len - args_num..];
-
-        match self
-            .globals
-            .find_method_from_icache(cache, receiver, method_id)
-        {
+        let rec_class = receiver.get_class_for_method();
+        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let args = Args::from_slice(arg_slice);
@@ -1537,11 +1531,8 @@ impl VM {
         let block = Block::Block(block.into(), self.context());
         let args = Args::new0_block(block);
         let cache = iseq.read32(self.pc + 9);
-
-        match self
-            .globals
-            .find_method_from_icache(cache, receiver, IdentId::EACH)
-        {
+        let rec_class = receiver.get_class_for_method();
+        match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     self.invoke_native(&func, method, name, receiver, &args)
@@ -1715,10 +1706,8 @@ impl VM {
         receiver: Value,
         args: &Args,
     ) -> VMResult {
-        match self
-            .globals
-            .find_method_from_icache(cache, receiver, method_id)
-        {
+        let rec_class = receiver.get_class_for_method();
+        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
             Some(method) => return self.eval_send(method, receiver, args),
             None => {}
         }

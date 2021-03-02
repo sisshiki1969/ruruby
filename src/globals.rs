@@ -195,29 +195,6 @@ impl Globals {
     }
 }
 
-impl Globals {
-    /// Search inline method cache for receiver object and method name.
-    ///
-    /// If the method was not found, return None.
-    pub fn find_method_from_icache(
-        &mut self,
-        cache: u32,
-        receiver: Value,
-        method_id: IdentId,
-    ) -> Option<MethodId> {
-        let rec_class = receiver.get_class_for_method();
-        if let Some(method) = MethodRepo::get_inline_cache_entry(cache, rec_class) {
-            return Some(method);
-        };
-        let method = match MethodRepo::find_method(rec_class, method_id) {
-            Some(method) => method,
-            None => return None,
-        };
-        MethodRepo::update_inline_cache_entry(cache, rec_class, method);
-        Some(method)
-    }
-}
-
 ///
 /// Contant value
 ///
