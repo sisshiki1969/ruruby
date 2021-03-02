@@ -106,7 +106,7 @@ impl ISeq {
     }
 
     pub fn read_method(&self, offset: ISeqPos) -> MethodId {
-        self.read64(offset).into()
+        self.read32(offset).into()
     }
 
     pub fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
@@ -122,6 +122,13 @@ impl ISeq {
     pub fn push16(&mut self, num: u16) {
         self.push(num as u8);
         self.push((num >> 8) as u8);
+    }
+
+    pub fn push_method(&mut self, block: Option<MethodId>) {
+        match block {
+            Some(block) => self.push32(block.into()),
+            None => self.push32(0),
+        };
     }
 
     pub fn push32(&mut self, num: u32) {

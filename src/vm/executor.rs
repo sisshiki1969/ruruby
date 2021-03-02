@@ -796,10 +796,6 @@ impl VM {
                 Inst::CONCAT_STRING => {
                     let num = iseq.read32(self.pc + 1) as usize;
                     let stack_len = self.stack_len();
-                    /*let mut res = String::new();
-                    for v in self.exec_stack.drain(stack_len - num..stack_len) {
-                        res += v.as_string().unwrap();
-                    }*/
                     let res = self
                         .exec_stack
                         .drain(stack_len - num..)
@@ -1019,7 +1015,7 @@ impl VM {
                     let ctx = self.context();
                     let proc_obj = self.create_proc(&Block::Block(method, ctx))?;
                     self.stack_push(proc_obj);
-                    self.pc += 9;
+                    self.pc += 5;
                 }
                 Inst::CREATE_HASH => {
                     let arg_num = iseq.read_usize(self.pc + 1);
@@ -1160,13 +1156,13 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_send(iseq, receiver));
-                    self.pc += 21;
+                    self.pc += 17;
                 }
                 Inst::SEND_SELF => {
                     try_push!(self.vm_send(iseq, self_value));
-                    self.pc += 21;
+                    self.pc += 17;
                 }
-                Inst::OPT_SEND => {
+                /*Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_fast_send(iseq, receiver));
                     self.pc += 11;
@@ -1183,29 +1179,29 @@ impl VM {
                 Inst::OPT_NSEND_SELF => {
                     try_no_push!(self.vm_fast_send(iseq, self_value));
                     self.pc += 11;
-                }
-                Inst::OPT_SEND_BLK => {
+                }*/
+                Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
-                    try_push!(self.vm_fast_send_with_block(iseq, receiver));
-                    self.pc += 19;
+                    try_push!(self.vm_fast_send(iseq, receiver));
+                    self.pc += 15;
                 }
-                Inst::OPT_NSEND_BLK => {
+                Inst::OPT_NSEND => {
                     let receiver = self.stack_pop();
-                    try_no_push!(self.vm_fast_send_with_block(iseq, receiver));
-                    self.pc += 19;
+                    try_no_push!(self.vm_fast_send(iseq, receiver));
+                    self.pc += 15;
                 }
-                Inst::OPT_SEND_SELF_BLK => {
-                    try_push!(self.vm_fast_send_with_block(iseq, self_value));
-                    self.pc += 19;
+                Inst::OPT_SEND_SELF => {
+                    try_push!(self.vm_fast_send(iseq, self_value));
+                    self.pc += 15;
                 }
-                Inst::OPT_NSEND_SELF_BLK => {
-                    try_no_push!(self.vm_fast_send_with_block(iseq, self_value));
-                    self.pc += 19;
+                Inst::OPT_NSEND_SELF => {
+                    try_no_push!(self.vm_fast_send(iseq, self_value));
+                    self.pc += 15;
                 }
                 Inst::FOR => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_for(iseq, receiver));
-                    self.pc += 13;
+                    self.pc += 9;
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
@@ -1226,7 +1222,7 @@ impl VM {
                     let res = self.eval_send(method, val, &Args::new0());
                     self.class_pop();
                     try_push!(res);
-                    self.pc += 14;
+                    self.pc += 10;
                 }
                 Inst::DEF_SCLASS => {
                     let method = iseq.read_method(self.pc + 1);
@@ -1237,7 +1233,7 @@ impl VM {
                     let res = self.eval_send(method, singleton, &Args::new0());
                     self.class_pop();
                     try_push!(res);
-                    self.pc += 9;
+                    self.pc += 5;
                 }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
@@ -1248,7 +1244,7 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_singleton_method(self_value, id, method)?;
                     };
-                    self.pc += 13;
+                    self.pc += 9;
                 }
                 Inst::DEF_SMETHOD => {
                     let id = iseq.read_id(self.pc + 1);
@@ -1260,7 +1256,7 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_method(singleton, id, method);
                     };
-                    self.pc += 13;
+                    self.pc += 9;
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
@@ -1351,8 +1347,8 @@ impl VM {
         let args_num = iseq.read16(self.pc + 5);
         let kw_rest_num = iseq.read8(self.pc + 7);
         let flag = iseq.read8(self.pc + 8);
-        let block = iseq.read64(self.pc + 9);
-        let cache = iseq.read32(self.pc + 17);
+        let block = iseq.read32(self.pc + 9);
+        let cache = iseq.read32(self.pc + 13);
 
         let mut kwrest = vec![];
         for _ in 0..kw_rest_num {
@@ -1410,21 +1406,23 @@ impl VM {
         self.send_icache(cache, method_id, receiver, &args)
     }
 
-    fn vm_fast_send_with_block(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+    fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
         // With block and no keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
-        let block = iseq.read64(self.pc + 7);
-        assert!(block != 0);
-        let cache = iseq.read32(self.pc + 15);
+        let block = iseq.read32(self.pc + 7);
+        let cache_id = iseq.read32(self.pc + 11);
         let len = self.stack_len();
         let arg_slice = &self.exec_stack[len - args_num..];
         let rec_class = receiver.get_class_for_method();
-        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
+        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(arg_slice);
-                    args.block = Block::Block(block.into(), self.context());
+                    args.block = match block {
+                        0 => Block::None,
+                        i => Block::Block(MethodId::from(i), self.context()),
+                    };
                     self.set_stack_len(len - args_num);
                     self.invoke_native(&func, method, name, receiver, &args)
                 }
@@ -1441,7 +1439,10 @@ impl VM {
                     Self::invoke_setter(id, receiver, self.stack_pop())
                 }
                 MethodInfo::RubyFunc { iseq } => {
-                    let block = Block::Block(block.into(), self.context());
+                    let block = match block {
+                        0 => Block::None,
+                        i => Block::Block(MethodId::from(i), self.context()),
+                    };
                     if iseq.opt_flag {
                         let mut context = Context::new(receiver, block, iseq, None);
                         let req_len = iseq.params.req;
@@ -1463,14 +1464,17 @@ impl VM {
             },
             None => {
                 let mut args = Args::from_slice(arg_slice);
-                args.block = Block::Block(block.into(), self.context());
+                args.block = match block {
+                    0 => Block::None,
+                    i => Block::Block(MethodId::from(i), self.context()),
+                };
                 self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
         }
     }
 
-    fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
+    /*fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
         // No block nor keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
@@ -1522,15 +1526,15 @@ impl VM {
                 self.send_method_missing(method_id, receiver, &args)
             }
         }
-    }
+    }*/
 
     fn vm_for(&mut self, iseq: &mut ISeq, receiver: Value) -> VMResult {
         // With block and no keyword/block/splat arguments for OPT_SEND.
-        let block = iseq.read64(self.pc + 1);
-        assert!(block != 0);
-        let block = Block::Block(block.into(), self.context());
+        let block = iseq.read_method(self.pc + 1);
+        //assert!(block != 0);
+        let block = Block::Block(block, self.context());
         let args = Args::new0_block(block);
-        let cache = iseq.read32(self.pc + 9);
+        let cache = iseq.read32(self.pc + 5);
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {
             Some(method) => match MethodRepo::get(method) {

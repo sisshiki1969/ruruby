@@ -376,10 +376,7 @@ impl Codegen {
         iseq.push16(args_num as u32 as u16);
         iseq.push8(kw_rest_num as u32 as u16 as u8);
         iseq.push8(flag);
-        iseq.push64(match block {
-            Some(block) => block.into(),
-            None => 0,
-        });
+        iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
     }
 
@@ -398,10 +395,7 @@ impl Codegen {
         iseq.push16(args_num as u32 as u16);
         iseq.push8(kw_rest_num as u32 as u16 as u8);
         iseq.push8(flag);
-        iseq.push64(match block {
-            Some(block) => block.into(),
-            None => 0,
-        });
+        iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
     }
 
@@ -414,25 +408,15 @@ impl Codegen {
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        if block.is_none() {
-            if use_value {
-                iseq.push(Inst::OPT_SEND);
-            } else {
-                iseq.push(Inst::OPT_NSEND)
-            }
+        if use_value {
+            iseq.push(Inst::OPT_SEND);
         } else {
-            if use_value {
-                iseq.push(Inst::OPT_SEND_BLK);
-            } else {
-                iseq.push(Inst::OPT_NSEND_BLK);
-            }
+            iseq.push(Inst::OPT_NSEND);
         }
 
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
-        if let Some(block) = block {
-            iseq.push64(block.into());
-        }
+        iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
     }
 
@@ -445,31 +429,21 @@ impl Codegen {
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        if block.is_none() {
-            if use_value {
-                iseq.push(Inst::OPT_SEND_SELF);
-            } else {
-                iseq.push(Inst::OPT_NSEND_SELF)
-            }
+        if use_value {
+            iseq.push(Inst::OPT_SEND_SELF);
         } else {
-            if use_value {
-                iseq.push(Inst::OPT_SEND_SELF_BLK);
-            } else {
-                iseq.push(Inst::OPT_NSEND_SELF_BLK);
-            }
+            iseq.push(Inst::OPT_NSEND_SELF);
         }
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
-        if let Some(block) = block {
-            iseq.push64(block.into());
-        }
+        iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
     }
 
     fn gen_for(&mut self, iseq: &mut ISeq, block: MethodId, use_value: bool) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::FOR);
-        iseq.push64(block.into());
+        iseq.push32(block.into());
         iseq.push32(MethodRepo::add_inline_cache_entry());
         if !use_value {
             self.gen_pop(iseq);
@@ -1871,7 +1845,7 @@ impl Codegen {
                 };
             }
             NodeKind::MethodDef(id, params, body, lvar) => {
-                let methodref = self.gen_iseq(
+                let method = self.gen_iseq(
                     globals,
                     params,
                     *body,
@@ -1882,13 +1856,13 @@ impl Codegen {
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 iseq.push32(id.into());
-                iseq.push64(methodref.into());
+                iseq.push32(method.into());
                 if use_value {
                     iseq.gen_symbol(id);
                 };
             }
             NodeKind::SingletonMethodDef(singleton, id, params, body, lvar) => {
-                let methodref = self.gen_iseq(
+                let method = self.gen_iseq(
                     globals,
                     params.into(),
                     *body,
@@ -1900,7 +1874,7 @@ impl Codegen {
                 self.gen(globals, iseq, *singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
                 iseq.push32((id).into());
-                iseq.push64(methodref.into());
+                iseq.push32(method.into());
                 if use_value {
                     iseq.gen_symbol(id);
                 };
@@ -1913,7 +1887,7 @@ impl Codegen {
                 is_module,
                 lvar,
             } => {
-                let methodref = self.gen_iseq(
+                let method = self.gen_iseq(
                     globals,
                     vec![],
                     *body,
@@ -1928,7 +1902,7 @@ impl Codegen {
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if is_module { 1 } else { 0 });
                 iseq.push32(id.into());
-                iseq.push64(methodref.into());
+                iseq.push32(method.into());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
@@ -1938,7 +1912,7 @@ impl Codegen {
                 body,
                 lvar,
             } => {
-                let methodref = self.gen_iseq(
+                let method = self.gen_iseq(
                     globals,
                     vec![],
                     *body,
@@ -1950,7 +1924,7 @@ impl Codegen {
                 self.gen(globals, iseq, *singleton, true)?;
                 self.save_loc(iseq, node_loc);
                 iseq.push(Inst::DEF_SCLASS);
-                iseq.push64(methodref.into());
+                iseq.push32(method.into());
                 if !use_value {
                     self.gen_pop(iseq);
                 };
@@ -2037,7 +2011,7 @@ impl Codegen {
             }
             NodeKind::Proc { params, body, lvar } => {
                 self.loop_stack.push(LoopInfo::new_top());
-                let methodref = self.gen_iseq(
+                let method = self.gen_iseq(
                     globals,
                     params.to_vec(),
                     *body,
@@ -2048,7 +2022,7 @@ impl Codegen {
                 )?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);
-                iseq.push64(methodref.into());
+                iseq.push32(method.into());
                 if !use_value {
                     self.gen_pop(iseq)
                 };

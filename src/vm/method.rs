@@ -254,9 +254,9 @@ impl From<u64> for MethodId {
     }
 }
 
-impl Into<u64> for MethodId {
-    fn into(self) -> u64 {
-        self.0.get() as u64
+impl Into<u32> for MethodId {
+    fn into(self) -> u32 {
+        self.0.get()
     }
 }
 

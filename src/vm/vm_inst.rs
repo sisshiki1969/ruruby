@@ -44,14 +44,10 @@ impl Inst {
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
-    pub const OPT_SEND: u8 = 62;
-    pub const OPT_SEND_SELF: u8 = 63;
-    pub const OPT_NSEND: u8 = 64;
-    pub const OPT_NSEND_SELF: u8 = 65;
-    pub const OPT_SEND_BLK: u8 = 66;
-    pub const OPT_SEND_SELF_BLK: u8 = 67;
-    pub const OPT_NSEND_BLK: u8 = 68;
-    pub const OPT_NSEND_SELF_BLK: u8 = 69;
+    pub const OPT_SEND: u8 = 66;
+    pub const OPT_SEND_SELF: u8 = 67;
+    pub const OPT_NSEND: u8 = 68;
+    pub const OPT_NSEND_SELF: u8 = 69;
     pub const FOR: u8 = 70;
 
     pub const POP: u8 = 80;
@@ -222,14 +218,10 @@ impl Inst {
 
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SLF",
-            Inst::OPT_SEND => "O_SEND",
-            Inst::OPT_SEND_SELF => "O_SEND_SLF",
-            Inst::OPT_NSEND => "O_NSEND",
-            Inst::OPT_NSEND_SELF => "O_NSEND_SLF",
-            Inst::OPT_SEND_BLK => "O_SEND_B",
-            Inst::OPT_SEND_SELF_BLK => "O_SEND_SLF_B",
-            Inst::OPT_NSEND_BLK => "O_NSEND_B",
-            Inst::OPT_NSEND_SELF_BLK => "O_NSEND_SLF_B",
+            Inst::OPT_SEND => "O_SEND_B",
+            Inst::OPT_SEND_SELF => "O_SEND_SLF_B",
+            Inst::OPT_NSEND => "O_NSEND_B",
+            Inst::OPT_NSEND_SELF => "O_NSEND_SLF_B",
             Inst::FOR => "FOR",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
@@ -361,6 +353,8 @@ impl Inst {
             | Inst::GEI                 // immediate: i32
             | Inst::LTI                 // immediate: i32
             | Inst::LEI                 // immediate: i32
+            | Inst::CREATE_PROC         // block: u32
+            | Inst::DEF_SCLASS          // block: u32
             | Inst::CREATE_HASH         // number of items: u32
             | Inst::YIELD               // number of items: u32
             | Inst::RESCUE              // number of items: u32
@@ -382,20 +376,15 @@ impl Inst {
             | Inst::JMP_F_GEI           // immediate: i32 / disp: i32
             | Inst::JMP_F_LTI           // immediate: i32 / disp: i32
             | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
-            | Inst::CREATE_PROC         // block: u64
-            | Inst::DEF_SCLASS          // block: u64
+            | Inst::FOR                 // method: u32 / cache: u32
+            | Inst::DEF_METHOD          // method_id: u32 / method: u32
+            | Inst::DEF_SMETHOD         // method_id: u32 / method: u32
             => 9,
-            Inst::DEF_METHOD            // method_id: u32 / method: u64
-            | Inst::DEF_SMETHOD         // method_id: u32 / method: u64
-            | Inst::FOR                 // method: u64 / cache: u32
-            => 13,
-            Inst::DEF_CLASS => 14,      // is_module: u8 / method_id: u32 / block: u64
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF => 11,
-                                // method_id: u32 / number of args: u16 / icache: u32
-            Inst::OPT_SEND_BLK | Inst::OPT_SEND_SELF_BLK | Inst::OPT_NSEND_BLK | Inst::OPT_NSEND_SELF_BLK => 19,
-                                // method_id: u32 / number of args: u16 / block: u64 / icache: u32
-            Inst::SEND | Inst::SEND_SELF => 21,
-                                // method_id: u32 / number of args: u16 / flag: u16 / block: u64 / icache: u32
+            Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF => 15,
+                                // method_id: u32 / number of args: u16 / block: u32 / icache: u32
+            Inst::SEND | Inst::SEND_SELF => 17,
+                                // method_id: u32 / number of args: u16 / flag: u16 / block: u32 / icache: u32
             _ => panic!(),
         };
         ISeqDisp::from_i32(disp)
@@ -522,8 +511,7 @@ impl Inst {
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5)
             ),
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF
-            | Inst::OPT_SEND_BLK | Inst::OPT_SEND_SELF_BLK | Inst::OPT_NSEND_BLK | Inst::OPT_NSEND_SELF_BLK=> format!(
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF=> format!(
                 "{} '{}' {} items",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
@@ -531,7 +519,7 @@ impl Inst {
             ),
             Inst::FOR => format!(
                 "FOR methodref:{:x}",
-                iseq.read64(pc + 1)
+                iseq.read32(pc + 1)
             ),
             Inst::CREATE_ARRAY
             | Inst::CREATE_PROC

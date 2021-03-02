@@ -414,15 +414,21 @@ impl Value {
     /// ### panic
     /// panic if `self` was Invalid.
     pub fn get_class_for_method(&self) -> Module {
-        match self.unpack() {
-            RV::Integer(_) => BuiltinClass::integer(),
-            RV::Float(_) => BuiltinClass::float(),
-            RV::Symbol(_) => BuiltinClass::symbol(),
-            RV::Nil => BuiltinClass::nilclass(),
-            RV::True => BuiltinClass::trueclass(),
-            RV::False => BuiltinClass::falseclass(),
-            RV::Object(info) => info.class(),
-            RV::Uninitialized => unreachable!("[Uninitialized]"),
+        if !self.is_packed_value() {
+            self.rvalue().class()
+        } else if self.is_packed_fixnum() {
+            BuiltinClass::integer()
+        } else if self.is_packed_num() {
+            BuiltinClass::float()
+        } else if self.is_packed_symbol() {
+            BuiltinClass::symbol()
+        } else {
+            match self.get() {
+                NIL_VALUE => BuiltinClass::nilclass(),
+                TRUE_VALUE => BuiltinClass::trueclass(),
+                FALSE_VALUE => BuiltinClass::falseclass(),
+                _ => unreachable!("Illegal packed value. {:x}", self.0),
+            }
         }
     }
 
