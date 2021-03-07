@@ -406,10 +406,25 @@ impl VM {
                     debug_assert_eq!(stack_len + 1, self.stack_len());
                     self.pc = pc;
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
-                    println!("<--- Ok({:?})", val);
+                    println!("<--- Ok({:?})", self.stack_top());
                     return Ok(());
                 }
                 Err(mut err) => {
+                    match err.kind {
+                        RubyErrorKind::BlockReturn => {
+                            self.context_pop().unwrap();
+                            let val = self.stack_pop();
+                            self.set_stack_len(stack_len);
+                            self.stack_push(val);
+                            self.pc = pc;
+                            #[cfg(any(feature = "trace", feature = "trace-func"))]
+                            {
+                                println!("<--- BlockReturn({:?})", self.stack_top());
+                            }
+                            return Err(err);
+                        }
+                        _ => {}
+                    }
                     err.info.push((self.source_info(), self.get_loc()));
                     //eprintln!("{:?}", iseq.exception_table);
                     if let RubyErrorKind::Internal(msg) = &err.kind {
