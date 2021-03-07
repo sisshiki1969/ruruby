@@ -17,8 +17,7 @@ impl VM {
                     Ok(()) => {}
                     Err(err) => match err.kind {
                         RubyErrorKind::BlockReturn => {}
-                        RubyErrorKind::MethodReturn(val) if self.is_method() => {
-                            self.stack_push(val);
+                        RubyErrorKind::MethodReturn if self.is_method() => {
                             return Ok(());
                         }
                         _ => return Err(err),
@@ -38,8 +37,8 @@ impl VM {
                         RubyErrorKind::BlockReturn => {
                             self.stack_pop();
                         }
-                        RubyErrorKind::MethodReturn(val) if self.is_method() => {
-                            self.stack_push(val);
+                        RubyErrorKind::MethodReturn if self.is_method() => {
+                            //self.stack_pop();
                             return Ok(());
                         }
                         _ => return Err(err),
@@ -79,7 +78,6 @@ impl VM {
                         self.context().kind == ISeqKind::Block
                             || self.context().kind == ISeqKind::Other
                     );
-                    //let val = self.stack_pop();
                     let err = RubyError::block_return();
                     return Err(err);
                 }
@@ -87,8 +85,7 @@ impl VM {
                     // - `return` in block
                     #[cfg(debug_assertions)]
                     assert_eq!(self.context().kind, ISeqKind::Block);
-                    let val = self.stack_pop();
-                    let err = RubyError::method_return(val);
+                    let err = RubyError::method_return();
                     return Err(err);
                 }
                 Inst::THROW => {

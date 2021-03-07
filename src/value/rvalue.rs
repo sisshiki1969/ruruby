@@ -61,7 +61,6 @@ impl GC for RValue {
             ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
             ObjKind::Exception(err) => match &err.kind {
                 RubyErrorKind::Value(val) => val.mark(alloc),
-                RubyErrorKind::MethodReturn(val) => val.mark(alloc),
                 _ => {}
             },
             _ => {}

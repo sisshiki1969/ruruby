@@ -75,7 +75,7 @@ extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
     println!("<=== yield {:?} and terminate fiber.", res);
     let res = match res {
         Err(err) => match &err.kind {
-            RubyErrorKind::MethodReturn(_) => Err(err.conv_localjump_err()),
+            RubyErrorKind::MethodReturn => Err(err.conv_localjump_err()),
             _ => Err(err),
         },
         res => res,

@@ -411,7 +411,7 @@ impl VM {
                 }
                 Err(mut err) => {
                     match err.kind {
-                        RubyErrorKind::BlockReturn => {
+                        RubyErrorKind::BlockReturn | RubyErrorKind::MethodReturn => {
                             self.context_pop().unwrap();
                             let val = self.stack_pop();
                             self.set_stack_len(stack_len);
@@ -419,7 +419,7 @@ impl VM {
                             self.pc = pc;
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             {
-                                println!("<--- BlockReturn({:?})", self.stack_top());
+                                println!("<--- {:?}({:?})", err.kind, self.stack_top());
                             }
                             return Err(err);
                         }

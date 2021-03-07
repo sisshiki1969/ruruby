@@ -36,7 +36,7 @@ impl std::fmt::Debug for ErrorInfo {
                 write!(f, "{:?} {}", kind, message)
             }
             RubyErrorKind::ParseErr(kind) => write!(f, "ParseErr: {:?}", kind),
-            RubyErrorKind::MethodReturn(val) => write!(f, "MethodReturn {:?}", val),
+            RubyErrorKind::MethodReturn => write!(f, "MethodReturn"),
             RubyErrorKind::BlockReturn => write!(f, "BlockReturn"),
             RubyErrorKind::Value(val) => write!(f, "{:?}", val),
             RubyErrorKind::Internal(msg) => write!(f, "InternalError {}", msg),
@@ -53,7 +53,7 @@ pub enum RubyErrorKind {
         message: String,
     },
     Value(Value),
-    MethodReturn(Value),
+    MethodReturn,
     BlockReturn,
     Internal(String),
     None(String),
@@ -176,7 +176,7 @@ impl RubyError {
                 ParseErrKind::Name(n) => format!("NameError: {}", n),
             },
             RubyErrorKind::RuntimeErr { message, .. } => message.to_owned(),
-            RubyErrorKind::MethodReturn(_) => "LocalJumpError".to_string(),
+            RubyErrorKind::MethodReturn => "LocalJumpError".to_string(),
             RubyErrorKind::BlockReturn => "LocalJumpError".to_string(),
             RubyErrorKind::Value(val) => val.if_exception().unwrap().message(),
             RubyErrorKind::None(msg) => msg.to_owned(),
@@ -369,8 +369,8 @@ impl RubyError {
 }
 
 impl RubyError {
-    pub fn method_return(val: Value) -> RubyError {
-        RubyError::new(RubyErrorKind::MethodReturn(val), 0)
+    pub fn method_return() -> RubyError {
+        RubyError::new(RubyErrorKind::MethodReturn, 0)
     }
 
     pub fn block_return() -> RubyError {
@@ -398,7 +398,7 @@ mod tests {
     fn errors() {
         let program = r#"
         assert_error { a }
-        #assert_error { break }
+        assert_error { break }
         assert_error { Integer("z") }
         assert_error { 5 * :sym }
         "#;
