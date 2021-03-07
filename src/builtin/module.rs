@@ -351,7 +351,8 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let res = vm.invoke_func(method, self_val, Some(context), &Args::new0());
             iseq.class_defined.pop().unwrap();
             vm.class_pop();
-            res
+            res?;
+            Ok(vm.stack_pop())
         }
         block => {
             args.check_args_num(0)?;

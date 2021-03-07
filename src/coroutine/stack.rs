@@ -65,7 +65,10 @@ extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
     let mut fiber_vm = handle.vm();
     fiber_vm.handle = Some(handle);
     let res = match handle.kind() {
-        FiberKind::Fiber(context) => fiber_vm.run_context(*context),
+        FiberKind::Fiber(context) => match fiber_vm.run_context(*context) {
+            Ok(()) => Ok(fiber_vm.stack_pop()),
+            Err(err) => Err(err),
+        },
         FiberKind::Enum(info) => info.enumerator_fiber(&mut fiber_vm),
     };
     #[cfg(any(feature = "trace", feature = "trace-func"))]

@@ -154,13 +154,13 @@ impl VM {
         self.exec_stack.push(val)
     }
 
-    fn stack_pop(&mut self) -> Value {
+    pub fn stack_pop(&mut self) -> Value {
         self.exec_stack
             .pop()
             .unwrap_or_else(|| panic!("exec stack is empty."))
     }
 
-    fn stack_top(&mut self) -> Value {
+    pub fn stack_top(&mut self) -> Value {
         self.exec_stack.last().unwrap().clone()
     }
 
@@ -331,10 +331,11 @@ impl VM {
         context.adjust_lvar_size();
         //context.pc = 0;
 
-        let val = self.run_context(context)?;
+        self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
 
+        let val = self.stack_pop();
         let stack_len = self.stack_len();
         if stack_len != 0 {
             eprintln!("Error: stack length is illegal. {}", stack_len);
@@ -378,7 +379,7 @@ impl VM {
         }
     }
 
-    pub fn run_context(&mut self, context: impl Into<ContextRef>) -> VMResult {
+    pub fn run_context(&mut self, context: impl Into<ContextRef>) -> Result<(), RubyError> {
         let context = context.into();
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
@@ -400,13 +401,13 @@ impl VM {
         }
         loop {
             match self.run_context_main() {
-                Ok(val) => {
+                Ok(()) => {
                     self.context_pop().unwrap();
-                    debug_assert_eq!(stack_len, self.stack_len());
+                    debug_assert_eq!(stack_len + 1, self.stack_len());
                     self.pc = pc;
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<--- Ok({:?})", val);
-                    return Ok(val);
+                    return Ok(());
                 }
                 Err(mut err) => {
                     err.info.push((self.source_info(), self.get_loc()));
@@ -583,7 +584,8 @@ impl VM {
             Some(method) => return self.eval_method(method, receiver, args),
             None => {}
         };
-        self.send_method_missing(method_id, receiver, args)
+        self.send_method_missing(method_id, receiver, args)?;
+        Ok(self.stack_pop())
     }
 
     pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
@@ -602,10 +604,10 @@ impl VM {
         method_id: IdentId,
         receiver: Value,
         args: &Args,
-    ) -> VMResult {
+    ) -> Result<(), RubyError> {
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => return self.eval_method(method, receiver, args),
+            Some(method) => return self.invoke_method(method, receiver, args),
             None => {}
         }
         self.send_method_missing(method_id, receiver, args)
@@ -616,14 +618,14 @@ impl VM {
         method_id: IdentId,
         receiver: Value,
         args: &Args,
-    ) -> VMResult {
+    ) -> Result<(), RubyError> {
         match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
             Some(method) => {
                 let len = args.len();
                 let mut new_args = Args::new(len + 1);
                 new_args[0] = Value::symbol(method_id);
                 new_args[1..len + 1].copy_from_slice(args);
-                self.eval_method(method, receiver, &new_args)
+                self.invoke_method(method, receiver, &new_args)
             }
             None => Err(RubyError::undefined_method(method_id, receiver)),
         }
@@ -1320,6 +1322,17 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
+        self.invoke_func(methodref, self_val, None, args)?;
+        Ok(self.stack_pop())
+    }
+
+    pub fn invoke_method(
+        &mut self,
+        methodref: MethodId,
+        self_val: impl Into<Value>,
+        args: &Args,
+    ) -> Result<(), RubyError> {
+        let self_val = self_val.into();
         self.invoke_func(methodref, self_val, None, args)
     }
 
@@ -1327,7 +1340,8 @@ impl VM {
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                self.invoke_func(*method, outer.self_value, Some(*outer), args)
+                self.invoke_func(*method, outer.self_value, Some(*outer), args)?;
+                Ok(self.stack_pop())
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
             _ => unreachable!(),
@@ -1379,7 +1393,9 @@ impl VM {
     ) -> VMResult {
         let self_val = self_val.into();
         match block {
-            Block::Block(method, outer) => self.invoke_func(*method, self_val, Some(*outer), args),
+            Block::Block(method, outer) => {
+                self.invoke_func(*method, self_val, Some(*outer), args)?
+            }
             Block::Proc(proc) => {
                 let pref = match proc.as_proc() {
                     Some(proc) => proc,
@@ -1392,20 +1408,25 @@ impl VM {
                     args,
                     pref.context.outer,
                 )?;
-                self.run_context(&context)
+                self.run_context(&context)?
             }
             _ => unreachable!(),
         }
+        Ok(self.stack_pop())
     }
 
     /// Evaluate given block with given `args`.
-    pub fn eval_yield(&mut self, args: &Args) -> VMResult {
+    pub fn eval_yield(&mut self, args: &Args) -> Result<(), RubyError> {
         let context = self.get_method_context();
         match &context.block {
             Block::Block(method, ctx) => {
                 self.invoke_func(*method, ctx.self_value, Some(*ctx), args)
             }
-            Block::Proc(proc) => self.invoke_proc(*proc, args),
+            Block::Proc(proc) => {
+                let val = self.invoke_proc(*proc, args)?;
+                self.stack_push(val);
+                Ok(())
+            }
             Block::None => return Err(RubyError::local_jump("No block given.")),
         }
     }
@@ -1420,7 +1441,8 @@ impl VM {
             args,
             pref.context.outer,
         )?;
-        self.run_context(&context)
+        self.run_context(&context)?;
+        Ok(self.stack_pop())
     }
 
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
@@ -1430,19 +1452,27 @@ impl VM {
         self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
-    ) -> VMResult {
+    ) -> Result<(), RubyError> {
         let self_val = self_val.into();
         use MethodInfo::*;
         let outer = outer.map(|ctx| ctx.get_current());
         match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => self.invoke_native(&func, method, name, self_val, args),
+            BuiltinFunc { func, name } => {
+                let val = self.invoke_native(&func, method, name, self_val, args)?;
+                self.stack_push(val);
+                Ok(())
+            }
             AttrReader { id } => {
                 args.check_args_num(0)?;
-                Self::invoke_getter(id, self_val)
+                let val = Self::invoke_getter(id, self_val)?;
+                self.stack_push(val);
+                Ok(())
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
-                Self::invoke_setter(id, self_val, args[0])
+                let val = Self::invoke_setter(id, self_val, args[0])?;
+                self.stack_push(val);
+                Ok(())
             }
             RubyFunc { iseq } => {
                 let context = Context::from_args(self, self_val, iseq, args, outer)?;
@@ -1488,7 +1518,8 @@ impl VM {
                             } else {
                                 context[0] = v;
                             }
-                            let res = self.run_context(context)?;
+                            self.run_context(context)?;
+                            let res = self.stack_pop();
                             if return_val {
                                 self.temp_push(res);
                             };
@@ -1501,7 +1532,8 @@ impl VM {
                             } else {
                                 context[0] = v;
                             }
-                            let res = self.run_context(context)?;
+                            self.run_context(context)?;
+                            let res = self.stack_pop();
                             if return_val {
                                 self.temp_push(res);
                             };
@@ -1511,7 +1543,8 @@ impl VM {
                     for v in args0 {
                         context = context.get_current();
                         context[0] = v;
-                        let res = self.run_context(context)?;
+                        self.run_context(context)?;
+                        let res = self.stack_pop();
                         if return_val {
                             self.temp_push(res);
                         };
