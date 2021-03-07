@@ -301,7 +301,7 @@ impl VM {
         let mut iseq = method.as_iseq();
         iseq.class_defined = self.get_class_defined();
         let self_value = self.globals.main_object;
-        let val = self.eval_send(method, self_value, &Args::new0())?;
+        let val = self.eval_method(method, self_value, &Args::new0())?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
         assert!(
@@ -580,7 +580,7 @@ impl VM {
 impl VM {
     pub fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
-            Some(method) => return self.eval_send(method, receiver, args),
+            Some(method) => return self.eval_method(method, receiver, args),
             None => {}
         };
         self.send_method_missing(method_id, receiver, args)
@@ -605,7 +605,7 @@ impl VM {
     ) -> VMResult {
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => return self.eval_send(method, receiver, args),
+            Some(method) => return self.eval_method(method, receiver, args),
             None => {}
         }
         self.send_method_missing(method_id, receiver, args)
@@ -623,7 +623,7 @@ impl VM {
                 let mut new_args = Args::new(len + 1);
                 new_args[0] = Value::symbol(method_id);
                 new_args[1..len + 1].copy_from_slice(args);
-                self.eval_send(method, receiver, &new_args)
+                self.eval_method(method, receiver, &new_args)
             }
             None => Err(RubyError::undefined_method(method_id, receiver)),
         }
@@ -634,7 +634,7 @@ impl VM {
         match MethodRepo::find_method(class, method) {
             Some(mref) => {
                 let arg = Args::new1(rhs);
-                let val = self.eval_send(mref, lhs, &arg)?;
+                let val = self.eval_method(mref, lhs, &arg)?;
                 Ok(val)
             }
             None => Err(RubyError::undefined_op(format!("{:?}", method), rhs, lhs)),
@@ -1160,7 +1160,7 @@ impl VM {
                 },
                 ObjKind::Method(mref) => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    self.eval_send(mref.method, mref.receiver, &args)?
+                    self.eval_method(mref.method, mref.receiver, &args)?
                 }
                 _ => {
                     let args = Args::new1(Value::integer(idx as i64));
@@ -1313,22 +1313,21 @@ impl VM {
 
 impl VM {
     /// Evaluate method with given `self_val`, `args` and no outer context.
-    #[inline]
-    pub fn eval_send(
+    pub fn eval_method(
         &mut self,
         methodref: MethodId,
         self_val: impl Into<Value>,
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.invoke_method(methodref, self_val, None, args)
+        self.invoke_func(methodref, self_val, None, args)
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                self.invoke_method(*method, outer.self_value, Some(*outer), args)
+                self.invoke_func(*method, outer.self_value, Some(*outer), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
             _ => unreachable!(),
@@ -1380,9 +1379,7 @@ impl VM {
     ) -> VMResult {
         let self_val = self_val.into();
         match block {
-            Block::Block(method, outer) => {
-                self.invoke_method(*method, self_val, Some(*outer), args)
-            }
+            Block::Block(method, outer) => self.invoke_func(*method, self_val, Some(*outer), args),
             Block::Proc(proc) => {
                 let pref = match proc.as_proc() {
                     Some(proc) => proc,
@@ -1406,7 +1403,7 @@ impl VM {
         let context = self.get_method_context();
         match &context.block {
             Block::Block(method, ctx) => {
-                self.invoke_method(*method, ctx.self_value, Some(*ctx), args)
+                self.invoke_func(*method, ctx.self_value, Some(*ctx), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
             Block::None => return Err(RubyError::local_jump("No block given.")),
@@ -1427,7 +1424,7 @@ impl VM {
     }
 
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
-    pub fn invoke_method(
+    pub fn invoke_func(
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,

@@ -249,7 +249,7 @@ fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             } else if args[0].is_class() {
                 if args[0].is_exception_class() {
                     let method = vm.get_method_from_receiver(args[0], IdentId::NEW)?;
-                    let val = vm.eval_send(method, args[0], &Args::new0())?;
+                    let val = vm.eval_method(method, args[0], &Args::new0())?;
                     Err(RubyError::value(val))
                 } else {
                     Err(RubyError::typeerr("Exception class/object expected."))
@@ -399,11 +399,11 @@ fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     let arg = args[0];
     let arg_class = arg.get_class_for_method();
     match MethodRepo::find_method(arg_class, IdentId::get_id("to_a")) {
-        Some(method) => return vm.eval_send(method, arg, &Args::new0()),
+        Some(method) => return vm.eval_method(method, arg, &Args::new0()),
         None => {}
     };
     match MethodRepo::find_method(arg_class, IdentId::get_id("to_ary")) {
-        Some(method) => return vm.eval_send(method, arg, &Args::new0()),
+        Some(method) => return vm.eval_method(method, arg, &Args::new0()),
         None => {}
     };
     let res = Value::array_from(vec![arg]);

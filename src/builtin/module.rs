@@ -348,7 +348,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.class_push(self_val);
             let mut iseq = vm.get_method_iseq();
             iseq.class_defined.push(self_val);
-            let res = vm.invoke_method(method, self_val, Some(context), &Args::new0());
+            let res = vm.invoke_func(method, self_val, Some(context), &Args::new0());
             iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res

@@ -126,7 +126,7 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     let array = Value::array_from_with_class(array_vec, self_val);
     if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
-        vm.eval_send(method, array, args)?;
+        vm.eval_method(method, array, args)?;
     };
     Ok(array)
 }

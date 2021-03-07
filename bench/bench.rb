@@ -191,7 +191,8 @@ def perf_optcarrot(option = "")
   @md3 += "| x #{'%.2f' % rss_mul} |\n"
 end
 
-['accessor_get.rb',
+['simple_call.rb',
+ 'accessor_get.rb',
  'accessor_set.rb',
  'ivar_get.rb',
  'ivar_set.rb',

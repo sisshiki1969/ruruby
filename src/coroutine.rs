@@ -53,7 +53,7 @@ impl EnumInfo {
         let method = vm.get_method_from_receiver(self.receiver, self.method)?;
         let context = Context::new_noiseq();
         vm.context_push(ContextRef::from_ref(&context));
-        vm.invoke_method(method, self.receiver, None, &self.args)?;
+        vm.invoke_func(method, self.receiver, None, &self.args)?;
         vm.context_pop();
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }

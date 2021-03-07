@@ -13,7 +13,7 @@ pub fn call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(method) => method,
         None => return Err(RubyError::internal("Expected Method object.")),
     };
-    let res = vm.eval_send(method.method, method.receiver, args)?;
+    let res = vm.eval_method(method.method, method.receiver, args)?;
     Ok(res)
 }
 

@@ -177,9 +177,9 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             for i in 0..param_num {
                 args.push(context[i]);
             }
-            vm.eval_send(method, context.self_value, &args)
+            vm.eval_method(method, context.self_value, &args)
         } else {
-            vm.eval_send(method, context.self_value, &args)
+            vm.eval_method(method, context.self_value, &args)
         }
     } else {
         return Err(RubyError::nomethod("super called outside of method"));
@@ -205,7 +205,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         new_args[i] = args[i + 1];
     }
     new_args.block = args.block.clone();
-    let res = vm.eval_send(method, self_val, &new_args)?;
+    let res = vm.eval_method(method, self_val, &new_args)?;
     Ok(res)
 }
 

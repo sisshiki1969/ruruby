@@ -719,24 +719,6 @@ impl VM {
                     try_push!(self.vm_send(iseq, self_value));
                     self.pc += 17;
                 }
-                /*Inst::OPT_SEND => {
-                    let receiver = self.stack_pop();
-                    try_push!(self.vm_fast_send(iseq, receiver));
-                    self.pc += 11;
-                }
-                Inst::OPT_NSEND => {
-                    let receiver = self.stack_pop();
-                    try_no_push!(self.vm_fast_send(iseq, receiver));
-                    self.pc += 11;
-                }
-                Inst::OPT_SEND_SELF => {
-                    try_push!(self.vm_fast_send(iseq, self_value));
-                    self.pc += 11;
-                }
-                Inst::OPT_NSEND_SELF => {
-                    try_no_push!(self.vm_fast_send(iseq, self_value));
-                    self.pc += 11;
-                }*/
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_fast_send(iseq, receiver));
@@ -776,7 +758,7 @@ impl VM {
                     self.class_push(val);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, val, &Args::new0());
+                    let res = self.eval_method(method, val, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 10;
@@ -787,7 +769,7 @@ impl VM {
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
-                    let res = self.eval_send(method, singleton, &Args::new0());
+                    let res = self.eval_method(method, singleton, &Args::new0());
                     self.class_pop();
                     try_push!(res);
                     self.pc += 5;
