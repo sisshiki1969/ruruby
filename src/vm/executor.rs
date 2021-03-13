@@ -84,6 +84,8 @@ impl VM {
             }
         };
 
+        vm.globals.startup_flag = true;
+
         #[cfg(feature = "perf")]
         {
             vm.globals.perf = Perf::new();
@@ -91,7 +93,7 @@ impl VM {
 
         #[cfg(feature = "perf-method")]
         {
-            MethodPerf::clear_stats();
+            MethodRepo::clear_stats();
             vm.globals.clear_const_cache();
         }
 
@@ -1358,7 +1360,7 @@ impl VM {
                 self.invoke_func(*method, outer.self_value, Some(*outer), args)?;
                 Ok(self.stack_pop())
             }
-            Block::Proc(proc) => self.invoke_proc(*proc, args),
+            Block::Proc(proc) => self.eval_proc(*proc, args),
             _ => unreachable!(),
         }
     }
@@ -1383,7 +1385,7 @@ impl VM {
                 let len = self.temp_stack.len();
                 for v in args0 {
                     args[0] = v;
-                    let val = self.invoke_proc(*proc, &args)?;
+                    let val = self.eval_proc(*proc, &args)?;
                     if return_val {
                         self.temp_push(val);
                     }
@@ -1438,7 +1440,7 @@ impl VM {
                 self.invoke_func(*method, ctx.self_value, Some(*ctx), args)
             }
             Block::Proc(proc) => {
-                let val = self.invoke_proc(*proc, args)?;
+                let val = self.eval_proc(*proc, args)?;
                 self.stack_push(val);
                 Ok(())
             }
@@ -1447,7 +1449,7 @@ impl VM {
     }
 
     /// Evaluate Proc object.
-    pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> VMResult {
+    pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
         let pref = proc.as_proc().unwrap();
         let context = Context::from_args(
             self,
@@ -1498,7 +1500,7 @@ impl VM {
     }
 
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
-    pub fn invoke_method_iter1(
+    fn invoke_method_iter1(
         &mut self,
         method: MethodId,
         self_val: Value,
@@ -1915,7 +1917,9 @@ impl VM {
         eprintln!("load file: {:?}", &absolute_path);
         self.exec_program(absolute_path, &program);
         #[cfg(feature = "emit-iseq")]
-        self.globals.const_values.dump();
+        {
+            self.globals.const_values.dump();
+        }
     }
 
     #[cfg(not(tarpaulin_include))]

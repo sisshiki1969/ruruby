@@ -23,6 +23,7 @@ pub struct Globals {
     source_files: Vec<PathBuf>,
     #[cfg(feature = "perf")]
     pub perf: Perf,
+    pub startup_flag: bool,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -78,6 +79,7 @@ impl Globals {
             source_files: vec![],
             #[cfg(feature = "perf")]
             perf: Perf::new(),
+            startup_flag: false,
         };
 
         BuiltinClass::initialize();
@@ -220,6 +222,7 @@ impl ConstantValues {
         self.table[id].dup()
     }
 
+    //#[cfg(features = "emit-iseq")]
     pub fn dump(&self) {
         for (i, val) in self.table.iter().enumerate() {
             eprintln!("{}:{:?}", i, val);

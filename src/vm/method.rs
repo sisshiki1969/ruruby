@@ -1,5 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
+use std::time::{Duration, Instant};
 
 thread_local!(
     pub static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
@@ -10,12 +11,58 @@ thread_local!(
     pub static METHOD_PERF: RefCell<MethodPerf> = RefCell::new(MethodPerf::new());
 );
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct MethodId(std::num::NonZeroU32);
+
+impl std::default::Default for MethodId {
+    fn default() -> Self {
+        Self::new(1)
+    }
+}
+
+impl MethodId {
+    fn new(id: u32) -> Self {
+        Self(std::num::NonZeroU32::new(id).unwrap())
+    }
+
+    pub fn as_iseq(&self) -> ISeqRef {
+        METHODS.with(|m| m.borrow()[*self].as_iseq())
+    }
+}
+
+impl From<u64> for MethodId {
+    fn from(id: u64) -> Self {
+        Self::new(id as u32)
+    }
+}
+
+impl Into<u32> for MethodId {
+    fn into(self) -> u32 {
+        self.0.get()
+    }
+}
+
+impl From<u32> for MethodId {
+    fn from(id: u32) -> Self {
+        Self::new(id)
+    }
+}
+
+impl Into<usize> for MethodId {
+    fn into(self) -> usize {
+        self.0.get() as usize
+    }
+}
+
 #[cfg(feature = "perf-method")]
 pub struct MethodPerf {
     inline_hit: usize,
     inline_missed: usize,
     total: usize,
     missed: usize,
+    timer: Instant,
+    prev_time: Duration,
+    prev_method: Option<MethodId>,
 }
 
 #[cfg(feature = "perf-method")]
@@ -26,6 +73,9 @@ impl MethodPerf {
             inline_missed: 0,
             total: 0,
             missed: 0,
+            timer: Instant::now(),
+            prev_time: Duration::from_secs(0),
+            prev_method: None,
         }
     }
 
@@ -43,6 +93,22 @@ impl MethodPerf {
 
     fn inc_missed() {
         METHOD_PERF.with(|m| m.borrow_mut().missed += 1);
+    }
+
+    fn next(method: MethodId) {
+        let (dur, prev_method) = METHOD_PERF.with(|m| {
+            let elapsed = m.borrow().timer.elapsed();
+            let prev = m.borrow().prev_time;
+            let prev_method = m.borrow().prev_method;
+            m.borrow_mut().prev_time = elapsed;
+            m.borrow_mut().prev_method = Some(method);
+            (elapsed - prev, prev_method)
+        });
+        let id = match prev_method {
+            Some(it) => it,
+            _ => return,
+        };
+        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize].duration += dur);
     }
 
     pub fn clear_stats() {
@@ -68,9 +134,24 @@ impl MethodPerf {
     }
 }
 
+#[derive(Debug, Clone)]
+struct MethodRepoCounter {
+    count: usize,
+    duration: Duration,
+}
+
+impl std::default::Default for MethodRepoCounter {
+    fn default() -> Self {
+        Self {
+            count: 0,
+            duration: Duration::from_secs(0),
+        }
+    }
+}
+
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
-    counter: Vec<usize>,
+    counter: Vec<MethodRepoCounter>,
     class_version: u32,
     i_cache: InlineCache,
     m_cache: MethodCache,
@@ -100,7 +181,11 @@ impl MethodRepo {
                     name: IdentId::_ENUM_FUNC,
                 }, // METHOD_ENUM
             ],
-            counter: vec![0, 0, 0],
+            counter: vec![
+                MethodRepoCounter::default(),
+                MethodRepoCounter::default(),
+                MethodRepoCounter::default(),
+            ],
             class_version: 0,
             i_cache: InlineCache::new(),
             m_cache: MethodCache::new(),
@@ -111,7 +196,7 @@ impl MethodRepo {
         METHODS.with(|m| {
             let m = &mut m.borrow_mut();
             m.table.push(info);
-            m.counter.push(0);
+            m.counter.push(MethodRepoCounter::default());
             MethodId::new((m.table.len() - 1) as u32)
         })
     }
@@ -200,12 +285,16 @@ impl MethodRepo {
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
     pub fn inc_counter(id: MethodId) {
-        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize] += 1);
+        MethodPerf::next(id);
+        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize].count += 1);
     }
 
     pub fn clear_stats() {
         METHODS.with(|m| {
-            m.borrow_mut().counter.iter_mut().for_each(|c| *c = 0);
+            m.borrow_mut()
+                .counter
+                .iter_mut()
+                .for_each(|c| *c = MethodRepoCounter::default());
         });
         MethodPerf::clear_stats();
     }
@@ -215,60 +304,28 @@ impl MethodRepo {
         eprintln!("| Method call stats:                       |");
         eprintln!("+-------------------------------------------+");
         METHODS.with(|m| {
-            for (id, count) in m.borrow().counter.iter().enumerate() {
-                if *count > 0 {
+            let mut v: Vec<_> = m
+                .borrow()
+                .counter
+                .iter()
+                .enumerate()
+                .map(|(id, counter)| (id, counter.clone()))
+                .collect();
+            v.sort_by_key(|x| x.1.duration);
+            v.reverse();
+            for (id, count) in v.iter() {
+                if count.count > 0 {
+                    let time = format!("{:?}", count.duration);
                     eprintln!(
-                        "  MethodId: {:>5}  {:>12}  {:?}",
+                        "  MethodId: {:>5}  {:>12}  {:>15} {:?}",
                         id,
-                        count,
-                        m.borrow().table[id]
+                        count.count,
+                        time,
+                        m.borrow().table[*id]
                     );
                 }
             }
         });
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct MethodId(std::num::NonZeroU32);
-
-impl std::default::Default for MethodId {
-    fn default() -> Self {
-        Self::new(1)
-    }
-}
-
-impl MethodId {
-    fn new(id: u32) -> Self {
-        Self(std::num::NonZeroU32::new(id).unwrap())
-    }
-
-    pub fn as_iseq(&self) -> ISeqRef {
-        METHODS.with(|m| m.borrow()[*self].as_iseq())
-    }
-}
-
-impl From<u64> for MethodId {
-    fn from(id: u64) -> Self {
-        Self::new(id as u32)
-    }
-}
-
-impl Into<u32> for MethodId {
-    fn into(self) -> u32 {
-        self.0.get()
-    }
-}
-
-impl From<u32> for MethodId {
-    fn from(id: u32) -> Self {
-        Self::new(id)
-    }
-}
-
-impl Into<usize> for MethodId {
-    fn into(self) -> usize {
-        self.0.get() as usize
     }
 }
 

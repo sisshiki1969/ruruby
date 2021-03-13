@@ -792,24 +792,26 @@ impl Codegen {
         MethodRepo::update(id, info);
         #[cfg(feature = "emit-iseq")]
         {
-            let iseq = id.as_iseq();
-            eprintln!("-----------------------------------------");
-            eprintln!("{:?}", *iseq);
-            eprintln!("{:?}", iseq.forvars);
-            eprint!("local var: ");
-            for (k, v) in iseq.lvar.table() {
-                eprint!("{}:{:?} ", v.as_u32(), k);
-            }
-            eprintln!("");
-            eprintln!("block: {:?}", iseq.lvar.block());
-            let mut pc = ISeqPos::from(0);
-            while pc.into_usize() < iseq.iseq.len() {
-                eprintln!(
-                    "  {:05x} {}",
-                    pc.into_usize(),
-                    Inst::inst_info(globals, iseq, pc)
-                );
-                pc += Inst::inst_size(iseq.iseq[pc]);
+            if globals.startup_flag {
+                let iseq = id.as_iseq();
+                eprintln!("-----------------------------------------");
+                eprintln!("{:?}", *iseq);
+                eprintln!("{:?}", iseq.forvars);
+                eprint!("local var: ");
+                for (k, v) in iseq.lvar.table() {
+                    eprint!("{}:{:?} ", v.as_u32(), k);
+                }
+                eprintln!("");
+                eprintln!("block: {:?}", iseq.lvar.block());
+                let mut pc = ISeqPos::from(0);
+                while pc.into_usize() < iseq.iseq.len() {
+                    eprintln!(
+                        "  {:05x} {}",
+                        pc.into_usize(),
+                        Inst::inst_info(globals, iseq, pc)
+                    );
+                    pc += Inst::inst_size(iseq.iseq[pc]);
+                }
             }
         }
         Ok(id)
