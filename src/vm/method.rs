@@ -1,6 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 thread_local!(
     pub static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
@@ -60,7 +60,7 @@ pub struct MethodPerf {
     inline_missed: usize,
     total: usize,
     missed: usize,
-    timer: Instant,
+    timer: std::time::Instant,
     prev_time: Duration,
     prev_method: Option<MethodId>,
 }
@@ -73,7 +73,7 @@ impl MethodPerf {
             inline_missed: 0,
             total: 0,
             missed: 0,
-            timer: Instant::now(),
+            timer: std::time::Instant::now(),
             prev_time: Duration::from_secs(0),
             prev_method: None,
         }
