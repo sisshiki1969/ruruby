@@ -8,6 +8,7 @@ extern crate fxhash;
 extern crate region;
 extern crate smallvec;
 pub use fxhash::FxHashMap;
+pub use indexmap;
 pub mod alloc;
 pub mod builtin;
 pub mod coroutine;

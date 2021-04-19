@@ -31,6 +31,8 @@ pub fn init() {
     object.add_builtin_method_by_str("__send__", send);
     object.add_builtin_method_by_str("to_enum", to_enum);
     object.add_builtin_method_by_str("enum_for", to_enum);
+    object.add_builtin_method_by_str("methods", methods);
+    object.add_builtin_method_by_str("singleton_methods", singleton_methods);
     object.add_builtin_method_by_str("respond_to?", respond_to);
     object.add_builtin_method_by_str("instance_exec", instance_exec);
 }
@@ -229,6 +231,53 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         (method, new_args)
     };
     vm.create_enumerator(method, self_val, new_args)
+}
+
+fn methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let regular = args.len() == 0 || args[0].to_bool();
+    // TODO: Only include public and protected.
+    if regular {
+        let class = self_val.get_class_for_method();
+        module::instance_methods(vm, class.into(), args)
+    } else {
+        singleton_methods(vm, self_val, args)
+    }
+}
+
+fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let all = args.len() == 0 || args[0].to_bool();
+    // TODO: Only include public and protected.
+    let mut v = FxIndexSet::default();
+    let root = match self_val.get_singleton_class() {
+        Err(_) => Some(self_val.get_class_for_method()),
+        Ok(class) => {
+            for k in class.method_table().keys() {
+                v.insert(Value::symbol(*k));
+            }
+            class.upper()
+        }
+    };
+    if all {
+        if let Some(mut module) = root {
+            loop {
+                if !module.is_singleton() && !module.is_included() {
+                    break;
+                }
+                for k in module.method_table().keys() {
+                    v.insert(Value::symbol(*k));
+                }
+                match module.upper() {
+                    None => break,
+                    Some(upper) => {
+                        module = upper;
+                    }
+                }
+            }
+        }
+    }
+    Ok(Value::array_from(v.iter().cloned().collect()))
 }
 
 fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -491,6 +540,78 @@ mod test {
         B.new.foo(100,200,d:500)
         B.new.boo(100,200,300)
 
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_methods() {
+        let program = r#"
+        class A
+            def foo
+            end
+        end
+        class B < A
+            def bar
+            end
+        end
+        a = A.new
+        b = B.new
+        c = B.new
+        def c.baz
+        end
+        assert [:foo, :instance_exec, :methods, :__send__, :freeze, :instance_variable_get, :nil?, :singleton_class, :equal?, :===, :inspect, :initialize, :singleton_methods, :to_enum, :super, :instance_variables, :method, :clone, :=~, :class, :to_s, :==, :respond_to?, :enum_for, :send, :instance_of?, :instance_variable_set, :dup, :eql?, :object_id, :<=>, :Integer, :sleep, :loop, :__FILE__, :is_a?, :require_relative, :assert, :puts, :eval, :Array, :lambda, :abort, :rand, :__dir__, :block_given?, :require, :print, :"`", :Complex, :proc, :exit, :raise, :kind_of?, :load, :assert_error, :p, :at_exit, :"/alias_method", :method_missing, :__id__], a.methods
+        assert [:foo, :instance_exec, :methods, :__send__, :freeze, :instance_variable_get, :nil?, :singleton_class, :equal?, :===, :inspect, :initialize, :singleton_methods, :to_enum, :super, :instance_variables, :method, :clone, :=~, :class, :to_s, :==, :respond_to?, :enum_for, :send, :instance_of?, :instance_variable_set, :dup, :eql?, :object_id, :<=>, :Integer, :sleep, :loop, :__FILE__, :is_a?, :require_relative, :assert, :puts, :eval, :Array, :lambda, :abort, :rand, :__dir__, :block_given?, :require, :print, :"`", :Complex, :proc, :exit, :raise, :kind_of?, :load, :assert_error, :p, :at_exit, :"/alias_method", :method_missing, :__id__], a.methods(true)
+        assert [], a.methods(false)
+        assert [:bar, :foo, :instance_exec, :methods, :__send__, :freeze, :instance_variable_get, :nil?, :singleton_class, :equal?, :===, :inspect, :initialize, :singleton_methods, :to_enum, :super, :instance_variables, :method, :clone, :=~, :class, :to_s, :==, :respond_to?, :enum_for, :send, :instance_of?, :instance_variable_set, :dup, :eql?, :object_id, :<=>, :Integer, :sleep, :loop, :__FILE__, :is_a?, :require_relative, :assert, :puts, :eval, :Array, :lambda, :abort, :rand, :__dir__, :block_given?, :require, :print, :"`", :Complex, :proc, :exit, :raise, :kind_of?, :load, :assert_error, :p, :at_exit, :"/alias_method", :method_missing, :__id__], b.methods
+        assert [:bar, :foo, :instance_exec, :methods, :__send__, :freeze, :instance_variable_get, :nil?, :singleton_class, :equal?, :===, :inspect, :initialize, :singleton_methods, :to_enum, :super, :instance_variables, :method, :clone, :=~, :class, :to_s, :==, :respond_to?, :enum_for, :send, :instance_of?, :instance_variable_set, :dup, :eql?, :object_id, :<=>, :Integer, :sleep, :loop, :__FILE__, :is_a?, :require_relative, :assert, :puts, :eval, :Array, :lambda, :abort, :rand, :__dir__, :block_given?, :require, :print, :"`", :Complex, :proc, :exit, :raise, :kind_of?, :load, :assert_error, :p, :at_exit, :"/alias_method", :method_missing, :__id__], b.methods(true)
+        assert [], b.methods(false)
+        assert [:baz, :bar, :foo, :instance_exec, :methods, :__send__, :freeze, :instance_variable_get, :nil?, :singleton_class, :equal?, :===, :inspect, :initialize, :singleton_methods, :to_enum, :super, :instance_variables, :method, :clone, :=~, :class, :to_s, :==, :respond_to?, :enum_for, :send, :instance_of?, :instance_variable_set, :dup, :eql?, :object_id, :<=>, :Integer, :sleep, :loop, :__FILE__, :is_a?, :require_relative, :assert, :puts, :eval, :Array, :lambda, :abort, :rand, :__dir__, :block_given?, :require, :print, :"`", :Complex, :proc, :exit, :raise, :kind_of?, :load, :assert_error, :p, :at_exit, :"/alias_method", :method_missing, :__id__], c.methods
+        assert [:baz, :bar, :foo, :instance_exec, :methods, :__send__, :freeze, :instance_variable_get, :nil?, :singleton_class, :equal?, :===, :inspect, :initialize, :singleton_methods, :to_enum, :super, :instance_variables, :method, :clone, :=~, :class, :to_s, :==, :respond_to?, :enum_for, :send, :instance_of?, :instance_variable_set, :dup, :eql?, :object_id, :<=>, :Integer, :sleep, :loop, :__FILE__, :is_a?, :require_relative, :assert, :puts, :eval, :Array, :lambda, :abort, :rand, :__dir__, :block_given?, :require, :print, :"`", :Complex, :proc, :exit, :raise, :kind_of?, :load, :assert_error, :p, :at_exit, :"/alias_method", :method_missing, :__id__], c.methods(true)
+        assert [:baz], c.methods(false)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_singleton_methods() {
+        let program = r#"
+        module Mod
+            def mod
+            end
+        end
+        class A
+            def foo
+            end
+        end
+        class B < A
+            def bar
+            end
+            def self.method_on_class
+            end
+        end
+        a = A.new
+        b = B.new
+        c = B.new
+        def c.one
+        end
+        class << c
+            include Mod
+            def two
+            end
+        end
+        assert [], a.singleton_methods
+        assert [], a.singleton_methods(true)
+        assert [], a.singleton_methods(false)
+        assert [], b.singleton_methods
+        assert [], b.singleton_methods(true)
+        assert [], b.singleton_methods(false)
+        assert [:one, :two, :mod], c.singleton_methods
+        assert [:one, :two, :mod], c.singleton_methods(true)
+        assert [:one, :two], c.singleton_methods(false)
+        assert [:method_on_class], B.singleton_methods
+        assert [:method_on_class], B.singleton_methods(true)
+        assert [:method_on_class], B.singleton_methods(false)
         "#;
         assert_script(program);
     }

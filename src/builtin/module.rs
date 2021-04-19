@@ -178,7 +178,7 @@ fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+pub(crate) fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     let mut module = self_val.into_module();
     let inherited_too = args.len() == 0 || args[0].to_bool();
@@ -192,18 +192,11 @@ fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Ok(Value::array_from(v))
         }
         true => {
-            let mut v = std::collections::HashSet::new();
+            let mut v = FxIndexSet::default();
             loop {
-                v = v
-                    .union(
-                        &module
-                            .method_table()
-                            .keys()
-                            .map(|k| Value::symbol(*k))
-                            .collect(),
-                    )
-                    .cloned()
-                    .collect();
+                for k in module.method_table().keys() {
+                    v.insert(Value::symbol(*k));
+                }
                 match module.upper() {
                     None => break,
                     Some(upper) => {
