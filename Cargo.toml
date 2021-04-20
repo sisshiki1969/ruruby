@@ -34,6 +34,7 @@ dirs = "3.0.1"
 smallvec = "1.5.0"
 arraystring = "0.3.0"
 region = "2.2.0"
+indexmap = "1.6.2"
 
 [profile.release]
 debug = false
