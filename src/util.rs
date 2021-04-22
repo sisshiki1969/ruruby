@@ -3,6 +3,8 @@ use core::ptr::NonNull;
 use std::path::PathBuf;
 use term_size;
 
+pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
+
 #[derive(Debug, Clone)]
 pub struct Annot<T> {
     pub kind: T,
