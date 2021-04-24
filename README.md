@@ -8,12 +8,14 @@ An alternative Ruby implementation by Rust.
 - No dependency on any other Ruby implementation such as CRuby(MRI), mruby, .. etc.
 - Hand-written original parser.
 - Virtual machine execution.
-- :ribbon: Simple mark & sweep garbage collector is implemented.
+- Simple mark & sweep garbage collector is implemented.
+- Supporting x86/posix, arm64/macos, x86/windows (thanks @jtran and @dmtaub!) . 64-bit arch only.
 
 ## Related articles (sorry, currently only in Japanese)
 
-[Qiita: Rust でつくる（つくれるかもしれない）Ruby](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)  
-[Qiita: ruruby: Rust でつくっている Ruby](https://qiita.com/sisshiki1969/items/4d76e69545ca1c26ed48)
+[Qiita: Rust でつくる（つくれるかもしれない）Ruby (You can (possibly) make Ruby.)](https://qiita.com/sisshiki1969/items/3d25aa81a376eee2e7c2)  
+[Qiita: ruruby: Rust でつくっている Ruby (Making Ruby with Rust)](https://qiita.com/sisshiki1969/items/4d76e69545ca1c26ed48)  
+[SpeakerDeck: Rust でつくるガーベジコレクタ (Garbage collector written in Rust)](https://speakerdeck.com/sisshiki1969/rustdetukurugabezikorekuta)
 
 ## Implementation status
 
