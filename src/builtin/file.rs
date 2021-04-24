@@ -338,6 +338,7 @@ mod tests {
 
     #[test]
     fn file_expand_path() {
+        #[cfg(not(windows))]
         let program = r###"
             assert(Dir.pwd, File.expand_path("."))
             assert(Dir.pwd, File.expand_path("", "."))
@@ -351,6 +352,22 @@ mod tests {
             assert("/home", File.expand_path("home", "/"))
             assert(Dir.home, File.expand_path("#{ENV["HOME"]}", "/"))
             assert("/ruruby", File.expand_path("ruruby", "/"))
+            assert(Dir.home, File.expand_path("~"))
+        "###;
+        #[cfg(windows)]
+        let program = r###"
+            assert(Dir.pwd, File.expand_path("."))
+            assert(Dir.pwd, File.expand_path("", "."))
+            #assert("#{ENV["HOME"]}", File.expand_path(".."))
+            #assert("#{ENV["HOME"]}", File.expand_path("..", "."))
+            #assert("C:/Users", File.expand_path("../.."))
+            #assert("C:/Users", File.expand_path("../..", "."))
+            #assert("C:/Users", File.expand_path("../../", "."))
+            assert("C:/", File.expand_path("/"))
+            assert(Dir.pwd, File.expand_path("../", "tests"))
+            assert("C:/home", File.expand_path("home", "/"))
+            assert(Dir.home, File.expand_path("#{ENV["HOME"]}", "/"))
+            assert("C:/ruruby", File.expand_path("ruruby", "/"))
             assert(Dir.home, File.expand_path("~"))
         "###;
         assert_script(program);

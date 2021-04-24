@@ -611,10 +611,18 @@ mod test {
 
     #[test]
     fn kernel_command() {
+        #[cfg(not(windows))]
         let program = r#"
         assert("Cargo.toml\n", `ls Cargo.toml`)
         a = "toml"
         assert("Cargo.toml\n", `ls Cargo.#{a}`)
+        assert_error { `wooo` }
+        "#;
+        #[cfg(windows)]
+        let program = r#"
+        assert("Cargo.toml\n", `dir /B Cargo.toml`)
+        a = "toml"
+        assert("Cargo.toml\n", `dir /B Cargo.#{a}`)
         assert_error { `wooo` }
         "#;
         assert_script(program);

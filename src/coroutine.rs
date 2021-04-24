@@ -3,11 +3,15 @@ use crate::*;
 mod asm_arm64;
 #[cfg(all(unix, target_arch = "x86_64"))]
 mod asm_x64;
+#[cfg(all(windows, target_arch = "x86_64"))]
+mod asm_windows_x64;
 mod stack;
 #[cfg(all(unix, target_arch = "aarch64"))]
 use asm_arm64 as asm;
 #[cfg(all(unix, target_arch = "x86_64"))]
 use asm_x64 as asm;
+#[cfg(all(windows, target_arch = "x86_64"))]
+use asm_windows_x64 as asm;
 use stack::*;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -139,6 +143,8 @@ impl FiberContext {
     //     |      registers      |
     // -80 |                     | <-sp
     //     +---------------------+
+    //
+    // Note: Size for callee-saved registers varies by platform.
     pub fn initialize(&mut self) {
         let ptr = self as *const _;
         self.stack = Stack::allocate();
