@@ -914,7 +914,7 @@ impl VM {
         } else if kwrest.len() == 0 {
             Value::nil()
         } else {
-            let mut hash = FxHashMap::default();
+            let mut hash = FxIndexMap::default();
             for h in kwrest {
                 for (k, v) in h.expect_hash("Arg")? {
                     hash.insert(HashKey(k), v);

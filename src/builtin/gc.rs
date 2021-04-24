@@ -45,7 +45,7 @@ fn start(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 }
 
 fn stat(_: &mut VM, _: Value, _: &Args) -> VMResult {
-    let mut hash = FxHashMap::default();
+    let mut hash = FxIndexMap::default();
     macro_rules! stat_insert {
         ( $($symbol:ident, $num:expr);* ) => {$(
             let id = IdentId::get_id(stringify!($symbol));

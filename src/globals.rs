@@ -89,7 +89,7 @@ impl Globals {
         io::init(&mut globals);
         file::init();
 
-        let mut env_map = HashInfo::new(FxHashMap::default());
+        let mut env_map = HashInfo::new(FxIndexMap::default());
         std::env::vars()
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
 

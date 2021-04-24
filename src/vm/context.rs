@@ -231,7 +231,7 @@ impl Context {
 
         context.set_arguments(args, kw);
         if params.kwrest || keyword_flag {
-            let mut kwrest = FxHashMap::default();
+            let mut kwrest = FxIndexMap::default();
             if keyword_flag {
                 let keyword = args.kw_arg.as_hash().unwrap();
                 for (k, v) in keyword.iter() {

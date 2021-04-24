@@ -2147,7 +2147,7 @@ impl Codegen {
     }
 
     fn const_hash(&self, globals: &mut Globals, key_value: Vec<(Node, Node)>) -> VMResult {
-        let mut map = FxHashMap::default();
+        let mut map = FxIndexMap::default();
         for (k, v) in key_value {
             map.insert(
                 HashKey(self.const_expr(globals, k)?),

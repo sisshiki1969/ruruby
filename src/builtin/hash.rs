@@ -38,7 +38,7 @@ pub fn init() -> Value {
 
 fn hash_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let map = FxHashMap::default();
+    let map = FxIndexMap::default();
     let hash = Value::hash_from_map(map);
     Ok(hash)
 }
@@ -94,7 +94,7 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
-    let mut res = FxHashMap::default();
+    let mut res = FxIndexMap::default();
     let mut arg = Args::new(2);
     for (k, v) in hash.iter() {
         arg[0] = k;
@@ -248,7 +248,7 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn invert(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
-    let mut new_hash = FxHashMap::default();
+    let mut new_hash = FxIndexMap::default();
     for (k, v) in hash.iter() {
         new_hash.insert(HashKey(v), k);
     }
@@ -282,8 +282,8 @@ mod test {
             assert(h[[1,2,3]], {a:1})
             assert(h[{b:3}], [3,4,5])
             assert(h[1..4], "1")
-            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}, 1..4])
-            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5], "1"])
+            assert(h.keys, [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}, 1..4])
+            assert(h.values, ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5], "1"])
 
             {a:7} == eval({a:7}.to_s)
 
@@ -299,8 +299,8 @@ mod test {
             assert(false, h[[1,2,3]]=={a:1})
             assert(false, h[{b:3}]==[3,4,5])
             assert(false, h[1..4]=="1")
-            assert([], h.keys - [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}, 1..4])
-            assert([], h.values - ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5], "1"])
+            assert(h.keys, [true, false, nil, 100, 7.7, "ruby", :ruby, [1,2,3], {b:3}, 1..4])
+            assert(h.values, ["true", "false", "nil", "100", "7.7", "string", "symbol", {a:1}, [3,4,5], "1"])
         "#;
         assert_script(program);
     }
@@ -328,22 +328,22 @@ mod test {
 
             a = []
             h.each_key{|k| a << k}
-            assert([], a - [:true, :false, :nil, 100, 7.7, :ruby])
+            assert(a, [:true, :false, :nil, 100, 7.7, :ruby])
             a = []
             h.each_value{|v| a << v}
-            assert([], a - ["true", "false", "nil", "100", "7.7", "string"])
+            assert(a, ["true", "false", "nil", "100", "7.7", "string"])
             a = []
             h.each{|k, v| a << [k, v];}
-            assert([], a - [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
+            assert(a, [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
             a = []
             h2.each_key{|k| a << k}
-            assert([], a - [:true, :false, :nil, 100, 7.7, :ruby])
+            assert(a, [:true, :false, :nil, 100, 7.7, :ruby])
             a = []
             h2.each_value{|v| a << v}
-            assert([], a - ["true", "false", "nil", "100", "7.7", "string"])
+            assert(a, ["true", "false", "nil", "100", "7.7", "string"])
             a = []
             h2.each{|k, v| a << [k, v];}
-            assert([], a - [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
+            assert(a, [[:true, "true"], [:false, "false"], [:nil, "nil"], [100, "100"], [7.7, "7.7"], [:ruby, "string"]])
         "#;
         assert_script(program);
     }

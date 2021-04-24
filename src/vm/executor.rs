@@ -1686,13 +1686,15 @@ impl VM {
         context
     }
 
-    fn pop_key_value_pair(&mut self, arg_num: usize) -> FxHashMap<HashKey, Value> {
-        let mut hash = FxHashMap::default();
-        for _ in 0..arg_num {
-            let value = self.stack_pop();
-            let key = self.stack_pop();
+    fn pop_key_value_pair(&mut self, arg_num: usize) -> FxIndexMap<HashKey, Value> {
+        let mut hash = FxIndexMap::default();
+        let len = self.exec_stack.len() - arg_num * 2;
+        for i in 0..arg_num {
+            let key = self.exec_stack[len + i * 2];
+            let value = self.exec_stack[len + i * 2 + 1];
             hash.insert(HashKey(key), value);
         }
+        self.set_stack_len(len);
         hash
     }
 

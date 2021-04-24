@@ -64,7 +64,7 @@ fn tof(_: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn toh(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    Ok(Value::hash_from_map(FxHashMap::default()))
+    Ok(Value::hash_from_map(FxIndexMap::default()))
 }
 
 fn toi(_: &mut VM, _: Value, args: &Args) -> VMResult {

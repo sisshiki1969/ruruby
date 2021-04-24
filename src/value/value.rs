@@ -1076,7 +1076,7 @@ impl Value {
         RValue::new_hash(hash).pack()
     }
 
-    pub fn hash_from_map(hash: FxHashMap<HashKey, Value>) -> Self {
+    pub fn hash_from_map(hash: FxIndexMap<HashKey, Value>) -> Self {
         RValue::new_hash(HashInfo::new(hash)).pack()
     }
 

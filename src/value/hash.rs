@@ -4,8 +4,8 @@ use std::ops::Deref;
 
 #[derive(Debug, Clone, Eq)]
 pub enum HashInfo {
-    Map(FxHashMap<HashKey, Value>),
-    IdentMap(FxHashMap<IdentKey, Value>),
+    Map(FxIndexMap<HashKey, Value>),
+    IdentMap(FxIndexMap<IdentKey, Value>),
 }
 
 impl PartialEq for HashInfo {
@@ -132,11 +132,9 @@ impl PartialEq for IdentKey {
 }
 impl Eq for IdentKey {}
 
-use std::collections::hash_map;
-
 pub enum IntoIter {
-    Map(hash_map::IntoIter<HashKey, Value>),
-    IdentMap(hash_map::IntoIter<IdentKey, Value>),
+    Map(indexmap::map::IntoIter<HashKey, Value>),
+    IdentMap(indexmap::map::IntoIter<IdentKey, Value>),
 }
 
 impl IntoIter {
@@ -167,8 +165,8 @@ impl Iterator for IntoIter {
 macro_rules! define_iter {
     ($trait:ident) => {
         pub enum $trait<'a> {
-            Map(hash_map::$trait<'a, HashKey, Value>),
-            IdentMap(hash_map::$trait<'a, IdentKey, Value>),
+            Map(indexmap::map::$trait<'a, HashKey, Value>),
+            IdentMap(indexmap::map::$trait<'a, IdentKey, Value>),
         }
     };
 }
@@ -249,7 +247,7 @@ impl GC for HashInfo {
 }
 
 impl HashInfo {
-    pub fn new(map: FxHashMap<HashKey, Value>) -> Self {
+    pub fn new(map: FxIndexMap<HashKey, Value>) -> Self {
         HashInfo::Map(map)
     }
 

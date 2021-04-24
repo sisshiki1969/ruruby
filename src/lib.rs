@@ -38,3 +38,5 @@ pub use crate::util::*;
 pub use crate::value::*;
 pub use crate::vm::*;
 pub use smallvec::{smallvec, SmallVec};
+
+pub type FxIndexMap<K, V> = indexmap::IndexMap<K, V, fxhash::FxBuildHasher>;
