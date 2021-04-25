@@ -122,7 +122,7 @@ fn dirname(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 1)?;
     let filename = string_to_path(vm, args[0], "1st arg")?;
     let dirname = match filename.parent() {
-        Some(ostr) => format!("{}", ostr.to_string_lossy()),
+        Some(ostr) => conv_pathbuf(&ostr.to_path_buf()),
         None => "".to_string(),
     };
     Ok(Value::string(dirname))
@@ -247,9 +247,14 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
             _ => {}
         };
     }
-    //eprintln!("{:?}", res_path);
+    #[cfg(windows)]
+    let res_path = PathBuf::from(
+        std::env::var("HOMEDRIVE")
+            .or_else(|_| Err(RubyError::internal("Failed to get home drive.")))?,
+    )
+    .join(res_path);
 
-    return Ok(Value::string(res_path.to_string_lossy()));
+    return Ok(Value::string(conv_pathbuf(&res_path)));
 }
 
 fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -292,8 +297,8 @@ fn realpath(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     };
     root.push(pathname.expect_string("1st arg")?);
     let path_buf = canonicalize_path(vm, root)?;
-    let path_str = path_buf.to_string_lossy();
-    Ok(Value::string(path_str))
+
+    Ok(Value::string(conv_pathbuf(&path_buf)))
 }
 
 #[cfg(test)]

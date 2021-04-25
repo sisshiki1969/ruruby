@@ -5,6 +5,17 @@ use term_size;
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
 
+#[cfg(not(windows))]
+pub fn conv_pathbuf(dir: &PathBuf) -> String {
+    dir.to_string_lossy().to_string()
+}
+#[cfg(windows)]
+pub fn conv_pathbuf(dir: &PathBuf) -> String {
+    dir.to_string_lossy()
+        .replace("\\\\?\\", "")
+        .replace('\\', "/")
+}
+
 #[derive(Debug, Clone)]
 pub struct Annot<T> {
     pub kind: T,

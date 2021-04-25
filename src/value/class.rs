@@ -584,7 +584,7 @@ impl ClassExt {
     fn new() -> Self {
         ClassExt {
             name: None,
-            method_table: FxHashMap::default(),
+            method_table: FxIndexMap::default(),
             const_table: FxHashMap::default(),
             singleton_for: None,
             origin: None,
@@ -594,7 +594,7 @@ impl ClassExt {
     fn new_singleton(target: Value) -> Self {
         ClassExt {
             name: None,
-            method_table: FxHashMap::default(),
+            method_table: FxIndexMap::default(),
             const_table: FxHashMap::default(),
             singleton_for: Some(target),
             origin: None,

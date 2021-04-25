@@ -1,6 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
-use std::time::{Duration};
+use std::time::Duration;
 
 thread_local!(
     pub static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
@@ -331,7 +331,7 @@ impl MethodRepo {
 
 pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult;
 
-pub type MethodTable = FxHashMap<IdentId, MethodId>;
+pub type MethodTable = FxIndexMap<IdentId, MethodId>;
 
 pub static METHOD_ENUM: MethodId = MethodId(unsafe { std::num::NonZeroU32::new_unchecked(2) });
 

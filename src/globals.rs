@@ -92,6 +92,24 @@ impl Globals {
         let mut env_map = HashInfo::new(FxIndexMap::default());
         std::env::vars()
             .for_each(|(var, val)| env_map.insert(Value::string(var), Value::string(val)));
+        #[cfg(windows)]
+        if let None = env_map.get(&Value::string("HOME")) {
+            let home_drive = env_map.get(&Value::string("HOMEDRIVE"));
+            let home_path = env_map.get(&Value::string("HOMEPATH"));
+            let user_profile = env_map.get(&Value::string("USERPROFILE"));
+            let home = if home_drive.is_some() && home_drive.is_some() {
+                home_drive.unwrap().as_string().unwrap().to_string()
+                    + home_path.unwrap().as_string().unwrap()
+            } else if let Some(up) = user_profile {
+                up.as_string().unwrap().to_string()
+            } else {
+                "".to_string()
+            };
+            env_map.insert(
+                Value::string("HOME"),
+                Value::string(home.replace('\\', "/")),
+            );
+        };
 
         let env = Value::hash_from(env_map);
         globals.set_toplevel_constant("ENV", env);
