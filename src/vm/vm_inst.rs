@@ -17,30 +17,31 @@ impl Inst {
     pub const CREATE_REGEXP: u8 = 14;
     pub const CONST_VAL: u8 = 15;
 
-    pub const SET_LOCAL: u8 = 30;
-    pub const GET_LOCAL: u8 = 31;
-    pub const SET_DYNLOCAL: u8 = 32;
-    pub const GET_DYNLOCAL: u8 = 33;
-    pub const GET_CONST: u8 = 34;
-    pub const SET_CONST: u8 = 35;
-    pub const GET_CONST_TOP: u8 = 36;
-    pub const GET_SCOPE: u8 = 37;
-    pub const GET_IVAR: u8 = 38;
-    pub const SET_IVAR: u8 = 39;
-    pub const GET_GVAR: u8 = 40;
-    pub const SET_GVAR: u8 = 41;
-    pub const GET_CVAR: u8 = 42;
-    pub const SET_CVAR: u8 = 43;
+    pub const SET_LOCAL: u8 = 20;
+    pub const GET_LOCAL: u8 = 21;
+    pub const SET_DYNLOCAL: u8 = 22;
+    pub const GET_DYNLOCAL: u8 = 23;
+    pub const GET_CONST: u8 = 24;
+    pub const SET_CONST: u8 = 25;
+    pub const GET_CONST_TOP: u8 = 26;
+    pub const GET_SCOPE: u8 = 27;
+    pub const GET_IVAR: u8 = 28;
+    pub const SET_IVAR: u8 = 29;
+    pub const GET_GVAR: u8 = 30;
+    pub const SET_GVAR: u8 = 31;
+    pub const GET_CVAR: u8 = 32;
+    pub const SET_CVAR: u8 = 33;
 
-    pub const GET_INDEX: u8 = 52;
-    pub const SET_INDEX: u8 = 53;
-    pub const GET_IDX_I: u8 = 54;
-    pub const SET_IDX_I: u8 = 55;
+    pub const GET_INDEX: u8 = 40;
+    pub const SET_INDEX: u8 = 41;
+    pub const GET_IDX_I: u8 = 42;
+    pub const SET_IDX_I: u8 = 43;
 
-    pub const CHECK_LOCAL: u8 = 56;
-    pub const CHECK_CONST: u8 = 57;
-    pub const CHECK_IVAR: u8 = 58;
-    pub const CHECK_GVAR: u8 = 59;
+    pub const CHECK_LOCAL: u8 = 50;
+    pub const CHECK_CONST: u8 = 51;
+    pub const CHECK_SCOPE: u8 = 52;
+    pub const CHECK_IVAR: u8 = 53;
+    pub const CHECK_GVAR: u8 = 54;
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
@@ -213,6 +214,7 @@ impl Inst {
 
             Inst::CHECK_LOCAL => "CHECK_LOCAL",
             Inst::CHECK_CONST => "CHECK_CONST",
+            Inst::CHECK_SCOPE => "CHECK_SCOPE",
             Inst::CHECK_IVAR => "CHECK_IVAR",
             Inst::CHECK_GVAR => "CHECK_GVAR",
 
@@ -311,6 +313,7 @@ impl Inst {
 
             | Inst::SET_CONST           // IdentId: u32
             | Inst::CHECK_CONST         // IdentId: u32
+            | Inst::CHECK_SCOPE         // IdentId: u32
             | Inst::GET_CONST_TOP       // IdentId: u32
             | Inst::GET_SCOPE           // IdentId: u32
             | Inst::GET_IVAR            // IdentId: u32

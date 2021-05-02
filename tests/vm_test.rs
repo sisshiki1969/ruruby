@@ -1423,13 +1423,26 @@ fn defined() {
     assert(nil, defined? a)
     assert(nil, defined? @a)
     assert(nil, defined? $a)
+    assert(nil, defined? a + 3)
+    assert(nil, defined? A)
+    assert(nil, defined? A::B)
+    assert(nil, defined? A::B::C)
     a = [1,2]
     @a = 100
     $a = 100
+    class A
+      B = 100
+    end
     assert("local-variable", defined? a)
     assert("instance-variable", defined? @a)
     assert("global-variable", defined? $a)
+    assert("constant", defined? A)
+    assert("constant", defined? A::B)
+    assert(nil, defined? A::C)
+    assert(nil, defined? A::B::C)
     assert("method", defined? a.each)
+    assert("method", defined? a + 3)
+    #assert(nil, defined? a.eeee)
     assert("method", defined? a[2])
     "##;
     assert_script(program);

@@ -284,6 +284,7 @@ impl Node {
         }
     }
 
+    /// This method returns str corresponding to the type of `self` for `defined?`.
     pub fn test_defined(&self) -> &'static str {
         match &self.kind {
             NodeKind::LocalVar(..) => "local-variable",

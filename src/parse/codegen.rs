@@ -2031,7 +2031,7 @@ impl Codegen {
             }
             NodeKind::Defined(content) => {
                 let mut nil_labels = vec![];
-                self.check_defined(&content, iseq, &mut nil_labels);
+                self.check_defined(globals, &content, iseq, &mut nil_labels)?;
                 if use_value {
                     iseq.gen_string(globals, content.test_defined());
                     let end = iseq.gen_jmp();
@@ -2054,7 +2054,16 @@ impl Codegen {
 }
 
 impl Codegen {
-    pub fn check_defined(&mut self, node: &Node, iseq: &mut ISeq, labels: &mut Vec<ISeqPos>) {
+    /// Helper for defined?.
+    /// Check `node`, and generate bytecode into `iseq`.
+    /// Collect destinations for nil into `labels`.
+    pub fn check_defined(
+        &mut self,
+        globals: &mut Globals,
+        node: &Node,
+        iseq: &mut ISeq,
+        labels: &mut Vec<ISeqPos>,
+    ) -> Result<(), RubyError> {
         match &node.kind {
             NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
                 match self.get_local_var(*id) {
@@ -2069,42 +2078,67 @@ impl Codegen {
                 };
 
                 labels.push(iseq.gen_jmp_if_t());
+                Ok(())
             }
             NodeKind::GlobalVar(id) => {
                 iseq.push(Inst::CHECK_GVAR);
                 iseq.push32((*id).into());
                 labels.push(iseq.gen_jmp_if_t());
+                Ok(())
             }
             NodeKind::InstanceVar(id) => {
                 iseq.push(Inst::CHECK_IVAR);
                 iseq.push32((*id).into());
                 labels.push(iseq.gen_jmp_if_t());
+                Ok(())
             }
-            NodeKind::Const { .. } | NodeKind::Scope(..) => {}
-            NodeKind::Array(elems, ..) => elems
-                .iter()
-                .for_each(|n| self.check_defined(n, iseq, labels)),
+            NodeKind::Const { toplevel: _, id } => {
+                iseq.push(Inst::CHECK_CONST);
+                iseq.push32((*id).into());
+                labels.push(iseq.gen_jmp_if_t());
+                Ok(())
+            }
+            NodeKind::Scope(parent, id) => {
+                self.check_defined(globals, parent, iseq, labels)?;
+                self.gen(globals, iseq, (**parent).clone(), true)?;
+                iseq.push(Inst::CHECK_SCOPE);
+                iseq.push32((*id).into());
+                labels.push(iseq.gen_jmp_if_t());
+                Ok(())
+            }
+            NodeKind::Array(elems, ..) => {
+                for n in elems {
+                    self.check_defined(globals, n, iseq, labels)?
+                }
+                Ok(())
+            }
             NodeKind::BinOp(_, lhs, rhs) => {
-                self.check_defined(lhs, iseq, labels);
-                self.check_defined(rhs, iseq, labels);
+                self.check_defined(globals, lhs, iseq, labels)?;
+                self.check_defined(globals, rhs, iseq, labels)?;
+                Ok(())
             }
-            NodeKind::UnOp(_, node) => self.check_defined(node, iseq, labels),
+            NodeKind::UnOp(_, node) => self.check_defined(globals, node, iseq, labels),
             NodeKind::Index { base, index } => {
-                self.check_defined(base, iseq, labels);
-                index
-                    .iter()
-                    .for_each(|i| self.check_defined(i, iseq, labels));
+                self.check_defined(globals, base, iseq, labels)?;
+                for i in index {
+                    self.check_defined(globals, i, iseq, labels)?
+                }
+                Ok(())
             }
             NodeKind::Send {
-                receiver, arglist, ..
+                receiver,
+                arglist,
+                method: _,
+                ..
             } => {
-                self.check_defined(receiver, iseq, labels);
-                arglist
-                    .args
-                    .iter()
-                    .for_each(|n| self.check_defined(n, iseq, labels));
+                // TODO: methods which does not exists for receiver should return nil.
+                self.check_defined(globals, receiver, iseq, labels)?;
+                for n in &arglist.args {
+                    self.check_defined(globals, n, iseq, labels)?
+                }
+                Ok(())
             }
-            _ => {}
+            _ => Ok(()),
         }
     }
 }
