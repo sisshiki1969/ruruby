@@ -2092,8 +2092,18 @@ impl Codegen {
                 labels.push(iseq.gen_jmp_if_t());
                 Ok(())
             }
-            NodeKind::Const { toplevel: _, id } => {
+            NodeKind::Const {
+                toplevel: false,
+                id,
+            } => {
                 iseq.push(Inst::CHECK_CONST);
+                iseq.push32((*id).into());
+                labels.push(iseq.gen_jmp_if_t());
+                Ok(())
+            }
+            NodeKind::Const { toplevel: true, id } => {
+                self.gen_get_const(globals, iseq, IdentId::get_id("Object"));
+                iseq.push(Inst::CHECK_SCOPE);
                 iseq.push32((*id).into());
                 labels.push(iseq.gen_jmp_if_t());
                 Ok(())
