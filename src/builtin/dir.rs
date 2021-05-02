@@ -19,13 +19,13 @@ pub fn init() -> Value {
 fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let home_dir = dirs::home_dir().unwrap_or(PathBuf::new());
-    Ok(Value::string(home_dir.to_string_lossy()))
+    Ok(Value::string(conv_pathbuf(&home_dir)))
 }
 
 fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let cur_dir = std::env::current_dir().unwrap_or(PathBuf::new());
-    Ok(Value::string(cur_dir.to_string_lossy()))
+    Ok(Value::string(conv_pathbuf(&cur_dir)))
 }
 
 fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -127,8 +127,7 @@ fn traverse_dir(
     }
 
     if level == glob.len() {
-        let path = path.to_string_lossy();
-        matches.insert(Value::string(path));
+        matches.insert(Value::string(conv_pathbuf(path)));
         return Ok(());
     }
     assert!(level < glob.len());
@@ -174,8 +173,7 @@ fn traverse_dir(
         {
             let mut path = path.clone();
             path.push(name_cow.as_ref());
-            let path = path.to_string_lossy();
-            matches.insert(Value::string(path));
+            matches.insert(Value::string(conv_pathbuf(&path)));
         }
     }
     Ok(())

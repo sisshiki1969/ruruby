@@ -230,13 +230,13 @@ fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut path = vm.get_source_path();
     path.pop();
-    Ok(Value::string(path.to_string_lossy()))
+    Ok(Value::string(conv_pathbuf(&path)))
 }
 
 fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let path = vm.get_source_path();
-    Ok(Value::string(path.to_string_lossy()))
+    Ok(Value::string(conv_pathbuf(&path)))
 }
 
 /// raise -> ()
@@ -425,13 +425,19 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     use std::process::Command;
     args.check_args_num(1)?;
     let mut arg = args[0];
-    let mut input = arg.expect_string("Arg")?.split_whitespace();
+    let input = if cfg!(windows) {
+        format!("cmd /C {}", arg.expect_string("Arg")?)
+    } else {
+        arg.expect_string("Arg")?.to_string()
+    };
+    let mut input = input.split_ascii_whitespace();
     let command = input.next().unwrap();
-    let output = match Command::new(command).args(input).output() {
+    let output = match Command::new(command.clone()).args(input).output() {
         Ok(ok) => ok,
         Err(err) => {
             return Err(RubyError::runtime(format!(
-                "Command failed. {:?}",
+                "Command failed. {} {:?}",
+                command,
                 err.kind()
             )))
         }
@@ -620,10 +626,10 @@ mod test {
         "#;
         #[cfg(windows)]
         let program = r#"
-        assert("Cargo.toml\n", `dir /B Cargo.toml`)
+        assert("Cargo.toml\r\n", `dir /B Cargo.toml`)
         a = "toml"
-        assert("Cargo.toml\n", `dir /B Cargo.#{a}`)
-        assert_error { `wooo` }
+        assert("Cargo.toml\r\n", `dir /B Cargo.#{a}`)
+        #assert_error { `wooo` }
         "#;
         assert_script(program);
     }
