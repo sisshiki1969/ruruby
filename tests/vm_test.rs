@@ -1418,19 +1418,57 @@ fn defined() {
     assert("expression", defined? "1.1")
     assert("expression", defined? [])
     assert("expression", defined? {})
+
     assert("method", defined? 1+1)
     assert("method", defined? -(1))
+
     assert(nil, defined? a)
     assert(nil, defined? @a)
     assert(nil, defined? $a)
+    assert(nil, defined? a + 3)
+    assert(nil, defined? A)
+    assert(nil, defined? A::B)
+    assert(nil, defined? A::B::C)
+    assert(nil, defined? ::A)
+    assert(nil, defined? ::A::B)
+    assert(nil, defined? ::A::B::C)
+
     a = [1,2]
     @a = 100
     $a = 100
+    class A
+      B = 100
+    end
+
     assert("local-variable", defined? a)
     assert("instance-variable", defined? @a)
     assert("global-variable", defined? $a)
+    assert("constant", defined? A)
+    assert("constant", defined? A::B)
+    assert(nil, defined? A::C)
+    assert(nil, defined? A::B::C)
+    assert("constant", defined? ::A)
+    assert("constant", defined? ::A::B)
+    assert(nil, defined? ::A::C)
+    assert(nil, defined? ::A::B::C)
+
     assert("method", defined? a.each)
+    assert(nil, defined? a.eeee)
+
+    assert("method", defined? a + 3)
+    assert("method", defined? a - 3)
+    assert("method", defined? a * 3)
+    #assert("method", defined? a / 3)
+    #assert("method", defined? a % 3)
     assert("method", defined? a[2])
+
+    assert(nil, defined? Object + 3)
+    assert(nil, defined? Object - 3)
+    assert(nil, defined? Object * 3)
+    assert(nil, defined? Object / 3)
+    assert(nil, defined? Object % 3)
+    assert(nil, defined? ((Object + 3).ee))
+    assert(nil, defined? Object[2])
     "##;
     assert_script(program);
 }

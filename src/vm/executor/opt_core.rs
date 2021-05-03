@@ -426,6 +426,15 @@ impl VM {
                     self.globals.set_const(parent, id, val);
                     self.pc += 5;
                 }
+                Inst::CHECK_CONST => {
+                    let id = iseq.read_id(self.pc + 1);
+                    let is_undef = match self.get_env_const(id) {
+                        Some(_) => false,
+                        None => VM::get_super_const(self.class(), id).is_err(),
+                    };
+                    self.stack_push(Value::bool(is_undef));
+                    self.pc += 5;
+                }
                 Inst::GET_CONST => {
                     let id = iseq.read_id(self.pc + 1);
                     let slot = iseq.read32(self.pc + 5);
@@ -446,6 +455,16 @@ impl VM {
                     let parent = BuiltinClass::object();
                     let val = self.get_const(parent, id)?;
                     self.stack_push(val);
+                    self.pc += 5;
+                }
+                Inst::CHECK_SCOPE => {
+                    let parent = self.stack_pop();
+                    let id = iseq.read_id(self.pc + 1);
+                    let is_undef = match parent.expect_mod_class() {
+                        Ok(parent) => self.get_const(parent, id).is_err(),
+                        Err(_) => true,
+                    };
+                    self.stack_push(Value::bool(is_undef));
                     self.pc += 5;
                 }
                 Inst::GET_SCOPE => {
@@ -713,6 +732,14 @@ impl VM {
                         iseq.read_disp(self.pc + 5)
                     };
                     self.jump_pc(9, disp);
+                }
+                Inst::CHECK_METHOD => {
+                    let receiver = self.stack_pop();
+                    let method = iseq.read_id(self.pc + 1);
+                    let rec_class = receiver.get_class_for_method();
+                    let is_undef = rec_class.get_method(method).is_none();
+                    self.stack_push(Value::bool(is_undef));
+                    self.pc += 5;
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
