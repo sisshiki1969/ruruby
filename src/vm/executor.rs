@@ -191,6 +191,10 @@ impl VM {
         self.temp_stack.split_off(len)
     }
 
+    pub fn temp_len(&self) -> usize {
+        self.temp_stack.len()
+    }
+
     /// Push objects to the temporary area.
     pub fn temp_push_vec(&mut self, slice: &[Value]) {
         self.temp_stack.extend_from_slice(slice);
@@ -496,6 +500,14 @@ impl VM {
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.globals.set_global_var(id, val);
+    }
+
+    // Search lexical class stack and class inheritance chain for a constant.
+    pub fn find_const(&self, id: IdentId) -> VMResult {
+        match self.get_env_const(id) {
+            Some(val) => Ok(val),
+            None => VM::get_super_const(self.class(), id),
+        }
     }
 
     // Search lexical class stack for the constant.

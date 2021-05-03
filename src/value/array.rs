@@ -283,19 +283,6 @@ impl ArrayInfo {
         self.elements.len()
     }
 
-    pub fn each<F>(&self, mut f: F) -> Result<(), RubyError>
-    where
-        F: FnMut(&Value) -> Result<(), RubyError>,
-    {
-        let mut i = 0;
-        let len = self.len();
-        while i < len {
-            f(&self.elements[i])?;
-            i += 1;
-        }
-        Ok(())
-    }
-
     pub fn retain<F>(&mut self, mut f: F) -> Result<(), RubyError>
     where
         F: FnMut(&Value) -> Result<bool, RubyError>,

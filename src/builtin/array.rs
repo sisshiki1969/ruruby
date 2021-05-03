@@ -384,10 +384,21 @@ macro_rules! to_enum_str {
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let aref = self_val.into_array();
-    let block = to_enum_id!(vm, self_val, args, IdentId::MAP);
-    let iter = aref.iter().map(|v| *v);
-    let res = vm.eval_block_iter1(block, iter, true)?;
-    Ok(res)
+    let method = to_enum_id!(vm, self_val, args, IdentId::MAP);
+
+    let temp_len = vm.temp_len();
+
+    let mut i = 0;
+    let mut arg = Args::new(1);
+    while i < aref.len() {
+        arg[0] = aref[i];
+        let res = vm.eval_block(method, &arg)?;
+        vm.temp_push(res);
+        i += 1;
+    }
+
+    let res = vm.temp_pop_vec(temp_len);
+    Ok(Value::array_from(res))
 }
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -425,8 +436,13 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.into_array();
-    let iter = aref.iter().map(|v| *v);
-    vm.eval_block_iter1(method, iter, false)?;
+    let mut i = 0;
+    let mut arg = Args::new(1);
+    while i < aref.len() {
+        arg[0] = aref[i];
+        vm.eval_block(method, &arg)?;
+        i += 1;
+    }
     Ok(self_val)
 }
 
@@ -434,11 +450,13 @@ fn each_with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "each_with_index");
     let aref = self_val.into_array();
+    let mut i = 0;
     let mut arg = Args::new(2);
-    for (i, v) in aref.elements.iter().enumerate() {
-        arg[0] = *v;
+    while i < aref.len() {
+        arg[0] = aref[i];
         arg[1] = Value::integer(i as i64);
         vm.eval_block(method, &arg)?;
+        i += 1;
     }
     Ok(self_val)
 }
@@ -1420,10 +1438,32 @@ mod tests {
         assert([1,2,3], a.each {|x| b+=x })
         assert(6, b)
 
+        a = (0..4).to_a
+        b = []
+        a.each do |x|
+          if x == 2
+            a.shift
+          end
+          b << x
+        end
+        assert([1,2,3,4], a)
+        assert([0,1,2,4], b)
+
         a = [1,2,3]
         b = []
         assert([1,2,3], a.each_with_index {|x, i| b << [x,i] })
         assert([[1, 0], [2, 1], [3, 2]], b)
+
+        a = (0..3).to_a
+        b = []
+        a.each_with_index do |x, i|
+          if i == 2
+            a.shift
+          end
+          b << [x, i]
+        end
+        assert([1,2,3], a)
+        assert([[0,0], [1,1], [2,2]], b)
     ";
         assert_script(program);
     }

@@ -432,10 +432,7 @@ impl VM {
                     let val = match self.globals.find_const_cache(slot) {
                         Some(val) => val,
                         None => {
-                            let val = match self.get_env_const(id) {
-                                Some(val) => val,
-                                None => VM::get_super_const(self.class(), id)?,
-                            };
+                            let val = self.find_const(id)?;
                             self.globals.set_const_cache(slot, val);
                             val
                         }
