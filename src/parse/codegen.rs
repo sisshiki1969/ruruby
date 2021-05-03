@@ -3,6 +3,7 @@ use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use crate::parse::parser::RescueEntry;
 use crate::vm::vm_inst::*;
 use crate::*;
+mod defined;
 
 #[derive(Debug, Clone)]
 pub struct Codegen {
@@ -2029,19 +2030,7 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::Defined(content) => {
-                let mut nil_labels = vec![];
-                self.check_defined(globals, &content, iseq, &mut nil_labels)?;
-                if use_value {
-                    iseq.gen_string(globals, content.test_defined());
-                    let end = iseq.gen_jmp();
-                    nil_labels
-                        .iter()
-                        .for_each(|label| iseq.write_disp_from_cur(*label));
-                    iseq.gen_push_nil();
-                    iseq.write_disp_from_cur(end);
-                }
-            }
+            NodeKind::Defined(content) => self.gen_defined(globals, iseq, *content, use_value)?,
             NodeKind::AliasMethod(new, old) => {
                 self.gen(globals, iseq, *new, true)?;
                 self.gen(globals, iseq, *old, true)?;
@@ -2050,106 +2039,6 @@ impl Codegen {
             _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())
-    }
-}
-
-impl Codegen {
-    /// Helper for defined?.
-    /// Check `node`, and generate bytecode into `iseq`.
-    /// Collect destinations for nil into `labels`.
-    pub fn check_defined(
-        &mut self,
-        globals: &mut Globals,
-        node: &Node,
-        iseq: &mut ISeq,
-        labels: &mut Vec<ISeqPos>,
-    ) -> Result<(), RubyError> {
-        match &node.kind {
-            NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
-                match self.get_local_var(*id) {
-                    Some((outer, lvar_id)) => {
-                        iseq.push(Inst::CHECK_LOCAL);
-                        iseq.push32(lvar_id.as_u32());
-                        iseq.push32(outer);
-                    }
-                    None => {
-                        iseq.push(Inst::PUSH_TRUE);
-                    }
-                };
-
-                labels.push(iseq.gen_jmp_if_t());
-                Ok(())
-            }
-            NodeKind::GlobalVar(id) => {
-                iseq.push(Inst::CHECK_GVAR);
-                iseq.push32((*id).into());
-                labels.push(iseq.gen_jmp_if_t());
-                Ok(())
-            }
-            NodeKind::InstanceVar(id) => {
-                iseq.push(Inst::CHECK_IVAR);
-                iseq.push32((*id).into());
-                labels.push(iseq.gen_jmp_if_t());
-                Ok(())
-            }
-            NodeKind::Const {
-                toplevel: false,
-                id,
-            } => {
-                iseq.push(Inst::CHECK_CONST);
-                iseq.push32((*id).into());
-                labels.push(iseq.gen_jmp_if_t());
-                Ok(())
-            }
-            NodeKind::Const { toplevel: true, id } => {
-                self.gen_get_const(globals, iseq, IdentId::get_id("Object"));
-                iseq.push(Inst::CHECK_SCOPE);
-                iseq.push32((*id).into());
-                labels.push(iseq.gen_jmp_if_t());
-                Ok(())
-            }
-            NodeKind::Scope(parent, id) => {
-                self.check_defined(globals, parent, iseq, labels)?;
-                self.gen(globals, iseq, (**parent).clone(), true)?;
-                iseq.push(Inst::CHECK_SCOPE);
-                iseq.push32((*id).into());
-                labels.push(iseq.gen_jmp_if_t());
-                Ok(())
-            }
-            NodeKind::Array(elems, ..) => {
-                for n in elems {
-                    self.check_defined(globals, n, iseq, labels)?
-                }
-                Ok(())
-            }
-            NodeKind::BinOp(_, lhs, rhs) => {
-                self.check_defined(globals, lhs, iseq, labels)?;
-                self.check_defined(globals, rhs, iseq, labels)?;
-                Ok(())
-            }
-            NodeKind::UnOp(_, node) => self.check_defined(globals, node, iseq, labels),
-            NodeKind::Index { base, index } => {
-                self.check_defined(globals, base, iseq, labels)?;
-                for i in index {
-                    self.check_defined(globals, i, iseq, labels)?
-                }
-                Ok(())
-            }
-            NodeKind::Send {
-                receiver,
-                arglist,
-                method: _,
-                ..
-            } => {
-                // TODO: methods which does not exists for receiver should return nil.
-                self.check_defined(globals, receiver, iseq, labels)?;
-                for n in &arglist.args {
-                    self.check_defined(globals, n, iseq, labels)?
-                }
-                Ok(())
-            }
-            _ => Ok(()),
-        }
     }
 }
 

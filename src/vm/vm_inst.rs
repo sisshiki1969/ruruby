@@ -42,6 +42,7 @@ impl Inst {
     pub const CHECK_SCOPE: u8 = 52;
     pub const CHECK_IVAR: u8 = 53;
     pub const CHECK_GVAR: u8 = 54;
+    pub const CHECK_METHOD: u8 = 55;
 
     pub const SEND: u8 = 60;
     pub const SEND_SELF: u8 = 61;
@@ -217,6 +218,7 @@ impl Inst {
             Inst::CHECK_SCOPE => "CHECK_SCOPE",
             Inst::CHECK_IVAR => "CHECK_IVAR",
             Inst::CHECK_GVAR => "CHECK_GVAR",
+            Inst::CHECK_METHOD => "CHECK_METHOD",
 
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SLF",
@@ -314,6 +316,7 @@ impl Inst {
             | Inst::SET_CONST           // IdentId: u32
             | Inst::CHECK_CONST         // IdentId: u32
             | Inst::CHECK_SCOPE         // IdentId: u32
+            | Inst::CHECK_METHOD        // IdentId: u32
             | Inst::GET_CONST_TOP       // IdentId: u32
             | Inst::GET_SCOPE           // IdentId: u32
             | Inst::GET_IVAR            // IdentId: u32
@@ -494,6 +497,7 @@ impl Inst {
             | Inst::GET_CONST_TOP
             | Inst::SET_CONST
             | Inst::CHECK_CONST
+            | Inst::CHECK_METHOD
             | Inst::GET_SCOPE
             | Inst::GET_IVAR
             | Inst::SET_IVAR

@@ -251,6 +251,34 @@ impl BinOp {
             _ => false,
         }
     }
+
+    pub fn to_method(&self) -> IdentId {
+        let s = match self {
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Rem => "%",
+            Self::Exp => "**",
+            Self::Shr => ">>",
+            Self::Shl => "<<",
+            Self::BitAnd => "&",
+            Self::BitOr => "|",
+            Self::BitXor => "^",
+            Self::Eq => "==",
+            Self::Ne => "!=",
+            Self::TEq => "===",
+            Self::Gt => ">",
+            Self::Ge => ">=",
+            Self::Lt => "<",
+            Self::Le => "<=",
+            Self::Cmp => "<=>",
+            Self::LAnd => "&&",
+            Self::LOr => "||",
+            Self::Match => "=~",
+        };
+        IdentId::get_id(s)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -281,27 +309,6 @@ impl Node {
             | NodeKind::RegExp(_, true)
             | NodeKind::Array(_, true) => true,
             _ => false,
-        }
-    }
-
-    /// This method returns str corresponding to the type of `self` for `defined?`.
-    pub fn test_defined(&self) -> &'static str {
-        match &self.kind {
-            NodeKind::LocalVar(..) => "local-variable",
-            NodeKind::GlobalVar(..) => "global-variable",
-            NodeKind::ClassVar(..) => "class-variable",
-            NodeKind::Const { .. } | NodeKind::Scope(..) => "constant",
-            NodeKind::InstanceVar(..) => "instance-variable",
-            NodeKind::AssignOp(..) | NodeKind::MulAssign(..) => "assignment",
-            NodeKind::BinOp(..)
-            | NodeKind::UnOp(..)
-            | NodeKind::Index { .. }
-            | NodeKind::Send { .. } => "method",
-            NodeKind::Bool(true) => "true",
-            NodeKind::Bool(false) => "false",
-            NodeKind::Nil => "nil",
-            NodeKind::SelfValue => "self",
-            _ => "expression",
         }
     }
 
