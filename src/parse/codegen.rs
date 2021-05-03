@@ -75,6 +75,8 @@ pub struct Context {
     kind: ContextKind,
 }
 
+/// Local jump destination entry.
+/// i.e. return and method_return
 #[derive(Debug, Clone, PartialEq)]
 struct LocalJumpDest {
     has_ensure: bool,
@@ -98,6 +100,7 @@ impl LocalJumpDest {
 
 #[derive(Clone, PartialEq)]
 pub struct ExceptionEntry {
+    pub ty: ExceptionType,
     /// start position in ISeq.
     pub start: ISeqPos,
     /// end position in ISeq.
@@ -105,22 +108,41 @@ pub struct ExceptionEntry {
     pub dest: ISeqPos,
 }
 
+/// Type of each exception.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExceptionType {
+    /// When raised, exec stack is cleared.
+    Rescue,
+    /// When raised, exec stack does not change.
+    Continue,
+}
+
 use std::fmt;
 
 impl fmt::Debug for ExceptionEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_fmt(format_args!(
-            "ExceptionEntry ({:?}, {:?}) => {:?}",
-            self.start, self.end, self.dest,
+            "ExceptionEntry {:?} ({:?}, {:?}) => {:?}",
+            self.ty, self.start, self.end, self.dest,
         ))
     }
 }
 
 impl ExceptionEntry {
-    fn new(start: usize, end: usize, dest: ISeqPos) -> Self {
+    fn new_rescue(start: ISeqPos, end: ISeqPos, dest: ISeqPos) -> Self {
         Self {
-            start: ISeqPos::from(start),
-            end: ISeqPos::from(end),
+            ty: ExceptionType::Rescue,
+            start,
+            end,
+            dest,
+        }
+    }
+
+    fn new_continue(start: ISeqPos, end: ISeqPos, dest: ISeqPos) -> Self {
+        Self {
+            ty: ExceptionType::Continue,
+            start,
+            end,
             dest,
         }
     }
@@ -188,6 +210,28 @@ impl Codegen {
 
     pub fn context_mut(&mut self) -> &mut Context {
         self.context_stack.last_mut().unwrap()
+    }
+
+    fn push_jump_dest(&mut self, has_ensure: bool) {
+        self.context_mut()
+            .jump_dest
+            .push(LocalJumpDest::new(has_ensure));
+    }
+
+    fn pop_jump_dest(&mut self) -> LocalJumpDest {
+        self.context_mut().jump_dest.pop().unwrap()
+    }
+
+    fn push_ex_rescue(&mut self, body_start: ISeqPos, body_end: ISeqPos, dest: ISeqPos) {
+        self.context_mut()
+            .exception_table
+            .push(ExceptionEntry::new_rescue(body_start, body_end, dest));
+    }
+
+    fn push_ex_continue(&mut self, body_start: ISeqPos, body_end: ISeqPos, dest: ISeqPos) {
+        self.context_mut()
+            .exception_table
+            .push(ExceptionEntry::new_continue(body_start, body_end, dest));
     }
 }
 
@@ -1365,13 +1409,11 @@ impl Codegen {
                 ensure,
             } => {
                 let mut ensure_dest = vec![];
-                let body_start = iseq.len();
-                self.context_mut()
-                    .jump_dest
-                    .push(LocalJumpDest::new(ensure.is_some()));
+                let body_start = iseq.current();
+                self.push_jump_dest(ensure.is_some());
                 self.gen(globals, iseq, *body, use_value)?;
-                let jump_dest = self.context_mut().jump_dest.pop().unwrap();
-                let body_end = iseq.len();
+                let jump_dest = self.pop_jump_dest();
+                let body_end = iseq.current();
                 let mut dest = None;
                 let mut prev = None;
 
@@ -1466,9 +1508,7 @@ impl Codegen {
                     iseq.write_disp_from_cur(src);
                 }
                 if let Some(dest) = dest {
-                    self.context_mut()
-                        .exception_table
-                        .push(ExceptionEntry::new(body_start, body_end, dest));
+                    self.push_ex_rescue(body_start, body_end, dest);
                 }
                 // Ensure clause does not return value.
                 if let Some(ensure) = ensure {
@@ -2030,7 +2070,12 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
-            NodeKind::Defined(content) => self.gen_defined(globals, iseq, *content, use_value)?,
+            NodeKind::Defined(content) => {
+                self.gen_defined(globals, iseq, *content)?;
+                if !use_value {
+                    self.gen_pop(iseq)
+                };
+            }
             NodeKind::AliasMethod(new, old) => {
                 self.gen(globals, iseq, *new, true)?;
                 self.gen(globals, iseq, *old, true)?;

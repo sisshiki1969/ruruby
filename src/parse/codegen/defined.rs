@@ -9,20 +9,24 @@ impl Codegen {
         globals: &mut Globals,
         iseq: &mut ISeq,
         content: Node,
-        use_value: bool,
     ) -> Result<(), RubyError> {
         let mut nil_labels = vec![];
+        let mut exceptions = vec![];
         let s = defined_str(&content);
-        self.check_defined(globals, &content, iseq, &mut nil_labels)?;
-        if use_value {
-            iseq.gen_string(globals, s);
-            let end = iseq.gen_jmp();
-            nil_labels
-                .iter()
-                .for_each(|label| iseq.write_disp_from_cur(*label));
-            iseq.gen_push_nil();
-            iseq.write_disp_from_cur(end);
+        self.check_defined(globals, &content, iseq, &mut nil_labels, &mut exceptions)?;
+        iseq.gen_string(globals, s);
+        let end = iseq.gen_jmp();
+        let pos = iseq.current();
+        for ex in exceptions {
+            self.push_ex_continue(ex.0, ex.1, pos);
         }
+        iseq.push(Inst::POP);
+        nil_labels
+            .iter()
+            .for_each(|label| iseq.write_disp_from_cur(*label));
+        iseq.gen_push_nil();
+        iseq.write_disp_from_cur(end);
+
         Ok(())
     }
 
@@ -35,6 +39,7 @@ impl Codegen {
         node: &Node,
         iseq: &mut ISeq,
         nil_labels: &mut Vec<ISeqPos>,
+        exceptions: &mut Vec<(ISeqPos, ISeqPos)>,
     ) -> Result<(), RubyError> {
         match &node.kind {
             NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
@@ -80,7 +85,7 @@ impl Codegen {
                 Ok(())
             }
             NodeKind::Scope(box parent, id) => {
-                self.check_defined(globals, parent, iseq, nil_labels)?;
+                self.check_defined(globals, parent, iseq, nil_labels, exceptions)?;
                 self.gen(globals, iseq, parent.clone(), true)?;
                 iseq.push(Inst::CHECK_SCOPE);
                 iseq.push32((*id).into());
@@ -89,24 +94,26 @@ impl Codegen {
             }
             NodeKind::Array(elems, ..) => {
                 for n in elems {
-                    self.check_defined(globals, n, iseq, nil_labels)?
+                    self.check_defined(globals, n, iseq, nil_labels, exceptions)?
                 }
                 Ok(())
             }
             NodeKind::BinOp(op, box lhs, box rhs) => {
-                self.check_defined(globals, lhs, iseq, nil_labels)?;
-                self.check_defined(globals, rhs, iseq, nil_labels)?;
+                self.check_defined(globals, lhs, iseq, nil_labels, exceptions)?;
+                self.check_defined(globals, rhs, iseq, nil_labels, exceptions)?;
                 self.gen(globals, iseq, lhs.clone(), true)?;
                 iseq.push(Inst::CHECK_METHOD);
                 iseq.push32((op.to_method()).into());
                 nil_labels.push(iseq.gen_jmp_if_t());
                 Ok(())
             }
-            NodeKind::UnOp(_, box node) => self.check_defined(globals, node, iseq, nil_labels),
+            NodeKind::UnOp(_, box node) => {
+                self.check_defined(globals, node, iseq, nil_labels, exceptions)
+            }
             NodeKind::Index { box base, index } => {
-                self.check_defined(globals, base, iseq, nil_labels)?;
+                self.check_defined(globals, base, iseq, nil_labels, exceptions)?;
                 for i in index {
-                    self.check_defined(globals, i, iseq, nil_labels)?
+                    self.check_defined(globals, i, iseq, nil_labels, exceptions)?
                 }
                 self.gen(globals, iseq, base.clone(), true)?;
                 iseq.push(Inst::CHECK_METHOD);
@@ -120,12 +127,14 @@ impl Codegen {
                 method,
                 ..
             } => {
-                // TODO: methods which does not exists for receiver should return nil.
-                self.check_defined(globals, receiver, iseq, nil_labels)?;
+                self.check_defined(globals, receiver, iseq, nil_labels, exceptions)?;
                 for n in &arglist.args {
-                    self.check_defined(globals, n, iseq, nil_labels)?
+                    self.check_defined(globals, n, iseq, nil_labels, exceptions)?
                 }
+                let start = iseq.current();
                 self.gen(globals, iseq, receiver.clone(), true)?;
+                let end = iseq.current();
+                exceptions.push((start, end));
                 iseq.push(Inst::CHECK_METHOD);
                 iseq.push32((*method).into());
                 nil_labels.push(iseq.gen_jmp_if_t());

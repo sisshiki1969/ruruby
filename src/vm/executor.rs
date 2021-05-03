@@ -1,5 +1,5 @@
 use crate::coroutine::*;
-use crate::parse::codegen::ContextKind;
+use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 
 #[cfg(feature = "perf")]
@@ -443,8 +443,15 @@ impl VM {
                     if let Some(entry) = catch {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.into();
-                        self.set_stack_len(stack_len);
+                        match entry.ty {
+                            ExceptionType::Rescue => self.set_stack_len(stack_len),
+                            ExceptionType::Continue => {}
+                        };
                         let val = err.to_exception_val();
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
+                        {
+                            println!("<--- Exception({:?})", val);
+                        }
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
