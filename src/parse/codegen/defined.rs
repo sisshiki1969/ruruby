@@ -98,6 +98,26 @@ impl Codegen {
                 }
                 Ok(())
             }
+            NodeKind::AssignOp(_, box lhs, _) => match lhs.kind {
+                NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
+                    iseq.gen_push_nil();
+                    self.gen_set_local(iseq, id);
+                    Ok(())
+                }
+                _ => Ok(()),
+            },
+            NodeKind::MulAssign(mlhs, _) => {
+                for lhs in mlhs {
+                    match lhs.kind {
+                        NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
+                            iseq.gen_push_nil();
+                            self.gen_set_local(iseq, id);
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            }
             NodeKind::BinOp(op, box lhs, box rhs) => {
                 self.check_defined(globals, lhs, iseq, nil_labels, exceptions)?;
                 self.check_defined(globals, rhs, iseq, nil_labels, exceptions)?;
@@ -107,8 +127,13 @@ impl Codegen {
                 nil_labels.push(iseq.gen_jmp_if_t());
                 Ok(())
             }
-            NodeKind::UnOp(_, box node) => {
-                self.check_defined(globals, node, iseq, nil_labels, exceptions)
+            NodeKind::UnOp(op, box node) => {
+                self.check_defined(globals, node, iseq, nil_labels, exceptions)?;
+                self.gen(globals, iseq, node.clone(), true)?;
+                iseq.push(Inst::CHECK_METHOD);
+                iseq.push32((op.to_method()).into());
+                nil_labels.push(iseq.gen_jmp_if_t());
+                Ok(())
             }
             NodeKind::Index { box base, index } => {
                 self.check_defined(globals, base, iseq, nil_labels, exceptions)?;
@@ -150,10 +175,21 @@ fn defined_str(node: &Node) -> &'static str {
     match &node.kind {
         NodeKind::LocalVar(..) => "local-variable",
         NodeKind::GlobalVar(..) => "global-variable",
-        NodeKind::ClassVar(..) => "class-variable",
+        NodeKind::ClassVar(..) => "class variable",
         NodeKind::Const { .. } | NodeKind::Scope(..) => "constant",
         NodeKind::InstanceVar(..) => "instance-variable",
-        NodeKind::AssignOp(..) | NodeKind::MulAssign(..) => "assignment",
+        NodeKind::MulAssign(mlhs, _) => {
+            if mlhs.len() != 1 {
+                "assignment"
+            } else {
+                if let NodeKind::Index { .. } = mlhs[0].kind {
+                    "method"
+                } else {
+                    "assignment"
+                }
+            }
+        }
+        NodeKind::AssignOp(..) => "assignment",
         NodeKind::BinOp(..)
         | NodeKind::UnOp(..)
         | NodeKind::Index { .. }

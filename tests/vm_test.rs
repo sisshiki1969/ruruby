@@ -1423,6 +1423,15 @@ fn defined() {
     assert("method", defined? -(1))
 
     assert(nil, defined? a)
+    assert("assignment", defined? a = 3)    # here, define a as a local variable.
+    assert("local-variable", defined? a)
+    assert(nil, a)                          # but a is nil, not 3.
+    assert("assignment", defined? b += 3)
+    assert(nil, b)
+
+    assert("method", defined? -(c = 100))
+    assert(100, c)
+
     assert(nil, defined? @a)
     assert(nil, defined? $a)
     assert(nil, defined? a + 3)
@@ -1458,9 +1467,13 @@ fn defined() {
     assert("method", defined? a + 3)
     assert("method", defined? a - 3)
     assert("method", defined? a * 3)
-    #assert("method", defined? a / 3)
-    #assert("method", defined? a % 3)
+    assert(nil, defined? a / 3)
+    assert(nil, defined? a % 3)
     assert("method", defined? a[2])
+    assert("method", defined? a[2] = 3)
+    assert("assignment", defined? a[2] += 3)
+    assert("method", defined? (a[2] = 3,4))
+    assert("assignment", defined? (a[2],b = 3,4))
 
     assert(nil, defined? Object + 3)
     assert(nil, defined? Object - 3)

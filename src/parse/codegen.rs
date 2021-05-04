@@ -1261,6 +1261,26 @@ impl Codegen {
                     self.gen_pop(iseq)
                 };
             }
+            NodeKind::AssignOp(op, box lhs, box rhs) => match (&op, &lhs.kind, &rhs.kind) {
+                (BinOp::Add, NodeKind::InstanceVar(id), NodeKind::Integer(i))
+                    if *i as i32 as i64 == *i =>
+                {
+                    let loc = lhs.loc.merge(rhs.loc);
+                    self.save_loc(iseq, loc);
+                    iseq.gen_ivar_addi(*id, *i as i32 as u32, use_value);
+                }
+                (BinOp::Add, NodeKind::LocalVar(id), NodeKind::Integer(i))
+                    if *i as i32 as i64 == *i =>
+                {
+                    let loc = lhs.loc.merge(rhs.loc);
+                    self.save_loc(iseq, loc);
+                    self.gen_lvar_addi(iseq, *id, *i as i32, use_value)?;
+                }
+                _ => {
+                    let rhs = Node::new_binop(op, lhs.clone(), rhs);
+                    self.gen_assign2(globals, iseq, lhs, rhs, use_value)?;
+                }
+            },
             NodeKind::UnOp(op, lhs) => {
                 self.gen(globals, iseq, *lhs, true)?;
                 match op {
@@ -2080,8 +2100,7 @@ impl Codegen {
                 self.gen(globals, iseq, *new, true)?;
                 self.gen(globals, iseq, *old, true)?;
                 self.gen_opt_send_self(iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
-            }
-            _ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
+            } //_ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())
     }
@@ -2096,14 +2115,6 @@ impl Codegen {
             loc,
         )
     }
-    /*pub fn error_name(&self, msg: impl Into<String>) -> RubyError {
-        RubyError::new_parse_err(
-            ParseErrKind::Name(msg.into()),
-            self.source_info,
-            0,
-            self.loc,
-        )
-    }*/
 }
 
 impl Codegen {

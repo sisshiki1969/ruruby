@@ -5,6 +5,8 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("Integer", class);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("+@", plus);
+    class.add_builtin_method_by_str("-@", minus);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
@@ -44,6 +46,17 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let i = self_val.as_integer().unwrap();
     Ok(Value::string(i.to_string()))
+}
+
+fn plus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    Ok(self_val)
+}
+
+fn minus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let rec = self_val.as_integer().unwrap();
+    Ok(Value::integer(-rec))
 }
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

@@ -903,10 +903,7 @@ impl Parser {
                 self.get()?;
                 let rhs = self.parse_arg()?;
                 self.check_lhs(&lhs)?;
-                Ok(Node::new_mul_assign(
-                    vec![lhs.clone()],
-                    vec![Node::new_binop(op, lhs, rhs)],
-                ))
+                Ok(Node::new_assign_op(op, lhs, rhs))
             }
         }
     }

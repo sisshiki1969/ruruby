@@ -289,6 +289,18 @@ pub enum UnOp {
     Neg,
 }
 
+impl UnOp {
+    pub fn to_method(&self) -> IdentId {
+        let s = match self {
+            Self::BitNot => "~",
+            Self::Not => "!",
+            Self::Pos => "+@",
+            Self::Neg => "-@",
+        };
+        IdentId::get_id(s)
+    }
+}
+
 impl Node {
     pub fn is_empty(&self) -> bool {
         match &self.kind {
@@ -482,6 +494,11 @@ impl Node {
     pub fn new_single_assign(lhs: Node, rhs: Node) -> Self {
         let loc = lhs.loc().merge(rhs.loc());
         Node::new(NodeKind::MulAssign(vec![lhs], vec![rhs]), loc)
+    }
+
+    pub fn new_assign_op(op: BinOp, lhs: Node, rhs: Node) -> Self {
+        let loc = lhs.loc().merge(rhs.loc());
+        Node::new(NodeKind::AssignOp(op, Box::new(lhs), Box::new(rhs)), loc)
     }
 
     pub fn new_method_decl(
