@@ -234,6 +234,14 @@ impl RescueEntry {
             body: Box::new(body),
         }
     }
+
+    pub fn new_postfix(body: Node) -> Self {
+        Self {
+            exception_list: vec![],
+            assign: None,
+            body: Box::new(body),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -667,8 +675,8 @@ impl Parser {
         // | STMT [no-term] unless EXPR
         // | STMT [no-term] while EXPR
         // | STMT [no-term] until EXPR
-        // | STMT [no-term] rescie EXPR
-        // | STMT - NORET-STMT [no-term] rescie EXPR
+        // | STMT [no-term] rescue EXPR
+        // | STMT - NORET-STMT [no-term] rescue EXPR
         // | VAR [no term] = UNPARENTHESIZED-METHOD-CALL
         // | PRIMARY :: CONST [no term] = UNPARENTHESIZED-METHOD-CALL
         // | :: CONST [no term] = UNPARENTHESIZED-METHOD-CALL
@@ -703,6 +711,10 @@ impl Parser {
                 let cond = self.parse_expr()?;
                 let loc = loc.merge(self.prev_loc());
                 node = Node::new_while(cond, node, false, loc);
+            } else if self.consume_reserved_no_skip_line_term(Reserved::Rescue)? {
+                // STMT : STMT rescue EXPR
+                let rescue = self.parse_expr()?;
+                node = Node::new_begin(node, vec![RescueEntry::new_postfix(rescue)], None, None);
             } else {
                 break;
             }

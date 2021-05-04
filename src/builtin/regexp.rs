@@ -15,11 +15,19 @@ impl RegexpInfo {
     }
 
     pub fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
-        match globals.regexp_cache.get(reg_str) {
+        let conv = Regex::new(r"\\Z\z").unwrap();
+        let reg_str = if let Some(mat) = conv.find(reg_str).unwrap() {
+            let mut s = reg_str.to_string();
+            s.replace_range(mat.range(), r"\z");
+            s
+        } else {
+            reg_str.to_string()
+        };
+        match globals.regexp_cache.get(&reg_str) {
             Some(re) => Ok(RegexpInfo(re.clone())),
             None => {
                 //eprintln!("new: {}", reg_str);
-                let regex = Rc::new(Regex::new(reg_str)?);
+                let regex = Rc::new(Regex::new(&reg_str)?);
                 globals
                     .regexp_cache
                     .insert(reg_str.to_string(), regex.clone());
@@ -471,6 +479,16 @@ mod test {
         assert 0, /foo/ =~ "foo"  # => 0
         assert 1, /foo/ =~ "afoo" # => 1
         assert nil, /foo/ =~ "bar"  # => nil
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn regexp3() {
+        let program = r#"
+        a = /Ruby\Z/
+        assert 0, "Ruby" =~ /Ruby\Z/
+        assert nil, "Rubys" =~ /Ruby\Z/
         "#;
         assert_script(program);
     }
