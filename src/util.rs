@@ -154,32 +154,6 @@ pub struct SourceInfo {
     pub code: Vec<char>,
 }
 
-use std::ops::{Index, Range, RangeInclusive};
-
-impl Index<usize> for SourceInfo {
-    type Output = char;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.code[index]
-    }
-}
-
-impl Index<Range<usize>> for SourceInfo {
-    type Output = [char];
-
-    fn index(&self, index: Range<usize>) -> &Self::Output {
-        &self.code[index.start..index.end]
-    }
-}
-
-impl Index<RangeInclusive<usize>> for SourceInfo {
-    type Output = [char];
-
-    fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
-        &self.code[*index.start()..=*index.end()]
-    }
-}
-
 /// This struct holds infomation of a certain line in the code.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
@@ -244,9 +218,9 @@ impl SourceInfo {
                 Line::new(idx + 1, top, pos)
             })
             .collect();
-        if line_top <= self.code.len() {
-            let line_no = lines.len();
-            lines.push(Line::new(line_no, line_top, self.code.len()));
+        if line_top < self.code.len() {
+            let line_no = lines.len() + 1;
+            lines.push(Line::new(line_no, line_top, self.code.len() - 1));
         }
 
         let mut found = false;
@@ -260,30 +234,30 @@ impl SourceInfo {
             };
 
             let mut start = line.top;
-            let mut end = std::cmp::min(self.code.len() - 1, line.end);
-            if self[end] == '\n' && end > 0 {
+            let mut end = line.end;
+            if self.code[end] == '\n' && end > 0 {
                 end -= 1
             }
             start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
-            if calc_width(&self[start..=end]) >= term_width {
+            if calc_width(&self.code[start..=end]) >= term_width {
                 for e in loc.1..=end {
-                    if calc_width(&self[start..=e]) < term_width {
+                    if calc_width(&self.code[start..=e]) < term_width {
                         end = e;
                     } else {
                         break;
                     }
                 }
             }
-            res_string += &(self[start..=end].iter().collect::<String>() + "\n");
+            res_string += &(self.code[start..=end].iter().collect::<String>() + "\n");
             use std::cmp::*;
             let lead = if loc.0 <= line.top {
-                0usize
+                0
             } else {
-                calc_width(&self[start..loc.0])
+                calc_width(&self.code[start..loc.0])
             };
             let range_start = max(loc.0, line.top);
             let range_end = min(loc.1, line.end);
-            let length: usize = calc_width(&self[range_start..range_end]);
+            let length = calc_width(&self.code[range_start..range_end]);
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);
             res_string += "\n";
@@ -295,14 +269,14 @@ impl SourceInfo {
                 Some(line) => (line.no + 1, line.end + 1, loc.1),
                 None => (1, 0, loc.1),
             };
-            let lead = calc_width(&self[line.1..loc.0]);
-            let length = calc_width(&self[loc.0..loc.1]);
-            let is_cr = loc.1 as usize >= self.code.len() || self[loc.1] == '\n';
+            let lead = calc_width(&self.code[line.1..loc.0]);
+            let length = calc_width(&self.code[loc.0..loc.1]);
+            let is_cr = loc.1 >= self.code.len() || self.code[loc.1] == '\n';
             res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.0);
             res_string += &(if !is_cr {
-                self[line.1..=loc.1].iter().collect::<String>()
+                self.code[line.1..=loc.1].iter().collect::<String>()
             } else {
-                self[line.1..loc.1].iter().collect::<String>()
+                self.code[line.1..loc.1].iter().collect::<String>()
             });
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);

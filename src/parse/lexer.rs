@@ -103,10 +103,7 @@ impl Lexer {
     fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(format!(
-                "Unexpected char. '{}'",
-                self.source_info.code[pos as usize]
-            )),
+            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos])),
             self.source_info,
             0,
             loc,
@@ -209,7 +206,7 @@ impl Lexer {
     }
 
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
-        let pos = tok.loc.1 as usize + 1;
+        let pos = tok.loc.1 + 1;
         if pos >= self.len {
             false
         } else {
@@ -990,7 +987,7 @@ impl Lexer {
         if self.pos as usize >= self.len {
             Err(self.error_eof(self.pos))
         } else {
-            let ch = self.source_info.code[self.pos as usize];
+            let ch = self.source_info.code[self.pos];
             self.pos += 1;
             Ok(ch)
         }
@@ -1006,7 +1003,7 @@ impl Lexer {
     fn consume(&mut self, ch: char) -> bool {
         if self.pos as usize >= self.len {
             false
-        } else if ch == self.source_info.code[self.pos as usize] {
+        } else if ch == self.source_info.code[self.pos] {
             self.pos += 1;
             true
         } else {
@@ -1017,11 +1014,11 @@ impl Lexer {
     /// Consume continue line. ("\\n")
     /// Return true if consumed.
     fn consume_cont_line(&mut self) -> bool {
-        if self.pos as usize + 1 >= self.len {
+        if self.pos + 1 >= self.len {
             return false;
         };
         let code = &self.source_info.code;
-        if code[self.pos as usize] == '\\' && code[self.pos as usize + 1] == '\n' {
+        if code[self.pos] == '\\' && code[self.pos + 1] == '\n' {
             self.pos += 2;
             true
         } else {
@@ -1032,10 +1029,10 @@ impl Lexer {
     /// Consume the next char, if the char is numeric char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_numeric(&mut self) -> Option<char> {
-        if self.pos as usize >= self.len {
+        if self.pos >= self.len {
             return None;
         };
-        let ch = self.source_info.code[self.pos as usize];
+        let ch = self.source_info.code[self.pos];
         if ch.is_ascii() && ch.is_numeric() {
             self.pos += 1;
             Some(ch)
@@ -1047,10 +1044,10 @@ impl Lexer {
     /// Consume the next char, if the char is '0' - '7'.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_octal(&mut self) -> Option<u8> {
-        if self.pos as usize >= self.len {
+        if self.pos >= self.len {
             return None;
         };
-        let ch = self.source_info.code[self.pos as usize];
+        let ch = self.source_info.code[self.pos];
         if '0' <= ch && ch <= '7' {
             self.pos += 1;
             Some(ch as u8 - '0' as u8)
@@ -1065,7 +1062,7 @@ impl Lexer {
         if self.pos as usize >= self.len {
             return false;
         };
-        if self.source_info.code[self.pos as usize].is_ascii_whitespace() {
+        if self.source_info.code[self.pos].is_ascii_whitespace() {
             self.pos += 1;
             true
         } else {
@@ -1087,7 +1084,7 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
-        let pos = self.pos as usize;
+        let pos = self.pos;
         if pos >= self.len {
             None
         } else {
