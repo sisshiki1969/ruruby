@@ -205,12 +205,11 @@ impl Lexer {
         }
     }
 
+    /// Examine if the next char of the token is space.
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
-        let pos = tok.loc.1 + 1;
-        if pos >= self.len {
-            false
-        } else {
-            self.source_info.code[pos].is_ascii_whitespace()
+        match self.source_info.code.get(tok.loc.1 + 1) {
+            Some(ch) => ch.is_ascii_whitespace(),
+            _ => false,
         }
     }
 
@@ -249,7 +248,7 @@ impl Lexer {
             let pos = self.pos;
             let ch = match self.get() {
                 Ok(ch) => ch,
-                Err(_) => return Ok(self.new_eof(self.pos)),
+                Err(_) => return Ok(self.new_eof()),
             };
 
             if ch.is_ascii_alphabetic() || ch == '_' {
@@ -981,44 +980,51 @@ impl Lexer {
 
 // Low level API
 impl Lexer {
+    /// Peek the next char.
+    /// Returns Some(char) or None if the cursor reached EOF.
+    fn peek(&self) -> Option<char> {
+        self.source_info.code.get(self.pos).cloned()
+    }
+
+    /// Peek the next next char.
+    /// Returns Some(char) or None if the cursor reached EOF.
+    fn peek2(&self) -> Option<char> {
+        self.source_info.code.get(self.pos + 1).cloned()
+    }
+
     /// Get one char and move to the next.
     /// Returns Ok(char) or RubyError if the cursor reached EOF.
     fn get(&mut self) -> Result<char, RubyError> {
-        if self.pos as usize >= self.len {
-            Err(self.error_eof(self.pos))
-        } else {
-            let ch = self.source_info.code[self.pos];
-            self.pos += 1;
-            Ok(ch)
+        match self.peek() {
+            Some(ch) => {
+                self.pos += 1;
+                Ok(ch)
+            }
+            _ => Err(self.error_eof(self.pos)),
         }
     }
 
-    /// Push back the last token.
+    /// Push back the last char.
     fn push_back(&mut self) {
         self.pos -= 1;
     }
 
     /// Consume the next char, if the char is equal to the given one.
-    /// Return true if the token was consumed.
-    fn consume(&mut self, ch: char) -> bool {
-        if self.pos as usize >= self.len {
-            false
-        } else if ch == self.source_info.code[self.pos] {
-            self.pos += 1;
-            true
-        } else {
-            false
+    /// Return true if the char was consumed.
+    fn consume(&mut self, expect: char) -> bool {
+        match self.peek() {
+            Some(ch) if ch == expect => {
+                self.pos += 1;
+                true
+            }
+            _ => false,
         }
     }
 
     /// Consume continue line. ("\\n")
     /// Return true if consumed.
     fn consume_cont_line(&mut self) -> bool {
-        if self.pos + 1 >= self.len {
-            return false;
-        };
-        let code = &self.source_info.code;
-        if code[self.pos] == '\\' && code[self.pos + 1] == '\n' {
+        if self.peek2() == Some('\n') && self.peek() == Some('\\') {
             self.pos += 2;
             true
         } else {
@@ -1029,44 +1035,36 @@ impl Lexer {
     /// Consume the next char, if the char is numeric char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_numeric(&mut self) -> Option<char> {
-        if self.pos >= self.len {
-            return None;
-        };
-        let ch = self.source_info.code[self.pos];
-        if ch.is_ascii() && ch.is_numeric() {
-            self.pos += 1;
-            Some(ch)
-        } else {
-            None
+        match self.peek() {
+            Some(ch) if ch.is_ascii() && ch.is_numeric() => {
+                self.pos += 1;
+                Some(ch)
+            }
+            _ => None,
         }
     }
 
     /// Consume the next char, if the char is '0' - '7'.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_octal(&mut self) -> Option<u8> {
-        if self.pos >= self.len {
-            return None;
-        };
-        let ch = self.source_info.code[self.pos];
-        if '0' <= ch && ch <= '7' {
-            self.pos += 1;
-            Some(ch as u8 - '0' as u8)
-        } else {
-            None
+        match self.peek() {
+            Some(ch) if '0' <= ch && ch <= '7' => {
+                self.pos += 1;
+                Some(ch as u8 - '0' as u8)
+            }
+            _ => None,
         }
     }
 
     /// Consume the next char, if the char is ascii-whitespace char.
     /// Return Some(ch) if the token (ch) was consumed.
     fn consume_whitespace(&mut self) -> bool {
-        if self.pos as usize >= self.len {
-            return false;
-        };
-        if self.source_info.code[self.pos].is_ascii_whitespace() {
-            self.pos += 1;
-            true
-        } else {
-            false
+        match self.peek() {
+            Some(ch) if ch.is_ascii_whitespace() => {
+                self.pos += 1;
+                true
+            }
+            _ => false,
         }
     }
 
@@ -1083,30 +1081,10 @@ impl Lexer {
 
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
-    fn peek(&self) -> Option<char> {
-        let pos = self.pos;
-        if pos >= self.len {
-            None
-        } else {
-            Some(self.source_info.code[pos])
-        }
-    }
-
-    /// Peek the next char.
-    /// Returns Some(char) or None if the cursor reached EOF.
     fn peek_digit(&self) -> bool {
         match self.peek() {
             Some(ch) => ch.is_ascii_digit(),
             None => false,
-        }
-    }
-
-    fn peek2(&self) -> Option<char> {
-        let pos = self.pos as usize + 1;
-        if pos >= self.len {
-            None
-        } else {
-            Some(self.source_info.code[pos])
         }
     }
 
@@ -1129,7 +1107,7 @@ impl Lexer {
         loop {
             match self.peek() {
                 Some('\n') | None => return,
-                _ => self.get().unwrap(),
+                _ => self.pos += 1,
             };
         }
     }
@@ -1209,8 +1187,8 @@ impl Lexer {
         Annot::new(TokenKind::LineTerm, self.cur_loc())
     }
 
-    fn new_eof(&self, pos: usize) -> Token {
-        Annot::new(TokenKind::EOF, Loc(pos, pos))
+    fn new_eof(&self) -> Token {
+        Annot::new(TokenKind::EOF, Loc(self.pos, self.pos))
     }
 }
 
