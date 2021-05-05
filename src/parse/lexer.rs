@@ -7,14 +7,14 @@ use fxhash::FxHashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
     len: usize,
-    token_start_pos: u32,
-    pos: u32,
+    token_start_pos: usize,
+    pos: usize,
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
     reserved: FxHashMap<String, Reserved>,
     reserved_rev: FxHashMap<Reserved, String>,
     pub source_info: SourceInfoRef,
-    state_save: Vec<(u32, u32)>, // (token_start_pos, pos)
+    state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
 
 #[derive(Debug, Clone)]
@@ -100,7 +100,7 @@ impl Lexer {
         self.reserved_rev.get(&reserved).unwrap()
     }
 
-    fn error_unexpected(&self, pos: u32) -> RubyError {
+    fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(format!(
@@ -113,12 +113,12 @@ impl Lexer {
         )
     }
 
-    fn error_eof(&self, pos: u32) -> RubyError {
+    fn error_eof(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, 0, loc)
     }
 
-    fn error_parse(&self, msg: &str, pos: u32) -> RubyError {
+    fn error_parse(&self, msg: &str, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(format!("Parse error. '{}'", msg)),
@@ -150,7 +150,7 @@ impl Lexer {
 
     pub fn init(&mut self, path: std::path::PathBuf, code_text: impl Into<String>) {
         let mut code = code_text.into().chars().collect::<Vec<char>>();
-        self.pos = self.source_info.code.len() as u32;
+        self.pos = self.source_info.code.len();
         self.source_info.code.append(&mut code);
         self.len = self.source_info.code.len();
         self.source_info.path = path;
@@ -1212,7 +1212,7 @@ impl Lexer {
         Annot::new(TokenKind::LineTerm, self.cur_loc())
     }
 
-    fn new_eof(&self, pos: u32) -> Token {
+    fn new_eof(&self, pos: usize) -> Token {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 }

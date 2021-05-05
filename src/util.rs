@@ -1,7 +1,7 @@
 use console;
 use core::ptr::NonNull;
 use std::path::PathBuf;
-use term_size;
+use terminal_size::{terminal_size, Height, Width};
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
 
@@ -38,23 +38,12 @@ impl<T> Annot<T> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub struct Loc(pub u32, pub u32);
-
-impl std::fmt::Debug for Loc {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_fmt(format_args!("Loc ({}, {})", self.0, self.1,))
-    }
-}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Loc(pub usize, pub usize);
 
 impl Loc {
     pub fn new(loc: Loc) -> Self {
         loc
-    }
-
-    pub fn dec(&self) -> Self {
-        use std::cmp::*;
-        Loc(min(self.0, self.1 - 1), self.1 - 1)
     }
 
     pub fn merge(&self, loc: Loc) -> Self {
@@ -167,27 +156,27 @@ pub struct SourceInfo {
 
 use std::ops::{Index, Range, RangeInclusive};
 
-impl Index<u32> for SourceInfo {
+impl Index<usize> for SourceInfo {
     type Output = char;
 
-    fn index(&self, index: u32) -> &Self::Output {
-        &self.code[index as usize]
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.code[index]
     }
 }
 
-impl Index<Range<u32>> for SourceInfo {
+impl Index<Range<usize>> for SourceInfo {
     type Output = [char];
 
-    fn index(&self, index: Range<u32>) -> &Self::Output {
-        &self.code[index.start as usize..index.end as usize]
+    fn index(&self, index: Range<usize>) -> &Self::Output {
+        &self.code[index.start..index.end]
     }
 }
 
-impl Index<RangeInclusive<u32>> for SourceInfo {
+impl Index<RangeInclusive<usize>> for SourceInfo {
     type Output = [char];
 
-    fn index(&self, index: RangeInclusive<u32>) -> &Self::Output {
-        &self.code[*index.start() as usize..=*index.end() as usize]
+    fn index(&self, index: RangeInclusive<usize>) -> &Self::Output {
+        &self.code[*index.start()..=*index.end()]
     }
 }
 
@@ -195,15 +184,15 @@ impl Index<RangeInclusive<u32>> for SourceInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
     /// line number. (the first line is 1)
-    pub no: u32,
+    pub no: usize,
     /// an index of the line top in Vec<char>.
-    pub top: u32,
+    pub top: usize,
     /// an index of the line end in Vec<char>.
-    pub end: u32,
+    pub end: usize,
 }
 
 impl Line {
-    fn new(line_no: u32, top_pos: u32, end_pos: u32) -> Self {
+    fn new(line_no: usize, top_pos: usize, end_pos: usize) -> Self {
         Line {
             no: line_no,
             top: top_pos,
@@ -240,8 +229,8 @@ impl SourceInfo {
             return "(internal)".to_string();
         }
         let mut res_string = String::new();
-        let term_width = term_size::dimensions_stderr().unwrap_or((80, 25)).0 as u32;
-        let mut line_top: u32 = 0;
+        let term_width = terminal_size().unwrap_or((Width(80), Height(25))).0 .0 as usize;
+        let mut line_top = 0;
         let mut lines: Vec<Line> = self
             .code
             .iter()
@@ -251,13 +240,13 @@ impl SourceInfo {
             .enumerate()
             .map(|(idx, pos)| {
                 let top = line_top;
-                line_top = pos as u32 + 1;
-                Line::new((idx + 1) as u32, top, pos as u32)
+                line_top = pos + 1;
+                Line::new(idx + 1, top, pos)
             })
             .collect();
-        if line_top <= self.code.len() as u32 {
-            let line_no = lines.len() as u32;
-            lines.push(Line::new(line_no, line_top, self.code.len() as u32));
+        if line_top <= self.code.len() {
+            let line_no = lines.len();
+            lines.push(Line::new(line_no, line_top, self.code.len()));
         }
 
         let mut found = false;
@@ -271,14 +260,14 @@ impl SourceInfo {
             };
 
             let mut start = line.top;
-            let mut end = std::cmp::min(self.code.len() as u32 - 1, line.end);
+            let mut end = std::cmp::min(self.code.len() - 1, line.end);
             if self[end] == '\n' && end > 0 {
                 end -= 1
             }
             start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
-            if calc_width(&self[start..=end]) >= term_width as usize {
+            if calc_width(&self[start..=end]) >= term_width {
                 for e in loc.1..=end {
-                    if calc_width(&self[start..=e]) < term_width as usize {
+                    if calc_width(&self[start..=e]) < term_width {
                         end = e;
                     } else {
                         break;

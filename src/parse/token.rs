@@ -206,7 +206,7 @@ impl Token {
         Annot::new(TokenKind::LineTerm, loc)
     }
 
-    pub fn new_eof(pos: u32) -> Self {
+    pub fn new_eof(pos: usize) -> Self {
         Annot::new(TokenKind::EOF, Loc(pos, pos))
     }
 }

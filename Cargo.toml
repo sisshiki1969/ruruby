@@ -19,16 +19,16 @@ gc-debug = []
 verbose = []
 
 [dependencies]
-rustyline = "7.0.0"
+rustyline = "8.0.0"
 clap = "2.33.1"
 ansi_term = "0.12.1"
 regex = "1.4.2"
-fancy-regex = "0.4.1"
+fancy-regex = "0.5.0"
 rand = "0.8.3"
 divrem = "0.1.0"
 fxhash = "0.2.1"
 chrono = "0.4.15"
-term_size = { git = "https://github.com/clap-rs/term_size-rs", rev = "e714b6a83f988b784ba4240c892a0edb2d0a5ae2" }
+terminal_size = "0.1.16"
 console = "0.14.0"
 dirs = "3.0.1"
 smallvec = "1.5.0"
