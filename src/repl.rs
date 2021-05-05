@@ -1,7 +1,5 @@
 use ansi_term::Colour::Red;
 use ruruby::error::*;
-//use ruruby::parser::{LvarCollector, Parser};
-//#[macro_use]
 use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
 
@@ -32,6 +30,12 @@ pub fn repl_vm() {
         );
     }
     let mut rl = Editor::<()>::new();
+    let prompt_body = if cfg!(not(unix)) {
+        // In Windows, it seems that ansi_term does not work well in rustyline.
+        format!("irb:")
+    } else {
+        format!("{}", Red.bold().paint("irb:"))
+    };
     let mut program = String::new();
     let mut parser = Parser::new();
     let mut globals = GlobalsRef::new_globals();
@@ -44,17 +48,21 @@ pub fn repl_vm() {
         ISeqRef::default(),
         None,
     );
+    rustyline::config::Builder::new().tab_stop(0).indent_size(0);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline = rl.readline(&format!(
             "{}{:1}{} {}",
-            Red.bold().paint("irb:"),
+            prompt_body,
             level,
             prompt,
             " ".repeat(level * 2)
         ));
-        let mut line = match readline {
-            Ok(line) => line,
+        let line = match readline {
+            Ok(line) => {
+                rl.add_history_entry(&line);
+                line
+            }
             Err(err) => match err {
                 ReadlineError::Interrupted => {
                     program = String::new();
@@ -65,8 +73,6 @@ pub fn repl_vm() {
                 _ => continue,
             },
         };
-        rl.add_history_entry(line.clone());
-        line.push('\n');
 
         program = format!("{}{}\n", program, line);
 
