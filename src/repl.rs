@@ -74,7 +74,7 @@ pub fn repl_vm() {
         };
 
         program += &line;
-        parser.lexer.append(line);
+        parser.lexer.append(&line);
 
         match parser.clone().parse_program_repl(context) {
             Ok(parse_result) => {

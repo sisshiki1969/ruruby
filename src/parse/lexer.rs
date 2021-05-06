@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
-    code: Vec<char>,
+    code: String,
     len: usize,
     token_start_pos: usize,
     pos: usize,
@@ -88,7 +88,7 @@ impl Lexer {
         let code = code.into();
         let source_info = SourceInfoRef::new(SourceInfo::new(path, &code));
         Lexer {
-            code: code.chars().collect(),
+            code,
             len: source_info.code.len(),
             token_start_pos: 0,
             pos: 0,
@@ -108,7 +108,10 @@ impl Lexer {
     fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.code[pos])),
+            ParseErrKind::SyntaxError(format!(
+                "Unexpected char. '{}'",
+                self.code.get(pos..).unwrap().chars().next().unwrap()
+            )),
             self.source_info,
             0,
             loc,
@@ -149,11 +152,9 @@ impl Lexer {
         return Ok(LexerResult::new(tokens));
     }
 
-    pub fn append(&mut self, code_text: impl Into<String>) {
-        let code_text = code_text.into();
-        let mut code = code_text.chars().collect::<Vec<char>>();
+    pub fn append(&mut self, code_text: &str) {
         self.pos = self.code.len();
-        self.code.append(&mut code);
+        self.code.push_str(code_text);
         self.len = self.code.len();
         self.source_info.code += &code_text;
     }
@@ -211,7 +212,12 @@ impl Lexer {
 
     /// Examine if the next char of the token is space.
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
-        match self.code.get(tok.loc.1 + 1) {
+        match self
+            .code
+            .get(tok.loc.1 + 1..)
+            .map(|s| s.chars().next())
+            .flatten()
+        {
             Some(ch) => ch.is_ascii_whitespace(),
             _ => false,
         }
@@ -471,12 +477,13 @@ impl Lexer {
                 ch.is_ascii_uppercase()
             }
             None => {
+                let pos = self.pos;
                 match self.get() {
                     Ok(ch) => {
                         if ch.is_alphanumeric() || ch == '_' || ch == '&' || ch == '\'' {
                             tok.push(ch);
                         } else {
-                            return Err(self.error_unexpected(self.pos));
+                            return Err(self.error_unexpected(pos));
                         }
                     }
                     Err(_) => {
@@ -535,19 +542,21 @@ impl Lexer {
             }
         };
         let mut s = ch.to_string();
-        let mut decimal_flag = false;
+        let mut float_flag = false;
         loop {
             if let Some(ch) = self.consume_numeric() {
                 s.push(ch);
             } else if self.consume('_') {
-            } else if !decimal_flag && self.consume('.') {
-                if let Some(ch) = self.consume_numeric() {
-                    decimal_flag = true;
-                    s.push('.');
-                    s.push(ch);
-                } else {
-                    self.push_back();
-                    break;
+            } else if !float_flag && self.peek() == Some('.') {
+                match self.peek2() {
+                    Some(ch) if ch.is_ascii() && ch.is_numeric() => {
+                        self.get()?;
+                        self.get()?;
+                        float_flag = true;
+                        s.push('.');
+                        s.push(ch);
+                    }
+                    _ => break,
                 }
             } else {
                 break;
@@ -572,9 +581,9 @@ impl Lexer {
                     break;
                 }
             }
-            decimal_flag = true;
+            float_flag = true;
         }
-        let number = if decimal_flag {
+        let number = if float_flag {
             match s.parse::<f64>() {
                 Ok(f) => Real::Float(f),
                 Err(err) => return Err(self.error_parse(&format!("{:?}", err), self.pos)),
@@ -600,52 +609,43 @@ impl Lexer {
 
     /// Read hexadecimal number.
     fn read_hex_number(&mut self) -> Result<Token, RubyError> {
-        let mut val = match self.get() {
-            Ok(ch @ '0'..='9') => (ch as u64 - '0' as u64),
-            Ok(ch @ 'a'..='f') => (ch as u64 - 'a' as u64 + 10),
-            Ok(ch @ 'A'..='F') => (ch as u64 - 'A' as u64 + 10),
-            Ok(_) => {
-                self.push_back();
-                return Err(self.error_unexpected(self.pos));
-            }
-            Err(_) => return Err(self.error_unexpected(self.pos)),
+        let mut val = match self.peek() {
+            Some(ch @ '0'..='9') => (ch as u64 - '0' as u64),
+            Some(ch @ 'a'..='f') => (ch as u64 - 'a' as u64 + 10),
+            Some(ch @ 'A'..='F') => (ch as u64 - 'A' as u64 + 10),
+            _ => return Err(self.error_unexpected(self.pos)),
         };
+        self.get()?;
         loop {
-            match self.get() {
-                Ok(ch @ '0'..='9') => val = val * 16 + (ch as u64 - '0' as u64),
-                Ok(ch @ 'a'..='f') => val = val * 16 + (ch as u64 - 'a' as u64 + 10),
-                Ok(ch @ 'A'..='F') => val = val * 16 + (ch as u64 - 'A' as u64 + 10),
-                Ok('_') => {}
-                Ok(_) => {
-                    self.push_back();
-                    break;
-                }
-                Err(_) => break,
+            match self.peek() {
+                Some(ch @ '0'..='9') => val = val * 16 + (ch as u64 - '0' as u64),
+                Some(ch @ 'a'..='f') => val = val * 16 + (ch as u64 - 'a' as u64 + 10),
+                Some(ch @ 'A'..='F') => val = val * 16 + (ch as u64 - 'A' as u64 + 10),
+                Some('_') => {}
+                _ => break,
             }
+            self.get()?;
         }
         Ok(self.new_numlit(val as i64))
     }
 
     /// Read binary number.
     fn read_bin_number(&mut self) -> Result<Token, RubyError> {
-        let mut val = match self.get() {
-            Ok(ch @ '0'..='1') => (ch as u64 - '0' as u64),
-            Ok(_) => {
-                self.push_back();
+        let mut val = match self.peek() {
+            Some(ch @ '0'..='1') => (ch as u64 - '0' as u64),
+            Some(_) => {
                 return Err(self.error_unexpected(self.pos));
             }
-            Err(_) => return Err(self.error_unexpected(self.pos)),
+            None => return Err(self.error_eof(self.pos)),
         };
+        self.get()?;
         loop {
-            match self.get() {
-                Ok(ch @ '0'..='1') => val = val * 2 + (ch as u64 - '0' as u64),
-                Ok('_') => {}
-                Ok(_) => {
-                    self.push_back();
-                    break;
-                }
-                Err(_) => break,
+            match self.peek() {
+                Some(ch @ '0'..='1') => val = val * 2 + (ch as u64 - '0' as u64),
+                Some('_') => {}
+                _ => break,
             }
+            self.get()?;
         }
         Ok(self.new_numlit(val as i64))
     }
@@ -955,7 +955,7 @@ impl Lexer {
             let start = self.pos as usize;
             self.goto_eol();
             let end = self.pos as usize;
-            let line: String = self.code[start..end].iter().collect();
+            let line: String = self.code[start..end].to_string();
             //eprintln!("line:[{}]", line);
             if mode == Mode::AllowIndent {
                 if line.trim_start() == delimiter {
@@ -987,13 +987,22 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
-        self.code.get(self.pos).cloned()
+        match self.code.get(self.pos..) {
+            Some(s) => s.chars().next(),
+            None => None,
+        }
     }
 
     /// Peek the next next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek2(&self) -> Option<char> {
-        self.code.get(self.pos + 1).cloned()
+        match self.code.get(self.pos..) {
+            Some(s) => {
+                let mut iter = s.chars();
+                iter.next().and(iter.next())
+            }
+            None => None,
+        }
     }
 
     /// Get one char and move to the next.
@@ -1001,16 +1010,11 @@ impl Lexer {
     fn get(&mut self) -> Result<char, RubyError> {
         match self.peek() {
             Some(ch) => {
-                self.pos += 1;
+                self.pos += ch.len_utf8();
                 Ok(ch)
             }
             _ => Err(self.error_eof(self.pos)),
         }
-    }
-
-    /// Push back the last char.
-    fn push_back(&mut self) {
-        self.pos -= 1;
     }
 
     /// Consume the next char, if the char is equal to the given one.
@@ -1018,7 +1022,7 @@ impl Lexer {
     fn consume(&mut self, expect: char) -> bool {
         match self.peek() {
             Some(ch) if ch == expect => {
-                self.pos += 1;
+                self.pos += ch.len_utf8();
                 true
             }
             _ => false,
@@ -1041,7 +1045,7 @@ impl Lexer {
     fn consume_numeric(&mut self) -> Option<char> {
         match self.peek() {
             Some(ch) if ch.is_ascii() && ch.is_numeric() => {
-                self.pos += 1;
+                self.pos += ch.len_utf8();
                 Some(ch)
             }
             _ => None,
@@ -1053,7 +1057,7 @@ impl Lexer {
     fn consume_octal(&mut self) -> Option<u8> {
         match self.peek() {
             Some(ch) if '0' <= ch && ch <= '7' => {
-                self.pos += 1;
+                self.pos += ch.len_utf8();
                 Some(ch as u8 - '0' as u8)
             }
             _ => None,
@@ -1065,7 +1069,7 @@ impl Lexer {
     fn consume_whitespace(&mut self) -> bool {
         match self.peek() {
             Some(ch) if ch.is_ascii_whitespace() => {
-                self.pos += 1;
+                self.pos += ch.len_utf8();
                 true
             }
             _ => false,
@@ -1111,7 +1115,7 @@ impl Lexer {
         loop {
             match self.peek() {
                 Some('\n') | None => return,
-                _ => self.pos += 1,
+                Some(ch) => self.pos += ch.len_utf8(),
             };
         }
     }
