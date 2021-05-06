@@ -148,12 +148,6 @@ impl<T> std::ops::DerefMut for Ref<T> {
 
 pub type SourceInfoRef = Ref<SourceInfo>;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SourceInfo {
-    pub path: PathBuf,
-    pub code: Vec<char>,
-}
-
 /// This struct holds infomation of a certain line in the code.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
@@ -175,17 +169,22 @@ impl Line {
     }
 }
 
-impl Default for SourceInfoRef {
-    fn default() -> Self {
-        SourceInfoRef::new(SourceInfo::new(PathBuf::default()))
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub struct SourceInfo {
+    pub path: PathBuf,
+    pub code: String,
 }
 
+impl Default for SourceInfo {
+    fn default() -> Self {
+        SourceInfo::new(PathBuf::default(), "")
+    }
+}
 impl SourceInfo {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
         SourceInfo {
-            path: path,
-            code: vec![],
+            path: path.into(),
+            code: code.into(),
         }
     }
 
@@ -205,8 +204,8 @@ impl SourceInfo {
         let mut res_string = String::new();
         let term_width = terminal_size().unwrap_or((Width(80), Height(25))).0 .0 as usize;
         let mut line_top = 0;
-        let mut lines: Vec<Line> = self
-            .code
+        let code: Vec<char> = self.code.chars().collect();
+        let mut lines: Vec<Line> = code
             .iter()
             .enumerate()
             .filter(|(_, ch)| **ch == '\n')
@@ -218,9 +217,9 @@ impl SourceInfo {
                 Line::new(idx + 1, top, pos)
             })
             .collect();
-        if line_top < self.code.len() {
+        if line_top < code.len() {
             let line_no = lines.len() + 1;
-            lines.push(Line::new(line_no, line_top, self.code.len() - 1));
+            lines.push(Line::new(line_no, line_top, code.len() - 1));
         }
 
         let mut found = false;
@@ -235,29 +234,29 @@ impl SourceInfo {
 
             let mut start = line.top;
             let mut end = line.end;
-            if self.code[end] == '\n' && end > 0 {
+            if code[end] == '\n' && end > 0 {
                 end -= 1
             }
             start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
-            if calc_width(&self.code[start..=end]) >= term_width {
+            if calc_width(&code[start..=end]) >= term_width {
                 for e in loc.1..=end {
-                    if calc_width(&self.code[start..=e]) < term_width {
+                    if calc_width(&code[start..=e]) < term_width {
                         end = e;
                     } else {
                         break;
                     }
                 }
             }
-            res_string += &(self.code[start..=end].iter().collect::<String>() + "\n");
+            res_string += &(code[start..=end].iter().collect::<String>() + "\n");
             use std::cmp::*;
             let lead = if loc.0 <= line.top {
                 0
             } else {
-                calc_width(&self.code[start..loc.0])
+                calc_width(&code[start..loc.0])
             };
             let range_start = max(loc.0, line.top);
             let range_end = min(loc.1, line.end);
-            let length = calc_width(&self.code[range_start..range_end]);
+            let length = calc_width(&code[range_start..range_end]);
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);
             res_string += "\n";
@@ -269,14 +268,14 @@ impl SourceInfo {
                 Some(line) => (line.no + 1, line.end + 1, loc.1),
                 None => (1, 0, loc.1),
             };
-            let lead = calc_width(&self.code[line.1..loc.0]);
-            let length = calc_width(&self.code[loc.0..loc.1]);
-            let is_cr = loc.1 >= self.code.len() || self.code[loc.1] == '\n';
+            let lead = calc_width(&code[line.1..loc.0]);
+            let length = calc_width(&code[loc.0..loc.1]);
+            let is_cr = loc.1 >= code.len() || code[loc.1] == '\n';
             res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.0);
             res_string += &(if !is_cr {
-                self.code[line.1..=loc.1].iter().collect::<String>()
+                code[line.1..=loc.1].iter().collect::<String>()
             } else {
-                self.code[line.1..loc.1].iter().collect::<String>()
+                code[line.1..loc.1].iter().collect::<String>()
             });
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);

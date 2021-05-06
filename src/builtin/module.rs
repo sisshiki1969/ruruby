@@ -1,5 +1,4 @@
 use crate::*;
-use std::path::PathBuf;
 
 pub fn init() {
     let class = BuiltinClass::module();
@@ -336,7 +335,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             args.check_args_num(1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string("1st arg")?;
-            let method = vm.parse_program_eval(PathBuf::from("(eval)"), program)?;
+            let method = vm.parse_program_eval("(eval)", program)?;
             // The scopes of constants and class variables are same as module definition of `self_val`.
             vm.class_push(self_val);
             let mut iseq = vm.get_method_iseq();

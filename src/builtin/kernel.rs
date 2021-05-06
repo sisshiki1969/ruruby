@@ -446,6 +446,7 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    let mut args = args.clone();
     args.check_args_range(1, 4)?;
     let mut arg0 = args[0];
     let program = arg0.expect_string("1st arg")?;
@@ -455,11 +456,9 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     let path = if args.len() > 2 {
-        let mut arg2 = args[2];
-        let name = arg2.expect_string("3rd arg")?;
-        std::path::PathBuf::from(name)
+        args[2].expect_string("3rd arg")?
     } else {
-        std::path::PathBuf::from("(eval)")
+        "(eval)"
     };
 
     let method = vm.parse_program_eval(path, program)?;

@@ -67,13 +67,13 @@ impl VM {
         };
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
-        match vm.run(PathBuf::from("(startup)"), load_path) {
+        match vm.run("(startup)", load_path) {
             Ok(val) => globals.set_global_var_by_str("$:", val),
             Err(_) => {}
         };
 
         match vm.run(
-            PathBuf::from("ruruby/startup/startup.rb"),
+            "ruruby/startup/startup.rb",
             include_str!("../startup/startup.rb"),
         ) {
             Ok(_) => {}
@@ -257,9 +257,13 @@ impl VM {
         self.pc = (self.pc + inst_offset + disp).into();
     }
 
-    pub fn parse_program(&mut self, path: PathBuf, program: &str) -> Result<MethodId, RubyError> {
-        let parser = Parser::new();
-        let result = parser.parse_program(path, program)?;
+    pub fn parse_program(
+        &mut self,
+        path: impl Into<PathBuf>,
+        program: impl Into<String>,
+    ) -> Result<MethodId, RubyError> {
+        let parser = Parser::new(path, program);
+        let result = parser.parse_program()?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
@@ -278,12 +282,12 @@ impl VM {
 
     pub fn parse_program_eval(
         &mut self,
-        path: PathBuf,
+        path: impl Into<PathBuf>,
         program: &str,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new();
+        let parser = Parser::new(path, program);
         let extern_context = self.context();
-        let result = parser.parse_program_eval(path, program, Some(extern_context))?;
+        let result = parser.parse_program_eval(Some(extern_context))?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
@@ -302,7 +306,7 @@ impl VM {
         Ok(method)
     }
 
-    pub fn run(&mut self, path: PathBuf, program: &str) -> VMResult {
+    pub fn run(&mut self, path: impl Into<PathBuf>, program: impl Into<String>) -> VMResult {
         let method = self.parse_program(path, program)?;
         let mut iseq = method.as_iseq();
         iseq.class_defined = self.get_class_defined();
@@ -431,7 +435,9 @@ impl VM {
                         }
                         _ => {}
                     }
-                    err.info.push((self.source_info(), self.get_loc()));
+                    if err.info.len() == 0 || self.context().kind != ISeqKind::Block {
+                        err.info.push((self.source_info(), self.get_loc()));
+                    }
                     //eprintln!("{:?}", iseq.exception_table);
                     if let RubyErrorKind::Internal(msg) = &err.kind {
                         eprintln!();
@@ -1936,7 +1942,7 @@ impl VM {
         self.set_global_var(IdentId::get_id("$0"), Value::string(file));
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
-        self.exec_program(absolute_path, &program);
+        self.exec_program(absolute_path, program);
         #[cfg(feature = "emit-iseq")]
         {
             self.globals.const_values.dump();
@@ -1944,7 +1950,7 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
+    pub fn exec_program(&mut self, absolute_path: PathBuf, program: impl Into<String>) {
         match self.run(absolute_path, program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]

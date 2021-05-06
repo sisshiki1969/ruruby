@@ -253,8 +253,8 @@ enum ContextKind {
 }
 
 impl Parser {
-    pub fn new() -> Self {
-        let lexer = Lexer::new();
+    pub fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
+        let lexer = Lexer::new(path, code);
         Parser {
             lexer,
             prev_loc: Loc(0, 0),
@@ -566,8 +566,8 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse_program(mut self, path: PathBuf, program: &str) -> Result<ParseResult, RubyError> {
-        let (node, lvar) = self.parse_program_core(path, program, None)?;
+    pub fn parse_program(mut self) -> Result<ParseResult, RubyError> {
+        let (node, lvar) = self.parse_program_core(None)?;
 
         let tok = self.peek()?;
         if tok.is_eof() {
@@ -580,17 +580,20 @@ impl Parser {
 
     pub fn parse_program_repl(
         mut self,
-        path: PathBuf,
-        program: &str,
-        extern_context: Option<ContextRef>,
+        extern_context: ContextRef,
     ) -> Result<ParseResult, RubyError> {
-        let (node, lvar) = match self.parse_program_core(path, program, extern_context) {
-            Ok((node, lvar)) => (node, lvar),
+        self.extern_context = Some(extern_context);
+        self.context_stack.push(ParseContext::new_class(Some(
+            extern_context.iseq_ref.unwrap().lvar.clone(),
+        )));
+        let node = match self.parse_comp_stmt() {
+            Ok(node) => node,
             Err(mut err) => {
                 err.set_level(self.context_stack.len() - 1);
                 return Err(err);
             }
         };
+        let lvar = self.context_stack.pop().unwrap().lvar;
 
         let tok = self.peek()?;
         if tok.is_eof() {
@@ -605,17 +608,15 @@ impl Parser {
 
     pub fn parse_program_core(
         &mut self,
-        path: PathBuf,
-        program: &str,
+        //path: PathBuf,
+        //program: &str,
         extern_context: Option<ContextRef>,
     ) -> Result<(Node, LvarCollector), RubyError> {
-        self.lexer.init(path, program);
+        //self.lexer.init(path, program);
         self.extern_context = extern_context;
-        self.context_stack
-            .push(ParseContext::new_class(match extern_context {
-                Some(ctx) => Some(ctx.iseq_ref.unwrap().lvar.clone()),
-                None => None,
-            }));
+        self.context_stack.push(ParseContext::new_class(
+            extern_context.map(|ctx| ctx.iseq_ref.unwrap().lvar.clone()),
+        ));
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         Ok((node, lvar))
@@ -623,11 +624,8 @@ impl Parser {
 
     pub fn parse_program_eval(
         mut self,
-        path: PathBuf,
-        program: &str,
         extern_context: Option<ContextRef>,
     ) -> Result<ParseResult, RubyError> {
-        self.lexer.init(path, program);
         self.extern_context = extern_context;
         self.context_stack.push(ParseContext::new_block());
         let node = self.parse_comp_stmt()?;

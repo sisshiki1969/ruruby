@@ -3,9 +3,11 @@ use crate::error::{ParseErrKind, RubyError};
 use crate::util::*;
 use crate::value::real::Real;
 use fxhash::FxHashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
+    code: Vec<char>,
     len: usize,
     token_start_pos: usize,
     pos: usize,
@@ -37,7 +39,7 @@ enum InterpolateState {
 }
 
 impl Lexer {
-    pub fn new() -> Self {
+    pub fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
         let mut reserved = FxHashMap::default();
         let mut reserved_rev = FxHashMap::default();
         macro_rules! reg_reserved {
@@ -83,15 +85,18 @@ impl Lexer {
             "while" => Reserved::While,
             "yield" => Reserved::Yield
         };
+        let code = code.into();
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, &code));
         Lexer {
-            len: 0,
+            code: code.chars().collect(),
+            len: source_info.code.len(),
             token_start_pos: 0,
             pos: 0,
             buf: None,
             buf_skip_lt: None,
             reserved,
             reserved_rev,
-            source_info: SourceInfoRef::new(SourceInfo::new(std::path::PathBuf::default())),
+            source_info,
             state_save: vec![],
         }
     }
@@ -103,7 +108,7 @@ impl Lexer {
     fn error_unexpected(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
         RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.source_info.code[pos])),
+            ParseErrKind::SyntaxError(format!("Unexpected char. '{}'", self.code[pos])),
             self.source_info,
             0,
             loc,
@@ -126,8 +131,7 @@ impl Lexer {
     }
 
     #[cfg(test)]
-    pub fn tokenize(&mut self, code_text: impl Into<String>) -> Result<LexerResult, RubyError> {
-        self.init(std::path::PathBuf::new(), code_text);
+    pub fn tokenize(&mut self) -> Result<LexerResult, RubyError> {
         let mut tokens = vec![];
         loop {
             match self.get_token() {
@@ -145,12 +149,13 @@ impl Lexer {
         return Ok(LexerResult::new(tokens));
     }
 
-    pub fn init(&mut self, path: std::path::PathBuf, code_text: impl Into<String>) {
-        let mut code = code_text.into().chars().collect::<Vec<char>>();
-        self.pos = self.source_info.code.len();
-        self.source_info.code.append(&mut code);
-        self.len = self.source_info.code.len();
-        self.source_info.path = path;
+    pub fn append(&mut self, code_text: impl Into<String>) {
+        let code_text = code_text.into();
+        let mut code = code_text.chars().collect::<Vec<char>>();
+        self.pos = self.code.len();
+        self.code.append(&mut code);
+        self.len = self.code.len();
+        self.source_info.code += &code_text;
     }
 
     pub fn get_token(&mut self) -> Result<Token, RubyError> {
@@ -175,7 +180,7 @@ impl Lexer {
         if let Some(tok) = &self.buf_skip_lt {
             return Ok(tok.clone());
         };
-        let state_save = (self.pos, self.token_start_pos);
+        self.save_state();
         let mut tok;
         loop {
             tok = self.read_token()?;
@@ -183,8 +188,7 @@ impl Lexer {
                 break;
             }
         }
-        self.pos = state_save.0;
-        self.token_start_pos = state_save.1;
+        self.restore_state();
         self.buf_skip_lt = Some(tok.clone());
         Ok(tok)
     }
@@ -207,7 +211,7 @@ impl Lexer {
 
     /// Examine if the next char of the token is space.
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
-        match self.source_info.code.get(tok.loc.1 + 1) {
+        match self.code.get(tok.loc.1 + 1) {
             Some(ch) => ch.is_ascii_whitespace(),
             _ => false,
         }
@@ -951,7 +955,7 @@ impl Lexer {
             let start = self.pos as usize;
             self.goto_eol();
             let end = self.pos as usize;
-            let line: String = self.source_info.code[start..end].iter().collect();
+            let line: String = self.code[start..end].iter().collect();
             //eprintln!("line:[{}]", line);
             if mode == Mode::AllowIndent {
                 if line.trim_start() == delimiter {
@@ -983,13 +987,13 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
-        self.source_info.code.get(self.pos).cloned()
+        self.code.get(self.pos).cloned()
     }
 
     /// Peek the next next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek2(&self) -> Option<char> {
-        self.source_info.code.get(self.pos + 1).cloned()
+        self.code.get(self.pos + 1).cloned()
     }
 
     /// Get one char and move to the next.
@@ -1204,8 +1208,8 @@ impl LexerResult {
 mod test {
     use crate::parse::lexer::*;
     fn assert_tokens(program: impl Into<String>, ans: Vec<Token>) {
-        let mut lexer = Lexer::new();
-        match lexer.tokenize(program.into()) {
+        let mut lexer = Lexer::new("test", program);
+        match lexer.tokenize() {
             Err(err) => panic!("{:?}", err),
             Ok(LexerResult { tokens, .. }) => {
                 let len = tokens.len();

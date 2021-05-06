@@ -31,13 +31,13 @@ pub fn repl_vm() {
     }
     let mut rl = Editor::<()>::new();
     let prompt_body = if cfg!(not(unix)) {
-        // In Windows, it seems that ansi_term does not work well in rustyline.
+        // In Windows, it seems that ansi_term does not work well with rustyline.
         format!("irb:")
     } else {
         format!("{}", Red.bold().paint("irb:"))
     };
     let mut program = String::new();
-    let mut parser = Parser::new();
+    let mut parser = Parser::new("REPL", &String::new());
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
@@ -48,7 +48,6 @@ pub fn repl_vm() {
         ISeqRef::default(),
         None,
     );
-    rustyline::config::Builder::new().tab_stop(0).indent_size(0);
     loop {
         let prompt = if program.len() == 0 { ">" } else { "*" };
         let readline = rl.readline(&format!(
@@ -61,7 +60,7 @@ pub fn repl_vm() {
         let line = match readline {
             Ok(line) => {
                 rl.add_history_entry(&line);
-                line
+                line + "\n"
             }
             Err(err) => match err {
                 ReadlineError::Interrupted => {
@@ -74,13 +73,10 @@ pub fn repl_vm() {
             },
         };
 
-        program = format!("{}{}\n", program, line);
+        program += &line;
+        parser.lexer.append(line);
 
-        match parser.clone().parse_program_repl(
-            std::path::PathBuf::from("REPL"),
-            &program,
-            Some(context),
-        ) {
+        match parser.clone().parse_program_repl(context) {
             Ok(parse_result) => {
                 let source_info = parse_result.source_info;
                 match vm.run_repl(parse_result, context) {
