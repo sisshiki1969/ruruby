@@ -87,7 +87,7 @@ impl RString {
                 }
                 Bytes(rhs) => {
                     let mut bytes = mem::replace(lhs, String::new()).into_bytes();
-                    bytes.extend_from_slice(rhs);
+                    bytes.extend(rhs);
                     RString::from_bytes(bytes)
                 }
             },
@@ -104,7 +104,7 @@ impl RString {
                     }
                     Bytes(rhs) => {
                         let mut bytes = lhs.into_bytes();
-                        bytes.extend_from_slice(rhs);
+                        bytes.extend(rhs);
                         RString::from_bytes(bytes)
                     }
                 }
@@ -112,16 +112,16 @@ impl RString {
             Bytes(ref mut lhs) => match rhs {
                 Str(rhs) => {
                     let mut bytes = mem::replace(lhs, Vec::new());
-                    bytes.extend_from_slice(rhs.as_bytes());
+                    bytes.extend(rhs.as_bytes());
                     RString::from_bytes(bytes)
                 }
                 SmallStr(rhs) => {
                     let mut bytes = mem::replace(lhs, Vec::new());
-                    bytes.extend_from_slice(rhs.as_bytes());
+                    bytes.extend(rhs.as_bytes());
                     RString::from_bytes(bytes)
                 }
                 Bytes(rhs) => {
-                    lhs.extend_from_slice(rhs);
+                    lhs.extend(rhs);
                     return;
                 }
             },

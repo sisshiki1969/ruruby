@@ -1,7 +1,7 @@
 use console;
 use core::ptr::NonNull;
 use std::path::PathBuf;
-use terminal_size::{terminal_size, Height, Width};
+use terminal_size::terminal_size;
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
 
@@ -202,13 +202,13 @@ impl SourceInfo {
             return "(internal)".to_string();
         }
         let mut res_string = String::new();
-        let term_width = terminal_size().unwrap_or((Width(80), Height(25))).0 .0 as usize;
+        let term_width = terminal_size().map(|(w, _)| w.0).unwrap_or(80) as usize;
         let mut line_top = 0;
-        let code: Vec<char> = self.code.chars().collect();
-        let mut lines: Vec<Line> = code
-            .iter()
-            .enumerate()
-            .filter(|(_, ch)| **ch == '\n')
+        let code_len = self.code.len();
+        let mut lines: Vec<_> = self
+            .code
+            .char_indices()
+            .filter(|(_, ch)| *ch == '\n')
             .map(|(pos, _)| pos)
             .enumerate()
             .map(|(idx, pos)| {
@@ -216,17 +216,14 @@ impl SourceInfo {
                 line_top = pos + 1;
                 Line::new(idx + 1, top, pos)
             })
+            .filter(|line| line.end >= loc.0 && line.top <= loc.1)
             .collect();
-        if line_top < code.len() {
-            let line_no = lines.len() + 1;
-            lines.push(Line::new(line_no, line_top, code.len() - 1));
+        if line_top < code_len && (code_len - 1) >= loc.0 && line_top <= loc.1 {
+            lines.push(Line::new(lines.len() + 1, line_top, code_len - 1));
         }
 
         let mut found = false;
-        for line in lines
-            .iter()
-            .filter(|line| line.end >= loc.0 && line.top <= loc.1)
-        {
+        for line in &lines {
             if !found {
                 res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.no);
                 found = true;
@@ -234,29 +231,30 @@ impl SourceInfo {
 
             let mut start = line.top;
             let mut end = line.end;
-            if code[end] == '\n' && end > 0 {
+            if self.code[end..].chars().next() == Some('\n') && end > 0 {
                 end -= 1
             }
             start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
-            if calc_width(&code[start..=end]) >= term_width {
+            if console::measure_text_width(&self.code[start..=end]) >= term_width {
                 for e in loc.1..=end {
-                    if calc_width(&code[start..=e]) < term_width {
+                    if console::measure_text_width(&self.code[start..=e]) < term_width {
                         end = e;
                     } else {
                         break;
                     }
                 }
             }
-            res_string += &(code[start..=end].iter().collect::<String>() + "\n");
+            res_string += &self.code[start..=end];
+            res_string.push('\n');
             use std::cmp::*;
             let lead = if loc.0 <= line.top {
                 0
             } else {
-                calc_width(&code[start..loc.0])
+                console::measure_text_width(&self.code[start..loc.0])
             };
             let range_start = max(loc.0, line.top);
             let range_end = min(loc.1, line.end);
-            let length = calc_width(&code[range_start..range_end]);
+            let length = console::measure_text_width(&self.code[range_start..range_end]);
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);
             res_string += "\n";
@@ -268,24 +266,19 @@ impl SourceInfo {
                 Some(line) => (line.no + 1, line.end + 1, loc.1),
                 None => (1, 0, loc.1),
             };
-            let lead = calc_width(&code[line.1..loc.0]);
-            let length = calc_width(&code[loc.0..loc.1]);
-            let is_cr = loc.1 >= code.len() || code[loc.1] == '\n';
+            let lead = console::measure_text_width(&self.code[line.1..loc.0]);
+            let length = console::measure_text_width(&self.code[loc.0..loc.1]);
+            let is_cr = loc.1 >= self.code.len() || self.code[loc.1..].chars().next() == Some('\n');
             res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.0);
-            res_string += &(if !is_cr {
-                code[line.1..=loc.1].iter().collect::<String>()
+            res_string += if !is_cr {
+                &self.code[line.1..=loc.1]
             } else {
-                code[line.1..loc.1].iter().collect::<String>()
-            });
+                &self.code[line.1..loc.1]
+            };
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);
             res_string += "\n";
         }
         return res_string;
-
-        fn calc_width(chars: &[char]) -> usize {
-            let str: String = chars.iter().collect();
-            console::measure_text_width(&str)
-        }
     }
 }
