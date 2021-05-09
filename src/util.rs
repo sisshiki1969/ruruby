@@ -1,7 +1,7 @@
 use console;
 use core::ptr::NonNull;
 use std::path::PathBuf;
-use terminal_size::terminal_size;
+//use terminal_size::terminal_size;
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
 
@@ -208,7 +208,7 @@ impl SourceInfo {
             return "(internal)".to_string();
         }
         let mut res_string = String::new();
-        let term_width = terminal_size().map(|(w, _)| w.0).unwrap_or(80) as usize;
+        //let term_width = terminal_size().map(|(w, _)| w.0).unwrap_or(80) as usize;
         let mut line_top = 0;
         let code_len = self.code.len();
         let mut lines: Vec<_> = self
@@ -240,16 +240,16 @@ impl SourceInfo {
             if self.get_next_char(end) == Some('\n') && end > 0 {
                 end -= 1
             }
-            start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
-            if console::measure_text_width(&self.code[start..=end]) >= term_width {
-                for e in loc.1..=end {
-                    if console::measure_text_width(&self.code[start..=e]) < term_width {
-                        end = e;
-                    } else {
-                        break;
-                    }
-                }
-            }
+            start += if loc.0 >= start { loc.0 - start } else { 0 }; // term_width * term_width;
+                                                                     /*if console::measure_text_width(&self.code[start..=end]) >= term_width {
+                                                                         for (e, _) in self.code[loc.1 + 1..=end].char_indices() {
+                                                                             if console::measure_text_width(&self.code[start..e]) < term_width {
+                                                                                 end = e;
+                                                                             } else {
+                                                                                 break;
+                                                                             }
+                                                                         }
+                                                                     }*/
             res_string += &self.code[start..=end];
             res_string.push('\n');
             use std::cmp::*;
