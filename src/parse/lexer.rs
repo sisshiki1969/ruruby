@@ -820,6 +820,7 @@ impl Lexer {
     }
 
     pub fn get_percent_notation(&mut self) -> Result<Token, RubyError> {
+        let pos = self.pos;
         let c = self.get()?;
         let (kind, delimiter) = match c {
             'q' | 'Q' | 'x' | 'r' | 'w' | 'W' | 's' | 'i' | 'I' => {
@@ -831,7 +832,7 @@ impl Lexer {
                 (Some(c), delimiter)
             }
             delimiter if !c.is_ascii_alphanumeric() => (None, delimiter),
-            _ => return Err(self.error_unexpected(self.pos)),
+            _ => return Err(self.error_unexpected(pos)),
         };
         let (open, term) = match delimiter {
             '(' => (Some('('), ')'),
@@ -869,7 +870,7 @@ impl Lexer {
             ch @ '0'..='9' => Ok(ch as u32 - '0' as u32),
             ch @ 'a'..='f' => Ok(ch as u32 - 'a' as u32 + 10),
             ch @ 'A'..='F' => Ok(ch as u32 - 'A' as u32 + 10),
-            _ => Err(self.error_unexpected(self.pos - 1)),
+            _ => Err(self.error_unexpected(self.pos - c.len_utf8())),
         }
     }
 
@@ -903,7 +904,7 @@ impl Lexer {
                 }
                 match std::char::from_u32(code) {
                     Some(ch) => ch,
-                    None => return Err(self.error_parse("Invalid UTF-8 character.", self.pos - 1)),
+                    None => return Err(self.error_parse("Invalid UTF-8 character.", self.pos)),
                 }
             }
             c if '0' <= c && c <= '7' => {
@@ -952,9 +953,9 @@ impl Lexer {
         self.get()?;
         let mut res = String::new();
         loop {
-            let start = self.pos as usize;
+            let start = self.pos;
             self.goto_eol();
-            let end = self.pos as usize;
+            let end = self.pos;
             let line: String = self.code[start..end].to_string();
             //eprintln!("line:[{}]", line);
             if mode == Mode::AllowIndent {

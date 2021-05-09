@@ -260,7 +260,7 @@ impl SourceInfo {
             };
             let range_start = max(loc.0, line.top);
             let range_end = min(loc.1, line.end);
-            let length = console::measure_text_width(&self.code[range_start..range_end]);
+            let length = console::measure_text_width(&self.code[range_start..=range_end]);
             res_string += &" ".repeat(lead);
             res_string += &"^".repeat(length + 1);
             res_string += "\n";
