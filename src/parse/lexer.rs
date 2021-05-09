@@ -987,22 +987,15 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
-        match self.code.get(self.pos..) {
-            Some(s) => s.chars().next(),
-            None => None,
-        }
+        self.code.get(self.pos..)?.chars().next()
     }
 
     /// Peek the next next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek2(&self) -> Option<char> {
-        match self.code.get(self.pos..) {
-            Some(s) => {
-                let mut iter = s.chars();
-                iter.next().and(iter.next())
-            }
-            None => None,
-        }
+        let mut iter = self.code.get(self.pos..)?.chars();
+        iter.next()?;
+        iter.next()
     }
 
     /// Get one char and move to the next.

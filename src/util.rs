@@ -153,9 +153,9 @@ pub type SourceInfoRef = Ref<SourceInfo>;
 pub struct Line {
     /// line number. (the first line is 1)
     pub no: usize,
-    /// an index of the line top in Vec<char>.
+    /// byte position of the line top in the code.
     pub top: usize,
-    /// an index of the line end in Vec<char>.
+    /// byte position of the line end in the code.
     pub end: usize,
 }
 
@@ -171,7 +171,9 @@ impl Line {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceInfo {
+    /// directory path of the source code.
     pub path: PathBuf,
+    /// source code text.
     pub code: String,
 }
 
@@ -194,6 +196,10 @@ impl SourceInfo {
 
     pub fn show_loc(&self, loc: &Loc) {
         eprint!("{}", self.get_location(loc));
+    }
+
+    pub fn get_next_char(&self, pos: usize) -> Option<char> {
+        self.code[pos..].chars().next()
     }
 
     /// Return a string represents the location of `loc` in the source code using '^^^'.
@@ -231,7 +237,7 @@ impl SourceInfo {
 
             let mut start = line.top;
             let mut end = line.end;
-            if self.code[end..].chars().next() == Some('\n') && end > 0 {
+            if self.get_next_char(end) == Some('\n') && end > 0 {
                 end -= 1
             }
             start += (if loc.0 >= start { loc.0 - start } else { 0 }) / term_width * term_width;
@@ -268,7 +274,7 @@ impl SourceInfo {
             };
             let lead = console::measure_text_width(&self.code[line.1..loc.0]);
             let length = console::measure_text_width(&self.code[loc.0..loc.1]);
-            let is_cr = loc.1 >= self.code.len() || self.code[loc.1..].chars().next() == Some('\n');
+            let is_cr = loc.1 >= self.code.len() || self.get_next_char(loc.1) == Some('\n');
             res_string += &format!("{}:{}\n", self.path.to_string_lossy(), line.0);
             res_string += if !is_cr {
                 &self.code[line.1..=loc.1]
