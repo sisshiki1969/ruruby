@@ -389,8 +389,7 @@ impl VM {
         }
     }
 
-    pub fn run_context(&mut self, context: impl Into<ContextRef>) -> Result<(), RubyError> {
-        let context = context.into();
+    pub fn run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
         let stack_len = self.stack_len();
@@ -1443,14 +1442,14 @@ impl VM {
                     Some(proc) => proc,
                     None => return Err(RubyError::internal("Illegal proc.")),
                 };
-                let context = Context::from_args(
+                let context = ContextRef::from_args(
                     self,
                     self_val,
                     pref.context.iseq_ref.unwrap(),
                     args,
                     pref.context.outer,
                 )?;
-                self.run_context(&context)?
+                self.run_context(context)?
             }
             _ => unreachable!(),
         }
@@ -1476,14 +1475,14 @@ impl VM {
     /// Evaluate Proc object.
     pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
         let pref = proc.as_proc().unwrap();
-        let context = Context::from_args(
+        let context = ContextRef::from_args(
             self,
             pref.context.self_value,
             pref.context.iseq_ref.unwrap(),
             args,
             pref.context.outer,
         )?;
-        self.run_context(&context)?;
+        self.run_context(context)?;
         Ok(self.stack_pop())
     }
 
@@ -1517,8 +1516,8 @@ impl VM {
                 Ok(())
             }
             RubyFunc { iseq } => {
-                let context = Context::from_args(self, self_val, iseq, args, outer)?;
-                self.run_context(&context)
+                let context = ContextRef::from_args(self, self_val, iseq, args, outer)?;
+                self.run_context(context)
             }
             _ => unreachable!(),
         }
@@ -1548,8 +1547,7 @@ impl VM {
                 }
             }
             RubyFunc { iseq } => {
-                let context = Context::from_args(self, self_val, iseq, &args, outer)?;
-                let mut context = ContextRef::from_ref(&context);
+                let mut context = ContextRef::from_args(self, self_val, iseq, &args, outer)?;
 
                 if iseq.params.req + iseq.params.post > 1 {
                     if iseq.opt_flag {

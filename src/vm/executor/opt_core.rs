@@ -1016,20 +1016,20 @@ impl VM {
                         i => Block::Block(MethodId::from(i), self.context()),
                     };
                     if iseq.opt_flag {
-                        let mut context = Context::new(receiver, block, iseq, None);
+                        let mut context = ContextRef::new_heap(receiver, block, iseq, None);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
                         };
                         context.copy_from_slice0(arg_slice);
                         self.set_stack_len(len - args_num);
-                        self.run_context(&context)
+                        self.run_context(context)
                     } else {
                         let mut args = Args::from_slice(arg_slice);
                         args.block = block;
                         self.set_stack_len(len - args_num);
-                        let context = Context::from_args(self, receiver, iseq, &args, None)?;
-                        self.run_context(&context)
+                        let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;
+                        self.run_context(context)
                     }
                 }
                 _ => unreachable!(),
@@ -1062,8 +1062,8 @@ impl VM {
                     Ok(())
                 }
                 MethodInfo::RubyFunc { iseq } => {
-                    let context = Context::from_args(self, receiver, iseq, &args, None)?;
-                    self.run_context(&context)
+                    let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;
+                    self.run_context(context)
                 }
                 _ => unreachable!(),
             },

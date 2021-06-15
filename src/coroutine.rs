@@ -1,17 +1,17 @@
 use crate::*;
 #[cfg(all(unix, target_arch = "aarch64"))]
 mod asm_arm64;
-#[cfg(all(unix, target_arch = "x86_64"))]
-mod asm_x64;
 #[cfg(all(windows, target_arch = "x86_64"))]
 mod asm_windows_x64;
+#[cfg(all(unix, target_arch = "x86_64"))]
+mod asm_x64;
 mod stack;
 #[cfg(all(unix, target_arch = "aarch64"))]
 use asm_arm64 as asm;
-#[cfg(all(unix, target_arch = "x86_64"))]
-use asm_x64 as asm;
 #[cfg(all(windows, target_arch = "x86_64"))]
 use asm_windows_x64 as asm;
+#[cfg(all(unix, target_arch = "x86_64"))]
+use asm_x64 as asm;
 use stack::*;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -55,8 +55,8 @@ impl EnumInfo {
     /// `vm`: VM of created fiber.
     pub fn enumerator_fiber(&self, vm: &mut VM) -> VMResult {
         let method = vm.get_method_from_receiver(self.receiver, self.method)?;
-        let context = Context::new_noiseq();
-        vm.context_push(ContextRef::from_ref(&context));
+        let context = ContextRef::new_noiseq();
+        vm.context_push(context);
         vm.invoke_func(method, self.receiver, None, &self.args)?;
         vm.context_pop();
         Err(RubyError::stop_iteration("Iteration reached an end."))

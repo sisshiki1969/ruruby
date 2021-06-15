@@ -88,12 +88,7 @@ impl GC for Context {
 }
 
 impl Context {
-    pub fn new(
-        self_value: Value,
-        block: Block,
-        iseq_ref: ISeqRef,
-        outer: Option<ContextRef>,
-    ) -> Self {
+    fn new(self_value: Value, block: Block, iseq_ref: ISeqRef, outer: Option<ContextRef>) -> Self {
         let lvar_num = iseq_ref.lvars;
         let lvar_vec = if lvar_num > LVAR_ARRAY_SIZE {
             vec![Value::uninitialized(); lvar_num - LVAR_ARRAY_SIZE]
@@ -113,7 +108,7 @@ impl Context {
         }
     }
 
-    pub fn new_noiseq() -> Self {
+    fn new_noiseq() -> Self {
         Context {
             self_value: Value::nil(),
             block: Block::None,
@@ -186,7 +181,7 @@ impl Context {
         }
     }
 
-    pub fn from_args(
+    fn from_args(
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
@@ -369,6 +364,28 @@ impl ContextRef {
         let mut ctxref = ContextRef::new(context);
         ctxref.moved_to_heap = Some(ctxref);
         ctxref
+    }
+
+    pub fn new_noiseq() -> Self {
+        let mut context = Context::new_noiseq();
+        context.on_stack = false;
+        let mut ctxref = ContextRef::new(context);
+        ctxref.moved_to_heap = Some(ctxref);
+        ctxref
+    }
+
+    pub fn from_args(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+    ) -> Result<Self, RubyError> {
+        let mut context = Context::from_args(vm, self_value, iseq, args, outer)?;
+        context.on_stack = false;
+        let mut ctxref = ContextRef::new(context);
+        ctxref.moved_to_heap = Some(ctxref);
+        Ok(ctxref)
     }
 
     pub fn get_current(self) -> Self {
