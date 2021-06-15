@@ -2297,12 +2297,11 @@ impl Parser {
                 None => eprintln!("parsed: method {:?}", name),
             }
         }
-        match singleton {
-            Some(singleton) => Ok(Node::new_singleton_method_decl(
-                singleton, name, args, body, lvar,
-            )),
-            None => Ok(Node::new_method_decl(name, args, body, lvar)),
-        }
+        let decl = match singleton {
+            Some(singleton) => Node::new_singleton_method_decl(singleton, name, args, body, lvar),
+            None => Node::new_method_decl(name, args, body, lvar),
+        };
+        Ok(decl)
     }
 
     /// Parse formal parameters.

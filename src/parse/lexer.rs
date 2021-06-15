@@ -153,7 +153,7 @@ impl Lexer {
     }
 
     pub fn append(&mut self, code_text: &str) {
-        self.pos = self.code.len();
+        self.pos = 0;
         self.code.push_str(code_text);
         self.len = self.code.len();
         self.source_info.code += &code_text;
