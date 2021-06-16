@@ -235,8 +235,13 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if num < 1 {
         return Ok(self_val);
     };
-    let iter = (0..num).map(|i| Value::integer(i));
-    vm.eval_block_iter1(block, iter, false)?;
+    let mut args = Args::new1(Value::uninitialized());
+    for i in 0..num {
+        args[0] = Value::integer(i);
+        vm.eval_block(block, &args)?;
+    }
+    //let iter = (0..num).map(|i| Value::integer(i));
+    //vm.eval_block_iter1(block, iter, false)?;
     Ok(self_val)
 }
 
@@ -253,8 +258,13 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
-        let iter = (num..max + 1).map(|i| Value::integer(i));
-        vm.eval_block_iter1(block, iter, false)?;
+        let mut args = Args::new1(Value::uninitialized());
+        for i in num..max + 1 {
+            args[0] = Value::integer(i);
+            vm.eval_block(block, &args)?;
+        }
+        //let iter = (num..max + 1).map(|i| Value::integer(i));
+        //vm.eval_block_iter1(block, iter, false)?;
     }
     Ok(self_val)
 }

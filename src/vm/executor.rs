@@ -389,11 +389,11 @@ impl VM {
         }
     }
 
-    pub fn run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
+    pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
-        let stack_len = self.stack_len();
-        let pc = self.pc;
+        context.prev_stack_len = self.stack_len();
+        context.prev_pc = self.pc;
         self.context_push(context);
         self.pc = ISeqPos::from(0);
         #[cfg(feature = "trace")]
@@ -411,9 +411,9 @@ impl VM {
         loop {
             match self.run_context_main() {
                 Ok(()) => {
-                    self.context_pop().unwrap();
-                    debug_assert_eq!(stack_len + 1, self.stack_len());
-                    self.pc = pc;
+                    let prev_context = self.context_pop().unwrap();
+                    debug_assert_eq!(prev_context.prev_stack_len + 1, self.stack_len());
+                    self.pc = prev_context.prev_pc;
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<--- Ok({:?})", self.stack_top());
                     return Ok(());
@@ -421,11 +421,11 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn | RubyErrorKind::MethodReturn => {
-                            self.context_pop().unwrap();
+                            let prev_context = self.context_pop().unwrap();
                             let val = self.stack_pop();
-                            self.set_stack_len(stack_len);
+                            self.set_stack_len(prev_context.prev_stack_len);
                             self.stack_push(val);
-                            self.pc = pc;
+                            self.pc = prev_context.prev_pc;
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             {
                                 println!("<--- {:?}({:?})", err.kind, self.stack_top());
@@ -434,7 +434,8 @@ impl VM {
                         }
                         _ => {}
                     }
-                    if err.info.len() == 0 || self.context().kind != ISeqKind::Block {
+                    let context = self.context();
+                    if err.info.len() == 0 || context.kind != ISeqKind::Block {
                         err.info.push((self.source_info(), self.get_loc()));
                     }
                     //eprintln!("{:?}", iseq.exception_table);
@@ -444,7 +445,7 @@ impl VM {
                         err.show_all_loc();
                         unreachable!("{}", msg);
                     };
-                    let iseq = self.context().iseq_ref.unwrap();
+                    let iseq = context.iseq_ref.unwrap();
                     let catch = iseq
                         .exception_table
                         .iter()
@@ -453,7 +454,7 @@ impl VM {
                         // Exception raised inside of begin-end with rescue clauses.
                         self.pc = entry.dest.into();
                         match entry.ty {
-                            ExceptionType::Rescue => self.set_stack_len(stack_len),
+                            ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
                             ExceptionType::Continue => {}
                         };
                         let val = err.to_exception_val();
@@ -464,9 +465,9 @@ impl VM {
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
-                        self.context_pop().unwrap();
-                        self.set_stack_len(stack_len);
-                        self.pc = pc;
+                        let prev_context = self.context_pop().unwrap();
+                        self.set_stack_len(prev_context.prev_stack_len);
+                        self.pc = prev_context.prev_pc;
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         {
                             println!("<--- Err({:?})", err.kind);
@@ -1390,7 +1391,7 @@ impl VM {
     }
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
-    pub fn eval_block_iter1(
+    /*pub fn eval_block_iter1(
         &mut self,
         block: &Block,
         args0: impl Iterator<Item = Value>,
@@ -1423,7 +1424,7 @@ impl VM {
             _ => unreachable!(),
         };
         Ok(res)
-    }
+    }*/
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block_self(
@@ -1524,7 +1525,7 @@ impl VM {
     }
 
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
-    fn invoke_method_iter1(
+    /*fn invoke_method_iter1(
         &mut self,
         method: MethodId,
         self_val: Value,
@@ -1598,7 +1599,7 @@ impl VM {
         } else {
             Ok(Value::nil())
         }
-    }
+    }*/
 
     // helper methods
     fn invoke_native(
