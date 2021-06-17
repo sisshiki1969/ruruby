@@ -44,8 +44,8 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     match &args.block {
         Block::None => {}
         _ => {
-            vm.class_push(module);
             let arg = Args::new1(val);
+            vm.class_push(module);
             let res = vm.eval_block_self(&args.block, val, &arg);
             vm.class_pop();
             res?;

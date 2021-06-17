@@ -1356,29 +1356,30 @@ impl VM {
 }
 
 impl VM {
-    /// Evaluate method with given `self_val`, `args` and no outer context.
+    /// Evaluate the method with given `self_val`, `args` and no outer context.
     pub fn eval_method(
         &mut self,
-        methodref: MethodId,
+        method: MethodId,
         self_val: impl Into<Value>,
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.invoke_func(methodref, self_val, None, args)?;
+        self.invoke_func(method, self_val, None, args)?;
         Ok(self.stack_pop())
     }
 
+    /// Invoke the method with given `self_val` and `args`.
     pub fn invoke_method(
         &mut self,
-        methodref: MethodId,
+        method: MethodId,
         self_val: impl Into<Value>,
         args: &Args,
     ) -> Result<(), RubyError> {
         let self_val = self_val.into();
-        self.invoke_func(methodref, self_val, None, args)
+        self.invoke_func(method, self_val, None, args)
     }
 
-    /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
+    /// Evaluate the block with self_val of outer context, and given `args`.
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
@@ -1390,7 +1391,7 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
+    /// Evaluate the block with given `self_val` and `args`.
     pub fn eval_block_self(
         &mut self,
         block: &Block,
@@ -1421,7 +1422,7 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    /// Evaluate given block with given `args`.
+    /// Invoke the block given to the method with `args`.
     pub fn invoke_yield(&mut self, args: &Args) -> Result<(), RubyError> {
         let context = self.get_method_context();
         match &context.block {
@@ -1433,7 +1434,7 @@ impl VM {
         }
     }
 
-    /// Evaluate Proc object.
+    /// Invoke the Proc object with given `args`, and push the returned value on the stack.
     pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
         let pref = proc.as_proc().unwrap();
         let context = ContextRef::from_args(
@@ -1447,7 +1448,7 @@ impl VM {
         Ok(())
     }
 
-    /// Evaluate method with given `self_val`, `outer` context, and `args`.
+    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
     pub fn invoke_func(
         &mut self,
         method: MethodId,
@@ -1458,22 +1459,14 @@ impl VM {
         let self_val = self_val.into();
         use MethodInfo::*;
         match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => {
-                let val = self.eval_native(&func, method, name, self_val, args)?;
-                self.stack_push(val);
-                Ok(())
-            }
+            BuiltinFunc { func, name } => self.invoke_native(&func, method, name, self_val, args),
             AttrReader { id } => {
                 args.check_args_num(0)?;
-                let val = Self::eval_getter(id, self_val)?;
-                self.stack_push(val);
-                Ok(())
+                self.invoke_getter(id, self_val)
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
-                let val = Self::eval_setter(id, self_val, args[0])?;
-                self.stack_push(val);
-                Ok(())
+                self.invoke_setter(id, self_val, args[0])
             }
             RubyFunc { iseq } => {
                 let outer = outer.map(|ctx| ctx.get_current());
@@ -1485,14 +1478,16 @@ impl VM {
     }
 
     // helper methods
-    fn eval_native(
+
+    /// Invoke the method defined by Rust fn and push the returned value on the stack.
+    fn invoke_native(
         &mut self,
         func: &BuiltinFunc,
         _method_id: MethodId,
         _name: IdentId,
         self_val: Value,
         args: &Args,
-    ) -> VMResult {
+    ) -> Result<(), RubyError> {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::EXTERN);
 
@@ -1511,24 +1506,34 @@ impl VM {
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         println!("<--- {:?}", res);
 
-        res
+        self.stack_push(res?);
+        Ok(())
     }
 
-    fn eval_getter(id: IdentId, self_val: Value) -> VMResult {
+    /// Invoke attr_getter and push the value on the stack.
+    fn invoke_getter(&mut self, id: IdentId, self_val: Value) -> Result<(), RubyError> {
         match self_val.as_rvalue() {
             Some(oref) => match oref.get_var(id) {
-                Some(v) => Ok(v),
-                None => Ok(Value::nil()),
+                Some(v) => self.stack_push(v),
+                None => self.stack_push(Value::nil()),
             },
-            None => Ok(Value::nil()),
-        }
+            None => self.stack_push(Value::nil()),
+        };
+        Ok(())
     }
 
-    fn eval_setter(id: IdentId, mut self_val: Value, val: Value) -> VMResult {
+    /// Invoke attr_setter and push the value on the stack.
+    fn invoke_setter(
+        &mut self,
+        id: IdentId,
+        mut self_val: Value,
+        val: Value,
+    ) -> Result<(), RubyError> {
         match self_val.as_mut_rvalue() {
             Some(oref) => {
                 oref.set_var(id, val);
-                Ok(val)
+                self.stack_push(val);
+                Ok(())
             }
             None => unreachable!("AttrReader must be used only for class instance."),
         }

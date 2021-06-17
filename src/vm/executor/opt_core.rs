@@ -1,6 +1,17 @@
 use super::*;
 
 impl VM {
+    /// Run VM.
+    ///
+    /// return Ok(()) when
+    /// - reached the end of the method or block.
+    /// - `return` in method.
+    /// - `next` in block AND outer of loops.
+    ///
+    /// return Err(err) when
+    /// - `break`  in block or eval AND outer of loops.
+    /// - `return` in block
+    /// - raise error
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         let ctx = self.context();
         let iseq = &mut ctx.iseq_ref.unwrap().iseq;
@@ -990,24 +1001,22 @@ impl VM {
                         i => Block::Block(MethodId::from(i), self.context()),
                     };
                     self.set_stack_len(len - args_num);
-                    let val = self.eval_native(&func, method, name, receiver, &args)?;
-                    self.stack_push(val);
+                    self.invoke_native(&func, method, name, receiver, &args)?;
                     Ok(())
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
                         return Err(RubyError::argument_wrong(args_num, 0));
                     }
-                    let val = Self::eval_getter(id, receiver)?;
-                    self.stack_push(val);
+                    self.invoke_getter(id, receiver)?;
                     Ok(())
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
                         return Err(RubyError::argument_wrong(args_num, 1));
                     }
-                    let val = Self::eval_setter(id, receiver, self.stack_pop())?;
-                    self.stack_push(val);
+                    let val = self.stack_pop();
+                    self.invoke_setter(id, receiver, val)?;
                     Ok(())
                 }
                 MethodInfo::RubyFunc { iseq } => {
@@ -1057,9 +1066,7 @@ impl VM {
         match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
-                    let val = self.eval_native(&func, method, name, receiver, &args)?;
-                    self.stack_push(val);
-                    Ok(())
+                    self.invoke_native(&func, method, name, receiver, &args)
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;

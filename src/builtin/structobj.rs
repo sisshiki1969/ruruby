@@ -53,8 +53,8 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     match &args.block {
         Block::None => {}
         method => {
-            vm.class_push(class);
             let arg = Args::new1(class.into());
+            vm.class_push(class);
             let res = vm.eval_block_self(method, class, &arg);
             vm.class_pop();
             res?;
