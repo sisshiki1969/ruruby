@@ -1383,48 +1383,12 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 self.invoke_func(*method, outer.self_value, Some(*outer), args)?;
-                Ok(self.stack_pop())
             }
-            Block::Proc(proc) => self.eval_proc(*proc, args),
+            Block::Proc(proc) => self.invoke_proc(*proc, args)?,
             _ => unreachable!(),
         }
+        Ok(self.stack_pop())
     }
-
-    /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
-    /*pub fn eval_block_iter1(
-        &mut self,
-        block: &Block,
-        args0: impl Iterator<Item = Value>,
-        return_val: bool,
-    ) -> VMResult {
-        let res = match block {
-            Block::Block(method, outer) => self.invoke_method_iter1(
-                *method,
-                outer.self_value,
-                Some(*outer),
-                args0,
-                return_val,
-            )?,
-            Block::Proc(proc) => {
-                let mut args = Args::new1(Value::nil());
-                let len = self.temp_stack.len();
-                for v in args0 {
-                    args[0] = v;
-                    let val = self.eval_proc(*proc, &args)?;
-                    if return_val {
-                        self.temp_push(val);
-                    }
-                }
-                if return_val {
-                    Value::array_from(self.temp_pop_vec(len))
-                } else {
-                    Value::nil()
-                }
-            }
-            _ => unreachable!(),
-        };
-        Ok(res)
-    }*/
 
     /// Evaluate method with self_val of current context, current context as outer context, and given `args`.
     pub fn eval_block_self(
@@ -1458,23 +1422,19 @@ impl VM {
     }
 
     /// Evaluate given block with given `args`.
-    pub fn eval_yield(&mut self, args: &Args) -> Result<(), RubyError> {
+    pub fn invoke_yield(&mut self, args: &Args) -> Result<(), RubyError> {
         let context = self.get_method_context();
         match &context.block {
             Block::Block(method, ctx) => {
                 self.invoke_func(*method, ctx.self_value, Some(*ctx), args)
             }
-            Block::Proc(proc) => {
-                let val = self.eval_proc(*proc, args)?;
-                self.stack_push(val);
-                Ok(())
-            }
+            Block::Proc(proc) => self.invoke_proc(*proc, args),
             Block::None => return Err(RubyError::local_jump("No block given.")),
         }
     }
 
     /// Evaluate Proc object.
-    pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
+    pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
         let pref = proc.as_proc().unwrap();
         let context = ContextRef::from_args(
             self,
@@ -1484,7 +1444,7 @@ impl VM {
             pref.context.outer,
         )?;
         self.run_context(context)?;
-        Ok(self.stack_pop())
+        Ok(())
     }
 
     /// Evaluate method with given `self_val`, `outer` context, and `args`.
@@ -1497,26 +1457,26 @@ impl VM {
     ) -> Result<(), RubyError> {
         let self_val = self_val.into();
         use MethodInfo::*;
-        let outer = outer.map(|ctx| ctx.get_current());
         match MethodRepo::get(method) {
             BuiltinFunc { func, name } => {
-                let val = self.invoke_native(&func, method, name, self_val, args)?;
+                let val = self.eval_native(&func, method, name, self_val, args)?;
                 self.stack_push(val);
                 Ok(())
             }
             AttrReader { id } => {
                 args.check_args_num(0)?;
-                let val = Self::invoke_getter(id, self_val)?;
+                let val = Self::eval_getter(id, self_val)?;
                 self.stack_push(val);
                 Ok(())
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
-                let val = Self::invoke_setter(id, self_val, args[0])?;
+                let val = Self::eval_setter(id, self_val, args[0])?;
                 self.stack_push(val);
                 Ok(())
             }
             RubyFunc { iseq } => {
+                let outer = outer.map(|ctx| ctx.get_current());
                 let context = ContextRef::from_args(self, self_val, iseq, args, outer)?;
                 self.run_context(context)
             }
@@ -1524,85 +1484,8 @@ impl VM {
         }
     }
 
-    /// Evaluate method with given `self_val`, `outer` context, and `args`.
-    /*fn invoke_method_iter1(
-        &mut self,
-        method: MethodId,
-        self_val: Value,
-        outer: Option<ContextRef>,
-        args0: impl Iterator<Item = Value>,
-        return_val: bool,
-    ) -> VMResult {
-        use MethodInfo::*;
-        let outer = outer.map(|ctx| ctx.get_current());
-        let mut args = Args::new1(Value::nil());
-        let len = self.temp_stack.len();
-        match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => {
-                for v in args0 {
-                    args[0] = v;
-                    let res = self.invoke_native(&func, method, name, self_val, &args)?;
-                    if return_val {
-                        self.temp_push(res);
-                    };
-                }
-            }
-            RubyFunc { iseq } => {
-                let mut context = ContextRef::from_args(self, self_val, iseq, &args, outer)?;
-
-                if iseq.params.req + iseq.params.post > 1 {
-                    if iseq.opt_flag {
-                        for v in args0 {
-                            context = context.get_current();
-                            if let Some(ary) = v.as_array() {
-                                context.fill_arguments_opt(&ary.elements, iseq.params.req);
-                            } else {
-                                context[0] = v;
-                            }
-                            self.run_context(context)?;
-                            let res = self.stack_pop();
-                            if return_val {
-                                self.temp_push(res);
-                            };
-                        }
-                    } else {
-                        for v in args0 {
-                            context = context.get_current();
-                            if let Some(ary) = v.as_array() {
-                                context.fill_arguments(&ary.elements, &iseq.params, Value::nil());
-                            } else {
-                                context[0] = v;
-                            }
-                            self.run_context(context)?;
-                            let res = self.stack_pop();
-                            if return_val {
-                                self.temp_push(res);
-                            };
-                        }
-                    }
-                } else {
-                    for v in args0 {
-                        context = context.get_current();
-                        context[0] = v;
-                        self.run_context(context)?;
-                        let res = self.stack_pop();
-                        if return_val {
-                            self.temp_push(res);
-                        };
-                    }
-                }
-            }
-            _ => unreachable!(),
-        };
-        if return_val {
-            Ok(Value::array_from(self.temp_pop_vec(len)))
-        } else {
-            Ok(Value::nil())
-        }
-    }*/
-
     // helper methods
-    fn invoke_native(
+    fn eval_native(
         &mut self,
         func: &BuiltinFunc,
         _method_id: MethodId,
@@ -1631,7 +1514,7 @@ impl VM {
         res
     }
 
-    fn invoke_getter(id: IdentId, self_val: Value) -> VMResult {
+    fn eval_getter(id: IdentId, self_val: Value) -> VMResult {
         match self_val.as_rvalue() {
             Some(oref) => match oref.get_var(id) {
                 Some(v) => Ok(v),
@@ -1641,7 +1524,7 @@ impl VM {
         }
     }
 
-    fn invoke_setter(id: IdentId, mut self_val: Value, val: Value) -> VMResult {
+    fn eval_setter(id: IdentId, mut self_val: Value, val: Value) -> VMResult {
         match self_val.as_mut_rvalue() {
             Some(oref) => {
                 oref.set_var(id, val);

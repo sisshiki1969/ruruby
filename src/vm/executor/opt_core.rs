@@ -776,7 +776,7 @@ impl VM {
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
                     let args = self.pop_args_to_args(args_num);
-                    try_push!(self.eval_yield(&args));
+                    try_push!(self.invoke_yield(&args));
                     self.pc += 5;
                 }
                 Inst::DEF_CLASS => {
@@ -990,7 +990,7 @@ impl VM {
                         i => Block::Block(MethodId::from(i), self.context()),
                     };
                     self.set_stack_len(len - args_num);
-                    let val = self.invoke_native(&func, method, name, receiver, &args)?;
+                    let val = self.eval_native(&func, method, name, receiver, &args)?;
                     self.stack_push(val);
                     Ok(())
                 }
@@ -998,7 +998,7 @@ impl VM {
                     if args_num != 0 {
                         return Err(RubyError::argument_wrong(args_num, 0));
                     }
-                    let val = Self::invoke_getter(id, receiver)?;
+                    let val = Self::eval_getter(id, receiver)?;
                     self.stack_push(val);
                     Ok(())
                 }
@@ -1006,7 +1006,7 @@ impl VM {
                     if args_num != 1 {
                         return Err(RubyError::argument_wrong(args_num, 1));
                     }
-                    let val = Self::invoke_setter(id, receiver, self.stack_pop())?;
+                    let val = Self::eval_setter(id, receiver, self.stack_pop())?;
                     self.stack_push(val);
                     Ok(())
                 }
@@ -1057,7 +1057,7 @@ impl VM {
         match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
-                    let val = self.invoke_native(&func, method, name, receiver, &args)?;
+                    let val = self.eval_native(&func, method, name, receiver, &args)?;
                     self.stack_push(val);
                     Ok(())
                 }
