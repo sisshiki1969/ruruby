@@ -203,26 +203,12 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 1;
                 }
-                Inst::B_ANDI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let val = self.eval_bitandi(lhs, i)?;
-                    self.stack_push(val);
-                    self.pc += 5;
-                }
                 Inst::BOR => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
                     let val = self.eval_bitor(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
-                }
-                Inst::B_ORI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let val = self.eval_bitori(lhs, i)?;
-                    self.stack_push(val);
-                    self.pc += 5;
                 }
                 Inst::BXOR => {
                     let rhs = self.stack_pop();

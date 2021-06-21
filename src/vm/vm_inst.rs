@@ -109,8 +109,6 @@ impl Inst {
     pub const GEI: u8 = 155;
     pub const LTI: u8 = 156;
     pub const LEI: u8 = 157;
-    pub const B_ANDI: u8 = 160;
-    pub const B_ORI: u8 = 161;
 
     pub const JMP_F_EQ: u8 = 170;
     pub const JMP_F_NE: u8 = 171;
@@ -162,8 +160,6 @@ impl Inst {
             Inst::CMP => "CMP",
             Inst::NEG => "NEG",
 
-            Inst::B_ANDI => "B_ANDI",
-            Inst::B_ORI => "B_ORI",
             Inst::EQI => "EQI",
             Inst::NEI => "NEI",
             Inst::GTI => "GTI",
@@ -341,8 +337,6 @@ impl Inst {
             | Inst::CONCAT_STRING       // number of items: u32
             | Inst::SINKN               // number of items: u32
             | Inst::TOPN                // number of items: u32
-            | Inst::B_ANDI              // immediate: i32
-            | Inst::B_ORI               // immediate: i32
             | Inst::EQI                 // immediate: i32
             | Inst::NEI                 // immediate: i32
             | Inst::GTI                 // immediate: i32
@@ -394,9 +388,7 @@ impl Inst {
         }
         let iseq = &iseq_ref.iseq;
         match iseq[pc] {
-            Inst::B_ANDI
-            | Inst::B_ORI
-            | Inst::EQI
+            Inst::EQI
             | Inst::NEI
             | Inst::GTI
             | Inst::GEI

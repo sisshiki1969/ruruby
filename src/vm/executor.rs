@@ -865,23 +865,6 @@ impl VM {
         }
     }
 
-    fn eval_bitandi(&mut self, lhs: Value, i: i32) -> VMResult {
-        let i = i as i64;
-        if lhs.is_packed_fixnum() {
-            return Ok(Value::integer(lhs.as_packed_fixnum() & i));
-        }
-        match lhs.unpack() {
-            RV::True => Ok(Value::true_val()),
-            RV::False => Ok(Value::false_val()),
-            RV::Integer(lhs) => Ok(Value::integer(lhs & i)),
-            RV::Nil => Ok(Value::false_val()),
-            _ => {
-                self.fallback_for_binop(IdentId::get_id("&"), lhs, Value::integer(i))?;
-                Ok(self.stack_pop())
-            }
-        }
-    }
-
     fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
             return Ok(Value::integer(
@@ -895,23 +878,6 @@ impl VM {
             (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
             (_, _) => {
                 self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs)?;
-                Ok(self.stack_pop())
-            }
-        }
-    }
-
-    fn eval_bitori(&mut self, lhs: Value, i: i32) -> VMResult {
-        let i = i as i64;
-        if lhs.is_packed_fixnum() {
-            return Ok(Value::integer(lhs.as_packed_fixnum() | i));
-        }
-        match lhs.unpack() {
-            RV::True => Ok(Value::true_val()),
-            RV::False => Ok(Value::true_val()),
-            RV::Integer(lhs) => Ok(Value::integer(lhs | i)),
-            RV::Nil => Ok(Value::true_val()),
-            _ => {
-                self.fallback_for_binop(IdentId::get_id("|"), lhs, Value::integer(i))?;
                 Ok(self.stack_pop())
             }
         }
