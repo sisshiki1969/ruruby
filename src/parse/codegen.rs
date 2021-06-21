@@ -845,42 +845,23 @@ impl Codegen {
         cond: Node,
     ) -> Result<ISeqPos, RubyError> {
         let pos = match cond.kind {
-            NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() => match rhs.is_imm_i32() {
-                Some(i) => {
-                    self.gen(globals, iseq, *lhs, true)?;
-                    let inst = match op {
-                        BinOp::Eq => Inst::JMP_F_EQI,
-                        BinOp::Ne => Inst::JMP_F_NEI,
-                        BinOp::Ge => Inst::JMP_F_GEI,
-                        BinOp::Gt => Inst::JMP_F_GTI,
-                        BinOp::Le => Inst::JMP_F_LEI,
-                        BinOp::Lt => Inst::JMP_F_LTI,
-                        _ => unreachable!(),
-                    };
-                    self.save_loc(iseq, cond.loc);
-                    iseq.push(inst);
-                    iseq.push32(i as u32);
-                    iseq.push32(0);
-                    iseq.current()
-                }
-                None => {
-                    self.gen(globals, iseq, *lhs, true)?;
-                    self.gen(globals, iseq, *rhs, true)?;
-                    self.save_loc(iseq, cond.loc);
-                    let inst = match op {
-                        BinOp::Eq => Inst::JMP_F_EQ,
-                        BinOp::Ne => Inst::JMP_F_NE,
-                        BinOp::Ge => Inst::JMP_F_GE,
-                        BinOp::Gt => Inst::JMP_F_GT,
-                        BinOp::Le => Inst::JMP_F_LE,
-                        BinOp::Lt => Inst::JMP_F_LT,
-                        _ => unreachable!(),
-                    };
-                    iseq.push(inst);
-                    iseq.push32(0);
-                    iseq.current()
-                }
-            },
+            NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() => {
+                self.gen(globals, iseq, *lhs, true)?;
+                self.gen(globals, iseq, *rhs, true)?;
+                self.save_loc(iseq, cond.loc);
+                let inst = match op {
+                    BinOp::Eq => Inst::JMP_F_EQ,
+                    BinOp::Ne => Inst::JMP_F_NE,
+                    BinOp::Ge => Inst::JMP_F_GE,
+                    BinOp::Gt => Inst::JMP_F_GT,
+                    BinOp::Le => Inst::JMP_F_LE,
+                    BinOp::Lt => Inst::JMP_F_LT,
+                    _ => unreachable!(),
+                };
+                iseq.push(inst);
+                iseq.push32(0);
+                iseq.current()
+            }
             _ => {
                 self.gen(globals, iseq, cond, true)?;
                 iseq.gen_jmp_if_f()

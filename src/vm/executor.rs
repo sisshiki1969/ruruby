@@ -621,6 +621,31 @@ impl VM {
 
 // Utilities for method call
 impl VM {
+    fn invoke_send(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+        args: &Args,
+    ) -> Result<(), RubyError> {
+        match MethodRepo::find_method_from_receiver(receiver, method_id) {
+            Some(method) => self.invoke_method(method, receiver, args),
+            None => self.send_method_missing(method_id, receiver, args),
+        }
+    }
+
+    fn invoke_send0(&mut self, method_id: IdentId, receiver: Value) -> Result<(), RubyError> {
+        self.invoke_send(method_id, receiver, &Args::new0())
+    }
+
+    fn invoke_send1(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+        arg0: Value,
+    ) -> Result<(), RubyError> {
+        self.invoke_send(method_id, receiver, &Args::new1(arg0))
+    }
+
     fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
             Some(method) => return self.eval_method(method, receiver, args),
@@ -685,32 +710,6 @@ impl VM {
     }
 }
 
-macro_rules! eval_op {
-    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
-        if $lhs.is_packed_fixnum() {
-            let lhs = $lhs.as_packed_fixnum();
-            if $rhs.is_packed_fixnum() {
-                let rhs = $rhs.as_packed_fixnum();
-                return Ok(Value::integer(lhs.$op(rhs)));
-            } else if $rhs.is_packed_num() {
-                let rhs = $rhs.as_packed_flonum();
-                return Ok(Value::float((lhs as f64).$op(rhs)));
-            }
-        } else if $lhs.is_packed_num() {
-            let lhs = $lhs.as_packed_flonum();
-            if $rhs.is_packed_fixnum() {
-                let rhs = $rhs.as_packed_fixnum();
-                return Ok(Value::float(lhs.$op(rhs as f64)));
-            } else if $rhs.is_packed_num() {
-                let rhs = $rhs.as_packed_flonum();
-                return Ok(Value::float(lhs.$op(rhs)));
-            }
-        }
-        $vm.fallback_for_binop($id, $lhs, $rhs)?;
-        return Ok($vm.stack_pop());
-    };
-}
-
 macro_rules! invoke_op {
     ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         let val = if $lhs.is_packed_fixnum() {
@@ -722,8 +721,7 @@ macro_rules! invoke_op {
                 let rhs = $rhs.as_packed_flonum();
                 Value::float((lhs as f64).$op(rhs))
             } else {
-                $vm.fallback_for_binop($id, $lhs, $rhs)?;
-                $vm.stack_pop()
+                return $vm.fallback_for_binop($id, $lhs, $rhs);
             }
         } else if $lhs.is_packed_num() {
             let lhs = $lhs.as_packed_flonum();
@@ -734,14 +732,13 @@ macro_rules! invoke_op {
                 let rhs = $rhs.as_packed_flonum();
                 Value::float(lhs.$op(rhs))
             } else {
-                $vm.fallback_for_binop($id, $lhs, $rhs)?;
-                $vm.stack_pop()
+                return $vm.fallback_for_binop($id, $lhs, $rhs);
             }
         } else {
-            $vm.fallback_for_binop($id, $lhs, $rhs)?;
-            $vm.stack_pop()
+            return $vm.fallback_for_binop($id, $lhs, $rhs);
         };
         $vm.stack_push(val);
+        return Ok(())
     };
 }
 
@@ -749,28 +746,27 @@ impl VM {
     fn invoke_add(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         use std::ops::Add;
         invoke_op!(self, rhs, lhs, add, IdentId::_ADD);
-        Ok(())
     }
 
-    fn eval_sub(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_sub(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         use std::ops::Sub;
-        eval_op!(self, rhs, lhs, sub, IdentId::_SUB);
+        invoke_op!(self, rhs, lhs, sub, IdentId::_SUB);
     }
 
-    fn eval_mul(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_mul(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         use std::ops::Mul;
-        eval_op!(self, rhs, lhs, mul, IdentId::_MUL);
+        invoke_op!(self, rhs, lhs, mul, IdentId::_MUL);
     }
 
-    fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_div(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         use std::ops::Div;
         if rhs.is_zero() {
             return Err(RubyError::zero_div("Divided by zero."));
         }
-        eval_op!(self, rhs, lhs, div, IdentId::_DIV);
+        invoke_op!(self, rhs, lhs, div, IdentId::_DIV);
     }
 
-    fn eval_rem(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         fn rem_floorf64(self_: f64, other: f64) -> f64 {
             if self_ > 0.0 && other < 0.0 {
                 ((self_ - 1.0) % other) + other + 1.0
@@ -787,14 +783,14 @@ impl VM {
             (RV::Float(lhs), RV::Integer(rhs)) => Value::float(rem_floorf64(lhs, rhs as f64)),
             (RV::Float(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs, rhs)),
             (_, _) => {
-                self.fallback_for_binop(IdentId::_REM, lhs, rhs)?;
-                self.stack_pop()
+                return self.fallback_for_binop(IdentId::_REM, lhs, rhs);
             }
         };
-        Ok(val)
+        self.stack_push(val);
+        Ok(())
     }
 
-    fn eval_exp(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_exp(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let val = match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => {
                 if 0 <= rhs && rhs <= std::u32::MAX as i64 {
@@ -807,80 +803,81 @@ impl VM {
             (RV::Float(lhs), RV::Integer(rhs)) => Value::float(lhs.powf(rhs as f64)),
             (RV::Float(lhs), RV::Float(rhs)) => Value::float(lhs.powf(rhs)),
             _ => {
-                self.fallback_for_binop(IdentId::_POW, lhs, rhs)?;
-                self.stack_pop()
+                return self.fallback_for_binop(IdentId::_POW, lhs, rhs);
             }
         };
-        Ok(val)
+        self.stack_push(val);
+        Ok(())
     }
 
-    fn eval_neg(&mut self, lhs: Value) -> VMResult {
+    fn invoke_neg(&mut self, lhs: Value) -> Result<(), RubyError> {
         let val = match lhs.unpack() {
             RV::Integer(i) => Value::integer(-i),
             RV::Float(f) => Value::float(-f),
-            _ => return self.send0(IdentId::get_id("-@"), lhs),
+            _ => return self.invoke_send0(IdentId::get_id("-@"), lhs),
         };
-        Ok(val)
+        self.stack_push(val);
+        Ok(())
     }
 
-    fn eval_shl(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::integer(
-                lhs.as_packed_fixnum() << rhs.as_packed_fixnum(),
-            ));
-        }
-        if let Some(mut ainfo) = lhs.as_array() {
+            let val = Value::integer(lhs.as_packed_fixnum() << rhs.as_packed_fixnum());
+            self.stack_push(val);
+            Ok(())
+        } else if let Some(mut ainfo) = lhs.as_array() {
             ainfo.push(rhs);
-            return Ok(lhs);
+            self.stack_push(lhs);
+            Ok(())
+        } else {
+            self.fallback_for_binop(IdentId::_SHL, lhs, rhs)
         }
-        self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
-        Ok(self.stack_pop())
     }
 
-    fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_shr(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::integer(
-                lhs.as_packed_fixnum() >> rhs.as_packed_fixnum(),
-            ));
+            let val = Value::integer(lhs.as_packed_fixnum() >> rhs.as_packed_fixnum());
+            self.stack_push(val);
+            Ok(())
+        } else {
+            self.fallback_for_binop(IdentId::_SHR, lhs, rhs)
         }
-        self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
-        Ok(self.stack_pop())
     }
 
-    fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::integer(
-                lhs.as_packed_fixnum() & rhs.as_packed_fixnum(),
-            ));
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::True, _) => Ok(Value::bool(rhs.to_bool())),
-            (RV::False, _) => Ok(Value::false_val()),
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs & rhs)),
-            (RV::Nil, _) => Ok(Value::false_val()),
-            (_, _) => {
-                self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs)?;
-                Ok(self.stack_pop())
+    fn invoke_bitand(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            Value::integer(lhs.as_packed_fixnum() & rhs.as_packed_fixnum())
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (RV::True, _) => Value::bool(rhs.to_bool()),
+                (RV::False, _) => Value::false_val(),
+                (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs & rhs),
+                (RV::Nil, _) => Value::false_val(),
+                (_, _) => {
+                    return self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs);
+                }
             }
-        }
+        };
+        self.stack_push(val);
+        Ok(())
     }
 
-    fn eval_bitor(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            return Ok(Value::integer(
-                lhs.as_packed_fixnum() | rhs.as_packed_fixnum(),
-            ));
-        }
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::True, _) => Ok(Value::true_val()),
-            (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs | rhs)),
-            (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
-            (_, _) => {
-                self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs)?;
-                Ok(self.stack_pop())
+    fn invoke_bitor(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
+            Value::integer(lhs.as_packed_fixnum() | rhs.as_packed_fixnum())
+        } else {
+            match (lhs.unpack(), rhs.unpack()) {
+                (RV::True, _) => Value::true_val(),
+                (RV::False, _) => Value::bool(rhs.to_bool()),
+                (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs | rhs),
+                (RV::Nil, _) => Value::bool(rhs.to_bool()),
+                (_, _) => {
+                    return self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs);
+                }
             }
-        }
+        };
+        self.stack_push(val);
+        Ok(())
     }
 
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -967,6 +964,18 @@ macro_rules! eval_cmp_i {
 }
 
 impl VM {
+    fn invoke_eq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+        let b = self.eval_eq(rhs, lhs)?;
+        self.stack_push(Value::bool(b));
+        Ok(())
+    }
+
+    fn invoke_neq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+        let b = !self.eval_eq(rhs, lhs)?;
+        self.stack_push(Value::bool(b));
+        Ok(())
+    }
+
     pub fn eval_eq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         if lhs.id() == rhs.id() {
             return Ok(true);
@@ -1017,6 +1026,37 @@ impl VM {
 
     pub fn eval_eqi(&self, lhs: Value, i: i32) -> bool {
         lhs.equal_i(i)
+    }
+
+    fn invoke_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+        let b = match lhs.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Module(_) => {
+                    return self.fallback_for_binop(IdentId::_TEQ, lhs, rhs);
+                }
+                ObjKind::Regexp(re) => {
+                    let given = match rhs.unpack() {
+                        RV::Symbol(sym) => IdentId::get_name(sym),
+                        RV::Object(_) => match rhs.as_string() {
+                            Some(s) => s.to_owned(),
+                            None => {
+                                self.stack_push(Value::false_val());
+                                return Ok(());
+                            }
+                        },
+                        _ => {
+                            self.stack_push(Value::false_val());
+                            return Ok(());
+                        }
+                    };
+                    RegexpInfo::find_one(self, &*re, &given)?.is_some()
+                }
+                _ => return self.invoke_eq(lhs, rhs),
+            },
+            None => return self.invoke_eq(lhs, rhs),
+        };
+        self.stack_push(Value::bool(b));
+        Ok(())
     }
 
     pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
@@ -1181,9 +1221,7 @@ impl VM {
         Ok(())
     }
 
-    fn get_index(&mut self) -> VMResult {
-        let idx = self.stack_pop();
-        let receiver = self.stack_top();
+    fn invoke_get_index(&mut self, receiver: Value, idx: Value) -> Result<(), RubyError> {
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.get_elem1(idx)?,
@@ -1191,19 +1229,15 @@ impl VM {
                     Some(val) => *val,
                     None => Value::nil(),
                 },
-                _ => self.send(IdentId::_INDEX, receiver, &Args::new1(idx))?,
+                _ => return self.invoke_send1(IdentId::_INDEX, receiver, idx),
             },
-            _ => {
-                self.fallback_for_binop(IdentId::_INDEX, receiver, idx)?;
-                self.stack_pop()
-            }
+            _ => return self.fallback_for_binop(IdentId::_INDEX, receiver, idx),
         };
-        self.stack_pop();
-        Ok(val)
+        self.stack_push(val);
+        Ok(())
     }
 
-    fn get_index_imm(&mut self, idx: u32) -> VMResult {
-        let receiver = self.stack_top();
+    fn invoke_get_index_imm(&mut self, receiver: Value, idx: u32) -> Result<(), RubyError> {
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.get_elem_imm(idx),
@@ -1213,11 +1247,14 @@ impl VM {
                 },
                 ObjKind::Method(mref) => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    self.eval_method(mref.method, mref.receiver, &args)?
+                    return self.invoke_method(mref.method, mref.receiver, &args);
                 }
                 _ => {
-                    let args = Args::new1(Value::integer(idx as i64));
-                    self.send(IdentId::_INDEX, receiver, &args)?
+                    return self.invoke_send1(
+                        IdentId::_INDEX,
+                        receiver,
+                        Value::integer(idx as i64),
+                    );
                 }
             },
             None if receiver.is_packed_fixnum() => {
@@ -1226,12 +1263,15 @@ impl VM {
                 Value::integer(val)
             }
             _ => {
-                self.fallback_for_binop(IdentId::_INDEX, receiver, Value::integer(idx as i64))?;
-                self.stack_pop()
+                return self.fallback_for_binop(
+                    IdentId::_INDEX,
+                    receiver,
+                    Value::integer(idx as i64),
+                );
             }
         };
-        self.stack_pop();
-        Ok(val)
+        self.stack_push(val);
+        Ok(())
     }
 
     /// Generate new class object with `super_val` as a superclass.

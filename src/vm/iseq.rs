@@ -330,13 +330,7 @@ impl ISeq {
                 | Inst::JMP_F_GT
                 | Inst::JMP_F_GE
                 | Inst::JMP_F_LT
-                | Inst::JMP_F_LE
-                | Inst::JMP_F_EQI
-                | Inst::JMP_F_NEI
-                | Inst::JMP_F_GTI
-                | Inst::JMP_F_GEI
-                | Inst::JMP_F_LTI
-                | Inst::JMP_F_LEI => {
+                | Inst::JMP_F_LE => {
                     let next_pos = pos + Inst::inst_size(inst);
                     let jmp_dest = next_pos + self.read_disp(next_pos - 4);
                     match self.chase(jmp_dest, false) {

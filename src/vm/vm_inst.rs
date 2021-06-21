@@ -114,13 +114,6 @@ impl Inst {
     pub const JMP_F_GE: u8 = 173;
     pub const JMP_F_LT: u8 = 174;
     pub const JMP_F_LE: u8 = 175;
-
-    pub const JMP_F_EQI: u8 = 180;
-    pub const JMP_F_NEI: u8 = 181;
-    pub const JMP_F_GTI: u8 = 182;
-    pub const JMP_F_GEI: u8 = 183;
-    pub const JMP_F_LTI: u8 = 184;
-    pub const JMP_F_LEI: u8 = 185;
 }
 
 #[allow(dead_code)]
@@ -171,13 +164,6 @@ impl Inst {
             Inst::JMP_F_GE => "JMP_F_GE",
             Inst::JMP_F_LT => "JMP_F_LT",
             Inst::JMP_F_LE => "JMP_F_LE",
-
-            Inst::JMP_F_EQI => "JMP_F_EQI",
-            Inst::JMP_F_NEI => "JMP_F_NEI",
-            Inst::JMP_F_GTI => "JMP_F_GTI",
-            Inst::JMP_F_GEI => "JMP_F_GEI",
-            Inst::JMP_F_LTI => "JMP_F_LTI",
-            Inst::JMP_F_LEI => "JMP_F_LEI",
 
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
@@ -354,12 +340,6 @@ impl Inst {
             | Inst::GET_CONST           // IdentId: u32 / cache: u32
             | Inst::OPT_CASE
             | Inst::OPT_CASE2
-            | Inst::JMP_F_EQI           // immediate: i32 / disp: i32
-            | Inst::JMP_F_NEI           // immediate: i32 / disp: i32
-            | Inst::JMP_F_GTI           // immediate: i32 / disp: i32
-            | Inst::JMP_F_GEI           // immediate: i32 / disp: i32
-            | Inst::JMP_F_LTI           // immediate: i32 / disp: i32
-            | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
             | Inst::FOR                 // method: u32 / cache: u32
             | Inst::DEF_METHOD          // method_id: u32 / method: u32
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u32
@@ -408,18 +388,6 @@ impl Inst {
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 (pc + 5 + iseq.read_disp(pc + 1)).into_usize()
-            ),
-
-            Inst::JMP_F_EQI
-            | Inst::JMP_F_NEI
-            | Inst::JMP_F_GTI
-            | Inst::JMP_F_GEI
-            | Inst::JMP_F_LTI
-            | Inst::JMP_F_LEI => format!(
-                "{} {} {:>05x}",
-                Inst::inst_name(iseq[pc]),
-                iseq.read32(pc + 1) as i32,
-                (pc + 9 + iseq.read_disp(pc + 5)).into_usize()
             ),
 
             Inst::OPT_CASE => format!(

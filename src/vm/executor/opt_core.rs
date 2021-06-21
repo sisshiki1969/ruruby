@@ -123,71 +123,61 @@ impl VM {
                 Inst::SUB => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_sub(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_sub(rhs, lhs)?;
                 }
                 Inst::MUL => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_mul(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_mul(rhs, lhs)?;
                 }
                 Inst::POW => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_exp(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_exp(rhs, lhs)?;
                 }
                 Inst::DIV => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_div(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_div(rhs, lhs)?;
                 }
                 Inst::REM => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_rem(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_rem(rhs, lhs)?;
                 }
                 Inst::SHR => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_shr(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_shr(rhs, lhs)?;
                 }
                 Inst::SHL => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_shl(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_shl(rhs, lhs)?;
                 }
                 Inst::NEG => {
                     let lhs = self.stack_pop();
-                    let val = self.eval_neg(lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_neg(lhs)?;
                 }
                 Inst::BAND => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_bitand(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_bitand(rhs, lhs)?;
                 }
                 Inst::BOR => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_bitor(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_bitor(rhs, lhs)?;
                 }
                 Inst::BXOR => {
                     let rhs = self.stack_pop();
@@ -206,9 +196,8 @@ impl VM {
                 Inst::EQ => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = Value::bool(self.eval_eq(rhs, lhs)?);
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_eq(rhs, lhs)?;
                 }
                 Inst::EQI => {
                     let lhs = self.stack_pop();
@@ -220,9 +209,8 @@ impl VM {
                 Inst::NE => {
                     let lhs = self.stack_pop();
                     let rhs = self.stack_pop();
-                    let val = Value::bool(!self.eval_eq(rhs, lhs)?);
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_neq(rhs, lhs)?;
                 }
                 Inst::NEI => {
                     let lhs = self.stack_pop();
@@ -234,10 +222,8 @@ impl VM {
                 Inst::TEQ => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let res = self.eval_teq(rhs, lhs)?;
-                    let val = Value::bool(res);
-                    self.stack_push(val);
                     self.pc += 1;
+                    self.invoke_teq(rhs, lhs)?;
                 }
                 Inst::GT => {
                     let rhs = self.stack_pop();
@@ -485,24 +471,25 @@ impl VM {
                     self.pc += 5;
                 }
                 Inst::SET_INDEX => {
-                    self.set_index()?;
                     self.pc += 1;
+                    self.set_index()?;
                 }
                 Inst::GET_INDEX => {
-                    let val = self.get_index()?;
-                    self.stack_push(val);
                     self.pc += 1;
+                    let idx = self.stack_pop();
+                    let receiver = self.stack_pop();
+                    self.invoke_get_index(receiver, idx)?;
                 }
                 Inst::SET_IDX_I => {
                     let idx = iseq.read32(self.pc + 1);
-                    self.set_index_imm(idx)?;
                     self.pc += 5;
+                    self.set_index_imm(idx)?;
                 }
                 Inst::GET_IDX_I => {
                     let idx = iseq.read32(self.pc + 1);
-                    let val = self.get_index_imm(idx)?;
-                    self.stack_push(val);
                     self.pc += 5;
+                    let receiver = self.stack_pop();
+                    self.invoke_get_index_imm(receiver, idx)?;
                 }
                 Inst::SPLAT => {
                     let val = self.stack_pop();
@@ -607,44 +594,6 @@ impl VM {
                     let b = self.eval_le(rhs, lhs)?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }
-
-                Inst::JMP_F_EQI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let b = self.eval_eqi(lhs, i);
-                    self.jmp_cond(iseq, b, 9, 5);
-                }
-                Inst::JMP_F_NEI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let b = !self.eval_eqi(lhs, i);
-                    self.jmp_cond(iseq, b, 9, 5);
-                }
-                Inst::JMP_F_GTI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let b = self.eval_gti(lhs, i)?;
-                    self.jmp_cond(iseq, b, 9, 5);
-                }
-                Inst::JMP_F_GEI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let b = self.eval_gei(lhs, i)?;
-                    self.jmp_cond(iseq, b, 9, 5);
-                }
-                Inst::JMP_F_LTI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let b = self.eval_lti(lhs, i)?;
-                    self.jmp_cond(iseq, b, 9, 5);
-                }
-                Inst::JMP_F_LEI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let b = self.eval_lei(lhs, i)?;
-                    self.jmp_cond(iseq, b, 9, 5);
-                }
-
                 Inst::OPT_CASE => {
                     let val = self.stack_pop();
                     let map = self
