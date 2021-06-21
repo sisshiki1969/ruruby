@@ -204,11 +204,6 @@ impl ISeq {
         self.push32(id.into());
     }
 
-    pub fn gen_subi(&mut self, i: i32) {
-        self.push(Inst::SUBI);
-        self.push32(i as u32);
-    }
-
     pub fn gen_create_array(&mut self, len: usize) {
         self.push(Inst::CREATE_ARRAY);
         self.push32(len as u32);
@@ -289,15 +284,6 @@ impl ISeq {
     pub fn gen_set_instance_var(&mut self, id: IdentId) {
         self.push(Inst::SET_IVAR);
         self.push32(id.into());
-    }
-
-    pub fn gen_ivar_addi(&mut self, id: IdentId, val: u32, use_value: bool) {
-        self.push(Inst::IVAR_ADDI);
-        self.push32(id.into());
-        self.push32(val);
-        if use_value {
-            self.gen_get_instance_var(id);
-        }
     }
 
     pub fn gen_get_global_var(&mut self, id: IdentId) {

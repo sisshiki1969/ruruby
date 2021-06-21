@@ -308,45 +308,6 @@ impl Codegen {
         Ok(())
     }
 
-    fn gen_lvar_addi(
-        &mut self,
-        iseq: &mut ISeq,
-        id: IdentId,
-        val: i32,
-        use_value: bool,
-    ) -> Result<(), RubyError> {
-        let (outer, lvar_id) = match self.get_local_var(id) {
-            Some((outer, id)) => (outer, id),
-            None => return Err(RubyError::name("undefined local variable.")),
-        };
-        if outer == 0 {
-            let loc = self.loc;
-            self.save_loc(iseq, loc);
-            iseq.push(Inst::LVAR_ADDI);
-            iseq.push32(lvar_id.as_u32());
-            iseq.push32(val as u32);
-            if use_value {
-                self.gen_get_local(iseq, id)?;
-            }
-        } else {
-            iseq.push(Inst::GET_DYNLOCAL);
-            iseq.push32(lvar_id.as_u32());
-            iseq.push32(outer);
-            let loc = self.loc;
-            self.save_loc(iseq, loc);
-            iseq.push(Inst::ADDI);
-            iseq.push32(val as u32);
-            if use_value {
-                self.gen_dup(iseq, 1);
-            }
-            iseq.push(Inst::SET_DYNLOCAL);
-            iseq.push32(lvar_id.as_u32());
-            iseq.push32(outer);
-        }
-
-        Ok(())
-    }
-
     fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
         let mut idx = 0u32;
         for (i, context) in self.context_stack.iter().rev().enumerate() {
@@ -1177,33 +1138,18 @@ impl Codegen {
                     };
                 }
                 match op {
-                    BinOp::Add => match (&lhs.kind, &rhs.kind) {
-                        (_, NodeKind::Integer(i)) if *i as i32 as i64 == *i => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            self.save_loc(iseq, loc);
-                            iseq.push(Inst::ADDI);
-                            iseq.push32(*i as u32);
-                        }
-                        _ => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            self.gen(globals, iseq, *rhs, true)?;
-                            self.save_loc(iseq, loc);
-                            iseq.push(Inst::ADD);
-                        }
-                    },
-                    BinOp::Sub => match rhs.kind {
-                        NodeKind::Integer(i) if i as i32 as i64 == i => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            self.save_loc(iseq, loc);
-                            iseq.gen_subi(i as i32);
-                        }
-                        _ => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            self.gen(globals, iseq, *rhs, true)?;
-                            self.save_loc(iseq, loc);
-                            iseq.push(Inst::SUB);
-                        }
-                    },
+                    BinOp::Add => {
+                        self.gen(globals, iseq, *lhs, true)?;
+                        self.gen(globals, iseq, *rhs, true)?;
+                        self.save_loc(iseq, loc);
+                        iseq.push(Inst::ADD);
+                    }
+                    BinOp::Sub => {
+                        self.gen(globals, iseq, *lhs, true)?;
+                        self.gen(globals, iseq, *rhs, true)?;
+                        self.save_loc(iseq, loc);
+                        iseq.push(Inst::SUB);
+                    }
                     BinOp::Mul => {
                         self.gen(globals, iseq, *lhs, true)?;
                         self.gen(globals, iseq, *rhs, true)?;
@@ -1262,20 +1208,6 @@ impl Codegen {
                 };
             }
             NodeKind::AssignOp(op, box lhs, box rhs) => match (&op, &lhs.kind, &rhs.kind) {
-                (BinOp::Add, NodeKind::InstanceVar(id), NodeKind::Integer(i))
-                    if *i as i32 as i64 == *i =>
-                {
-                    let loc = lhs.loc.merge(rhs.loc);
-                    self.save_loc(iseq, loc);
-                    iseq.gen_ivar_addi(*id, *i as i32 as u32, use_value);
-                }
-                (BinOp::Add, NodeKind::LocalVar(id), NodeKind::Integer(i))
-                    if *i as i32 as i64 == *i =>
-                {
-                    let loc = lhs.loc.merge(rhs.loc);
-                    self.save_loc(iseq, loc);
-                    self.gen_lvar_addi(iseq, *id, *i as i32, use_value)?;
-                }
                 _ => {
                     let rhs = Node::new_binop(op, lhs.clone(), rhs);
                     self.gen_assign2(globals, iseq, lhs, rhs, use_value)?;
@@ -1679,42 +1611,6 @@ impl Codegen {
                 let lhs_len = mlhs.len();
                 if lhs_len == 1 && mrhs.len() == 1 {
                     match (&mlhs[0].kind, &mrhs[0].kind) {
-                        (
-                            NodeKind::InstanceVar(id1),
-                            NodeKind::BinOp(
-                                BinOp::Add,
-                                box Node {
-                                    kind: NodeKind::InstanceVar(id2),
-                                    ..
-                                },
-                                box Node {
-                                    kind: NodeKind::Integer(i),
-                                    ..
-                                },
-                            ),
-                        ) if *id1 == *id2 && *i as i32 as i64 == *i => {
-                            let loc = mlhs[0].loc.merge(mrhs[0].loc);
-                            self.save_loc(iseq, loc);
-                            iseq.gen_ivar_addi(*id1, *i as i32 as u32, use_value);
-                        }
-                        (
-                            NodeKind::LocalVar(id1),
-                            NodeKind::BinOp(
-                                BinOp::Add,
-                                box Node {
-                                    kind: NodeKind::LocalVar(id2),
-                                    ..
-                                },
-                                box Node {
-                                    kind: NodeKind::Integer(i),
-                                    ..
-                                },
-                            ),
-                        ) if *id1 == *id2 && *i as i32 as i64 == *i => {
-                            let loc = mlhs[0].loc.merge(mrhs[0].loc);
-                            self.save_loc(iseq, loc);
-                            self.gen_lvar_addi(iseq, *id1, *i as i32, use_value)?;
-                        }
                         _ => {
                             self.gen_assign2(
                                 globals,

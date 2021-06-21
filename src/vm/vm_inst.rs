@@ -103,8 +103,6 @@ impl Inst {
     pub const CMP: u8 = 140;
     pub const NEG: u8 = 141;
 
-    pub const ADDI: u8 = 150;
-    pub const SUBI: u8 = 151;
     pub const EQI: u8 = 152;
     pub const NEI: u8 = 153;
     pub const GTI: u8 = 154;
@@ -113,8 +111,6 @@ impl Inst {
     pub const LEI: u8 = 157;
     pub const B_ANDI: u8 = 160;
     pub const B_ORI: u8 = 161;
-    pub const IVAR_ADDI: u8 = 162;
-    pub const LVAR_ADDI: u8 = 163;
 
     pub const JMP_F_EQ: u8 = 170;
     pub const JMP_F_NE: u8 = 171;
@@ -166,9 +162,6 @@ impl Inst {
             Inst::CMP => "CMP",
             Inst::NEG => "NEG",
 
-            Inst::ADDI => "ADDI",
-            Inst::SUBI => "SUBI",
-            Inst::IVAR_ADDI => "IVAR_ADDI",
             Inst::B_ANDI => "B_ANDI",
             Inst::B_ORI => "B_ORI",
             Inst::EQI => "EQI",
@@ -177,7 +170,6 @@ impl Inst {
             Inst::GEI => "GEI",
             Inst::LTI => "LTI",
             Inst::LEI => "LEI",
-            Inst::LVAR_ADDI => "LVAR_ADDI",
 
             Inst::JMP_F_EQ => "JMP_F_EQ",
             Inst::JMP_F_NE => "JMP_F_NE",
@@ -349,8 +341,6 @@ impl Inst {
             | Inst::CONCAT_STRING       // number of items: u32
             | Inst::SINKN               // number of items: u32
             | Inst::TOPN                // number of items: u32
-            | Inst::ADDI                // immediate: i32
-            | Inst::SUBI                // immediate: i32
             | Inst::B_ANDI              // immediate: i32
             | Inst::B_ORI               // immediate: i32
             | Inst::EQI                 // immediate: i32
@@ -374,8 +364,6 @@ impl Inst {
             | Inst::GET_CONST           // IdentId: u32 / cache: u32
             | Inst::OPT_CASE
             | Inst::OPT_CASE2
-            | Inst::IVAR_ADDI
-            | Inst::LVAR_ADDI
             | Inst::JMP_F_EQI           // immediate: i32 / disp: i32
             | Inst::JMP_F_NEI           // immediate: i32 / disp: i32
             | Inst::JMP_F_GTI           // immediate: i32 / disp: i32
@@ -406,9 +394,7 @@ impl Inst {
         }
         let iseq = &iseq_ref.iseq;
         match iseq[pc] {
-            Inst::ADDI
-            | Inst::SUBI
-            | Inst::B_ANDI
+            Inst::B_ANDI
             | Inst::B_ORI
             | Inst::EQI
             | Inst::NEI
@@ -418,21 +404,6 @@ impl Inst {
             | Inst::LEI
             | Inst::GET_IDX_I
             | Inst::SET_IDX_I => imm_i32(iseq, pc),
-            Inst::IVAR_ADDI => format!(
-                "IVAR_ADDI {} +{}",
-                iseq.ident_name(pc + 1),
-                iseq.read32(pc + 5) as i32
-            ),
-            Inst::LVAR_ADDI => {
-                let id = iseq.read32(pc + 1);
-                let ident_id = iseq_ref.lvar.get_name_id(id.into());
-                format!(
-                    "LVAR_ADDI '{}' LvarId:{} +{}",
-                    IdentId::get_ident_name(ident_id),
-                    id,
-                    iseq.read32(pc + 5) as i32
-                )
-            }
             Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", iseq.read64(pc + 1) as i64),
             Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", f64::from_bits(iseq.read64(pc + 1))),
 

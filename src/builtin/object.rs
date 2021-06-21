@@ -207,8 +207,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         new_args[i] = args[i + 1];
     }
     new_args.block = args.block.clone();
-    let res = vm.eval_method(method, self_val, &new_args)?;
-    Ok(res)
+    vm.eval_method(method, self_val, &new_args)
 }
 
 fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

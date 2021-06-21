@@ -621,7 +621,7 @@ impl VM {
 
 // Utilities for method call
 impl VM {
-    pub fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
+    fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
             Some(method) => return self.eval_method(method, receiver, args),
             None => {}
@@ -632,11 +632,6 @@ impl VM {
 
     pub fn send0(&mut self, method_id: IdentId, receiver: Value) -> VMResult {
         let args = Args::new0();
-        self.send(method_id, receiver, &args)
-    }
-
-    pub fn send1(&mut self, method_id: IdentId, receiver: Value, arg: Value) -> VMResult {
-        let args = Args::new1(arg);
         self.send(method_id, receiver, &args)
     }
 
@@ -673,28 +668,21 @@ impl VM {
         }
     }
 
-    fn fallback_for_binop(&mut self, method: IdentId, lhs: Value, rhs: Value) -> VMResult {
+    fn fallback_for_binop(
+        &mut self,
+        method: IdentId,
+        lhs: Value,
+        rhs: Value,
+    ) -> Result<(), RubyError> {
         let class = lhs.get_class_for_method();
         match MethodRepo::find_method(class, method) {
             Some(mref) => {
                 let arg = Args::new1(rhs);
-                let val = self.eval_method(mref, lhs, &arg)?;
-                Ok(val)
+                self.invoke_method(mref, lhs, &arg)
             }
             None => Err(RubyError::undefined_op(format!("{:?}", method), rhs, lhs)),
         }
     }
-}
-
-macro_rules! eval_op_i {
-    ($vm:ident, $iseq:ident, $lhs:expr, $i:ident, $op:ident, $id:expr) => {
-        if $lhs.is_packed_fixnum() {
-            return Ok(Value::integer($lhs.as_packed_fixnum().$op($i as i64)));
-        } else if $lhs.is_packed_num() {
-            return Ok(Value::float($lhs.as_packed_flonum().$op($i as f64)));
-        }
-        return $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64));
-    };
 }
 
 macro_rules! eval_op {
@@ -718,14 +706,50 @@ macro_rules! eval_op {
                 return Ok(Value::float(lhs.$op(rhs)));
             }
         }
-        return $vm.fallback_for_binop($id, $lhs, $rhs);
+        $vm.fallback_for_binop($id, $lhs, $rhs)?;
+        return Ok($vm.stack_pop());
+    };
+}
+
+macro_rules! invoke_op {
+    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+        let val = if $lhs.is_packed_fixnum() {
+            let lhs = $lhs.as_packed_fixnum();
+            if $rhs.is_packed_fixnum() {
+                let rhs = $rhs.as_packed_fixnum();
+                Value::integer(lhs.$op(rhs))
+            } else if $rhs.is_packed_num() {
+                let rhs = $rhs.as_packed_flonum();
+                Value::float((lhs as f64).$op(rhs))
+            } else {
+                $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                $vm.stack_pop()
+            }
+        } else if $lhs.is_packed_num() {
+            let lhs = $lhs.as_packed_flonum();
+            if $rhs.is_packed_fixnum() {
+                let rhs = $rhs.as_packed_fixnum();
+                Value::float(lhs.$op(rhs as f64))
+            } else if $rhs.is_packed_num() {
+                let rhs = $rhs.as_packed_flonum();
+                Value::float(lhs.$op(rhs))
+            } else {
+                $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                $vm.stack_pop()
+            }
+        } else {
+            $vm.fallback_for_binop($id, $lhs, $rhs)?;
+            $vm.stack_pop()
+        };
+        $vm.stack_push(val);
     };
 }
 
 impl VM {
-    fn eval_add(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    fn invoke_add(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         use std::ops::Add;
-        eval_op!(self, rhs, lhs, add, IdentId::_ADD);
+        invoke_op!(self, rhs, lhs, add, IdentId::_ADD);
+        Ok(())
     }
 
     fn eval_sub(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -736,16 +760,6 @@ impl VM {
     fn eval_mul(&mut self, rhs: Value, lhs: Value) -> VMResult {
         use std::ops::Mul;
         eval_op!(self, rhs, lhs, mul, IdentId::_MUL);
-    }
-
-    fn eval_addi(&mut self, lhs: Value, i: i32) -> VMResult {
-        use std::ops::Add;
-        eval_op_i!(self, iseq, lhs, i, add, IdentId::_ADD);
-    }
-
-    fn eval_subi(&mut self, lhs: Value, i: i32) -> VMResult {
-        use std::ops::Sub;
-        eval_op_i!(self, iseq, lhs, i, sub, IdentId::_SUB);
     }
 
     fn eval_div(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -772,7 +786,10 @@ impl VM {
             (RV::Integer(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs as f64, rhs)),
             (RV::Float(lhs), RV::Integer(rhs)) => Value::float(rem_floorf64(lhs, rhs as f64)),
             (RV::Float(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs, rhs)),
-            (_, _) => return self.fallback_for_binop(IdentId::_REM, lhs, rhs),
+            (_, _) => {
+                self.fallback_for_binop(IdentId::_REM, lhs, rhs)?;
+                self.stack_pop()
+            }
         };
         Ok(val)
     }
@@ -790,7 +807,8 @@ impl VM {
             (RV::Float(lhs), RV::Integer(rhs)) => Value::float(lhs.powf(rhs as f64)),
             (RV::Float(lhs), RV::Float(rhs)) => Value::float(lhs.powf(rhs)),
             _ => {
-                return self.fallback_for_binop(IdentId::_POW, lhs, rhs);
+                self.fallback_for_binop(IdentId::_POW, lhs, rhs)?;
+                self.stack_pop()
             }
         };
         Ok(val)
@@ -815,8 +833,8 @@ impl VM {
             ainfo.push(rhs);
             return Ok(lhs);
         }
-        let val = self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
-        Ok(val)
+        self.fallback_for_binop(IdentId::_SHL, lhs, rhs)?;
+        Ok(self.stack_pop())
     }
 
     fn eval_shr(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -825,8 +843,8 @@ impl VM {
                 lhs.as_packed_fixnum() >> rhs.as_packed_fixnum(),
             ));
         }
-        let val = self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
-        Ok(val)
+        self.fallback_for_binop(IdentId::_SHR, lhs, rhs)?;
+        Ok(self.stack_pop())
     }
 
     fn eval_bitand(&mut self, rhs: Value, lhs: Value) -> VMResult {
@@ -840,7 +858,10 @@ impl VM {
             (RV::False, _) => Ok(Value::false_val()),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs & rhs)),
             (RV::Nil, _) => Ok(Value::false_val()),
-            (_, _) => self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs),
+            (_, _) => {
+                self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs)?;
+                Ok(self.stack_pop())
+            }
         }
     }
 
@@ -854,7 +875,10 @@ impl VM {
             RV::False => Ok(Value::false_val()),
             RV::Integer(lhs) => Ok(Value::integer(lhs & i)),
             RV::Nil => Ok(Value::false_val()),
-            _ => self.fallback_for_binop(IdentId::get_id("&"), lhs, Value::integer(i)),
+            _ => {
+                self.fallback_for_binop(IdentId::get_id("&"), lhs, Value::integer(i))?;
+                Ok(self.stack_pop())
+            }
         }
     }
 
@@ -869,7 +893,10 @@ impl VM {
             (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs | rhs)),
             (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
-            (_, _) => self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs),
+            (_, _) => {
+                self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs)?;
+                Ok(self.stack_pop())
+            }
         }
     }
 
@@ -883,7 +910,10 @@ impl VM {
             RV::False => Ok(Value::true_val()),
             RV::Integer(lhs) => Ok(Value::integer(lhs | i)),
             RV::Nil => Ok(Value::true_val()),
-            _ => self.fallback_for_binop(IdentId::get_id("|"), lhs, Value::integer(i)),
+            _ => {
+                self.fallback_for_binop(IdentId::get_id("|"), lhs, Value::integer(i))?;
+                Ok(self.stack_pop())
+            }
         }
     }
 
@@ -893,7 +923,10 @@ impl VM {
             (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
             (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
-            (_, _) => return self.fallback_for_binop(IdentId::get_id("^"), lhs, rhs),
+            (_, _) => {
+                self.fallback_for_binop(IdentId::get_id("^"), lhs, rhs)?;
+                Ok(self.stack_pop())
+            }
         }
     }
 
@@ -916,7 +949,8 @@ macro_rules! eval_cmp {
                 let rhs = $rhs.as_packed_flonum();
                 Ok((lhs as f64).$op(&rhs))
             } else {
-                $vm.fallback_for_binop($id, $lhs, $rhs).map(|x| x.to_bool())
+                $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                Ok($vm.stack_pop().to_bool())
             }
         } else if $lhs.is_packed_num() {
             let lhs = $lhs.as_packed_flonum();
@@ -927,7 +961,8 @@ macro_rules! eval_cmp {
                 let rhs = $rhs.as_packed_flonum();
                 Ok(lhs.$op(&rhs))
             } else {
-                $vm.fallback_for_binop($id, $lhs, $rhs).map(|x| x.to_bool())
+                $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                Ok($vm.stack_pop().to_bool())
             }
         } else {
             match ($lhs.unpack(), $rhs.unpack()) {
@@ -935,7 +970,10 @@ macro_rules! eval_cmp {
                 (RV::Float(lhs), RV::Integer(rhs)) => Ok(lhs.$op(&(rhs as f64))),
                 (RV::Integer(lhs), RV::Float(rhs)) => Ok((lhs as f64).$op(&rhs)),
                 (RV::Float(lhs), RV::Float(rhs)) => Ok(lhs.$op(&rhs)),
-                (_, _) => $vm.fallback_for_binop($id, $lhs, $rhs).map(|x| x.to_bool()),
+                (_, _) => {
+                    $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                    Ok($vm.stack_pop().to_bool())
+                }
             }
         }
     };
@@ -954,8 +992,8 @@ macro_rules! eval_cmp_i {
                 RV::Integer(lhs) => Ok(lhs.$op(&($i as i64))),
                 RV::Float(lhs) => Ok(lhs.$op(&($i as f64))),
                 _ => {
-                    let res = $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64));
-                    res.map(|x| x.to_bool())
+                    $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64))?;
+                    Ok($vm.stack_pop().to_bool())
                 }
             }
         }
@@ -1003,7 +1041,7 @@ impl VM {
             }
             (_, _) => {
                 let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {
-                    Ok(val) => val,
+                    Ok(()) => self.stack_pop(),
                     _ => return Ok(false),
                 };
                 Ok(val.to_bool())
@@ -1019,7 +1057,8 @@ impl VM {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(_) => {
-                    Ok(self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?.to_bool())
+                    self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?;
+                    Ok(self.stack_pop().to_bool())
                 }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
@@ -1112,7 +1151,8 @@ impl VM {
                 _ => return Ok(Value::nil()),
             },
             _ => {
-                return self.fallback_for_binop(IdentId::_CMP, lhs, rhs);
+                self.fallback_for_binop(IdentId::_CMP, lhs, rhs)?;
+                return Ok(self.stack_pop());
             }
         };
         match res {
@@ -1187,7 +1227,10 @@ impl VM {
                 },
                 _ => self.send(IdentId::_INDEX, receiver, &Args::new1(idx))?,
             },
-            _ => self.fallback_for_binop(IdentId::_INDEX, receiver, idx)?,
+            _ => {
+                self.fallback_for_binop(IdentId::_INDEX, receiver, idx)?;
+                self.stack_pop()
+            }
         };
         self.stack_pop();
         Ok(val)
@@ -1216,7 +1259,10 @@ impl VM {
                 let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
                 Value::integer(val)
             }
-            _ => self.fallback_for_binop(IdentId::_INDEX, receiver, Value::integer(idx as i64))?,
+            _ => {
+                self.fallback_for_binop(IdentId::_INDEX, receiver, Value::integer(idx as i64))?;
+                self.stack_pop()
+            }
         };
         self.stack_pop();
         Ok(val)
@@ -1356,6 +1402,10 @@ impl VM {
 }
 
 impl VM {
+    pub fn eval_send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
+        self.send(method_id, receiver, args)
+    }
+
     /// Evaluate the method with given `self_val`, `args` and no outer context.
     pub fn eval_method(
         &mut self,

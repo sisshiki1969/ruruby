@@ -138,16 +138,8 @@ impl VM {
                 Inst::ADD => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
-                    let val = self.eval_add(rhs, lhs)?;
-                    self.stack_push(val);
                     self.pc += 1;
-                }
-                Inst::ADDI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let val = self.eval_addi(lhs, i)?;
-                    self.stack_push(val);
-                    self.pc += 5;
+                    self.invoke_add(rhs, lhs)?;
                 }
                 Inst::SUB => {
                     let rhs = self.stack_pop();
@@ -155,13 +147,6 @@ impl VM {
                     let val = self.eval_sub(rhs, lhs)?;
                     self.stack_push(val);
                     self.pc += 1;
-                }
-                Inst::SUBI => {
-                    let lhs = self.stack_pop();
-                    let i = iseq.read32(self.pc + 1) as i32;
-                    let val = self.eval_subi(lhs, i)?;
-                    self.stack_push(val);
-                    self.pc += 5;
                 }
                 Inst::MUL => {
                     let rhs = self.stack_pop();
@@ -392,14 +377,6 @@ impl VM {
                     self.stack_push(val);
                     self.pc += 5;
                 }
-                Inst::LVAR_ADDI => {
-                    let id = iseq.read_lvar_id(self.pc + 1);
-                    let i = iseq.read32(self.pc + 5) as i32;
-                    let mut ctx = self.context();
-                    let val = ctx[id];
-                    ctx[id] = self.eval_addi(val, i)?;
-                    self.pc += 9;
-                }
                 Inst::SET_DYNLOCAL => {
                     let id = iseq.read_lvar_id(self.pc + 1);
                     let outer = iseq.read32(self.pc + 5);
@@ -508,18 +485,6 @@ impl VM {
                     };
                     self.stack_push(val);
                     self.pc += 5;
-                }
-                Inst::IVAR_ADDI => {
-                    let var_id = iseq.read_id(self.pc + 1);
-                    let i = iseq.read32(self.pc + 5) as i32;
-                    let v = self_value
-                        .rvalue_mut()
-                        .var_table_mut()
-                        .entry(var_id)
-                        .or_insert(Value::nil());
-                    *v = self.eval_addi(*v, i)?;
-
-                    self.pc += 9;
                 }
                 Inst::SET_GVAR => {
                     let var_id = iseq.read_id(self.pc + 1);

@@ -278,13 +278,13 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Ok(Value::bool(b))
         }
         _ => {
-            if !vm.send(IdentId::_LE, range.start, args)?.to_bool() {
+            if !vm.eval_send(IdentId::_LE, range.start, args)?.to_bool() {
                 return Ok(Value::false_val());
             };
             let b = if range.exclude {
-                vm.send(IdentId::_GT, range.end, args)?.to_bool()
+                vm.eval_send(IdentId::_GT, range.end, args)?.to_bool()
             } else {
-                vm.send(IdentId::_GE, range.end, args)?.to_bool()
+                vm.eval_send(IdentId::_GE, range.end, args)?.to_bool()
             };
             Ok(Value::bool(b))
         }
