@@ -414,16 +414,14 @@ impl Codegen {
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        if use_value {
-            iseq.push(Inst::OPT_SEND);
-        } else {
-            iseq.push(Inst::OPT_NSEND);
-        }
-
+        iseq.push(Inst::OPT_SEND);
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
+        if !use_value {
+            self.gen_pop(iseq);
+        }
     }
 
     fn gen_opt_send_self(
@@ -435,15 +433,14 @@ impl Codegen {
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        if use_value {
-            iseq.push(Inst::OPT_SEND_SELF);
-        } else {
-            iseq.push(Inst::OPT_NSEND_SELF);
-        }
+        iseq.push(Inst::OPT_SEND_SELF);
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
+        if !use_value {
+            self.gen_pop(iseq);
+        }
     }
 
     fn gen_for(&mut self, iseq: &mut ISeq, block: MethodId, use_value: bool) {

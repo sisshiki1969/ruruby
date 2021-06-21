@@ -48,8 +48,6 @@ impl Inst {
     pub const SEND_SELF: u8 = 61;
     pub const OPT_SEND: u8 = 66;
     pub const OPT_SEND_SELF: u8 = 67;
-    pub const OPT_NSEND: u8 = 68;
-    pub const OPT_NSEND_SELF: u8 = 69;
     pub const FOR: u8 = 70;
 
     pub const POP: u8 = 80;
@@ -212,8 +210,6 @@ impl Inst {
             Inst::SEND_SELF => "SEND_SLF",
             Inst::OPT_SEND => "O_SEND_B",
             Inst::OPT_SEND_SELF => "O_SEND_SLF_B",
-            Inst::OPT_NSEND => "O_NSEND_B",
-            Inst::OPT_NSEND_SELF => "O_NSEND_SLF_B",
             Inst::FOR => "FOR",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
@@ -369,7 +365,7 @@ impl Inst {
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u32
             => 9,
             Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF => 15,
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF   => 15,
                                 // method_id: u32 / number of args: u16 / block: u32 / icache: u32
             Inst::SEND | Inst::SEND_SELF => 17,
                                 // method_id: u32 / number of args: u16 / flag: u16 / block: u32 / icache: u32
@@ -481,7 +477,7 @@ impl Inst {
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5)
             ),
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_NSEND | Inst::OPT_NSEND_SELF=> format!(
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF  => format!(
                 "{} '{}' {} items",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),

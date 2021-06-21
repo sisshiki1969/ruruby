@@ -37,27 +37,6 @@ impl VM {
             };
         }
 
-        /// Evaluate expr, and discard return value.
-        macro_rules! try_no_push {
-            ($eval:expr) => {
-                match $eval {
-                    Ok(()) => {
-                        self.stack_pop();
-                    }
-                    Err(err) => match err.kind {
-                        RubyErrorKind::BlockReturn => {
-                            self.stack_pop();
-                        }
-                        RubyErrorKind::MethodReturn if self.is_method() => {
-                            //self.stack_pop();
-                            return Ok(());
-                        }
-                        _ => return Err(err),
-                    },
-                };
-            };
-        }
-
         loop {
             #[cfg(feature = "perf")]
             self.globals.perf.get_perf(iseq[self.pc]);
@@ -706,34 +685,20 @@ impl VM {
                 Inst::SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_send(iseq, receiver));
-                    self.pc += 17;
                 }
                 Inst::SEND_SELF => {
                     try_push!(self.vm_send(iseq, self_value));
-                    self.pc += 17;
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_fast_send(iseq, receiver));
-                    self.pc += 15;
-                }
-                Inst::OPT_NSEND => {
-                    let receiver = self.stack_pop();
-                    try_no_push!(self.vm_fast_send(iseq, receiver));
-                    self.pc += 15;
                 }
                 Inst::OPT_SEND_SELF => {
                     try_push!(self.vm_fast_send(iseq, self_value));
-                    self.pc += 15;
-                }
-                Inst::OPT_NSEND_SELF => {
-                    try_no_push!(self.vm_fast_send(iseq, self_value));
-                    self.pc += 15;
                 }
                 Inst::FOR => {
                     let receiver = self.stack_pop();
                     try_push!(self.vm_for(iseq, receiver));
-                    self.pc += 9;
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
@@ -881,7 +846,7 @@ impl VM {
         let flag = iseq.read8(self.pc + 8);
         let block = iseq.read32(self.pc + 9);
         let cache = iseq.read32(self.pc + 13);
-
+        self.pc += 17;
         let mut kwrest = vec![];
         for _ in 0..kw_rest_num {
             let val = self.stack_pop();
@@ -940,6 +905,7 @@ impl VM {
         let args_num = iseq.read16(self.pc + 5) as usize;
         let block = iseq.read32(self.pc + 7);
         let cache_id = iseq.read32(self.pc + 11);
+        self.pc += 15;
         let len = self.stack_len();
         let arg_slice = &self.exec_stack[len - args_num..];
         let rec_class = receiver.get_class_for_method();
@@ -1013,6 +979,7 @@ impl VM {
         let block = Block::Block(block, self.context());
         let args = Args::new0_block(block);
         let cache = iseq.read32(self.pc + 5);
+        self.pc += 9;
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {
             Some(method) => match MethodRepo::get(method) {
