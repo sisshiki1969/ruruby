@@ -29,15 +29,16 @@ pub fn repl_vm() {
             std::mem::size_of::<Option<MethodId>>()
         );
     }
-    let mut rl = Editor::<()>::new();
+    let mut editor = Editor::<()>::new();
     let prompt_body = if cfg!(not(unix)) {
         // In Windows, it seems that ansi_term does not work well with rustyline.
         format!("irb:")
     } else {
         format!("{}", Red.bold().paint("irb:"))
     };
-    let mut program = String::new();
+    let mut temp_script = String::new();
     let mut parser = Parser::new("REPL", &String::new());
+    let mut parser_save = parser.clone();
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
@@ -49,8 +50,8 @@ pub fn repl_vm() {
         None,
     );
     loop {
-        let prompt = if program.len() == 0 { ">" } else { "*" };
-        let readline = rl.readline(&format!(
+        let prompt = if temp_script.len() == 0 { ">" } else { "*" };
+        let readline = editor.readline(&format!(
             "{}{:1}{} {}",
             prompt_body,
             level,
@@ -59,12 +60,12 @@ pub fn repl_vm() {
         ));
         let line = match readline {
             Ok(line) => {
-                rl.add_history_entry(&line);
+                editor.add_history_entry(&line);
                 line + "\n"
             }
             Err(err) => match err {
                 ReadlineError::Interrupted => {
-                    program = String::new();
+                    temp_script = String::new();
                     level = 0;
                     continue;
                 }
@@ -73,15 +74,16 @@ pub fn repl_vm() {
             },
         };
 
-        program += &line;
-        parser.lexer.append(&line);
+        temp_script += &line;
+        parser = parser_save.clone();
+        parser.lexer.append(&temp_script);
 
-        match parser.clone().parse_program_repl(context) {
+        match parser.parse_program_repl(context) {
             Ok(parse_result) => {
                 let source_info = parse_result.source_info;
                 match vm.run_repl(parse_result, context) {
                     Ok(result) => {
-                        parser.lexer.source_info = source_info;
+                        parser_save.lexer.source_info = source_info;
                         println!("=> {:?}", result);
                     }
                     Err(err) => {
@@ -93,7 +95,6 @@ pub fn repl_vm() {
                     }
                 }
                 level = 0;
-                program = String::new();
             }
             Err(err) => {
                 level = err.level();
@@ -102,8 +103,8 @@ pub fn repl_vm() {
                 }
                 err.show_loc(0);
                 err.show_err();
-                program = String::new();
             }
         }
+        temp_script = String::new();
     }
 }

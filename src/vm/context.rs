@@ -15,6 +15,7 @@ pub struct Context {
     pub moved_to_heap: Option<ContextRef>,
     pub on_stack: bool,
     pub kind: ISeqKind,
+    pub cur_pc: ISeqPos,
     pub prev_pc: ISeqPos,
     pub prev_stack_len: usize,
 }
@@ -107,6 +108,7 @@ impl Context {
             moved_to_heap: None,
             on_stack: true,
             kind: iseq_ref.kind,
+            cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
         }
@@ -123,6 +125,7 @@ impl Context {
             moved_to_heap: None,
             on_stack: true,
             kind: ISeqKind::Block,
+            cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
         }

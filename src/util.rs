@@ -235,21 +235,12 @@ impl SourceInfo {
                 found = true;
             };
 
-            let mut start = line.top;
+            let start = line.top;
             let mut end = line.end;
             if self.get_next_char(end) == Some('\n') && end > 0 {
                 end -= 1
             }
-            start += if loc.0 >= start { loc.0 - start } else { 0 }; // term_width * term_width;
-                                                                     /*if console::measure_text_width(&self.code[start..=end]) >= term_width {
-                                                                         for (e, _) in self.code[loc.1 + 1..=end].char_indices() {
-                                                                             if console::measure_text_width(&self.code[start..e]) < term_width {
-                                                                                 end = e;
-                                                                             } else {
-                                                                                 break;
-                                                                             }
-                                                                         }
-                                                                     }*/
+            //start += if loc.0 >= start { loc.0 - start } else { 0 };
             res_string += &self.code[start..=end];
             res_string.push('\n');
             use std::cmp::*;
@@ -262,7 +253,7 @@ impl SourceInfo {
             let range_end = min(loc.1, line.end);
             let length = console::measure_text_width(&self.code[range_start..=range_end]);
             res_string += &" ".repeat(lead);
-            res_string += &"^".repeat(length + 1);
+            res_string += &"^".repeat(length);
             res_string += "\n";
         }
 

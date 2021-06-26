@@ -482,15 +482,16 @@ impl VM {
 
 impl VM {
     fn get_loc(&self) -> Loc {
+        let pc = self.context().cur_pc;
         match self.context().iseq_ref {
             None => Loc(1, 1),
-            Some(iseq) => {
-                iseq.iseq_sourcemap
-                    .iter()
-                    .find(|x| x.0 == self.pc)
-                    .unwrap_or(&(ISeqPos::from(0), Loc(0, 0)))
-                    .1
-            }
+            Some(iseq) => match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+                Some((_, loc)) => *loc,
+                None => {
+                    eprintln!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
+                    Loc(0, 0)
+                }
+            },
         }
     }
 

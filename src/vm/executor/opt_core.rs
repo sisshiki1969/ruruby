@@ -38,6 +38,7 @@ impl VM {
         }
 
         loop {
+            self.context().cur_pc = self.pc;
             #[cfg(feature = "perf")]
             self.globals.perf.get_perf(iseq[self.pc]);
             #[cfg(feature = "trace")]

@@ -7,8 +7,6 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
-    code: String,
-    len: usize,
     token_start_pos: usize,
     pos: usize,
     buf: Option<Token>,
@@ -85,11 +83,8 @@ impl Lexer {
             "while" => Reserved::While,
             "yield" => Reserved::Yield
         };
-        let code = code.into();
-        let source_info = SourceInfoRef::new(SourceInfo::new(path, &code));
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
         Lexer {
-            code,
-            len: source_info.code.len(),
             token_start_pos: 0,
             pos: 0,
             buf: None,
@@ -110,7 +105,13 @@ impl Lexer {
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(format!(
                 "Unexpected char. '{}'",
-                self.code.get(pos..).unwrap().chars().next().unwrap()
+                self.source_info
+                    .code
+                    .get(pos..)
+                    .unwrap()
+                    .chars()
+                    .next()
+                    .unwrap()
             )),
             self.source_info,
             0,
@@ -153,9 +154,7 @@ impl Lexer {
     }
 
     pub fn append(&mut self, code_text: &str) {
-        self.pos = 0;
-        self.code.push_str(code_text);
-        self.len = self.code.len();
+        self.pos = self.source_info.code.len();
         self.source_info.code += &code_text;
     }
 
@@ -213,6 +212,7 @@ impl Lexer {
     /// Examine if the next char of the token is space.
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
         match self
+            .source_info
             .code
             .get(tok.loc.1 + 1..)
             .map(|s| s.chars().next())
@@ -956,7 +956,7 @@ impl Lexer {
             let start = self.pos;
             self.goto_eol();
             let end = self.pos;
-            let line: String = self.code[start..end].to_string();
+            let line: String = self.source_info.code[start..end].to_string();
             //eprintln!("line:[{}]", line);
             if mode == Mode::AllowIndent {
                 if line.trim_start() == delimiter {
@@ -988,13 +988,13 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
-        self.code.get(self.pos..)?.chars().next()
+        self.source_info.code.get(self.pos..)?.chars().next()
     }
 
     /// Peek the next next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek2(&self) -> Option<char> {
-        let mut iter = self.code.get(self.pos..)?.chars();
+        let mut iter = self.source_info.code.get(self.pos..)?.chars();
         iter.next()?;
         iter.next()
     }
