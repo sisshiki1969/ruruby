@@ -1267,7 +1267,7 @@ impl Parser {
         //      ｜ 一次式 ［行終端子禁止］ "::" メソッド名 括弧付き実引数 ブロック?
         //      ｜ 一次式 ［行終端子禁止］ "::" 定数以外のメソッド名 ブロック?
         if self.consume_punct_no_term(Punct::LParen)? {
-            let arglist = self.parse_argument_list(Punct::RParen)?;
+            let arglist = self.parse_arglist_block(Punct::RParen)?;
             let loc = receiver.loc().merge(self.loc());
             let node = Node::new_send(receiver, IdentId::get_id("call"), arglist, false, loc);
             return Ok(node);
