@@ -835,7 +835,7 @@ impl Parser {
     fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
         // FNAME ARGS
         // FNAME ARGS DO-BLOCK
-        let send_args = self.parse_arglist_block()?;
+        let send_args = self.parse_arglist_block(None)?;
         Ok(Node::new_send(
             Node::new_self(loc),
             operation,
@@ -845,8 +845,11 @@ impl Parser {
         ))
     }
 
-    fn parse_arglist_block(&mut self) -> Result<ArgList, RubyError> {
-        let mut arglist = self.parse_argument_list(None)?;
+    fn parse_arglist_block(
+        &mut self,
+        delimiter: impl Into<Option<Punct>>,
+    ) -> Result<ArgList, RubyError> {
+        let mut arglist = self.parse_argument_list(delimiter)?;
         match self.parse_block()? {
             Some(actual_block) => {
                 if arglist.block.is_some() {
@@ -1213,19 +1216,7 @@ impl Parser {
         let loc = node.loc();
         if self.consume_punct_no_term(Punct::LParen)? {
             // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-            let mut send_args = self.parse_argument_list(Punct::RParen)?;
-            match self.parse_block()? {
-                Some(actual_block) => {
-                    if send_args.block.is_some() {
-                        return Err(self.error_unexpected(
-                            actual_block.loc(),
-                            "Both block arg and actual block given.",
-                        ));
-                    }
-                    send_args.block = Some(actual_block);
-                }
-                None => {}
-            };
+            let send_args = self.parse_arglist_block(Punct::RParen)?;
 
             Ok(Node::new_send(
                 Node::new_self(loc),
@@ -1275,29 +1266,36 @@ impl Parser {
         //      ｜ 一次式 ［行終端子禁止］ "." メソッド名 括弧付き実引数? ブロック?
         //      ｜ 一次式 ［行終端子禁止］ "::" メソッド名 括弧付き実引数 ブロック?
         //      ｜ 一次式 ［行終端子禁止］ "::" 定数以外のメソッド名 ブロック?
+        if self.consume_punct_no_term(Punct::LParen)? {
+            let arglist = self.parse_argument_list(Punct::RParen)?;
+            let loc = receiver.loc().merge(self.loc());
+            let node = Node::new_send(receiver, IdentId::get_id("call"), arglist, false, loc);
+            return Ok(node);
+        };
         let (id, loc) = self.parse_method_name()?;
-        let mut arglist = if !self.consume_punct_no_term(Punct::LParen)? {
+        let arglist = if self.consume_punct_no_term(Punct::LParen)? {
+            self.parse_arglist_block(Punct::RParen)?
+        } else {
             if self.is_command() {
                 return Ok(Node::new_send(
                     receiver,
                     id,
-                    self.parse_arglist_block()?,
+                    self.parse_arglist_block(None)?,
                     false,
                     loc,
                 ));
             }
-            ArgList::default()
-        } else {
-            self.parse_argument_list(Punct::RParen)?
+            let mut arglist = ArgList::default();
+            if let Some(block) = self.parse_block()? {
+                if arglist.block.is_some() {
+                    return Err(self
+                        .error_unexpected(block.loc(), "Both block arg and actual block given."));
+                }
+                arglist.block = Some(block);
+            };
+            arglist
         };
-        if let Some(block) = self.parse_block()? {
-            if arglist.block.is_some() {
-                return Err(
-                    self.error_unexpected(block.loc(), "Both block arg and actual block given.")
-                );
-            }
-            arglist.block = Some(block);
-        };
+
         let node = match receiver.kind {
             NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, false, loc),
             _ => receiver,
@@ -1317,11 +1315,9 @@ impl Parser {
             return Ok(Node::new_yield(ArgList::default(), loc));
         };
         let args = if self.consume_punct(Punct::LParen)? {
-            let args = self.parse_arglist_block()?;
-            self.expect_punct(Punct::RParen)?;
-            args
+            self.parse_arglist_block(Punct::RParen)?
         } else {
-            self.parse_arglist_block()?
+            self.parse_arglist_block(None)?
         };
         return Ok(Node::new_yield(args, loc));
     }
