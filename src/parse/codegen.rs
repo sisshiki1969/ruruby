@@ -319,19 +319,12 @@ impl Codegen {
                 return None;
             }
         }
-        let mut ctx = match self.extern_context {
-            Some(ctx) => ctx,
-            None => return None,
-        };
+        let mut ctx = self.extern_context?;
         loop {
-            match ctx.iseq_ref.unwrap().lvar.get(&id) {
-                Some(id) => return Some((idx as u32, *id)),
-                None => {}
+            if let Some(id) = ctx.iseq_ref.unwrap().lvar.get(&id) {
+                return Some((idx as u32, *id));
             };
-            ctx = match ctx.outer {
-                Some(ctx) => ctx,
-                None => return None,
-            };
+            ctx = ctx.outer?;
             idx += 1;
         }
     }

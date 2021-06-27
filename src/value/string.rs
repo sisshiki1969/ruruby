@@ -249,10 +249,7 @@ impl RString {
 
     pub fn cmp(&self, other: Value) -> Option<Ordering> {
         let lhs = self.as_bytes();
-        let rhs = match other.as_bytes() {
-            Some(s) => s,
-            None => return None,
-        };
+        let rhs = other.as_bytes()?;
         Some(RString::string_cmp(lhs, rhs))
     }
 

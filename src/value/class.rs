@@ -292,17 +292,12 @@ impl ClassInfo {
     ///
     /// If `self` has no upper module/class, return None.
     pub fn upper(&self) -> Option<Module> {
-        let mut upper = self.upper;
+        let mut m = self.upper?;
         loop {
-            match upper {
-                None => return None,
-                Some(m) => {
-                    if !m.has_prepend() {
-                        return Some(m);
-                    }
-                    upper = m.upper;
-                }
+            if !m.has_prepend() {
+                return Some(m);
             }
+            m = m.upper?;
         }
     }
 
@@ -310,17 +305,12 @@ impl ClassInfo {
     ///
     /// If `self` has no superclass, return nil.
     pub fn superclass(&self) -> Option<Module> {
-        let mut upper = self.upper;
+        let mut m = self.upper?;
         loop {
-            match upper {
-                None => return None,
-                Some(m) => {
-                    if !m.is_included() {
-                        return Some(m);
-                    };
-                    upper = m.upper;
-                }
-            }
+            if !m.is_included() {
+                return Some(m);
+            };
+            m = m.upper?;
         }
     }
 

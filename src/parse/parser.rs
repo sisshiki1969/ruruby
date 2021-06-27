@@ -118,19 +118,13 @@ impl LvarCollector {
     }
 
     fn insert_block_param(&mut self, val: IdentId) -> Option<LvarId> {
-        let lvar = match self.insert_new(val) {
-            Some(lvar) => lvar,
-            None => return None,
-        };
+        let lvar = self.insert_new(val)?;
         self.block = Some(lvar);
         Some(lvar)
     }
 
     fn insert_kwrest_param(&mut self, val: IdentId) -> Option<LvarId> {
-        let lvar = match self.insert_new(val) {
-            Some(lvar) => lvar,
-            None => return None,
-        };
+        let lvar = self.insert_new(val)?;
         self.kwrest = Some(lvar);
         Some(lvar)
     }
@@ -1285,15 +1279,10 @@ impl Parser {
                     loc,
                 ));
             }
-            let mut arglist = ArgList::default();
-            if let Some(block) = self.parse_block()? {
-                if arglist.block.is_some() {
-                    return Err(self
-                        .error_unexpected(block.loc(), "Both block arg and actual block given."));
-                }
-                arglist.block = Some(block);
-            };
-            arglist
+            match self.parse_block()? {
+                Some(block) => ArgList::with_block(block),
+                None => ArgList::default(),
+            }
         };
 
         let node = match receiver.kind {
@@ -1415,6 +1404,9 @@ impl Parser {
         Ok(arglist)
     }
 
+    /// Parse block.
+    ///     do |x| stmt end
+    ///     { |x| stmt }
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
         let old = self.supress_mul_assign;
         self.supress_mul_assign = false;
