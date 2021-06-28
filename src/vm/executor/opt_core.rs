@@ -14,6 +14,8 @@ impl VM {
     /// - raise error
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         let ctx = self.context();
+        #[cfg(debug_assertions)]
+        let kind = ctx.iseq_ref.unwrap().kind;
         let iseq = &mut ctx.iseq_ref.unwrap().iseq;
         let self_value = ctx.self_value;
         //let stack_len = self.stack_len();
@@ -65,17 +67,14 @@ impl VM {
                 Inst::BREAK => {
                     // - `break`  in block or eval AND outer of loops.
                     #[cfg(debug_assertions)]
-                    assert!(
-                        self.context().kind == ISeqKind::Block
-                            || self.context().kind == ISeqKind::Other
-                    );
+                    assert!(kind == ISeqKind::Block || kind == ISeqKind::Other);
                     let err = RubyError::block_return();
                     return Err(err);
                 }
                 Inst::MRETURN => {
                     // - `return` in block
                     #[cfg(debug_assertions)]
-                    assert_eq!(self.context().kind, ISeqKind::Block);
+                    assert!(kind == ISeqKind::Block);
                     let err = RubyError::method_return();
                     return Err(err);
                 }

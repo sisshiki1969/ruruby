@@ -342,10 +342,11 @@ impl Parser {
             Some(ctx) => ctx,
         };
         loop {
-            if ctx.iseq_ref.unwrap().lvar.table.contains_key(&id) {
+            let iseq = ctx.iseq_ref.unwrap();
+            if iseq.lvar.table.contains_key(&id) {
                 return true;
             };
-            if let ISeqKind::Method(_) = ctx.kind {
+            if let ISeqKind::Method(_) = iseq.kind {
                 return false;
             }
             match ctx.outer {

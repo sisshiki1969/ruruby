@@ -154,7 +154,7 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //args.check_args_num( 0)?;
     let context = vm.context();
     let iseq = context.iseq_ref.unwrap();
-    if let ISeqKind::Method(Some(m)) = context.kind {
+    if let ISeqKind::Method(Some(m)) = iseq.kind {
         let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
             Some(class) => match MethodRepo::find_method(class, m) {

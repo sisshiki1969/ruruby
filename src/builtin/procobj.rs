@@ -35,8 +35,7 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let pref = self_val.as_proc().unwrap();
-    let is_proc = pref.context.kind == ISeqKind::Block;
-    let s = if is_proc {
+    let s = if let ISeqKind::Block = pref.context.iseq_ref.unwrap().kind {
         format!("#<Proc:0x{:016x}>", pref.context.id())
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", pref.context.id())

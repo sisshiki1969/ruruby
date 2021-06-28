@@ -16,7 +16,7 @@ pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    exec_context: Vec<ContextRef>,
+    //exec_context: Vec<ContextRef>,
     cur_context: Option<ContextRef>,
     class_context: Vec<(Module, DefineMode)>,
     exec_stack: Vec<Value>,
@@ -46,7 +46,7 @@ impl DefineMode {
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
         self.cur_context.iter().for_each(|c| c.mark(alloc));
-        self.exec_context.iter().for_each(|c| c.mark(alloc));
+        //self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
@@ -59,7 +59,7 @@ impl VM {
             globals,
             class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             cur_context: None,
-            exec_context: vec![],
+            //exec_context: vec![],
             exec_stack: vec![],
             temp_stack: vec![],
             pc: ISeqPos::from(0),
@@ -104,7 +104,6 @@ impl VM {
         VM {
             globals: self.globals,
             cur_context: None,
-            exec_context: vec![],
             temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
@@ -114,9 +113,7 @@ impl VM {
     }
 
     pub fn context(&self) -> ContextRef {
-        let ctx = self.cur_context.unwrap();
-        debug_assert!(!ctx.on_stack || ctx.moved_to_heap.is_none());
-        ctx
+        self.cur_context.unwrap()
     }
 
     fn get_method_context(&self) -> ContextRef {
@@ -152,7 +149,7 @@ impl VM {
         self.context().iseq_ref.unwrap().is_method()
     }
 
-    fn stack_push(&mut self, val: Value) {
+    pub fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
 
@@ -200,20 +197,15 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn context_push(&mut self, ctx: ContextRef) {
-        match self.cur_context {
-            Some(c) => {
-                self.exec_context.push(c);
-                self.cur_context = Some(ctx);
-            }
-            None => self.cur_context = Some(ctx),
-        }
+    pub fn context_push(&mut self, mut ctx: ContextRef) {
+        ctx.prev_ctx = self.cur_context;
+        self.cur_context = Some(ctx);
     }
 
     pub fn context_pop(&mut self) -> Option<ContextRef> {
         match self.cur_context {
             Some(c) => {
-                self.cur_context = self.exec_context.pop();
+                self.cur_context = c.prev_ctx;
                 Some(c)
             }
             None => None,
@@ -224,7 +216,6 @@ impl VM {
     pub fn clear(&mut self) {
         self.exec_stack.clear();
         self.class_context = vec![(BuiltinClass::object(), DefineMode::default())];
-        self.exec_context.clear();
         self.cur_context = None;
     }
 
@@ -358,9 +349,13 @@ impl VM {
     #[cfg(not(tarpaulin_include))]
     pub fn dump_context(&self) {
         eprintln!("---dump");
-        for (i, context) in self.exec_context.iter().rev().enumerate() {
+        let mut ctx = self.cur_context;
+        let mut i = 0;
+        while let Some(c) = ctx {
             eprintln!("context: {}", i);
-            context.dump();
+            i += 1;
+            c.dump();
+            ctx = c.prev_ctx;
         }
         for v in &self.exec_stack {
             eprintln!("stack: {:#?}", *v);
@@ -398,15 +393,17 @@ impl VM {
         self.pc = ISeqPos::from(0);
         #[cfg(feature = "trace")]
         {
+            let iseq = context.iseq_ref.unwrap();
             print!("--->");
-            println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
+            println!(" {:?} {:?}", iseq.method, iseq.kind);
             context.dump();
             eprintln!("  ------------------------------------------------------------------");
         }
         #[cfg(feature = "trace-func")]
         {
+            let iseq = context.iseq_ref.unwrap();
             print!("--->");
-            println!(" {:?} {:?}", context.iseq_ref.unwrap().method, context.kind);
+            println!(" {:?} {:?}", iseq.method, iseq.kind);
         }
         loop {
             match self.run_context_main() {
@@ -435,7 +432,7 @@ impl VM {
                         _ => {}
                     }
                     let context = self.context();
-                    if err.info.len() == 0 || context.kind != ISeqKind::Block {
+                    if err.info.len() == 0 || context.iseq_ref.unwrap().kind != ISeqKind::Block {
                         err.info.push((self.source_info(), self.get_loc()));
                     }
                     //eprintln!("{:?}", iseq.exception_table);
@@ -566,7 +563,7 @@ impl VM {
     }
 
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.exec_context.len() == 0 {
+        if self.cur_context.is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.context().self_value;
@@ -591,7 +588,7 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.exec_context.len() == 0 {
+        if self.cur_context.is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.context().self_value;
@@ -1526,7 +1523,6 @@ impl VM {
                 self.invoke_setter(id, self_val, args[0])
             }
             RubyFunc { iseq } => {
-                let outer = outer.map(|ctx| ctx.get_current());
                 let context = ContextRef::from_args(self, self_val, iseq, args, outer)?;
                 self.run_context(context)
             }
@@ -1720,8 +1716,8 @@ impl VM {
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let mut context = self.create_block_context(*method, *outer)?;
-                context.kind = ISeqKind::Method(None);
+                let context = self.create_block_context(*method, *outer)?;
+                context.iseq_ref.unwrap().kind = ISeqKind::Method(None);
                 Ok(Value::procobj(context))
             }
             Block::Proc(proc) => Ok(proc.dup()),
@@ -1758,7 +1754,7 @@ impl VM {
 
     /// Move outer execution contexts on the stack to the heap.
     fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
-        let mut stack_context = outer;
+        /*let mut stack_context = outer;
         let mut prev_ctx: Option<ContextRef> = None;
         let mut iter = self
             .exec_context
@@ -1790,10 +1786,10 @@ impl VM {
                 Some(context) => context,
                 None => break,
             };
-        }
+        }*/
         //eprintln!("****moved.");
 
-        outer.moved_to_heap.unwrap()
+        outer
     }
 
     /// Create a new execution context for a block.

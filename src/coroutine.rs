@@ -55,10 +55,11 @@ impl EnumInfo {
     /// `vm`: VM of created fiber.
     pub fn enumerator_fiber(&self, vm: &mut VM) -> VMResult {
         let method = vm.get_method_from_receiver(self.receiver, self.method)?;
-        let context = ContextRef::new_noiseq();
+        let context = ContextRef::new_native();
         vm.context_push(context);
-        vm.invoke_method(method, self.receiver, &self.args)?;
+        let val = vm.eval_method(method, self.receiver, &self.args)?;
         vm.context_pop();
+        vm.stack_push(val);
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }
 }

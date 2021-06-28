@@ -22,8 +22,6 @@ fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         _ => unreachable!(),
     };
     assert!(!context.on_stack);
-    assert!(context.moved_to_heap == Some(context));
-
     let val = Value::fiber(vm, context);
     Ok(val)
 }

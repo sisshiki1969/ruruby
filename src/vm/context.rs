@@ -12,9 +12,9 @@ pub struct Context {
     pub iseq_ref: Option<ISeqRef>,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
-    pub moved_to_heap: Option<ContextRef>,
+    /// Previous context.
+    pub prev_ctx: Option<ContextRef>,
     pub on_stack: bool,
-    pub kind: ISeqKind,
     pub cur_pc: ISeqPos,
     pub prev_pc: ISeqPos,
     pub prev_stack_len: usize,
@@ -66,8 +66,8 @@ impl Into<ContextRef> for &Context {
 
 impl GC for Context {
     fn mark(&self, alloc: &mut Allocator) {
-        if let (true, Some(_heap)) = (self.on_stack, self.moved_to_heap) {
-            panic!("Warining: ref to stack for heap-allocated context.");
+        if let Some(ctx) = self.prev_ctx {
+            ctx.mark(alloc)
         }
         self.self_value.mark(alloc);
         match self.iseq_ref {
@@ -80,7 +80,7 @@ impl GC for Context {
         }
         match self.block {
             Block::Proc(proc) => proc.mark(alloc),
-            Block::Block(_, outer) => outer.get_current().mark(alloc),
+            Block::Block(_, outer) => outer.mark(alloc),
             Block::None => {}
         }
         match self.outer {
@@ -105,16 +105,15 @@ impl Context {
             lvar_vec,
             iseq_ref: Some(iseq_ref),
             outer,
-            moved_to_heap: None,
+            prev_ctx: None,
             on_stack: true,
-            kind: iseq_ref.kind,
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
         }
     }
 
-    fn new_noiseq() -> Self {
+    fn new_native() -> Self {
         Context {
             self_value: Value::nil(),
             block: Block::None,
@@ -122,9 +121,8 @@ impl Context {
             lvar_vec: vec![],
             iseq_ref: None,
             outer: None,
-            moved_to_heap: None,
+            prev_ctx: None,
             on_stack: true,
-            kind: ISeqKind::Block,
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
@@ -140,7 +138,6 @@ impl Context {
             self as *const Context,
             self.outer
         );
-        assert!(!self.on_stack || self.moved_to_heap.is_none());
         println!("  self: {:#?}", self.self_value);
         match self.iseq_ref {
             Some(iseq_ref) => {
@@ -370,17 +367,13 @@ impl ContextRef {
     ) -> Self {
         let mut context = Context::new(self_value, block, iseq_ref, outer);
         context.on_stack = false;
-        let mut ctxref = ContextRef::new(context);
-        ctxref.moved_to_heap = Some(ctxref);
-        ctxref
+        ContextRef::new(context)
     }
 
-    pub fn new_noiseq() -> Self {
-        let mut context = Context::new_noiseq();
+    pub fn new_native() -> Self {
+        let mut context = Context::new_native();
         context.on_stack = false;
-        let mut ctxref = ContextRef::new(context);
-        ctxref.moved_to_heap = Some(ctxref);
-        ctxref
+        ContextRef::new(context)
     }
 
     pub fn from_args(
@@ -392,26 +385,15 @@ impl ContextRef {
     ) -> Result<Self, RubyError> {
         let mut context = Context::from_args(vm, self_value, iseq, args, outer)?;
         context.on_stack = false;
-        let mut ctxref = ContextRef::new(context);
-        ctxref.moved_to_heap = Some(ctxref);
-        Ok(ctxref)
+        Ok(ContextRef::new(context))
     }
 
-    pub fn get_current(self) -> Self {
-        match self.moved_to_heap {
-            None => self,
-            Some(heap) => heap,
-        }
-    }
-
-    pub fn move_to_heap(mut self) -> Self {
+    pub fn move_to_heap(self) -> Self {
         if !self.on_stack {
             return self;
         };
         let mut heap_context = self.dup();
         heap_context.on_stack = false;
-        heap_context.moved_to_heap = Some(heap_context);
-        self.moved_to_heap = Some(heap_context);
         heap_context
     }
 
