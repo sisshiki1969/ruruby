@@ -329,7 +329,6 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_val = self_val.into_module();
-    let context = vm.context();
     match &args.block {
         Block::None => {
             args.check_args_num(1)?;
@@ -340,7 +339,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.class_push(self_val);
             let mut iseq = vm.get_method_iseq();
             iseq.class_defined.push(self_val);
-            let res = vm.invoke_func(method, self_val, Some(context), &Args::new0());
+            let res = vm.invoke_func(method, self_val, Some(vm.context()), &Args::new0());
             iseq.class_defined.pop().unwrap();
             vm.class_pop();
             res?;

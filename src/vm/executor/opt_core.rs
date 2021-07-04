@@ -13,15 +13,15 @@ impl VM {
     /// - `return` in block
     /// - raise error
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
-        let ctx = self.context();
+        let iseqref = self.context().iseq_ref.unwrap();
         #[cfg(debug_assertions)]
-        let kind = ctx.iseq_ref.unwrap().kind;
-        let iseq = &mut ctx.iseq_ref.unwrap().iseq;
-        let self_value = ctx.self_value;
+        let kind = iseqref.kind;
+        let iseq = &iseqref.iseq;
+        let self_value = self.context().self_value;
         //let stack_len = self.stack_len();
         self.gc();
-        for (i, (outer, lvar)) in ctx.iseq_ref.unwrap().forvars.iter().enumerate() {
-            self.get_outer_context(*outer)[*lvar as usize] = ctx[i];
+        for (i, (outer, lvar)) in iseqref.forvars.iter().enumerate() {
+            self.get_outer_context(*outer)[*lvar as usize] = self.context()[i];
         }
         /// Evaluate expr, and push return value to stack.
         macro_rules! try_push {
@@ -520,8 +520,8 @@ impl VM {
                 }
                 Inst::CREATE_PROC => {
                     let method = iseq.read_method(self.pc + 1);
-                    let ctx = self.context();
-                    let proc_obj = self.create_proc(&Block::Block(method, ctx))?;
+                    let block = self.new_block(method);
+                    let proc_obj = self.create_proc(&block)?;
                     self.stack_push(proc_obj);
                     self.pc += 5;
                 }
@@ -647,7 +647,9 @@ impl VM {
                 }
                 Inst::FOR => {
                     let receiver = self.stack_pop();
-                    try_push!(self.vm_for(iseq, receiver));
+                    let block = iseq.read_method(self.pc + 1);
+                    let cache = iseq.read32(self.pc + 5);
+                    try_push!(self.vm_for(receiver, block, cache));
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
@@ -788,7 +790,7 @@ impl VM {
 
 // helper functions for run_context_main.
 impl VM {
-    fn vm_send(&mut self, iseq: &mut ISeq, receiver: Value) -> Result<(), RubyError> {
+    fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<(), RubyError> {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let kw_rest_num = iseq.read8(self.pc + 7);
@@ -824,7 +826,7 @@ impl VM {
         };
 
         let block = if block != 0 {
-            Block::Block(block.into(), self.context())
+            self.new_block(block)
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
             if val.is_nil() {
@@ -848,7 +850,7 @@ impl VM {
         self.send_icache(cache, method_id, receiver, &args)
     }
 
-    fn vm_fast_send(&mut self, iseq: &mut ISeq, receiver: Value) -> Result<(), RubyError> {
+    fn vm_fast_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<(), RubyError> {
         // With block and no keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
@@ -856,16 +858,12 @@ impl VM {
         let cache_id = iseq.read32(self.pc + 11);
         self.pc += 15;
         let len = self.stack_len();
-        let arg_slice = &self.exec_stack[len - args_num..];
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
-                    let mut args = Args::from_slice(arg_slice);
-                    args.block = match block {
-                        0 => Block::None,
-                        i => Block::Block(MethodId::from(i), self.context()),
-                    };
+                    let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
+                    args.block = Block::from_u32(block, self);
                     self.set_stack_len(len - args_num);
                     self.invoke_native(&func, method, name, receiver, &args)?;
                     Ok(())
@@ -886,21 +884,18 @@ impl VM {
                     Ok(())
                 }
                 MethodInfo::RubyFunc { iseq } => {
-                    let block = match block {
-                        0 => Block::None,
-                        i => Block::Block(MethodId::from(i), self.context()),
-                    };
+                    let block = Block::from_u32(block, self);
                     if iseq.opt_flag {
-                        let mut context = ContextRef::new_heap(receiver, block, iseq, None);
+                        let mut context = ContextRef::new_stack(receiver, block, iseq, None, self);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
                         };
-                        context.copy_from_slice0(arg_slice);
+                        context.copy_from_slice0(&self.exec_stack[len - args_num..]);
                         self.set_stack_len(len - args_num);
                         self.run_context(context)
                     } else {
-                        let mut args = Args::from_slice(arg_slice);
+                        let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                         args.block = block;
                         self.set_stack_len(len - args_num);
                         let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;
@@ -910,24 +905,23 @@ impl VM {
                 _ => unreachable!(),
             },
             None => {
-                let mut args = Args::from_slice(arg_slice);
-                args.block = match block {
-                    0 => Block::None,
-                    i => Block::Block(MethodId::from(i), self.context()),
-                };
+                let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
+                args.block = Block::from_u32(block, self);
                 self.set_stack_len(len - args_num);
                 self.send_method_missing(method_id, receiver, &args)
             }
         }
     }
 
-    fn vm_for(&mut self, iseq: &mut ISeq, receiver: Value) -> Result<(), RubyError> {
+    fn vm_for(
+        &mut self,
+        receiver: Value,
+        method_id: MethodId,
+        cache: u32,
+    ) -> Result<(), RubyError> {
         // With block and no keyword/block/splat arguments for OPT_SEND.
-        let block = iseq.read_method(self.pc + 1);
-        //assert!(block != 0);
-        let block = Block::Block(block, self.context());
+        let block = self.new_block(method_id);
         let args = Args::new0_block(block);
-        let cache = iseq.read32(self.pc + 5);
         self.pc += 9;
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {

@@ -2,6 +2,70 @@ pub use crate::*;
 use std::ops::{Index, IndexMut, Range};
 
 const LVAR_ARRAY_SIZE: usize = 4;
+const INITIAL_STACK_SIZE: usize = 128;
+
+#[derive(Debug, Clone)]
+pub struct ContextStack {
+    buf: *mut Context,
+    sp: usize,
+}
+
+impl ContextStack {
+    /// Allocate new virtual stack.
+    pub fn new() -> Self {
+        use std::alloc::{alloc, Layout};
+        let layout = Layout::from_size_align(
+            INITIAL_STACK_SIZE * std::mem::size_of::<Context>(),
+            INITIAL_STACK_SIZE,
+        )
+        .unwrap();
+        let buf = unsafe { alloc(layout) as *mut Context };
+        Self { buf, sp: 0 }
+    }
+
+    /// Push `context` to the virtual stack, and return a context handle.
+    pub fn push(&mut self, context: Context) -> ContextRef {
+        self.compress();
+        unsafe {
+            if self.sp >= INITIAL_STACK_SIZE {
+                panic!("stack overflow")
+            };
+            let ptr = self.buf.add(self.sp);
+            std::ptr::write(ptr, context);
+            self.sp += 1;
+            ContextRef::from_ptr(ptr)
+        }
+    }
+
+    /// Pop `context` from the virtual stack.
+    pub fn pop(&mut self, context: ContextRef) {
+        unsafe {
+            if self.sp == 0 {
+                return;
+            }
+            let ptr = self.buf.add(self.sp - 1);
+            if context == ContextRef::from_ptr(ptr) {
+                (*ptr).lvar_vec = Vec::new();
+                self.sp -= 1;
+            }
+        }
+        self.compress();
+    }
+
+    /// Remove contexts which have been moved to heap from the virtual stack.
+    fn compress(&mut self) {
+        while self.sp > 0 {
+            unsafe {
+                let ptr = self.buf.add(self.sp - 1);
+                if (*ptr).alive() {
+                    return;
+                }
+                (*ptr).lvar_vec = Vec::new();
+                self.sp -= 1;
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -13,11 +77,18 @@ pub struct Context {
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
     /// Previous context.
-    pub prev_ctx: Option<ContextRef>,
-    pub on_stack: bool,
+    pub caller: Option<ContextRef>,
+    pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
     pub prev_pc: ISeqPos,
     pub prev_stack_len: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum CtxKind {
+    Heap,
+    Stack,
+    Dead(ContextRef),
 }
 
 pub type ContextRef = Ref<Context>;
@@ -66,8 +137,8 @@ impl Into<ContextRef> for &Context {
 
 impl GC for Context {
     fn mark(&self, alloc: &mut Allocator) {
-        if let Some(ctx) = self.prev_ctx {
-            ctx.mark(alloc)
+        if !self.alive() {
+            unreachable!("GC error: Dead context.")
         }
         self.self_value.mark(alloc);
         match self.iseq_ref {
@@ -78,14 +149,28 @@ impl GC for Context {
             }
             None => {}
         }
-        match self.block {
-            Block::Proc(proc) => proc.mark(alloc),
-            Block::Block(_, outer) => outer.mark(alloc),
-            Block::None => {}
-        }
+        self.block.mark(alloc);
         match self.outer {
             Some(c) => c.mark(alloc),
             None => {}
+        }
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Context {
+            self_value: Value::uninitialized(),
+            block: Block::None,
+            lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
+            lvar_vec: Vec::new(),
+            iseq_ref: None,
+            outer: None,
+            caller: None,
+            on_stack: CtxKind::Stack,
+            cur_pc: ISeqPos::from(0),
+            prev_pc: ISeqPos::from(0),
+            prev_stack_len: 0,
         }
     }
 }
@@ -105,8 +190,8 @@ impl Context {
             lvar_vec,
             iseq_ref: Some(iseq_ref),
             outer,
-            prev_ctx: None,
-            on_stack: true,
+            caller: None,
+            on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
@@ -121,11 +206,22 @@ impl Context {
             lvar_vec: vec![],
             iseq_ref: None,
             outer: None,
-            prev_ctx: None,
-            on_stack: true,
+            caller: None,
+            on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
+        }
+    }
+
+    pub fn on_heap(&self) -> bool {
+        self.on_stack == CtxKind::Heap
+    }
+
+    pub fn alive(&self) -> bool {
+        match self.on_stack {
+            CtxKind::Dead(_) => false,
+            _ => true,
         }
     }
 
@@ -133,10 +229,8 @@ impl Context {
     #[cfg(not(tarpaulin_include))]
     pub fn dump(&self) {
         println!(
-            "{} context:{:?} outer:{:?}",
-            if self.on_stack { "STACK" } else { "HEAP " },
-            self as *const Context,
-            self.outer
+            "{:?} context:{:?} outer:{:?}",
+            self.on_stack, self as *const Context, self.outer
         );
         println!("  self: {:#?}", self.self_value);
         match self.iseq_ref {
@@ -154,6 +248,15 @@ impl Context {
             }
             None => {}
         }
+    }
+
+    #[allow(dead_code)]
+    #[cfg(not(tarpaulin_include))]
+    pub fn pp(&self) {
+        println!(
+            "{:?} context:{:?} outer:{:?}",
+            self.on_stack, self as *const Context, self.outer
+        );
     }
 
     fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
@@ -359,6 +462,17 @@ impl Context {
 }
 
 impl ContextRef {
+    pub fn new_stack(
+        self_value: Value,
+        block: Block,
+        iseq_ref: ISeqRef,
+        outer: Option<ContextRef>,
+        vm: &mut VM,
+    ) -> Self {
+        let context = Context::new(self_value, block, iseq_ref, outer);
+        vm.new_stack_context(context)
+    }
+
     pub fn new_heap(
         self_value: Value,
         block: Block,
@@ -366,14 +480,13 @@ impl ContextRef {
         outer: Option<ContextRef>,
     ) -> Self {
         let mut context = Context::new(self_value, block, iseq_ref, outer);
-        context.on_stack = false;
+        context.on_stack = CtxKind::Heap;
         ContextRef::new(context)
     }
 
-    pub fn new_native() -> Self {
-        let mut context = Context::new_native();
-        context.on_stack = false;
-        ContextRef::new(context)
+    pub fn new_native(vm: &mut VM) -> Self {
+        let context = Context::new_native();
+        vm.new_stack_context(context)
     }
 
     pub fn from_args(
@@ -383,18 +496,30 @@ impl ContextRef {
         args: &Args,
         outer: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
-        let mut context = Context::from_args(vm, self_value, iseq, args, outer)?;
-        context.on_stack = false;
-        Ok(ContextRef::new(context))
+        let context = Context::from_args(vm, self_value, iseq, args, outer)?;
+        Ok(vm.new_stack_context(context))
     }
 
-    pub fn move_to_heap(self) -> Self {
-        if !self.on_stack {
+    /// Move a context on the stack to the heap.
+    pub fn move_to_heap(mut self) -> ContextRef {
+        if self.on_heap() {
             return self;
-        };
-        let mut heap_context = self.dup();
-        heap_context.on_stack = false;
-        heap_context
+        }
+        assert!(self.alive());
+        let mut heap = self.dup();
+        heap.on_stack = CtxKind::Heap;
+        self.on_stack = CtxKind::Dead(heap);
+
+        match heap.outer {
+            Some(c) => {
+                if c.on_stack == CtxKind::Stack {
+                    let c_heap = c.move_to_heap();
+                    heap.outer = Some(c_heap);
+                }
+            }
+            None => {}
+        }
+        heap
     }
 
     pub fn adjust_lvar_size(&mut self) {

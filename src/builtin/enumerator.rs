@@ -153,7 +153,6 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
-    //let fref = &mut eref.fiber;
     let block = match &args.block {
         Block::None => {
             // return Enumerator

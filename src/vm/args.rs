@@ -39,6 +39,13 @@ impl Block {
         }
     }
 
+    pub fn from_u32(id: u32, vm: &mut VM) -> Self {
+        match id {
+            0 => Block::None,
+            i => vm.new_block(i),
+        }
+    }
+
     pub fn is_none(&self) -> bool {
         *self == Block::None
     }

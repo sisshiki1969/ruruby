@@ -55,7 +55,7 @@ impl EnumInfo {
     /// `vm`: VM of created fiber.
     pub fn enumerator_fiber(&self, vm: &mut VM) -> VMResult {
         let method = vm.get_method_from_receiver(self.receiver, self.method)?;
-        let context = ContextRef::new_native();
+        let context = ContextRef::new_native(vm);
         vm.context_push(context);
         let val = vm.eval_method(method, self.receiver, &self.args)?;
         vm.context_pop();

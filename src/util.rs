@@ -119,7 +119,7 @@ impl<T> Clone for Ref<T> {
 
 impl<T> PartialEq for Ref<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        self.as_ptr() == other.as_ptr()
     }
 }
 

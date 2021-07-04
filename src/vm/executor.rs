@@ -16,12 +16,11 @@ pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    //exec_context: Vec<ContextRef>,
     cur_context: Option<ContextRef>,
+    ctx_stack: ContextStack,
     class_context: Vec<(Module, DefineMode)>,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
-    //exception: bool,
     pc: ISeqPos,
     pub handle: Option<FiberHandle>,
 }
@@ -45,11 +44,22 @@ impl DefineMode {
 
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        self.cur_context.iter().for_each(|c| c.mark(alloc));
+        let mut ctx = self.cur_context;
+        while let Some(c) = ctx {
+            c.mark(alloc);
+            ctx = c.caller;
+        }
         //self.exec_context.iter().for_each(|c| c.mark(alloc));
         self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
+    }
+}
+
+// handling cxt_stack
+impl VM {
+    pub fn new_stack_context(&mut self, context: Context) -> ContextRef {
+        self.ctx_stack.push(context)
     }
 }
 
@@ -59,7 +69,7 @@ impl VM {
             globals,
             class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             cur_context: None,
-            //exec_context: vec![],
+            ctx_stack: ContextStack::new(),
             exec_stack: vec![],
             temp_stack: vec![],
             pc: ISeqPos::from(0),
@@ -104,6 +114,7 @@ impl VM {
         VM {
             globals: self.globals,
             cur_context: None,
+            ctx_stack: ContextStack::new(),
             temp_stack: vec![],
             class_context: self.class_context.clone(),
             exec_stack: vec![],
@@ -198,14 +209,17 @@ impl VM {
     }
 
     pub fn context_push(&mut self, mut ctx: ContextRef) {
-        ctx.prev_ctx = self.cur_context;
+        ctx.caller = self.cur_context;
         self.cur_context = Some(ctx);
     }
 
     pub fn context_pop(&mut self) -> Option<ContextRef> {
         match self.cur_context {
             Some(c) => {
-                self.cur_context = c.prev_ctx;
+                self.cur_context = c.caller;
+                if c.on_stack == CtxKind::Stack {
+                    self.ctx_stack.pop(c);
+                }
                 Some(c)
             }
             None => None,
@@ -352,10 +366,10 @@ impl VM {
         let mut ctx = self.cur_context;
         let mut i = 0;
         while let Some(c) = ctx {
-            eprintln!("context: {}", i);
+            eprintln!("context[{}]", i);
             i += 1;
             c.dump();
-            ctx = c.prev_ctx;
+            ctx = c.caller;
         }
         for v in &self.exec_stack {
             eprintln!("stack: {:#?}", *v);
@@ -409,7 +423,7 @@ impl VM {
             match self.run_context_main() {
                 Ok(()) => {
                     let prev_context = self.context_pop().unwrap();
-                    debug_assert_eq!(prev_context.prev_stack_len + 1, self.stack_len());
+                    assert_eq!(prev_context.prev_stack_len + 1, self.stack_len());
                     self.pc = prev_context.prev_pc;
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<--- Ok({:?})", self.stack_top());
@@ -1691,6 +1705,12 @@ impl VM {
         args
     }
 
+    pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {
+        //let ctx = self.context();
+        let ctx = self.move_outer_to_heap(self.context());
+        Block::Block(id.into(), ctx)
+    }
+
     pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
         if self.eval_compare(start, end)?.is_nil() {
             return Err(RubyError::argument("Bad value for range."));
@@ -1743,7 +1763,7 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Block::Block(METHOD_ENUM, self.context());
+        args.block = self.new_block(METHOD_ENUM);
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,
@@ -1752,44 +1772,70 @@ impl VM {
         Ok(Value::enumerator(fiber))
     }
 
+    #[allow(dead_code)]
+    fn check_stack_integrity(&self) {
+        eprintln!("Checking context integlity..");
+        let mut cur = self.cur_context;
+        let mut n = 0;
+        while let Some(c) = cur {
+            eprint!("[{}]:", n);
+            c.pp();
+            assert!(c.alive());
+            let mut o = c.outer;
+            let mut on = 1;
+            while let Some(ctx) = o {
+                eprint!("    [outer:{}]:", on);
+                ctx.pp();
+                assert!(ctx.alive());
+                o = ctx.outer;
+                on += 1;
+            }
+            cur = c.caller;
+            n += 1;
+        }
+        eprintln!("--------------------------------");
+    }
+
     /// Move outer execution contexts on the stack to the heap.
     fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
-        /*let mut stack_context = outer;
-        let mut prev_ctx: Option<ContextRef> = None;
-        let mut iter = self
-            .exec_context
-            .iter_mut()
-            .chain(self.cur_context.iter_mut())
-            .rev();
-        loop {
-            if !stack_context.on_stack {
-                break;
-            };
-            let heap_context = stack_context.move_to_heap();
-            loop {
-                match iter.next() {
-                    None => unreachable!("not found."),
-                    Some(ctx) if *ctx == stack_context => {
-                        assert!(ctx.on_stack);
-                        *ctx = heap_context;
-                        break;
-                    }
-                    _ => {}
-                }
+        if outer.on_heap() {
+            return outer;
+        }
+        let outer_heap = outer.move_to_heap();
+        if let Some(mut c) = self.cur_context {
+            if let CtxKind::Dead(c_heap) = c.on_stack {
+                assert!(c_heap.on_heap());
+                c = c_heap;
+                self.cur_context = Some(c);
             }
-            if let Some(mut ctx) = prev_ctx {
-                (*ctx).outer = Some(heap_context)
-            };
-            prev_ctx = Some(heap_context);
-
-            stack_context = match heap_context.outer {
-                Some(context) => context,
-                None => break,
-            };
-        }*/
-        //eprintln!("****moved.");
-
-        outer
+            while let Some(mut caller) = c.caller {
+                if let CtxKind::Dead(caller_heap) = caller.on_stack {
+                    assert!(caller_heap.on_heap());
+                    caller = caller_heap;
+                    c.caller = Some(caller);
+                }
+                match c.outer {
+                    Some(o) => {
+                        if let CtxKind::Dead(o_heap) = o.on_stack {
+                            assert!(o_heap.on_heap());
+                            c.outer = Some(o_heap);
+                        }
+                    }
+                    None => {}
+                }
+                c = caller;
+            }
+            match c.outer {
+                Some(o) => {
+                    if let CtxKind::Dead(o_heap) = o.on_stack {
+                        assert!(o_heap.on_heap());
+                        c.outer = Some(o_heap);
+                    }
+                }
+                None => {}
+            }
+        };
+        outer_heap
     }
 
     /// Create a new execution context for a block.
@@ -1798,6 +1844,7 @@ impl VM {
         method: MethodId,
         outer: ContextRef,
     ) -> Result<ContextRef, RubyError> {
+        assert!(outer.alive());
         let outer = self.move_outer_to_heap(outer);
         let iseq = method.as_iseq();
         Ok(ContextRef::new_heap(

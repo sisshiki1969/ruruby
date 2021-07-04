@@ -240,8 +240,6 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         args[0] = Value::integer(i);
         vm.eval_block(block, &args)?;
     }
-    //let iter = (0..num).map(|i| Value::integer(i));
-    //vm.eval_block_iter1(block, iter, false)?;
     Ok(self_val)
 }
 

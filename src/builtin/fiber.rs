@@ -21,7 +21,6 @@ fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         Block::Proc(proc) => proc.expect_proc(vm)?.context,
         _ => unreachable!(),
     };
-    assert!(!context.on_stack);
     let val = Value::fiber(vm, context);
     Ok(val)
 }

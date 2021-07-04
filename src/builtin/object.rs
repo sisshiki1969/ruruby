@@ -152,8 +152,7 @@ fn freeze(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //args.check_args_num( 0)?;
-    let context = vm.context();
-    let iseq = context.iseq_ref.unwrap();
+    let iseq = vm.context().iseq_ref.unwrap();
     if let ISeqKind::Method(Some(m)) = iseq.kind {
         let class = iseq.class_defined.last().unwrap();
         let method = match class.superclass() {
@@ -173,15 +172,16 @@ fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 )));
             }
         };
+        let self_value = vm.context().self_value;
         if args.len() == 0 {
             let param_num = iseq.params.param_ident.len();
             let mut args = Args::new0();
             for i in 0..param_num {
-                args.push(context[i]);
+                args.push(vm.context()[i]);
             }
-            vm.eval_method(method, context.self_value, &args)
+            vm.eval_method(method, self_value, &args)
         } else {
-            vm.eval_method(method, context.self_value, &args)
+            vm.eval_method(method, self_value, &args)
         }
     } else {
         return Err(RubyError::nomethod("super called outside of method"));
