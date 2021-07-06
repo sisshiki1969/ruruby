@@ -2,7 +2,7 @@ pub use crate::*;
 use std::ops::{Index, IndexMut, Range};
 
 const LVAR_ARRAY_SIZE: usize = 4;
-const INITIAL_STACK_SIZE: usize = 128;
+const INITIAL_STACK_SIZE: usize = 256;
 
 #[derive(Debug, Clone)]
 pub struct ContextStack {
@@ -25,7 +25,6 @@ impl ContextStack {
 
     /// Push `context` to the virtual stack, and return a context handle.
     pub fn push(&mut self, context: Context) -> ContextRef {
-        self.compress();
         unsafe {
             if self.sp >= INITIAL_STACK_SIZE {
                 panic!("stack overflow")
@@ -37,32 +36,64 @@ impl ContextStack {
         }
     }
 
+    /// Push `context` to the virtual stack, and return a context handle.
+    pub fn push_with(
+        &mut self,
+        self_value: Value,
+        block: Block,
+        iseq: ISeqRef,
+        outer: Option<ContextRef>,
+    ) -> ContextRef {
+        unsafe {
+            if self.sp >= INITIAL_STACK_SIZE {
+                panic!("stack overflow")
+            };
+            let ptr = self.buf.add(self.sp);
+            std::ptr::write(ptr, Context::default());
+            let lvar_num = iseq.lvars;
+            if lvar_num > LVAR_ARRAY_SIZE {
+                let v = vec![Value::uninitialized(); lvar_num - LVAR_ARRAY_SIZE];
+                (*ptr).lvar_vec = v;
+            };
+            (*ptr).self_value = self_value;
+            (*ptr).block = block;
+            (*ptr).iseq_ref = Some(iseq);
+            (*ptr).outer = outer;
+            self.sp += 1;
+            ContextRef::from_ptr(ptr)
+        }
+    }
+
     /// Pop `context` from the virtual stack.
-    pub fn pop(&mut self, context: ContextRef) {
+    pub fn pop(&mut self, _context: ContextRef) {
         unsafe {
             if self.sp == 0 {
                 return;
             }
             let ptr = self.buf.add(self.sp - 1);
-            if context == ContextRef::from_ptr(ptr) {
-                (*ptr).lvar_vec = Vec::new();
-                self.sp -= 1;
+            #[cfg(debug_assertions)]
+            {
+                let ctx = ContextRef::from_ptr(ptr);
+                match ctx.on_stack {
+                    CtxKind::Stack => {
+                        assert_eq!(ctx, _context);
+                    }
+                    CtxKind::Dead(ctx) => {
+                        assert_eq!(ctx, _context);
+                    }
+                    _ => unreachable!("CtxKind::Heap on the stack."),
+                }
             }
+            (*ptr).lvar_vec = Vec::new();
+            self.sp -= 1;
         }
-        self.compress();
     }
 
-    /// Remove contexts which have been moved to heap from the virtual stack.
-    fn compress(&mut self) {
-        while self.sp > 0 {
-            unsafe {
-                let ptr = self.buf.add(self.sp - 1);
-                if (*ptr).alive() {
-                    return;
-                }
-                (*ptr).lvar_vec = Vec::new();
-                self.sp -= 1;
-            }
+    pub fn dump(&self) {
+        eprintln!("dump context stack");
+        for i in 0..self.sp {
+            eprint!("[{}]", i);
+            ContextRef::from_ptr(unsafe { self.buf.add(self.sp - 1 - i) }).pp();
         }
     }
 }
@@ -135,11 +166,8 @@ impl Into<ContextRef> for &Context {
     }
 }
 
-impl GC for Context {
+impl GC for ContextRef {
     fn mark(&self, alloc: &mut Allocator) {
-        if !self.alive() {
-            unreachable!("GC error: Dead context.")
-        }
         self.self_value.mark(alloc);
         match self.iseq_ref {
             Some(iseq_ref) => {
@@ -290,87 +318,6 @@ impl Context {
         }
     }
 
-    fn from_args(
-        vm: &mut VM,
-        self_value: Value,
-        iseq: ISeqRef,
-        args: &Args,
-        outer: Option<ContextRef>,
-    ) -> Result<Self, RubyError> {
-        let mut context = Context::new(self_value, args.block.clone(), iseq, outer);
-        if iseq.opt_flag {
-            if !args.kw_arg.is_nil() {
-                return Err(RubyError::argument("Undefined keyword."));
-            };
-            if iseq.is_block() {
-                context.from_args_opt_block(&iseq.params, args)?;
-            } else {
-                let req_len = iseq.params.req;
-                args.check_args_num(req_len)?;
-                context.copy_from_slice0(args);
-            }
-            return Ok(context);
-        }
-        let params = &iseq.params;
-        let mut keyword_flag = false;
-        let kw = if params.keyword.is_empty() && !params.kwrest {
-            // if no keyword param nor kwrest param exists in formal parameters,
-            // make Hash.
-            args.kw_arg
-        } else {
-            keyword_flag = !args.kw_arg.is_nil();
-            Value::nil()
-        };
-        if !iseq.is_block() {
-            let min = params.req + params.post;
-            let kw = if kw.is_nil() { 0 } else { 1 };
-            if params.rest.is_some() {
-                if min > kw {
-                    args.check_args_min(min - kw)?;
-                }
-            } else {
-                args.check_args_range_ofs(kw, min, min + params.opt)?;
-            }
-        }
-
-        context.set_arguments(args, kw);
-        if params.kwrest || keyword_flag {
-            let mut kwrest = FxIndexMap::default();
-            if keyword_flag {
-                let keyword = args.kw_arg.as_hash().unwrap();
-                for (k, v) in keyword.iter() {
-                    let id = k.as_symbol().unwrap();
-                    match params.keyword.get(&id) {
-                        Some(lvar) => {
-                            context[*lvar] = v;
-                        }
-                        None => {
-                            if params.kwrest {
-                                kwrest.insert(HashKey(k), v);
-                            } else {
-                                return Err(RubyError::argument("Undefined keyword."));
-                            }
-                        }
-                    };
-                }
-            };
-            if let Some(id) = iseq.lvar.kwrest_param() {
-                context[id] = Value::hash_from_map(kwrest);
-            }
-        };
-        if let Some(id) = iseq.lvar.block_param() {
-            context[id] = match &args.block {
-                Block::Block(method, ctx) => {
-                    let proc_context = vm.create_block_context(*method, *ctx)?;
-                    Value::procobj(proc_context)
-                }
-                Block::Proc(proc) => *proc,
-                Block::None => Value::nil(),
-            }
-        }
-        Ok(context)
-    }
-
     fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
         let iseq = self.iseq_ref.unwrap();
         let req_len = iseq.params.req;
@@ -444,7 +391,7 @@ impl Context {
         }
     }
 
-    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) -> Result<(), RubyError> {
+    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) {
         let args_len = args.len();
         let req_len = params.req;
         if args_len == 1 && req_len > 1 {
@@ -452,27 +399,15 @@ impl Context {
                 // if a single array argument is given for the block with multiple formal parameters,
                 // the arguments must be expanded.
                 self.fill_arguments_opt(&ary.elements, req_len);
-                return Ok(());
+                return;
             };
         }
 
         self.fill_arguments_opt(args, req_len);
-        Ok(())
     }
 }
 
 impl ContextRef {
-    pub fn new_stack(
-        self_value: Value,
-        block: Block,
-        iseq_ref: ISeqRef,
-        outer: Option<ContextRef>,
-        vm: &mut VM,
-    ) -> Self {
-        let context = Context::new(self_value, block, iseq_ref, outer);
-        vm.new_stack_context(context)
-    }
-
     pub fn new_heap(
         self_value: Value,
         block: Block,
@@ -489,6 +424,13 @@ impl ContextRef {
         vm.new_stack_context(context)
     }
 
+    pub fn get_current(self) -> Self {
+        match self.on_stack {
+            CtxKind::Dead(c) => c,
+            _ => self,
+        }
+    }
+
     pub fn from_args(
         vm: &mut VM,
         self_value: Value,
@@ -496,8 +438,84 @@ impl ContextRef {
         args: &Args,
         outer: Option<ContextRef>,
     ) -> Result<Self, RubyError> {
-        let context = Context::from_args(vm, self_value, iseq, args, outer)?;
-        Ok(vm.new_stack_context(context))
+        if iseq.opt_flag {
+            if !args.kw_arg.is_nil() {
+                return Err(RubyError::argument("Undefined keyword."));
+            };
+
+            if iseq.is_block() {
+                let mut context =
+                    vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
+                context.from_args_opt_block(&iseq.params, args);
+                return Ok(context);
+            } else {
+                let req_len = iseq.params.req;
+                args.check_args_num(req_len)?;
+                let mut context =
+                    vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
+                context.copy_from_slice0(args);
+                return Ok(context);
+            }
+        }
+        let params = &iseq.params;
+        let mut keyword_flag = false;
+        let kw = if params.keyword.is_empty() && !params.kwrest {
+            // if no keyword param nor kwrest param exists in formal parameters,
+            // make Hash.
+            args.kw_arg
+        } else {
+            keyword_flag = !args.kw_arg.is_nil();
+            Value::nil()
+        };
+        if !iseq.is_block() {
+            let min = params.req + params.post;
+            let kw = if kw.is_nil() { 0 } else { 1 };
+            if params.rest.is_some() {
+                if min > kw {
+                    args.check_args_min(min - kw)?;
+                }
+            } else {
+                args.check_args_range_ofs(kw, min, min + params.opt)?;
+            }
+        }
+
+        let mut context = vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
+        context.set_arguments(args, kw);
+        if params.kwrest || keyword_flag {
+            let mut kwrest = FxIndexMap::default();
+            if keyword_flag {
+                let keyword = args.kw_arg.as_hash().unwrap();
+                for (k, v) in keyword.iter() {
+                    let id = k.as_symbol().unwrap();
+                    match params.keyword.get(&id) {
+                        Some(lvar) => {
+                            context[*lvar] = v;
+                        }
+                        None => {
+                            if params.kwrest {
+                                kwrest.insert(HashKey(k), v);
+                            } else {
+                                return Err(RubyError::argument("Undefined keyword."));
+                            }
+                        }
+                    };
+                }
+            };
+            if let Some(id) = iseq.lvar.kwrest_param() {
+                context[id] = Value::hash_from_map(kwrest);
+            }
+        };
+        if let Some(id) = iseq.lvar.block_param() {
+            context[id] = match &args.block {
+                Block::Block(method, ctx) => {
+                    let proc_context = vm.create_block_context(*method, *ctx);
+                    Value::procobj(proc_context)
+                }
+                Block::Proc(proc) => *proc,
+                Block::None => Value::nil(),
+            }
+        }
+        Ok(context)
     }
 
     /// Move a context on the stack to the heap.

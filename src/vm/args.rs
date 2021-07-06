@@ -14,7 +14,9 @@ pub enum Block {
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
-            Block::Block(_, ctx) => ctx.mark(alloc),
+            Block::Block(_, ctx) => {
+                ctx.get_current().mark(alloc);
+            }
             Block::Proc(v) => v.mark(alloc),
             Block::None => {}
         }

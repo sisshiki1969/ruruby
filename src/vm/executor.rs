@@ -61,6 +61,16 @@ impl VM {
     pub fn new_stack_context(&mut self, context: Context) -> ContextRef {
         self.ctx_stack.push(context)
     }
+
+    pub fn new_stack_context_with(
+        &mut self,
+        self_value: Value,
+        block: Block,
+        iseq: ISeqRef,
+        outer: Option<ContextRef>,
+    ) -> ContextRef {
+        self.ctx_stack.push_with(self_value, block, iseq, outer)
+    }
 }
 
 impl VM {
@@ -213,16 +223,13 @@ impl VM {
         self.cur_context = Some(ctx);
     }
 
-    pub fn context_pop(&mut self) -> Option<ContextRef> {
+    pub fn context_pop(&mut self) {
         match self.cur_context {
             Some(c) => {
                 self.cur_context = c.caller;
-                if c.on_stack == CtxKind::Stack {
-                    self.ctx_stack.pop(c);
-                }
-                Some(c)
+                self.ctx_stack.pop(c);
             }
-            None => None,
+            None => {}
         }
     }
 
@@ -405,26 +412,23 @@ impl VM {
         context.prev_pc = self.pc;
         self.context_push(context);
         self.pc = ISeqPos::from(0);
+        #[cfg(any(feature = "trace", feature = "trace-func"))]
+        {
+            let iseq = context.iseq_ref.unwrap();
+            print!("--->");
+            println!(" {:?} {:?}", iseq.method, iseq.kind);
+        }
         #[cfg(feature = "trace")]
         {
-            let iseq = context.iseq_ref.unwrap();
-            print!("--->");
-            println!(" {:?} {:?}", iseq.method, iseq.kind);
             context.dump();
             eprintln!("  ------------------------------------------------------------------");
-        }
-        #[cfg(feature = "trace-func")]
-        {
-            let iseq = context.iseq_ref.unwrap();
-            print!("--->");
-            println!(" {:?} {:?}", iseq.method, iseq.kind);
         }
         loop {
             match self.run_context_main() {
                 Ok(()) => {
-                    let prev_context = self.context_pop().unwrap();
-                    assert_eq!(prev_context.prev_stack_len + 1, self.stack_len());
-                    self.pc = prev_context.prev_pc;
+                    assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
+                    self.pc = self.context().prev_pc;
+                    self.context_pop();
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                     println!("<--- Ok({:?})", self.stack_top());
                     return Ok(());
@@ -432,11 +436,11 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn | RubyErrorKind::MethodReturn => {
-                            let prev_context = self.context_pop().unwrap();
                             let val = self.stack_pop();
-                            self.set_stack_len(prev_context.prev_stack_len);
+                            self.set_stack_len(self.context().prev_stack_len);
                             self.stack_push(val);
-                            self.pc = prev_context.prev_pc;
+                            self.pc = self.context().prev_pc;
+                            self.context_pop();
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             {
                                 println!("<--- {:?}({:?})", err.kind, self.stack_top());
@@ -476,9 +480,11 @@ impl VM {
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
-                        let prev_context = self.context_pop().unwrap();
-                        self.set_stack_len(prev_context.prev_stack_len);
-                        self.pc = prev_context.prev_pc;
+                        self.set_stack_len(self.context().prev_stack_len);
+                        self.pc = self.context().prev_pc;
+                        //self.check_stack_integrity();
+                        //self.ctx_stack.dump();
+                        self.context_pop();
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         {
                             println!("<--- Err({:?})", err.kind);
@@ -1451,7 +1457,8 @@ impl VM {
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                self.invoke_func(*method, outer.self_value, Some(*outer), args)?;
+                let outer = outer.get_current();
+                self.invoke_func(*method, outer.self_value, Some(outer), args)?;
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args)?,
             _ => unreachable!(),
@@ -1469,7 +1476,8 @@ impl VM {
         let self_val = self_val.into();
         match block {
             Block::Block(method, outer) => {
-                self.invoke_func(*method, self_val, Some(*outer), args)?
+                let outer = outer.get_current();
+                self.invoke_func(*method, self_val, Some(outer), args)?
             }
             Block::Proc(proc) => {
                 let pref = match proc.as_proc() {
@@ -1495,7 +1503,8 @@ impl VM {
         let context = self.get_method_context();
         match &context.block {
             Block::Block(method, ctx) => {
-                self.invoke_func(*method, ctx.self_value, Some(*ctx), args)
+                let ctx = ctx.get_current();
+                self.invoke_func(*method, ctx.self_value, Some(ctx), args)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
             Block::None => return Err(RubyError::local_jump("No block given.")),
@@ -1512,8 +1521,7 @@ impl VM {
             args,
             pref.context.outer,
         )?;
-        self.run_context(context)?;
-        Ok(())
+        self.run_context(context)
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
@@ -1706,8 +1714,7 @@ impl VM {
     }
 
     pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {
-        //let ctx = self.context();
-        let ctx = self.move_outer_to_heap(self.context());
+        let ctx = self.context();
         Block::Block(id.into(), ctx)
     }
 
@@ -1723,7 +1730,7 @@ impl VM {
     pub fn create_proc(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let context = self.create_block_context(*method, *outer)?;
+                let context = self.create_block_context(*method, *outer);
                 Ok(Value::procobj(context))
             }
             Block::Proc(proc) => Ok(proc.dup()),
@@ -1736,7 +1743,7 @@ impl VM {
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let context = self.create_block_context(*method, *outer)?;
+                let context = self.create_block_context(*method, *outer);
                 context.iseq_ref.unwrap().kind = ISeqKind::Method(None);
                 Ok(Value::procobj(context))
             }
@@ -1839,20 +1846,11 @@ impl VM {
     }
 
     /// Create a new execution context for a block.
-    pub fn create_block_context(
-        &mut self,
-        method: MethodId,
-        outer: ContextRef,
-    ) -> Result<ContextRef, RubyError> {
+    pub fn create_block_context(&mut self, method: MethodId, outer: ContextRef) -> ContextRef {
         assert!(outer.alive());
         let outer = self.move_outer_to_heap(outer);
         let iseq = method.as_iseq();
-        Ok(ContextRef::new_heap(
-            outer.self_value,
-            Block::None,
-            iseq,
-            Some(outer),
-        ))
+        ContextRef::new_heap(outer.self_value, Block::None, iseq, Some(outer))
     }
 
     /// Create fancy_regex::Regex from `string`.

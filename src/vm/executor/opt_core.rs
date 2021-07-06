@@ -886,11 +886,11 @@ impl VM {
                 MethodInfo::RubyFunc { iseq } => {
                     let block = Block::from_u32(block, self);
                     if iseq.opt_flag {
-                        let mut context = ContextRef::new_stack(receiver, block, iseq, None, self);
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
                         };
+                        let mut context = self.new_stack_context_with(receiver, block, iseq, None);
                         context.copy_from_slice0(&self.exec_stack[len - args_num..]);
                         self.set_stack_len(len - args_num);
                         self.run_context(context)
