@@ -139,20 +139,14 @@ impl VM {
 
     fn get_method_context(&self) -> ContextRef {
         let mut context = self.context();
-        loop {
-            context = match context.outer {
-                Some(context) => context,
-                None => return context,
-            };
+        while let Some(c) = context.outer {
+            context = c;
         }
+        context
     }
 
     pub fn get_method_iseq(&self) -> ISeqRef {
         self.get_method_context().iseq_ref.unwrap()
-    }
-
-    pub fn latest_context(&self) -> Option<ContextRef> {
-        self.cur_context
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
@@ -181,7 +175,7 @@ impl VM {
     }
 
     pub fn stack_top(&mut self) -> Value {
-        self.exec_stack.last().unwrap().clone()
+        *self.exec_stack.last().unwrap()
     }
 
     fn stack_len(&self) -> usize {
@@ -405,6 +399,12 @@ impl VM {
         }
     }
 
+    fn unwind_context(&mut self) {
+        self.set_stack_len(self.context().prev_stack_len);
+        self.pc = self.context().prev_pc;
+        self.context_pop();
+    }
+
     pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
@@ -426,21 +426,24 @@ impl VM {
         loop {
             match self.run_context_main() {
                 Ok(()) => {
+                    let called = self.context().called;
                     assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
                     self.pc = self.context().prev_pc;
                     self.context_pop();
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
-                    println!("<--- Ok({:?})", self.stack_top());
-                    return Ok(());
+                    {
+                        println!("<--- Ok({:?})", self.stack_top());
+                    }
+                    if called {
+                        return Ok(());
+                    }
                 }
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn | RubyErrorKind::MethodReturn => {
                             let val = self.stack_pop();
-                            self.set_stack_len(self.context().prev_stack_len);
+                            self.unwind_context();
                             self.stack_push(val);
-                            self.pc = self.context().prev_pc;
-                            self.context_pop();
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             {
                                 println!("<--- {:?}({:?})", err.kind, self.stack_top());
@@ -453,7 +456,6 @@ impl VM {
                     if err.info.len() == 0 || context.iseq_ref.unwrap().kind != ISeqKind::Block {
                         err.info.push((self.source_info(), self.get_loc()));
                     }
-                    //eprintln!("{:?}", iseq.exception_table);
                     if let RubyErrorKind::Internal(msg) = &err.kind {
                         eprintln!();
                         err.show_err();
@@ -480,11 +482,9 @@ impl VM {
                         self.stack_push(val);
                     } else {
                         // Exception raised outside of begin-end.
-                        self.set_stack_len(self.context().prev_stack_len);
-                        self.pc = self.context().prev_pc;
                         //self.check_stack_integrity();
                         //self.ctx_stack.dump();
-                        self.context_pop();
+                        self.unwind_context();
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         {
                             println!("<--- Err({:?})", err.kind);
@@ -1466,6 +1466,19 @@ impl VM {
         Ok(self.stack_pop())
     }
 
+    /// Evaluate the method with given `self_val`, `args` and no outer context.
+    pub fn eval_method_with_outer(
+        &mut self,
+        method: MethodId,
+        self_val: impl Into<Value>,
+        outer: ContextRef,
+        args: &Args,
+    ) -> VMResult {
+        let self_val = self_val.into();
+        self.invoke_func(method, self_val, Some(outer), args)?;
+        Ok(self.stack_pop())
+    }
+
     /// Invoke the method with given `self_val` and `args`.
     pub fn invoke_method(
         &mut self,
@@ -1549,7 +1562,7 @@ impl VM {
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    pub fn invoke_func(
+    fn invoke_func(
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,

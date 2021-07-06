@@ -113,6 +113,7 @@ pub struct Context {
     pub cur_pc: ISeqPos,
     pub prev_pc: ISeqPos,
     pub prev_stack_len: usize,
+    pub called: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -199,6 +200,7 @@ impl Default for Context {
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
+            called: true,
         }
     }
 }
@@ -223,6 +225,7 @@ impl Context {
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
+            called: true,
         }
     }
 
@@ -239,6 +242,7 @@ impl Context {
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
+            called: true,
         }
     }
 

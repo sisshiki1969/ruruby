@@ -24,7 +24,22 @@ impl VM {
             self.get_outer_context(*outer)[*lvar as usize] = self.context()[i];
         }
         /// Evaluate expr, and push return value to stack.
-        macro_rules! try_push {
+        macro_rules! try_err {
+            ($eval:expr) => {
+                match $eval {
+                    Ok(()) => {}
+                    Err(err) => match err.kind {
+                        RubyErrorKind::BlockReturn => {}
+                        RubyErrorKind::MethodReturn if self.is_method() => {
+                            return Ok(());
+                        }
+                        _ => return Err(err),
+                    },
+                };
+            };
+        }
+
+        macro_rules! try_send {
             ($eval:expr) => {
                 match $eval {
                     Ok(()) => {}
@@ -645,34 +660,35 @@ impl VM {
                 }
                 Inst::SEND => {
                     let receiver = self.stack_pop();
-                    try_push!(self.vm_send(iseq, receiver));
+                    try_err!(self.vm_send(iseq, receiver));
                 }
                 Inst::SEND_SELF => {
-                    try_push!(self.vm_send(iseq, self_value));
+                    try_err!(self.vm_send(iseq, self_value));
                 }
                 Inst::OPT_SEND => {
                     let receiver = self.stack_pop();
-                    try_push!(self.vm_fast_send(iseq, receiver));
+                    try_send!(self.vm_fast_send(iseq, receiver));
                 }
                 Inst::OPT_SEND_SELF => {
-                    try_push!(self.vm_fast_send(iseq, self_value));
+                    try_send!(self.vm_fast_send(iseq, self_value));
                 }
                 Inst::FOR => {
                     let receiver = self.stack_pop();
                     let block = iseq.read_method(self.pc + 1);
                     let cache = iseq.read32(self.pc + 5);
-                    try_push!(self.vm_for(receiver, block, cache));
+                    try_err!(self.vm_for(receiver, block, cache));
                 }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
                     let args = self.pop_args_to_args(args_num);
-                    try_push!(self.invoke_yield(&args));
+                    try_err!(self.invoke_yield(&args));
                     self.pc += 5;
                 }
                 Inst::DEF_CLASS => {
                     let is_module = iseq.read8(self.pc + 1) == 1;
                     let id = iseq.read_id(self.pc + 2);
                     let method = iseq.read_method(self.pc + 6);
+                    self.pc += 10;
                     let base = self.stack_pop();
                     let super_val = self.stack_pop();
                     let val = self.define_class(base, id, is_module, super_val)?;
@@ -681,34 +697,34 @@ impl VM {
                     iseq.class_defined = self.get_class_defined();
                     let res = self.invoke_method(method, val, &Args::new0());
                     self.class_pop();
-                    try_push!(res);
-                    self.pc += 10;
+                    try_err!(res);
                 }
                 Inst::DEF_SCLASS => {
                     let method = iseq.read_method(self.pc + 1);
+                    self.pc += 5;
                     let singleton = self.stack_pop().get_singleton_class()?;
                     self.class_push(singleton);
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_class_defined();
                     let res = self.invoke_method(method, singleton, &Args::new0());
                     self.class_pop();
-                    try_push!(res);
-                    self.pc += 5;
+                    try_err!(res);
                 }
                 Inst::DEF_METHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_method(self.pc + 5);
+                    self.pc += 9;
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     self.define_method(self_value, id, method);
                     if self.define_mode().module_function {
                         self.define_singleton_method(self_value, id, method)?;
                     };
-                    self.pc += 9;
                 }
                 Inst::DEF_SMETHOD => {
                     let id = iseq.read_id(self.pc + 1);
                     let method = iseq.read_method(self.pc + 5);
+                    self.pc += 9;
                     let mut iseq = method.as_iseq();
                     iseq.class_defined = self.get_method_iseq().class_defined.clone();
                     let singleton = self.stack_pop();
@@ -716,7 +732,6 @@ impl VM {
                     if self.define_mode().module_function {
                         self.define_method(singleton, id, method);
                     };
-                    self.pc += 9;
                 }
                 Inst::TO_S => {
                     let val = self.stack_pop();
