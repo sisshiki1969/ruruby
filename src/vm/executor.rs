@@ -728,6 +728,20 @@ impl VM {
     }
 }
 
+macro_rules! invoke_op_i {
+    ($vm:ident, $iseq:ident, $lhs:expr, $i:ident, $op:ident, $id:expr) => {
+        let val = if $lhs.is_packed_fixnum() {
+            Value::integer($lhs.as_packed_fixnum().$op($i as i64))
+        } else if $lhs.is_packed_num() {
+            Value::float($lhs.as_packed_flonum().$op($i as f64))
+        } else {
+            return $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64));
+        };
+        $vm.stack_push(val);
+        return Ok(());
+    };
+}
+
 macro_rules! invoke_op {
     ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
         let val = if $lhs.is_packed_fixnum() {
@@ -766,9 +780,19 @@ impl VM {
         invoke_op!(self, rhs, lhs, add, IdentId::_ADD);
     }
 
+    fn invoke_addi(&mut self, lhs: Value, i: i32) -> Result<(), RubyError> {
+        use std::ops::Add;
+        invoke_op_i!(self, iseq, lhs, i, add, IdentId::_ADD);
+    }
+
     fn invoke_sub(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         use std::ops::Sub;
         invoke_op!(self, rhs, lhs, sub, IdentId::_SUB);
+    }
+
+    fn invoke_subi(&mut self, lhs: Value, i: i32) -> Result<(), RubyError> {
+        use std::ops::Sub;
+        invoke_op_i!(self, iseq, lhs, i, sub, IdentId::_SUB);
     }
 
     fn invoke_mul(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {

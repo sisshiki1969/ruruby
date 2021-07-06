@@ -101,6 +101,8 @@ impl Inst {
     pub const CMP: u8 = 140;
     pub const NEG: u8 = 141;
 
+    pub const ADDI: u8 = 150;
+    pub const SUBI: u8 = 151;
     pub const EQI: u8 = 152;
     pub const NEI: u8 = 153;
     pub const GTI: u8 = 154;
@@ -151,6 +153,8 @@ impl Inst {
             Inst::CMP => "CMP",
             Inst::NEG => "NEG",
 
+            Inst::ADDI => "ADDI",
+            Inst::SUBI => "SUBI",
             Inst::EQI => "EQI",
             Inst::NEI => "NEI",
             Inst::GTI => "GTI",
@@ -319,6 +323,8 @@ impl Inst {
             | Inst::CONCAT_STRING       // number of items: u32
             | Inst::SINKN               // number of items: u32
             | Inst::TOPN                // number of items: u32
+            | Inst::ADDI                // immediate: i32
+            | Inst::SUBI                // immediate: i32
             | Inst::EQI                 // immediate: i32
             | Inst::NEI                 // immediate: i32
             | Inst::GTI                 // immediate: i32
@@ -364,7 +370,9 @@ impl Inst {
         }
         let iseq = &iseq_ref.iseq;
         match iseq[pc] {
-            Inst::EQI
+            Inst::ADDI
+            | Inst::SUBI
+            | Inst::EQI
             | Inst::NEI
             | Inst::GTI
             | Inst::GEI

@@ -120,11 +120,23 @@ impl VM {
                     self.pc += 1;
                     self.invoke_add(rhs, lhs)?;
                 }
+                Inst::ADDI => {
+                    let lhs = self.stack_pop();
+                    let i = iseq.read32(self.pc + 1) as i32;
+                    self.pc += 5;
+                    self.invoke_addi(lhs, i)?;
+                }
                 Inst::SUB => {
                     let rhs = self.stack_pop();
                     let lhs = self.stack_pop();
                     self.pc += 1;
                     self.invoke_sub(rhs, lhs)?;
+                }
+                Inst::SUBI => {
+                    let lhs = self.stack_pop();
+                    let i = iseq.read32(self.pc + 1) as i32;
+                    self.pc += 5;
+                    self.invoke_subi(lhs, i)?;
                 }
                 Inst::MUL => {
                     let rhs = self.stack_pop();

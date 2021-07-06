@@ -1109,18 +1109,34 @@ impl Codegen {
                     };
                 }
                 match op {
-                    BinOp::Add => {
-                        self.gen(globals, iseq, *lhs, true)?;
-                        self.gen(globals, iseq, *rhs, true)?;
-                        self.save_loc(iseq, loc);
-                        iseq.push(Inst::ADD);
-                    }
-                    BinOp::Sub => {
-                        self.gen(globals, iseq, *lhs, true)?;
-                        self.gen(globals, iseq, *rhs, true)?;
-                        self.save_loc(iseq, loc);
-                        iseq.push(Inst::SUB);
-                    }
+                    BinOp::Add => match &rhs.kind {
+                        NodeKind::Integer(i) if *i as i32 as i64 == *i => {
+                            self.gen(globals, iseq, *lhs, true)?;
+                            self.save_loc(iseq, loc);
+                            iseq.push(Inst::ADDI);
+                            iseq.push32(*i as u32);
+                        }
+                        _ => {
+                            self.gen(globals, iseq, *lhs, true)?;
+                            self.gen(globals, iseq, *rhs, true)?;
+                            self.save_loc(iseq, loc);
+                            iseq.push(Inst::ADD);
+                        }
+                    },
+                    BinOp::Sub => match &rhs.kind {
+                        NodeKind::Integer(i) if *i as i32 as i64 == *i => {
+                            self.gen(globals, iseq, *lhs, true)?;
+                            self.save_loc(iseq, loc);
+                            iseq.push(Inst::SUBI);
+                            iseq.push32(*i as u32);
+                        }
+                        _ => {
+                            self.gen(globals, iseq, *lhs, true)?;
+                            self.gen(globals, iseq, *rhs, true)?;
+                            self.save_loc(iseq, loc);
+                            iseq.push(Inst::SUB);
+                        }
+                    },
                     BinOp::Mul => {
                         self.gen(globals, iseq, *lhs, true)?;
                         self.gen(globals, iseq, *rhs, true)?;
