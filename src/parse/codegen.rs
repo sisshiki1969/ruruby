@@ -791,7 +791,7 @@ impl Codegen {
             if globals.startup_flag {
                 let iseq = id.as_iseq();
                 eprintln!("-----------------------------------------");
-                eprintln!("{:?}", *iseq);
+                eprintln!("[{:?}] {:?}", id, *iseq);
                 eprintln!("{:?}", iseq.forvars);
                 eprint!("local var: ");
                 for (k, v) in iseq.lvar.table() {

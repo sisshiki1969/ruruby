@@ -1,5 +1,14 @@
-def fun
-  a=b=c=d=e=f=g=h=i=j=k=l=m=n=o=p=0
+class A
+  def each
+    for i in 0..2
+      yield i
+    end
+    #raise StopIteration
+  end
 end
 
-1000000.times{fun}
+a = A.new
+
+for elem in a
+  puts elem
+end

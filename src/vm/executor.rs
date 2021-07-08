@@ -40,6 +40,11 @@ impl DefineMode {
     }
 }
 
+pub enum VMResKind {
+    Return,
+    Invoke,
+}
+
 // API's
 
 impl GC for VM {
@@ -437,7 +442,7 @@ impl VM {
         loop {
             match self.run_context_main() {
                 // normal return mode
-                Ok(true) => {
+                Ok(VMResKind::Return) => {
                     let called = self.context().called;
                     // normal return from method.
                     assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
@@ -454,7 +459,7 @@ impl VM {
                     }
                 }
                 // invoke mode
-                Ok(false) => {}
+                Ok(VMResKind::Invoke) => {}
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
@@ -749,7 +754,7 @@ impl VM {
         method_id: IdentId,
         receiver: Value,
         args: &Args,
-    ) -> Result<bool, RubyError> {
+    ) -> Result<VMResKind, RubyError> {
         match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
             Some(method) => {
                 let len = args.len();
@@ -1650,7 +1655,7 @@ impl VM {
         self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
-    ) -> Result<bool, RubyError> {
+    ) -> Result<VMResKind, RubyError> {
         let self_val = self_val.into();
         use MethodInfo::*;
         let val = match MethodRepo::get(method) {
@@ -1666,12 +1671,12 @@ impl VM {
             RubyFunc { iseq } => {
                 let context = ContextRef::from_args(self, self_val, iseq, args, outer)?;
                 self.invoke_new_context(context);
-                return Ok(false);
+                return Ok(VMResKind::Invoke);
             }
             _ => unreachable!(),
         };
         self.stack_push(val);
-        Ok(true)
+        Ok(VMResKind::Return)
     }
 
     // helper methods

@@ -15,7 +15,7 @@ impl VM {
     ///
     /// true: normal mode
     /// false: invoke mode
-    pub fn run_context_main(&mut self) -> Result<bool, RubyError> {
+    pub fn run_context_main(&mut self) -> Result<VMResKind, RubyError> {
         let iseqref = self.context().iseq_ref.unwrap();
         #[cfg(debug_assertions)]
         let kind = iseqref.kind;
@@ -33,7 +33,7 @@ impl VM {
                     Err(err) => match err.kind {
                         RubyErrorKind::BlockReturn => {}
                         RubyErrorKind::MethodReturn if self.is_method() => {
-                            return Ok(true);
+                            return Ok(VMResKind::Return);
                         }
                         _ => return Err(err),
                     },
@@ -44,18 +44,15 @@ impl VM {
         macro_rules! try_send {
             ($eval:expr) => {
                 match $eval {
-                    Ok(mode) => {
-                        if !mode {
-                            return Ok(false);
-                        }
-                    }
+                    Ok(VMResKind::Invoke) => return Ok(VMResKind::Invoke),
                     Err(err) => match err.kind {
                         RubyErrorKind::BlockReturn => {}
                         RubyErrorKind::MethodReturn if self.is_method() => {
-                            return Ok(true);
+                            return Ok(VMResKind::Return);
                         }
                         _ => return Err(err),
                     },
+                    _ => {}
                 };
             };
         }
@@ -83,7 +80,7 @@ impl VM {
                     // - reached the end of the method or block.
                     // - `return` in method.
                     // - `next` in block AND outer of loops.
-                    return Ok(true);
+                    return Ok(VMResKind::Return);
                 }
                 Inst::BREAK => {
                     // - `break`  in block or eval AND outer of loops.
@@ -828,7 +825,7 @@ impl VM {
     /// continue current context -> true
     ///
     /// invoke new context -> false
-    fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<bool, RubyError> {
+    fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<VMResKind, RubyError> {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let kw_rest_num = iseq.read8(self.pc + 7);
@@ -898,7 +895,7 @@ impl VM {
     /// continue current context -> true
     ///
     /// invoke new context -> false
-    fn vm_fast_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<bool, RubyError> {
+    fn vm_fast_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<VMResKind, RubyError> {
         // With block and no keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
@@ -946,7 +943,7 @@ impl VM {
                         self.set_stack_len(len - args_num);
                         self.invoke_new_context(context);
                     }
-                    return Ok(false);
+                    return Ok(VMResKind::Invoke);
                 }
                 _ => unreachable!(),
             },
@@ -958,7 +955,7 @@ impl VM {
             }
         };
         self.stack_push(val);
-        Ok(true)
+        Ok(VMResKind::Return)
     }
 
     /// continue current context -> true
@@ -969,7 +966,7 @@ impl VM {
         receiver: Value,
         method_id: MethodId,
         cache: u32,
-    ) -> Result<bool, RubyError> {
+    ) -> Result<VMResKind, RubyError> {
         let block = self.new_block(method_id);
         let args = Args::new0_block(block);
         let rec_class = receiver.get_class_for_method();
@@ -981,18 +978,18 @@ impl VM {
                 MethodInfo::RubyFunc { iseq } => {
                     let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;
                     self.invoke_new_context(context);
-                    return Ok(false);
+                    return Ok(VMResKind::Invoke);
                 }
                 _ => unreachable!(),
             },
             None => return self.invoke_method_missing(IdentId::EACH, receiver, &args),
         };
         self.stack_push(val);
-        Ok(true)
+        Ok(VMResKind::Return)
     }
 
     /// Invoke the block given to the method with `args`.
-    fn vm_yield(&mut self, args: &Args) -> Result<bool, RubyError> {
+    fn vm_yield(&mut self, args: &Args) -> Result<VMResKind, RubyError> {
         match &self.get_method_context().block {
             Block::Block(method, ctx) => {
                 let ctx = ctx.get_current();
@@ -1000,7 +997,7 @@ impl VM {
             }
             Block::Proc(proc) => {
                 self.exec_proc(*proc, args)?;
-                Ok(false)
+                Ok(VMResKind::Return)
             }
             Block::None => return Err(RubyError::local_jump("No block given.")),
         }

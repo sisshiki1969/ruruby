@@ -547,6 +547,29 @@ fn for7() {
 }
 
 #[test]
+fn for8() {
+    let program = "
+        class A
+            def each
+                for i in 0..2
+                    yield i
+                end
+                #raise StopIteration
+            end
+        end
+
+        a = A.new
+        ary = []
+
+        for elem in a
+            ary << elem
+        end
+        assert [0,1,2], ary
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn while1() {
     let program = "
         assert((a = 0; while a < 5 do puts a; a+=1 end; a), 5)
