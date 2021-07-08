@@ -14,6 +14,7 @@ pub fn init() {
     class.add_builtin_method_by_str("class_variables", class_variables);
     class.add_builtin_method_by_str("const_defined?", const_defined);
     class.add_builtin_method_by_str("instance_methods", instance_methods);
+    class.add_builtin_method_by_str("instance_method", instance_method);
     class.add_builtin_method_by_str("attr_accessor", attr_accessor);
     class.add_builtin_method_by_str("attr", attr_reader);
     class.add_builtin_method_by_str("attr_reader", attr_reader);
@@ -208,6 +209,22 @@ pub(crate) fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMRe
     }
 }
 
+fn instance_method(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let name = args[0].expect_symbol_or_string("1st arg")?;
+    let (method, owner) = match self_val.into_module().search_method_and_owner(name) {
+        Some(m) => m,
+        None => {
+            return Err(RubyError::name(format!(
+                "undefined method `{:?}' for class `{}'",
+                name,
+                self_val.into_module().name()
+            )))
+        }
+    };
+    Ok(Value::unbound_method(name, method, owner))
+}
+
 fn attr_accessor(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     set_attr_accessor(self_val.into_module(), args)
 }
@@ -267,7 +284,7 @@ fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         let mut singleton = class.get_singleton_class();
         for arg in args.iter() {
             let name = arg.expect_string_or_symbol("Args")?;
-            let method = vm.get_method(class, name)?;
+            let method = class.get_method_or_nomethod(name)?;
             singleton.add_method(name, method);
         }
     }
@@ -355,11 +372,11 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn module_alias_method(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
     let new = args[0].expect_string_or_symbol("1st arg")?;
     let org = args[1].expect_string_or_symbol("2nd arg")?;
-    let method = vm.get_method(Module::new(self_val), org)?;
+    let method = Module::new(self_val).get_method_or_nomethod(org)?;
     self_val.into_module().add_method(new, method);
     Ok(self_val)
 }
@@ -609,6 +626,25 @@ mod test {
     assert(true, ary_cmp(A.constants, [:Bar, :Foo]))
     assert(true, ary_cmp(A.instance_methods - Class.instance_methods, [:fn, :fo]))
     assert(true, ary_cmp(A.instance_methods(false), [:fn, :fo]))
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn instance_method() {
+        let program = r#"
+    class A
+      def foo
+        "foo"
+      end
+    end
+    assert UnboundMethod, A.instance_method(:foo).class
+    assert "foo", A.instance_method(:foo).bind_call(A.new)
+    begin
+      A.instance_method(:poo)
+    rescue => ex
+      assert NameError, ex.class
+    end
     "#;
         assert_script(program);
     }

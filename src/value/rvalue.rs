@@ -293,6 +293,14 @@ impl RValue {
         }
     }
 
+    pub fn new_unbound_method(method_info: MethodObjInfo) -> Self {
+        RValue {
+            class: BuiltinClass::unbound_method(),
+            var_table: None,
+            kind: ObjKind::Method(method_info),
+        }
+    }
+
     pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
         let fiber = FiberContext::new_fiber(vm, context);
         RValue {

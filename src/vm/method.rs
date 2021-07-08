@@ -473,7 +473,7 @@ impl MethodCache {
     /// return MethodId of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
-    pub fn get_method(
+    fn get_method(
         &mut self,
         class_version: u32,
         rec_class: Module,
@@ -492,7 +492,7 @@ impl MethodCache {
         {
             MethodPerf::inc_missed();
         }
-        match rec_class.get_method(method) {
+        match rec_class.search_method(method) {
             Some(methodref) => {
                 self.add_entry(rec_class, method, class_version, methodref);
                 Some(methodref)
@@ -642,22 +642,35 @@ impl ISeqInfo {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodObjInfo {
     pub name: IdentId,
-    pub receiver: Value,
+    pub receiver: Option<Value>,
     pub method: MethodId,
+    pub owner: Module,
 }
 
 impl MethodObjInfo {
-    pub fn new(name: IdentId, receiver: Value, method: MethodId) -> Self {
+    pub fn new(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
         MethodObjInfo {
             name,
-            receiver,
+            receiver: Some(receiver),
             method,
+            owner,
+        }
+    }
+
+    pub fn new_unbound(name: IdentId, method: MethodId, owner: Module) -> Self {
+        MethodObjInfo {
+            name,
+            receiver: None,
+            method,
+            owner,
         }
     }
 }
 
 impl GC for MethodObjInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        self.receiver.mark(alloc);
+        if let Some(rec) = self.receiver {
+            rec.mark(alloc);
+        }
     }
 }

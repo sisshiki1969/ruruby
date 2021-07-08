@@ -94,14 +94,24 @@ fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
-fn method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn method(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(id) => id,
         None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
     };
-    let method = vm.get_method_from_receiver(self_val, name)?;
-    let val = Value::method(name, self_val, method);
+    let rec_class = self_val.get_class_for_method();
+    let (method, owner) = match rec_class.search_method_and_owner(name) {
+        Some(m) => m,
+        None => {
+            return Err(RubyError::name(format!(
+                "undefined method `{:?}' for class `{}'",
+                name,
+                rec_class.name()
+            )))
+        }
+    };
+    let val = Value::method(name, self_val, method, owner);
     Ok(val)
 }
 
@@ -200,7 +210,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(RubyError::argument("Must be a symbol.")),
     };
-    let method = vm.get_method_from_receiver(receiver, method_id)?;
+    let method = receiver.get_method_or_nomethod(method_id)?;
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {
@@ -638,11 +648,23 @@ mod test {
     }
 
     #[test]
-    fn object_etc() {
+    fn object_method() {
         let program = r#"
-        #assert 365, -365.method(:abs).call
+        assert 365, -365.method(:abs).call
         assert "RUBY", "Ruby".method(:upcase).call
-        assert_error { "Ruby".method(100) }
+
+        begin
+          "Ruby".method(100)
+        rescue => ex
+          assert TypeError, ex.class
+        end
+
+        begin
+          100.method(:xxx)
+        rescue => ex
+          assert NameError, ex.class
+        end
+
         "#;
         assert_script(program);
     }

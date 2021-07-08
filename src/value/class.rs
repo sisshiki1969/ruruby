@@ -140,14 +140,49 @@ impl Module {
         self.get().get_singleton_class().unwrap()
     }
 
+    /// Get method(MethodId) for class.
+    ///
+    /// If the method was not found, return NoMethodError.
+    pub fn get_method_or_nomethod(self, method_id: IdentId) -> Result<MethodId, RubyError> {
+        match MethodRepo::find_method(self, method_id) {
+            Some(m) => Ok(m),
+            None => Err(RubyError::undefined_method_for_class(method_id, self)),
+        }
+    }
+
     /// Get method for a receiver which class is `self` and `method` (IdentId).
-    pub fn get_method(self, method: IdentId) -> Option<MethodId> {
+    pub fn search_method(self, method: IdentId) -> Option<MethodId> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
             match class.get_instance_method(method) {
                 Some(method) => {
                     return Some(method);
+                }
+                None => match class.upper() {
+                    Some(superclass) => class = superclass,
+                    None => {
+                        if singleton_flag {
+                            singleton_flag = false;
+                            class = self.class();
+                        } else {
+                            return None;
+                        }
+                    }
+                },
+            };
+        }
+    }
+
+    /// Get method for a receiver which class is `self` and `method` (IdentId).
+    /// Returns tupple of method and its owner module.
+    pub fn search_method_and_owner(self, method: IdentId) -> Option<(MethodId, Module)> {
+        let mut class = self;
+        let mut singleton_flag = self.is_singleton();
+        loop {
+            match class.get_instance_method(method) {
+                Some(method) => {
+                    return Some((method, class));
                 }
                 None => match class.upper() {
                     Some(superclass) => class = superclass,

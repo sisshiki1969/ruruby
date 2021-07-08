@@ -31,6 +31,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("to_int", toi);
     class.add_builtin_method_by_str("floor", floor);
+    class.add_builtin_method_by_str("abs", abs);
     class.add_builtin_method_by_str("even?", even);
     class.add_builtin_method_by_str("odd?", odd);
     class.add_builtin_method_by_str("size", size);
@@ -315,6 +316,12 @@ fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     Ok(self_val)
+}
+
+fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let num = self_val.as_integer().unwrap();
+    Ok(Value::integer(num.abs()))
 }
 
 fn tof(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

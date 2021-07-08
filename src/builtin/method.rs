@@ -5,15 +5,28 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("Method", class);
     class.add_builtin_method_by_str("call", call);
     class.add_builtin_method_by_str("[]", call);
+    class.add_builtin_method_by_str("unbind", unbind);
+    class.add_builtin_method_by_str("owner", owner);
     class.into()
 }
 
 pub fn call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let method = match self_val.as_method() {
-        Some(method) => method,
-        None => return Err(RubyError::internal("Expected Method object.")),
-    };
-    let res = vm.eval_method(method.method, method.receiver, args)?;
+    let method = self_val.as_method().unwrap();
+    let res = vm.eval_method(method.method, method.receiver.unwrap(), args)?;
+    Ok(res)
+}
+
+pub fn unbind(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let method = self_val.as_method().unwrap();
+    let res = Value::unbound_method(method.name, method.method, method.owner);
+    Ok(res)
+}
+
+pub fn owner(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let method = self_val.as_method().unwrap();
+    let res = method.owner.into();
     Ok(res)
 }
 
@@ -58,6 +71,24 @@ mod tests {
         m = Foo.new.method(:foo) # => #<Method: Foo#foo>
         assert "foo called with arg 1", m[1]  
         assert "foo called with arg 2", m.call(2) 
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn method_unbind() {
+        let program = r#"
+        class Foo
+          def foo
+            "foo"
+          end
+        end
+        m = Foo.new.method(:foo)
+        assert Foo, m.owner
+        unbound = m.unbind
+        assert UnboundMethod, unbound.class
+        assert :foo, unbound.name
+        assert Foo, unbound.owner
     "#;
         assert_script(program);
     }

@@ -54,10 +54,11 @@ impl EnumInfo {
     /// This BuiltinFunc is called in the fiber thread of a enumerator.
     /// `vm`: VM of created fiber.
     pub fn enumerator_fiber(&self, vm: &mut VM) -> VMResult {
-        let method = vm.get_method_from_receiver(self.receiver, self.method)?;
+        let receiver = self.receiver;
+        let method = receiver.get_method_or_nomethod(self.method)?;
         let context = ContextRef::new_native(vm);
         vm.context_push(context);
-        let val = vm.eval_method(method, self.receiver, &self.args)?;
+        let val = vm.eval_method(method, receiver, &self.args)?;
         vm.context_pop();
         vm.stack_push(val);
         Err(RubyError::stop_iteration("Iteration reached an end."))

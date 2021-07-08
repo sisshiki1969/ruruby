@@ -1342,9 +1342,9 @@ impl VM {
                     Some(val) => *val,
                     None => Value::nil(),
                 },
-                ObjKind::Method(mref) => {
+                ObjKind::Method(mref) if mref.receiver.is_some() => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    return self.exec_method(mref.method, mref.receiver, &args);
+                    return self.exec_method(mref.method, mref.receiver.unwrap(), &args);
                 }
                 _ => {
                     return self.invoke_send1(
@@ -1760,30 +1760,6 @@ impl VM {
     ) -> Result<(), RubyError> {
         target_obj.get_singleton_class()?.add_method(id, method);
         Ok(())
-    }
-
-    /// Get method(MethodId) for class.
-    ///
-    /// If the method was not found, return NoMethodError.
-    pub fn get_method(
-        &mut self,
-        rec_class: Module,
-        method_id: IdentId,
-    ) -> Result<MethodId, RubyError> {
-        match MethodRepo::find_method(rec_class, method_id) {
-            Some(m) => Ok(m),
-            None => Err(RubyError::undefined_method_for_class(method_id, rec_class)),
-        }
-    }
-
-    /// Get method(MethodId) for receiver.
-    pub fn get_method_from_receiver(
-        &mut self,
-        receiver: Value,
-        method_id: IdentId,
-    ) -> Result<MethodId, RubyError> {
-        let rec_class = receiver.get_class_for_method();
-        self.get_method(rec_class, method_id)
     }
 }
 

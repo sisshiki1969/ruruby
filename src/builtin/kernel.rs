@@ -254,7 +254,7 @@ fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 Err(RubyError::none(s))
             } else if args[0].is_class() {
                 if args[0].is_exception_class() {
-                    let method = vm.get_method_from_receiver(args[0], IdentId::NEW)?;
+                    let method = args[0].get_method_or_nomethod(IdentId::NEW)?;
                     let val = vm.eval_method(method, args[0], &Args::new0())?;
                     Err(RubyError::value(val))
                 } else {

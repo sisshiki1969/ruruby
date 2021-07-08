@@ -270,7 +270,10 @@ impl Value {
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
                 ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
                 ObjKind::Proc(p) => format!("#<Proc:0x{:x}>", p.context.id()),
-                ObjKind::Method(_) => format!("Method"),
+                ObjKind::Method(m) => match m.receiver {
+                    Some(_) => format!("#<Method: {:?}#{:?}>", m.owner.name(), m.name),
+                    None => format!("#<UnboundMethod: {:?}#{:?}>", m.owner.name(), m.name),
+                },
                 ObjKind::Enumerator(_) => format!("Enumerator"),
                 ObjKind::Fiber(_) => format!("Fiber"),
                 ObjKind::Time(time) => format!("{:?}", time),
@@ -1092,8 +1095,12 @@ impl Value {
         RValue::new_proc(ProcInfo::new(context)).pack()
     }
 
-    pub fn method(name: IdentId, receiver: Value, method: MethodId) -> Self {
-        RValue::new_method(MethodObjInfo::new(name, receiver, method)).pack()
+    pub fn method(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
+        RValue::new_method(MethodObjInfo::new(name, receiver, method, owner)).pack()
+    }
+
+    pub fn unbound_method(name: IdentId, method: MethodId, owner: Module) -> Self {
+        RValue::new_unbound_method(MethodObjInfo::new_unbound(name, method, owner)).pack()
     }
 
     pub fn fiber(parent_vm: &mut VM, context: ContextRef) -> Self {
@@ -1172,6 +1179,12 @@ impl Value {
                 self.get_class_name()
             ))),
         }
+    }
+
+    /// Get method(MethodId) for receiver.
+    pub fn get_method_or_nomethod(self, method_id: IdentId) -> Result<MethodId, RubyError> {
+        let rec_class = self.get_class_for_method();
+        rec_class.get_method_or_nomethod(method_id)
     }
 }
 

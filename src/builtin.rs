@@ -30,6 +30,7 @@ pub mod structobj;
 pub mod symbol;
 pub mod time;
 pub mod trueclass;
+pub mod unbound_method;
 
 use crate::*;
 use std::cell::RefCell;
@@ -88,6 +89,7 @@ pub struct BuiltinClass {
     pub symbol: Value,
     pub procobj: Value,
     pub method: Value,
+    pub unbound_method: Value,
     pub range: Value,
     pub hash: Value,
     pub regexp: Value,
@@ -117,6 +119,7 @@ impl BuiltinClass {
             symbol: nil,
             procobj: nil,
             method: nil,
+            unbound_method: nil,
             range: nil,
             hash: nil,
             regexp: nil,
@@ -151,7 +154,7 @@ impl BuiltinClass {
         init!(module, class, basicobject, object);
         init_builtin!(float, complex, integer, nilclass, trueclass, falseclass);
         init_builtin!(array, symbol, procobj, range, string, hash);
-        init_builtin!(method, regexp, fiber, enumerator);
+        init_builtin!(method, unbound_method, regexp, fiber, enumerator);
         init!(math, dir, process, gc, structobj, time);
     }
 
@@ -227,6 +230,10 @@ impl BuiltinClass {
 
     pub fn method() -> Module {
         BUILTINS.with(|b| b.borrow().method).into_module()
+    }
+
+    pub fn unbound_method() -> Module {
+        BUILTINS.with(|b| b.borrow().unbound_method).into_module()
     }
 
     pub fn exception() -> Module {

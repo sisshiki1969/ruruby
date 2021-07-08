@@ -656,7 +656,7 @@ impl VM {
                     let receiver = self.stack_pop();
                     let method = iseq.read_id(self.pc + 1);
                     let rec_class = receiver.get_class_for_method();
-                    let is_undef = rec_class.get_method(method).is_none();
+                    let is_undef = rec_class.search_method(method).is_none();
                     self.stack_push(Value::bool(is_undef));
                     self.pc += 5;
                 }

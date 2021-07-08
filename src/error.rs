@@ -212,6 +212,12 @@ impl RubyError {
                         .into_module();
                     Value::exception(err_class, self.clone())
                 }
+                RuntimeErrKind::Name => {
+                    let err_class = BuiltinClass::get_toplevel_constant("NameError")
+                        .unwrap()
+                        .into_module();
+                    Value::exception(err_class, self.clone())
+                }
                 _ => {
                     let standard = BuiltinClass::standard();
                     Value::exception(standard, self.clone())

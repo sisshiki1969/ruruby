@@ -71,6 +71,8 @@ class ZeroDivisionError < StandardError
 end
 class LoadError < StandardError
 end
+class NameError < StandardError
+end
 
 
 class Module
