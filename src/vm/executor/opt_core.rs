@@ -995,10 +995,7 @@ impl VM {
                 let ctx = ctx.get_current();
                 self.invoke_func(*method, ctx.self_value, Some(ctx), args)
             }
-            Block::Proc(proc) => {
-                self.exec_proc(*proc, args)?;
-                Ok(VMResKind::Return)
-            }
+            Block::Proc(proc) => self.invoke_proc(*proc, args),
             Block::None => return Err(RubyError::local_jump("No block given.")),
         }
     }

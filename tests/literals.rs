@@ -171,11 +171,12 @@ fn float_lit1() {
 #[test]
 fn array_lit1() {
     let program = "
-        assert([1,2,3], [1,2,3])
+        assert [1,2,3], [1,2,3]
         a = 100
         @b = 200
         $c = 300
-        assert([100, 200, 300],[a, @b, $c])
+        assert [100, 200, 300], [a, @b, $c]
+        assert [1,2,3], [*(1..3)]
     ";
     assert_script(program);
 }

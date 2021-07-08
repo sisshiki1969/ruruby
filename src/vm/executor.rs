@@ -365,7 +365,6 @@ impl VM {
         Ok(val)
     }
 
-    #[allow(dead_code)]
     #[cfg(not(tarpaulin_include))]
     pub fn dump_context(&self) {
         eprintln!("---dump");
@@ -1591,7 +1590,7 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    /// Invoke the Proc object with given `args`, and push the returned value on the stack.
+    /// Execute the Proc object with given `args`, and push the returned value on the stack.
     pub fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
         let pref = proc.as_proc().unwrap();
         let context = ContextRef::from_args(
@@ -1604,8 +1603,8 @@ impl VM {
         self.run_context(context)
     }
 
-    /// Invoke the Proc object with given `args`, and push the returned value on the stack.
-    pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
+    /// Invoke the Proc object with given `args`.
+    pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<VMResKind, RubyError> {
         let pref = proc.as_proc().unwrap();
         let context = ContextRef::from_args(
             self,
@@ -1615,7 +1614,7 @@ impl VM {
             pref.context.outer,
         )?;
         self.invoke_new_context(context);
-        Ok(())
+        Ok(VMResKind::Invoke)
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
@@ -1904,6 +1903,7 @@ impl VM {
         Ok(Value::enumerator(fiber))
     }
 
+    #[cfg(not(tarpaulin_include))]
     #[allow(dead_code)]
     fn check_stack_integrity(&self) {
         eprintln!("Checking context integlity..");

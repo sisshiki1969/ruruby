@@ -286,7 +286,6 @@ impl Context {
         }
     }
 
-    #[allow(dead_code)]
     #[cfg(not(tarpaulin_include))]
     pub fn pp(&self) {
         println!(
