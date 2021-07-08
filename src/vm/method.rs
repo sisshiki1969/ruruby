@@ -580,7 +580,11 @@ impl std::fmt::Debug for ISeqInfo {
             ISeqKind::Class(id) => format!("Class: {:?}", id),
             ISeqKind::Other => "Other".to_string(),
         };
-        write!(f, "{} opt:{:?}", func_name, self.opt_flag,)
+        write!(
+            f,
+            "{} opt:{:?}\n{:?}",
+            func_name, self.opt_flag, self.exception_table
+        )
     }
 }
 

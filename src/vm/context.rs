@@ -89,6 +89,8 @@ impl ContextStack {
         }
     }
 
+    #[allow(dead_code)]
+    #[cfg(not(tarpaulin_include))]
     pub fn dump(&self) {
         eprintln!("dump context stack");
         for i in 0..self.sp {
@@ -264,13 +266,13 @@ impl Context {
     #[allow(dead_code)]
     #[cfg(not(tarpaulin_include))]
     pub fn dump(&self) {
-        println!(
+        eprintln!(
             "{:?} context:{:?} outer:{:?}",
             self.on_stack, self as *const Context, self.outer
         );
-        println!("  self: {:#?}", self.self_value);
         match self.iseq_ref {
             Some(iseq_ref) => {
+                eprintln!("  iseq: {:?}", *iseq_ref);
                 for i in 0..iseq_ref.lvars {
                     let id = i.into();
                     let (k, _) = iseq_ref
@@ -279,7 +281,8 @@ impl Context {
                         .iter()
                         .find(|(_, v)| **v == id)
                         .unwrap();
-                    println!("  lvar({}): {:?} {:#?}", id.as_u32(), k, self[id]);
+                    eprintln!("  self: {:#?}", self.self_value);
+                    eprintln!("  lvar({}): {:?} {:#?}", id.as_u32(), k, self[id]);
                 }
             }
             None => {}
@@ -547,6 +550,7 @@ impl ContextRef {
         heap
     }
 
+    #[cfg(not(tarpaulin_include))]
     pub fn adjust_lvar_size(&mut self) {
         let len = self.iseq_ref.unwrap().lvars;
         if LVAR_ARRAY_SIZE != len {
