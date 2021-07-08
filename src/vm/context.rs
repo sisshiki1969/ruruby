@@ -257,6 +257,10 @@ impl Context {
         }
     }
 
+    pub fn is_method(&self) -> bool {
+        self.iseq_ref.unwrap().is_method()
+    }
+
     #[allow(dead_code)]
     #[cfg(not(tarpaulin_include))]
     pub fn dump(&self) {

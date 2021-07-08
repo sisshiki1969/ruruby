@@ -160,8 +160,8 @@ impl VM {
         self.context().iseq_ref.unwrap().source_info.path.clone()
     }
 
-    pub fn is_method(&self) -> bool {
-        self.context().iseq_ref.unwrap().is_method()
+    fn is_method(&self) -> bool {
+        self.context().is_method()
     }
 
     pub fn stack_push(&mut self, val: Value) {
@@ -399,15 +399,21 @@ impl VM {
         }
     }
 
+    /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
         self.set_stack_len(self.context().prev_stack_len);
         self.pc = self.context().prev_pc;
         self.context_pop();
     }
 
-    pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
+    /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
+    /// Set the pc to 0.
+    fn invoke_new_context(&mut self, mut context: ContextRef) {
         #[cfg(feature = "perf-method")]
-        MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
+        {
+            MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
+        }
+        context.called = false;
         context.prev_stack_len = self.stack_len();
         context.prev_pc = self.pc;
         self.context_push(context);
@@ -423,73 +429,115 @@ impl VM {
             context.dump();
             eprintln!("  ------------------------------------------------------------------");
         }
+    }
+
+    pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
+        self.invoke_new_context(context);
+        context.called = true;
         loop {
             match self.run_context_main() {
-                Ok(()) => {
+                // normal return mode
+                Ok(true) => {
                     let called = self.context().called;
+                    // normal return from method.
                     assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
                     self.pc = self.context().prev_pc;
                     self.context_pop();
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                     {
-                        println!("<--- Ok({:?})", self.stack_top());
+                        eprintln!("<--- Ok({:?})", self.stack_top());
                     }
                     if called {
                         return Ok(());
+                    } else {
+                        continue;
                     }
                 }
+                // invoke mode
+                Ok(false) => {}
                 Err(mut err) => {
                     match err.kind {
-                        RubyErrorKind::BlockReturn | RubyErrorKind::MethodReturn => {
+                        RubyErrorKind::BlockReturn => {
+                            let called = self.context().called;
+                            #[cfg(any(feature = "trace", feature = "trace-func"))]
+                            {
+                                eprintln!("<--- {:?}({:?})", err.kind, self.stack_top());
+                            }
                             let val = self.stack_pop();
                             self.unwind_context();
                             self.stack_push(val);
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
-                                println!("<--- {:?}({:?})", err.kind, self.stack_top());
+                            if called {
+                                return Err(err);
+                            } else {
+                                continue;
                             }
-                            return Err(err);
+                        }
+                        RubyErrorKind::MethodReturn => {
+                            let val = self.stack_pop();
+                            loop {
+                                if self.context().called {
+                                    #[cfg(any(feature = "trace", feature = "trace-func"))]
+                                    {
+                                        eprintln!("<--- {:?}({:?})", err.kind, val);
+                                    }
+                                    self.unwind_context();
+                                    self.stack_push(val);
+                                    return Err(err);
+                                };
+                                self.unwind_context();
+                                if self.context().is_method() {
+                                    break;
+                                }
+                            }
+                            self.stack_push(val);
+                            continue;
                         }
                         _ => {}
                     }
-                    let context = self.context();
-                    if err.info.len() == 0 || context.iseq_ref.unwrap().kind != ISeqKind::Block {
-                        err.info.push((self.source_info(), self.get_loc()));
-                    }
-                    if let RubyErrorKind::Internal(msg) = &err.kind {
-                        eprintln!();
-                        err.show_err();
-                        err.show_all_loc();
-                        unreachable!("{}", msg);
-                    };
-                    let iseq = context.iseq_ref.unwrap();
-                    let catch = iseq
-                        .exception_table
-                        .iter()
-                        .find(|x| x.include(self.pc.into_usize()));
-                    if let Some(entry) = catch {
-                        // Exception raised inside of begin-end with rescue clauses.
-                        self.pc = entry.dest.into();
-                        match entry.ty {
-                            ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
-                            ExceptionType::Continue => {}
+                    loop {
+                        let context = self.context();
+                        if err.info.len() == 0 || context.iseq_ref.unwrap().kind != ISeqKind::Block
+                        {
+                            err.info.push((self.source_info(), self.get_loc()));
+                        }
+                        if let RubyErrorKind::Internal(msg) = &err.kind {
+                            //eprintln!();
+                            err.show_err();
+                            err.show_all_loc();
+                            unreachable!("{}", msg);
                         };
-                        let val = err.to_exception_val();
-                        #[cfg(any(feature = "trace", feature = "trace-func"))]
-                        {
-                            println!("<--- Exception({:?})", val);
+                        let iseq = context.iseq_ref.unwrap();
+                        let catch = iseq
+                            .exception_table
+                            .iter()
+                            .find(|x| x.include(self.pc.into_usize()));
+                        if let Some(entry) = catch {
+                            // Exception raised inside of begin-end with rescue clauses.
+                            self.pc = entry.dest.into();
+                            match entry.ty {
+                                ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
+                                ExceptionType::Continue => {}
+                            };
+                            let val = err.to_exception_val();
+                            #[cfg(any(feature = "trace", feature = "trace-func"))]
+                            {
+                                eprintln!("<--- Exception({:?})", val);
+                            }
+                            self.stack_push(val);
+                            break;
+                        } else {
+                            // Exception raised outside of begin-end.
+                            //self.check_stack_integrity();
+                            //self.ctx_stack.dump();
+                            #[cfg(any(feature = "trace", feature = "trace-func"))]
+                            {
+                                eprintln!("<--- {:?}", err.kind);
+                            }
+                            self.unwind_context();
+                            if context.called {
+                                return Err(err);
+                            }
                         }
-                        self.stack_push(val);
-                    } else {
-                        // Exception raised outside of begin-end.
-                        //self.check_stack_integrity();
-                        //self.ctx_stack.dump();
-                        self.unwind_context();
-                        #[cfg(any(feature = "trace", feature = "trace-func"))]
-                        {
-                            println!("<--- Err({:?})", err.kind);
-                        }
-                        return Err(err);
                     }
                 }
             }
@@ -646,7 +694,7 @@ impl VM {
         args: &Args,
     ) -> Result<(), RubyError> {
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
-            Some(method) => self.invoke_method(method, receiver, args),
+            Some(method) => self.exec_method(method, receiver, args),
             None => self.send_method_missing(method_id, receiver, args),
         }
     }
@@ -678,21 +726,6 @@ impl VM {
         self.send(method_id, receiver, &args)
     }
 
-    fn send_icache(
-        &mut self,
-        cache: u32,
-        method_id: IdentId,
-        receiver: Value,
-        args: &Args,
-    ) -> Result<(), RubyError> {
-        let rec_class = receiver.get_class_for_method();
-        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => return self.invoke_method(method, receiver, args),
-            None => {}
-        }
-        self.send_method_missing(method_id, receiver, args)
-    }
-
     fn send_method_missing(
         &mut self,
         method_id: IdentId,
@@ -705,7 +738,25 @@ impl VM {
                 let mut new_args = Args::new(len + 1);
                 new_args[0] = Value::symbol(method_id);
                 new_args[1..len + 1].copy_from_slice(args);
-                self.invoke_method(method, receiver, &new_args)
+                self.exec_method(method, receiver, &new_args)
+            }
+            None => Err(RubyError::undefined_method(method_id, receiver)),
+        }
+    }
+
+    fn invoke_method_missing(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+        args: &Args,
+    ) -> Result<bool, RubyError> {
+        match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
+            Some(method) => {
+                let len = args.len();
+                let mut new_args = Args::new(len + 1);
+                new_args[0] = Value::symbol(method_id);
+                new_args[1..len + 1].copy_from_slice(args);
+                self.invoke_func(method, receiver, None, &new_args)
             }
             None => Err(RubyError::undefined_method(method_id, receiver)),
         }
@@ -721,7 +772,7 @@ impl VM {
         match MethodRepo::find_method(class, method) {
             Some(mref) => {
                 let arg = Args::new1(rhs);
-                self.invoke_method(mref, lhs, &arg)
+                self.exec_method(mref, lhs, &arg)
             }
             None => Err(RubyError::undefined_op(format!("{:?}", method), rhs, lhs)),
         }
@@ -1126,7 +1177,7 @@ impl VM {
         }
     }
 
-    fn eval_rescue(&self, val: Value, exceptions: &[Value]) -> Result<bool, RubyError> {
+    fn eval_rescue(&self, val: Value, exceptions: &[Value]) -> bool {
         let mut module = if val.is_class() {
             Module::new(val)
         } else {
@@ -1145,7 +1196,7 @@ impl VM {
                         x.id() == module.id()
                     }
                 }) {
-                    return Ok(true);
+                    return true;
                 }
             };
 
@@ -1154,7 +1205,7 @@ impl VM {
                 None => break,
             }
         }
-        Ok(false)
+        false
     }
 
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
@@ -1289,7 +1340,7 @@ impl VM {
                 },
                 ObjKind::Method(mref) => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    return self.invoke_method(mref.method, mref.receiver, &args);
+                    return self.exec_method(mref.method, mref.receiver, &args);
                 }
                 _ => {
                     return self.invoke_send1(
@@ -1462,7 +1513,7 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.invoke_func(method, self_val, None, args)?;
+        self.exec_func(method, self_val, None, args)?;
         Ok(self.stack_pop())
     }
 
@@ -1475,19 +1526,19 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.invoke_func(method, self_val, Some(outer), args)?;
+        self.exec_func(method, self_val, Some(outer), args)?;
         Ok(self.stack_pop())
     }
 
     /// Invoke the method with given `self_val` and `args`.
-    pub fn invoke_method(
+    pub fn exec_method(
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
         args: &Args,
     ) -> Result<(), RubyError> {
         let self_val = self_val.into();
-        self.invoke_func(method, self_val, None, args)
+        self.exec_func(method, self_val, None, args)
     }
 
     /// Evaluate the block with self_val of outer context, and given `args`.
@@ -1495,9 +1546,9 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = outer.get_current();
-                self.invoke_func(*method, outer.self_value, Some(outer), args)?;
+                self.exec_func(*method, outer.self_value, Some(outer), args)?;
             }
-            Block::Proc(proc) => self.invoke_proc(*proc, args)?,
+            Block::Proc(proc) => self.exec_proc(*proc, args)?,
             _ => unreachable!(),
         }
         Ok(self.stack_pop())
@@ -1514,7 +1565,7 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = outer.get_current();
-                self.invoke_func(*method, self_val, Some(outer), args)?
+                self.exec_func(*method, self_val, Some(outer), args)?
             }
             Block::Proc(proc) => {
                 let pref = match proc.as_proc() {
@@ -1535,17 +1586,17 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    /// Invoke the block given to the method with `args`.
-    pub fn invoke_yield(&mut self, args: &Args) -> Result<(), RubyError> {
-        let context = self.get_method_context();
-        match &context.block {
-            Block::Block(method, ctx) => {
-                let ctx = ctx.get_current();
-                self.invoke_func(*method, ctx.self_value, Some(ctx), args)
-            }
-            Block::Proc(proc) => self.invoke_proc(*proc, args),
-            Block::None => return Err(RubyError::local_jump("No block given.")),
-        }
+    /// Invoke the Proc object with given `args`, and push the returned value on the stack.
+    pub fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
+        let pref = proc.as_proc().unwrap();
+        let context = ContextRef::from_args(
+            self,
+            pref.context.self_value,
+            pref.context.iseq_ref.unwrap(),
+            args,
+            pref.context.outer,
+        )?;
+        self.run_context(context)
     }
 
     /// Invoke the Proc object with given `args`, and push the returned value on the stack.
@@ -1558,7 +1609,38 @@ impl VM {
             args,
             pref.context.outer,
         )?;
-        self.run_context(context)
+        self.invoke_new_context(context);
+        Ok(())
+    }
+
+    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
+    fn exec_func(
+        &mut self,
+        method: MethodId,
+        self_val: impl Into<Value>,
+        outer: Option<ContextRef>,
+        args: &Args,
+    ) -> Result<(), RubyError> {
+        let self_val = self_val.into();
+        use MethodInfo::*;
+        let val = match MethodRepo::get(method) {
+            BuiltinFunc { func, name } => self.exec_native(&func, method, name, self_val, args)?,
+            AttrReader { id } => {
+                args.check_args_num(0)?;
+                self.exec_getter(id, self_val)?
+            }
+            AttrWriter { id } => {
+                args.check_args_num(1)?;
+                self.exec_setter(id, self_val, args[0])?
+            }
+            RubyFunc { iseq } => {
+                let context = ContextRef::from_args(self, self_val, iseq, args, outer)?;
+                return self.run_context(context);
+            }
+            _ => unreachable!(),
+        };
+        self.stack_push(val);
+        Ok(())
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
@@ -1568,38 +1650,41 @@ impl VM {
         self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
-    ) -> Result<(), RubyError> {
+    ) -> Result<bool, RubyError> {
         let self_val = self_val.into();
         use MethodInfo::*;
-        match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => self.invoke_native(&func, method, name, self_val, args),
+        let val = match MethodRepo::get(method) {
+            BuiltinFunc { func, name } => self.exec_native(&func, method, name, self_val, args)?,
             AttrReader { id } => {
                 args.check_args_num(0)?;
-                self.invoke_getter(id, self_val)
+                self.exec_getter(id, self_val)?
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
-                self.invoke_setter(id, self_val, args[0])
+                self.exec_setter(id, self_val, args[0])?
             }
             RubyFunc { iseq } => {
                 let context = ContextRef::from_args(self, self_val, iseq, args, outer)?;
-                self.run_context(context)
+                self.invoke_new_context(context);
+                return Ok(false);
             }
             _ => unreachable!(),
-        }
+        };
+        self.stack_push(val);
+        Ok(true)
     }
 
     // helper methods
 
     /// Invoke the method defined by Rust fn and push the returned value on the stack.
-    fn invoke_native(
+    fn exec_native(
         &mut self,
         func: &BuiltinFunc,
         _method_id: MethodId,
         _name: IdentId,
         self_val: Value,
         args: &Args,
-    ) -> Result<(), RubyError> {
+    ) -> Result<Value, RubyError> {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::EXTERN);
 
@@ -1618,34 +1703,32 @@ impl VM {
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         println!("<--- {:?}", res);
 
-        self.stack_push(res?);
-        Ok(())
+        res
     }
 
-    /// Invoke attr_getter and push the value on the stack.
-    fn invoke_getter(&mut self, id: IdentId, self_val: Value) -> Result<(), RubyError> {
-        match self_val.as_rvalue() {
+    /// Invoke attr_getter and return the value.
+    fn exec_getter(&mut self, id: IdentId, self_val: Value) -> Result<Value, RubyError> {
+        let val = match self_val.as_rvalue() {
             Some(oref) => match oref.get_var(id) {
-                Some(v) => self.stack_push(v),
-                None => self.stack_push(Value::nil()),
+                Some(v) => v,
+                None => Value::nil(),
             },
-            None => self.stack_push(Value::nil()),
+            None => Value::nil(),
         };
-        Ok(())
+        Ok(val)
     }
 
-    /// Invoke attr_setter and push the value on the stack.
-    fn invoke_setter(
+    /// Invoke attr_setter and return the value.
+    fn exec_setter(
         &mut self,
         id: IdentId,
         mut self_val: Value,
         val: Value,
-    ) -> Result<(), RubyError> {
+    ) -> Result<Value, RubyError> {
         match self_val.as_mut_rvalue() {
             Some(oref) => {
                 oref.set_var(id, val);
-                self.stack_push(val);
-                Ok(())
+                Ok(val)
             }
             None => unreachable!("AttrReader must be used only for class instance."),
         }
@@ -1848,20 +1931,17 @@ impl VM {
         let outer_heap = outer.move_to_heap();
         if let Some(mut c) = self.cur_context {
             if let CtxKind::Dead(c_heap) = c.on_stack {
-                assert!(c_heap.on_heap());
                 c = c_heap;
                 self.cur_context = Some(c);
             }
             while let Some(mut caller) = c.caller {
                 if let CtxKind::Dead(caller_heap) = caller.on_stack {
-                    assert!(caller_heap.on_heap());
                     caller = caller_heap;
                     c.caller = Some(caller);
                 }
                 match c.outer {
                     Some(o) => {
                         if let CtxKind::Dead(o_heap) = o.on_stack {
-                            assert!(o_heap.on_heap());
                             c.outer = Some(o_heap);
                         }
                     }
@@ -1872,7 +1952,6 @@ impl VM {
             match c.outer {
                 Some(o) => {
                     if let CtxKind::Dead(o_heap) = o.on_stack {
-                        assert!(o_heap.on_heap());
                         c.outer = Some(o_heap);
                     }
                 }

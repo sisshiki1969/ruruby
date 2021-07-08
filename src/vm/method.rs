@@ -622,8 +622,12 @@ impl ISeqInfo {
     }
 
     pub fn is_method(&self) -> bool {
+        !self.is_block()
+    }
+
+    pub fn is_classdef(&self) -> bool {
         match self.kind {
-            ISeqKind::Method(_) => true,
+            ISeqKind::Class(_) => true,
             _ => false,
         }
     }
