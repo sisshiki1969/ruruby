@@ -8,9 +8,11 @@ pub fn repl_vm() {
     assert_eq!(56, std::mem::size_of::<RValue>());
     #[cfg(debug_assertions)]
     {
-        println!("RV: {}", std::mem::size_of::<RV>());
-        println!("Value: {}", std::mem::size_of::<Value>());
-        println!("Option<Value>: {}", std::mem::size_of::<Option<Value>>());
+        println!("VMResult: {}", std::mem::size_of::<VMResult>());
+        println!("ErrorInfo: {}", std::mem::size_of::<ErrorInfo>());
+        //println!("RV: {}", std::mem::size_of::<RV>());
+        //println!("Value: {}", std::mem::size_of::<Value>());
+        //println!("Option<Value>: {}", std::mem::size_of::<Option<Value>>());
         println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
         println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
         println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
@@ -24,10 +26,10 @@ pub fn repl_vm() {
         println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
         println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
         println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
-        println!(
+        /*println!(
             "Option<MethodId>: {}",
             std::mem::size_of::<Option<MethodId>>()
-        );
+        );*/
     }
     let mut editor = Editor::<()>::new();
     let prompt_body = if cfg!(not(unix)) {

@@ -1,4 +1,5 @@
 pub use crate::*;
+use std::alloc::{alloc, dealloc, Layout};
 use std::ops::{Index, IndexMut, Range};
 
 const LVAR_ARRAY_SIZE: usize = 4;
@@ -10,10 +11,20 @@ pub struct ContextStack {
     sp: usize,
 }
 
+impl Drop for ContextStack {
+    fn drop(&mut self) {
+        let layout = Layout::from_size_align(
+            INITIAL_STACK_SIZE * std::mem::size_of::<Context>(),
+            INITIAL_STACK_SIZE,
+        )
+        .unwrap();
+        unsafe { dealloc(self.buf as *mut _, layout) };
+    }
+}
+
 impl ContextStack {
     /// Allocate new virtual stack.
     pub fn new() -> Self {
-        use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(
             INITIAL_STACK_SIZE * std::mem::size_of::<Context>(),
             INITIAL_STACK_SIZE,
