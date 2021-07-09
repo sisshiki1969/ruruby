@@ -48,7 +48,6 @@ impl Inst {
     pub const SEND_SELF: u8 = 61;
     pub const OPT_SEND: u8 = 66;
     pub const OPT_SEND_SELF: u8 = 67;
-    pub const FOR: u8 = 70;
 
     pub const POP: u8 = 80;
     pub const DUP: u8 = 81;
@@ -200,7 +199,6 @@ impl Inst {
             Inst::SEND_SELF => "SEND_SLF",
             Inst::OPT_SEND => "O_SEND_B",
             Inst::OPT_SEND_SELF => "O_SEND_SLF_B",
-            Inst::FOR => "FOR",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
@@ -346,7 +344,6 @@ impl Inst {
             | Inst::GET_CONST           // IdentId: u32 / cache: u32
             | Inst::OPT_CASE
             | Inst::OPT_CASE2
-            | Inst::FOR                 // method: u32 / cache: u32
             | Inst::DEF_METHOD          // method_id: u32 / method: u32
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u32
             => 9,
@@ -458,10 +455,6 @@ impl Inst {
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5)
-            ),
-            Inst::FOR => format!(
-                "FOR methodref:{:x}",
-                iseq.read32(pc + 1)
             ),
             Inst::CREATE_ARRAY
             | Inst::CREATE_PROC

@@ -136,7 +136,7 @@ impl Default for Value {
 
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.format(2))
+        write!(f, "{}", self.format(3))
     }
 }
 

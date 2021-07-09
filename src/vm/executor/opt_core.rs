@@ -22,9 +22,9 @@ impl VM {
         let iseq = &iseqref.iseq;
         let self_value = self.context().self_value;
         self.gc();
-        for (i, (outer, lvar)) in iseqref.forvars.iter().enumerate() {
+        /*for (i, (outer, lvar)) in iseqref.forvars.iter().enumerate() {
             self.get_outer_context(*outer)[*lvar as usize] = self.context()[i];
-        }
+        }*/
 
         macro_rules! try_err {
             ($eval:expr) => {
@@ -674,13 +674,6 @@ impl VM {
                 Inst::OPT_SEND_SELF => {
                     try_send!(self.vm_fast_send(iseq, self_value));
                 }
-                Inst::FOR => {
-                    let receiver = self.stack_pop();
-                    let block = iseq.read_method(self.pc + 1);
-                    let cache = iseq.read32(self.pc + 5);
-                    self.pc += 9;
-                    try_send!(self.vm_for(receiver, block, cache));
-                }
                 Inst::YIELD => {
                     let args_num = iseq.read32(self.pc + 1) as usize;
                     self.pc += 5;
@@ -953,36 +946,6 @@ impl VM {
                 self.set_stack_len(len - args_num);
                 return self.invoke_method_missing(method_id, receiver, &args);
             }
-        };
-        self.stack_push(val);
-        Ok(VMResKind::Return)
-    }
-
-    /// continue current context -> true
-    ///
-    /// invoke new context -> false
-    fn vm_for(
-        &mut self,
-        receiver: Value,
-        method_id: MethodId,
-        cache: u32,
-    ) -> Result<VMResKind, RubyError> {
-        let block = self.new_block(method_id);
-        let args = Args::new0_block(block);
-        let rec_class = receiver.get_class_for_method();
-        let val = match MethodRepo::find_method_inline_cache(cache, rec_class, IdentId::EACH) {
-            Some(method) => match MethodRepo::get(method) {
-                MethodInfo::BuiltinFunc { func, name } => {
-                    self.exec_native(&func, method, name, receiver, &args)?
-                }
-                MethodInfo::RubyFunc { iseq } => {
-                    let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;
-                    self.invoke_new_context(context);
-                    return Ok(VMResKind::Invoke);
-                }
-                _ => unreachable!(),
-            },
-            None => return self.invoke_method_missing(IdentId::EACH, receiver, &args),
         };
         self.stack_push(val);
         Ok(VMResKind::Return)

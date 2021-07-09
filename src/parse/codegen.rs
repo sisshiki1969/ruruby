@@ -436,16 +436,6 @@ impl Codegen {
         }
     }
 
-    fn gen_for(&mut self, iseq: &mut ISeq, block: MethodId, use_value: bool) {
-        self.save_cur_loc(iseq);
-        iseq.push(Inst::FOR);
-        iseq.push32(block.into());
-        iseq.push32(MethodRepo::add_inline_cache_entry());
-        if !use_value {
-            self.gen_pop(iseq);
-        }
-    }
-
     /// stack: val
     fn gen_assign(
         &mut self,
@@ -692,7 +682,7 @@ impl Codegen {
         use_value: bool,
         kind: ContextKind,
         //name: Option<IdentId>,
-        forvars: Option<Vec<IdentId>>,
+        forvars: Vec<IdentId>,
     ) -> Result<MethodId, RubyError> {
         let id = MethodRepo::add(MethodInfo::default());
         let is_block = !kind.is_method();
@@ -745,18 +735,14 @@ impl Codegen {
             }
         }
 
+        forvars.iter().enumerate().for_each(|(i, id)| {
+            iseq.push(Inst::GET_LOCAL);
+            iseq.push32(i as u32);
+            self.gen_set_local(&mut iseq, *id);
+        });
         self.gen(globals, &mut iseq, node, use_value)?;
-        let forvars = match forvars {
-            None => vec![],
-            Some(forvars) => forvars
-                .iter()
-                .map(|id| {
-                    let (outer, lvar) = self.get_local_var(*id).unwrap();
-                    (outer, lvar.as_u32())
-                })
-                .collect(),
-        };
         let context = self.context_stack.pop().unwrap();
+
         let iseq_sourcemap = context.iseq_sourcemap;
         let exception_table = context.exception_table;
         iseq.gen_return();
@@ -778,7 +764,6 @@ impl Codegen {
                     ContextKind::Class(name) => ISeqKind::Class(name),
                     ContextKind::Method(name) => ISeqKind::Method(name),
                 },
-                forvars,
             )),
         };
 
@@ -792,7 +777,6 @@ impl Codegen {
                 let iseq = id.as_iseq();
                 eprintln!("-----------------------------------------");
                 eprintln!("[{:?}] {:?}", id, *iseq);
-                eprintln!("{:?}", iseq.forvars);
                 eprint!("local var: ");
                 for (k, v) in iseq.lvar.table() {
                     eprint!("{}:{:?} ", v.as_u32(), k);
@@ -1294,7 +1278,7 @@ impl Codegen {
                             lvar,
                             true,
                             ContextKind::Block,
-                            Some(param),
+                            param,
                         )?;
                         self.loop_stack.pop().unwrap();
                         methodref
@@ -1303,7 +1287,7 @@ impl Codegen {
                     _ => unreachable!(),
                 };
                 self.gen(globals, iseq, *iter, true)?;
-                self.gen_for(iseq, block, use_value);
+                self.gen_opt_send(iseq, IdentId::EACH, 0, Some(block), use_value);
             }
             NodeKind::While {
                 cond,
@@ -1701,7 +1685,7 @@ impl Codegen {
                                 lvar,
                                 true,
                                 ContextKind::Block,
-                                None,
+                                vec![],
                             )?;
                             self.loop_stack.pop().unwrap();
                             Some(methodref)
@@ -1798,7 +1782,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Method(Some(id)),
-                    None,
+                    vec![],
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 iseq.push32(id.into());
@@ -1815,7 +1799,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Method(Some(id)),
-                    None,
+                    vec![],
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
@@ -1840,7 +1824,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Class(id),
-                    None,
+                    vec![],
                 )?;
                 self.gen(globals, iseq, *superclass, true)?;
                 self.gen(globals, iseq, *base, true)?;
@@ -1865,7 +1849,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Class(IdentId::get_id("Singleton")),
-                    None,
+                    vec![],
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
                 self.save_loc(iseq, node_loc);
@@ -1964,7 +1948,7 @@ impl Codegen {
                     lvar,
                     true,
                     ContextKind::Block,
-                    None,
+                    vec![],
                 )?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);

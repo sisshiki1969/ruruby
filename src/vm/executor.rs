@@ -286,7 +286,7 @@ impl VM {
             result.lvar_collector,
             true,
             ContextKind::Method(None),
-            None,
+            vec![],
         )?;
         Ok(methodref)
     }
@@ -312,7 +312,7 @@ impl VM {
             result.lvar_collector,
             true,
             ContextKind::Eval,
-            None,
+            vec![],
         )?;
         Ok(method)
     }
@@ -345,7 +345,7 @@ impl VM {
             result.lvar_collector,
             true,
             ContextKind::Method(None),
-            None,
+            vec![],
         )?;
         let iseq = method.as_iseq();
         context.iseq_ref = Some(iseq);
