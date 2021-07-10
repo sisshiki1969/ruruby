@@ -458,6 +458,32 @@ impl ContextRef {
         }
     }
 
+    pub fn from_args_opt_block(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+    ) -> Self {
+        let mut context = vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
+        context.from_args_opt_block(&iseq.params, args);
+        context
+    }
+
+    pub fn from_args_opt_method(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: Option<ContextRef>,
+    ) -> Result<Self, RubyError> {
+        let req_len = iseq.params.req;
+        args.check_args_num(req_len)?;
+        let mut context = vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
+        context.copy_from_slice0(args);
+        Ok(context)
+    }
+
     pub fn from_args(
         vm: &mut VM,
         self_value: Value,
@@ -471,17 +497,9 @@ impl ContextRef {
             };
 
             if iseq.is_block() {
-                let mut context =
-                    vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
-                context.from_args_opt_block(&iseq.params, args);
-                return Ok(context);
+                return Ok(Self::from_args_opt_block(vm, self_value, iseq, args, outer));
             } else {
-                let req_len = iseq.params.req;
-                args.check_args_num(req_len)?;
-                let mut context =
-                    vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer);
-                context.copy_from_slice0(args);
-                return Ok(context);
+                return Self::from_args_opt_method(vm, self_value, iseq, args, outer);
             }
         }
         let params = &iseq.params;

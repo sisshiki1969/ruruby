@@ -1575,6 +1575,76 @@ impl VM {
         Ok(self.stack_pop())
     }
 
+    /// Evaluate the block with self_val of outer context, and given `args`.
+    pub fn eval_block_each1(
+        &mut self,
+        block: &Block,
+        iter: impl Iterator<Item = Value>,
+    ) -> Result<(), RubyError> {
+        let mut args = Args::new1(Value::uninitialized());
+        match block {
+            Block::Block(method, outer) => {
+                let self_val = outer.self_value;
+                use MethodInfo::*;
+                match MethodRepo::get(*method) {
+                    BuiltinFunc { func, name } => {
+                        for v in iter {
+                            args[0] = v;
+                            self.exec_native(&func, *method, name, self_val, &args)?;
+                        }
+                    }
+                    RubyFunc { iseq } => {
+                        if iseq.opt_flag {
+                            for v in iter {
+                                args[0] = v;
+                                let context = ContextRef::from_args_opt_block(
+                                    self,
+                                    self_val,
+                                    iseq,
+                                    &args,
+                                    Some(outer.get_current()),
+                                );
+                                self.run_context(context)?;
+                                self.stack_pop();
+                            }
+                        } else {
+                            for v in iter {
+                                args[0] = v;
+                                let context = ContextRef::from_args(
+                                    self,
+                                    self_val,
+                                    iseq,
+                                    &args,
+                                    Some(outer.get_current()),
+                                )?;
+                                self.run_context(context)?;
+                                self.stack_pop();
+                            }
+                        }
+                    }
+                    _ => unreachable!(),
+                };
+            }
+            Block::Proc(proc) => {
+                let pref = proc.as_proc().unwrap();
+                for v in iter {
+                    args[0] = v;
+                    let context = ContextRef::from_args(
+                        self,
+                        pref.context.self_value,
+                        pref.context.iseq_ref.unwrap(),
+                        &args,
+                        pref.context.outer,
+                    )?;
+                    self.run_context(context)?;
+                    self.stack_pop();
+                }
+            }
+            _ => unreachable!(),
+        };
+        Ok(())
+    }
+
     /// Evaluate the block with given `self_val` and `args`.
     pub fn eval_block_self(
         &mut self,

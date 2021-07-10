@@ -300,9 +300,17 @@ impl MethodRepo {
     }
 
     pub fn print_stats() {
-        eprintln!("+-------------------------------------------+");
-        eprintln!("| Method call stats:                       |");
-        eprintln!("+-------------------------------------------+");
+        eprintln!(
+            "+-------------------------------------------------------------------------------+"
+        );
+        eprintln!("| Method call stats:");
+        eprintln!(
+            "+-------------------------------------------------------------------------------+"
+        );
+        eprintln!(
+            "  MethodId({:>5}) {:>12} {:>15}   info",
+            "id", "exec count", "time"
+        );
         METHODS.with(|m| {
             let mut v: Vec<_> = m
                 .borrow()
@@ -317,7 +325,7 @@ impl MethodRepo {
                 if count.count > 0 {
                     let time = format!("{:?}", count.duration);
                     eprintln!(
-                        "  MethodId: {:>5}  {:>12}  {:>15} {:?}",
+                        "  MethodId({:>5}) {:>12} {:>15}   {:?}",
                         id,
                         count.count,
                         time,
@@ -591,11 +599,7 @@ impl std::fmt::Debug for ISeqInfo {
             ISeqKind::Class(id) => format!("Class: {:?}", id),
             ISeqKind::Other => "Other".to_string(),
         };
-        write!(
-            f,
-            "{} opt:{:?}\n{:?}",
-            func_name, self.opt_flag, self.exception_table
-        )
+        write!(f, "{} opt:{:?}", func_name, self.opt_flag)
     }
 }
 

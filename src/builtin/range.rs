@@ -182,14 +182,13 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
 
-    let mut args = Args::new1(Value::uninitialized());
-    for i in start..end {
+    /*for i in start..end {
         args[0] = Value::integer(i);
-        vm.eval_block(method, &args)?;
-    }
+        vm.eval_block_iter(method, &args)?;
+    }*/
 
-    //let iter = (start..end).map(|i| Value::integer(i));
-    //vm.eval_block_iter1(method, iter, false)?;
+    let iter = (start..end).map(|i| Value::integer(i));
+    vm.eval_block_each1(method, iter)?;
     Ok(self_val)
 }
 

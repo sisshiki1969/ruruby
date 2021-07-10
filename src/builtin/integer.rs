@@ -236,11 +236,8 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if num < 1 {
         return Ok(self_val);
     };
-    let mut args = Args::new1(Value::uninitialized());
-    for i in 0..num {
-        args[0] = Value::integer(i);
-        vm.eval_block(block, &args)?;
-    }
+    let iter = (0..num).map(|i| Value::integer(i));
+    vm.eval_block_each1(block, iter)?;
     Ok(self_val)
 }
 
@@ -257,26 +254,40 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
-        let mut args = Args::new1(Value::uninitialized());
-        for i in num..max + 1 {
-            args[0] = Value::integer(i);
-            vm.eval_block(block, &args)?;
-        }
-        //let iter = (num..max + 1).map(|i| Value::integer(i));
-        //vm.eval_block_iter1(block, iter, false)?;
+        let iter = (num..max + 1).map(|i| Value::integer(i));
+        vm.eval_block_each1(block, iter)?;
     }
     Ok(self_val)
 }
 
+struct Step {
+    cur: i64,
+    limit: i64,
+    step: i64,
+}
+
+impl Iterator for Step {
+    type Item = Value;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.step > 0 && self.cur > self.limit || self.step < 0 && self.limit > self.cur {
+            None
+        } else {
+            let v = Value::integer(self.cur);
+            self.cur += self.step;
+            Some(v)
+        }
+    }
+}
+
 fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
-    let method = match &args.block {
+    let block = match &args.block {
         Block::None => {
             let id = IdentId::get_id("step");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
-        method => method,
+        block => block,
     };
     let start = self_val.as_integer().unwrap();
     let limit = args[0].expect_integer("Limit")?;
@@ -290,16 +301,12 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         1
     };
 
-    let mut arg = Args::new(1);
-    let mut i = start;
-    loop {
-        if step > 0 && i > limit || step < 0 && limit > i {
-            break;
-        }
-        arg[0] = Value::integer(i);
-        vm.eval_block(method, &arg)?;
-        i += step;
-    }
+    let iter = Step {
+        cur: start,
+        step,
+        limit,
+    };
+    vm.eval_block_each1(block, iter)?;
 
     Ok(self_val)
 }
