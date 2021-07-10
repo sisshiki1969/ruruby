@@ -120,7 +120,9 @@ impl FiberHandle {
                 #[cfg(feature = "perf")]
                 vm.globals.perf.get_perf(Perf::INVALID);
                 #[cfg(any(feature = "trace", feature = "trace-func"))]
-                println!("<=== yield Ok({:?})", val);
+                {
+                    eprintln!("<=== yield Ok({:?})", val);
+                }
                 let send_val = Box::into_raw(Box::new(Ok(val)));
                 let val = asm::yield_context(handle.0, send_val);
                 Ok(Value::from(val))
@@ -182,7 +184,9 @@ impl FiberContext {
     /// Resume child fiber.
     pub fn resume(&mut self, val: Value) -> VMResult {
         #[cfg(any(feature = "trace", feature = "trace-func"))]
-        println!("===> resume");
+        {
+            eprintln!("===> resume");
+        }
         let ptr = self as _;
         match self.state {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),

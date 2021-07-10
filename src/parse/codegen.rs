@@ -1975,12 +1975,7 @@ impl Codegen {
 
 impl Codegen {
     fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(msg.into()),
-            self.source_info,
-            0,
-            loc,
-        )
+        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), self.source_info, loc)
     }
 }
 

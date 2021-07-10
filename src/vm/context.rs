@@ -1,9 +1,14 @@
 pub use crate::*;
-use std::alloc::{alloc, dealloc, Layout};
+use std::alloc::{alloc, Layout};
+use std::cell::RefCell;
 use std::ops::{Index, IndexMut, Range};
 
 const LVAR_ARRAY_SIZE: usize = 4;
 const INITIAL_STACK_SIZE: usize = 256;
+
+thread_local!(
+    static CONTEXT_STORE: RefCell<Vec<*mut Context>> = RefCell::new(vec![]);
+);
 
 #[derive(Debug, Clone)]
 pub struct ContextStack {
@@ -13,24 +18,25 @@ pub struct ContextStack {
 
 impl Drop for ContextStack {
     fn drop(&mut self) {
-        let layout = Layout::from_size_align(
-            INITIAL_STACK_SIZE * std::mem::size_of::<Context>(),
-            INITIAL_STACK_SIZE,
-        )
-        .unwrap();
-        unsafe { dealloc(self.buf as *mut _, layout) };
+        CONTEXT_STORE.with(|m| m.borrow_mut().push(self.buf));
+        //unsafe { dealloc(self.buf as *mut _, layout) };
     }
 }
 
 impl ContextStack {
     /// Allocate new virtual stack.
     pub fn new() -> Self {
-        let layout = Layout::from_size_align(
-            INITIAL_STACK_SIZE * std::mem::size_of::<Context>(),
-            INITIAL_STACK_SIZE,
-        )
-        .unwrap();
-        let buf = unsafe { alloc(layout) as *mut Context };
+        let buf = CONTEXT_STORE.with(|m| match m.borrow_mut().pop() {
+            None => {
+                let layout = Layout::from_size_align(
+                    INITIAL_STACK_SIZE * std::mem::size_of::<Context>(),
+                    INITIAL_STACK_SIZE,
+                )
+                .unwrap();
+                unsafe { alloc(layout) as *mut Context }
+            }
+            Some(buf) => buf,
+        });
         Self { buf, sp: 0 }
     }
 
@@ -213,7 +219,7 @@ impl Default for Context {
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
-            called: true,
+            called: false,
         }
     }
 }
@@ -238,7 +244,7 @@ impl Context {
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
-            called: true,
+            called: false,
         }
     }
 
@@ -255,7 +261,7 @@ impl Context {
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
-            called: true,
+            called: false,
         }
     }
 

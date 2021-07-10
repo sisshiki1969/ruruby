@@ -714,6 +714,7 @@ fn case_less_case() {
 fn block_break() {
     let program = "
         assert(100, loop { break 100 })
+        assert(nil, 3.times { break })
     ";
     assert_script(program);
 }

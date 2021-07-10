@@ -527,7 +527,7 @@ impl ISeqParams {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum ISeqKind {
     Other,                   // eval or unnamed method
     Method(Option<IdentId>), // method or lambda
@@ -538,6 +538,18 @@ pub enum ISeqKind {
 impl Default for ISeqKind {
     fn default() -> Self {
         ISeqKind::Other
+    }
+}
+
+impl std::fmt::Debug for ISeqKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Other => write!(f, "Other"),
+            Self::Class(id) => write!(f, r##"Class["{:?}"]"##, id),
+            Self::Method(None) => write!(f, "Method[unnamed]"),
+            Self::Method(Some(id)) => write!(f, r##"Method["{:?}"]"##, id),
+            Self::Block => write!(f, "Block"),
+        }
     }
 }
 

@@ -44,7 +44,6 @@ pub fn repl_vm() {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
-    let mut level = parser.get_context_depth();
     let context = ContextRef::new_heap(
         vm.globals.main_object,
         Block::None,
@@ -53,13 +52,7 @@ pub fn repl_vm() {
     );
     loop {
         let prompt = if temp_script.len() == 0 { ">" } else { "*" };
-        let readline = editor.readline(&format!(
-            "{}{:1}{} {}",
-            prompt_body,
-            level,
-            prompt,
-            " ".repeat(level * 2)
-        ));
+        let readline = editor.readline(&format!("{}{} ", prompt_body, prompt,));
         let line = match readline {
             Ok(line) => {
                 editor.add_history_entry(&line);
@@ -68,7 +61,6 @@ pub fn repl_vm() {
             Err(err) => match err {
                 ReadlineError::Interrupted => {
                     temp_script = String::new();
-                    level = 0;
                     continue;
                 }
                 ReadlineError::Eof => return,
@@ -96,10 +88,8 @@ pub fn repl_vm() {
                         vm.clear();
                     }
                 }
-                level = 0;
             }
             Err(err) => {
-                level = err.level();
                 if RubyErrorKind::ParseErr(ParseErrKind::UnexpectedEOF) == err.kind {
                     continue;
                 }

@@ -26,7 +26,6 @@ impl std::fmt::Debug for RubyError {
 pub struct ErrorInfo {
     pub kind: RubyErrorKind,
     pub info: Vec<(SourceInfoRef, Loc)>,
-    level: usize,
 }
 
 impl std::fmt::Debug for ErrorInfo {
@@ -85,24 +84,14 @@ pub enum RuntimeErrKind {
 }
 
 impl RubyError {
-    pub fn new(kind: RubyErrorKind, level: usize) -> Self {
-        Self(Box::new(ErrorInfo {
-            kind,
-            info: vec![],
-            level,
-        }))
+    pub fn new(kind: RubyErrorKind) -> Self {
+        Self(Box::new(ErrorInfo { kind, info: vec![] }))
     }
 
-    pub fn new_with_info(
-        kind: RubyErrorKind,
-        source_info: SourceInfoRef,
-        level: usize,
-        loc: Loc,
-    ) -> Self {
+    pub fn new_with_info(kind: RubyErrorKind, source_info: SourceInfoRef, loc: Loc) -> Self {
         Self(Box::new(ErrorInfo {
             kind,
             info: vec![(source_info, loc)],
-            level,
         }))
     }
 
@@ -118,16 +107,6 @@ impl RubyError {
 }
 
 impl RubyError {
-    #[cfg(not(tarpaulin_include))]
-    pub fn level(&self) -> usize {
-        self.0.level
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn set_level(&mut self, level: usize) {
-        self.0.level = level;
-    }
-
     pub fn get_location(&self, pos: usize) -> String {
         if let Some(info) = self.0.info.get(pos) {
             info.0.get_location(&self.0.info[pos].1)
@@ -234,17 +213,12 @@ impl RubyError {
 impl RubyError {
     fn new_runtime_err(kind: RuntimeErrKind, message: String) -> Self {
         let kind = RubyErrorKind::RuntimeErr { kind, message };
-        RubyError::new(kind, 0)
+        RubyError::new(kind)
     }
 
-    pub fn new_parse_err(
-        err: ParseErrKind,
-        source_info: SourceInfoRef,
-        level: usize,
-        loc: Loc,
-    ) -> Self {
+    pub fn new_parse_err(err: ParseErrKind, source_info: SourceInfoRef, loc: Loc) -> Self {
         let kind = RubyErrorKind::ParseErr(err);
-        RubyError::new_with_info(kind, source_info, level, loc)
+        RubyError::new_with_info(kind, source_info, loc)
     }
 
     pub fn conv_localjump_err(mut self) -> Self {
@@ -293,11 +267,11 @@ impl RubyError {
     }
 
     pub fn internal(msg: impl Into<String>) -> RubyError {
-        RubyError::new(RubyErrorKind::Internal(msg.into()), 0)
+        RubyError::new(RubyErrorKind::Internal(msg.into()))
     }
 
     pub fn none(msg: impl Into<String>) -> RubyError {
-        RubyError::new(RubyErrorKind::None(msg.into()), 0)
+        RubyError::new(RubyErrorKind::None(msg.into()))
     }
 
     pub fn name(msg: impl Into<String>) -> RubyError {
@@ -366,15 +340,15 @@ impl RubyError {
 
 impl RubyError {
     pub fn method_return() -> RubyError {
-        RubyError::new(RubyErrorKind::MethodReturn, 0)
+        RubyError::new(RubyErrorKind::MethodReturn)
     }
 
     pub fn block_return() -> RubyError {
-        RubyError::new(RubyErrorKind::BlockReturn, 0)
+        RubyError::new(RubyErrorKind::BlockReturn)
     }
 
     pub fn value(val: Value) -> RubyError {
-        RubyError::new(RubyErrorKind::Value(val), 0)
+        RubyError::new(RubyErrorKind::Value(val))
     }
 
     pub fn stop_iteration(msg: impl Into<String>) -> RubyError {

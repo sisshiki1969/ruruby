@@ -8,7 +8,7 @@ use std::{
 const DEFAULT_STACK_SIZE: usize = 1024 * 128;
 
 thread_local!(
-    pub static STACK_STORE: RefCell<Vec<*mut u8>> = RefCell::new(vec![]);
+    static STACK_STORE: RefCell<Vec<*mut u8>> = RefCell::new(vec![]);
 );
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -72,7 +72,9 @@ extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
         FiberKind::Enum(info) => info.enumerator_fiber(&mut fiber_vm),
     };
     #[cfg(any(feature = "trace", feature = "trace-func"))]
-    println!("<=== yield {:?} and terminate fiber.", res);
+    {
+        eprintln!("<=== yield {:?} and terminate fiber.", res);
+    }
     let res = match res {
         Err(err) => match &err.kind {
             RubyErrorKind::MethodReturn => Err(err.conv_localjump_err()),

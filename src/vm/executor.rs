@@ -417,16 +417,15 @@ impl VM {
         {
             MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
         }
-        context.called = false;
         context.prev_stack_len = self.stack_len();
         context.prev_pc = self.pc;
         self.context_push(context);
         self.pc = ISeqPos::from(0);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         {
+            let ch = if context.called { "+++" } else { "---" };
             let iseq = context.iseq_ref.unwrap();
-            print!("--->");
-            println!(" {:?} {:?}", iseq.method, iseq.kind);
+            eprintln!("{}> {:?} {:?}", ch, iseq.method, iseq.kind);
         }
         #[cfg(feature = "trace")]
         {
@@ -436,8 +435,8 @@ impl VM {
     }
 
     pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
-        self.invoke_new_context(context);
         context.called = true;
+        self.invoke_new_context(context);
         loop {
             match self.run_context_main() {
                 // normal return mode
@@ -447,13 +446,18 @@ impl VM {
                     assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
                     self.pc = self.context().prev_pc;
                     self.context_pop();
-                    #[cfg(any(feature = "trace", feature = "trace-func"))]
-                    {
-                        eprintln!("<--- Ok({:?})", self.stack_top());
-                    }
+
                     if called {
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
+                        {
+                            eprintln!("<+++ Ok({:?})", self.stack_top());
+                        }
                         return Ok(());
                     } else {
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
+                        {
+                            eprintln!("<--- Ok({:?})", self.stack_top());
+                        }
                         continue;
                     }
                 }
@@ -463,16 +467,21 @@ impl VM {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
                             let called = self.context().called;
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
-                                eprintln!("<--- {:?}({:?})", err.kind, self.stack_top());
-                            }
+
                             let val = self.stack_pop();
                             self.unwind_context();
                             self.stack_push(val);
                             if called {
+                                #[cfg(any(feature = "trace", feature = "trace-func"))]
+                                {
+                                    eprintln!("<+++ {:?}({:?})", err.kind, val);
+                                }
                                 return Err(err);
                             } else {
+                                #[cfg(any(feature = "trace", feature = "trace-func"))]
+                                {
+                                    eprintln!("<--- {:?}({:?})", err.kind, val);
+                                }
                                 continue;
                             }
                         }
@@ -482,7 +491,7 @@ impl VM {
                                 if self.context().called {
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                                     {
-                                        eprintln!("<--- {:?}({:?})", err.kind, val);
+                                        eprintln!("<+++ {:?}({:?})", err.kind, val);
                                     }
                                     self.unwind_context();
                                     self.stack_push(val);
@@ -492,6 +501,10 @@ impl VM {
                                 if self.context().is_method() {
                                     break;
                                 }
+                            }
+                            #[cfg(any(feature = "trace", feature = "trace-func"))]
+                            {
+                                eprintln!("<--- {:?}({:?})", err.kind, val);
                             }
                             self.stack_push(val);
                             continue;
@@ -533,13 +546,17 @@ impl VM {
                             // Exception raised outside of begin-end.
                             //self.check_stack_integrity();
                             //self.ctx_stack.dump();
+                            self.unwind_context();
+                            if context.called {
+                                #[cfg(any(feature = "trace", feature = "trace-func"))]
+                                {
+                                    eprintln!("<+++ {:?}", err.kind);
+                                }
+                                return Err(err);
+                            }
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             {
                                 eprintln!("<--- {:?}", err.kind);
-                            }
-                            self.unwind_context();
-                            if context.called {
-                                return Err(err);
                             }
                         }
                     }
@@ -2025,10 +2042,6 @@ impl VM {
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
         self.exec_program(absolute_path, program);
-        #[cfg(feature = "emit-iseq")]
-        {
-            self.globals.const_values.dump();
-        }
     }
 
     #[cfg(not(tarpaulin_include))]

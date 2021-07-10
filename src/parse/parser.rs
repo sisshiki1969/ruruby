@@ -550,13 +550,12 @@ impl Parser {
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(msg.into()),
             self.lexer.source_info,
-            0,
             loc,
         )
     }
 
     fn error_eof(&self, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.lexer.source_info, 0, loc)
+        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.lexer.source_info, loc)
     }
 }
 
@@ -581,13 +580,7 @@ impl Parser {
         self.context_stack.push(ParseContext::new_class(Some(
             extern_context.iseq_ref.unwrap().lvar.clone(),
         )));
-        let node = match self.parse_comp_stmt() {
-            Ok(node) => node,
-            Err(mut err) => {
-                err.set_level(self.context_stack.len() - 1);
-                return Err(err);
-            }
-        };
+        let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
 
         let tok = self.peek()?;
@@ -595,8 +588,7 @@ impl Parser {
             let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
         } else {
-            let mut err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
-            err.set_level(0);
+            let err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
             Err(err)
         }
     }

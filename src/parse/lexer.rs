@@ -114,14 +114,13 @@ impl Lexer {
                     .unwrap()
             )),
             self.source_info,
-            0,
             loc,
         )
     }
 
     fn error_eof(&self, pos: usize) -> RubyError {
         let loc = Loc(pos, pos);
-        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, 0, loc)
+        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, loc)
     }
 
     fn error_parse(&self, msg: &str, pos: usize) -> RubyError {
@@ -129,7 +128,6 @@ impl Lexer {
         RubyError::new_parse_err(
             ParseErrKind::SyntaxError(format!("Parse error. '{}'", msg)),
             self.source_info,
-            0,
             loc,
         )
     }

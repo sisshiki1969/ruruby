@@ -240,7 +240,8 @@ impl ConstantValues {
         self.table[id].dup()
     }
 
-    //#[cfg(features = "emit-iseq")]
+    #[cfg(not(tarpaulin_include))]
+    #[cfg(features = "emit-iseq")]
     pub fn dump(&self) {
         for (i, val) in self.table.iter().enumerate() {
             eprintln!("{}:{:?}", i, val);
