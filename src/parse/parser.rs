@@ -76,6 +76,7 @@ impl From<u32> for LvarId {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
     id: usize,
+    pub optkw: Vec<LvarId>,
     table: FxHashMap<IdentId, LvarId>,
     kwrest: Option<LvarId>,
     block: Option<LvarId>,
@@ -86,6 +87,7 @@ impl LvarCollector {
     pub fn new() -> Self {
         LvarCollector {
             id: 0,
+            optkw: vec![],
             table: FxHashMap::default(),
             kwrest: None,
             block: None,
@@ -300,11 +302,15 @@ impl Parser {
 
     /// Add the `id` as a new parameter in the current context.
     /// If a parameter with the same name already exists, return error.
-    fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
-        if self.context_mut().lvar.insert_new(id).is_none() {
-            return Err(self.error_unexpected(loc, "Duplicated argument name."));
+    fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<LvarId, RubyError> {
+        match self.context_mut().lvar.insert_new(id) {
+            Some(lvar) => Ok(lvar),
+            None => Err(self.error_unexpected(loc, "Duplicated argument name.")),
         }
-        Ok(())
+    }
+
+    fn add_kwopt_param(&mut self, lvar: LvarId) {
+        self.context_mut().lvar.optkw.push(lvar);
     }
 
     /// Add the `id` as a new parameter in the current context.
@@ -873,8 +879,8 @@ impl Parser {
             return Ok(lhs);
         }
         if self.consume_punct_no_term(Punct::Assign)? {
-            let mrhs = self.parse_mul_assign_rhs(None)?;
             self.check_lhs(&lhs)?;
+            let mrhs = self.parse_mul_assign_rhs(None)?;
             Ok(Node::new_mul_assign(vec![lhs], mrhs))
         } else if let Some(op) = self.consume_assign_op_no_term()? {
             // <lhs> <assign_op> <arg>
@@ -1307,8 +1313,8 @@ impl Parser {
     fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, RubyError> {
         if !self.supress_acc_assign {
             if self.consume_punct_no_term(Punct::Assign)? {
-                let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
                 self.check_lhs(&lhs)?;
+                let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
                 return Ok(Some(Node::new_mul_assign(vec![lhs.clone()], mrhs)));
             } else if let Some(op) = self.consume_assign_op_no_term()? {
                 return Ok(Some(self.parse_assign_op(lhs.clone(), op)?));
@@ -2360,7 +2366,8 @@ impl Parser {
                         }
                     };
                     args.push(FormalParam::optional(id, default, loc));
-                    self.new_param(id, loc)?;
+                    let lvar = self.new_param(id, loc)?;
+                    self.add_kwopt_param(lvar);
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
                     let next = self.peek_no_term()?.kind;
@@ -2382,7 +2389,8 @@ impl Parser {
                         state = Kind::KeyWord;
                     };
                     args.push(FormalParam::keyword(id, default, loc));
-                    self.new_param(id, loc)?;
+                    let lvar = self.new_param(id, loc)?;
+                    self.add_kwopt_param(lvar);
                 } else {
                     // Required param
                     loc = self.prev_loc();

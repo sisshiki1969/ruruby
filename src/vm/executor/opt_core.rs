@@ -794,14 +794,6 @@ impl VM {
 
                     self.pc += 5;
                 }
-                Inst::REP_UNINIT => {
-                    let mut val = self.stack_pop();
-                    if val.is_uninitialized() {
-                        val = Value::nil()
-                    }
-                    self.stack_push(val);
-                    self.pc += 1;
-                }
                 inst => {
                     return Err(RubyError::internal(format!(
                         "Unimplemented instruction. {}",

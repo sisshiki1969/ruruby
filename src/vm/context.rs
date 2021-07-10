@@ -69,9 +69,12 @@ impl ContextStack {
             std::ptr::write(ptr, Context::default());
             let lvar_num = iseq.lvars;
             if lvar_num > LVAR_ARRAY_SIZE {
-                let v = vec![Value::uninitialized(); lvar_num - LVAR_ARRAY_SIZE];
+                let v = vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE];
                 (*ptr).lvar_vec = v;
             };
+            for i in &iseq.lvar.optkw {
+                (*ptr)[*i] = Value::uninitialized();
+            }
             (*ptr).self_value = self_value;
             (*ptr).block = block;
             (*ptr).iseq_ref = Some(iseq);
@@ -210,7 +213,7 @@ impl Default for Context {
         Context {
             self_value: Value::uninitialized(),
             block: Block::None,
-            lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
+            lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
             lvar_vec: Vec::new(),
             iseq_ref: None,
             outer: None,
@@ -228,14 +231,14 @@ impl Context {
     fn new(self_value: Value, block: Block, iseq_ref: ISeqRef, outer: Option<ContextRef>) -> Self {
         let lvar_num = iseq_ref.lvars;
         let lvar_vec = if lvar_num > LVAR_ARRAY_SIZE {
-            vec![Value::uninitialized(); lvar_num - LVAR_ARRAY_SIZE]
+            vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE]
         } else {
             Vec::new()
         };
         Context {
             self_value,
             block,
-            lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
+            lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
             lvar_vec,
             iseq_ref: Some(iseq_ref),
             outer,
@@ -252,7 +255,7 @@ impl Context {
         Context {
             self_value: Value::nil(),
             block: Block::None,
-            lvar_ary: [Value::uninitialized(); LVAR_ARRAY_SIZE],
+            lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
             lvar_vec: vec![],
             iseq_ref: None,
             outer: None,
@@ -443,6 +446,9 @@ impl ContextRef {
     ) -> Self {
         let mut context = Context::new(self_value, block, iseq_ref, outer);
         context.on_stack = CtxKind::Heap;
+        for i in &iseq_ref.lvar.optkw {
+            context[*i] = Value::uninitialized();
+        }
         ContextRef::new(context)
     }
 

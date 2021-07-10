@@ -1516,7 +1516,7 @@ fn defined() {
     assert(nil, defined? Object * 3)
     assert(nil, defined? Object / 3)
     assert(nil, defined? Object % 3)
-    #assert(nil, defined? ((Object + 3).ee))
+    assert(nil, defined? ((Object + 3).ee))
     assert(nil, defined? Object[2])
     "##;
     assert_script(program);

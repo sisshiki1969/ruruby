@@ -1157,15 +1157,8 @@ impl Codegen {
                     BinOp::Lt => binop_imm!(Inst::LT, Inst::LTI),
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
-                        /*match &lhs.kind {
-                            NodeKind::LocalVar(_) => {
-                                self.gen(globals, iseq, *lhs, true)?;
-                                iseq.push(Inst::REP_UNINIT);
-                            }
-                            _ => self.gen(globals, iseq, *lhs, true)?,
-                        };*/
                         self.gen(globals, iseq, *lhs, true)?;
-                        iseq.push(Inst::REP_UNINIT);
+                        //iseq.push(Inst::REP_UNINIT);
                         self.gen_dup(iseq, 1);
                         let src = iseq.gen_jmp_if_f();
                         self.gen_pop(iseq);

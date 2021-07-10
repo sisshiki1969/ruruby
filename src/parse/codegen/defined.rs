@@ -42,7 +42,7 @@ impl Codegen {
         exceptions: &mut Vec<(ISeqPos, ISeqPos)>,
     ) -> Result<(), RubyError> {
         match &node.kind {
-            NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
+            NodeKind::LocalVar(id) => {
                 match self.get_local_var(*id) {
                     Some((outer, lvar_id)) => {
                         iseq.push(Inst::CHECK_LOCAL);
@@ -54,6 +54,13 @@ impl Codegen {
                         nil_labels.push(iseq.gen_jmp());
                     }
                 };
+                Ok(())
+            }
+            NodeKind::Ident(id) => {
+                iseq.push(Inst::PUSH_SELF);
+                iseq.push(Inst::CHECK_METHOD);
+                iseq.push32((*id).into());
+                nil_labels.push(iseq.gen_jmp_if_t());
                 Ok(())
             }
             NodeKind::GlobalVar(id) => {
@@ -174,6 +181,7 @@ impl Codegen {
 fn defined_str(node: &Node) -> &'static str {
     match &node.kind {
         NodeKind::LocalVar(..) => "local-variable",
+        NodeKind::Ident(_) => "method",
         NodeKind::GlobalVar(..) => "global-variable",
         NodeKind::ClassVar(..) => "class variable",
         NodeKind::Const { .. } | NodeKind::Scope(..) => "constant",
