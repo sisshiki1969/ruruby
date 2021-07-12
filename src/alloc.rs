@@ -306,7 +306,7 @@ impl Allocator {
         self.clear_mark();
         root.mark(self);
         #[cfg(feature = "gc-debug")]
-        eprint!("marked: {}  ", self.mark_counter);
+        eprintln!("marked: {}  ", self.mark_counter);
         self.dealloc_empty_pages();
         self.sweep();
         #[cfg(feature = "gc-debug")]
@@ -372,7 +372,6 @@ impl Allocator {
                 let page = self.pages.remove(len - i - 1);
                 page.free_page();
                 self.free_pages.push(page);
-                //page.dealloc_page();
                 #[cfg(feature = "gc-debug")]
                 eprintln!("dealloc: {:?}", page.as_ptr());
             }
