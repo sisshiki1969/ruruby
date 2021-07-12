@@ -6,6 +6,11 @@ end
 module Enumerable
 end
 
+module Marshal
+  MAJOR_VERSION = 0
+  MINOR_VERSION = 0
+end
+
 class ARGF_CLASS
   include Enumerable
   def argv
@@ -61,6 +66,13 @@ end
 class Errno < StandardError
   class ENOENT; end;
   class ENOTDIR; end;
+  class ENOSYS; end;
+  class ENOTSUP; end;
+  class EACCES; end;
+  class EROFS; end;
+end
+
+class Mutex
 end
 
 class RangeError < StandardError

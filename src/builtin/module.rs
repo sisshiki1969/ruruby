@@ -33,6 +33,8 @@ pub fn init() {
     class.add_builtin_method_by_str("private", private);
     class.add_builtin_method_by_str("protected", protected);
     class.add_builtin_method_by_str("include?", include_);
+    class.add_builtin_method_by_str("deprecate_constant", deprecate_constant);
+    class.add_builtin_method_by_str("private_class_method", private_class_method);
 }
 
 /// Create new module.
@@ -398,6 +400,14 @@ fn include_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let val = Module::new(self_val);
     let module = args[0].expect_module("1st arg")?;
     Ok(Value::bool(val.include_module(module)))
+}
+
+fn deprecate_constant(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    Ok(self_val)
+}
+
+fn private_class_method(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    Ok(self_val)
 }
 
 #[cfg(test)]
