@@ -38,6 +38,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("sum", sum);
     class.add_builtin_method_by_str("upcase", upcase);
     class.add_builtin_method_by_str("chomp", chomp);
+    class.add_builtin_method_by_str("chomp!", chomp_);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("<", lt);
     class.add_builtin_method_by_str(">", gt);
@@ -742,11 +743,41 @@ fn upcase(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(res))
 }
 
+/// String#chomp
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/chomp.html
 fn chomp(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    args.check_args_range(0, 1)?;
+    let rs = if args.len() == 0 {
+        "\n".to_string()
+    } else {
+        let mut arg = args[0];
+        if arg.is_nil() {
+            return Ok(self_val);
+        }
+        arg.expect_string("1st arg")?.to_owned()
+    };
     let self_ = self_val.expect_string("Receiver")?;
-    let res = self_.trim_end_matches('\n').to_string();
+    let res = self_.trim_end_matches(&rs).to_string();
     Ok(Value::string(res))
+}
+
+/// String#chomp!
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/chomp=21.html
+fn chomp_(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let rs = if args.len() == 0 {
+        "\n".to_string()
+    } else {
+        let mut arg = args[0];
+        if arg.is_nil() {
+            return Ok(self_val);
+        }
+        arg.expect_string("1st arg")?.to_owned()
+    };
+    let self_ = self_val.expect_string("Receiver")?;
+    let res = self_.trim_end_matches(&rs).to_string();
+    *self_val.as_mut_rstring().unwrap() = RString::from(res);
+    Ok(self_val)
 }
 
 fn toi(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -1287,10 +1318,23 @@ mod test {
     #[test]
     fn string_chomp() {
         let program = r#"
-        assert "Ruby", "Ruby\n\n\n".chomp
+        a = "Ruby\n\n\n"
+        assert "Ruby", a.chomp
+        assert "Ruby\n\n\n", a
+        assert "R", a.chomp("uby\n\n\n")
+        assert "Ruby\n\n\n", a
+        assert "Ruby\n\n", "Ruby\n\n".chomp!(nil)
+
         a = ""
         [82, 117, 98, 121, 10, 10, 10].map{ |elem| a += elem.chr }
         assert "Ruby", a.chomp
+
+        a = "Ruby\n\n"
+        assert "Ruby", a.chomp!
+        assert "Ruby", a
+        assert "R", a.chomp!("uby")
+        assert "R", a
+        assert "Ruby\n\n", "Ruby\n\n".chomp!(nil)
         "#;
         assert_script(program);
     }
