@@ -37,6 +37,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("each_char", each_char);
     class.add_builtin_method_by_str("sum", sum);
     class.add_builtin_method_by_str("upcase", upcase);
+    class.add_builtin_method_by_str("replace", replace);
     class.add_builtin_method_by_str("chomp", chomp);
     class.add_builtin_method_by_str("chomp!", chomp_);
     class.add_builtin_method_by_str("to_i", toi);
@@ -773,6 +774,16 @@ fn upcase(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(res))
 }
 
+/// String#replace
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/replace.html
+fn replace(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let self_ = self_val.as_mut_rstring().unwrap();
+    let mut arg0 = args[0];
+    *self_ = RString::from(arg0.expect_string("1st arg")?);
+    Ok(self_val)
+}
+
 /// String#chomp
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/chomp.html
 fn chomp(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -1350,6 +1361,16 @@ mod test {
         a = ""
         [114, 117, 98, 121, 32, 105, 115, 32, 103, 114, 101, 97, 116, 46].map{ |elem| a += elem.chr }
         assert "RUBY IS GREAT.", a.upcase
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_replace() {
+        let program = r#"
+        str = "foo"
+        assert "bar", str.replace "bar"
+        assert "bar", str
         "#;
         assert_script(program);
     }
