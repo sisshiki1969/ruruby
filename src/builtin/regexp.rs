@@ -9,11 +9,15 @@ use std::rc::Rc;
 pub struct RegexpInfo(Rc<Regex>);
 
 impl RegexpInfo {
+    /// Create `RegexpInfo` from `escaped_str` escaping all meta characters.
     pub fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
         let string = regex::escape(escaped_str);
         RegexpInfo::from_string(globals, &string)
     }
 
+    /// Create `RegexpInfo` from `reg_str`.
+    /// The first `\\Z\z` in `reg_str` is replaced by '\z' for compatibility issue
+    /// between fancy_regex crate and Regexp class of Ruby.
     pub fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
         let conv = Regex::new(r"\\Z\z").unwrap();
         let reg_str = if let Some(mat) = conv.find(reg_str).unwrap() {
@@ -26,7 +30,6 @@ impl RegexpInfo {
         match globals.regexp_cache.get(&reg_str) {
             Some(re) => Ok(RegexpInfo(re.clone())),
             None => {
-                //eprintln!("new: {}", reg_str);
                 let regex = Rc::new(Regex::new(&reg_str)?);
                 globals
                     .regexp_cache
@@ -37,158 +40,15 @@ impl RegexpInfo {
     }
 }
 
-impl RegexpInfo {
-    /// Replace all matches for `self` in `given` string with `replace`.
-    ///
-    /// ### return
-    /// (replaced:String, is_replaced?:bool)
-    pub fn replace_repeat(
-        &self,
-        vm: &mut VM,
-        given: &str,
-        replace: &str,
-    ) -> Result<(String, bool), RubyError> {
-        let mut range = vec![];
-        let mut i = 0;
-        loop {
-            if i >= given.len() {
-                break;
-            }
-            match self.captures_from_pos(given, i) {
-                Ok(None) => break,
-                Ok(Some(captures)) => {
-                    let m = captures.get(0).unwrap();
-                    // the length of matched string can be 0.
-                    // this is neccesary to avoid infinite loop.
-                    i = if m.end() == m.start() {
-                        m.end() + 1
-                    } else {
-                        m.end()
-                    };
-                    range.push((m.start(), m.end()));
-                    //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
-                    RegexpInfo::get_captures(vm, &captures, given);
-                }
-                Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
-            };
-        }
-        let mut res = given.to_string();
-        for (start, end) in range.iter().rev() {
-            res.replace_range(start..end, replace);
-        }
-        Ok((res, range.len() != 0))
-    }
-
-    /// Replaces the leftmost-first match for `self` in `given` string with `replace`.
-    ///
-    /// ### return
-    /// replaced:String
-    pub fn replace_once<'a>(
-        &'a self,
-        vm: &mut VM,
-        given: &'a str,
-        replace: &str,
-    ) -> Result<(String, Option<Captures>), RubyError> {
-        match self.captures(given) {
-            Ok(None) => Ok((given.to_string(), None)),
-            Ok(Some(captures)) => {
-                let mut res = given.to_string();
-                let m = captures.get(0).unwrap();
-                RegexpInfo::get_captures(vm, &captures, given);
-                let mut rep = "".to_string();
-                let mut escape = false;
-                for ch in replace.chars() {
-                    if escape {
-                        match ch {
-                            '0'..='9' => {
-                                let i = ch as usize - '0' as usize;
-                                match captures.get(i) {
-                                    Some(m) => rep += m.as_str(),
-                                    None => {}
-                                };
-                            }
-                            _ => rep.push(ch),
-                        };
-                        escape = false;
-                    } else {
-                        if ch != '\\' {
-                            rep.push(ch);
-                        } else {
-                            escape = true;
-                        };
-                    }
-                }
-                res.replace_range(m.start()..m.end(), &rep);
-                Ok((res, Some(captures)))
-            }
-            Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
-        }
-    }
-}
-
-impl PartialEq for RegexpInfo {
-    fn eq(&self, other: &Self) -> bool {
-        if Rc::ptr_eq(&self.0, &other.0) {
-            return true;
-        }
-        self.as_str() == other.as_str()
-    }
-}
-
-impl std::ops::Deref for RegexpInfo {
-    type Target = Regex;
-    fn deref(&self) -> &Regex {
-        &self.0
-    }
-}
-
-pub fn init() -> Value {
-    let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Regexp", class);
-    class.add_builtin_class_method("new", regexp_new);
-    class.add_builtin_class_method("compile", regexp_new);
-    class.add_builtin_class_method("escape", regexp_escape);
-    class.add_builtin_class_method("quote", regexp_escape);
-    class.add_builtin_method_by_str("=~", regexp_match);
-    class.into()
-}
-
-// Class methods
-
-fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut arg0 = args[0];
-    let string = arg0.expect_string("1st arg")?;
-    let val = Value::regexp_from(vm, string)?;
-    Ok(val)
-}
-
-fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut arg0 = args[0];
-    let string = arg0.expect_string("1st arg")?;
-    let regexp = Value::string(regex::escape(string));
-    Ok(regexp)
-}
-
-fn regexp_match(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut args0 = args[0];
-    let regex = self_val.as_regexp().unwrap();
-    let given = args0.expect_string("1st Arg")?;
-    let res = match RegexpInfo::find_one(vm, &regex, given).unwrap() {
-        Some(mat) => Value::integer(mat.start() as i64),
-        None => Value::nil(),
-    };
-    return Ok(res);
-}
-
-// Instance methods
-
 // Utility methods
 
 impl RegexpInfo {
-    fn get_captures(vm: &mut VM, captures: &Captures, given: &str) {
+    /// Save captured strings to special variables.
+    /// $n (n:0,1,2,3...) <- The string which matched with nth parenthesis
+    /// in the last successful match.
+    /// $& <- The string which matched successfully at last.
+    /// $' <- The string after $&.
+    pub fn get_captures(vm: &mut VM, captures: &Captures, given: &str) {
         let id1 = IdentId::get_id("$&");
         let id2 = IdentId::get_id("$'");
         match captures.get(0) {
@@ -395,7 +255,7 @@ impl RegexpInfo {
     }
 
     /// Find the leftmost-first match for `given`.
-    /// Returns Matchs.
+    /// Returns `Match`s.
     pub fn find_one<'a>(
         vm: &mut VM,
         re: &Regex,
@@ -452,6 +312,154 @@ impl RegexpInfo {
         Ok(ary)
     }
 }
+
+impl RegexpInfo {
+    /// Replace all matches for `self` in `given` string with `replace`.
+    ///
+    /// ### return
+    /// (replaced:String, is_replaced?:bool)
+    pub fn replace_repeat(
+        &self,
+        vm: &mut VM,
+        given: &str,
+        replace: &str,
+    ) -> Result<(String, bool), RubyError> {
+        let mut range = vec![];
+        let mut i = 0;
+        loop {
+            if i >= given.len() {
+                break;
+            }
+            match self.captures_from_pos(given, i) {
+                Ok(None) => break,
+                Ok(Some(captures)) => {
+                    let m = captures.get(0).unwrap();
+                    // the length of matched string can be 0.
+                    // this is neccesary to avoid infinite loop.
+                    i = if m.end() == m.start() {
+                        m.end() + 1
+                    } else {
+                        m.end()
+                    };
+                    range.push((m.start(), m.end()));
+                    //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
+                    RegexpInfo::get_captures(vm, &captures, given);
+                }
+                Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
+            };
+        }
+        let mut res = given.to_string();
+        for (start, end) in range.iter().rev() {
+            res.replace_range(start..end, replace);
+        }
+        Ok((res, range.len() != 0))
+    }
+
+    /// Replaces the leftmost-first match for `self` in `given` string with `replace`.
+    ///
+    /// ### return
+    /// replaced:String
+    pub fn replace_once<'a>(
+        &'a self,
+        vm: &mut VM,
+        given: &'a str,
+        replace: &str,
+    ) -> Result<(String, Option<Captures>), RubyError> {
+        match self.captures(given) {
+            Ok(None) => Ok((given.to_string(), None)),
+            Ok(Some(captures)) => {
+                let mut res = given.to_string();
+                let m = captures.get(0).unwrap();
+                RegexpInfo::get_captures(vm, &captures, given);
+                let mut rep = "".to_string();
+                let mut escape = false;
+                for ch in replace.chars() {
+                    if escape {
+                        match ch {
+                            '0'..='9' => {
+                                let i = ch as usize - '0' as usize;
+                                match captures.get(i) {
+                                    Some(m) => rep += m.as_str(),
+                                    None => {}
+                                };
+                            }
+                            _ => rep.push(ch),
+                        };
+                        escape = false;
+                    } else {
+                        if ch != '\\' {
+                            rep.push(ch);
+                        } else {
+                            escape = true;
+                        };
+                    }
+                }
+                res.replace_range(m.start()..m.end(), &rep);
+                Ok((res, Some(captures)))
+            }
+            Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
+        }
+    }
+}
+
+impl PartialEq for RegexpInfo {
+    fn eq(&self, other: &Self) -> bool {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            return true;
+        }
+        self.as_str() == other.as_str()
+    }
+}
+
+impl std::ops::Deref for RegexpInfo {
+    type Target = Regex;
+    fn deref(&self) -> &Regex {
+        &self.0
+    }
+}
+
+pub fn init() -> Value {
+    let class = Module::class_under_object();
+    BuiltinClass::set_toplevel_constant("Regexp", class);
+    class.add_builtin_class_method("new", regexp_new);
+    class.add_builtin_class_method("compile", regexp_new);
+    class.add_builtin_class_method("escape", regexp_escape);
+    class.add_builtin_class_method("quote", regexp_escape);
+    class.add_builtin_method_by_str("=~", regexp_match);
+    class.into()
+}
+
+// Class methods
+
+fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let mut arg0 = args[0];
+    let string = arg0.expect_string("1st arg")?;
+    let val = Value::regexp_from(vm, string)?;
+    Ok(val)
+}
+
+fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let mut arg0 = args[0];
+    let string = arg0.expect_string("1st arg")?;
+    let regexp = Value::string(regex::escape(string));
+    Ok(regexp)
+}
+
+fn regexp_match(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let mut args0 = args[0];
+    let regex = self_val.as_regexp().unwrap();
+    let given = args0.expect_string("1st Arg")?;
+    let res = match RegexpInfo::find_one(vm, &regex, given).unwrap() {
+        Some(mat) => Value::integer(mat.start() as i64),
+        None => Value::nil(),
+    };
+    return Ok(res);
+}
+
+// Instance methods
 
 #[cfg(test)]
 mod test {

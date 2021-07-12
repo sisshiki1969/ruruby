@@ -112,7 +112,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     fn conv_index(i: i64, len: usize) -> Option<usize> {
         if i >= 0 {
             if i < len as i64 {
@@ -169,9 +169,39 @@ fn index(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 let s: String = lhs.chars().skip(start).take(end - start + 1).collect();
                 Ok(Value::string(s))
             }
-            _ => return Err(RubyError::argument("Bad type for index.")),
+            ObjKind::Regexp(info) => {
+                let nth = if args.len() == 1 {
+                    0
+                } else {
+                    args[1].expect_integer("2nd arg")?
+                };
+                match info.captures(lhs) {
+                    Ok(None) => return Ok(Value::nil()),
+                    Ok(Some(captures)) => {
+                        RegexpInfo::get_captures(vm, &captures, lhs);
+                        let len = captures.len() as i64;
+                        if nth == 0 {
+                            Ok(Value::string(captures.get(0).unwrap().as_str()))
+                        } else if nth > 0 {
+                            match captures.get(nth as usize) {
+                                Some(m) => Ok(Value::string(m.as_str())),
+                                None => Ok(Value::nil()),
+                            }
+                        } else {
+                            match len + nth {
+                                i if i > 0 => {
+                                    Ok(Value::string(captures.get(i as usize).unwrap().as_str()))
+                                }
+                                _ => Ok(Value::nil()),
+                            }
+                        }
+                    }
+                    Err(err) => Err(RubyError::internal(format!("Capture failed. {:?}", err))),
+                }
+            }
+            _ => Err(RubyError::argument("Bad type for index.")),
         },
-        _ => return Err(RubyError::argument("Bad type for index.")),
+        _ => Err(RubyError::argument("Bad type for index.")),
     }
 }
 
@@ -1110,6 +1140,15 @@ mod test {
         assert "rubyruby"[0..2], "rub" 
         assert "rubyruby"[0..-2], "rubyrub" 
         assert "rubyruby"[2..-7], ""
+        s = "andfoobarbazend"
+        r = /f(oo)b(ar)b(az)/
+        assert "foobarbaz", s[r]
+        assert "foobarbaz", s[r, 0]
+        assert "oo", s[r, 1]
+        assert "ar", s[r, 2]
+        assert "az", s[r, 3]
+        assert nil, s[r, 4]
+        assert nil, s[/ddd/, 4]
         "#;
         assert_script(program);
     }
