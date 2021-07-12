@@ -24,6 +24,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("each_value", each_value);
     class.add_builtin_method_by_str("each_key", each_key);
     class.add_builtin_method_by_str("each", each);
+    class.add_builtin_method_by_str("each_pair", each);
     class.add_builtin_method_by_str("merge", merge);
     class.add_builtin_method_by_str("fetch", fetch);
     class.add_builtin_method_by_str("compare_by_identity", compare_by_identity);
@@ -167,6 +168,8 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+/// Hash#each, Hash#each_pair
+/// https://docs.ruby-lang.org/ja/latest/method/Hash/i/each.html
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
