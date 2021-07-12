@@ -2250,7 +2250,9 @@ impl Parser {
                 (None, self.method_def_ext(&s)?)
             }
             TokenKind::Ident(s) => {
-                if self.consume_punct_no_term(Punct::Dot)? {
+                if self.consume_punct_no_term(Punct::Dot)?
+                    || self.consume_punct_no_term(Punct::Scope)?
+                {
                     let id = IdentId::get_id(s);
                     (Some(Node::new_lvar(id, loc)), self.parse_method_def_name()?)
                 } else {
@@ -2258,7 +2260,9 @@ impl Parser {
                 }
             }
             TokenKind::Const(s) => {
-                if self.consume_punct_no_term(Punct::Dot)? {
+                if self.consume_punct_no_term(Punct::Dot)?
+                    || self.consume_punct_no_term(Punct::Scope)?
+                {
                     (
                         Some(Node::new_const(s, false, loc)),
                         self.parse_method_def_name()?,
