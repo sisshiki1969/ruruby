@@ -83,6 +83,14 @@ impl RegexpInfo {
         vm.set_global_var(id, Value::nil());
     }
 
+    fn get_special_global(vm: &mut VM, i: usize) -> Value {
+        let id = IdentId::get_id(&format!("${}", i));
+        match vm.get_global_var(id) {
+            Some(v) => v,
+            None => Value::nil(),
+        }
+    }
+
     /// Replaces the leftmost-first match with `replace`.
     pub fn replace_one(
         vm: &mut VM,
@@ -425,12 +433,16 @@ pub fn init() -> Value {
     class.add_builtin_class_method("compile", regexp_new);
     class.add_builtin_class_method("escape", regexp_escape);
     class.add_builtin_class_method("quote", regexp_escape);
+    class.add_builtin_class_method("last_match", regexp_last_match);
     class.add_builtin_method_by_str("=~", regexp_match);
     class.into()
 }
 
 // Class methods
 
+/// Regexp.new(string, option=nil, code=nil) -> Regexp
+/// Regexp.compile(string, option=nil, code=nil) -> Regexp
+/// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/compile.html
 fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut arg0 = args[0];
@@ -439,6 +451,9 @@ fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+/// Regexp.escape(string) -> String
+/// Regexp.quote(string) -> String
+/// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/escape.html
 fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut arg0 = args[0];
@@ -447,6 +462,23 @@ fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(regexp)
 }
 
+/// (not supported) Regexp.last_match -> MatchData
+/// Regexp.last_match(nth) -> String | nil
+/// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/last_match.html
+fn regexp_last_match(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let nth = args[0].expect_integer("1st arg")?;
+    if nth == 0 {
+        return Ok(vm.get_global_var(IdentId::get_id("$&")).unwrap_or_default());
+    }
+    if nth < 0 {
+        return Err(RubyError::argument("1st arg must not be sub zero."));
+    };
+    let str = RegexpInfo::get_special_global(vm, nth as usize);
+    Ok(str)
+}
+
+// Instance methods
 fn regexp_match(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut args0 = args[0];
@@ -459,11 +491,22 @@ fn regexp_match(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     return Ok(res);
 }
 
-// Instance methods
-
 #[cfg(test)]
 mod test {
     use crate::test::*;
+
+    #[test]
+    fn last_match() {
+        let program = r#"
+        /(.)(.)/ =~ "ab"
+        #Regexp.last_match      # => #<MatchData:0x4599e58>
+        assert "ab", Regexp.last_match(0)   # => "ab"
+        assert "a", Regexp.last_match(1)   # => "a"
+        assert "b", Regexp.last_match(2)   # => "b"
+        assert nil, Regexp.last_match(3)   # => nil
+    "#;
+        assert_script(program);
+    }
 
     #[test]
     fn regexp1() {

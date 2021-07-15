@@ -136,11 +136,12 @@ impl Module {
         false
     }
 
+    /// Get singleton class of `self`.
     pub fn get_singleton_class(self) -> Module {
         self.get().get_singleton_class().unwrap()
     }
 
-    /// Get method(MethodId) for class.
+    /// Get MethodId from `method_id` for `self`.
     ///
     /// If the method was not found, return NoMethodError.
     pub fn get_method_or_nomethod(self, method_id: IdentId) -> Result<MethodId, RubyError> {
@@ -150,7 +151,7 @@ impl Module {
         }
     }
 
-    /// Get method for a receiver which class is `self` and `method` (IdentId).
+    /// Get method for a `method` (IdentId) and a receiver which class is `self` without using method cache.
     pub fn search_method(self, method: IdentId) -> Option<MethodId> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
@@ -174,7 +175,7 @@ impl Module {
         }
     }
 
-    /// Get method for a receiver which class is `self` and `method` (IdentId).
+    /// Get method for a receiver which class is `self` and `method` (IdentId) without using method cache.
     /// Returns tupple of method and its owner module.
     pub fn search_method_and_owner(self, method: IdentId) -> Option<(MethodId, Module)> {
         let mut class = self;
@@ -244,14 +245,15 @@ impl Module {
 }
 
 impl Module {
-    pub fn new_class(cinfo: ClassInfo) -> Module {
+    fn new_class(cinfo: ClassInfo) -> Module {
         assert!(!cinfo.is_module());
         let obj = RValue::new_class(cinfo).pack();
         obj.get_singleton_class().unwrap();
         obj.into_module()
     }
 
-    pub fn bootstrap_class(cinfo: ClassInfo) -> Module {
+    pub fn bootstrap_class(superclass: impl Into<Option<Module>>) -> Module {
+        let cinfo = ClassInfo::class_from(superclass);
         Module::new(RValue::new_bootstrap(cinfo).pack())
     }
 
@@ -294,6 +296,7 @@ impl GC for ClassInfo {
     }
 }
 
+// Constructors
 impl ClassInfo {
     fn new(is_module: bool, superclass: impl Into<Option<Module>>, info: ClassExt) -> Self {
         ClassInfo {
@@ -310,11 +313,11 @@ impl ClassInfo {
         self as *const ClassInfo as u64
     }
 
-    pub fn class_from(superclass: impl Into<Option<Module>>) -> Self {
+    fn class_from(superclass: impl Into<Option<Module>>) -> Self {
         Self::new(false, superclass, ClassExt::new())
     }
 
-    pub fn module_from(superclass: impl Into<Option<Module>>) -> Self {
+    fn module_from(superclass: impl Into<Option<Module>>) -> Self {
         Self::new(true, superclass, ClassExt::new())
     }
 
@@ -322,7 +325,9 @@ impl ClassInfo {
         let target = target.into();
         Self::new(false, superclass, ClassExt::new_singleton(target))
     }
+}
 
+impl ClassInfo {
     /// Get an upper module/class of `self`.
     ///
     /// If `self` has no upper module/class, return None.
@@ -490,7 +495,7 @@ impl ClassInfo {
         &self.ext.method_table
     }
 
-    pub fn const_table(&self) -> &ValueTable {
+    pub fn const_table(&self) -> &ConstTable {
         &self.ext.const_table
     }
 
@@ -515,7 +520,7 @@ impl ClassInfo {
 
     /// Set a constant (`self`::`id`) to `val`.
     ///
-    /// If `val` is a module or class, set the name of the class/module to the name of the constant.
+    /// If `val` is a module or class object, set the name of `val` to the name of the constant.
     /// If the constant was already initialized, output warning.
     pub fn set_const(&mut self, id: IdentId, val: Value) {
         if let Some(mut module) = val.if_mod_class() {
@@ -534,9 +539,13 @@ impl ClassInfo {
             }
         }
 
-        if self.ext.const_table.insert(id, val).is_some() {
+        if let Some(ConstEntry::Value(_)) = self.ext.insert_const(id, val) {
             eprintln!("warning: already initialized constant {:?}", id);
         }
+    }
+
+    pub fn set_autoload(&mut self, id: IdentId, file_name: String) {
+        self.ext.insert_const_autoload(id, file_name);
     }
 
     pub fn set_const_by_str(&mut self, name: &str, val: Value) {
@@ -544,13 +553,15 @@ impl ClassInfo {
         self.set_const(id, val)
     }
 
-    pub fn get_const(&self, id: IdentId) -> Option<Value> {
-        self.ext.const_table.get(&id).cloned()
+    pub fn get_mut_const(&mut self, id: IdentId) -> Option<&mut ConstEntry> {
+        self.ext.get_mut_const(id)
     }
 
-    pub fn get_const_by_str(&self, name: &str) -> Option<Value> {
-        let id = IdentId::get_id(name);
-        self.get_const(id)
+    pub fn get_const_noautoload(&mut self, id: IdentId) -> Option<Value> {
+        match self.ext.get_mut_const(id) {
+            Some(ConstEntry::Value(v)) => Some(*v),
+            _ => None,
+        }
     }
 }
 
@@ -597,10 +608,27 @@ impl ClassFlags {
 struct ClassExt {
     name: Option<String>,
     method_table: MethodTable,
-    const_table: ValueTable,
+    const_table: ConstTable,
     singleton_for: Option<Value>,
     /// This slot holds original module Value for include modules.
     origin: Option<Module>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstEntry {
+    Autoload(String),
+    Value(Value),
+}
+
+type ConstTable = FxHashMap<IdentId, ConstEntry>;
+
+impl ConstEntry {
+    pub fn mark(&self, alloc: &mut Allocator) {
+        match self {
+            ConstEntry::Value(v) => v.mark(alloc),
+            _ => {}
+        }
+    }
 }
 
 type ClassRef = Ref<ClassExt>;
@@ -629,5 +657,26 @@ impl ClassExt {
     fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
         MethodRepo::inc_class_version();
         self.method_table.insert(id, info)
+    }
+
+    fn insert_const(&mut self, id: IdentId, val: Value) -> Option<ConstEntry> {
+        self.const_table.insert(id, ConstEntry::Value(val))
+    }
+
+    fn insert_const_autoload(&mut self, id: IdentId, file_name: String) {
+        let entry = self.const_table.get_mut(&id);
+        match entry {
+            Some(entry) => match entry {
+                ConstEntry::Value(_) => {}
+                ConstEntry::Autoload(_) => *entry = ConstEntry::Autoload(file_name),
+            },
+            None => {
+                self.const_table.insert(id, ConstEntry::Autoload(file_name));
+            }
+        };
+    }
+
+    fn get_mut_const(&mut self, id: IdentId) -> Option<&mut ConstEntry> {
+        self.const_table.get_mut(&id)
     }
 }

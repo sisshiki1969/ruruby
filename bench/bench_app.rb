@@ -62,7 +62,7 @@ puts "CPU: #{@cpu_info}"
 |:-----------:|:--------:|:---------:|:-------:|
 "
 
-`set -x`
+#`set -x`
 `cargo build --release`
 
 @ruruby_exec = File.expand_path('../target/release/ruruby', __dir__)

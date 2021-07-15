@@ -1,4 +1,5 @@
 use crate::coroutine::*;
+use crate::loader::*;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 
@@ -318,6 +319,7 @@ impl VM {
     }
 
     pub fn run(&mut self, path: impl Into<PathBuf>, program: impl Into<String>) -> VMResult {
+        let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
         let mut iseq = method.as_iseq();
         iseq.class_defined = self.get_class_defined();
@@ -326,8 +328,9 @@ impl VM {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
         assert!(
-            self.stack_len() == 0,
-            "exec_stack length must be 0. actual:{}",
+            self.stack_len() == prev_len,
+            "exec_stack length must be {}. actual:{}",
+            prev_len,
             self.stack_len()
         );
         Ok(val)
@@ -591,8 +594,7 @@ impl VM {
     }
 }
 
-// handling global/class varables.
-
+// Handling global varables.
 impl VM {
     pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
         self.globals.get_global_var(id)
@@ -601,56 +603,96 @@ impl VM {
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.globals.set_global_var(id, val);
     }
+}
 
-    // Search lexical class stack and class inheritance chain for a constant.
-    pub fn find_const(&self, id: IdentId) -> VMResult {
-        match self.get_env_const(id) {
-            Some(val) => Ok(val),
-            None => VM::get_super_const(self.class(), id),
+// Handling constants.
+impl VM {
+    /// Search lexical class stack and then, search class inheritance chain for a constant `id`,
+    /// returning the value.
+    /// Returns error if the constant was not defined, or autoload failed.
+    fn find_const(&mut self, id: IdentId) -> VMResult {
+        match self.get_env_const(id)? {
+            Some(v) => Ok(v),
+            None => self.get_super_const(self.class(), id),
         }
     }
 
-    // Search lexical class stack for the constant.
-    fn get_env_const(&self, id: IdentId) -> Option<Value> {
+    /// Search lexical class stack for a constant `id`.
+    /// If the constant was found, returns Ok(Some(Value)), and if not, returns Ok(None).
+    /// Returns error if an autoload failed.
+    fn get_env_const(&mut self, id: IdentId) -> Result<Option<Value>, RubyError> {
         let class_defined = &self.get_method_iseq().class_defined;
         match class_defined.len() {
-            0 => None,
-            1 => class_defined[0].get_const(id),
-            _ => class_defined[1..]
-                .iter()
-                .rev()
-                .find_map(|c| c.get_const(id)),
+            0 => Ok(None),
+            1 => self.get_mut_const(class_defined[0], id),
+            _ => {
+                for m in class_defined[1..].iter().rev() {
+                    match self.get_mut_const(*m, id)? {
+                        Some(v) => return Ok(Some(v)),
+                        None => {}
+                    }
+                }
+                Ok(None)
+            }
         }
     }
 
-    /// Search class inheritance chain for the constant.
-    pub fn get_super_const(mut class: Module, id: IdentId) -> VMResult {
+    /// Search class inheritance chain of `class` for a constant `id`, returning the value.
+    /// Returns name error if the constant was not defined.
+    pub fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
         let is_module = class.is_module();
         loop {
-            match class.get_const(id) {
+            match self.get_mut_const(class, id)? {
                 Some(val) => return Ok(val),
                 None => match class.upper() {
                     Some(upper) => class = upper,
                     None => {
                         if is_module {
-                            if let Some(val) = BuiltinClass::object().get_const(id) {
-                                return Ok(val);
+                            if let Some(v) = self.get_mut_const(BuiltinClass::object(), id)? {
+                                return Ok(v);
                             }
                         }
-                        return Err(RubyError::name(format!("Uninitialized constant {:?}.", id)));
+                        return Err(RubyError::uninitialized_constant(id));
                     }
                 },
             }
         }
     }
 
-    pub fn get_const(&self, parent: Module, id: IdentId) -> VMResult {
-        match parent.get_const(id) {
+    /// Search constant table of `parent` for a constant `id`.
+    /// If the constant was found, returns the value.
+    /// Returns error if the constant was not defined or an autoload failed.
+    pub fn get_scope(&mut self, parent: Module, id: IdentId) -> VMResult {
+        match self.get_mut_const(parent, id)? {
             Some(val) => Ok(val),
-            None => Err(RubyError::name(format!("Uninitialized constant {:?}.", id))),
+            None => Err(RubyError::uninitialized_constant(id)),
         }
     }
 
+    /// Search constant table of `parent` for a constant `id`.
+    /// If the constant was found, returns Ok(Some(Value)), and if not, returns Ok(None).
+    /// Returns error if an autoload failed.
+    pub fn get_mut_const(
+        &mut self,
+        mut parent: Module,
+        id: IdentId,
+    ) -> Result<Option<Value>, RubyError> {
+        match parent.get_mut_const(id) {
+            Some(ConstEntry::Value(v)) => Ok(Some(*v)),
+            Some(ConstEntry::Autoload(file)) => {
+                self.require(file)?;
+                match parent.get_mut_const(id) {
+                    Some(ConstEntry::Value(v)) => Ok(Some(*v)),
+                    _ => Ok(None),
+                }
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+// Handling class variables.
+impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
         if self.cur_context.is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
@@ -1396,12 +1438,12 @@ impl VM {
         is_module: bool,
         super_val: Value,
     ) -> Result<Module, RubyError> {
-        let current_class = if base.is_nil() {
+        let mut current_class = if base.is_nil() {
             self.class()
         } else {
             Module::new(base)
         };
-        match current_class.get_const(id) {
+        match current_class.get_const_noautoload(id) {
             Some(val) => {
                 let val = Module::new(val);
                 if val.is_module() != is_module {
@@ -1423,7 +1465,7 @@ impl VM {
                 };
                 Ok(val)
             }
-            None => {
+            _ => {
                 let val = if is_module {
                     if !super_val.is_nil() {
                         panic!("Module can not have superclass.");
@@ -2081,6 +2123,46 @@ impl VM {
                 Err(RubyError::load(err_str))
             }
         }
+    }
+
+    pub fn require(&mut self, file_name: &str) -> Result<bool, RubyError> {
+        let mut path = PathBuf::from(file_name);
+        if path.is_absolute() {
+            path.set_extension("rb");
+            if path.exists() {
+                return Ok(load_exec(self, &path, false)?);
+            }
+            path.set_extension("so");
+            if path.exists() {
+                eprintln!("Warning: currently, can not require .so file. {:?}", path);
+                return Ok(false);
+            }
+        }
+        let mut load_path = match self.get_global_var(IdentId::get_id("$:")) {
+            Some(path) => path,
+            None => return Ok(false),
+        };
+        let mut ainfo = load_path.expect_array("LOAD_PATH($:)")?;
+        for path in ainfo.iter_mut() {
+            let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
+            base_path.push(file_name);
+            base_path.set_extension("rb");
+            if base_path.exists() {
+                return Ok(load_exec(self, &base_path, false)?);
+            }
+            base_path.set_extension("so");
+            if base_path.exists() {
+                eprintln!(
+                    "Warning: currently, can not require .so file. {:?}",
+                    base_path
+                );
+                return Ok(false);
+            }
+        }
+        Err(RubyError::load(format!(
+            "Can not load such file -- {:?}",
+            file_name
+        )))
     }
 
     #[cfg(not(tarpaulin_include))]

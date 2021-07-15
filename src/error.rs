@@ -156,45 +156,35 @@ impl RubyError {
             RubyErrorKind::Value(val) => *val,
             RubyErrorKind::RuntimeErr { kind, .. } => match &kind {
                 RuntimeErrKind::Type => {
-                    let err_class = BuiltinClass::get_toplevel_constant("TypeError")
-                        .unwrap()
-                        .into_module();
+                    let err_class = BuiltinClass::get_toplevel_constant("TypeError").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::Argument => {
-                    let err_class = BuiltinClass::get_toplevel_constant("ArgumentError")
-                        .unwrap()
-                        .into_module();
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("ArgumentError").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::NoMethod => {
-                    let err_class = BuiltinClass::get_toplevel_constant("NoMethodError")
-                        .unwrap()
-                        .into_module();
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("NoMethodError").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::Runtime => {
-                    let err_class = BuiltinClass::get_toplevel_constant("RuntimeError")
-                        .unwrap()
-                        .into_module();
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("RuntimeError").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::LoadError => {
-                    let err_class = BuiltinClass::get_toplevel_constant("LoadError")
-                        .unwrap()
-                        .into_module();
+                    let err_class = BuiltinClass::get_toplevel_constant("LoadError").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::StopIteration => {
-                    let err_class = BuiltinClass::get_toplevel_constant("StopIteration")
-                        .unwrap()
-                        .into_module();
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("StopIteration").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 RuntimeErrKind::Name => {
-                    let err_class = BuiltinClass::get_toplevel_constant("NameError")
-                        .unwrap()
-                        .into_module();
+                    let err_class = BuiltinClass::get_toplevel_constant("NameError").into_module();
                     Value::exception(err_class, self.clone())
                 }
                 _ => {
@@ -276,6 +266,10 @@ impl RubyError {
 
     pub fn name(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into())
+    }
+
+    pub fn uninitialized_constant(id: IdentId) -> RubyError {
+        RubyError::name(format!("Uninitialized constant {:?}.", id))
     }
 
     pub fn typeerr(msg: impl Into<String>) -> RubyError {

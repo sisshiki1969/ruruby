@@ -52,14 +52,10 @@ pub struct EssentialClass {
 
 impl EssentialClass {
     fn new() -> Self {
-        let basic_class = ClassInfo::class_from(None);
-        let basic = Module::bootstrap_class(basic_class);
-        let object_class = ClassInfo::class_from(basic);
-        let object = Module::bootstrap_class(object_class);
-        let module_class = ClassInfo::class_from(object);
-        let module = Module::bootstrap_class(module_class);
-        let class_class = ClassInfo::class_from(module);
-        let class = Module::bootstrap_class(class_class);
+        let basic = Module::bootstrap_class(None);
+        let object = Module::bootstrap_class(basic);
+        let module = Module::bootstrap_class(object);
+        let class = Module::bootstrap_class(module);
 
         basic.set_class(class);
         object.set_class(class);
@@ -164,8 +160,12 @@ impl BuiltinClass {
     }
 
     /// Get object bound to the constant `name` of the root object.
-    pub fn get_toplevel_constant(class_name: &str) -> Option<Value> {
-        BuiltinClass::object().get_const_by_str(class_name)
+    pub fn get_toplevel_constant(class_name: &str) -> Value {
+        let id = IdentId::get_id(class_name);
+        match BuiltinClass::object().get_const_noautoload(id) {
+            Some(val) => val,
+            _ => unreachable!("{} is not defined in Object.", class_name),
+        }
     }
 
     pub fn object() -> Module {

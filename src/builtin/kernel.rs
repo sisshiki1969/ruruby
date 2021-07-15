@@ -126,43 +126,7 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         Some(string) => string,
         None => return Err(RubyError::argument("file name must be a string.")),
     };
-    let mut path = PathBuf::from(file_name);
-    if path.is_absolute() {
-        path.set_extension("rb");
-        if path.exists() {
-            return Ok(Value::bool(load_exec(vm, &path, false)?));
-        }
-        path.set_extension("so");
-        if path.exists() {
-            eprintln!("Warning: currently, can not require .so file. {:?}", path);
-            return Ok(Value::bool(false));
-        }
-    }
-    let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
-        Some(path) => path,
-        None => return Ok(Value::false_val()),
-    };
-    let mut ainfo = load_path.expect_array("LOAD_PATH($:)")?;
-    for path in ainfo.iter_mut() {
-        let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
-        base_path.push(file_name);
-        base_path.set_extension("rb");
-        if base_path.exists() {
-            return Ok(Value::bool(load_exec(vm, &base_path, false)?));
-        }
-        base_path.set_extension("so");
-        if base_path.exists() {
-            eprintln!(
-                "Warning: currently, can not require .so file. {:?}",
-                base_path
-            );
-            return Ok(Value::bool(false));
-        }
-    }
-    Err(RubyError::load(format!(
-        "Can not load such file -- {:?}",
-        file_name
-    )))
+    Ok(Value::bool(vm.require(file_name)?))
 }
 
 fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -229,6 +193,11 @@ fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut path = vm.get_source_path();
+    if path.as_os_str().to_string_lossy() == "REPL" {
+        return Ok(Value::string(conv_pathbuf(
+            &std::env::current_dir().unwrap(),
+        )));
+    }
     path.pop();
     Ok(Value::string(conv_pathbuf(&path)))
 }

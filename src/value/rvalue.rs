@@ -84,10 +84,6 @@ impl RValue {
         self as *const RValue as u64
     }
 
-    pub fn as_ref(&self) -> ObjectRef {
-        Ref::from_ref(self)
-    }
-
     pub fn dup(&self) -> Self {
         RValue {
             class: self.class,
@@ -149,52 +145,30 @@ impl RValue {
     }
 
     pub fn new_invalid() -> Self {
-        RValue {
-            class: Module::default(),
-            kind: ObjKind::Invalid,
-            var_table: None,
-        }
+        RValue::new(Module::default(), ObjKind::Invalid)
     }
 
     pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
-        RValue {
-            class: Module::default(), // dummy for boot strapping
-            kind: ObjKind::Module(cinfo),
-            var_table: None,
-        }
+        RValue::new(
+            Module::default(), // dummy for boot strapping
+            ObjKind::Module(cinfo),
+        )
     }
 
     pub fn new_integer(i: i64) -> Self {
-        RValue {
-            class: BuiltinClass::integer(),
-            var_table: None,
-            kind: ObjKind::Integer(i),
-        }
+        RValue::new(BuiltinClass::integer(), ObjKind::Integer(i))
     }
 
     pub fn new_float(f: f64) -> Self {
-        RValue {
-            class: BuiltinClass::float(),
-            var_table: None,
-            kind: ObjKind::Float(f),
-        }
+        RValue::new(BuiltinClass::float(), ObjKind::Float(f))
     }
 
     pub fn new_complex(r: Value, i: Value) -> Self {
-        let class = BuiltinClass::complex();
-        RValue {
-            class,
-            var_table: None,
-            kind: ObjKind::Complex { r, i },
-        }
+        RValue::new(BuiltinClass::complex(), ObjKind::Complex { r, i })
     }
 
     pub fn new_string_from_rstring(rs: RString) -> Self {
-        RValue {
-            class: BuiltinClass::string(),
-            var_table: None,
-            kind: ObjKind::String(rs),
-        }
+        RValue::new(BuiltinClass::string(), ObjKind::String(rs))
     }
 
     pub fn new_string<'a>(s: impl Into<Cow<'a, str>>) -> Self {
@@ -206,124 +180,64 @@ impl RValue {
     }
 
     pub fn new_ordinary(class: Module) -> Self {
-        RValue {
-            class,
-            var_table: None,
-            kind: ObjKind::Ordinary,
-        }
+        RValue::new(class, ObjKind::Ordinary)
     }
 
     pub fn new_class(cinfo: ClassInfo) -> Self {
-        RValue {
-            class: BuiltinClass::class(),
-            var_table: None,
-            kind: ObjKind::Module(cinfo),
-        }
+        RValue::new(BuiltinClass::class(), ObjKind::Module(cinfo))
     }
 
     pub fn new_module(cinfo: ClassInfo) -> Self {
-        RValue {
-            class: BuiltinClass::module(),
-            var_table: None,
-            kind: ObjKind::Module(cinfo),
-        }
+        RValue::new(BuiltinClass::module(), ObjKind::Module(cinfo))
     }
 
     pub fn new_array(array_info: ArrayInfo) -> Self {
-        RValue {
-            class: BuiltinClass::array(),
-            var_table: None,
-            kind: ObjKind::Array(array_info),
-        }
+        RValue::new(BuiltinClass::array(), ObjKind::Array(array_info))
     }
 
     pub fn new_array_with_class(array_info: ArrayInfo, class: Module) -> Self {
-        RValue {
-            class,
-            var_table: None,
-            kind: ObjKind::Array(array_info),
-        }
+        RValue::new(class, ObjKind::Array(array_info))
     }
 
     pub fn new_range(range: RangeInfo) -> Self {
-        RValue {
-            class: BuiltinClass::range(),
-            var_table: None,
-            kind: ObjKind::Range(range),
-        }
+        RValue::new(BuiltinClass::range(), ObjKind::Range(range))
     }
 
     pub fn new_splat(val: Value) -> Self {
-        RValue {
-            class: BuiltinClass::array(),
-            var_table: None,
-            kind: ObjKind::Splat(val),
-        }
+        RValue::new(BuiltinClass::array(), ObjKind::Splat(val))
     }
 
     pub fn new_hash(hash: HashInfo) -> Self {
-        RValue {
-            class: BuiltinClass::hash(),
-            var_table: None,
-            kind: ObjKind::Hash(Box::new(hash)),
-        }
+        RValue::new(BuiltinClass::hash(), ObjKind::Hash(Box::new(hash)))
     }
 
     pub fn new_regexp(regexp: RegexpInfo) -> Self {
-        RValue {
-            class: BuiltinClass::regexp(),
-            var_table: None,
-            kind: ObjKind::Regexp(regexp),
-        }
+        RValue::new(BuiltinClass::regexp(), ObjKind::Regexp(regexp))
     }
 
     pub fn new_proc(proc_info: ProcInfo) -> Self {
-        RValue {
-            class: BuiltinClass::procobj(),
-            var_table: None,
-            kind: ObjKind::Proc(proc_info),
-        }
+        RValue::new(BuiltinClass::procobj(), ObjKind::Proc(proc_info))
     }
 
     pub fn new_method(method_info: MethodObjInfo) -> Self {
-        RValue {
-            class: BuiltinClass::method(),
-            var_table: None,
-            kind: ObjKind::Method(method_info),
-        }
+        RValue::new(BuiltinClass::method(), ObjKind::Method(method_info))
     }
 
     pub fn new_unbound_method(method_info: MethodObjInfo) -> Self {
-        RValue {
-            class: BuiltinClass::unbound_method(),
-            var_table: None,
-            kind: ObjKind::Method(method_info),
-        }
+        RValue::new(BuiltinClass::unbound_method(), ObjKind::Method(method_info))
     }
 
     pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
         let fiber = FiberContext::new_fiber(vm, context);
-        RValue {
-            class: BuiltinClass::fiber(),
-            var_table: None,
-            kind: ObjKind::Fiber(fiber),
-        }
+        RValue::new(BuiltinClass::fiber(), ObjKind::Fiber(fiber))
     }
 
     pub fn new_enumerator(fiber: Box<FiberContext>) -> Self {
-        RValue {
-            class: BuiltinClass::enumerator(),
-            var_table: None,
-            kind: ObjKind::Enumerator(fiber),
-        }
+        RValue::new(BuiltinClass::enumerator(), ObjKind::Enumerator(fiber))
     }
 
     pub fn new_time(time_class: Module, time: TimeInfo) -> Self {
-        RValue {
-            class: time_class,
-            var_table: None,
-            kind: ObjKind::Time(time),
-        }
+        RValue::new(time_class, ObjKind::Time(time))
     }
 
     pub fn new_exception(exception_class: Module, err: RubyError) -> Self {
@@ -333,18 +247,12 @@ impl RValue {
             backtrace.push(Value::string(err.get_location(pos)));
         }
         let backtrace = Value::array_from(backtrace);
-        let mut rval = RValue {
-            class: exception_class,
-            var_table: None,
-            kind: ObjKind::Exception(err),
-        };
+        let mut rval = RValue::new(exception_class, ObjKind::Exception(err));
         rval.set_var(IdentId::get_id("@message"), message);
         rval.set_var(IdentId::get_id("@backtrace"), backtrace);
         rval
     }
 }
-
-pub type ObjectRef = Ref<RValue>;
 
 impl RValue {
     /// Pack `self` into `Value`(64-bit data representation).

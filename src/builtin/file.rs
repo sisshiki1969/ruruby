@@ -4,7 +4,7 @@ use std::io::Read;
 use std::path::*;
 
 pub fn init() -> Value {
-    let io_class = BuiltinClass::get_toplevel_constant("IO").unwrap();
+    let io_class = BuiltinClass::get_toplevel_constant("IO");
     let class = Module::class_under(Module::new(io_class));
     BuiltinClass::set_toplevel_constant("File", class);
     class.add_builtin_class_method("join", join);

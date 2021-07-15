@@ -398,10 +398,7 @@ impl VM {
                 Inst::CHECK_CONST => {
                     let id = iseq.read_id(self.pc + 1);
                     self.pc += 5;
-                    let is_undef = match self.get_env_const(id) {
-                        Some(_) => false,
-                        None => VM::get_super_const(self.class(), id).is_err(),
-                    };
+                    let is_undef = self.find_const(id).is_err();
                     self.stack_push(Value::bool(is_undef));
                 }
                 Inst::GET_CONST => {
@@ -422,7 +419,7 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     self.pc += 5;
                     let parent = BuiltinClass::object();
-                    let val = self.get_const(parent, id)?;
+                    let val = self.get_scope(parent, id)?;
                     self.stack_push(val);
                 }
                 Inst::CHECK_SCOPE => {
@@ -430,7 +427,7 @@ impl VM {
                     let id = iseq.read_id(self.pc + 1);
                     self.pc += 5;
                     let is_undef = match parent.expect_mod_class() {
-                        Ok(parent) => self.get_const(parent, id).is_err(),
+                        Ok(parent) => self.get_scope(parent, id).is_err(),
                         Err(_) => true,
                     };
                     self.stack_push(Value::bool(is_undef));
@@ -439,7 +436,7 @@ impl VM {
                     let parent = self.stack_pop().expect_mod_class()?;
                     let id = iseq.read_id(self.pc + 1);
                     self.pc += 5;
-                    let val = self.get_const(parent, id)?;
+                    let val = self.get_scope(parent, id)?;
                     self.stack_push(val);
                 }
                 Inst::SET_IVAR => {

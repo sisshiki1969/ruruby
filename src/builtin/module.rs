@@ -11,6 +11,7 @@ pub fn init() {
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("constants", constants);
+    class.add_builtin_method_by_str("autoload", autoload);
     class.add_builtin_method_by_str("class_variables", class_variables);
     class.add_builtin_method_by_str("const_defined?", const_defined);
     class.add_builtin_method_by_str("instance_methods", instance_methods);
@@ -146,6 +147,18 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
+/// Module#autoload(const_name, feature) -> nil
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/autoload.html
+fn autoload(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(2)?;
+    let const_name = args[0].expect_string_or_symbol("1st arg")?;
+    let mut arg1 = args[1];
+    let feature = arg1.expect_string("2nd")?.to_string();
+    let mut parent = Module::new(self_val);
+    parent.set_autoload(const_name, feature);
+    Ok(Value::nil())
+}
+
 fn class_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let inherit = args[0].to_bool();
@@ -162,21 +175,21 @@ fn class_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn const_defined(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn const_defined(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     let name = args[0].expect_string_or_symbol("1st arg")?;
     Ok(Value::bool(
-        VM::get_super_const(Module::new(self_val), name).is_ok(),
+        vm.get_super_const(Module::new(self_val), name).is_ok(),
     ))
 }
 
-fn const_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn const_get(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let name = match args[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
     };
-    let val = VM::get_super_const(Module::new(self_val), name)?;
+    let val = vm.get_super_const(Module::new(self_val), name)?;
     Ok(val)
 }
 
@@ -529,6 +542,14 @@ mod test {
     assert(456, Bar.foo)
     assert(789, Bar.bar)
     "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn autoload() {
+        let program = r##"
+        load "#{Dir.pwd}/tests/autoload_test.rb"
+    "##;
         assert_script(program);
     }
 
