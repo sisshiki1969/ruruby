@@ -310,19 +310,25 @@ fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::bool(self_val.into_module().is_singleton()))
 }
 
+/// Module#include(*modules) -> self
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/include.html
 fn include(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let module = args[0].expect_module("1st arg")?;
-    self_val.into_module().append_include(module);
-    Ok(Value::nil())
+    for arg in args.iter() {
+        let module = (*arg).expect_module("arg")?;
+        self_val.into_module().append_include(module);
+    }
+    Ok(self_val)
 }
 
+/// Module#prepend(*modules) -> self
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/prepend.html
 fn prepend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let self_val = self_val.into_module();
-    let module = args[0].expect_module("1st arg")?;
-    self_val.clone().append_prepend(self_val, module);
-    Ok(Value::nil())
+    let self_mod = self_val.into_module();
+    for arg in args.iter() {
+        let module = (*arg).expect_module("arg")?;
+        self_val.into_module().append_prepend(self_mod, module);
+    }
+    Ok(self_val)
 }
 
 fn included_modules(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -548,7 +554,7 @@ mod test {
     #[test]
     fn autoload() {
         let program = r##"
-        load "#{Dir.pwd}/tests/autoload_test.rb"
+        load "./tests/autoload_test.rb"
     "##;
         assert_script(program);
     }
@@ -787,6 +793,19 @@ mod test {
           include M2
         end
         assert "M2", C.new.f
+
+        class D; end
+        module M3
+          def f; "M3"; end
+        end
+        module M4
+          def f; "M4"; end
+        end
+        class D
+          include M3, M4
+        end
+        assert "M4", D.new.f
+        assert_error { class D; include 100; end }
         "#;
         assert_script(program);
     }
@@ -849,7 +868,39 @@ mod test {
     }
 
     #[test]
-    fn include() {
+    fn prepend2() {
+        let program = r#"
+        module M0
+          def f; "M0"; end
+        end
+        module M1
+          def f; "M1"; end
+        end
+        module M2
+          def f; "M2"; end
+        end
+        
+        class S
+          include M0
+        end
+        class C < S; end
+
+        assert "M0", C.new.f
+        class S
+          def f; "S"; end
+        end
+        assert "S", C.new.f
+        class S
+          prepend M1, M2
+        end
+        assert "M2", C.new.f
+        assert [C, M2, M1, S, M0, Object, Kernel, BasicObject], C.ancestors
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn include_() {
         let program = "
         assert true, Integer.include?(Kernel)
         assert true, Integer.include?(Comparable)

@@ -461,8 +461,7 @@ impl ClassInfo {
         imodule.upper = superclass;
     }
 
-    pub fn append_prepend(&mut self, base: Module, module: Module) {
-        let mut module = module;
+    pub fn append_prepend(&mut self, base: Module, mut module: Module) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);

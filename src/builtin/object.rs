@@ -17,6 +17,7 @@ pub fn init() {
     object.add_builtin_method_by_str("<=>", cmp);
     object.add_builtin_method_by_str("eql?", eql);
     object.add_builtin_method_by_str("singleton_class", singleton_class);
+    object.add_builtin_method_by_str("extend", extend);
     object.add_builtin_method_by_str("clone", dup);
     object.add_builtin_method_by_str("dup", dup);
     object.add_builtin_method_by_str("nil?", nil_);
@@ -75,7 +76,18 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    self_val.get_singleton_class().map(|c| c.into())
+    Ok(self_val.get_singleton_class()?.into())
+}
+
+/// Object#extend(*modules) -> self
+/// https://docs.ruby-lang.org/ja/latest/method/Object/i/extend.html
+fn extend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let mut singleton = self_val.get_singleton_class()?;
+    for arg in args.iter() {
+        let module = (*arg).expect_module("arg")?;
+        singleton.append_include(module);
+    }
+    Ok(self_val)
 }
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -665,6 +677,33 @@ mod test {
           assert NameError, ex.class
         end
 
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn object_extend() {
+        let program = r#"
+        module Foo
+          def a; 'ok Foo'; end
+        end
+        
+        module Bar
+          def b; 'ok Bar'; end
+        end
+        
+        obj = Object.new
+        obj.extend Foo, Bar
+        assert "ok Foo", obj.a
+        assert "ok Bar", obj.b
+        
+        class Klass
+          include Foo
+          extend Bar
+        end
+        
+        assert "ok Foo", Klass.new.a
+        assert "ok Bar", Klass.b
         "#;
         assert_script(program);
     }
