@@ -1,17 +1,14 @@
 use crate::*;
 #[cfg(all(unix, target_arch = "aarch64"))]
-mod asm_arm64;
+#[path = "coroutine/asm_arm64.rs"]
+mod asm;
 #[cfg(all(windows, target_arch = "x86_64"))]
-mod asm_windows_x64;
+#[path = "coroutine/asm_windows_x64.rs"]
+mod asm;
 #[cfg(all(unix, target_arch = "x86_64"))]
-mod asm_x64;
+#[path = "coroutine/asm_x64.rs"]
+mod asm;
 mod stack;
-#[cfg(all(unix, target_arch = "aarch64"))]
-use asm_arm64 as asm;
-#[cfg(all(windows, target_arch = "x86_64"))]
-use asm_windows_x64 as asm;
-#[cfg(all(unix, target_arch = "x86_64"))]
-use asm_x64 as asm;
 use stack::*;
 
 #[derive(PartialEq, Eq, Debug)]
