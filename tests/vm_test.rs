@@ -732,6 +732,10 @@ fn block_next() {
 #[test]
 fn block_return() {
     let program = "
+        def f(x)
+          1.times { return x * 7 }
+        end
+        assert 21, f(3)
         assert_error { return }
     ";
     assert_script(program);

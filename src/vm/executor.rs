@@ -442,53 +442,27 @@ impl VM {
         self.invoke_new_context(context);
         loop {
             match self.run_context_main() {
-                // normal return mode
-                Ok(VMResKind::Return) => {
-                    let called = self.context().called;
+                Ok(_) => {
+                    assert!(self.context().called);
                     // normal return from method.
                     assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
                     self.pc = self.context().prev_pc;
                     self.context_pop();
 
-                    if called {
-                        #[cfg(any(feature = "trace", feature = "trace-func"))]
-                        {
-                            eprintln!("<+++ Ok({:?})", self.stack_top());
-                        }
-                        return Ok(());
-                    } else {
-                        #[cfg(any(feature = "trace", feature = "trace-func"))]
-                        {
-                            eprintln!("<--- Ok({:?})", self.stack_top());
-                        }
-                        continue;
+                    #[cfg(any(feature = "trace", feature = "trace-func"))]
+                    {
+                        eprintln!("<+++ Ok({:?})", self.stack_top());
                     }
+                    return Ok(());
                 }
-                // invoke mode
-                Ok(VMResKind::Invoke) => {}
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
-                            let called = self.context().called;
-
-                            let val = self.stack_pop();
-                            self.unwind_context();
-                            self.stack_push(val);
-                            if called {
-                                #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                {
-                                    eprintln!("<+++ {:?}({:?})", err.kind, val);
-                                }
-                                return Err(err);
-                            } else {
-                                #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                {
-                                    eprintln!("<--- {:?}({:?})", err.kind, val);
-                                }
-                                continue;
-                            }
+                            assert!(self.context().called);
+                            return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
+                            //assert!(self.context().called);
                             let val = self.stack_pop();
                             loop {
                                 if self.context().called {

@@ -9,11 +9,13 @@ pub fn repl_vm() {
     #[cfg(debug_assertions)]
     {
         println!("VMResult: {}", std::mem::size_of::<VMResult>());
+        println!("Context: {}", std::mem::size_of::<Context>());
         println!("ErrorInfo: {}", std::mem::size_of::<ErrorInfo>());
         //println!("RV: {}", std::mem::size_of::<RV>());
         //println!("Value: {}", std::mem::size_of::<Value>());
         //println!("Option<Value>: {}", std::mem::size_of::<Option<Value>>());
         println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
+        /*
         println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
         println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
         println!("RString: {}", std::mem::size_of::<RString>());
@@ -26,7 +28,7 @@ pub fn repl_vm() {
         println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
         println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
         println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
-        /*println!(
+        println!(
             "Option<MethodId>: {}",
             std::mem::size_of::<Option<MethodId>>()
         );*/
