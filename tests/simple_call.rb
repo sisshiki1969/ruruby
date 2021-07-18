@@ -5,14 +5,14 @@ end
 
 o = C.new
 1000000.times do
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
-  o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
+  a = o.fn()
 end
