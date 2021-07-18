@@ -3,7 +3,7 @@ use std::alloc::{alloc, Layout};
 use std::cell::RefCell;
 use std::ops::{Index, IndexMut, Range};
 
-const LVAR_ARRAY_SIZE: usize = 4;
+const LVAR_ARRAY_SIZE: usize = 16;
 const INITIAL_STACK_SIZE: usize = 256;
 
 thread_local!(
@@ -66,11 +66,23 @@ impl ContextStack {
                 panic!("stack overflow")
             };
             let ptr = self.buf.add(self.sp);
-            std::ptr::write(ptr, Context::default());
             let lvar_num = iseq.lvars;
+            let mut lvar_ary = std::ptr::addr_of_mut!((*ptr).lvar_ary) as *mut Value;
+            let lvar_vec = std::ptr::addr_of_mut!((*ptr).lvar_vec);
+            //(*ptr).lvar_ary.fill(Value::nil());
             if lvar_num > LVAR_ARRAY_SIZE {
+                for _ in 0..LVAR_ARRAY_SIZE {
+                    std::ptr::write(lvar_ary, Value::nil());
+                    lvar_ary = lvar_ary.add(1);
+                }
                 let v = vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE];
-                (*ptr).lvar_vec = v;
+                std::ptr::write(lvar_vec, v);
+            } else {
+                for _ in 0..lvar_num {
+                    std::ptr::write(lvar_ary, Value::nil());
+                    lvar_ary = lvar_ary.add(1);
+                }
+                std::ptr::write(lvar_vec, Vec::new());
             };
             for i in &iseq.lvar.optkw {
                 (*ptr)[*i] = Value::uninitialized();
@@ -79,6 +91,12 @@ impl ContextStack {
             (*ptr).block = block;
             (*ptr).iseq_ref = Some(iseq);
             (*ptr).outer = outer;
+            (*ptr).caller = None;
+            (*ptr).on_stack = CtxKind::Stack;
+            (*ptr).cur_pc = ISeqPos::from(0);
+            (*ptr).prev_pc = ISeqPos::from(0);
+            (*ptr).prev_stack_len = 0;
+            (*ptr).called = false;
             self.sp += 1;
             ContextRef::from_ptr(ptr)
         }

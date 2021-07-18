@@ -24,6 +24,7 @@ pub struct VM {
     temp_stack: Vec<Value>,
     pc: ISeqPos,
     pub handle: Option<FiberHandle>,
+    pub exec_native: bool,
 }
 
 pub type VMRef = Ref<VM>;
@@ -90,6 +91,7 @@ impl VM {
             temp_stack: vec![],
             pc: ISeqPos::from(0),
             handle: None,
+            exec_native: false,
         };
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
@@ -136,6 +138,7 @@ impl VM {
             exec_stack: vec![],
             pc: ISeqPos::from(0),
             handle: None,
+            exec_native: false,
         }
     }
 
@@ -1804,7 +1807,9 @@ impl VM {
         let len = self.temp_stack.len();
         self.temp_push(self_val);
         self.temp_push_args(args);
+        self.exec_native = true;
         let res = func(self, self_val, args);
+        self.exec_native = false;
         self.temp_stack.truncate(len);
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
