@@ -887,6 +887,7 @@ impl VM {
             if val.is_nil() {
                 Block::None
             } else {
+                // TODO: Support to_proc().
                 if val.as_proc().is_none() {
                     return Err(RubyError::internal(format!(
                         "Must be Proc. {:?}:{}",
@@ -902,7 +903,6 @@ impl VM {
         let mut args = self.pop_args_to_args(args_num as usize);
         args.block = block;
         args.kw_arg = keyword;
-        //self.send_icache(cache, method_id, receiver, &args)
 
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
@@ -924,46 +924,51 @@ impl VM {
         self.pc += 15;
         let len = self.stack_len();
         let rec_class = receiver.get_class_for_method();
-        let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
+        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name } => {
                     let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                     args.block = Block::from_u32(block, self);
                     self.set_stack_len(len - args_num);
-                    self.exec_native(&func, method, name, receiver, &args)?
+                    let val = self.exec_native(&func, method, name, receiver, &args)?;
+                    self.stack_push(val);
+                    Ok(VMResKind::Return)
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
                         return Err(RubyError::argument_wrong(args_num, 0));
                     }
-                    self.exec_getter(id, receiver)?
+                    let val = self.exec_getter(id, receiver)?;
+                    self.stack_push(val);
+                    Ok(VMResKind::Return)
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
                         return Err(RubyError::argument_wrong(args_num, 1));
                     }
                     let val = self.stack_pop();
-                    self.exec_setter(id, receiver, val)?
+                    let val = self.exec_setter(id, receiver, val)?;
+                    self.stack_push(val);
+                    Ok(VMResKind::Return)
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     let block = Block::from_u32(block, self);
-                    if iseq.opt_flag {
+                    let context = if iseq.opt_flag {
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
                         };
                         let mut context = self.new_stack_context_with(receiver, block, iseq, None);
                         context.copy_from_slice0(&self.exec_stack[len - args_num..]);
-                        self.set_stack_len(len - args_num);
-                        self.invoke_new_context(context);
+                        context
                     } else {
                         let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                         args.block = block;
-                        let context = ContextRef::from_args(self, receiver, iseq, &args, None)?;
-                        self.set_stack_len(len - args_num);
-                        self.invoke_new_context(context);
-                    }
-                    return Ok(VMResKind::Invoke);
+                        ContextRef::from_noopt(self, receiver, iseq, &args, None)?
+                    };
+                    self.set_stack_len(len - args_num);
+                    self.invoke_new_context(context);
+                    Ok(VMResKind::Invoke)
                 }
                 _ => unreachable!(),
             },
@@ -971,11 +976,9 @@ impl VM {
                 let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                 args.block = Block::from_u32(block, self);
                 self.set_stack_len(len - args_num);
-                return self.invoke_method_missing(method_id, receiver, &args);
+                self.invoke_method_missing(method_id, receiver, &args)
             }
-        };
-        self.stack_push(val);
-        Ok(VMResKind::Return)
+        }
     }
 
     /// Invoke the block given to the method with `args`.
