@@ -14,6 +14,7 @@ thread_local!(
 pub struct ContextStack {
     buf: *mut Context,
     sp: usize,
+    sp_ptr: *mut Context,
 }
 
 impl Drop for ContextStack {
@@ -37,7 +38,11 @@ impl ContextStack {
             }
             Some(buf) => buf,
         });
-        Self { buf, sp: 0 }
+        Self {
+            buf,
+            sp: 0,
+            sp_ptr: buf,
+        }
     }
 
     /// Push `context` to the virtual stack, and return a context handle.
@@ -46,9 +51,10 @@ impl ContextStack {
             if self.sp >= INITIAL_STACK_SIZE {
                 panic!("stack overflow")
             };
-            let ptr = self.buf.add(self.sp);
+            let ptr = self.sp_ptr;
             std::ptr::write(ptr, context);
             self.sp += 1;
+            self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)
         }
     }
@@ -65,7 +71,7 @@ impl ContextStack {
             if self.sp >= INITIAL_STACK_SIZE {
                 panic!("stack overflow")
             };
-            let ptr = self.buf.add(self.sp);
+            let ptr = self.sp_ptr;
             let lvar_num = iseq.lvars;
             let mut lvar_ary = std::ptr::addr_of_mut!((*ptr).lvar_ary) as *mut Value;
             let lvar_vec = std::ptr::addr_of_mut!((*ptr).lvar_vec);
@@ -93,11 +99,12 @@ impl ContextStack {
             (*ptr).outer = outer;
             (*ptr).caller = None;
             (*ptr).on_stack = CtxKind::Stack;
-            (*ptr).cur_pc = ISeqPos::from(0);
-            (*ptr).prev_pc = ISeqPos::from(0);
-            (*ptr).prev_stack_len = 0;
+            //(*ptr).cur_pc = ISeqPos::from(0);
+            //(*ptr).prev_pc = ISeqPos::from(0);
+            //(*ptr).prev_stack_len = 0;
             (*ptr).called = false;
             self.sp += 1;
+            self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)
         }
     }
@@ -108,7 +115,7 @@ impl ContextStack {
             if self.sp == 0 {
                 return;
             }
-            let ptr = self.buf.add(self.sp - 1);
+            let ptr = self.sp_ptr.sub(1);
             #[cfg(debug_assertions)]
             {
                 let ctx = ContextRef::from_ptr(ptr);
@@ -124,6 +131,7 @@ impl ContextStack {
             }
             (*ptr).lvar_vec = Vec::new();
             self.sp -= 1;
+            self.sp_ptr = ptr;
         }
     }
 
