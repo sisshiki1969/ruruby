@@ -910,6 +910,9 @@ impl VM {
             }
         }
         use divrem::*;
+        if rhs.is_zero() {
+            return Err(RubyError::zero_div("Divided by zero."));
+        }
         let val = match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs.rem_floor(rhs)),
             (RV::Integer(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs as f64, rhs)),
@@ -1001,9 +1004,8 @@ impl VM {
         } else {
             match (lhs.unpack(), rhs.unpack()) {
                 (RV::True, _) => Value::true_val(),
-                (RV::False, _) => Value::bool(rhs.to_bool()),
+                (RV::False, _) | (RV::Nil, _) => Value::bool(rhs.to_bool()),
                 (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs | rhs),
-                (RV::Nil, _) => Value::bool(rhs.to_bool()),
                 (_, _) => {
                     return self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs);
                 }
@@ -1016,9 +1018,8 @@ impl VM {
     fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
         match (lhs.unpack(), rhs.unpack()) {
             (RV::True, _) => Ok(Value::bool(!rhs.to_bool())),
-            (RV::False, _) => Ok(Value::bool(rhs.to_bool())),
+            (RV::False, _) | (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
-            (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
             (_, _) => {
                 self.fallback_for_binop(IdentId::get_id("^"), lhs, rhs)?;
                 Ok(self.stack_pop())

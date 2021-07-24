@@ -2047,7 +2047,7 @@ impl Codegen {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn codegen_usevalue() {

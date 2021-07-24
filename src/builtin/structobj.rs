@@ -115,7 +115,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn struct_test() {

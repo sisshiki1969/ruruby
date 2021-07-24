@@ -510,7 +510,7 @@ impl Allocator {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn gc_test() {

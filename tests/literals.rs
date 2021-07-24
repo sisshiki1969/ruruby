@@ -1,6 +1,6 @@
 #![feature(test)]
 extern crate ruruby;
-use ruruby::test::*;
+use ruruby::tests::*;
 use ruruby::*;
 
 #[test]

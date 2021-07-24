@@ -181,7 +181,7 @@ fn traverse_dir(
 
 #[cfg(test)]
 mod test {
-    use crate::test::*;
+    use crate::tests::*;
     #[test]
     fn dir_test() {
         let program = r##"

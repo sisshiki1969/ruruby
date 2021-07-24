@@ -61,7 +61,7 @@ fn sin(_: &mut VM, _: Value, args: &Args) -> VMResult {
 
 #[cfg(test)]
 mod test {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn math() {

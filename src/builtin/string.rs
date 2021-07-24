@@ -1091,7 +1091,7 @@ fn lines(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 #[cfg(test)]
 mod test {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn string_test() {

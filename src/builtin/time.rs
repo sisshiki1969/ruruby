@@ -81,7 +81,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn time() {

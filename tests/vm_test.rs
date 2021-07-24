@@ -2,7 +2,7 @@
 #![allow(unused_imports, dead_code)]
 extern crate ruruby;
 use ruruby::parse::Lexer;
-use ruruby::test::*;
+use ruruby::tests::*;
 use ruruby::*;
 
 #[test]
@@ -255,6 +255,15 @@ fn op11() {
         assert(4, b||=4)
         assert(4, b||=5)
         ";
+    assert_script(program);
+}
+
+#[test]
+fn op_error() {
+    let program = "
+    assert_error { 4 / 0 }
+    assert_error { 4 % 0 }
+    ";
     assert_script(program);
 }
 

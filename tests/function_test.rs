@@ -1,7 +1,9 @@
 #![feature(test)]
 extern crate ruruby;
-use ruruby::test::*;
+extern crate test;
+use ruruby::tests::*;
 use ruruby::*;
+use test::bench::Bencher;
 
 #[test]
 fn func1() {
@@ -31,7 +33,7 @@ fn func2() {
     let expected = Value::integer(120);
     eval_script(program, expected);
 }
-/*
+
 #[bench]
 fn func3(b: &mut Bencher) {
     let program = "
@@ -58,7 +60,7 @@ fn func4(b: &mut Bencher) {
         assert(120, fact(5))";
     b.iter(|| assert_script(program));
 }
-*/
+
 #[test]
 fn optional_param() {
     let program = "

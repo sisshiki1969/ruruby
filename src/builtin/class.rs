@@ -72,7 +72,7 @@ fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn class_new() {

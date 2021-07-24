@@ -120,7 +120,7 @@ fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::test::*;
+    use crate::tests::*;
     #[test]
     fn float() {
         let program = r#"

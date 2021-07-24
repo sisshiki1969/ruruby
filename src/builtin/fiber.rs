@@ -48,7 +48,7 @@ fn resume(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 #[cfg(test)]
 mod test1 {
-    use crate::test::*;
+    use crate::tests::*;
     #[test]
     fn fiber_test1() {
         let program = r#"
@@ -126,7 +126,7 @@ mod test1 {
 
 #[cfg(test)]
 mod test2 {
-    use crate::test::*;
+    use crate::tests::*;
     #[test]
     fn fiber_gc_test1() {
         let program = r#"

@@ -17,7 +17,7 @@ pub mod globals;
 pub mod id_table;
 pub mod loader;
 pub mod parse;
-pub mod test;
+pub mod tests;
 pub mod util;
 pub mod value;
 pub mod vm;

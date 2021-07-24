@@ -431,7 +431,7 @@ fn private_class_method(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult
 
 #[cfg(test)]
 mod test {
-    use crate::test::*;
+    use crate::tests::*;
 
     #[test]
     fn module_teq() {
