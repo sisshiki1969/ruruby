@@ -184,7 +184,10 @@ impl VM {
     }
 
     pub fn stack_top(&mut self) -> Value {
-        *self.exec_stack.last().unwrap()
+        *self
+            .exec_stack
+            .last()
+            .unwrap_or_else(|| panic!("exec stack is empty."))
     }
 
     fn stack_len(&self) -> usize {
@@ -192,7 +195,7 @@ impl VM {
     }
 
     fn set_stack_len(&mut self, len: usize) {
-        unsafe { self.exec_stack.set_len(len) };
+        self.exec_stack.truncate(len);
     }
 
     /// Push an object to the temporary area.

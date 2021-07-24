@@ -359,13 +359,7 @@ impl Context {
     }
 
     pub fn copy_from_slice0(&mut self, slice: &[Value]) {
-        let len = slice.len();
-        if len <= LVAR_ARRAY_SIZE {
-            self.lvar_ary[0..len].copy_from_slice(slice);
-        } else {
-            self.lvar_ary[0..LVAR_ARRAY_SIZE].copy_from_slice(&slice[..LVAR_ARRAY_SIZE]);
-            self.lvar_vec[0..len - LVAR_ARRAY_SIZE].copy_from_slice(&slice[LVAR_ARRAY_SIZE..])
-        }
+        self.copy_from_slice(0, slice);
     }
 
     fn fill(&mut self, range: Range<usize>, val: Value) {
@@ -374,7 +368,7 @@ impl Context {
         }
     }
 
-    fn set_arguments(&mut self, args: &Args, kw_arg: Value) {
+    fn set_arguments(&mut self, args: &[Value], kw_arg: Value) {
         let iseq = self.iseq_ref.unwrap();
         let req_len = iseq.params.req;
         let post_len = iseq.params.post;
@@ -447,7 +441,7 @@ impl Context {
         }
     }
 
-    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &Args) {
+    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &[Value]) {
         let args_len = args.len();
         let req_len = params.req;
         if args_len == 1 && req_len > 1 {
