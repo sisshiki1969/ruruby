@@ -20,6 +20,8 @@ impl VM {
             let iseqref = self.context().iseq_ref.unwrap();
             let iseq = &iseqref.iseq;
             let self_value = self.context().self_value;
+            let use_value = self.context().use_value;
+            let called = self.context().called;
             self.gc();
 
             macro_rules! try_err {
@@ -29,7 +31,7 @@ impl VM {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.is_method() => {
-                                if self.context().called {
+                                if called {
                                     return Ok(());
                                 } else {
                                     self.unwind_continue();
@@ -49,7 +51,7 @@ impl VM {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.is_method() => {
-                                if self.context().called {
+                                if called {
                                     return Ok(());
                                 } else {
                                     self.unwind_continue();
@@ -61,6 +63,26 @@ impl VM {
                         _ => {}
                     };
                 };
+            }
+
+            macro_rules! cmp {
+                ($eval:ident) => {{
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    self.pc += 1;
+                    let val = Value::bool(self.$eval(rhs, lhs)?);
+                    self.stack_push(val);
+                }};
+            }
+
+            macro_rules! cmp_i {
+                ($eval:ident) => {{
+                    let lhs = self.stack_pop();
+                    let i = iseq.read32(self.pc + 1) as i32;
+                    self.pc += 5;
+                    let val = Value::bool(self.$eval(lhs, i)?);
+                    self.stack_push(val);
+                }};
             }
 
             macro_rules! jmp_cmp {
@@ -87,7 +109,7 @@ impl VM {
                 self.globals.perf.get_perf(iseq[self.pc]);
                 #[cfg(feature = "trace")]
                 if self.globals.startup_flag {
-                    println!(
+                    eprintln!(
                         "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                         self.pc.into_usize(),
                         Inst::inst_info(&self.globals, self.context().iseq_ref.unwrap(), self.pc),
@@ -104,8 +126,7 @@ impl VM {
                         // - reached the end of the method or block.
                         // - `return` in method.
                         // - `next` in block AND outer of loops.
-                        let use_value = self.context().use_value;
-                        if self.context().called {
+                        if called {
                             return Ok(());
                         } else {
                             self.unwind_continue();
@@ -119,7 +140,6 @@ impl VM {
                         // - `break`  in block or eval AND outer of loops.
                         #[cfg(debug_assertions)]
                         assert!(iseqref.kind == ISeqKind::Block || iseqref.kind == ISeqKind::Other);
-                        let called = self.context().called;
                         let val = self.stack_pop();
                         self.unwind_context();
                         self.globals.acc = val;
@@ -276,94 +296,24 @@ impl VM {
                         self.stack_push(val);
                     }
 
-                    Inst::EQ => {
-                        let lhs = self.stack_pop();
-                        let rhs = self.stack_pop();
-                        self.pc += 1;
-                        self.invoke_eq(rhs, lhs)?;
-                    }
-                    Inst::EQI => {
-                        let lhs = self.stack_pop();
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        self.pc += 5;
-                        let val = Value::bool(self.eval_eqi(lhs, i)?);
-                        self.stack_push(val);
-                    }
-                    Inst::NE => {
-                        let lhs = self.stack_pop();
-                        let rhs = self.stack_pop();
-                        self.pc += 1;
-                        self.invoke_neq(rhs, lhs)?;
-                    }
-                    Inst::NEI => {
-                        let lhs = self.stack_pop();
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        self.pc += 5;
-                        let val = Value::bool(self.eval_nei(lhs, i)?);
-                        self.stack_push(val);
-                    }
+                    Inst::EQ => cmp!(eval_eq),
+                    Inst::EQI => cmp_i!(eval_eqi),
+                    Inst::NE => cmp!(eval_ne),
+                    Inst::NEI => cmp_i!(eval_nei),
                     Inst::TEQ => {
                         let rhs = self.stack_pop();
                         let lhs = self.stack_pop();
                         self.pc += 1;
                         self.invoke_teq(rhs, lhs)?;
                     }
-                    Inst::GT => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        self.pc += 1;
-                        let val = self.eval_gt(rhs, lhs).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::GTI => {
-                        let lhs = self.stack_pop();
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        self.pc += 5;
-                        let val = self.eval_gti(lhs, i).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::GE => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        self.pc += 1;
-                        let val = self.eval_ge(rhs, lhs).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::GEI => {
-                        let lhs = self.stack_pop();
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        self.pc += 5;
-                        let val = self.eval_gei(lhs, i).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::LT => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        self.pc += 1;
-                        let val = self.eval_lt(rhs, lhs).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::LTI => {
-                        let lhs = self.stack_pop();
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        self.pc += 5;
-                        let val = self.eval_lti(lhs, i).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::LE => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        self.pc += 1;
-                        let val = self.eval_le(rhs, lhs).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
-                    Inst::LEI => {
-                        let lhs = self.stack_pop();
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        self.pc += 5;
-                        let val = self.eval_lei(lhs, i).map(|x| Value::bool(x))?;
-                        self.stack_push(val);
-                    }
+                    Inst::GT => cmp!(eval_gt),
+                    Inst::GTI => cmp_i!(eval_gti),
+                    Inst::GE => cmp!(eval_ge),
+                    Inst::GEI => cmp_i!(eval_gei),
+                    Inst::LT => cmp!(eval_lt),
+                    Inst::LTI => cmp_i!(eval_lti),
+                    Inst::LE => cmp!(eval_le),
+                    Inst::LEI => cmp_i!(eval_lei),
                     Inst::CMP => {
                         let rhs = self.stack_pop();
                         let lhs = self.stack_pop();

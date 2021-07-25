@@ -1119,12 +1119,6 @@ impl VM {
         Ok(())
     }
 
-    fn invoke_neq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        let b = !self.eval_eq(rhs, lhs)?;
-        self.stack_push(Value::bool(b));
-        Ok(())
-    }
-
     fn invoke_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let b = match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
