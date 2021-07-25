@@ -68,7 +68,7 @@ impl VM {
                 #[cfg(feature = "perf")]
                 self.globals.perf.get_perf(iseq[self.pc]);
                 #[cfg(feature = "trace")]
-                {
+                if self.globals.startup_flag {
                     println!(
                         "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                         self.pc.into_usize(),
@@ -86,10 +86,14 @@ impl VM {
                         // - reached the end of the method or block.
                         // - `return` in method.
                         // - `next` in block AND outer of loops.
+                        let use_value = self.context().use_value;
                         if self.context().called {
                             return Ok(());
                         } else {
                             self.unwind_continue();
+                            if !use_value {
+                                self.stack_pop();
+                            }
                             break;
                         }
                     }
@@ -100,18 +104,22 @@ impl VM {
                         let called = self.context().called;
                         let val = self.stack_pop();
                         self.unwind_context();
-                        self.stack_push(val);
+                        self.globals.acc = val;
                         if called {
                             let err = RubyError::block_return();
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
-                                eprintln!("<+++ {:?}({:?})", err.kind, val);
+                            if self.globals.startup_flag {
+                                eprintln!(
+                                    "<+++ BlockReturn({:?}) stack:{}",
+                                    self.globals.acc,
+                                    self.stack_len()
+                                );
                             }
                             return Err(err);
                         } else {
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
-                                eprintln!("<--- BlockReturn({:?})", val);
+                            if self.globals.startup_flag {
+                                eprintln!("<--- BlockReturn({:?})", self.globals.acc);
                             }
                             break;
                         }
@@ -125,8 +133,8 @@ impl VM {
                     }
                     Inst::THROW => {
                         // - raise error
-                        let val = self.stack_pop();
-                        return Err(RubyError::value(val));
+                        self.globals.acc = self.stack_pop();
+                        return Err(RubyError::value());
                     }
                     Inst::PUSH_NIL => {
                         self.stack_push(Value::nil());
@@ -260,7 +268,7 @@ impl VM {
                         let lhs = self.stack_pop();
                         let i = iseq.read32(self.pc + 1) as i32;
                         self.pc += 5;
-                        let val = Value::bool(self.eval_eqi(lhs, i));
+                        let val = Value::bool(self.eval_eqi(lhs, i)?);
                         self.stack_push(val);
                     }
                     Inst::NE => {
@@ -273,7 +281,7 @@ impl VM {
                         let lhs = self.stack_pop();
                         let i = iseq.read32(self.pc + 1) as i32;
                         self.pc += 5;
-                        let val = Value::bool(!self.eval_eqi(lhs, i));
+                        let val = Value::bool(self.eval_nei(lhs, i)?);
                         self.stack_push(val);
                     }
                     Inst::TEQ => {
@@ -647,6 +655,44 @@ impl VM {
                         let b = self.eval_le(rhs, lhs)?;
                         self.jmp_cond(iseq, b, 5, 1);
                     }
+
+                    Inst::JMP_F_EQI => {
+                        let i = iseq.read32(self.pc + 1) as i32;
+                        let lhs = self.stack_pop();
+                        let b = self.eval_eqi(lhs, i)?;
+                        self.jmp_cond(iseq, b, 9, 5);
+                    }
+                    Inst::JMP_F_NEI => {
+                        let i = iseq.read32(self.pc + 1) as i32;
+                        let lhs = self.stack_pop();
+                        let b = self.eval_nei(lhs, i)?;
+                        self.jmp_cond(iseq, b, 9, 5);
+                    }
+                    Inst::JMP_F_GTI => {
+                        let i = iseq.read32(self.pc + 1) as i32;
+                        let lhs = self.stack_pop();
+                        let b = self.eval_gti(lhs, i)?;
+                        self.jmp_cond(iseq, b, 9, 5);
+                    }
+                    Inst::JMP_F_GEI => {
+                        let i = iseq.read32(self.pc + 1) as i32;
+                        let lhs = self.stack_pop();
+                        let b = self.eval_gei(lhs, i)?;
+                        self.jmp_cond(iseq, b, 9, 5);
+                    }
+                    Inst::JMP_F_LTI => {
+                        let i = iseq.read32(self.pc + 1) as i32;
+                        let lhs = self.stack_pop();
+                        let b = self.eval_lti(lhs, i)?;
+                        self.jmp_cond(iseq, b, 9, 5);
+                    }
+                    Inst::JMP_F_LEI => {
+                        let i = iseq.read32(self.pc + 1) as i32;
+                        let lhs = self.stack_pop();
+                        let b = self.eval_lei(lhs, i)?;
+                        self.jmp_cond(iseq, b, 9, 5);
+                    }
+
                     Inst::OPT_CASE => {
                         let val = self.stack_pop();
                         let map = self
@@ -693,10 +739,17 @@ impl VM {
                     }
                     Inst::OPT_SEND => {
                         let receiver = self.stack_pop();
-                        try_send!(self.vm_fast_send(iseq, receiver));
+                        try_send!(self.vm_fast_send(iseq, receiver, true));
                     }
                     Inst::OPT_SEND_SELF => {
-                        try_send!(self.vm_fast_send(iseq, self_value));
+                        try_send!(self.vm_fast_send(iseq, self_value, true));
+                    }
+                    Inst::OPT_SEND_N => {
+                        let receiver = self.stack_pop();
+                        try_send!(self.vm_fast_send(iseq, receiver, false));
+                    }
+                    Inst::OPT_SEND_SELF_N => {
+                        try_send!(self.vm_fast_send(iseq, self_value, false));
                     }
                     Inst::YIELD => {
                         let args_num = iseq.read32(self.pc + 1) as usize;
@@ -837,7 +890,7 @@ impl VM {
         self.pc = self.context().prev_pc;
         self.context_pop();
         #[cfg(any(feature = "trace", feature = "trace-func"))]
-        {
+        if self.globals.startup_flag {
             eprintln!("<--- Ok({:?})", self.stack_top());
         }
     }
@@ -906,16 +959,21 @@ impl VM {
 
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => return self.invoke_func(method, receiver, None, &args),
+            Some(method) => return self.invoke_func(method, receiver, None, &args, true),
             None => {}
         }
-        self.invoke_method_missing(method_id, receiver, &args)
+        self.invoke_method_missing(method_id, receiver, &args, true)
     }
 
     /// continue current context -> true
     ///
     /// invoke new context -> false
-    fn vm_fast_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<VMResKind, RubyError> {
+    fn vm_fast_send(
+        &mut self,
+        iseq: &ISeq,
+        receiver: Value,
+        use_value: bool,
+    ) -> Result<VMResKind, RubyError> {
         // With block and no keyword/block/splat arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
@@ -924,36 +982,30 @@ impl VM {
         self.pc += 15;
         let len = self.stack_len();
         let rec_class = receiver.get_class_for_method();
-        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
+        let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
             Some(method) => match MethodRepo::get(method) {
-                MethodInfo::BuiltinFunc { func, name } => {
+                MethodInfo::BuiltinFunc { func, name, .. } => {
                     let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                     args.block = Block::from_u32(block, self);
                     self.set_stack_len(len - args_num);
-                    let val = self.exec_native(&func, method, name, receiver, &args)?;
-                    self.stack_push(val);
-                    Ok(VMResKind::Return)
+                    self.exec_native(&func, method, name, receiver, &args)?
                 }
                 MethodInfo::AttrReader { id } => {
                     if args_num != 0 {
                         return Err(RubyError::argument_wrong(args_num, 0));
                     }
-                    let val = self.exec_getter(id, receiver)?;
-                    self.stack_push(val);
-                    Ok(VMResKind::Return)
+                    self.exec_getter(id, receiver)?
                 }
                 MethodInfo::AttrWriter { id } => {
                     if args_num != 1 {
                         return Err(RubyError::argument_wrong(args_num, 1));
                     }
                     let val = self.stack_pop();
-                    let val = self.exec_setter(id, receiver, val)?;
-                    self.stack_push(val);
-                    Ok(VMResKind::Return)
+                    self.exec_setter(id, receiver, val)?
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     let block = Block::from_u32(block, self);
-                    let context = if iseq.opt_flag {
+                    let mut context = if iseq.opt_flag {
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
@@ -966,9 +1018,10 @@ impl VM {
                         args.block = block;
                         ContextRef::from_noopt(self, receiver, iseq, &args, None)?
                     };
+                    context.use_value = use_value;
                     self.set_stack_len(len - args_num);
                     self.invoke_new_context(context);
-                    Ok(VMResKind::Invoke)
+                    return Ok(VMResKind::Invoke);
                 }
                 _ => unreachable!(),
             },
@@ -976,9 +1029,13 @@ impl VM {
                 let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                 args.block = Block::from_u32(block, self);
                 self.set_stack_len(len - args_num);
-                self.invoke_method_missing(method_id, receiver, &args)
+                return self.invoke_method_missing(method_id, receiver, &args, use_value);
             }
+        };
+        if use_value {
+            self.stack_push(val);
         }
+        Ok(VMResKind::Return)
     }
 
     /// Invoke the block given to the method with `args`.
@@ -986,7 +1043,7 @@ impl VM {
         match &self.get_method_context().block {
             Block::Block(method, ctx) => {
                 let ctx = ctx.get_current();
-                self.invoke_func(*method, ctx.self_value, Some(ctx), args)
+                self.invoke_func(*method, ctx.self_value, Some(ctx), args, true)
             }
             Block::Proc(proc) => self.invoke_proc(*proc, args),
             Block::None => return Err(RubyError::local_jump("No block given.")),

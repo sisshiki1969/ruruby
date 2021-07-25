@@ -431,13 +431,14 @@ impl VM {
         self.context_push(context);
         self.pc = ISeqPos::from(0);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
-        {
+        if self.globals.startup_flag {
             let ch = if context.called { "+++" } else { "---" };
             let iseq = context.iseq_ref.unwrap();
             eprintln!("{}> {:?} {:?}", ch, iseq.method, iseq.kind);
         }
         #[cfg(feature = "trace")]
-        {
+        if self.globals.startup_flag {
+            eprintln!("  ------invoke new context------------------------------------------");
             context.dump();
             eprintln!("  ------------------------------------------------------------------");
         }
@@ -451,12 +452,16 @@ impl VM {
                 Ok(_) => {
                     assert!(self.context().called);
                     // normal return from method.
-                    assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
+                    assert_eq!(
+                        self.stack_len(),
+                        self.context().prev_stack_len
+                            + if self.context().use_value { 1 } else { 0 }
+                    );
                     self.pc = self.context().prev_pc;
                     self.context_pop();
 
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
-                    {
+                    if self.globals.startup_flag {
                         eprintln!("<+++ Ok({:?})", self.stack_top());
                     }
                     return Ok(());
@@ -473,7 +478,7 @@ impl VM {
                             loop {
                                 if self.context().called {
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                    {
+                                    if self.globals.startup_flag {
                                         eprintln!("<+++ {:?}({:?})", err.kind, val);
                                     }
                                     self.unwind_context();
@@ -486,7 +491,7 @@ impl VM {
                                 }
                             }
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
+                            if self.globals.startup_flag {
                                 eprintln!("<--- {:?}({:?})", err.kind, val);
                             }
                             self.stack_push(val);
@@ -518,10 +523,10 @@ impl VM {
                                 ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
                                 ExceptionType::Continue => {}
                             };
-                            let val = err.to_exception_val();
+                            let val = err.to_exception_val().unwrap_or(self.globals.acc);
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
-                                eprintln!("<--- Exception({:?})", val);
+                            if self.globals.startup_flag {
+                                eprintln!(":::: Exception({:?})", val);
                             }
                             self.stack_push(val);
                             break;
@@ -532,13 +537,13 @@ impl VM {
                             self.unwind_context();
                             if context.called {
                                 #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                {
+                                if self.globals.startup_flag {
                                     eprintln!("<+++ {:?}", err.kind);
                                 }
                                 return Err(err);
                             }
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            {
+                            if self.globals.startup_flag {
                                 eprintln!("<--- {:?}", err.kind);
                             }
                         }
@@ -792,6 +797,7 @@ impl VM {
         method_id: IdentId,
         receiver: Value,
         args: &Args,
+        use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
             Some(method) => {
@@ -799,7 +805,7 @@ impl VM {
                 let mut new_args = Args::new(len + 1);
                 new_args[0] = Value::symbol(method_id);
                 new_args[1..len + 1].copy_from_slice(args);
-                self.invoke_func(method, receiver, None, &new_args)
+                self.invoke_func(method, receiver, None, &new_args, use_value)
             }
             None => Err(RubyError::undefined_method(method_id, receiver)),
         }
@@ -903,24 +909,30 @@ impl VM {
     }
 
     fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        fn rem_floorf64(self_: f64, other: f64) -> f64 {
-            if self_ > 0.0 && other < 0.0 {
+        fn rem_floorf64(self_: f64, other: f64) -> Result<f64, RubyError> {
+            if other == 0.0 {
+                return Err(RubyError::zero_div("Divided by zero."));
+            }
+            let res = if self_ > 0.0 && other < 0.0 {
                 ((self_ - 1.0) % other) + other + 1.0
             } else if self_ < 0.0 && other > 0.0 {
                 ((self_ + 1.0) % other) + other - 1.0
             } else {
                 self_ % other
-            }
+            };
+            Ok(res)
         }
         use divrem::*;
-        if rhs.is_zero() {
-            return Err(RubyError::zero_div("Divided by zero."));
-        }
         let val = match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs.rem_floor(rhs)),
-            (RV::Integer(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs as f64, rhs)),
-            (RV::Float(lhs), RV::Integer(rhs)) => Value::float(rem_floorf64(lhs, rhs as f64)),
-            (RV::Float(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs, rhs)),
+            (RV::Integer(lhs), RV::Integer(rhs)) => {
+                if rhs == 0 {
+                    return Err(RubyError::zero_div("Divided by zero."));
+                }
+                Value::integer(lhs.rem_floor(rhs))
+            }
+            (RV::Integer(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs as f64, rhs)?),
+            (RV::Float(lhs), RV::Integer(rhs)) => Value::float(rem_floorf64(lhs, rhs as f64)?),
+            (RV::Float(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs, rhs)?),
             (_, _) => {
                 return self.fallback_for_binop(IdentId::_REM, lhs, rhs);
             }
@@ -1161,10 +1173,6 @@ impl VM {
         }
     }
 
-    pub fn eval_eqi(&self, lhs: Value, i: i32) -> bool {
-        lhs.equal_i(i)
-    }
-
     fn invoke_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let b = match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -1265,6 +1273,27 @@ impl VM {
         eval_cmp!(self, rhs, lhs, lt, IdentId::_LT)
     }
 
+    fn eval_eqi(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
+        let res = if lhs.is_packed_fixnum() {
+            lhs.as_packed_fixnum() == i as i64
+        } else if lhs.is_packed_num() {
+            lhs.as_packed_flonum() == i as f64
+        } else {
+            match lhs.unpack() {
+                RV::Integer(lhs) => lhs == i as i64,
+                RV::Float(lhs) => lhs == i as f64,
+                _ => {
+                    self.fallback_for_binop(IdentId::_EQ, lhs, Value::integer(i as i64))?;
+                    return Ok(self.stack_pop().to_bool());
+                }
+            }
+        };
+
+        Ok(res)
+    }
+    fn eval_nei(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
+        Ok(!self.eval_eqi(lhs, i)?)
+    }
     fn eval_gei(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
         eval_cmp_i!(self, lhs, i, ge, IdentId::_GE)
     }
@@ -1603,14 +1632,15 @@ impl VM {
         &mut self,
         block: &Block,
         iter: impl Iterator<Item = Value>,
-    ) -> Result<(), RubyError> {
+        default: Value,
+    ) -> VMResult {
         let mut args = Args::new1(Value::uninitialized());
         match block {
             Block::Block(method, outer) => {
                 let self_value = outer.self_value;
                 use MethodInfo::*;
                 match MethodRepo::get(*method) {
-                    BuiltinFunc { func, name } => {
+                    BuiltinFunc { func, name, .. } => {
                         for v in iter {
                             args[0] = v;
                             self.exec_native(&func, *method, name, self_value, &args)?;
@@ -1628,7 +1658,13 @@ impl VM {
                                     &args,
                                     outer.get_current(),
                                 );
-                                self.run_context(context)?;
+                                match self.run_context(context) {
+                                    Err(err) => match err.kind {
+                                        RubyErrorKind::BlockReturn => return Ok(self.globals.acc),
+                                        _ => return Err(err),
+                                    },
+                                    Ok(()) => {}
+                                };
                                 self.set_stack_len(len);
                             }
                         } else {
@@ -1641,7 +1677,13 @@ impl VM {
                                     &args,
                                     outer.get_current(),
                                 )?;
-                                self.run_context(context)?;
+                                match self.run_context(context) {
+                                    Err(err) => match err.kind {
+                                        RubyErrorKind::BlockReturn => return Ok(self.globals.acc),
+                                        _ => return Err(err),
+                                    },
+                                    Ok(()) => {}
+                                };
                                 self.set_stack_len(len);
                             }
                         }
@@ -1657,13 +1699,19 @@ impl VM {
                 for v in iter {
                     args[0] = v;
                     let context = ContextRef::from(self, self_value, iseq, &args, outer)?;
-                    self.run_context(context)?;
+                    match self.run_context(context) {
+                        Err(err) => match err.kind {
+                            RubyErrorKind::BlockReturn => return Ok(self.globals.acc),
+                            _ => return Err(err),
+                        },
+                        Ok(()) => {}
+                    };
                     self.stack_pop();
                 }
             }
             _ => unreachable!(),
         };
-        Ok(())
+        Ok(default)
     }
 
     /// Evaluate the block with given `self_val` and `args`.
@@ -1726,7 +1774,9 @@ impl VM {
         let self_val = self_value.into();
         use MethodInfo::*;
         let val = match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => self.exec_native(&func, method, name, self_val, args)?,
+            BuiltinFunc { func, name, .. } => {
+                self.exec_native(&func, method, name, self_val, args)?
+            }
             AttrReader { id } => {
                 args.check_args_num(0)?;
                 self.exec_getter(id, self_val)?
@@ -1752,11 +1802,14 @@ impl VM {
         self_val: impl Into<Value>,
         outer: Option<ContextRef>,
         args: &Args,
+        use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         let self_val = self_val.into();
         use MethodInfo::*;
         let val = match MethodRepo::get(method) {
-            BuiltinFunc { func, name } => self.exec_native(&func, method, name, self_val, args)?,
+            BuiltinFunc { func, name, .. } => {
+                self.exec_native(&func, method, name, self_val, args)?
+            }
             AttrReader { id } => {
                 args.check_args_num(0)?;
                 self.exec_getter(id, self_val)?
@@ -1766,13 +1819,16 @@ impl VM {
                 self.exec_setter(id, self_val, args[0])?
             }
             RubyFunc { iseq } => {
-                let context = ContextRef::from(self, self_val, iseq, args, outer)?;
+                let mut context = ContextRef::from(self, self_val, iseq, args, outer)?;
+                context.use_value = use_value;
                 self.invoke_new_context(context);
                 return Ok(VMResKind::Invoke);
             }
             _ => unreachable!(),
         };
-        self.stack_push(val);
+        if use_value {
+            self.stack_push(val);
+        }
         Ok(VMResKind::Return)
     }
 
@@ -1791,7 +1847,9 @@ impl VM {
         self.globals.perf.get_perf(Perf::EXTERN);
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
-        println!("---> BuiltinFunc {:?}", _name);
+        if self.globals.startup_flag {
+            println!("+++> BuiltinFunc {:?}", _name);
+        }
 
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
@@ -1805,7 +1863,9 @@ impl VM {
         self.temp_stack.truncate(len);
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
-        println!("<--- {:?}", res);
+        if self.globals.startup_flag {
+            println!("<+++ {:?}", res);
+        }
 
         res
     }

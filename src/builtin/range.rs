@@ -188,8 +188,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }*/
 
     let iter = (start..end).map(|i| Value::integer(i));
-    vm.eval_block_each1(method, iter)?;
-    Ok(self_val)
+    vm.eval_block_each1(method, iter, self_val)
 }
 
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

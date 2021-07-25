@@ -103,6 +103,7 @@ impl ContextStack {
             //(*ptr).prev_pc = ISeqPos::from(0);
             //(*ptr).prev_stack_len = 0;
             (*ptr).called = false;
+            (*ptr).use_value = true;
             self.sp += 1;
             self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)
@@ -162,6 +163,7 @@ pub struct Context {
     pub prev_pc: ISeqPos,
     pub prev_stack_len: usize,
     pub called: bool,
+    pub use_value: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -249,6 +251,7 @@ impl Default for Context {
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
             called: false,
+            use_value: true,
         }
     }
 }
@@ -274,6 +277,7 @@ impl Context {
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
             called: false,
+            use_value: true,
         }
     }
 
@@ -291,6 +295,7 @@ impl Context {
             prev_pc: ISeqPos::from(0),
             prev_stack_len: 0,
             called: false,
+            use_value: true,
         }
     }
 
@@ -313,8 +318,8 @@ impl Context {
     #[cfg(not(tarpaulin_include))]
     pub fn dump(&self) {
         eprintln!(
-            "{:?} context:{:?} outer:{:?}",
-            self.on_stack, self as *const Context, self.outer
+            "{:?} context:{:?} outer:{:?} prev_stack_len:{}",
+            self.on_stack, self as *const Context, self.outer, self.prev_stack_len
         );
         match self.iseq_ref {
             Some(iseq_ref) => {

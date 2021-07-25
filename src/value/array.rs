@@ -201,19 +201,12 @@ impl ArrayInfo {
     pub fn set_elem(&mut self, args: &Args) -> VMResult {
         args.check_args_range(2, 3)?;
         let val = if args.len() == 3 { args[2] } else { args[1] };
-        let index = args[0].expect_integer("Index")?;
-        let elements = &mut self.elements;
-        let len = elements.len();
         if args.len() == 2 {
-            if index >= elements.len() as i64 {
-                let padding = index as usize - len;
-                elements.append(&mut vec![Value::nil(); padding]);
-                elements.push(val);
-            } else {
-                let index = get_array_index(index, len)?;
-                elements[index] = val;
-            }
+            return self.set_elem1(args[0], args[1]);
         } else {
+            let index = args[0].expect_integer("Index")?;
+            let elements = &mut self.elements;
+            let len = elements.len();
             let index = get_array_index(index, len)?;
             let length = args[1].expect_integer("Length")?;
             if length < 0 {
@@ -222,15 +215,22 @@ impl ArrayInfo {
             let length = length as usize;
             let end = std::cmp::min(len, index + length);
             match val.as_array() {
-                Some(val) => {
-                    let mut tail = elements.split_off(end);
-                    elements.truncate(index);
-                    elements.append(&mut val.elements.clone());
-                    elements.append(&mut tail);
+                Some(ary) => {
+                    let ary_len = ary.len();
+                    if ary_len > (end - index) {
+                        elements.resize(len - end + index + ary_len, Value::nil());
+                        elements.copy_within(end..len, index + ary_len);
+                        elements[index..index + ary_len].copy_from_slice(&ary.elements);
+                    } else {
+                        elements.copy_within(end..len, index + ary_len);
+                        elements[index..index + ary_len].copy_from_slice(&ary.elements);
+                        elements.truncate(len - end + index + ary_len);
+                    }
                 }
                 None => {
-                    elements.drain(index..end);
-                    elements.insert(index, val);
+                    elements.copy_within(end..len, index + 1);
+                    elements[index] = val;
+                    elements.truncate(len - end + index + 1);
                 }
             };
         };
@@ -242,8 +242,7 @@ impl ArrayInfo {
         let elements = &mut self.elements;
         let len = elements.len();
         if index >= elements.len() as i64 {
-            let padding = index as usize - len;
-            elements.extend_from_slice(&vec![Value::nil(); padding]);
+            elements.resize(index as usize, Value::nil());
             elements.push(val);
         } else {
             let index = get_array_index(index, len)?;
@@ -256,8 +255,7 @@ impl ArrayInfo {
         let elements = &mut self.elements;
         let len = elements.len();
         if index as usize >= len {
-            let padding = index as usize - len;
-            elements.append(&mut vec![Value::nil(); padding]);
+            elements.resize(index as usize, Value::nil());
             elements.push(val);
         } else {
             elements[index as usize] = val;

@@ -179,6 +179,7 @@ impl MethodRepo {
                 MethodInfo::BuiltinFunc {
                     func: enumerator_iterate,
                     name: IdentId::_ENUM_FUNC,
+                    class: "Enumerator".to_string(),
                 }, // METHOD_ENUM
             ],
             counter: vec![
@@ -301,11 +302,13 @@ impl MethodRepo {
 
     pub fn print_stats() {
         eprintln!(
-            "+-------------------------------------------------------------------------------+"
+            "+-----------------------------------------------------------------------------------------------------+"
         );
-        eprintln!("| Method call stats:");
         eprintln!(
-            "+-------------------------------------------------------------------------------+"
+            "| Method call stats:                                                                                  |"
+        );
+        eprintln!(
+            "+-----------------------------------------------------------------------------------------------------+"
         );
         eprintln!(
             "  MethodId({:>5}) {:>12} {:>15}   info",
@@ -345,10 +348,20 @@ pub static METHOD_ENUM: MethodId = MethodId(unsafe { std::num::NonZeroU32::new_u
 
 #[derive(Clone)]
 pub enum MethodInfo {
-    RubyFunc { iseq: ISeqRef },
-    AttrReader { id: IdentId },
-    AttrWriter { id: IdentId },
-    BuiltinFunc { name: IdentId, func: BuiltinFunc },
+    RubyFunc {
+        iseq: ISeqRef,
+    },
+    AttrReader {
+        id: IdentId,
+    },
+    AttrWriter {
+        id: IdentId,
+    },
+    BuiltinFunc {
+        name: IdentId,
+        func: BuiltinFunc,
+        class: String,
+    },
     Void,
 }
 
@@ -367,7 +380,9 @@ impl std::fmt::Debug for MethodInfo {
             MethodInfo::RubyFunc { iseq } => write!(f, "RubyFunc {:?}", **iseq),
             MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
             MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
-            MethodInfo::BuiltinFunc { name, .. } => write!(f, "BuiltinFunc {:?}", name),
+            MethodInfo::BuiltinFunc { name, class, .. } => {
+                write!(f, r##"BuiltinFunc {}#{:?}"##, class, name)
+            }
             MethodInfo::Void => write!(f, "Void"),
         }
     }

@@ -37,7 +37,7 @@ impl std::fmt::Debug for ErrorInfo {
             RubyErrorKind::ParseErr(kind) => write!(f, "ParseErr: {:?}", kind),
             RubyErrorKind::MethodReturn => write!(f, "MethodReturn"),
             RubyErrorKind::BlockReturn => write!(f, "BlockReturn"),
-            RubyErrorKind::Value(val) => write!(f, "{:?}", val),
+            RubyErrorKind::Exception => write!(f, "Exception"),
             RubyErrorKind::Internal(msg) => write!(f, "InternalError {}", msg),
             RubyErrorKind::None(msg) => write!(f, "{}", msg),
         }
@@ -51,7 +51,7 @@ pub enum RubyErrorKind {
         kind: RuntimeErrKind,
         message: String,
     },
-    Value(Value),
+    Exception,
     MethodReturn,
     BlockReturn,
     Internal(String),
@@ -143,7 +143,7 @@ impl RubyError {
             RubyErrorKind::RuntimeErr { message, .. } => message.to_owned(),
             RubyErrorKind::MethodReturn => "LocalJumpError".to_string(),
             RubyErrorKind::BlockReturn => "LocalJumpError".to_string(),
-            RubyErrorKind::Value(val) => val.if_exception().unwrap().message(),
+            RubyErrorKind::Exception => "Exception".to_string(),
             RubyErrorKind::None(msg) => msg.to_owned(),
             RubyErrorKind::Internal(msg) => {
                 format!("InternalError\n{}", msg)
@@ -151,9 +151,9 @@ impl RubyError {
         }
     }
 
-    pub fn to_exception_val(&self) -> Value {
-        match &self.kind {
-            RubyErrorKind::Value(val) => *val,
+    pub fn to_exception_val(&self) -> Option<Value> {
+        let val = match &self.kind {
+            RubyErrorKind::Exception => return None,
             RubyErrorKind::RuntimeErr { kind, .. } => match &kind {
                 RuntimeErrKind::Type => {
                     let err_class = BuiltinClass::get_toplevel_constant("TypeError").into_module();
@@ -196,7 +196,8 @@ impl RubyError {
                 let standard = BuiltinClass::standard();
                 Value::exception(standard, self.clone())
             }
-        }
+        };
+        Some(val)
     }
 }
 
@@ -341,8 +342,8 @@ impl RubyError {
         RubyError::new(RubyErrorKind::BlockReturn)
     }
 
-    pub fn value(val: Value) -> RubyError {
-        RubyError::new(RubyErrorKind::Value(val))
+    pub fn value() -> RubyError {
+        RubyError::new(RubyErrorKind::Exception)
     }
 
     pub fn stop_iteration(msg: impl Into<String>) -> RubyError {

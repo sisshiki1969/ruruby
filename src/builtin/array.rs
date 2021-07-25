@@ -160,13 +160,11 @@ fn toa(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn get_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let val = self_val.into_array().get_elem(args)?;
-    Ok(val)
+    self_val.into_array().get_elem(args)
 }
 
 fn set_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let val = self_val.into_array().set_elem(args)?;
-    Ok(val)
+    self_val.into_array().set_elem(args)
 }
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1264,6 +1262,12 @@ mod tests {
         assert [3,4,5], a[2,3]
         a[2,3] = 100
         assert [1,2,100,6,7], a
+        a[1,3] = [10,11,12,13,14,15,16,17]
+        assert [1,10,11,12,13,14,15,16,17,7], a
+        a[4,5] = []
+        assert [1,10,11,12,7], a
+        a[1,4] = [0]
+        assert [1,0], a
         ";
         assert_script(program);
     }

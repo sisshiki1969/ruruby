@@ -48,6 +48,8 @@ impl Inst {
     pub const SEND_SELF: u8 = 61;
     pub const OPT_SEND: u8 = 66;
     pub const OPT_SEND_SELF: u8 = 67;
+    pub const OPT_SEND_N: u8 = 68;
+    pub const OPT_SEND_SELF_N: u8 = 69;
 
     pub const POP: u8 = 80;
     pub const DUP: u8 = 81;
@@ -114,6 +116,13 @@ impl Inst {
     pub const JMP_F_GE: u8 = 173;
     pub const JMP_F_LT: u8 = 174;
     pub const JMP_F_LE: u8 = 175;
+
+    pub const JMP_F_EQI: u8 = 180;
+    pub const JMP_F_NEI: u8 = 181;
+    pub const JMP_F_GTI: u8 = 182;
+    pub const JMP_F_GEI: u8 = 183;
+    pub const JMP_F_LTI: u8 = 184;
+    pub const JMP_F_LEI: u8 = 185;
 }
 
 #[allow(dead_code)]
@@ -167,6 +176,13 @@ impl Inst {
             Inst::JMP_F_LT => "JMP_F_LT",
             Inst::JMP_F_LE => "JMP_F_LE",
 
+            Inst::JMP_F_EQI => "JMP_F_EQI",
+            Inst::JMP_F_NEI => "JMP_F_NEI",
+            Inst::JMP_F_GTI => "JMP_F_GTI",
+            Inst::JMP_F_GEI => "JMP_F_GEI",
+            Inst::JMP_F_LTI => "JMP_F_LTI",
+            Inst::JMP_F_LEI => "JMP_F_LEI",
+
             Inst::SET_LOCAL => "SET_LOCAL",
             Inst::GET_LOCAL => "GET_LOCAL",
             Inst::SET_DYNLOCAL => "SET_DYNLOCAL",
@@ -196,8 +212,10 @@ impl Inst {
 
             Inst::SEND => "SEND",
             Inst::SEND_SELF => "SEND_SLF",
-            Inst::OPT_SEND => "O_SEND_B",
-            Inst::OPT_SEND_SELF => "O_SEND_SLF_B",
+            Inst::OPT_SEND => "O_SEND",
+            Inst::OPT_SEND_SELF => "O_SEND_SLF",
+            Inst::OPT_SEND_N => "O_SEND_N",
+            Inst::OPT_SEND_SELF_N => "O_SEND_SLF_N",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
@@ -343,12 +361,19 @@ impl Inst {
             | Inst::OPT_CASE2
             | Inst::DEF_METHOD          // method_id: u32 / method: u32
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u32
+
+            | Inst::JMP_F_EQI            // immediate: i32 / disp: i32
+            | Inst::JMP_F_NEI            // immediate: i32 / disp: i32
+            | Inst::JMP_F_GTI            // immediate: i32 / disp: i32
+            | Inst::JMP_F_GEI            // immediate: i32 / disp: i32
+            | Inst::JMP_F_LTI            // immediate: i32 / disp: i32
+            | Inst::JMP_F_LEI            // immediate: i32 / disp: i32
             => 9,
             Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF   => 15,
-                                // method_id: u32 / number of args: u16 / block: u32 / icache: u32
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N  => 15,
+                    // method_id: u32 / number of args: u16 / block: u32 / icache: u32
             Inst::SEND | Inst::SEND_SELF => 17,
-                                // method_id: u32 / number of args: u16 / flag: u16 / block: u32 / icache: u32
+                    // method_id: u32 / number of args: u16 / flag: u16 / block: u32 / icache: u32
             _ => panic!(),
         };
         ISeqDisp::from_i32(disp)
@@ -390,6 +415,18 @@ impl Inst {
                 "{} {:>05x}",
                 Inst::inst_name(iseq[pc]),
                 (pc + 5 + iseq.read_disp(pc + 1)).into_usize()
+            ),
+
+            Inst::JMP_F_EQI
+            | Inst::JMP_F_NEI
+            | Inst::JMP_F_GTI
+            | Inst::JMP_F_GEI
+            | Inst::JMP_F_LTI
+            | Inst::JMP_F_LEI => format!(
+                "{} {} {:>05x}",
+                Inst::inst_name(iseq[pc]),
+                iseq.read32(pc + 1) as i32,
+                (pc + 9 + iseq.read_disp(pc + 5)).into_usize()
             ),
 
             Inst::OPT_CASE => format!(
@@ -447,7 +484,7 @@ impl Inst {
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5)
             ),
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF  => format!(
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N => format!(
                 "{} '{}' {} items",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),

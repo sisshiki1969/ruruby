@@ -35,7 +35,7 @@ pub fn assert_script(script: impl Into<String>) {
         Err(err) => {
             err.show_err();
             err.show_loc(0);
-            panic!("Got error: {:?}", err);
+            panic!("Got error: {:?} {:?}", err, vm.globals.acc);
         }
     }
 }

@@ -1122,16 +1122,6 @@ impl Value {
 }
 
 impl Value {
-    pub fn equal_i(self, other: i32) -> bool {
-        if self.is_packed_fixnum() {
-            self.as_packed_fixnum() == other as i64
-        } else if self.is_packed_num() {
-            self.as_packed_flonum() == other as f64
-        } else {
-            false
-        }
-    }
-
     pub fn to_ordering(&self) -> std::cmp::Ordering {
         use std::cmp::Ordering;
         match self.as_integer() {

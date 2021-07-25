@@ -237,8 +237,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Ok(self_val);
     };
     let iter = (0..num).map(|i| Value::integer(i));
-    vm.eval_block_each1(block, iter)?;
-    Ok(self_val)
+    vm.eval_block_each1(block, iter, self_val)
 }
 
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -255,9 +254,10 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
         let iter = (num..max + 1).map(|i| Value::integer(i));
-        vm.eval_block_each1(block, iter)?;
+        vm.eval_block_each1(block, iter, self_val)
+    } else {
+        Ok(self_val)
     }
-    Ok(self_val)
 }
 
 struct Step {
@@ -306,9 +306,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         step,
         limit,
     };
-    vm.eval_block_each1(block, iter)?;
-
-    Ok(self_val)
+    vm.eval_block_each1(block, iter, self_val)
 }
 
 /// Built-in function "chr".

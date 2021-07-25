@@ -117,7 +117,7 @@ impl FiberHandle {
                 #[cfg(feature = "perf")]
                 vm.globals.perf.get_perf(Perf::INVALID);
                 #[cfg(any(feature = "trace", feature = "trace-func"))]
-                {
+                if vm.globals.startup_flag {
                     eprintln!("<=== yield Ok({:?})", val);
                 }
                 let send_val = Box::into_raw(Box::new(Ok(val)));
@@ -181,9 +181,7 @@ impl FiberContext {
     /// Resume child fiber.
     pub fn resume(&mut self, val: Value) -> VMResult {
         #[cfg(any(feature = "trace", feature = "trace-func"))]
-        {
-            eprintln!("===> resume");
-        }
+        eprintln!("===> resume");
         let ptr = self as _;
         match self.state {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),

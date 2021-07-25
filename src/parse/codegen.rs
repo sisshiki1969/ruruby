@@ -407,14 +407,18 @@ impl Codegen {
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        iseq.push(Inst::OPT_SEND);
+        if use_value {
+            iseq.push(Inst::OPT_SEND);
+        } else {
+            iseq.push(Inst::OPT_SEND_N);
+        };
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
-        if !use_value {
+        /*if !use_value {
             self.gen_pop(iseq);
-        }
+        }*/
     }
 
     fn gen_opt_send_self(
@@ -426,14 +430,18 @@ impl Codegen {
         use_value: bool,
     ) {
         self.save_cur_loc(iseq);
-        iseq.push(Inst::OPT_SEND_SELF);
+        if use_value {
+            iseq.push(Inst::OPT_SEND_SELF);
+        } else {
+            iseq.push(Inst::OPT_SEND_SELF_N);
+        };
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
-        if !use_value {
+        /*if !use_value {
             self.gen_pop(iseq);
-        }
+        }*/
     }
 
     /// stack: val
@@ -824,19 +832,35 @@ impl Codegen {
         let pos = match cond.kind {
             NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() => {
                 self.gen(globals, iseq, *lhs, true)?;
-                self.gen(globals, iseq, *rhs, true)?;
-                self.save_loc(iseq, cond.loc);
-                let inst = match op {
-                    BinOp::Eq => Inst::JMP_F_EQ,
-                    BinOp::Ne => Inst::JMP_F_NE,
-                    BinOp::Ge => Inst::JMP_F_GE,
-                    BinOp::Gt => Inst::JMP_F_GT,
-                    BinOp::Le => Inst::JMP_F_LE,
-                    BinOp::Lt => Inst::JMP_F_LT,
-                    _ => unreachable!(),
-                };
-                iseq.push(inst);
-                iseq.push32(0);
+                if let Some(i) = rhs.is_imm_i32() {
+                    self.save_loc(iseq, cond.loc);
+                    let inst = match op {
+                        BinOp::Eq => Inst::JMP_F_EQI,
+                        BinOp::Ne => Inst::JMP_F_NEI,
+                        BinOp::Ge => Inst::JMP_F_GEI,
+                        BinOp::Gt => Inst::JMP_F_GTI,
+                        BinOp::Le => Inst::JMP_F_LEI,
+                        BinOp::Lt => Inst::JMP_F_LTI,
+                        _ => unreachable!(),
+                    };
+                    iseq.push(inst);
+                    iseq.push32(i as u32);
+                    iseq.push32(0);
+                } else {
+                    self.gen(globals, iseq, *rhs, true)?;
+                    self.save_loc(iseq, cond.loc);
+                    let inst = match op {
+                        BinOp::Eq => Inst::JMP_F_EQ,
+                        BinOp::Ne => Inst::JMP_F_NE,
+                        BinOp::Ge => Inst::JMP_F_GE,
+                        BinOp::Gt => Inst::JMP_F_GT,
+                        BinOp::Le => Inst::JMP_F_LE,
+                        BinOp::Lt => Inst::JMP_F_LT,
+                        _ => unreachable!(),
+                    };
+                    iseq.push(inst);
+                    iseq.push32(0);
+                }
                 iseq.current()
             }
             _ => {
@@ -1158,20 +1182,29 @@ impl Codegen {
                     BinOp::Cmp => binop!(Inst::CMP),
                     BinOp::LAnd => {
                         self.gen(globals, iseq, *lhs, true)?;
-                        //iseq.push(Inst::REP_UNINIT);
-                        self.gen_dup(iseq, 1);
+                        if use_value {
+                            self.gen_dup(iseq, 1);
+                        }
                         let src = iseq.gen_jmp_if_f();
-                        self.gen_pop(iseq);
-                        self.gen(globals, iseq, *rhs, true)?;
+                        if use_value {
+                            self.gen_pop(iseq);
+                        }
+                        self.gen(globals, iseq, *rhs, use_value)?;
                         iseq.write_disp_from_cur(src);
+                        return Ok(());
                     }
                     BinOp::LOr => {
                         self.gen(globals, iseq, *lhs, true)?;
-                        self.gen_dup(iseq, 1);
+                        if use_value {
+                            self.gen_dup(iseq, 1);
+                        }
                         let src = iseq.gen_jmp_if_t();
-                        self.gen_pop(iseq);
-                        self.gen(globals, iseq, *rhs, true)?;
+                        if use_value {
+                            self.gen_pop(iseq);
+                        }
+                        self.gen(globals, iseq, *rhs, use_value)?;
                         iseq.write_disp_from_cur(src);
+                        return Ok(());
                     }
                 }
                 if !use_value {

@@ -289,13 +289,12 @@ impl Allocator {
     }
 
     pub fn gc(&mut self, root: &Globals) {
-        #[cfg(feature = "trace")]
+        #[cfg(any(feature = "trace", feature = "gc-debug"))]
         {
-            println!("#### GC Start");
+            eprintln!("#### GC Start");
         }
         #[cfg(feature = "gc-debug")]
         {
-            eprintln!("--GC start");
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
                 self.allocated,
@@ -316,11 +315,9 @@ impl Allocator {
         }
         self.alloc_flag = false;
         self.count += 1;
-        #[cfg(feature = "gc-debug")]
-        eprintln!("--GC completed");
-        #[cfg(feature = "trace")]
+        #[cfg(any(feature = "trace", feature = "gc-debug"))]
         {
-            println!("#### GC End");
+            eprintln!("#### GC End");
         }
     }
 

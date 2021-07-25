@@ -503,7 +503,11 @@ impl ClassInfo {
     }
 
     pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
-        let info = MethodInfo::BuiltinFunc { name: id, func };
+        let info = MethodInfo::BuiltinFunc {
+            name: id,
+            func,
+            class: self.name(),
+        };
         let methodref = MethodRepo::add(info);
         self.ext.method_table.insert(id, methodref);
     }

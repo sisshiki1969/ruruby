@@ -24,6 +24,8 @@ pub struct Globals {
     #[cfg(feature = "perf")]
     pub perf: Perf,
     pub startup_flag: bool,
+    /// register for error handling
+    pub acc: Value,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -80,6 +82,7 @@ impl Globals {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
             startup_flag: false,
+            acc: Value::nil(),
         };
 
         BuiltinClass::initialize();

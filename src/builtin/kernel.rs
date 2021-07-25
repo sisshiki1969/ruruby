@@ -107,7 +107,7 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         ))),
         Err(err) => {
             match err.kind {
-                RubyErrorKind::BlockReturn | RubyErrorKind::MethodReturn => {
+                RubyErrorKind::MethodReturn => {
                     vm.stack_pop();
                 }
                 _ => {}
@@ -224,13 +224,14 @@ fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             } else if args[0].is_class() {
                 if args[0].is_exception_class() {
                     let method = args[0].get_method_or_nomethod(IdentId::NEW)?;
-                    let val = vm.eval_method(method, args[0], &Args::new0())?;
-                    Err(RubyError::value(val))
+                    vm.globals.acc = vm.eval_method(method, args[0], &Args::new0())?;
+                    Err(RubyError::value())
                 } else {
                     Err(RubyError::typeerr("Exception class/object expected."))
                 }
             } else if args[0].if_exception().is_some() {
-                Err(RubyError::value(args[0]))
+                vm.globals.acc = args[0];
+                Err(RubyError::value())
             } else {
                 Err(RubyError::typeerr("Exception class/object expected."))
             }
@@ -248,15 +249,15 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
     let arg = Args::new0();
     loop {
-        let res = vm.eval_block(&block, &arg);
-        match res {
+        match vm.eval_block(&block, &arg) {
             Ok(_) => {}
             Err(err) => match &err.kind {
+                RubyErrorKind::BlockReturn => return Ok(vm.globals.acc),
                 RubyErrorKind::RuntimeErr {
                     kind: RuntimeErrKind::StopIteration,
                     ..
                 } => return Ok(Value::nil()),
-                RubyErrorKind::Value(val) if val.get_class_name() == "StopIteration" => {
+                RubyErrorKind::Exception if vm.globals.acc.get_class_name() == "StopIteration" => {
                     return Ok(Value::nil())
                 }
                 _ => return Err(err),
@@ -528,6 +529,22 @@ mod test {
             assert_script(program);
         }
     */
+
+    #[test]
+    fn kernel_loop1() {
+        let program = r#"
+        a = loop do break end
+        assert nil, a
+        a = loop do break 42 end
+        assert 42, a
+        a = loop do
+          raise StopIteration
+        end
+        assert nil, a
+        "#;
+        assert_script(program);
+    }
+
     #[test]
     fn kernel_loop() {
         let program = r#"
