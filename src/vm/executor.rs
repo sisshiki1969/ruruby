@@ -1125,54 +1125,6 @@ impl VM {
         Ok(())
     }
 
-    pub fn eval_eq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        if lhs.id() == rhs.id() {
-            return Ok(true);
-        };
-        if lhs.is_packed_value() || rhs.is_packed_value() {
-            if lhs.is_packed_num() && rhs.is_packed_num() {
-                match (lhs.is_packed_fixnum(), rhs.is_packed_fixnum()) {
-                    (true, false) => {
-                        return Ok(lhs.as_packed_fixnum() as f64 == rhs.as_packed_flonum())
-                    }
-                    (false, true) => {
-                        return Ok(lhs.as_packed_flonum() == rhs.as_packed_fixnum() as f64)
-                    }
-                    _ => return Ok(false),
-                }
-            }
-            return Ok(false);
-        };
-        match (&lhs.rvalue().kind, &rhs.rvalue().kind) {
-            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => Ok(*lhs as f64 == *rhs),
-            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => Ok(*lhs == *rhs as f64),
-            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                Ok(*r1 == *r2 && *i1 == *i2)
-            }
-            (ObjKind::String(lhs), ObjKind::String(rhs)) => Ok(lhs.as_bytes() == rhs.as_bytes()),
-            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => Ok(lhs.elements == rhs.elements),
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => Ok(lhs == rhs),
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => Ok(**lhs == **rhs),
-            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Invalid, _) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs.rvalue())
-            }
-            (_, ObjKind::Invalid) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs.rvalue())
-            }
-            (_, _) => {
-                let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {
-                    Ok(()) => self.stack_pop(),
-                    _ => return Ok(false),
-                };
-                Ok(val.to_bool())
-            }
-        }
-    }
-
     fn invoke_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let b = match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -1258,6 +1210,58 @@ impl VM {
             }
         }
         false
+    }
+
+    pub fn eval_eq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        if lhs.id() == rhs.id() {
+            return Ok(true);
+        };
+        if lhs.is_packed_value() || rhs.is_packed_value() {
+            if lhs.is_packed_num() && rhs.is_packed_num() {
+                match (lhs.is_packed_fixnum(), rhs.is_packed_fixnum()) {
+                    (true, false) => {
+                        return Ok(lhs.as_packed_fixnum() as f64 == rhs.as_packed_flonum())
+                    }
+                    (false, true) => {
+                        return Ok(lhs.as_packed_flonum() == rhs.as_packed_fixnum() as f64)
+                    }
+                    _ => return Ok(false),
+                }
+            }
+            return Ok(false);
+        };
+        match (&lhs.rvalue().kind, &rhs.rvalue().kind) {
+            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => Ok(*lhs == *rhs),
+            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => Ok(*lhs == *rhs),
+            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => Ok(*lhs as f64 == *rhs),
+            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => Ok(*lhs == *rhs as f64),
+            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
+                Ok(*r1 == *r2 && *i1 == *i2)
+            }
+            (ObjKind::String(lhs), ObjKind::String(rhs)) => Ok(lhs.as_bytes() == rhs.as_bytes()),
+            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => Ok(lhs.elements == rhs.elements),
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => Ok(lhs == rhs),
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => Ok(**lhs == **rhs),
+            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
+            (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
+            (ObjKind::Invalid, _) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs.rvalue())
+            }
+            (_, ObjKind::Invalid) => {
+                panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs.rvalue())
+            }
+            (_, _) => {
+                let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {
+                    Ok(()) => self.stack_pop(),
+                    _ => return Ok(false),
+                };
+                Ok(val.to_bool())
+            }
+        }
+    }
+
+    fn eval_ne(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        Ok(!self.eval_eq(rhs, lhs)?)
     }
 
     fn eval_ge(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {

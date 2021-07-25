@@ -63,6 +63,24 @@ impl VM {
                 };
             }
 
+            macro_rules! jmp_cmp {
+                ($eval:ident) => {{
+                    let rhs = self.stack_pop();
+                    let lhs = self.stack_pop();
+                    let b = self.$eval(rhs, lhs)?;
+                    self.jmp_cond(iseq, b, 5, 1);
+                }};
+            }
+
+            macro_rules! jmp_cmp_i {
+                ($eval:ident) => {{
+                    let i = iseq.read32(self.pc + 1) as i32;
+                    let lhs = self.stack_pop();
+                    let b = self.$eval(lhs, i)?;
+                    self.jmp_cond(iseq, b, 9, 5);
+                }};
+            }
+
             loop {
                 self.context().cur_pc = self.pc;
                 #[cfg(feature = "perf")]
@@ -619,79 +637,19 @@ impl VM {
                         self.jmp_cond(iseq, b, 5, 1);
                     }
 
-                    Inst::JMP_F_EQ => {
-                        let lhs = self.stack_pop();
-                        let rhs = self.stack_pop();
-                        let b = self.eval_eq(rhs, lhs)?;
-                        self.jmp_cond(iseq, b, 5, 1);
-                    }
-                    Inst::JMP_F_NE => {
-                        let lhs = self.stack_pop();
-                        let rhs = self.stack_pop();
-                        let b = !self.eval_eq(rhs, lhs)?;
-                        self.jmp_cond(iseq, b, 5, 1);
-                    }
-                    Inst::JMP_F_GT => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        let b = self.eval_gt(rhs, lhs)?;
-                        self.jmp_cond(iseq, b, 5, 1);
-                    }
-                    Inst::JMP_F_GE => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        let b = self.eval_ge(rhs, lhs)?;
-                        self.jmp_cond(iseq, b, 5, 1);
-                    }
-                    Inst::JMP_F_LT => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        let b = self.eval_lt(rhs, lhs)?;
-                        self.jmp_cond(iseq, b, 5, 1);
-                    }
-                    Inst::JMP_F_LE => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
-                        let b = self.eval_le(rhs, lhs)?;
-                        self.jmp_cond(iseq, b, 5, 1);
-                    }
+                    Inst::JMP_F_EQ => jmp_cmp!(eval_eq),
+                    Inst::JMP_F_NE => jmp_cmp!(eval_ne),
+                    Inst::JMP_F_GT => jmp_cmp!(eval_gt),
+                    Inst::JMP_F_GE => jmp_cmp!(eval_ge),
+                    Inst::JMP_F_LT => jmp_cmp!(eval_lt),
+                    Inst::JMP_F_LE => jmp_cmp!(eval_le),
 
-                    Inst::JMP_F_EQI => {
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        let lhs = self.stack_pop();
-                        let b = self.eval_eqi(lhs, i)?;
-                        self.jmp_cond(iseq, b, 9, 5);
-                    }
-                    Inst::JMP_F_NEI => {
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        let lhs = self.stack_pop();
-                        let b = self.eval_nei(lhs, i)?;
-                        self.jmp_cond(iseq, b, 9, 5);
-                    }
-                    Inst::JMP_F_GTI => {
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        let lhs = self.stack_pop();
-                        let b = self.eval_gti(lhs, i)?;
-                        self.jmp_cond(iseq, b, 9, 5);
-                    }
-                    Inst::JMP_F_GEI => {
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        let lhs = self.stack_pop();
-                        let b = self.eval_gei(lhs, i)?;
-                        self.jmp_cond(iseq, b, 9, 5);
-                    }
-                    Inst::JMP_F_LTI => {
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        let lhs = self.stack_pop();
-                        let b = self.eval_lti(lhs, i)?;
-                        self.jmp_cond(iseq, b, 9, 5);
-                    }
-                    Inst::JMP_F_LEI => {
-                        let i = iseq.read32(self.pc + 1) as i32;
-                        let lhs = self.stack_pop();
-                        let b = self.eval_lei(lhs, i)?;
-                        self.jmp_cond(iseq, b, 9, 5);
-                    }
+                    Inst::JMP_F_EQI => jmp_cmp_i!(eval_eqi),
+                    Inst::JMP_F_NEI => jmp_cmp_i!(eval_nei),
+                    Inst::JMP_F_GTI => jmp_cmp_i!(eval_gti),
+                    Inst::JMP_F_GEI => jmp_cmp_i!(eval_gei),
+                    Inst::JMP_F_LTI => jmp_cmp_i!(eval_lti),
+                    Inst::JMP_F_LEI => jmp_cmp_i!(eval_lei),
 
                     Inst::OPT_CASE => {
                         let val = self.stack_pop();
