@@ -254,10 +254,21 @@ impl Lexer {
             };
 
             let pos = self.pos;
-            let ch = match self.get() {
-                Ok(ch) => ch,
-                Err(_) => return Ok(self.new_eof()),
-            };
+            let mut ch;
+            loop {
+                ch = match self.get() {
+                    Ok(ch) => ch,
+                    Err(_) => return Ok(self.new_eof()),
+                };
+                if ch != '\\' {
+                    break;
+                };
+                if let Some('\n') = self.peek() {
+                    self.get().unwrap();
+                    continue;
+                }
+                break;
+            }
 
             if ch.is_ascii_alphabetic() || ch == '_' {
                 return self.read_identifier(ch, VarKind::Identifier);
@@ -700,9 +711,16 @@ impl Lexer {
                         level -= 1;
                     }
                 }
-                '\\' => s.push(self.read_escaped_char()?),
-
+                '\\' => {
+                    // continuation line
+                    if let Some('\n') = self.peek() {
+                        self.get().unwrap();
+                        continue;
+                    };
+                    s.push(self.read_escaped_char()?);
+                }
                 '#' => match self.peek() {
+                    // string interpolation
                     Some(ch) if ch == '{' || ch == '$' || ch == '@' => {
                         return Ok(InterpolateState::NewInterpolation(s, level))
                     }
@@ -737,6 +755,11 @@ impl Lexer {
                     }
                 }
                 '\\' => {
+                    // continuation line
+                    if let Some('\n') = self.peek() {
+                        self.get().unwrap();
+                        continue;
+                    };
                     let c = self.get()?;
                     if c == '\'' {
                         s.push('\'');

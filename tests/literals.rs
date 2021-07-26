@@ -73,7 +73,19 @@ fn imaginary() {
 
 #[test]
 fn string_lit1() {
-    let program = r##"assert("open "  "windows", "open windows")"##;
+    let program = r##"
+      assert("open "  "windows", "open windows")
+      assert("open "  'windows', "open windows")
+      assert('open '  'windows', "open windows")
+      a = "dows"
+      assert('open '  "win#{a}", "open windows")
+      assert('open '  "win#{a}" '!', "open windows!")
+      assert('open '  "win#{a}" "!#{a}", 'open windows!dows')
+      assert('open '  "win#{a}" '!#{a}', 'open windows!#{a}')
+      assert('open ' \
+       "win#{a}"\
+        '!#{a}', 'open windows!#{a}')
+    "##;
     assert_script(program);
 }
 

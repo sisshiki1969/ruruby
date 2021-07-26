@@ -15,6 +15,7 @@ perf-method = []
 trace = []
 trace-func = []
 emit-iseq = []
+emit-ast = []
 gc-debug = []
 verbose = []
 

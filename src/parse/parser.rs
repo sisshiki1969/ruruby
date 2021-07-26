@@ -180,31 +180,36 @@ impl LvarCollector {
 struct ParseContext {
     lvar: LvarCollector,
     kind: ContextKind,
+    name: Option<IdentId>,
 }
 
 impl ParseContext {
-    fn new_method() -> Self {
+    fn new_method(name: IdentId) -> Self {
         ParseContext {
             lvar: LvarCollector::new(),
             kind: ContextKind::Method,
+            name: Some(name),
         }
     }
-    fn new_class(lvar_collector: Option<LvarCollector>) -> Self {
+    fn new_class(name: IdentId, lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
             lvar: lvar_collector.unwrap_or(LvarCollector::new()),
             kind: ContextKind::Class,
+            name: Some(name),
         }
     }
     fn new_block() -> Self {
         ParseContext {
             lvar: LvarCollector::new(),
             kind: ContextKind::Block,
+            name: None,
         }
     }
     fn new_for() -> Self {
         ParseContext {
             lvar: LvarCollector::new(),
             kind: ContextKind::For,
+            name: None,
         }
     }
 }
@@ -568,8 +573,9 @@ impl Parser {
 impl Parser {
     pub fn parse_program(mut self) -> Result<ParseResult, RubyError> {
         let (node, lvar) = self.parse_program_core(None)?;
-
         let tok = self.peek()?;
+        #[cfg(feature = "emit-ast")]
+        eprintln!("{:#?}", node);
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar, self.lexer.source_info);
             Ok(result)
@@ -583,10 +589,13 @@ impl Parser {
         extern_context: ContextRef,
     ) -> Result<ParseResult, RubyError> {
         self.extern_context = Some(extern_context);
-        self.context_stack.push(ParseContext::new_class(Some(
-            extern_context.iseq_ref.unwrap().lvar.clone(),
-        )));
+        self.context_stack.push(ParseContext::new_class(
+            IdentId::get_id("REPL"),
+            Some(extern_context.iseq_ref.unwrap().lvar.clone()),
+        ));
         let node = self.parse_comp_stmt()?;
+        #[cfg(feature = "emit-ast")]
+        eprintln!("{:#?}", node);
         let lvar = self.context_stack.pop().unwrap().lvar;
 
         let tok = self.peek()?;
@@ -608,6 +617,7 @@ impl Parser {
         //self.lexer.init(path, program);
         self.extern_context = extern_context;
         self.context_stack.push(ParseContext::new_class(
+            IdentId::get_id("Top"),
             extern_context.map(|ctx| ctx.iseq_ref.unwrap().lvar.clone()),
         ));
         let node = self.parse_comp_stmt()?;
@@ -1714,6 +1724,7 @@ impl Parser {
                     Reserved::Def => self.parse_def(),
                     Reserved::Class => {
                         if self.is_method_context() {
+                            eprintln!("{:?}", self.context_stack);
                             return Err(self.error_unexpected(
                                 loc,
                                 "SyntaxError: class definition in method body.",
@@ -1924,9 +1935,19 @@ impl Parser {
     fn parse_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
         let mut s = s.to_string();
-        while let TokenKind::StringLit(next_s) = self.peek_no_term()?.kind {
-            self.get()?;
-            s = format!("{}{}", s, next_s);
+        loop {
+            match self.peek_no_term()?.kind {
+                TokenKind::StringLit(next_s) => {
+                    self.get()?;
+                    s += &next_s;
+                }
+                TokenKind::OpenString(next_s, delimiter, level) => {
+                    self.get()?;
+                    s += &next_s;
+                    return self.parse_interporated_string_literal(&s, delimiter, level);
+                }
+                _ => break,
+            }
         }
         Ok(Node::new_string(s, loc))
     }
@@ -1974,11 +1995,32 @@ impl Parser {
             let tok = self
                 .lexer
                 .read_string_literal_double(None, delimiter, level)?;
-            let loc = tok.loc();
-            match &tok.kind {
-                TokenKind::StringLit(s) => {
+            let mut loc = tok.loc();
+            match tok.kind {
+                TokenKind::StringLit(mut s) => {
+                    loop {
+                        match self.peek_no_term()?.kind {
+                            TokenKind::StringLit(next_s) => {
+                                let t = self.get()?;
+                                s += &next_s;
+                                loc = loc.merge(t.loc);
+                            }
+                            TokenKind::OpenString(next_s, _, _) => {
+                                let t = self.get()?;
+                                s += &next_s;
+                                loc = loc.merge(t.loc);
+                                break;
+                            }
+                            _ => {
+                                nodes.push(Node::new_string(s, loc));
+                                return Ok(Node::new_interporated_string(
+                                    nodes,
+                                    start_loc.merge(loc),
+                                ));
+                            }
+                        }
+                    }
                     nodes.push(Node::new_string(s.clone(), loc));
-                    return Ok(Node::new_interporated_string(nodes, start_loc.merge(loc)));
                 }
                 TokenKind::OpenString(s, _, _) => {
                     nodes.push(Node::new_string(s.clone(), loc));
@@ -2275,7 +2317,7 @@ impl Parser {
             _ => return Err(self.error_unexpected(loc, "Invalid method name.")),
         };
 
-        self.context_stack.push(ParseContext::new_method());
+        self.context_stack.push(ParseContext::new_method(name));
         let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
@@ -2503,7 +2545,7 @@ impl Parser {
         };
         let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
-        self.context_stack.push(ParseContext::new_class(None));
+        self.context_stack.push(ParseContext::new_class(name, None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
@@ -2523,7 +2565,8 @@ impl Parser {
         eprintln!("***parsing.. singleton class {:?}", singleton.kind);
         let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
-        self.context_stack.push(ParseContext::new_class(None));
+        self.context_stack
+            .push(ParseContext::new_class(IdentId::get_id("Singleton"), None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         #[cfg(feature = "verbose")]
