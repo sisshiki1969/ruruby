@@ -407,7 +407,17 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
             )))
         }
     };
-    Ok(Value::bytes(output.stdout))
+    let status = output.status;
+    if status.success() {
+        Ok(Value::bytes(output.stdout))
+    } else {
+        let err = format!(
+            "{} exit status:{:?}",
+            String::from_utf8_lossy(&output.stderr),
+            status.code()
+        );
+        Err(RubyError::runtime(err))
+    }
 }
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
