@@ -38,14 +38,18 @@ end
                 else
                   '/usr/bin/time'
                 end
+@branch = `git branch --show-current`.chomp
 
-@md0 = "# ruruby benchmark results\n
-## environment\n
-Ruby version: #{@ruby_version}  \nCPU: #{@cpu_info}  \nOS: #{@os_info}  \n\n"
+@time = Time.now
 
+@md0 = "# ruruby benchmark results\n## environment\n#{@time}\n
+Ruby version: #{@ruby_version}  \nCPU: #{@cpu_info}  \nOS: #{@os_info}  \nbranch: #{@branch}\n"
+
+puts @time
 puts "Ruby version: #{@ruby_version}"
-puts "OS: #{@os_info}"
 puts "CPU: #{@cpu_info}"
+puts "OS: #{@os_info}"
+puts "branch: #{@branch}"
 
 @md1 = "## execution time\n
 |benchmark|ruby|ruruby|rate|

@@ -390,19 +390,14 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
     Ok(_self_val)
 }
 
-/// TODO: Can not handle command args including ' or ".
 fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
     use std::process::Command;
     args.check_args_num(1)?;
     let mut arg = args[0];
-    let input = if cfg!(windows) {
-        format!("cmd /C {}", arg.expect_string("Arg")?)
-    } else {
-        arg.expect_string("Arg")?.to_string()
-    };
-    let mut input = input.split_ascii_whitespace();
-    let command = input.next().unwrap();
-    let output = match Command::new(command.clone()).args(input).output() {
+    let opt = if cfg!(windows) { "/C" } else { "-c" };
+    let input = arg.expect_string("Arg")?;
+    let command = if cfg!(windows) { "cmd" } else { "sh" };
+    let output = match Command::new(command).args(&[opt, input]).output() {
         Ok(ok) => ok,
         Err(err) => {
             return Err(RubyError::runtime(format!(
