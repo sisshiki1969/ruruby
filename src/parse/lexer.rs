@@ -818,26 +818,49 @@ impl Lexer {
     /// Scan as regular expression.
     fn read_regexp_sub(&mut self) -> Result<InterpolateState, RubyError> {
         let mut s = "".to_string();
+        let mut char_class = 0;
         loop {
             match self.get()? {
                 '/' => {
                     self.check_postfix(&mut s);
                     return Ok(InterpolateState::Finished(s));
                 }
+                '[' => {
+                    char_class += 1;
+                    s.push('[');
+                }
+                ']' => {
+                    char_class -= 1;
+                    s.push(']');
+                }
                 '\\' => {
-                    s.push('\\');
-                    // TODO: It is necessary to count capture groups
-                    // to determine whether backref or octal digit.
-                    // Current impl. may cause problems.
                     let ch = self.get()?;
-                    if '1' >= ch && ch <= '9' && !self.peek_digit() {
-                        s.push(ch);
-                    } else if '0' <= ch && ch <= '7' {
-                        let hex = format!("x{:02x}", self.consume_tri_octal(ch).unwrap());
-                        hex.chars().for_each(|c| s.push(c));
-                    } else {
-                        s.push(ch);
-                    }
+                    match ch {
+                        'a' => s += "\\a",
+                        // '\b' is valid only in the inner of character class. Otherwise, shoud be treated as "\x08".
+                        'b' => s += if char_class == 0 { "\\b" } else { "\\x08" },
+                        'e' => s += "\\x1b",
+                        'f' => s += "\\f",
+                        'n' => s += "\\n",
+                        'r' => s += "\\r",
+                        's' => s += "[[:space:]]",
+                        't' => s += "\\t",
+                        'v' => s += "\\v",
+                        _ => {
+                            s.push('\\');
+                            // TODO: It is necessary to count capture groups
+                            // to determine whether backref or octal digit.
+                            // Current impl. may cause problems.
+                            if '1' >= ch && ch <= '9' && !self.peek_digit() {
+                                s.push(ch);
+                            } else if '0' <= ch && ch <= '7' {
+                                let hex = format!("x{:02x}", self.consume_tri_octal(ch).unwrap());
+                                s += &hex;
+                            } else {
+                                s.push(ch);
+                            }
+                        }
+                    };
                 }
                 '#' => match self.peek() {
                     Some(ch) if ch == '{' || ch == '$' || ch == '@' => {

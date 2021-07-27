@@ -28,7 +28,7 @@ pub enum ObjKind {
     Method(MethodObjInfo),
     Fiber(Box<FiberContext>),
     Enumerator(Box<FiberContext>),
-    Time(TimeInfo),
+    Time(Box<TimeInfo>),
     Exception(RubyError),
 }
 
@@ -233,7 +233,7 @@ impl RValue {
     }
 
     pub fn new_time(time_class: Module, time: TimeInfo) -> Self {
-        RValue::new(time_class, ObjKind::Time(time))
+        RValue::new(time_class, ObjKind::Time(Box::new(time)))
     }
 
     pub fn new_exception(exception_class: Module, err: RubyError) -> Self {
