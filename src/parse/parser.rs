@@ -6,7 +6,9 @@ use crate::vm::context::{ContextRef, ISeqKind};
 use fxhash::FxHashMap;
 use std::path::PathBuf;
 
+mod define;
 mod flow_control;
+mod literals;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
@@ -613,13 +615,10 @@ impl Parser {
         }
     }
 
-    pub fn parse_program_core(
+    fn parse_program_core(
         &mut self,
-        //path: PathBuf,
-        //program: &str,
         extern_context: Option<ContextRef>,
     ) -> Result<(Node, LvarCollector), RubyError> {
-        //self.lexer.init(path, program);
         self.extern_context = extern_context;
         self.context_stack.push(ParseContext::new_class(
             IdentId::get_id("Top"),
@@ -656,20 +655,16 @@ impl Parser {
         loop {
             if self.peek()?.check_stmt_end() {
                 let node = Node::new_comp_stmt(nodes, loc);
-                //println!("comp_node_escape {:?}", node);
                 return Ok(node);
             }
 
             let node = self.parse_stmt()?;
-            //println!("node {:?}", node);
             nodes.push(node);
-            //println!("next {:?}", self.peek_no_term()?);
             if !self.consume_term()? {
                 break;
             }
         }
         let node = Node::new_comp_stmt(nodes, loc);
-        //println!("comp_node {:?}", node);
         Ok(node)
     }
 
@@ -1465,23 +1460,6 @@ impl Parser {
         Ok(Some(Box::new(node)))
     }
 
-    fn alias_name(&mut self) -> Result<Node, RubyError> {
-        if self.consume_punct_no_term(Punct::Colon)? {
-            self.parse_symbol()
-        } else if let TokenKind::GlobalVar(_) = self.peek_no_term()?.kind {
-            let tok = self.get()?;
-            match &tok.kind {
-                TokenKind::GlobalVar(name) => Ok(Node::new_symbol(IdentId::get_id(name), tok.loc)),
-                _ => unreachable!(),
-            }
-        } else {
-            Ok(Node::new_symbol(
-                self.parse_method_def_name()?,
-                self.prev_loc(),
-            ))
-        }
-    }
-
     fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, RubyError> {
         let tok = self.get()?;
         let loc = tok.loc();
@@ -1539,7 +1517,7 @@ impl Parser {
                 Ok(Node::new_command(content))
             }
             TokenKind::OpenString(s, term, level) => {
-                Ok(self.parse_interporated_string_literal(s, *term, *level)?)
+                self.parse_interporated_string_literal(s, *term, *level)
             }
             TokenKind::OpenCommand(s, term, level) => {
                 let content = self.parse_interporated_string_literal(s, *term, *level)?;
@@ -1564,46 +1542,7 @@ impl Parser {
                 }
                 Punct::LBrace => self.parse_hash_literal(),
                 Punct::Colon => self.parse_symbol(),
-                Punct::Arrow => {
-                    // Lambda literal
-                    let mut params = vec![];
-                    self.context_stack.push(ParseContext::new_block());
-                    if self.consume_punct(Punct::LParen)? {
-                        if !self.consume_punct(Punct::RParen)? {
-                            loop {
-                                let id = self.expect_ident()?;
-                                params.push(FormalParam::req_param(id, self.prev_loc()));
-                                self.new_param(id, self.prev_loc())?;
-                                if !self.consume_punct(Punct::Comma)? {
-                                    break;
-                                }
-                            }
-                            self.expect_punct(Punct::RParen)?;
-                        }
-                    } else if let TokenKind::Ident(_) = self.peek()?.kind {
-                        let id = self.expect_ident()?;
-                        self.new_param(id, self.prev_loc())?;
-                        params.push(FormalParam::req_param(id, self.prev_loc()));
-                    };
-                    let body = if self.consume_punct(Punct::LBrace)? {
-                        let body = self.parse_comp_stmt()?;
-                        self.expect_punct(Punct::RBrace)?;
-                        body
-                    } else if self.consume_reserved(Reserved::Do)? {
-                        let body = self.parse_comp_stmt()?;
-                        self.expect_reserved(Reserved::End)?;
-                        body
-                    } else {
-                        let loc = self.loc();
-                        let tok = self.get()?;
-                        return Err(self.error_unexpected(
-                            loc,
-                            format!("Expected 'do' or '{{'. Actual:{:?}", tok.kind),
-                        ));
-                    };
-                    let lvar = self.context_stack.pop().unwrap().lvar;
-                    Ok(Node::new_proc(params, body, lvar, loc))
-                }
+                Punct::Arrow => self.parse_lambda_literal(),
                 Punct::Scope => {
                     let name = self.expect_const()?;
                     Ok(Node::new_const(&name, true, loc))
@@ -1770,239 +1709,6 @@ impl Parser {
         }
     }
 
-    /// Parse string literals.
-    /// Adjacent string literals are to be combined.
-    fn parse_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
-        let loc = self.prev_loc();
-        let mut s = s.to_string();
-        loop {
-            match self.peek_no_term()?.kind {
-                TokenKind::StringLit(next_s) => {
-                    self.get()?;
-                    s += &next_s;
-                }
-                TokenKind::OpenString(next_s, delimiter, level) => {
-                    self.get()?;
-                    s += &next_s;
-                    return self.parse_interporated_string_literal(&s, delimiter, level);
-                }
-                _ => break,
-            }
-        }
-        Ok(Node::new_string(s, loc))
-    }
-
-    /// Parse char literals.
-    fn parse_char_literal(&mut self) -> Result<Node, RubyError> {
-        let loc = self.loc();
-        match self.lexer.read_char_literal()?.kind {
-            TokenKind::StringLit(s) => Ok(Node::new_string(s, loc.merge(self.prev_loc))),
-            _ => unreachable!(),
-        }
-    }
-
-    /// Parse template (#{..}, #$s, #@a).
-    fn parse_template(&mut self, nodes: &mut Vec<Node>) -> Result<(), RubyError> {
-        if self.consume_punct(Punct::LBrace)? {
-            nodes.push(self.parse_comp_stmt()?);
-            if !self.consume_punct(Punct::RBrace)? {
-                let loc = self.prev_loc();
-                return Err(self.error_unexpected(loc, "Expect '}'"));
-            }
-        } else {
-            let tok = self.get()?;
-            let loc = tok.loc();
-            let node = match &tok.kind {
-                TokenKind::GlobalVar(s) => Node::new_global_var(s, loc),
-                TokenKind::InstanceVar(s) => Node::new_instance_var(s, loc),
-                _ => unreachable!(format!("{:?}", tok)),
-            };
-            nodes.push(node);
-        };
-        Ok(())
-    }
-
-    fn parse_interporated_string_literal(
-        &mut self,
-        s: &str,
-        delimiter: char,
-        level: usize,
-    ) -> Result<Node, RubyError> {
-        let start_loc = self.prev_loc();
-        let mut nodes = vec![Node::new_string(s.to_string(), start_loc)];
-        loop {
-            self.parse_template(&mut nodes)?;
-            let tok = self
-                .lexer
-                .read_string_literal_double(None, delimiter, level)?;
-            let mut loc = tok.loc();
-            match tok.kind {
-                TokenKind::StringLit(mut s) => {
-                    loop {
-                        match self.peek_no_term()?.kind {
-                            TokenKind::StringLit(next_s) => {
-                                let t = self.get()?;
-                                s += &next_s;
-                                loc = loc.merge(t.loc);
-                            }
-                            TokenKind::OpenString(next_s, _, _) => {
-                                let t = self.get()?;
-                                s += &next_s;
-                                loc = loc.merge(t.loc);
-                                break;
-                            }
-                            _ => {
-                                nodes.push(Node::new_string(s, loc));
-                                return Ok(Node::new_interporated_string(
-                                    nodes,
-                                    start_loc.merge(loc),
-                                ));
-                            }
-                        }
-                    }
-                    nodes.push(Node::new_string(s.clone(), loc));
-                }
-                TokenKind::OpenString(s, _, _) => {
-                    nodes.push(Node::new_string(s.clone(), loc));
-                }
-                _ => unreachable!(format!("{:?}", tok)),
-            }
-        }
-    }
-
-    fn parse_regexp(&mut self) -> Result<Node, RubyError> {
-        let start_loc = self.prev_loc();
-        let tok = self.lexer.get_regexp()?;
-        let mut nodes = match tok.kind {
-            TokenKind::StringLit(s) => {
-                return Ok(Node::new_regexp(
-                    vec![Node::new_string(s, tok.loc)],
-                    tok.loc,
-                ));
-            }
-            TokenKind::OpenRegex(s) => vec![Node::new_string(s, tok.loc)],
-            _ => unreachable!(),
-        };
-        loop {
-            self.parse_template(&mut nodes)?;
-            let tok = self.lexer.get_regexp()?;
-            let loc = tok.loc();
-            match tok.kind {
-                TokenKind::StringLit(s) => {
-                    nodes.push(Node::new_string(s, loc));
-                    return Ok(Node::new_regexp(nodes, start_loc.merge(loc)));
-                }
-                TokenKind::OpenRegex(s) => {
-                    nodes.push(Node::new_string(s, loc));
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    fn parse_percent_notation(&mut self) -> Result<Node, RubyError> {
-        let tok = self.lexer.get_percent_notation()?;
-        let loc = tok.loc;
-        if let TokenKind::PercentNotation(kind, content) = tok.kind {
-            match kind {
-                // TODO: backslash-space must be valid in %w and %i.
-                // e.g. "foo\ bar" => "foo bar"
-                'w' => {
-                    let ary = content
-                        .split(|c| c == ' ' || c == '\n')
-                        .map(|x| Node::new_string(x.to_string(), loc))
-                        .collect();
-                    Ok(Node::new_array(ary, tok.loc))
-                }
-                'i' => {
-                    let ary = content
-                        .split(|c| c == ' ' || c == '\n')
-                        .map(|x| Node::new_symbol(IdentId::get_id(x), loc))
-                        .collect();
-                    Ok(Node::new_array(ary, tok.loc))
-                }
-                'r' => {
-                    let ary = vec![Node::new_string(content + "-", loc)];
-                    Ok(Node::new_regexp(ary, tok.loc))
-                }
-                _ => return Err(self.error_unexpected(loc, "Unsupported % notation.")),
-            }
-        } else if let TokenKind::StringLit(s) = tok.kind {
-            return Ok(Node::new_string(s, loc));
-        } else if let TokenKind::OpenString(s, term, level) = tok.kind {
-            let node = self.parse_interporated_string_literal(&s, term, level)?;
-            return Ok(node);
-        } else {
-            unreachable!(format!("parse_percent_notation(): {:?}", tok.kind));
-        }
-    }
-
-    fn parse_hash_literal(&mut self) -> Result<Node, RubyError> {
-        let mut kvp = vec![];
-        let loc = self.prev_loc();
-        loop {
-            if self.consume_punct(Punct::RBrace)? {
-                return Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())));
-            };
-            let ident_loc = self.loc();
-            let mut symbol_flag = false;
-            let key = if self.peek()?.can_be_symbol() {
-                self.save_state();
-                let token = self.get()?.clone();
-                let ident = self.token_as_symbol(&token);
-                if self.consume_punct(Punct::Colon)? {
-                    self.discard_state();
-                    let id = self.get_ident_id(&ident);
-                    symbol_flag = true;
-                    Node::new_symbol(id, ident_loc)
-                } else {
-                    self.restore_state();
-                    self.parse_arg()?
-                }
-            } else {
-                self.parse_arg()?
-            };
-            if !symbol_flag {
-                self.expect_punct(Punct::FatArrow)?
-            };
-            let value = self.parse_arg()?;
-            kvp.push((key, value));
-            if !self.consume_punct(Punct::Comma)? {
-                break;
-            };
-        }
-        self.expect_punct(Punct::RBrace)?;
-        Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
-    }
-
-    fn parse_symbol(&mut self) -> Result<Node, RubyError> {
-        let loc = self.prev_loc();
-        if self.lexer.trailing_space() {
-            return Err(self.error_unexpected(loc, "Unexpected ':'."));
-        }
-        // Symbol literal
-        let token = self.get()?;
-        let symbol_loc = self.prev_loc();
-        let id = match &token.kind {
-            TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
-            TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
-            _ if token.can_be_symbol() => {
-                let ident = self.token_as_symbol(&token);
-                self.get_ident_id(&ident)
-            }
-            TokenKind::OpenString(s, term, level) => {
-                let node = self.parse_interporated_string_literal(&s, *term, *level)?;
-                let method = self.get_ident_id("to_sym");
-                let loc = symbol_loc.merge(node.loc());
-                return Ok(Node::new_send_noarg(node, method, false, loc));
-            }
-            _ => {
-                return Err(self.error_unexpected(symbol_loc, "Expect identifier or string."));
-            }
-        };
-        Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
-    }
-
     fn parse_then(&mut self) -> Result<(), RubyError> {
         if self.consume_term()? {
             self.consume_reserved(Reserved::Then)?;
@@ -2033,111 +1739,6 @@ impl Parser {
             self.get_ident_id(s)
         };
         Ok(id)
-    }
-
-    /// Parse method definition name.
-    fn parse_method_def_name(&mut self) -> Result<IdentId, RubyError> {
-        // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
-        // メソッド名 : 局所変数識別子
-        //      | 定数識別子
-        //      | ( 定数識別子 | 局所変数識別子 ) ( "!" | "?" )
-        //      | 演算子メソッド名
-        //      | キーワード
-        // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
-        //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
-        let tok = self.get()?;
-        let id = match tok.kind {
-            TokenKind::Reserved(r) => {
-                let s = self.lexer.get_string_from_reserved(r).to_owned();
-                self.method_def_ext(&s)?
-            }
-            TokenKind::Ident(name) | TokenKind::Const(name) => self.method_def_ext(&name)?,
-            TokenKind::Punct(p) => self.parse_op_definable(&p)?,
-            _ => {
-                let loc = tok.loc.merge(self.prev_loc());
-                return Err(self.error_unexpected(loc, "Expected identifier or operator."));
-            }
-        };
-        Ok(id)
-    }
-
-    /// Parse method definition.
-    fn parse_def(&mut self) -> Result<Node, RubyError> {
-        // メソッド定義
-
-        // 特異メソッド定義
-        // ( 変数参照 | "(" 式 ")" ) ( "." | "::" ) メソッド定義名
-        // 変数参照 : 定数識別子 | 大域変数識別子 | クラス変数識別子 | インスタンス変数識別子 | 局所変数識別子 | 擬似変数
-
-        let tok = self.get()?;
-        let loc = tok.loc;
-        let (singleton, name) = match &tok.kind {
-            TokenKind::GlobalVar(name) => {
-                self.consume_punct_no_term(Punct::Dot)?;
-                (
-                    Some(Node::new_global_var(name, loc)),
-                    self.parse_method_def_name()?,
-                )
-            }
-            TokenKind::InstanceVar(name) => {
-                self.consume_punct_no_term(Punct::Dot)?;
-                (
-                    Some(Node::new_instance_var(name, loc)),
-                    self.parse_method_def_name()?,
-                )
-            }
-            TokenKind::Reserved(Reserved::Self_) => {
-                self.consume_punct_no_term(Punct::Dot)?;
-                (Some(Node::new_self(loc)), self.parse_method_def_name()?)
-            }
-            TokenKind::Reserved(r) => {
-                let s = self.lexer.get_string_from_reserved(*r).to_owned();
-                (None, self.method_def_ext(&s)?)
-            }
-            TokenKind::Ident(s) => {
-                if self.consume_punct_no_term(Punct::Dot)?
-                    || self.consume_punct_no_term(Punct::Scope)?
-                {
-                    let id = IdentId::get_id(s);
-                    (Some(Node::new_lvar(id, loc)), self.parse_method_def_name()?)
-                } else {
-                    (None, self.method_def_ext(s)?)
-                }
-            }
-            TokenKind::Const(s) => {
-                if self.consume_punct_no_term(Punct::Dot)?
-                    || self.consume_punct_no_term(Punct::Scope)?
-                {
-                    (
-                        Some(Node::new_const(s, false, loc)),
-                        self.parse_method_def_name()?,
-                    )
-                } else {
-                    (None, self.method_def_ext(s)?)
-                }
-            }
-            TokenKind::Punct(p) => (None, self.parse_op_definable(p)?),
-            _ => return Err(self.error_unexpected(loc, "Invalid method name.")),
-        };
-
-        self.context_stack.push(ParseContext::new_method(name));
-        let args = self.parse_def_params()?;
-        let body = self.parse_begin()?;
-        let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        {
-            match &singleton {
-                Some(singleton) => {
-                    eprintln!("parsed: method {:?} singleton {:?}", name, singleton.kind)
-                }
-                None => eprintln!("parsed: method {:?}", name),
-            }
-        }
-        let decl = match singleton {
-            Some(singleton) => Node::new_singleton_method_decl(singleton, name, args, body, lvar),
-            None => Node::new_method_decl(name, args, body, lvar),
-        };
-        Ok(decl)
     }
 
     /// Parse formal parameters.
@@ -2267,114 +1868,6 @@ impl Parser {
             }
         }
         Ok(args)
-    }
-
-    // ( )
-    // ( ident [, ident]* )
-    fn parse_def_params(&mut self) -> Result<Vec<FormalParam>, RubyError> {
-        if self.consume_term()? {
-            return Ok(vec![]);
-        };
-        let paren_flag = self.consume_punct(Punct::LParen)?;
-
-        if paren_flag && self.consume_punct(Punct::RParen)? {
-            self.consume_term()?;
-            return Ok(vec![]);
-        }
-
-        let args = self.parse_formal_params(TokenKind::Punct(Punct::RParen))?;
-
-        if paren_flag {
-            self.expect_punct(Punct::RParen)?
-        };
-        self.consume_term()?;
-        Ok(args)
-    }
-
-    fn parse_class_def_name(&mut self) -> Result<Node, RubyError> {
-        // クラスパス : "::" 定数識別子
-        //      ｜ 定数識別子
-        //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
-        let mut node = self.parse_primary(true)?;
-        loop {
-            node = if self.consume_punct(Punct::Dot)? {
-                self.parse_primary_method(node, false)?
-            } else if self.consume_punct_no_term(Punct::Scope)? {
-                let loc = self.prev_loc();
-                let name = self.expect_const()?;
-                Node::new_scope(node, &name, loc)
-            } else {
-                return Ok(node);
-            };
-        }
-    }
-
-    /// Parse class definition.
-    fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
-        // クラス定義 : "class" クラスパス [行終端子禁止] ("<" 式)? 分離子 本体文 "end"
-        // クラスパス : "::" 定数識別子
-        //      ｜ 定数識別子
-        //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
-        let loc = self.prev_loc();
-        let prim = self.parse_class_def_name()?;
-        let (base, name) = match prim.kind {
-            NodeKind::Const { toplevel: true, id } if !self.peek_punct_no_term(Punct::Scope) => {
-                (Node::new_nil(loc), id)
-            }
-            NodeKind::Const {
-                toplevel: false,
-                id,
-                ..
-            } if !self.peek_punct_no_term(Punct::Scope) => (Node::new_nil(loc), id),
-            NodeKind::Scope(base, id) => (*base, id),
-            _ => return Err(self.error_unexpected(prim.loc, "Invalid Class/Module name.")),
-        };
-        //eprintln!("base:{:?} name:{:?}", base, name);
-
-        #[cfg(feature = "verbose")]
-        eprintln!(
-            "***parsing.. {} {:?}",
-            if is_module { "module" } else { "class" },
-            name
-        );
-        let superclass = if self.consume_punct_no_term(Punct::Lt)? {
-            if is_module {
-                return Err(self.error_unexpected(self.prev_loc(), "Unexpected '<'."));
-            };
-            self.parse_expr()?
-        } else {
-            let loc = loc.merge(self.prev_loc());
-            Node::new_nil(loc)
-        };
-        let loc = loc.merge(self.prev_loc());
-        self.consume_term()?;
-        self.context_stack.push(ParseContext::new_class(name, None));
-        let body = self.parse_begin()?;
-        let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        eprintln!("***parsed");
-        Ok(Node::new_class_decl(
-            base, name, superclass, body, lvar, is_module, loc,
-        ))
-    }
-
-    /// Parse singleton class definition.
-    fn parse_singleton_class(&mut self, loc: Loc) -> Result<Node, RubyError> {
-        // class "<<" EXPR <term>
-        //      COMPSTMT
-        // end
-        let singleton = self.parse_expr()?;
-        #[cfg(feature = "verbose")]
-        eprintln!("***parsing.. singleton class {:?}", singleton.kind);
-        let loc = loc.merge(self.prev_loc());
-        self.consume_term()?;
-        self.context_stack
-            .push(ParseContext::new_class(IdentId::get_id("Singleton"), None));
-        let body = self.parse_begin()?;
-        let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        eprintln!("***parsed");
-        Ok(Node::new_singleton_class_decl(singleton, body, lvar, loc))
     }
 
     fn parse_begin(&mut self) -> Result<Node, RubyError> {
