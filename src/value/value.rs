@@ -948,6 +948,20 @@ impl Value {
         }
     }
 
+    pub fn as_time(&self) -> &TimeInfo {
+        match &self.rvalue().kind {
+            ObjKind::Time(time) => &**time,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_mut_time(&mut self) -> &mut TimeInfo {
+        match &mut self.rvalue_mut().kind {
+            ObjKind::Time(time) => &mut **time,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
             Some(self.as_packed_symbol())
