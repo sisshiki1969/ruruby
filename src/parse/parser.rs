@@ -6,6 +6,8 @@ use crate::vm::context::{ContextRef, ISeqKind};
 use fxhash::FxHashMap;
 use std::path::PathBuf;
 
+mod flow_control;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
     pub lexer: Lexer,
@@ -13,9 +15,11 @@ pub struct Parser {
     context_stack: Vec<ParseContext>,
     extern_context: Option<ContextRef>,
     /// this flag suppress accesory assignment. e.g. x=3
-    supress_acc_assign: bool,
+    suppress_acc_assign: bool,
     /// this flag suppress accesory multiple assignment. e.g. x = 2,3
-    supress_mul_assign: bool,
+    suppress_mul_assign: bool,
+    /// this flag suppress parse do-end style block.
+    suppress_do_block: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -261,8 +265,9 @@ impl Parser {
             prev_loc: Loc(0, 0),
             context_stack: vec![],
             extern_context: None,
-            supress_acc_assign: false,
-            supress_mul_assign: false,
+            suppress_acc_assign: false,
+            suppress_mul_assign: false,
+            suppress_do_block: false,
         }
     }
 
@@ -758,8 +763,8 @@ impl Parser {
     fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
         // EXPR : MLHS `=' MRHS
         let mut mlhs = vec![node];
-        let old = self.supress_acc_assign;
-        self.supress_acc_assign = true;
+        let old = self.suppress_acc_assign;
+        self.suppress_acc_assign = true;
         loop {
             if self.peek_punct_no_term(Punct::Assign) {
                 break;
@@ -770,7 +775,7 @@ impl Parser {
                 break;
             }
         }
-        self.supress_acc_assign = old;
+        self.suppress_acc_assign = old;
         if !self.consume_punct_no_term(Punct::Assign)? {
             let loc = self.loc();
             return Err(self.error_unexpected(loc, "Expected '='."));
@@ -787,7 +792,7 @@ impl Parser {
     /// Parse rhs of multiple assignment.
     /// If Parser.mul_assign_rhs is true, only a single assignment is allowed.
     fn parse_mul_assign_rhs_if_allowed(&mut self) -> Result<Vec<Node>, RubyError> {
-        if self.supress_mul_assign {
+        if self.suppress_mul_assign {
             let node = vec![self.parse_arg()?];
             Ok(node)
         } else {
@@ -802,15 +807,15 @@ impl Parser {
         term: impl Into<Option<Punct>>,
     ) -> Result<Vec<Node>, RubyError> {
         let term = term.into();
-        let old = self.supress_mul_assign;
+        let old = self.suppress_mul_assign;
         // multiple assignment must be suppressed in parsing arg list.
-        self.supress_mul_assign = true;
+        self.suppress_mul_assign = true;
 
         let mut args = vec![];
         loop {
             if let Some(term) = term {
                 if self.consume_punct(term)? {
-                    self.supress_mul_assign = old;
+                    self.suppress_mul_assign = old;
                     return Ok(args);
                 }
             };
@@ -827,7 +832,7 @@ impl Parser {
                 break;
             }
         }
-        self.supress_mul_assign = old;
+        self.suppress_mul_assign = old;
         match term {
             Some(term) => self.expect_punct(term)?,
             None => {}
@@ -1321,7 +1326,7 @@ impl Parser {
     }
 
     fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, RubyError> {
-        if !self.supress_acc_assign {
+        if !self.suppress_acc_assign {
             if self.consume_punct_no_term(Punct::Assign)? {
                 self.check_lhs(&lhs)?;
                 let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
@@ -1417,18 +1422,19 @@ impl Parser {
     ///     do |x| stmt end
     ///     { |x| stmt }
     fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
-        let old = self.supress_mul_assign;
-        self.supress_mul_assign = false;
-        let do_flag = if self.consume_reserved_no_skip_line_term(Reserved::Do)? {
-            true
-        } else {
-            if self.consume_punct_no_term(Punct::LBrace)? {
-                false
+        let old_suppress_mul_flag = self.suppress_mul_assign;
+        self.suppress_mul_assign = false;
+        let do_flag =
+            if !self.suppress_do_block && self.consume_reserved_no_skip_line_term(Reserved::Do)? {
+                true
             } else {
-                self.supress_mul_assign = old;
-                return Ok(None);
-            }
-        };
+                if self.consume_punct_no_term(Punct::LBrace)? {
+                    false
+                } else {
+                    self.suppress_mul_assign = old_suppress_mul_flag;
+                    return Ok(None);
+                }
+            };
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();
         self.context_stack.push(ParseContext::new_block());
@@ -1455,7 +1461,7 @@ impl Parser {
         let lvar = self.context_stack.pop().unwrap().lvar;
         let loc = loc.merge(self.prev_loc());
         let node = Node::new_proc(params, body, lvar, loc);
-        self.supress_mul_assign = old;
+        self.suppress_mul_assign = old_suppress_mul_flag;
         Ok(Some(Box::new(node)))
     }
 
@@ -1621,229 +1627,63 @@ impl Parser {
                     )
                 }
             },
-            TokenKind::Reserved(reserved) => {
-                match reserved {
-                    Reserved::If => {
-                        let node = self.parse_if_then()?;
-                        self.expect_reserved(Reserved::End)?;
-                        Ok(node)
+            TokenKind::Reserved(reserved) => match reserved {
+                Reserved::If => self.parse_if(),
+                Reserved::Unless => self.parse_unless(),
+                Reserved::For => self.parse_for(),
+                Reserved::While => self.parse_while(true),
+                Reserved::Until => self.parse_while(false),
+                Reserved::Case => self.parse_case(),
+                Reserved::Def => self.parse_def(),
+                Reserved::Class => {
+                    if self.is_method_context() {
+                        return Err(self.error_unexpected(
+                            loc,
+                            "SyntaxError: class definition in method body.",
+                        ));
                     }
-                    Reserved::Unless => {
-                        let node = self.parse_unless()?;
-                        self.expect_reserved(Reserved::End)?;
-                        Ok(node)
-                    }
-                    Reserved::For => {
-                        // for <ident>, .. in <iter>
-                        //   COMP_STMT
-                        // end
-                        //
-                        // for <ident>, .. in <iter> do
-                        //   COMP_STMT
-                        // end
-                        //let loc = self.prev_loc();
-                        let mut vars = vec![];
-                        loop {
-                            let var_id = self.expect_ident()?;
-                            self.add_local_var_if_new(var_id);
-                            vars.push(var_id);
-                            if !self.consume_punct(Punct::Comma)? {
-                                break;
-                            }
-                        }
-                        self.expect_reserved(Reserved::In)?;
-                        let iter = self.parse_expr()?;
-                        self.parse_do()?;
-                        let loc = self.prev_loc();
-
-                        self.context_stack.push(ParseContext::new_for());
-                        let body = self.parse_comp_stmt()?;
-                        let mut formal_params = vec![];
-                        for (i, _var) in vars.iter().enumerate() {
-                            let dummy_var = IdentId::get_id(format!("_{}", i));
-                            self.new_param(dummy_var, loc)?;
-                            formal_params.push(FormalParam::req_param(dummy_var, loc));
-                        }
-                        let lvar = self.context_stack.pop().unwrap().lvar;
-
-                        let loc = loc.merge(self.prev_loc());
-                        let body = Node::new_proc(formal_params, body, lvar, loc);
-
-                        self.expect_reserved(Reserved::End)?;
-                        let node = Node::new(
-                            NodeKind::For {
-                                param: vars,
-                                iter: Box::new(iter),
-                                body: Box::new(body),
-                            },
-                            loc.merge(self.prev_loc()),
-                        );
-                        Ok(node)
-                    }
-                    Reserved::While => {
-                        let loc = self.prev_loc();
-                        let cond = self.parse_expr()?;
-                        self.parse_do()?;
-                        let body = self.parse_comp_stmt()?;
-                        self.expect_reserved(Reserved::End)?;
-                        let loc = loc.merge(self.prev_loc());
-                        Ok(Node::new_while(cond, body, true, loc))
-                    }
-                    Reserved::Until => {
-                        let loc = self.prev_loc();
-                        let cond = self.parse_expr()?;
-                        self.parse_do()?;
-                        let body = self.parse_comp_stmt()?;
-                        self.expect_reserved(Reserved::End)?;
-                        let loc = loc.merge(self.prev_loc());
-                        Ok(Node::new_while(cond, body, false, loc))
-                    }
-                    Reserved::Case => {
-                        let loc = self.prev_loc();
-                        let cond = if self.peek()?.kind != TokenKind::Reserved(Reserved::When) {
-                            Some(self.parse_expr()?)
-                        } else {
-                            None
-                        };
-                        self.consume_term()?;
-                        let mut when_ = vec![];
-                        while self.consume_reserved(Reserved::When)? {
-                            let arg = self.parse_mul_assign_rhs(None)?;
-                            self.parse_then()?;
-                            let body = self.parse_comp_stmt()?;
-                            when_.push(CaseBranch::new(arg, body));
-                        }
-                        let else_ = if self.consume_reserved(Reserved::Else)? {
-                            self.parse_comp_stmt()?
-                        } else {
-                            Node::new_comp_stmt(vec![], self.loc())
-                        };
-                        self.expect_reserved(Reserved::End)?;
-                        Ok(Node::new_case(cond, when_, else_, loc))
-                    }
-                    Reserved::Def => self.parse_def(),
-                    Reserved::Class => {
-                        if self.is_method_context() {
-                            eprintln!("{:?}", self.context_stack);
-                            return Err(self.error_unexpected(
-                                loc,
-                                "SyntaxError: class definition in method body.",
-                            ));
-                        }
-                        let loc = self.prev_loc();
-                        if self.consume_punct(Punct::Shl)? {
-                            self.parse_singleton_class(loc)
-                        } else {
-                            self.parse_class(false)
-                        }
-                    }
-                    Reserved::Module => {
-                        if self.is_method_context() {
-                            return Err(self.error_unexpected(
-                                loc,
-                                "SyntaxError: module definition in method body.",
-                            ));
-                        }
-                        self.parse_class(true)
-                    }
-                    Reserved::Return => {
-                        let tok = self.peek_no_term()?;
-                        // TODO: This is not correct.
-                        if tok.is_term()
-                            || tok.kind == TokenKind::Reserved(Reserved::Unless)
-                            || tok.kind == TokenKind::Reserved(Reserved::If)
-                            || tok.check_stmt_end()
-                        {
-                            let val = Node::new_nil(loc);
-                            return Ok(Node::new_return(val, loc));
-                        };
-                        let val = self.parse_arg()?;
-                        let ret_loc = val.loc();
-                        if self.consume_punct_no_term(Punct::Comma)? {
-                            let mut vec = vec![val, self.parse_arg()?];
-                            while self.consume_punct_no_term(Punct::Comma)? {
-                                vec.push(self.parse_arg()?);
-                            }
-                            let val = Node::new_array(vec, ret_loc);
-                            Ok(Node::new_return(val, loc))
-                        } else {
-                            Ok(Node::new_return(val, loc))
-                        }
-                    }
-                    Reserved::Break => {
-                        let tok = self.peek_no_term()?;
-                        // TODO: This is not correct.
-                        if tok.is_term()
-                            || tok.kind == TokenKind::Reserved(Reserved::Unless)
-                            || tok.kind == TokenKind::Reserved(Reserved::If)
-                            || tok.check_stmt_end()
-                        {
-                            let val = Node::new_nil(loc);
-                            return Ok(Node::new_break(val, loc));
-                        };
-                        let val = self.parse_arg()?;
-                        let ret_loc = val.loc();
-                        if self.consume_punct_no_term(Punct::Comma)? {
-                            let mut vec = vec![val, self.parse_arg()?];
-                            while self.consume_punct_no_term(Punct::Comma)? {
-                                vec.push(self.parse_arg()?);
-                            }
-                            let val = Node::new_array(vec, ret_loc);
-                            Ok(Node::new_break(val, loc))
-                        } else {
-                            Ok(Node::new_break(val, loc))
-                        }
-                    }
-                    Reserved::Next => {
-                        let tok = self.peek_no_term()?;
-                        // TODO: This is not correct.
-                        if tok.is_term()
-                            || tok.kind == TokenKind::Reserved(Reserved::Unless)
-                            || tok.kind == TokenKind::Reserved(Reserved::If)
-                            || tok.check_stmt_end()
-                        {
-                            let val = Node::new_nil(loc);
-                            return Ok(Node::new_next(val, loc));
-                        };
-                        let val = self.parse_arg()?;
-                        let ret_loc = val.loc();
-                        if self.consume_punct_no_term(Punct::Comma)? {
-                            let mut vec = vec![val, self.parse_arg()?];
-                            while self.consume_punct_no_term(Punct::Comma)? {
-                                vec.push(self.parse_arg()?);
-                            }
-                            let val = Node::new_array(vec, ret_loc);
-                            Ok(Node::new_next(val, loc))
-                        } else {
-                            Ok(Node::new_next(val, loc))
-                        }
-                    }
-                    Reserved::True => Ok(Node::new_bool(true, loc)),
-                    Reserved::False => Ok(Node::new_bool(false, loc)),
-                    Reserved::Nil => Ok(Node::new_nil(loc)),
-                    Reserved::Self_ => Ok(Node::new_self(loc)),
-                    Reserved::Begin => self.parse_begin(),
-                    Reserved::Defined => {
-                        if self.consume_punct_no_term(Punct::LParen)? {
-                            let node = self.parse_expr()?;
-                            self.expect_punct(Punct::RParen)?;
-                            Ok(Node::new_defined(node))
-                        } else {
-                            let tok = self.get()?;
-                            Err(self.error_unexpected(tok.loc, format!("expected '('.")))
-                        }
-                    }
-                    Reserved::Alias => {
-                        let new_name = self.alias_name()?;
-                        let old_name = self.alias_name()?;
-                        let loc = loc.merge(self.prev_loc());
-                        Ok(Node::new_alias(new_name, old_name, loc))
-                    }
-                    _ => {
-                        Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
+                    let loc = self.prev_loc();
+                    if self.consume_punct(Punct::Shl)? {
+                        self.parse_singleton_class(loc)
+                    } else {
+                        self.parse_class(false)
                     }
                 }
-            }
+                Reserved::Module => {
+                    if self.is_method_context() {
+                        return Err(self.error_unexpected(
+                            loc,
+                            "SyntaxError: module definition in method body.",
+                        ));
+                    }
+                    self.parse_class(true)
+                }
+                Reserved::Return => self.parse_return(),
+                Reserved::Break => self.parse_break(),
+                Reserved::Next => self.parse_next(),
+                Reserved::True => Ok(Node::new_bool(true, loc)),
+                Reserved::False => Ok(Node::new_bool(false, loc)),
+                Reserved::Nil => Ok(Node::new_nil(loc)),
+                Reserved::Self_ => Ok(Node::new_self(loc)),
+                Reserved::Begin => self.parse_begin(),
+                Reserved::Defined => {
+                    if self.consume_punct_no_term(Punct::LParen)? {
+                        let node = self.parse_expr()?;
+                        self.expect_punct(Punct::RParen)?;
+                        Ok(Node::new_defined(node))
+                    } else {
+                        let tok = self.get()?;
+                        Err(self.error_unexpected(tok.loc, format!("expected '('.")))
+                    }
+                }
+                Reserved::Alias => {
+                    let new_name = self.alias_name()?;
+                    let old_name = self.alias_name()?;
+                    let loc = loc.merge(self.prev_loc());
+                    Ok(Node::new_alias(new_name, old_name, loc))
+                }
+                _ => Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))),
+            },
             TokenKind::EOF => return Err(self.error_eof(loc)),
             _ => {
                 return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
@@ -2161,43 +2001,6 @@ impl Parser {
             }
         };
         Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
-    }
-
-    fn parse_if_then(&mut self) -> Result<Node, RubyError> {
-        //  if EXPR THEN
-        //      COMPSTMT
-        //      (elsif EXPR THEN COMPSTMT)*
-        //      [else COMPSTMT]
-        //  end
-        let loc = self.prev_loc();
-        let cond = self.parse_expr()?;
-        self.parse_then()?;
-        let then_ = self.parse_comp_stmt()?;
-        let else_ = if self.consume_reserved(Reserved::Elsif)? {
-            self.parse_if_then()?
-        } else if self.consume_reserved(Reserved::Else)? {
-            self.parse_comp_stmt()?
-        } else {
-            Node::new_comp_stmt(vec![], self.loc())
-        };
-        Ok(Node::new_if(cond, then_, else_, loc))
-    }
-
-    fn parse_unless(&mut self) -> Result<Node, RubyError> {
-        //  unless EXPR THEN
-        //      COMPSTMT
-        //      [else COMPSTMT]
-        //  end
-        let loc = self.prev_loc();
-        let cond = self.parse_expr()?;
-        self.parse_then()?;
-        let then_ = self.parse_comp_stmt()?;
-        let else_ = if self.consume_reserved(Reserved::Else)? {
-            self.parse_comp_stmt()?
-        } else {
-            Node::new_comp_stmt(vec![], self.loc())
-        };
-        Ok(Node::new_if(cond, else_, then_, loc))
     }
 
     fn parse_then(&mut self) -> Result<(), RubyError> {
