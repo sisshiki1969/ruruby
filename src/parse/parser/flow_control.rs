@@ -113,6 +113,8 @@ impl Parser {
 
     pub fn parse_case(&mut self) -> Result<Node, RubyError> {
         let loc = self.prev_loc();
+        let old = self.suppress_mul_assign;
+        self.suppress_mul_assign = false;
         let cond = if self.peek()?.kind != TokenKind::Reserved(Reserved::When) {
             Some(self.parse_expr()?)
         } else {
@@ -132,6 +134,7 @@ impl Parser {
             Node::new_comp_stmt(vec![], self.loc())
         };
         self.expect_reserved(Reserved::End)?;
+        self.suppress_mul_assign = old;
         Ok(Node::new_case(cond, when_, else_, loc))
     }
 
