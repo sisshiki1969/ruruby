@@ -27,6 +27,9 @@ pub fn init() -> Value {
 
     class.add_builtin_method_by_str("concat", concat);
     class.add_builtin_method_by_str("map", map);
+    class.add_builtin_method_by_str("collect", map);
+    class.add_builtin_method_by_str("map!", map_);
+    class.add_builtin_method_by_str("collect!", map_);
     class.add_builtin_method_by_str("flat_map", flat_map);
     class.add_builtin_method_by_str("each", each);
     class.add_builtin_method_by_str("each_with_index", each_with_index);
@@ -397,6 +400,22 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let res = vm.temp_pop_vec(temp_len);
     Ok(Value::array_from(res))
+}
+
+fn map_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let mut aref = self_val.into_array();
+    let method = to_enum_id!(vm, self_val, args, IdentId::MAP);
+
+    let mut i = 0;
+    let mut arg = Args::new(1);
+    while i < aref.len() {
+        arg[0] = aref[i];
+        aref[i] = vm.eval_block(method, &arg)?;
+        i += 1;
+    }
+
+    Ok(self_val)
 }
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1426,6 +1445,30 @@ mod tests {
         b = [1, [2, 3], 4, [5, 6, 7]]
         assert [2, 2, 3, 2, 3, 8, 5, 6, 7, 5, 6, 7], b.flat_map{|x| x * 2}
         e = [1,2,3].map
+        assert 1, e.next
+        assert 2, e.next
+        assert 3, e.next
+        assert_error { e.next }
+        ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_map_() {
+        let program = "
+        a = [1,2,3]
+        a.map! {|| 3 }
+        assert [3,3,3], a
+        a = [1,2,3]
+        a.map! {|x| x*3 }
+        assert [3,6,9], a
+        a = [1,2,3]
+        a.map! do |x| x*3 end
+        assert [3,6,9], a
+        b = [1, [2, 3], 4, [5, 6, 7]]
+        #b.flat_map!{|x| x * 2}
+        #assert b, [2, 2, 3, 2, 3, 8, 5, 6, 7, 5, 6, 7]
+        e = [1,2,3].map!
         assert 1, e.next
         assert 2, e.next
         assert 3, e.next
