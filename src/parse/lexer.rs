@@ -75,6 +75,7 @@ impl Lexer {
             "return" => Reserved::Return,
             "rescue" => Reserved::Rescue,
             "self" => Reserved::Self_,
+            "super" => Reserved::Super,
             "then" => Reserved::Then,
             "true" => Reserved::True,
             "until" => Reserved::Until,

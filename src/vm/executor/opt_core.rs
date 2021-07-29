@@ -548,7 +548,7 @@ impl VM {
                         self.pc += 5;
                     }
                     Inst::CREATE_PROC => {
-                        let method = iseq.read_method(self.pc + 1);
+                        let method = iseq.read_method(self.pc + 1).unwrap();
                         let block = self.new_block(method);
                         let proc_obj = self.create_proc(&block)?;
                         self.stack_push(proc_obj);
@@ -665,10 +665,17 @@ impl VM {
                         let args = self.pop_args_to_args(args_num);
                         try_send!(self.vm_yield(&args));
                     }
+                    Inst::SUPER => {
+                        let args_num = iseq.read32(self.pc + 1) as usize;
+                        let _block = iseq.read_method(self.pc + 3);
+                        let flag = iseq.read8(self.pc + 7) == 1;
+                        self.pc += 8;
+                        try_send!(self.vm_super(self_value, args_num, flag));
+                    }
                     Inst::DEF_CLASS => {
                         let is_module = iseq.read8(self.pc + 1) == 1;
                         let id = iseq.read_id(self.pc + 2);
-                        let method = iseq.read_method(self.pc + 6);
+                        let method = iseq.read_method(self.pc + 6).unwrap();
                         self.pc += 10;
                         let base = self.stack_pop();
                         let super_val = self.stack_pop();
@@ -682,7 +689,7 @@ impl VM {
                         try_err!(res);
                     }
                     Inst::DEF_SCLASS => {
-                        let method = iseq.read_method(self.pc + 1);
+                        let method = iseq.read_method(self.pc + 1).unwrap();
                         self.pc += 5;
                         let singleton = self.stack_pop().get_singleton_class()?;
                         self.class_push(singleton);
@@ -695,7 +702,7 @@ impl VM {
                     }
                     Inst::DEF_METHOD => {
                         let id = iseq.read_id(self.pc + 1);
-                        let method = iseq.read_method(self.pc + 5);
+                        let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
@@ -706,7 +713,7 @@ impl VM {
                     }
                     Inst::DEF_SMETHOD => {
                         let id = iseq.read_id(self.pc + 1);
-                        let method = iseq.read_method(self.pc + 5);
+                        let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
@@ -944,6 +951,42 @@ impl VM {
             self.stack_push(val);
         }
         Ok(VMResKind::Return)
+    }
+
+    fn vm_super(
+        &mut self,
+        self_value: Value,
+        args_num: usize,
+        flag: bool,
+    ) -> Result<VMResKind, RubyError> {
+        // TODO: support keyword parameter, etc..
+        let iseq = self.get_method_context().iseq_ref.unwrap();
+        if let ISeqKind::Method(Some(m_id)) = iseq.kind {
+            let class = self_value.get_class_for_method();
+            let method = class
+                .superclass()
+                .map(|class| MethodRepo::find_method(class, m_id))
+                .flatten()
+                .ok_or_else(|| {
+                    RubyError::nomethod(format!(
+                        "no superclass method `{:?}' for {:?}.",
+                        m_id, self_value
+                    ))
+                })?;
+            if flag {
+                let param_num = iseq.params.param_ident.len();
+                let mut args = Args::new0();
+                for i in 0..param_num {
+                    args.push(self.context()[i]);
+                }
+                self.invoke_func(method, self_value, None, &args, true)
+            } else {
+                let args = self.pop_args_to_args(args_num);
+                self.invoke_func(method, self_value, None, &args, true)
+            }
+        } else {
+            return Err(RubyError::nomethod("super called outside of method"));
+        }
     }
 
     /// Invoke the block given to the method with `args`.

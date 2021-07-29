@@ -112,6 +112,7 @@ pub enum NodeKind {
     },
 
     Defined(Box<Node>),
+    Super(Option<ArgList>),
     AliasMethod(Box<Node>, Box<Node>), // (new_method, old_method)
 }
 
@@ -677,6 +678,10 @@ impl Node {
 
     pub fn new_yield(args: ArgList, loc: Loc) -> Self {
         Node::new(NodeKind::Yield(args), loc)
+    }
+
+    pub fn new_super(args: impl Into<Option<ArgList>>, loc: Loc) -> Self {
+        Node::new(NodeKind::Super(args.into()), loc)
     }
 
     pub fn new_proc(params: Vec<FormalParam>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {

@@ -77,6 +77,7 @@ impl Inst {
     pub const RESCUE: u8 = 109;
     pub const THROW: u8 = 110;
     pub const OPT_CASE2: u8 = 111;
+    pub const SUPER: u8 = 112;
     
     pub const ADD: u8 = 120;
     pub const SUB: u8 = 121;
@@ -250,6 +251,7 @@ impl Inst {
             Inst::YIELD => "YIELD",
             Inst::RESCUE => "RESCUE",
             Inst::THROW => "THROW",
+            Inst::SUPER => "SUPER",
 
             _ => return format!("undefined {}", inst),
         };
@@ -314,8 +316,8 @@ impl Inst {
             | Inst::CHECK_GVAR          // IdentId: u32
             | Inst::GET_CVAR            // IdentId: u32
             | Inst::SET_CVAR            // IdentId: u32
-            | Inst::GET_IDX_I       // immediate: u32
-            | Inst::SET_IDX_I       // immediate: u32
+            | Inst::GET_IDX_I           // immediate: u32
+            | Inst::SET_IDX_I           // immediate: u32
             | Inst::CREATE_ARRAY        // number of items: u32
             | Inst::CONST_VAL           // ConstId: u32
 
@@ -350,6 +352,9 @@ impl Inst {
             | Inst::YIELD               // number of items: u32
             | Inst::RESCUE              // number of items: u32
             => 5,
+
+            Inst::SUPER  => 8,
+            // number of args: u16 / block: u32 / flag: u8
 
             Inst::PUSH_FIXNUM           // value:i64
             | Inst::PUSH_FLONUM         // value:f64
@@ -485,11 +490,20 @@ impl Inst {
                 iseq.read16(pc + 5)
             ),
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N => format!(
-                "{} '{}' {} items",
+                "{} '{}' {} items block:{}",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
-                iseq.read16(pc + 5)
+                iseq.read16(pc + 5),
+                iseq.read_block(pc + 7),
             ),
+            Inst::SUPER => format!(
+                "{} {} items {} block:{}",
+                Inst::inst_name(iseq[pc]),
+                iseq.read16(pc + 1),
+                iseq.read_block(pc + 3),
+                if iseq.read8(pc + 7) == 1 {"NO_ARGS"} else {""},
+            ),
+
             Inst::CREATE_ARRAY
             | Inst::CREATE_PROC
             | Inst::CREATE_HASH

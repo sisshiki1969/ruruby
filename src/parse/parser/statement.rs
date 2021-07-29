@@ -457,22 +457,18 @@ impl Parser {
     fn parse_unary(&mut self) -> Result<Node, RubyError> {
         if self.consume_punct(Punct::BitNot)? {
             let loc = self.prev_loc();
-            let lhs = self.parse_unary()?;
-            let lhs = Node::new_unop(UnOp::BitNot, lhs, loc);
+            let lhs = Node::new_unop(UnOp::BitNot, self.parse_unary()?, loc);
             Ok(lhs)
         } else if self.consume_punct(Punct::Not)? {
             let loc = self.prev_loc();
-            let lhs = self.parse_unary()?;
-            let lhs = Node::new_unop(UnOp::Not, lhs, loc);
+            let lhs = Node::new_unop(UnOp::Not, self.parse_unary()?, loc);
             Ok(lhs)
         } else if self.consume_punct(Punct::Plus)? {
             let loc = self.prev_loc();
-            let lhs = self.parse_unary()?;
-            let lhs = Node::new_unop(UnOp::Pos, lhs, loc);
+            let lhs = Node::new_unop(UnOp::Pos, self.parse_unary()?, loc);
             Ok(lhs)
         } else {
-            let lhs = self.parse_method_call()?;
-            Ok(lhs)
+            self.parse_method_call()
         }
     }
 
@@ -493,7 +489,7 @@ impl Parser {
                 let loc = self.prev_loc();
                 if let TokenKind::Const(_) = self.peek()?.kind {
                     let name = self.expect_const()?;
-                    Node::new_scope(node, &name, loc)
+                    Node::new_scope(node, &name, self.prev_loc().merge(loc))
                 } else {
                     self.parse_primary_method(node, false)?
                 }
@@ -525,5 +521,18 @@ impl Parser {
             self.parse_arglist_block(None)?
         };
         return Ok(Node::new_yield(args, loc));
+    }
+
+    pub fn parse_super(&mut self) -> Result<Node, RubyError> {
+        let loc = self.prev_loc();
+        let arglist = if self.consume_punct_no_term(Punct::LParen)? {
+            self.parse_arglist_block(Punct::RParen)?
+        } else if self.is_command() {
+            self.parse_arglist_block(None)?
+        } else {
+            return Ok(Node::new_super(None, loc));
+        };
+        let loc = self.prev_loc().merge(loc);
+        Ok(Node::new_super(arglist, loc))
     }
 }

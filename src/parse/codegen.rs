@@ -266,6 +266,20 @@ impl Codegen {
         iseq.push32(args_num as u32);
     }
 
+    pub fn gen_super(
+        &mut self,
+        iseq: &mut ISeq,
+        arg_num: usize,
+        block: Option<MethodId>,
+        no_arg: bool,
+    ) {
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::SUPER);
+        iseq.push16(arg_num as u32 as u16);
+        iseq.push_method(block);
+        iseq.push8(if no_arg { 1 } else { 0 });
+    }
+
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
         let (outer, lvar_id) = match self.get_local_var(id) {
             Some((outer, id)) => (outer, id),
@@ -678,6 +692,40 @@ impl Codegen {
             }
         }
         Ok(())
+    }
+
+    fn get_block(
+        &mut self,
+        globals: &mut Globals,
+        iseq: &mut ISeq,
+        block: Option<Box<Node>>,
+    ) -> Result<(Option<MethodId>, bool), RubyError> {
+        let block = match block {
+            Some(block) => match block.kind {
+                // Block literal ({})
+                NodeKind::Proc { params, body, lvar } => {
+                    self.loop_stack.push(LoopInfo::new_top());
+                    let methodref = self.gen_iseq(
+                        globals,
+                        params,
+                        *body,
+                        lvar,
+                        true,
+                        ContextKind::Block,
+                        vec![],
+                    )?;
+                    self.loop_stack.pop().unwrap();
+                    (Some(methodref), false)
+                }
+                // Block parameter (&block)
+                _ => {
+                    self.gen(globals, iseq, *block, true)?;
+                    (None, true)
+                }
+            },
+            None => (None, false),
+        };
+        Ok(block)
     }
 
     /// Generate ISeq.
@@ -1705,33 +1753,7 @@ impl Codegen {
                 for arg in arglist.kw_rest {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                let mut block_flag = false;
-                let block_ref = match arglist.block {
-                    Some(block) => match block.kind {
-                        // Block literal ({})
-                        NodeKind::Proc { params, body, lvar } => {
-                            self.loop_stack.push(LoopInfo::new_top());
-                            let methodref = self.gen_iseq(
-                                globals,
-                                params,
-                                *body,
-                                lvar,
-                                true,
-                                ContextKind::Block,
-                                vec![],
-                            )?;
-                            self.loop_stack.pop().unwrap();
-                            Some(methodref)
-                        }
-                        // Block parameter (&block)
-                        _ => {
-                            self.gen(globals, iseq, *block, true)?;
-                            block_flag = true;
-                            None
-                        }
-                    },
-                    None => None,
-                };
+                let (block_ref, block_flag) = self.get_block(globals, iseq, arglist.block)?;
                 // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
                 if !block_flag
                     && !kw_flag
@@ -1803,6 +1825,28 @@ impl Codegen {
                     self.gen(globals, iseq, arg, true)?;
                 }
                 self.gen_yield(iseq, len);
+                if !use_value {
+                    self.gen_pop(iseq);
+                };
+            }
+            NodeKind::Super(arglist) => {
+                match arglist {
+                    None => {
+                        self.gen_super(iseq, 0, None, true);
+                    }
+                    Some(arglist) => {
+                        let len = arglist.args.len();
+                        for arg in arglist.args {
+                            self.gen(globals, iseq, arg, true)?;
+                        }
+                        let (block, flag) = self.get_block(globals, iseq, arglist.block)?;
+                        if flag {
+                            unreachable!("Block param is not supported for super.")
+                        }
+                        self.gen_super(iseq, len, block, false);
+                    }
+                }
+
                 if !use_value {
                     self.gen_pop(iseq);
                 };

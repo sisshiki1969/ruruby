@@ -27,7 +27,6 @@ pub fn init() {
     object.add_builtin_method_by_str("instance_variables", instance_variables);
     object.add_builtin_method_by_str("instance_of?", instance_of);
     object.add_builtin_method_by_str("freeze", freeze);
-    object.add_builtin_method_by_str("super", super_);
     object.add_builtin_method_by_str("send", send);
     object.add_builtin_method_by_str("__send__", send);
     object.add_builtin_method_by_str("to_enum", to_enum);
@@ -170,44 +169,6 @@ fn instance_of(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn freeze(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     Ok(self_val)
-}
-
-fn super_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    //args.check_args_num( 0)?;
-    let iseq = vm.context().iseq_ref.unwrap();
-    if let ISeqKind::Method(Some(m)) = iseq.kind {
-        let class = iseq.class_defined.last().unwrap();
-        let method = match class.superclass() {
-            Some(class) => match MethodRepo::find_method(class, m) {
-                Some(m) => m,
-                None => {
-                    return Err(RubyError::nomethod(format!(
-                        "no superclass method `{:?}' for {:?}",
-                        m, self_val
-                    )));
-                }
-            },
-            None => {
-                return Err(RubyError::nomethod(format!(
-                    "no superclass method `{:?}' for {:?}.",
-                    m, self_val
-                )));
-            }
-        };
-        let self_value = vm.context().self_value;
-        if args.len() == 0 {
-            let param_num = iseq.params.param_ident.len();
-            let mut args = Args::new0();
-            for i in 0..param_num {
-                args.push(vm.context()[i]);
-            }
-            vm.eval_method(method, self_value, &args)
-        } else {
-            vm.eval_method(method, self_value, &args)
-        }
-    } else {
-        return Err(RubyError::nomethod("super called outside of method"));
-    }
 }
 
 fn equal(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -541,13 +502,16 @@ mod test {
     fn object_super() {
         let program = r#"
         class A
-            def foo(a,b,c,d:0)
-                assert [100,200,300,500], [a,b,c,d]
+            def foo(a,b,c)
+                [a,b,c]
             end 
-            def boo(a,b,c)
-                assert [100,200,300], [a,b,c]
-            end           
-         end
+            def boo(*a)
+                a
+            end
+            def bee(a:1,b:2,c:3)
+                [a,b,c]
+            end
+        end            
         
         class B < A
             def foo(a,b,c=300,d:400)
@@ -556,10 +520,14 @@ mod test {
             def boo(a,b,c)
                 super
             end
+            def bee(a,b,c)
+                super()
+            end
         end
         
-        B.new.foo(100,200,d:500)
-        B.new.boo(100,200,300)
+        assert [100,200,300], B.new.foo(100,200,300)
+        assert [100,200,300], B.new.boo(100,200,300)
+        assert [1,2,3], B.new.bee(100,200,300)
 
         "#;
         assert_script(program);

@@ -1096,6 +1096,9 @@ impl Parser {
                     let loc = loc.merge(self.prev_loc());
                     Ok(Node::new_alias(new_name, old_name, loc))
                 }
+                Reserved::Super => {
+                    return self.parse_super();
+                }
                 _ => Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))),
             },
             TokenKind::EOF => return Err(self.error_eof(loc)),

@@ -38,6 +38,9 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("sum", sum);
     class.add_builtin_method_by_str("upcase", upcase);
     class.add_builtin_method_by_str("replace", replace);
+    class.add_builtin_method_by_str("strip", strip);
+    class.add_builtin_method_by_str("lstrip", lstrip);
+    class.add_builtin_method_by_str("rstrip", rstrip);
     class.add_builtin_method_by_str("chomp", chomp);
     class.add_builtin_method_by_str("chomp!", chomp_);
     class.add_builtin_method_by_str("to_i", toi);
@@ -49,7 +52,6 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("succ", next);
     class.add_builtin_method_by_str("count", count);
-    class.add_builtin_method_by_str("rstrip", rstrip);
     class.add_builtin_method_by_str("ord", ord);
     class.add_builtin_method_by_str("empty?", empty);
     class.add_builtin_method_by_str("codepoints", codepoints);
@@ -784,6 +786,37 @@ fn replace(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+/// String#strip
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/strip.html
+fn strip(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let self_ = self_val.as_string().unwrap();
+    let trim1: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b'];
+    let trim2: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
+    let res = self_.trim_end_matches(trim2).trim_start_matches(trim1);
+    Ok(Value::string(res))
+}
+
+/// String#lstrip
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/lstrip.html
+fn lstrip(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let string = self_val.as_string().unwrap();
+    let trim: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b'];
+    let res = string.trim_start_matches(trim);
+    Ok(Value::string(res))
+}
+
+/// String#rstrip
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/rstrip.html
+fn rstrip(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let string = self_val.as_string().unwrap();
+    let trim: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
+    let res = string.trim_end_matches(trim);
+    Ok(Value::string(res))
+}
+
 /// String#chomp
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/chomp.html
 fn chomp(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -1031,14 +1064,6 @@ fn count(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         c += target.rmatches(|x| ch == x).count();
     }
     Ok(Value::integer(c as i64))
-}
-
-fn rstrip(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    let string = self_val.as_string().unwrap();
-    let trim: &[_] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
-    let res = string.trim_end_matches(trim);
-    Ok(Value::string(res))
 }
 
 fn ord(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1400,6 +1425,40 @@ mod test {
     }
 
     #[test]
+    fn string_strip() {
+        let program = r#"
+        assert "abc", "  abc  \r\n".strip
+        assert "abc", "abc\n".strip
+        assert "abc", "  abc".strip
+        assert "abc", "abc".strip
+        assert "\0  abc", "  \0  abc  \0".strip
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_lstrip() {
+        let program = r#"
+        assert "abc\n", "  abc\n".lstrip
+        assert "abc\n", "\t  abc\n".lstrip
+        assert "abc\n", "abc\n".lstrip
+        assert "\0abc\n", "\0abc\n".lstrip
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn string_rstrip() {
+        let program = r#"
+        assert "   abc", "   abc\n".rstrip
+        assert "   abc", "   abc \t\n\x00".rstrip
+        assert "   abc", "   abc".rstrip
+        assert "   abc", "   abc\x00".rstrip
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn string_toi() {
         let program = r#"
         assert 1578, "1578".to_i
@@ -1493,17 +1552,6 @@ mod test {
         assert 1, 'abcdefg'.count('c')
         assert 4, '123456789'.count('2378')
         #assert 4, '123456789'.count('2-8', '^4-6')
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn string_rstrip() {
-        let program = r#"
-        assert "   abc", "   abc\n".rstrip
-        assert "   abc", "   abc \t\n\x00".rstrip
-        assert "   abc", "   abc".rstrip
-        assert "   abc", "   abc\x00".rstrip
         "#;
         assert_script(program);
     }

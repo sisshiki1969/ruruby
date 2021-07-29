@@ -85,6 +85,13 @@ impl ISeq {
         u32::from_ne_bytes((&self[pc..pc + 4]).try_into().unwrap())
     }
 
+    pub fn read_block(&self, pc: ISeqPos) -> String {
+        match self.read32(pc) {
+            0 => "None".to_string(),
+            b => format!("MethodId({})", b),
+        }
+    }
+
     pub fn write32(&mut self, pc: usize, data: u32) {
         unsafe { std::ptr::write(self[pc] as *mut _, data.to_ne_bytes()) };
     }
@@ -105,8 +112,11 @@ impl ISeq {
         self.read_usize(offset).into()
     }
 
-    pub fn read_method(&self, offset: ISeqPos) -> MethodId {
-        self.read32(offset).into()
+    pub fn read_method(&self, offset: ISeqPos) -> Option<MethodId> {
+        match self.read32(offset) {
+            0 => None,
+            m => Some(m.into()),
+        }
     }
 
     pub fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
