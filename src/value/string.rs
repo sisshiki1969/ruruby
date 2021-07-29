@@ -19,14 +19,15 @@ impl fmt::Debug for RString {
                     c @ '\'' | c @ '"' | c @ '\\' => {
                         write!(f, "\\{}", c)?;
                     }
+                    c if '\x00' <= c && c <= '\x06' => write!(f, "\\x{:02}", c as u32)?,
                     '\x07' => write!(f, "\\a")?,
                     '\x08' => write!(f, "\\b")?,
-                    '\x1b' => write!(f, "\\e")?,
-                    '\x0c' => write!(f, "\\f")?,
-                    '\x0a' => write!(f, "\\n")?,
-                    '\x0d' => write!(f, "\\r")?,
                     '\x09' => write!(f, "\\t")?,
+                    '\x0a' => write!(f, "\\n")?,
                     '\x0b' => write!(f, "\\v")?,
+                    '\x0c' => write!(f, "\\f")?,
+                    '\x0d' => write!(f, "\\r")?,
+                    '\x1b' => write!(f, "\\e")?,
                     c => write!(f, "{}", c)?,
                 };
             }

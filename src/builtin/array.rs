@@ -63,6 +63,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("zip", zip);
     class.add_builtin_method_by_str("grep", grep);
     class.add_builtin_method_by_str("sort", sort);
+    class.add_builtin_method_by_str("sort_by", sort_by);
     class.add_builtin_method_by_str("count", count);
     class.add_builtin_method_by_str("inject", inject);
     class.add_builtin_method_by_str("reduce", inject);
@@ -501,6 +502,7 @@ fn partition(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
     let target = args[0];
     let aref = self_val.into_array();
     for item in aref.elements.iter() {
@@ -874,6 +876,9 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
+/// Array#sort -> Array
+/// Array#sort { |a, b| .. } -> Array
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/sort.html
 fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     args.check_args_num(0)?;
@@ -882,9 +887,35 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         Block::None => {
             vm.sort_array(&mut ary)?;
         }
-        _ => return Err(RubyError::argument("Currently, can not use block.")),
+        block => {
+            let mut args = Args::new(2);
+            ary.sort_by(|a, b| {
+                args[0] = *a;
+                args[1] = *b;
+                vm.eval_block(block, &args).unwrap().to_ordering()
+            });
+        }
     };
     Ok(Value::array_from(ary))
+}
+
+/// Enumerator#sort { |item| .. } -> Array
+/// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/sort_by.html
+fn sort_by(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let block = args.expect_block()?;
+    let mut ary = vec![];
+    {
+        let mut args = Args::new(1);
+        for v in &self_val.as_array().unwrap().elements {
+            args[0] = *v;
+            let v1 = vm.eval_block(block, &args)?;
+            ary.push((*v, v1));
+        }
+    }
+    ary.sort_by(|a, b| vm.eval_compare(b.1, a.1).unwrap().to_ordering());
+
+    Ok(Value::array_from(ary.iter().map(|x| x.0).collect()))
 }
 
 fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -1412,9 +1443,15 @@ mod tests {
     #[test]
     fn array_sort() {
         let program = r#"
-        assert([-3,2,6], [6,2,-3].sort)
-        assert([-3,2.34,6.3], [6.3,2.34,-3].sort)
+        assert [-3,2,6], [6,2,-3].sort
+        assert [-3,2.34,6.3], [6.3,2.34,-3].sort
         assert_error {[1,2.5,nil].sort}
+
+        assert ["a","b","c","d","e"], ["d","a","e","c","b"].sort
+        assert ["10","11","7","8","9"], ["9","7","10","11","8"].sort
+        assert  ["7","8","9","10","11"],  ["9","7","10","11","8"].sort{ |a, b| a.to_i <=> b.to_i }
+
+        assert ["BAR", "bar", "FOO", "foo"], ["BAR", "FOO", "bar", "foo"].sort_by { |v| v.downcase }
         "#;
         assert_script(program);
     }

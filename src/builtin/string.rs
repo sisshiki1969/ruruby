@@ -7,6 +7,7 @@ pub fn init() -> Value {
     class.add_builtin_class_method("new", string_new);
     class.add_builtin_method_by_str("to_s", to_s);
     class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("dump", dump);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("*", mul);
     class.add_builtin_method_by_str("%", rem);
@@ -37,6 +38,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("each_char", each_char);
     class.add_builtin_method_by_str("sum", sum);
     class.add_builtin_method_by_str("upcase", upcase);
+    class.add_builtin_method_by_str("downcase", downcase);
     class.add_builtin_method_by_str("replace", replace);
     class.add_builtin_method_by_str("strip", strip);
     class.add_builtin_method_by_str("lstrip", lstrip);
@@ -87,6 +89,15 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let self_ = self_val.as_rstring().unwrap();
     Ok(Value::string(self_.inspect()))
+}
+
+/// String#dump
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/dump.html
+fn dump(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    //let self_ = self_val.as_string().unwrap();
+    let str: String = format!("{:?}", self_val);
+    Ok(Value::string(str))
 }
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -776,6 +787,13 @@ fn upcase(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(res))
 }
 
+fn downcase(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let self_ = self_val.expect_string("Receiver")?;
+    let res = self_.to_lowercase();
+    Ok(Value::string(res))
+}
+
 /// String#replace
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/replace.html
 fn replace(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
@@ -1136,6 +1154,9 @@ mod test {
         assert(true, "".empty?)
         assert(false, "s".empty?)
         assert(false, 2.chr.empty?)
+        s = "a\t\0\1\v\b\\"
+        assert("\"a\\t\\x00\\x01\\v\\b\\\\\"", s.dump)
+        assert(s, eval s.dump)
         "#;
         assert_script(program);
     }
@@ -1386,6 +1407,7 @@ mod test {
         a = ""
         [114, 117, 98, 121, 32, 105, 115, 32, 103, 114, 101, 97, 116, 46].map{ |elem| a += elem.chr }
         assert "RUBY IS GREAT.", a.upcase
+        assert "ruby is great.", "Ruby Is Great.".downcase
         "#;
         assert_script(program);
     }

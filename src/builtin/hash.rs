@@ -11,7 +11,12 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("compact", compact);
     class.add_builtin_method_by_str("delete", delete);
     class.add_builtin_method_by_str("empty?", empty);
+
     class.add_builtin_method_by_str("select", select);
+    class.add_builtin_method_by_str("find_all", select);
+    class.add_builtin_method_by_str("filter", select);
+    class.add_builtin_method_by_str("reject", reject);
+
     class.add_builtin_method_by_str("has_key?", has_key);
     class.add_builtin_method_by_str("key?", has_key);
     class.add_builtin_method_by_str("include?", has_key);
@@ -92,6 +97,10 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(hash.len() == 0))
 }
 
+/// Enumerable#filter { |item| .. } -> [object]
+/// Enumerable#find_all { |item| .. } -> [object]
+/// Enumerable#select { |item| .. } -> [object]
+/// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/select.html
 fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
@@ -101,6 +110,24 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         arg[0] = k;
         arg[1] = v;
         if vm.eval_block(&method, &arg)?.to_bool() {
+            res.insert(HashKey(k), v);
+        };
+    }
+
+    Ok(Value::hash_from_map(res))
+}
+
+/// Enumerable#reject { |item| .. } -> [object]
+/// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/reject.html
+fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let hash = self_val.as_hash().unwrap();
+    let method = args.expect_block()?;
+    let mut res = FxIndexMap::default();
+    let mut arg = Args::new(2);
+    for (k, v) in hash.iter() {
+        arg[0] = k;
+        arg[1] = v;
+        if !vm.eval_block(&method, &arg)?.to_bool() {
             res.insert(HashKey(k), v);
         };
     }
@@ -405,12 +432,17 @@ mod test {
     fn hash_select() {
         let program = r#"
             h = { "a" => 100, "b" => 200, "c" => 300 }
-            assert({"b" => 200, "c" => 300}, h.select {|k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
-            assert({"a" => 100}, h.select {|k,v| v < 200})  #=> {"a" => 100}
+            assert({"b" => 200, "c" => 300}, h.select { |k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
+            assert({"a" => 100}, h.select { |k,v| v < 200})
 
             h = { "a" => 100, "b" => 200, "c" => 300 }.compare_by_identity
-            assert({"b" => 200, "c" => 300}, h.select {|k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
-            assert({"a" => 100}, h.select {|k,v| v < 200})  #=> {"a" => 100}
+            assert({"b" => 200, "c" => 300}, h.select { |k,v| k > "a"})  #=> {"b" => 200, "c" => 300}
+            assert({"a" => 100}, h.select { |k,v| v < 200})
+
+            h = {a:4, b:7, c:-1, d:0}
+            assert({a:4, d:0}, h.filter { |k,v| v % 2 == 0 })
+            assert({b:7, c:-1}, h.reject { |k,v| v % 2 == 0 })
+
         "#;
         assert_script(program);
     }

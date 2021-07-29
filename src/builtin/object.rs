@@ -67,10 +67,10 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => Ok(Value::string(oref.inspect()?)),
-        None => unreachable!(),
+        None => Ok(Value::string(vm.val_inspect(self_val)?)),
     }
 }
 

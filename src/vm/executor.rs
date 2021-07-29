@@ -1620,7 +1620,7 @@ impl VM {
                 self.exec_func(*method, outer.self_value, Some(outer), args)?;
             }
             Block::Proc(proc) => self.exec_proc(*proc, args)?,
-            _ => unreachable!(),
+            _ => unreachable!("Block: None."),
         }
         Ok(self.stack_pop())
     }
