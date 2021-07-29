@@ -4,6 +4,7 @@ pub fn init() {
     let class = BuiltinClass::module();
     BuiltinClass::set_toplevel_constant("Module", class);
     class.add_builtin_class_method("new", module_new);
+    class.add_builtin_class_method("constants", module_constants);
 
     class.add_builtin_method_by_str("===", teq);
     class.add_builtin_method_by_str("<=>", cmp);
@@ -56,6 +57,16 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     };
     Ok(val)
+}
+
+fn module_constants(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let v = vm
+        .enumerate_const()
+        .into_iter()
+        .map(|id| Value::symbol(id))
+        .collect();
+    Ok(Value::array_from(v))
 }
 
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_--3D--3D--3D
@@ -577,11 +588,17 @@ mod test {
         true
     end
 
-    assert(100, Foo.const_get(:Bar))
-    assert(100, Bar.const_get(:Bar))
+    assert 100, Foo.const_get(:Bar)
+    assert 100, Bar.const_get(:Bar)
     assert_error { Bar.const_get([]) }
-    assert(true, ary_cmp(Foo.constants, [:Bar, :Ker]))
-    assert(true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker]))
+    assert true, ary_cmp(Foo.constants, [:Bar, :Ker])
+    assert true, ary_cmp(Bar.constants, [:Doo, :Bar, :Ker])
+
+    assert [], Module.constants - Object.constants
+    class Z
+        CONST = 100
+        assert [:CONST], Module.constants - Object.constants
+    end
     "#;
         assert_script(program);
     }

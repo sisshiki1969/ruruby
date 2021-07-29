@@ -1460,6 +1460,19 @@ fn singleton4() {
 }
 
 #[test]
+fn singleton5() {
+    let program = "
+    module M
+    end
+    assert Module, M.class
+    assert_error { M.super_class }
+    assert Class, M.singleton_class.class
+    assert Module, M.singleton_class.superclass
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn defined() {
     let program = r##"
     assert("expression", defined? 1)

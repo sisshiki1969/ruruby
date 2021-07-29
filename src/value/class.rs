@@ -566,6 +566,10 @@ impl ClassInfo {
             _ => None,
         }
     }
+
+    pub fn enumerate_const(&self) -> std::collections::hash_map::Keys<IdentId, ConstEntry> {
+        self.ext.enumerate_const()
+    }
 }
 
 /// ClassFlags:
@@ -681,5 +685,9 @@ impl ClassExt {
 
     fn get_mut_const(&mut self, id: IdentId) -> Option<&mut ConstEntry> {
         self.const_table.get_mut(&id)
+    }
+
+    fn enumerate_const(&self) -> std::collections::hash_map::Keys<IdentId, ConstEntry> {
+        self.const_table.keys()
     }
 }

@@ -1161,7 +1161,7 @@ impl Value {
                     Ok(class)
                 } else {
                     let singleton = match &oref.kind {
-                        ObjKind::Module(cinfo) => {
+                        ObjKind::Module(cinfo) if !cinfo.is_module() => {
                             let superclass = match cinfo.superclass() {
                                 None => None,
                                 Some(superclass) => Some(superclass.get_singleton_class()),

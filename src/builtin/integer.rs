@@ -25,6 +25,7 @@ pub fn init() -> Value {
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
+    class.add_builtin_method_by_str("downto", downto);
     class.add_builtin_method_by_str("step", step);
     class.add_builtin_method_by_str("chr", chr);
     class.add_builtin_method_by_str("to_f", tof);
@@ -240,6 +241,9 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.eval_block_each1(block, iter, self_val)
 }
 
+/// Integer#upto(min) { |n| .. } -> self
+/// Integer#upto(min) -> Enumerator
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/upto.html
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let block = match &args.block {
@@ -254,6 +258,29 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
         let iter = (num..max + 1).map(|i| Value::integer(i));
+        vm.eval_block_each1(block, iter, self_val)
+    } else {
+        Ok(self_val)
+    }
+}
+
+/// Integer#downto(min) { |n| .. } -> self
+/// Integer#downto(min) -> Enumerator
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/downto.html
+fn downto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let block = match &args.block {
+        Block::None => {
+            let id = IdentId::get_id("downto");
+            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            return Ok(val);
+        }
+        method => method,
+    };
+    let num = self_val.as_integer().unwrap();
+    let min = args[0].expect_integer("Arg")?;
+    if num >= min {
+        let iter = (min..num + 1).rev().map(|i| Value::integer(i));
         vm.eval_block_each1(block, iter, self_val)
     } else {
         Ok(self_val)
@@ -473,13 +500,17 @@ mod tests {
     fn integer_upto() {
         let program = r#"
         res = []
-        assert 5, 5.upto(8) {|x| res << x * x}
+        assert 5, 5.upto(8) { |x| res << x * x }
         assert [25, 36, 49, 64], res
         res = []
-        assert 5, 5.upto(4) {|x| res << x * x}
+        assert 5, 5.upto(4) { |x| res << x * x }
         assert [], res
         enum = 5.upto(8)
-        assert [10, 12, 14, 16], enum.map{|x| x * 2}
+        assert [10, 12, 14, 16], enum.map{ |x| x * 2 }
+
+        res = []
+        assert 5, 5.downto(2) { |x| res << x }
+        assert [5, 4, 3, 2], res
         "#;
         assert_script(program);
     }

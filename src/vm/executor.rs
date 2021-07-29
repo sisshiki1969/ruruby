@@ -602,6 +602,13 @@ impl VM {
         }
     }
 
+    pub fn enumerate_const(&self) -> Vec<IdentId> {
+        let mut map = FxHashSet::default();
+        self.enumerate_env_const(&mut map);
+        self.enumerate_super_const(&mut map);
+        map.into_iter().collect()
+    }
+
     /// Search lexical class stack for a constant `id`.
     /// If the constant was found, returns Ok(Some(Value)), and if not, returns Ok(None).
     /// Returns error if an autoload failed.
@@ -622,6 +629,21 @@ impl VM {
         }
     }
 
+    fn enumerate_env_const(&self, map: &mut FxHashSet<IdentId>) {
+        let class_defined = &self.get_method_iseq().class_defined;
+        match class_defined.len() {
+            0 => {}
+            1 => class_defined[0].enumerate_const().for_each(|id| {
+                map.insert(*id);
+            }),
+            _ => class_defined[1..].iter().for_each(|m| {
+                m.enumerate_const().for_each(|id| {
+                    map.insert(*id);
+                })
+            }),
+        };
+    }
+
     /// Search class inheritance chain of `class` for a constant `id`, returning the value.
     /// Returns name error if the constant was not defined.
     pub fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
@@ -640,6 +662,30 @@ impl VM {
                         return Err(RubyError::uninitialized_constant(id));
                     }
                 },
+            }
+        }
+    }
+
+    pub fn enumerate_super_const(&self, map: &mut FxHashSet<IdentId>) {
+        let mut class = self.class();
+        let is_module = class.is_module();
+        loop {
+            class.enumerate_const().into_iter().for_each(|id| {
+                map.insert(*id);
+            });
+            match class.upper() {
+                Some(upper) => class = upper,
+                None => {
+                    if is_module {
+                        BuiltinClass::object()
+                            .enumerate_const()
+                            .into_iter()
+                            .for_each(|id| {
+                                map.insert(*id);
+                            })
+                    }
+                    break;
+                }
             }
         }
     }
