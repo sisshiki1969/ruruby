@@ -139,6 +139,14 @@ impl Parser {
         }
     }
 
+    pub fn parse_heredocument(&mut self) -> Result<Node, RubyError> {
+        if self.lexer.trailing_space() {
+            let loc = self.prev_loc();
+            return Err(self.error_unexpected(loc, "Unexpectd <<."));
+        }
+        self.lexer.read_heredocument()
+    }
+
     pub fn parse_hash_literal(&mut self) -> Result<Node, RubyError> {
         let mut kvp = vec![];
         let loc = self.prev_loc();

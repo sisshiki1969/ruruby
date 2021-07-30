@@ -1025,16 +1025,7 @@ impl Parser {
                 Punct::Div => self.parse_regexp(),
                 Punct::Rem => self.parse_percent_notation(),
                 Punct::Question => self.parse_char_literal(),
-                Punct::Shl => {
-                    if self.lexer.trailing_space() {
-                        return Err(
-                            self.error_unexpected(loc, r#"Expected '-', '~', '"', '`', or '\''."#)
-                        );
-                    }
-                    let string = self.lexer.read_heredocument()?;
-                    let node = Node::new_string(string, loc);
-                    Ok(node)
-                }
+                Punct::Shl => self.parse_heredocument(),
                 _ => {
                     return Err(
                         self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))

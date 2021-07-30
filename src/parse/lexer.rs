@@ -9,6 +9,7 @@ use std::path::PathBuf;
 pub struct Lexer {
     token_start_pos: usize,
     pos: usize,
+    heredoc_pos: usize,
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
     reserved: FxHashMap<String, Reserved>,
@@ -88,6 +89,7 @@ impl Lexer {
         Lexer {
             token_start_pos: 0,
             pos: 0,
+            heredoc_pos: 0,
             buf: None,
             buf_skip_lt: None,
             reserved,
@@ -253,23 +255,11 @@ impl Lexer {
             if let Some(tok) = self.skip_whitespace() {
                 return Ok(tok);
             };
-
             let pos = self.pos;
-            let mut ch;
-            loop {
-                ch = match self.get() {
-                    Ok(ch) => ch,
-                    Err(_) => return Ok(self.new_eof()),
-                };
-                if ch != '\\' {
-                    break;
-                };
-                if let Some('\n') = self.peek() {
-                    self.get().unwrap();
-                    continue;
-                }
-                break;
-            }
+            let ch = match self.get() {
+                Ok(ch) => ch,
+                Err(_) => return Ok(self.new_eof()),
+            };
 
             if ch.is_ascii_alphabetic() || ch == '_' {
                 return self.read_identifier(ch, VarKind::Identifier);
@@ -574,9 +564,10 @@ impl Lexer {
         }
         if self.consume('e') || self.consume('E') {
             s.push('e');
-            self.consume('+');
-            if self.consume('-') {
-                s.push('-');
+            if !self.consume('+') {
+                if self.consume('-') {
+                    s.push('-');
+                }
             }
             if let Some(ch) = self.consume_numeric() {
                 s.push(ch);
@@ -714,8 +705,7 @@ impl Lexer {
                 }
                 '\\' => {
                     // continuation line
-                    if let Some('\n') = self.peek() {
-                        self.get().unwrap();
+                    if self.consume_newline() {
                         continue;
                     };
                     s.push(self.read_escaped_char()?);
@@ -757,8 +747,7 @@ impl Lexer {
                 }
                 '\\' => {
                     // continuation line
-                    if let Some('\n') = self.peek() {
-                        self.get().unwrap();
+                    if self.consume_newline() {
                         continue;
                     };
                     let c = self.get()?;
@@ -782,7 +771,6 @@ impl Lexer {
     /// Read char literal.
     pub fn read_char_literal(&mut self) -> Result<Token, RubyError> {
         let c = self.get()?;
-        self.buf = None;
         if c == '\\' {
             let ch = self.read_escaped_char()?;
             Ok(self.new_stringlit(ch))
@@ -974,20 +962,16 @@ impl Lexer {
         Ok(ch)
     }
 
-    pub fn read_heredocument(&mut self) -> Result<String, RubyError> {
+    pub fn read_heredocument(&mut self) -> Result<Node, RubyError> {
         #[derive(Clone, PartialEq)]
         enum Mode {
             Normal,
             AllowIndent,
         }
         let mut mode = Mode::Normal;
-        let mut delimiter = vec![];
-        match self.peek() {
-            Some(ch) if ch == '-' => {
-                mode = Mode::AllowIndent;
-                self.get()?;
-            }
-            _ => {}
+        let mut delimiter = String::new();
+        if self.consume('-') {
+            mode = Mode::AllowIndent;
         };
         loop {
             match self.peek() {
@@ -1001,18 +985,21 @@ impl Lexer {
         if delimiter.len() == 0 {
             return Err(self.error_unexpected(self.pos));
         }
-        let delimiter: String = delimiter.iter().collect();
-        //eprintln!("delimiter:{}", delimiter);
-        //self.save_state();
+        self.save_state();
         self.goto_eol();
         self.get()?;
+        if self.heredoc_pos > self.pos {
+            self.pos = self.heredoc_pos;
+        }
+        self.token_start_pos = self.pos;
         let mut res = String::new();
+        let mut token_end = self.pos;
         loop {
             let start = self.pos;
             self.goto_eol();
             let end = self.pos;
-            let line: String = self.source_info.code[start..end].to_string();
-            //eprintln!("line:[{}]", line);
+            let next = self.get();
+            let line = &self.source_info.code[start..end];
             if mode == Mode::AllowIndent {
                 if line.trim_start() == delimiter {
                     break;
@@ -1022,7 +1009,7 @@ impl Lexer {
                     break;
                 }
             }
-            if self.get().is_err() {
+            if next.is_err() {
                 return Err(self.error_parse(
                     &format!(
                         r#"Can not find string "{}" anywhere before EOF."#,
@@ -1031,10 +1018,14 @@ impl Lexer {
                     self.pos,
                 ));
             };
-            res = format!("{}{}\n", res, line);
+            token_end = end;
+            res += line;
+            res.push('\n');
         }
-        //self.restore_state();
-        Ok(res)
+        self.heredoc_pos = self.pos;
+        let node = Node::new_string(res, Loc(self.token_start_pos, token_end));
+        self.restore_state();
+        Ok(node)
     }
 }
 
@@ -1078,6 +1069,17 @@ impl Lexer {
         }
     }
 
+    fn consume_newline(&mut self) -> bool {
+        if self.consume('\n') {
+            if self.heredoc_pos > self.pos {
+                self.pos = self.heredoc_pos;
+            };
+            true
+        } else {
+            false
+        }
+    }
+
     /// Consume continue line. ("\\n")
     /// Return true if consumed.
     fn consume_cont_line(&mut self) -> bool {
@@ -1114,7 +1116,7 @@ impl Lexer {
     }
 
     /// Consume the next char, if the char is ascii-whitespace char.
-    /// Return Some(ch) if the token (ch) was consumed.
+    /// Return whether some whitespace characters were consumed or not.
     fn consume_whitespace(&mut self) -> bool {
         match self.peek() {
             Some(ch) if ch.is_ascii_whitespace() => {
@@ -1145,13 +1147,13 @@ impl Lexer {
         }
     }
 
-    /// Skip whitespace and line terminator.
+    /// Skip whitespace, newline and continuation line.
     ///
-    /// Returns Some(Space or LineTerm) or None if the cursor reached EOF.
+    /// Returns Some(LineTerm) if some newline characters were skipped.
     fn skip_whitespace(&mut self) -> Option<Token> {
         let mut res = None;
         loop {
-            if self.consume('\n') {
+            if self.consume_newline() {
                 res = Some(self.new_line_term());
             } else if !self.consume_cont_line() && !self.consume_whitespace() {
                 self.token_start_pos = self.pos;

@@ -133,18 +133,33 @@ fn interpolated_string_lit1() {
 #[test]
 fn heredocument1() {
     let program = r###"
-    a = <<RUBY
+    a = <<RUBY; b = 100
 We
-love
-Ruby.
+  love
+    Ruby.
 RUBY
-    assert "We\nlove\nRuby.\n", a
-    b = <<-RUBY
+    assert "We\n  love\n    Ruby.\n", a
+    assert 100, b
+
+    a = <<RUBY; b = <<RUST
+We
+    love
+        Ruby.
+RUBY
+We
+    love
+        Rust.
+RUST
+        assert "We\n    love\n        Ruby.\n", a
+        assert "We\n    love\n        Rust.\n", b
+
+    b = <<-RUBY; c = 200
 We
 love
 Ruby.
     RUBY
     assert "We\nlove\nRuby.\n", b
+    assert 200, c
 
     "###;
     assert_script(program);
