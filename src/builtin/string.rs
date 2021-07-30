@@ -1,5 +1,6 @@
 use crate::vm::*;
 use crate::*;
+use std::cmp::Ordering;
 
 pub fn init() -> Value {
     let class = Module::class_under_object();
@@ -47,7 +48,9 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("chomp!", chomp_);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("<", lt);
+    class.add_builtin_method_by_str("<=", le);
     class.add_builtin_method_by_str(">", gt);
+    class.add_builtin_method_by_str(">=", ge);
     class.add_builtin_method_by_str("center", center);
     class.add_builtin_method_by_str("ljust", ljust);
     class.add_builtin_method_by_str("rjust", rjust);
@@ -889,7 +892,19 @@ fn lt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
-        Some(ord) => Ok(Value::bool(ord == std::cmp::Ordering::Less)),
+        Some(ord) => Ok(Value::bool(ord.is_lt())),
+        None => Err(RubyError::argument(format!(
+            "Comparison of String with {:?} failed.",
+            args[0]
+        ))),
+    }
+}
+
+fn le(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.as_rstring().unwrap();
+    match lhs.cmp(args[0]) {
+        Some(ord) => Ok(Value::bool(ord.is_le())),
         None => Err(RubyError::argument(format!(
             "Comparison of String with {:?} failed.",
             args[0]
@@ -901,7 +916,19 @@ fn gt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(args[0]) {
-        Some(ord) => Ok(Value::bool(ord == std::cmp::Ordering::Greater)),
+        Some(ord) => Ok(Value::bool(ord.is_gt())),
+        None => Err(RubyError::argument(format!(
+            "Comparison of String with {:?} failed.",
+            args[0]
+        ))),
+    }
+}
+
+fn ge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.as_rstring().unwrap();
+    match lhs.cmp(args[0]) {
+        Some(ord) => Ok(Value::bool(ord.is_ge())),
         None => Err(RubyError::argument(format!(
             "Comparison of String with {:?} failed.",
             args[0]
