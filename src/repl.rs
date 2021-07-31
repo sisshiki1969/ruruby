@@ -40,11 +40,7 @@ pub fn repl_vm() {
     } else {
         format!("{}", Red.bold().paint("irb:"))
     };
-    let mut temp_script = String::new();
-    let program = String::new();
-    let mut parser = Parser::new(&program);
-    let source_info = SourceInfoRef::new(SourceInfo::new("REPL", ""));
-    let parser_save = parser.clone();
+    let mut script = String::new();
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
@@ -55,7 +51,7 @@ pub fn repl_vm() {
         None,
     );
     loop {
-        let prompt = if temp_script.len() == 0 { ">" } else { "*" };
+        let prompt = if script.len() == 0 { ">" } else { "*" };
         let readline = editor.readline(&format!("{}{} ", prompt_body, prompt,));
         let line = match readline {
             Ok(line) => {
@@ -64,7 +60,7 @@ pub fn repl_vm() {
             }
             Err(err) => match err {
                 ReadlineError::Interrupted => {
-                    temp_script = String::new();
+                    script = String::new();
                     continue;
                 }
                 ReadlineError::Eof => return,
@@ -72,33 +68,36 @@ pub fn repl_vm() {
             },
         };
 
-        temp_script += &line;
-        parser = parser_save.clone();
-        //parser.lexer.append(&temp_script);
-
-        match parser.parse_program_repl(context) {
-            Ok(parse_result) => match vm.run_repl(parse_result, source_info, context) {
-                Ok(result) => {
-                    //parser_save.lexer.set_source_info(source_info);
-                    println!("=> {:?}", result);
+        script += &line;
+        {
+            let parser = Parser::new(&script);
+            match parser.parse_program_repl(context) {
+                Ok(parse_result) => {
+                    let source_info = SourceInfoRef::new(SourceInfo::new("REPL", script.clone()));
+                    match vm.run_repl(parse_result, source_info, context) {
+                        Ok(result) => {
+                            println!("=> {:?}", result);
+                        }
+                        Err(err) => {
+                            for (info, loc) in &err.info {
+                                info.show_loc(loc);
+                            }
+                            err.show_err();
+                            vm.clear();
+                        }
+                    }
                 }
                 Err(err) => {
-                    for (info, loc) in &err.info {
-                        info.show_loc(loc);
+                    if ParseErrKind::UnexpectedEOF == err.0 {
+                        continue;
                     }
+                    let source_info = SourceInfoRef::new(SourceInfo::new("REPL", script.clone()));
+                    let err = RubyError::new_parse_err(err.0, source_info, err.1);
+                    err.show_loc(0);
                     err.show_err();
-                    vm.clear();
                 }
-            },
-            Err(err) => {
-                if ParseErrKind::UnexpectedEOF == err.0 {
-                    continue;
-                }
-                let err = RubyError::new_parse_err(err.0, source_info, err.1);
-                err.show_loc(0);
-                err.show_err();
             }
         }
-        temp_script = String::new();
+        script = String::new();
     }
 }

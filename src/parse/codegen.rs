@@ -981,8 +981,7 @@ impl Codegen {
                 if is_const {
                     if use_value {
                         let val = self.const_regexp(globals, nodes, node_loc)?;
-                        let id = globals.const_values.insert(val);
-                        iseq.gen_const_val(id);
+                        iseq.gen_const_val(globals, val);
                     }
                 } else {
                     let nodes_len = nodes.len();
@@ -1033,8 +1032,7 @@ impl Codegen {
                             iseq.gen_create_array(0);
                         } else {
                             let val = self.const_array(globals, nodes)?;
-                            let id = globals.const_values.insert(val);
-                            iseq.gen_const_val(id);
+                            iseq.gen_const_val(globals, val);
                         }
                     }
                 } else {
@@ -1055,8 +1053,7 @@ impl Codegen {
                             iseq.gen_create_hash(0);
                         } else {
                             let val = self.const_hash(globals, key_value)?;
-                            let id = globals.const_values.insert(val);
-                            iseq.gen_const_val(id);
+                            iseq.gen_const_val(globals, val);
                         }
                     }
                 } else {

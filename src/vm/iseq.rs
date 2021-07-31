@@ -73,16 +73,28 @@ impl ISeq {
         self.0.push(val);
     }
 
+    pub fn push32(&mut self, val: u32) {
+        self.0.extend_from_slice(&val.to_le_bytes());
+    }
+
+    pub fn push64(&mut self, val: u64) {
+        self.0.extend_from_slice(&val.to_le_bytes());
+    }
+
     pub fn read8(&self, pc: ISeqPos) -> u8 {
         self[pc]
     }
 
     pub fn read16(&self, pc: ISeqPos) -> u16 {
-        u16::from_ne_bytes((&self[pc..pc + 2]).try_into().unwrap())
+        u16::from_le_bytes((&self[pc..pc + 2]).try_into().unwrap())
     }
 
     pub fn read32(&self, pc: ISeqPos) -> u32 {
-        u32::from_ne_bytes((&self[pc..pc + 4]).try_into().unwrap())
+        u32::from_le_bytes((&self[pc..pc + 4]).try_into().unwrap())
+    }
+
+    pub fn read64(&self, pc: ISeqPos) -> u64 {
+        u64::from_le_bytes((&self[pc..pc + 8]).try_into().unwrap())
     }
 
     pub fn read_block(&self, pc: ISeqPos) -> String {
@@ -93,11 +105,7 @@ impl ISeq {
     }
 
     pub fn write32(&mut self, pc: usize, data: u32) {
-        unsafe { std::ptr::write(self[pc] as *mut _, data.to_ne_bytes()) };
-    }
-
-    pub fn read64(&self, pc: ISeqPos) -> u64 {
-        u64::from_ne_bytes((&self[pc..pc + 8]).try_into().unwrap())
+        unsafe { std::ptr::write(self[pc] as *mut _, data.to_le_bytes()) };
     }
 
     pub fn read_usize(&self, pc: ISeqPos) -> usize {
@@ -141,24 +149,6 @@ impl ISeq {
         };
     }
 
-    pub fn push32(&mut self, num: u32) {
-        self.push(num as u8);
-        self.push((num >> 8) as u8);
-        self.push((num >> 16) as u8);
-        self.push((num >> 24) as u8);
-    }
-
-    pub fn push64(&mut self, num: u64) {
-        self.push(num as u8);
-        self.push((num >> 8) as u8);
-        self.push((num >> 16) as u8);
-        self.push((num >> 24) as u8);
-        self.push((num >> 32) as u8);
-        self.push((num >> 40) as u8);
-        self.push((num >> 48) as u8);
-        self.push((num >> 56) as u8);
-    }
-
     /// Write a 32-bit `disp`lacement from `dest` on current ISeqPos.
     pub fn write_disp_from_cur(&mut self, src: ISeqPos) {
         let dest = self.current();
@@ -189,7 +179,8 @@ impl ISeq {
         self.push64(val.id());
     }
 
-    pub fn gen_const_val(&mut self, id: usize) {
+    pub fn gen_const_val(&mut self, globals: &mut Globals, val: Value) {
+        let id = globals.const_values.insert(val);
         if id > u32::max_value() as usize {
             panic!("Constant value id overflow.")
         };
@@ -202,8 +193,7 @@ impl ISeq {
         if val.is_packed_value() {
             self.gen_val(val);
         } else {
-            let id = globals.const_values.insert(val);
-            self.gen_const_val(id);
+            self.gen_const_val(globals, val);
         }
     }
 
@@ -212,21 +202,18 @@ impl ISeq {
         if val.is_packed_value() {
             self.gen_val(val);
         } else {
-            let id = globals.const_values.insert(val);
-            self.gen_const_val(id);
+            self.gen_const_val(globals, val);
         }
     }
 
     pub fn gen_string(&mut self, globals: &mut Globals, s: &str) {
         let val = Value::string(s);
-        let id = globals.const_values.insert(val);
-        self.gen_const_val(id);
+        self.gen_const_val(globals, val);
     }
 
     pub fn gen_complex(&mut self, globals: &mut Globals, i: Real) {
         let val = Value::complex(Value::integer(0), i.to_val());
-        let id = globals.const_values.insert(val);
-        self.gen_const_val(id);
+        self.gen_const_val(globals, val);
     }
 
     pub fn gen_create_array(&mut self, len: usize) {
@@ -359,11 +346,6 @@ impl ISeq {
                     let next_pos = pos + Inst::inst_size(inst);
                     let jmp_dest = next_pos + self.read_disp(next_pos - 4);
                     match self.chase(jmp_dest, false) {
-                        /*eprintln!(
-                            "Optimize {} -> {}",
-                            Inst::inst_name(inst),
-                            Inst::inst_name(term_inst)
-                        );*/
                         DestKind::Dest(dest) => self.write_disp(next_pos, dest),
                         DestKind::Inst(_) => unreachable!(),
                     }

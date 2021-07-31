@@ -561,65 +561,40 @@ impl<'a> Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn parse_program(mut self) -> Result<ParseResult, ParseErr> {
-        let (node, lvar) = self.parse_program_core(None)?;
-        let tok = self.peek()?;
-        #[cfg(feature = "emit-ast")]
-        eprintln!("{:#?}", node);
-        if tok.is_eof() {
-            let result = ParseResult::default(node, lvar);
-            Ok(result)
-        } else {
-            Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
-        }
+        let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
+        self.parse(None, parse_ctx)
     }
 
     pub fn parse_program_repl(
         mut self,
         extern_context: ContextRef,
     ) -> Result<ParseResult, ParseErr> {
-        self.extern_context = Some(extern_context);
-        self.context_stack.push(ParseContext::new_class(
+        let parse_ctx = ParseContext::new_class(
             IdentId::get_id("REPL"),
             Some(extern_context.iseq_ref.unwrap().lvar.clone()),
-        ));
-        let node = self.parse_comp_stmt()?;
-        #[cfg(feature = "emit-ast")]
-        eprintln!("{:#?}", node);
-        let lvar = self.context_stack.pop().unwrap().lvar;
-
-        let tok = self.peek()?;
-        if tok.is_eof() {
-            let result = ParseResult::default(node, lvar);
-            Ok(result)
-        } else {
-            let err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
-            Err(err)
-        }
-    }
-
-    fn parse_program_core(
-        &mut self,
-        extern_context: Option<ContextRef>,
-    ) -> Result<(Node, LvarCollector), ParseErr> {
-        self.extern_context = extern_context;
-        self.context_stack.push(ParseContext::new_class(
-            IdentId::get_id("Top"),
-            extern_context.map(|ctx| ctx.iseq_ref.unwrap().lvar.clone()),
-        ));
-        let node = self.parse_comp_stmt()?;
-        let lvar = self.context_stack.pop().unwrap().lvar;
-        Ok((node, lvar))
+        );
+        self.parse(Some(extern_context), parse_ctx)
     }
 
     pub fn parse_program_eval(
         mut self,
         extern_context: Option<ContextRef>,
     ) -> Result<ParseResult, ParseErr> {
+        self.parse(extern_context, ParseContext::new_block())
+    }
+
+    fn parse(
+        &mut self,
+        extern_context: Option<ContextRef>,
+        parse_context: ParseContext,
+    ) -> Result<ParseResult, ParseErr> {
         self.extern_context = extern_context;
-        self.context_stack.push(ParseContext::new_block());
+        self.context_stack.push(parse_context);
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         let tok = self.peek()?;
+        #[cfg(feature = "emit-ast")]
+        eprintln!("{:#?}", node);
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar);
             Ok(result)
