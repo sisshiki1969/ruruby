@@ -1,7 +1,7 @@
 use super::*;
 
-impl Parser {
-    pub fn parse_comp_stmt(&mut self) -> Result<Node, RubyError> {
+impl<'a> Parser<'a> {
+    pub fn parse_comp_stmt(&mut self) -> Result<Node, ParseErr> {
         // COMP_STMT : (STMT (TERM STMT)*)? (TERM+)?
         self.peek()?;
         let loc = self.loc();
@@ -23,7 +23,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn parse_stmt(&mut self) -> Result<Node, RubyError> {
+    fn parse_stmt(&mut self) -> Result<Node, ParseErr> {
         // STMT : EXPR
         // | ALIAS-STMT
         // | UNDEF-STMT
@@ -79,7 +79,7 @@ impl Parser {
         Ok(node)
     }
 
-    pub fn parse_expr(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_expr(&mut self) -> Result<Node, ParseErr> {
         // EXPR : NOT
         // | EXPR [no term] and NOT
         // | EXPR [no term] or NOT
@@ -97,7 +97,7 @@ impl Parser {
         }
     }
 
-    fn parse_not(&mut self) -> Result<Node, RubyError> {
+    fn parse_not(&mut self) -> Result<Node, ParseErr> {
         // NOT : ARG
         // | UNPARENTHESIZED-METHOD
         // | ! UNPARENTHESIZED-METHOD
@@ -110,7 +110,7 @@ impl Parser {
         Ok(node)
     }
 
-    fn parse_mul_assign(&mut self, node: Node) -> Result<Node, RubyError> {
+    fn parse_mul_assign(&mut self, node: Node) -> Result<Node, ParseErr> {
         // EXPR : MLHS `=' MRHS
         let mut mlhs = vec![node];
         let old = self.suppress_acc_assign;
@@ -141,7 +141,7 @@ impl Parser {
 
     /// Parse rhs of multiple assignment.
     /// If Parser.mul_assign_rhs is true, only a single assignment is allowed.
-    pub fn parse_mul_assign_rhs_if_allowed(&mut self) -> Result<Vec<Node>, RubyError> {
+    pub fn parse_mul_assign_rhs_if_allowed(&mut self) -> Result<Vec<Node>, ParseErr> {
         if self.suppress_mul_assign {
             let node = vec![self.parse_arg()?];
             Ok(node)
@@ -155,7 +155,7 @@ impl Parser {
     pub fn parse_mul_assign_rhs(
         &mut self,
         term: impl Into<Option<Punct>>,
-    ) -> Result<Vec<Node>, RubyError> {
+    ) -> Result<Vec<Node>, ParseErr> {
         let term = term.into();
         let old = self.suppress_mul_assign;
         // multiple assignment must be suppressed in parsing arg list.
@@ -190,7 +190,7 @@ impl Parser {
         Ok(args)
     }
 
-    pub fn parse_arg(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_arg(&mut self) -> Result<Node, ParseErr> {
         if self.peek()?.kind == TokenKind::Reserved(Reserved::Defined) {
             self.save_state();
             self.consume_reserved(Reserved::Defined).unwrap();
@@ -205,7 +205,7 @@ impl Parser {
         self.parse_arg_assign()
     }
 
-    fn parse_arg_assign(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_assign(&mut self) -> Result<Node, ParseErr> {
         let lhs = self.parse_arg_ternary()?;
         if self.is_line_term()? {
             return Ok(lhs);
@@ -222,7 +222,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_ternary(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_ternary(&mut self) -> Result<Node, ParseErr> {
         let cond = self.parse_arg_range()?;
         let loc = cond.loc();
         if self.consume_punct_no_term(Punct::Question)? {
@@ -239,7 +239,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_range(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_range(&mut self) -> Result<Node, ParseErr> {
         let lhs = self.parse_arg_logical_or()?;
         if self.is_line_term()? {
             return Ok(lhs);
@@ -257,7 +257,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_logical_or(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_logical_or(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_logical_and()?;
         while self.consume_punct_no_term(Punct::LOr)? {
             let rhs = self.parse_arg_logical_and()?;
@@ -266,7 +266,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_logical_and(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_logical_and(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_eq()?;
         while self.consume_punct_no_term(Punct::LAnd)? {
             let rhs = self.parse_arg_eq()?;
@@ -276,7 +276,7 @@ impl Parser {
     }
 
     // 4==4==4 => SyntaxError
-    fn parse_arg_eq(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_eq(&mut self) -> Result<Node, ParseErr> {
         let lhs = self.parse_arg_comp()?;
         if self.consume_punct_no_term(Punct::Eq)? {
             let rhs = self.parse_arg_comp()?;
@@ -300,7 +300,7 @@ impl Parser {
         }
     }
 
-    fn parse_arg_comp(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_comp(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_bitor()?;
         if self.is_line_term()? {
             return Ok(lhs);
@@ -328,7 +328,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_bitor(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_bitor(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_bitand()?;
         loop {
             if self.consume_punct_no_term(Punct::BitOr)? {
@@ -342,7 +342,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_bitand(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_bitand(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_shift()?;
         loop {
             if self.consume_punct_no_term(Punct::BitAnd)? {
@@ -354,7 +354,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_shift(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_shift(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_add()?;
         loop {
             if self.consume_punct_no_term(Punct::Shl)? {
@@ -368,7 +368,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_add(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_add(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_arg_mul()?;
         loop {
             if self.consume_punct_no_term(Punct::Plus)? {
@@ -384,7 +384,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_arg_mul(&mut self) -> Result<Node, RubyError> {
+    fn parse_arg_mul(&mut self) -> Result<Node, ParseErr> {
         let mut lhs = self.parse_unary_minus()?;
         if self.is_line_term()? {
             return Ok(lhs);
@@ -406,7 +406,7 @@ impl Parser {
         Ok(lhs)
     }
 
-    fn parse_unary_minus(&mut self) -> Result<Node, RubyError> {
+    fn parse_unary_minus(&mut self) -> Result<Node, ParseErr> {
         self.save_state();
         let lhs = if self.consume_punct(Punct::Minus)? {
             let loc = self.prev_loc();
@@ -431,7 +431,7 @@ impl Parser {
         }
     }
 
-    fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, RubyError> {
+    fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, ParseErr> {
         if !self.suppress_acc_assign {
             if self.consume_punct_no_term(Punct::Assign)? {
                 self.check_lhs(&lhs)?;
@@ -444,7 +444,7 @@ impl Parser {
         Ok(None)
     }
 
-    fn parse_exponent(&mut self) -> Result<Node, RubyError> {
+    fn parse_exponent(&mut self) -> Result<Node, ParseErr> {
         let lhs = self.parse_unary()?;
         if self.consume_punct_no_term(Punct::DMul)? {
             let rhs = self.parse_exponent()?;
@@ -454,7 +454,7 @@ impl Parser {
         }
     }
 
-    fn parse_unary(&mut self) -> Result<Node, RubyError> {
+    fn parse_unary(&mut self) -> Result<Node, ParseErr> {
         if self.consume_punct(Punct::BitNot)? {
             let loc = self.prev_loc();
             let lhs = Node::new_unop(UnOp::BitNot, self.parse_unary()?, loc);
@@ -472,7 +472,7 @@ impl Parser {
         }
     }
 
-    fn parse_method_call(&mut self) -> Result<Node, RubyError> {
+    fn parse_method_call(&mut self) -> Result<Node, ParseErr> {
         if self.consume_reserved(Reserved::Yield)? {
             return self.parse_yield();
         }
@@ -504,7 +504,7 @@ impl Parser {
         }
     }
 
-    fn parse_yield(&mut self) -> Result<Node, RubyError> {
+    fn parse_yield(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         let tok = self.peek_no_term()?;
         // TODO: This is not correct.
@@ -523,7 +523,7 @@ impl Parser {
         return Ok(Node::new_yield(args, loc));
     }
 
-    pub fn parse_super(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_super(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         let arglist = if self.consume_punct_no_term(Punct::LParen)? {
             self.parse_arglist_block(Punct::RParen)?

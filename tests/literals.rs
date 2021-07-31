@@ -30,7 +30,7 @@ fn int1() {
     let i2 = 0x4000_0000_0000_0005u64 as i64;
     let program = format!("{}+6=={}", i1, i2);
     let expected = Value::bool(true);
-    eval_script(program, expected);
+    eval_script(&program, expected);
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn int2() {
     let i2 = 0x4000_0000_0000_0005u64 as i64;
     let program = format!("{}-6=={}", i2, i1);
     let expected = Value::bool(true);
-    eval_script(program, expected);
+    eval_script(&program, expected);
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn int3() {
     let i2 = 0xc000_0000_0000_0005u64 as i64;
     let program = format!("{}+6=={}", i1, i2);
     let expected = Value::bool(true);
-    eval_script(program, expected);
+    eval_script(&program, expected);
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn int4() {
     let i2 = 0xc000_0000_0000_0005u64 as i64;
     let program = format!("{}-6=={}", i2, i1);
     let expected = Value::bool(true);
-    eval_script(program, expected);
+    eval_script(&program, expected);
 }
 
 #[test]

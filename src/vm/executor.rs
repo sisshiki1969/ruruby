@@ -278,15 +278,18 @@ impl VM {
     pub fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
-        program: impl Into<String>,
+        program: &str,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new(path, program);
-        let result = parser.parse_program()?;
-
+        let parser = Parser::new(program);
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
+        let result = match parser.parse_program() {
+            Ok(ok) => ok,
+            Err(err) => return Err(RubyError::new_parse_err(err.0, source_info, err.1)),
+        };
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let methodref = Codegen::new(result.source_info).gen_iseq(
+        let methodref = Codegen::new(source_info).gen_iseq(
             &mut self.globals,
             vec![],
             result.node,
@@ -303,14 +306,18 @@ impl VM {
         path: impl Into<PathBuf>,
         program: &str,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new(path, program);
+        let parser = Parser::new(program);
         let extern_context = self.context();
-        let result = parser.parse_program_eval(Some(extern_context))?;
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
+        let result = match parser.parse_program_eval(Some(extern_context)) {
+            Ok(ok) => ok,
+            Err(err) => return Err(RubyError::new_parse_err(err.0, source_info, err.1)),
+        };
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let mut codegen = Codegen::new(result.source_info);
+        let mut codegen = Codegen::new(source_info);
         codegen.set_external_context(extern_context);
         let method = codegen.gen_iseq(
             &mut self.globals,
@@ -324,7 +331,7 @@ impl VM {
         Ok(method)
     }
 
-    pub fn run(&mut self, path: impl Into<PathBuf>, program: impl Into<String>) -> VMResult {
+    pub fn run(&mut self, path: impl Into<PathBuf>, program: &str) -> VMResult {
         let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
         let mut iseq = method.as_iseq();
@@ -343,11 +350,16 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(&mut self, result: ParseResult, mut context: ContextRef) -> VMResult {
+    pub fn run_repl(
+        &mut self,
+        result: ParseResult,
+        source_info: SourceInfoRef,
+        mut context: ContextRef,
+    ) -> VMResult {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
-        let method = Codegen::new(result.source_info).gen_iseq(
+        let method = Codegen::new(source_info).gen_iseq(
             &mut self.globals,
             vec![],
             result.node,
@@ -2265,11 +2277,11 @@ impl VM {
         self.set_global_var(IdentId::get_id("$0"), Value::string(file));
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
-        self.exec_program(absolute_path, program);
+        self.exec_program(absolute_path, &program);
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn exec_program(&mut self, absolute_path: PathBuf, program: impl Into<String>) {
+    pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
         match self.run(absolute_path, program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]

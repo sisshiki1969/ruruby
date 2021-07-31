@@ -1,8 +1,8 @@
 use super::*;
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// Parse method definition.
-    pub fn parse_def(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_def(&mut self) -> Result<Node, ParseErr> {
         // メソッド定義
 
         // 特異メソッド定義
@@ -80,7 +80,7 @@ impl Parser {
         Ok(decl)
     }
     /// Parse class definition.
-    pub fn parse_class(&mut self, is_module: bool) -> Result<Node, RubyError> {
+    pub fn parse_class(&mut self, is_module: bool) -> Result<Node, ParseErr> {
         // クラス定義 : "class" クラスパス [行終端子禁止] ("<" 式)? 分離子 本体文 "end"
         // クラスパス : "::" 定数識別子
         //      ｜ 定数識別子
@@ -129,7 +129,7 @@ impl Parser {
     }
 
     /// Parse singleton class definition.
-    pub fn parse_singleton_class(&mut self, loc: Loc) -> Result<Node, RubyError> {
+    pub fn parse_singleton_class(&mut self, loc: Loc) -> Result<Node, ParseErr> {
         // class "<<" EXPR <term>
         //      COMPSTMT
         // end
@@ -147,7 +147,7 @@ impl Parser {
         Ok(Node::new_singleton_class_decl(singleton, body, lvar, loc))
     }
 
-    fn parse_class_def_name(&mut self) -> Result<Node, RubyError> {
+    fn parse_class_def_name(&mut self) -> Result<Node, ParseErr> {
         // クラスパス : "::" 定数識別子
         //      ｜ 定数識別子
         //      ｜ 一次式 [行終端子禁止] "::" 定数識別子
@@ -165,7 +165,7 @@ impl Parser {
         }
     }
 
-    pub fn alias_name(&mut self) -> Result<Node, RubyError> {
+    pub fn alias_name(&mut self) -> Result<Node, ParseErr> {
         if self.consume_punct_no_term(Punct::Colon)? {
             self.parse_symbol()
         } else if let TokenKind::GlobalVar(_) = self.peek_no_term()?.kind {
@@ -183,7 +183,7 @@ impl Parser {
     }
 
     /// Parse method definition name.
-    fn parse_method_def_name(&mut self) -> Result<IdentId, RubyError> {
+    fn parse_method_def_name(&mut self) -> Result<IdentId, ParseErr> {
         // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
         // メソッド名 : 局所変数識別子
         //      | 定数識別子
@@ -210,7 +210,7 @@ impl Parser {
 
     // ( )
     // ( ident [, ident]* )
-    fn parse_def_params(&mut self) -> Result<Vec<FormalParam>, RubyError> {
+    fn parse_def_params(&mut self) -> Result<Vec<FormalParam>, ParseErr> {
         if self.consume_term()? {
             return Ok(vec![]);
         };

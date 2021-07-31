@@ -1,10 +1,10 @@
+use super::lexer::ParseErr;
 use super::*;
-use crate::error::{ParseErrKind, RubyError};
+use crate::error::ParseErrKind;
 use crate::id_table::IdentId;
 use crate::util::*;
 use crate::vm::context::{ContextRef, ISeqKind};
 use fxhash::FxHashMap;
-use std::path::PathBuf;
 
 mod define;
 mod flow_control;
@@ -12,8 +12,8 @@ mod literals;
 mod statement;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Parser {
-    pub lexer: Lexer,
+pub struct Parser<'a> {
+    pub lexer: Lexer<'a>,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
     extern_context: Option<ContextRef>,
@@ -29,15 +29,13 @@ pub struct Parser {
 pub struct ParseResult {
     pub node: Node,
     pub lvar_collector: LvarCollector,
-    pub source_info: SourceInfoRef,
 }
 
 impl ParseResult {
-    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
+    pub fn default(node: Node, lvar_collector: LvarCollector) -> Self {
         ParseResult {
             node,
             lvar_collector,
-            source_info,
         }
     }
 }
@@ -260,9 +258,9 @@ enum ContextKind {
     For,
 }
 
-impl Parser {
-    pub fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
-        let lexer = Lexer::new(path, code);
+impl<'a> Parser<'a> {
+    pub fn new(code: &'a str) -> Self {
+        let lexer = Lexer::new(code);
         Parser {
             lexer,
             prev_loc: Loc(0, 0),
@@ -315,7 +313,7 @@ impl Parser {
 
     /// Add the `id` as a new parameter in the current context.
     /// If a parameter with the same name already exists, return error.
-    fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<LvarId, RubyError> {
+    fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<LvarId, ParseErr> {
         match self.context_mut().lvar.insert_new(id) {
             Some(lvar) => Ok(lvar),
             None => Err(self.error_unexpected(loc, "Duplicated argument name.")),
@@ -328,7 +326,7 @@ impl Parser {
 
     /// Add the `id` as a new parameter in the current context.
     /// If a parameter with the same name already exists, return error.
-    fn new_kwrest_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
+    fn new_kwrest_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_kwrest_param(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
         }
@@ -337,7 +335,7 @@ impl Parser {
 
     /// Add the `id` as a new block parameter in the current context.
     /// If a parameter with the same name already exists, return error.
-    fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), RubyError> {
+    fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_block_param(id).is_none() {
             return Err(self.error_unexpected(loc, "Duplicated argument name."));
         }
@@ -380,12 +378,12 @@ impl Parser {
     }
 
     /// Peek next token (skipping line terminators).
-    fn peek(&mut self) -> Result<Token, RubyError> {
+    fn peek(&mut self) -> Result<Token, ParseErr> {
         self.lexer.peek_token_skip_lt()
     }
 
     /// Peek next token (no skipping line terminators).
-    fn peek_no_term(&mut self) -> Result<Token, RubyError> {
+    fn peek_no_term(&mut self) -> Result<Token, ParseErr> {
         self.lexer.peek_token()
     }
 
@@ -398,7 +396,7 @@ impl Parser {
     }
 
     /// Examine the next token, and return true if it is a line terminator.
-    fn is_line_term(&mut self) -> Result<bool, RubyError> {
+    fn is_line_term(&mut self) -> Result<bool, ParseErr> {
         Ok(self.peek_no_term()?.is_line_term())
     }
 
@@ -412,7 +410,7 @@ impl Parser {
 
     /// Get next token (skipping line terminators).
     /// Return RubyError if it was EOF.
-    fn get(&mut self) -> Result<Token, RubyError> {
+    fn get(&mut self) -> Result<Token, ParseErr> {
         loop {
             let tok = self.lexer.get_token()?;
             if tok.is_eof() {
@@ -426,7 +424,7 @@ impl Parser {
     }
 
     /// Get next token (no skipping line terminators).
-    fn get_no_skip_line_term(&mut self) -> Result<Token, RubyError> {
+    fn get_no_skip_line_term(&mut self) -> Result<Token, ParseErr> {
         let tok = self.lexer.get_token()?;
         self.prev_loc = tok.loc;
         Ok(tok)
@@ -434,7 +432,7 @@ impl Parser {
 
     /// If the next token is Ident, consume and return Some(it).
     /// If not, return None.
-    fn consume_ident(&mut self) -> Result<Option<IdentId>, RubyError> {
+    fn consume_ident(&mut self) -> Result<Option<IdentId>, ParseErr> {
         match self.peek()?.kind {
             TokenKind::Ident(s) => {
                 self.get()?;
@@ -446,7 +444,7 @@ impl Parser {
 
     /// If the next token is an expected kind of Punctuator, get it and return true.
     /// Otherwise, return false.
-    fn consume_punct(&mut self, expect: Punct) -> Result<bool, RubyError> {
+    fn consume_punct(&mut self, expect: Punct) -> Result<bool, ParseErr> {
         match self.peek()?.kind {
             TokenKind::Punct(punct) if punct == expect => {
                 self.get()?;
@@ -456,7 +454,7 @@ impl Parser {
         }
     }
 
-    fn consume_punct_no_term(&mut self, expect: Punct) -> Result<bool, RubyError> {
+    fn consume_punct_no_term(&mut self, expect: Punct) -> Result<bool, ParseErr> {
         if TokenKind::Punct(expect) == self.peek_no_term()?.kind {
             self.get()?;
             Ok(true)
@@ -465,7 +463,7 @@ impl Parser {
         }
     }
 
-    fn consume_assign_op_no_term(&mut self) -> Result<Option<BinOp>, RubyError> {
+    fn consume_assign_op_no_term(&mut self) -> Result<Option<BinOp>, ParseErr> {
         if let TokenKind::Punct(Punct::AssignOp(op)) = self.peek_no_term()?.kind {
             Ok(Some(op))
         } else {
@@ -475,7 +473,7 @@ impl Parser {
 
     /// If next token is an expected kind of Reserved keyeord, get it and return true.
     /// Otherwise, return false.
-    fn consume_reserved(&mut self, expect: Reserved) -> Result<bool, RubyError> {
+    fn consume_reserved(&mut self, expect: Reserved) -> Result<bool, ParseErr> {
         match self.peek()?.kind {
             TokenKind::Reserved(reserved) if reserved == expect => {
                 self.get()?;
@@ -485,7 +483,7 @@ impl Parser {
         }
     }
 
-    fn consume_reserved_no_skip_line_term(&mut self, expect: Reserved) -> Result<bool, RubyError> {
+    fn consume_reserved_no_skip_line_term(&mut self, expect: Reserved) -> Result<bool, ParseErr> {
         if TokenKind::Reserved(expect) == self.peek_no_term()?.kind {
             self.get()?;
             Ok(true)
@@ -496,7 +494,7 @@ impl Parser {
 
     /// Get the next token if it is a line terminator or ';' or EOF, and return true,
     /// Otherwise, return false.
-    fn consume_term(&mut self) -> Result<bool, RubyError> {
+    fn consume_term(&mut self) -> Result<bool, ParseErr> {
         if !self.peek_no_term()?.is_term() {
             return Ok(false);
         };
@@ -510,7 +508,7 @@ impl Parser {
 
     /// Get the next token and examine whether it is an expected Reserved.
     /// If not, return RubyError.
-    fn expect_reserved(&mut self, expect: Reserved) -> Result<(), RubyError> {
+    fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseErr> {
         match &self.get()?.kind {
             TokenKind::Reserved(reserved) if *reserved == expect => Ok(()),
             t => {
@@ -522,7 +520,7 @@ impl Parser {
 
     /// Get the next token and examine whether it is an expected Punct.
     /// If not, return RubyError.
-    fn expect_punct(&mut self, expect: Punct) -> Result<(), RubyError> {
+    fn expect_punct(&mut self, expect: Punct) -> Result<(), ParseErr> {
         match &self.get()?.kind {
             TokenKind::Punct(punct) if *punct == expect => Ok(()),
             t => {
@@ -535,7 +533,7 @@ impl Parser {
     /// Get the next token and examine whether it is Ident.
     /// Return IdentId of the Ident.
     /// If not, return RubyError.
-    fn expect_ident(&mut self) -> Result<IdentId, RubyError> {
+    fn expect_ident(&mut self) -> Result<IdentId, ParseErr> {
         match &self.get()?.kind {
             TokenKind::Ident(s) => Ok(self.get_ident_id(s)),
             _ => Err(self.error_unexpected(self.prev_loc(), "Expect identifier.")),
@@ -545,7 +543,7 @@ impl Parser {
     /// Get the next token and examine whether it is Const.
     /// Return IdentId of the Const.
     /// If not, return RubyError.
-    fn expect_const(&mut self) -> Result<String, RubyError> {
+    fn expect_const(&mut self) -> Result<String, ParseErr> {
         match self.get()?.kind {
             TokenKind::Const(s) => Ok(s),
             _ => Err(self.error_unexpected(self.prev_loc(), "Expect constant.")),
@@ -565,27 +563,23 @@ impl Parser {
         }
     }
 
-    fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> RubyError {
-        RubyError::new_parse_err(
-            ParseErrKind::SyntaxError(msg.into()),
-            self.lexer.source_info,
-            loc,
-        )
+    fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseErr {
+        ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
     }
 
-    fn error_eof(&self, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.lexer.source_info, loc)
+    fn error_eof(&self, loc: Loc) -> ParseErr {
+        ParseErr(ParseErrKind::UnexpectedEOF, loc)
     }
 }
 
-impl Parser {
-    pub fn parse_program(mut self) -> Result<ParseResult, RubyError> {
+impl<'a> Parser<'a> {
+    pub fn parse_program(mut self) -> Result<ParseResult, ParseErr> {
         let (node, lvar) = self.parse_program_core(None)?;
         let tok = self.peek()?;
         #[cfg(feature = "emit-ast")]
         eprintln!("{:#?}", node);
         if tok.is_eof() {
-            let result = ParseResult::default(node, lvar, self.lexer.source_info);
+            let result = ParseResult::default(node, lvar);
             Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
@@ -595,7 +589,7 @@ impl Parser {
     pub fn parse_program_repl(
         mut self,
         extern_context: ContextRef,
-    ) -> Result<ParseResult, RubyError> {
+    ) -> Result<ParseResult, ParseErr> {
         self.extern_context = Some(extern_context);
         self.context_stack.push(ParseContext::new_class(
             IdentId::get_id("REPL"),
@@ -608,7 +602,7 @@ impl Parser {
 
         let tok = self.peek()?;
         if tok.is_eof() {
-            let result = ParseResult::default(node, lvar, self.lexer.source_info);
+            let result = ParseResult::default(node, lvar);
             Ok(result)
         } else {
             let err = self.error_unexpected(tok.loc(), "Expected end-of-input.");
@@ -619,7 +613,7 @@ impl Parser {
     fn parse_program_core(
         &mut self,
         extern_context: Option<ContextRef>,
-    ) -> Result<(Node, LvarCollector), RubyError> {
+    ) -> Result<(Node, LvarCollector), ParseErr> {
         self.extern_context = extern_context;
         self.context_stack.push(ParseContext::new_class(
             IdentId::get_id("Top"),
@@ -633,21 +627,21 @@ impl Parser {
     pub fn parse_program_eval(
         mut self,
         extern_context: Option<ContextRef>,
-    ) -> Result<ParseResult, RubyError> {
+    ) -> Result<ParseResult, ParseErr> {
         self.extern_context = extern_context;
         self.context_stack.push(ParseContext::new_block());
         let node = self.parse_comp_stmt()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
         let tok = self.peek()?;
         if tok.is_eof() {
-            let result = ParseResult::default(node, lvar, self.lexer.source_info);
+            let result = ParseResult::default(node, lvar);
             Ok(result)
         } else {
             Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
         }
     }
 
-    fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, RubyError> {
+    fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, ParseErr> {
         // FNAME ARGS
         // FNAME ARGS DO-BLOCK
         let send_args = self.parse_arglist_block(None)?;
@@ -663,7 +657,7 @@ impl Parser {
     fn parse_arglist_block(
         &mut self,
         delimiter: impl Into<Option<Punct>>,
-    ) -> Result<ArgList, RubyError> {
+    ) -> Result<ArgList, ParseErr> {
         let mut arglist = self.parse_argument_list(delimiter)?;
         match self.parse_block()? {
             Some(actual_block) => {
@@ -682,7 +676,7 @@ impl Parser {
 
     /// Parse assign-op.
     /// <lhs> <assign_op> <arg>
-    fn parse_assign_op(&mut self, mut lhs: Node, op: BinOp) -> Result<Node, RubyError> {
+    fn parse_assign_op(&mut self, mut lhs: Node, op: BinOp) -> Result<Node, ParseErr> {
         match op {
             BinOp::LOr | BinOp::LAnd => {
                 self.get()?;
@@ -705,7 +699,7 @@ impl Parser {
     }
 
     /// Check whether `lhs` is a local variable or not.
-    fn check_lhs(&mut self, lhs: &Node) -> Result<(), RubyError> {
+    fn check_lhs(&mut self, lhs: &Node) -> Result<(), ParseErr> {
         if let NodeKind::Ident(id) = lhs.kind {
             self.add_local_var_if_new(id);
         } else if let NodeKind::Const { .. } = lhs.kind {
@@ -722,7 +716,7 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_function_args(&mut self, node: Node) -> Result<Node, RubyError> {
+    fn parse_function_args(&mut self, node: Node) -> Result<Node, ParseErr> {
         let loc = node.loc();
         if self.consume_punct_no_term(Punct::LParen)? {
             // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
@@ -750,7 +744,7 @@ impl Parser {
     }
 
     /// Parse primary method call.
-    fn parse_primary_method(&mut self, receiver: Node, safe_nav: bool) -> Result<Node, RubyError> {
+    fn parse_primary_method(&mut self, receiver: Node, safe_nav: bool) -> Result<Node, ParseErr> {
         // 一次式メソッド呼出し : 省略可能実引数付きsuper
         //      ｜ 添字メソッド呼出し
         //      ｜ メソッド専用識別子
@@ -793,7 +787,7 @@ impl Parser {
 
     /// Parse method name.
     /// In primary method call, assign-like method name(cf. foo= or Bar=) is not allowed.
-    pub fn parse_method_name(&mut self) -> Result<(IdentId, Loc), RubyError> {
+    pub fn parse_method_name(&mut self) -> Result<(IdentId, Loc), ParseErr> {
         let tok = self.get()?;
         let loc = tok.loc();
         let id = match &tok.kind {
@@ -814,7 +808,7 @@ impl Parser {
     fn parse_argument_list(
         &mut self,
         punct: impl Into<Option<Punct>>,
-    ) -> Result<ArgList, RubyError> {
+    ) -> Result<ArgList, ParseErr> {
         let punct = punct.into();
         let mut arglist = ArgList::default();
         loop {
@@ -891,7 +885,7 @@ impl Parser {
     /// Parse block.
     ///     do |x| stmt end
     ///     { |x| stmt }
-    fn parse_block(&mut self) -> Result<Option<Box<Node>>, RubyError> {
+    fn parse_block(&mut self) -> Result<Option<Box<Node>>, ParseErr> {
         let old_suppress_mul_flag = self.suppress_mul_assign;
         self.suppress_mul_assign = false;
         let do_flag =
@@ -935,7 +929,7 @@ impl Parser {
         Ok(Some(Box::new(node)))
     }
 
-    fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, RubyError> {
+    fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, ParseErr> {
         let tok = self.get()?;
         let loc = tok.loc();
         match &tok.kind {
@@ -1100,7 +1094,7 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     fn is_command(&mut self) -> bool {
         let tok = match self.peek_no_term() {
             Ok(tok) => tok,
@@ -1146,7 +1140,7 @@ impl Parser {
 
     /// Parse operator which can be defined as a method.
     /// Return IdentId of the operator.
-    fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, RubyError> {
+    fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, ParseErr> {
         match punct {
             Punct::Plus => Ok(IdentId::_ADD),
             Punct::Minus => Ok(IdentId::_SUB),
@@ -1178,7 +1172,7 @@ impl Parser {
         }
     }
 
-    fn parse_then(&mut self) -> Result<(), RubyError> {
+    fn parse_then(&mut self) -> Result<(), ParseErr> {
         if self.consume_term()? {
             self.consume_reserved(Reserved::Then)?;
             return Ok(());
@@ -1187,7 +1181,7 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_do(&mut self) -> Result<(), RubyError> {
+    fn parse_do(&mut self) -> Result<(), ParseErr> {
         if self.consume_term()? {
             return Ok(());
         }
@@ -1198,7 +1192,7 @@ impl Parser {
     /// Check method name extension.
     /// Parse "xxxx!" as a valid mathod name.
     /// "xxxx!=" or "xxxx?=" is invalid.
-    fn method_def_ext(&mut self, s: &str) -> Result<IdentId, RubyError> {
+    fn method_def_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
         let id = if !self.lexer.trailing_space()
             && !(s.ends_with(&['!', '?'][..]))
             && self.consume_punct_no_term(Punct::Assign)?
@@ -1212,10 +1206,7 @@ impl Parser {
 
     /// Parse formal parameters.
     /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
-    fn parse_formal_params(
-        &mut self,
-        terminator: TokenKind,
-    ) -> Result<Vec<FormalParam>, RubyError> {
+    fn parse_formal_params(&mut self, terminator: TokenKind) -> Result<Vec<FormalParam>, ParseErr> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
             Reqired,
@@ -1339,7 +1330,7 @@ impl Parser {
         Ok(args)
     }
 
-    fn parse_begin(&mut self) -> Result<Node, RubyError> {
+    fn parse_begin(&mut self) -> Result<Node, ParseErr> {
         // begin式 :: "begin"  複合文  rescue節*  else節?  ensure節?  "end"
         // rescue節 :: "rescue" [行終端子禁止] 例外クラスリスト?  例外変数代入?  then節
         // 例外クラスリスト :: 演算子式 | 多重代入右辺
