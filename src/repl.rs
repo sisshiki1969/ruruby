@@ -41,9 +41,10 @@ pub fn repl_vm() {
         format!("{}", Red.bold().paint("irb:"))
     };
     let mut temp_script = String::new();
-    let mut parser = Parser::new(&String::new());
+    let program = String::new();
+    let mut parser = Parser::new(&program);
     let source_info = SourceInfoRef::new(SourceInfo::new("REPL", ""));
-    let mut parser_save = parser.clone();
+    let parser_save = parser.clone();
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
@@ -73,12 +74,12 @@ pub fn repl_vm() {
 
         temp_script += &line;
         parser = parser_save.clone();
-        parser.lexer.append(&temp_script);
+        //parser.lexer.append(&temp_script);
 
         match parser.parse_program_repl(context) {
             Ok(parse_result) => match vm.run_repl(parse_result, source_info, context) {
                 Ok(result) => {
-                    parser_save.lexer.set_source_info(source_info);
+                    //parser_save.lexer.set_source_info(source_info);
                     println!("=> {:?}", result);
                 }
                 Err(err) => {

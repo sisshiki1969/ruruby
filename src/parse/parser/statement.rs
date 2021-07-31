@@ -1,6 +1,6 @@
 use super::*;
 
-impl Parser {
+impl<'a> Parser<'a> {
     pub fn parse_comp_stmt(&mut self) -> Result<Node, ParseErr> {
         // COMP_STMT : (STMT (TERM STMT)*)? (TERM+)?
         self.peek()?;

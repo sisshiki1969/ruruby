@@ -12,8 +12,8 @@ mod literals;
 mod statement;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Parser {
-    pub lexer: Lexer,
+pub struct Parser<'a> {
+    pub lexer: Lexer<'a>,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
     extern_context: Option<ContextRef>,
@@ -258,8 +258,8 @@ enum ContextKind {
     For,
 }
 
-impl Parser {
-    pub fn new(code: impl Into<String>) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(code: &'a str) -> Self {
         let lexer = Lexer::new(code);
         Parser {
             lexer,
@@ -572,7 +572,7 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     pub fn parse_program(mut self) -> Result<ParseResult, ParseErr> {
         let (node, lvar) = self.parse_program_core(None)?;
         let tok = self.peek()?;
@@ -1094,7 +1094,7 @@ impl Parser {
     }
 }
 
-impl Parser {
+impl<'a> Parser<'a> {
     fn is_command(&mut self) -> bool {
         let tok = match self.peek_no_term() {
             Ok(tok) => tok,

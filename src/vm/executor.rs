@@ -278,10 +278,9 @@ impl VM {
     pub fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
-        program: impl Into<String>,
+        program: &str,
     ) -> Result<MethodId, RubyError> {
-        let program = program.into();
-        let parser = Parser::new(program.clone());
+        let parser = Parser::new(program);
         let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
         let result = match parser.parse_program() {
             Ok(ok) => ok,
@@ -332,7 +331,7 @@ impl VM {
         Ok(method)
     }
 
-    pub fn run(&mut self, path: impl Into<PathBuf>, program: impl Into<String>) -> VMResult {
+    pub fn run(&mut self, path: impl Into<PathBuf>, program: &str) -> VMResult {
         let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
         let mut iseq = method.as_iseq();
@@ -2278,11 +2277,11 @@ impl VM {
         self.set_global_var(IdentId::get_id("$0"), Value::string(file));
         #[cfg(feature = "verbose")]
         eprintln!("load file: {:?}", &absolute_path);
-        self.exec_program(absolute_path, program);
+        self.exec_program(absolute_path, &program);
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn exec_program(&mut self, absolute_path: PathBuf, program: impl Into<String>) {
+    pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
         match self.run(absolute_path, program) {
             Ok(_) => {
                 #[cfg(feature = "perf")]

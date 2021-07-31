@@ -1,6 +1,6 @@
 use super::*;
 
-impl Parser {
+impl<'a> Parser<'a> {
     /// Parse method definition.
     pub fn parse_def(&mut self) -> Result<Node, ParseErr> {
         // メソッド定義

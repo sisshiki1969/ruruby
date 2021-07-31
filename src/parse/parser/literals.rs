@@ -1,7 +1,7 @@
 use super::*;
 
 // Parse
-impl Parser {
+impl<'a> Parser<'a> {
     /// Parse char literals.
     pub fn parse_char_literal(&mut self) -> Result<Node, ParseErr> {
         let loc = self.loc();

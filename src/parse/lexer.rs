@@ -5,7 +5,7 @@ use crate::value::real::Real;
 use fxhash::FxHashMap;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Lexer {
+pub struct Lexer<'a> {
     token_start_pos: usize,
     pos: usize,
     heredoc_pos: usize,
@@ -14,7 +14,7 @@ pub struct Lexer {
     reserved: FxHashMap<String, Reserved>,
     reserved_rev: FxHashMap<Reserved, String>,
     //source_info: SourceInfoRef,
-    code: String,
+    code: &'a str,
     state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
 
@@ -40,8 +40,8 @@ enum InterpolateState {
     NewInterpolation(String, usize), // (string, paren_level)
 }
 
-impl Lexer {
-    pub fn new(code: impl Into<String>) -> Self {
+impl<'a> Lexer<'a> {
+    pub fn new(code: &'a str) -> Self {
         let mut reserved = FxHashMap::default();
         let mut reserved_rev = FxHashMap::default();
         let code = code.into();
@@ -104,10 +104,6 @@ impl Lexer {
         }
     }
 
-    pub fn set_source_info(&mut self, info: SourceInfoRef) {
-        self.code = info.code.clone();
-    }
-
     pub fn get_string_from_reserved(&self, reserved: Reserved) -> &str {
         self.reserved_rev.get(&reserved).unwrap()
     }
@@ -153,11 +149,6 @@ impl Lexer {
             }
         }
         return Ok(LexerResult::new(tokens));
-    }
-
-    pub fn append(&mut self, code_text: &str) {
-        self.pos = self.code.len();
-        self.code += &code_text;
     }
 
     pub fn get_token(&mut self) -> Result<Token, ParseErr> {
@@ -247,7 +238,7 @@ impl Lexer {
     }
 }
 
-impl Lexer {
+impl<'a> Lexer<'a> {
     /// Read token.
     fn read_token(&mut self) -> Result<Token, ParseErr> {
         loop {
@@ -1030,7 +1021,7 @@ impl Lexer {
 }
 
 // Low level API
-impl Lexer {
+impl<'a> Lexer<'a> {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
@@ -1177,7 +1168,7 @@ impl Lexer {
     }
 }
 
-impl Lexer {
+impl<'a> Lexer<'a> {
     fn new_ident(&self, ident: impl Into<String>) -> Token {
         Token::new_ident(ident.into(), self.cur_loc())
     }
@@ -1262,7 +1253,7 @@ impl LexerResult {
 #[allow(unused_imports, dead_code)]
 mod test {
     use crate::parse::lexer::*;
-    fn assert_tokens(program: impl Into<String>, ans: Vec<Token>) {
+    fn assert_tokens(program: &str, ans: Vec<Token>) {
         let mut lexer = Lexer::new(program);
         match lexer.tokenize() {
             Err(err) => panic!("{:?}", err),

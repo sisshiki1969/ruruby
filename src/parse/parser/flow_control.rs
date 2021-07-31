@@ -1,7 +1,7 @@
 use super::*;
 
 // Parse
-impl Parser {
+impl<'a> Parser<'a> {
     pub fn parse_if(&mut self) -> Result<Node, ParseErr> {
         //  if EXPR THEN
         //      COMPSTMT

@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn eval_script(script: impl Into<String>, expected: Value) {
+pub fn eval_script(script: &str, expected: Value) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     let res = vm.run("", script);
@@ -22,7 +22,7 @@ pub fn eval_script(script: impl Into<String>, expected: Value) {
     }
 }
 
-pub fn assert_script(script: impl Into<String>) {
+pub fn assert_script(script: &str) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     let res = vm.run("", script);
