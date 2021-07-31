@@ -943,29 +943,12 @@ impl Codegen {
         };
         match node.kind {
             NodeKind::Nil => iseq.gen_push_nil(),
-            NodeKind::Bool(b) => {
-                if b {
-                    iseq.push(Inst::PUSH_TRUE)
-                } else {
-                    iseq.push(Inst::PUSH_FALSE)
-                }
-            }
-            NodeKind::Integer(num) => {
-                iseq.gen_fixnum(num);
-            }
-            NodeKind::Float(num) => {
-                iseq.push(Inst::PUSH_FLONUM);
-                iseq.push64(f64::to_bits(num));
-            }
-            NodeKind::Imaginary(r) => {
-                iseq.gen_complex(globals, r);
-            }
-            NodeKind::String(s) => {
-                iseq.gen_string(globals, &s);
-            }
-            NodeKind::Symbol(id) => {
-                iseq.gen_symbol(id);
-            }
+            NodeKind::Bool(b) => iseq.gen_val(Value::bool(b)),
+            NodeKind::Integer(num) => iseq.gen_integer(globals, num),
+            NodeKind::Float(num) => iseq.gen_float(globals, num),
+            NodeKind::Imaginary(r) => iseq.gen_complex(globals, r),
+            NodeKind::String(s) => iseq.gen_string(globals, &s),
+            NodeKind::Symbol(id) => iseq.gen_val(Value::symbol(id)),
             NodeKind::InterporatedString(nodes) => {
                 let mut c = 0;
                 for node in nodes {
@@ -1034,11 +1017,7 @@ impl Codegen {
                 end,
                 exclude_end,
             } => {
-                if exclude_end {
-                    iseq.push(Inst::PUSH_TRUE);
-                } else {
-                    iseq.push(Inst::PUSH_FALSE)
-                };
+                iseq.gen_val(Value::bool(exclude_end));
                 self.gen(globals, iseq, *end, true)?;
                 self.gen(globals, iseq, *start, true)?;
                 self.save_loc(iseq, node_loc);
@@ -1744,7 +1723,7 @@ impl Codegen {
                 let kw_flag = kw_args_len != 0;
                 if kw_flag {
                     for (id, default) in arglist.kw_args {
-                        iseq.gen_symbol(id);
+                        iseq.gen_val(Value::symbol(id));
                         self.gen(globals, iseq, default, true)?;
                     }
                     iseq.gen_create_hash(kw_args_len);
@@ -1865,7 +1844,7 @@ impl Codegen {
                 iseq.push32(id.into());
                 iseq.push32(method.into());
                 if use_value {
-                    iseq.gen_symbol(id);
+                    iseq.gen_val(Value::symbol(id));
                 };
             }
             NodeKind::SingletonMethodDef(singleton, id, params, body, lvar) => {
@@ -1883,7 +1862,7 @@ impl Codegen {
                 iseq.push32((id).into());
                 iseq.push32(method.into());
                 if use_value {
-                    iseq.gen_symbol(id);
+                    iseq.gen_val(Value::symbol(id));
                 };
             }
             NodeKind::ClassDef {

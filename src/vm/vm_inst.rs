@@ -2,12 +2,9 @@ use crate::*;
 
 pub struct Inst;
 impl Inst {
-    pub const PUSH_FIXNUM: u8 = 1;
+    pub const PUSH_VAL: u8 = 1;
     pub const PUSH_FLONUM: u8 = 2;
-    pub const PUSH_TRUE: u8 = 3;
-    pub const PUSH_FALSE: u8 = 4;
     pub const PUSH_NIL: u8 = 5;
-    pub const PUSH_SYMBOL: u8 = 7;
     pub const PUSH_SELF: u8 = 8;
 
     pub const CREATE_RANGE: u8 = 10;
@@ -130,12 +127,8 @@ impl Inst {
 impl Inst {
     pub fn inst_name(inst: u8) -> String {
         let inst = match inst {
-            Inst::PUSH_FIXNUM => "PUSH_FIXNUM",
-            Inst::PUSH_FLONUM => "PUSH_FLONUM",
-            Inst::PUSH_TRUE => "PUSH_TRUE",
-            Inst::PUSH_FALSE => "PUSH_FALSE",
+            Inst::PUSH_VAL => "PUSH_VAL",
             Inst::PUSH_NIL => "PUSH_NIL",
-            Inst::PUSH_SYMBOL => "PUSH_SYMBOL",
             Inst::PUSH_SELF => "PUSH_SELF",
 
             Inst::ADD => "ADD",
@@ -262,8 +255,6 @@ impl Inst {
         let disp = match inst {
             Inst::RETURN
             | Inst::PUSH_NIL
-            | Inst::PUSH_TRUE
-            | Inst::PUSH_FALSE
             | Inst::PUSH_SELF
             | Inst::ADD                 
             | Inst::SUB                 
@@ -298,10 +289,8 @@ impl Inst {
             | Inst::MRETURN
             | Inst::THROW => 1,
                                         // operand
-            Inst::PUSH_SYMBOL           // IdentId: u32
-            | Inst::SET_LOCAL           // LvarId: u32
+            Inst::SET_LOCAL           // LvarId: u32
             | Inst::GET_LOCAL           // LVarId: u32
-
             | Inst::SET_CONST           // IdentId: u32
             | Inst::CHECK_CONST         // IdentId: u32
             | Inst::CHECK_SCOPE         // IdentId: u32
@@ -356,8 +345,7 @@ impl Inst {
             Inst::SUPER  => 8,
             // number of args: u16 / block: u32 / flag: u8
 
-            Inst::PUSH_FIXNUM           // value:i64
-            | Inst::PUSH_FLONUM         // value:f64
+            Inst::PUSH_VAL              // value: Value
             | Inst::SET_DYNLOCAL
             | Inst::GET_DYNLOCAL
             | Inst::CHECK_LOCAL
@@ -367,12 +355,12 @@ impl Inst {
             | Inst::DEF_METHOD          // method_id: u32 / method: u32
             | Inst::DEF_SMETHOD         // method_id: u32 / method: u32
 
-            | Inst::JMP_F_EQI            // immediate: i32 / disp: i32
-            | Inst::JMP_F_NEI            // immediate: i32 / disp: i32
-            | Inst::JMP_F_GTI            // immediate: i32 / disp: i32
-            | Inst::JMP_F_GEI            // immediate: i32 / disp: i32
-            | Inst::JMP_F_LTI            // immediate: i32 / disp: i32
-            | Inst::JMP_F_LEI            // immediate: i32 / disp: i32
+            | Inst::JMP_F_EQI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_NEI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_GTI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_GEI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_LTI           // immediate: i32 / disp: i32
+            | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
             => 9,
             Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N  => 15,
@@ -404,8 +392,7 @@ impl Inst {
             | Inst::LEI
             | Inst::GET_IDX_I
             | Inst::SET_IDX_I => imm_i32(iseq, pc),
-            Inst::PUSH_FIXNUM => format!("PUSH_FIXNUM {}", iseq.read64(pc + 1) as i64),
-            Inst::PUSH_FLONUM => format!("PUSH_FLONUM {}", f64::from_bits(iseq.read64(pc + 1))),
+            Inst::PUSH_VAL => format!("PUSH_VAL {:?}", Value::from(iseq.read64(pc + 1))),
 
             Inst::JMP
             | Inst::JMP_BACK
@@ -463,8 +450,7 @@ impl Inst {
                 let ident_id = iseq_ref.lvar.get_name(id.into());
                 format!("CHECK_LOCAL '{:?}' outer:{}", ident_id, frame)
             }
-            Inst::PUSH_SYMBOL
-            | Inst::GET_CONST
+            Inst::GET_CONST
             | Inst::GET_CONST_TOP
             | Inst::SET_CONST
             | Inst::CHECK_CONST

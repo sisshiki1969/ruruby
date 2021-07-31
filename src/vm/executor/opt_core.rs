@@ -178,32 +178,14 @@ impl VM {
                         self.stack_push(Value::nil());
                         self.pc += 1;
                     }
-                    Inst::PUSH_TRUE => {
-                        self.stack_push(Value::true_val());
-                        self.pc += 1;
-                    }
-                    Inst::PUSH_FALSE => {
-                        self.stack_push(Value::false_val());
-                        self.pc += 1;
-                    }
                     Inst::PUSH_SELF => {
                         self.stack_push(self_value);
                         self.pc += 1;
                     }
-                    Inst::PUSH_FIXNUM => {
-                        let num = iseq.read64(self.pc + 1);
-                        self.stack_push(Value::integer(num as i64));
+                    Inst::PUSH_VAL => {
+                        let val = iseq.read64(self.pc + 1);
+                        self.stack_push(Value::from(val));
                         self.pc += 9;
-                    }
-                    Inst::PUSH_FLONUM => {
-                        let num = f64::from_bits(iseq.read64(self.pc + 1));
-                        self.stack_push(Value::float(num));
-                        self.pc += 9;
-                    }
-                    Inst::PUSH_SYMBOL => {
-                        let id = iseq.read_id(self.pc + 1);
-                        self.stack_push(Value::symbol(id));
-                        self.pc += 5;
                     }
                     Inst::ADD => {
                         let rhs = self.stack_pop();

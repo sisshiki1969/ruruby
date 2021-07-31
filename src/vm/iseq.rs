@@ -184,9 +184,9 @@ impl ISeq {
         self.push(Inst::PUSH_SELF);
     }
 
-    pub fn gen_fixnum(&mut self, num: i64) {
-        self.push(Inst::PUSH_FIXNUM);
-        self.push64(num as u64);
+    pub fn gen_val(&mut self, val: Value) {
+        self.push(Inst::PUSH_VAL);
+        self.push64(val.id());
     }
 
     pub fn gen_const_val(&mut self, id: usize) {
@@ -195,6 +195,26 @@ impl ISeq {
         };
         self.push(Inst::CONST_VAL);
         self.push32(id as u32);
+    }
+
+    pub fn gen_integer(&mut self, globals: &mut Globals, num: i64) {
+        let val = Value::integer(num);
+        if val.is_packed_value() {
+            self.gen_val(val);
+        } else {
+            let id = globals.const_values.insert(val);
+            self.gen_const_val(id);
+        }
+    }
+
+    pub fn gen_float(&mut self, globals: &mut Globals, num: f64) {
+        let val = Value::float(num);
+        if val.is_packed_value() {
+            self.gen_val(val);
+        } else {
+            let id = globals.const_values.insert(val);
+            self.gen_const_val(id);
+        }
     }
 
     pub fn gen_string(&mut self, globals: &mut Globals, s: &str) {
@@ -207,11 +227,6 @@ impl ISeq {
         let val = Value::complex(Value::integer(0), i.to_val());
         let id = globals.const_values.insert(val);
         self.gen_const_val(id);
-    }
-
-    pub fn gen_symbol(&mut self, id: IdentId) {
-        self.push(Inst::PUSH_SYMBOL);
-        self.push32(id.into());
     }
 
     pub fn gen_create_array(&mut self, len: usize) {
