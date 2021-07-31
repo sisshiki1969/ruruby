@@ -160,8 +160,7 @@ impl Lexer {
     }
 
     pub fn get_token(&mut self) -> Result<Token, RubyError> {
-        self.buf = None;
-        self.buf_skip_lt = None;
+        self.flush();
         let tok = self.read_token()?;
         Ok(tok)
     }
@@ -244,6 +243,11 @@ impl Lexer {
 
     pub fn discard_state(&mut self) {
         self.state_save.pop().unwrap();
+    }
+
+    pub fn flush(&mut self) {
+        self.buf = None;
+        self.buf_skip_lt = None;
     }
 }
 
@@ -466,11 +470,12 @@ impl Lexer {
     ) -> Result<Token, RubyError> {
         // read identifier or reserved keyword
         let mut tok = match var_kind {
-            VarKind::ClassVar => String::from("@@"),
-            VarKind::GlobalVar => String::from("$"),
-            VarKind::InstanceVar => String::from("@"),
-            VarKind::Identifier => String::new(),
-        };
+            VarKind::ClassVar => "@@",
+            VarKind::GlobalVar => "$",
+            VarKind::InstanceVar => "@",
+            VarKind::Identifier => "",
+        }
+        .to_string();
         let is_const = match ch.into() {
             Some(ch) => {
                 tok.push(ch);
@@ -493,19 +498,7 @@ impl Lexer {
                 false
             }
         };
-        loop {
-            let ch = match self.peek() {
-                Some(ch) => ch,
-                _ => {
-                    break;
-                }
-            };
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                tok.push(self.get()?);
-            } else {
-                break;
-            }
-        }
+        tok += &self.consume_ident();
         match var_kind {
             VarKind::InstanceVar => return Ok(self.new_instance_var(tok)),
             VarKind::ClassVar => return Ok(self.new_class_var(tok)),
@@ -769,13 +762,13 @@ impl Lexer {
     }
 
     /// Read char literal.
-    pub fn read_char_literal(&mut self) -> Result<Token, RubyError> {
+    pub fn read_char_literal(&mut self) -> Result<char, RubyError> {
         let c = self.get()?;
+        self.flush();
         if c == '\\' {
-            let ch = self.read_escaped_char()?;
-            Ok(self.new_stringlit(ch))
+            self.read_escaped_char()
         } else {
-            Ok(self.new_stringlit(c))
+            Ok(c)
         }
     }
 
@@ -969,19 +962,10 @@ impl Lexer {
             AllowIndent,
         }
         let mut mode = Mode::Normal;
-        let mut delimiter = String::new();
         if self.consume('-') {
             mode = Mode::AllowIndent;
         };
-        loop {
-            match self.peek() {
-                Some(ch) if ch.is_ascii_alphanumeric() || ch == '_' => {
-                    self.get()?;
-                    delimiter.push(ch);
-                }
-                _ => break,
-            };
-        }
+        let delimiter = self.consume_ident();
         if delimiter.len() == 0 {
             return Err(self.error_unexpected(self.pos));
         }
@@ -1067,6 +1051,19 @@ impl Lexer {
             }
             _ => false,
         }
+    }
+
+    /// Consume continuous ascii_alphanumeric or underscore characters.
+    /// Return consumed string.
+    fn consume_ident(&mut self) -> String {
+        let start = self.pos;
+        loop {
+            match self.peek() {
+                Some(ch) if ch.is_ascii_alphanumeric() || ch == '_' => self.get().unwrap(),
+                _ => break,
+            };
+        }
+        self.source_info.code[start..self.pos].to_string()
     }
 
     fn consume_newline(&mut self) -> bool {

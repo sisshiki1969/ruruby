@@ -5,10 +5,8 @@ impl Parser {
     /// Parse char literals.
     pub fn parse_char_literal(&mut self) -> Result<Node, RubyError> {
         let loc = self.loc();
-        match self.lexer.read_char_literal()?.kind {
-            TokenKind::StringLit(s) => Ok(Node::new_string(s, loc.merge(self.prev_loc))),
-            _ => unreachable!(),
-        }
+        let s = self.lexer.read_char_literal()?;
+        Ok(Node::new_string(s.to_string(), loc.merge(self.prev_loc)))
     }
 
     /// Parse string literals.

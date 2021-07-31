@@ -1,6 +1,5 @@
 use crate::vm::*;
 use crate::*;
-use std::cmp::Ordering;
 
 pub fn init() -> Value {
     let class = Module::class_under_object();

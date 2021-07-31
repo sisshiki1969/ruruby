@@ -1,7 +1,7 @@
-a = <<RUBY + "AAA"
-We
-  love
-    Ruby.
+a = <<RUBY
+windows #{<<RUST + ":"
+rusty.
+RUST
+}
 RUBY
 puts a
-#puts b
