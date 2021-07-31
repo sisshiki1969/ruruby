@@ -154,21 +154,20 @@ impl<'a> Parser<'a> {
             };
             let ident_loc = self.loc();
             let mut symbol_flag = false;
-            let key = if self.peek()?.can_be_symbol() {
-                self.save_state();
-                let token = self.get()?.clone();
-                let ident = self.token_as_symbol(&token);
-                if self.consume_punct(Punct::Colon)? {
-                    self.discard_state();
-                    let id = self.get_ident_id(&ident);
-                    symbol_flag = true;
-                    Node::new_symbol(id, ident_loc)
-                } else {
-                    self.restore_state();
-                    self.parse_arg()?
+            let key = match self.peek()?.can_be_symbol() {
+                Some(id) => {
+                    self.save_state();
+                    self.get().unwrap();
+                    if self.consume_punct(Punct::Colon)? {
+                        self.discard_state();
+                        symbol_flag = true;
+                        Node::new_symbol(id, ident_loc)
+                    } else {
+                        self.restore_state();
+                        self.parse_arg()?
+                    }
                 }
-            } else {
-                self.parse_arg()?
+                None => self.parse_arg()?,
             };
             if !symbol_flag {
                 self.expect_punct(Punct::FatArrow)?
@@ -194,19 +193,18 @@ impl<'a> Parser<'a> {
         let id = match &token.kind {
             TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
             TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
-            _ if token.can_be_symbol() => {
-                let ident = self.token_as_symbol(&token);
-                self.get_ident_id(&ident)
-            }
             TokenKind::OpenString(s, term, level) => {
                 let node = self.parse_interporated_string_literal(&s, *term, *level)?;
                 let method = self.get_ident_id("to_sym");
                 let loc = symbol_loc.merge(node.loc());
                 return Ok(Node::new_send_noarg(node, method, false, loc));
             }
-            _ => {
-                return Err(self.error_unexpected(symbol_loc, "Expect identifier or string."));
-            }
+            _ => match token.can_be_symbol() {
+                Some(id) => id,
+                None => {
+                    return Err(self.error_unexpected(symbol_loc, "Expect identifier or string."))
+                }
+            },
         };
         Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
     }

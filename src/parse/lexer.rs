@@ -3,6 +3,66 @@ use crate::error::ParseErrKind;
 use crate::util::*;
 use crate::value::real::Real;
 use fxhash::FxHashMap;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
+
+static RESERVED: Lazy<Mutex<ReservedChecker>> = Lazy::new(|| {
+    let mut reserved = FxHashMap::default();
+    let mut reserved_rev = FxHashMap::default();
+    macro_rules! reg_reserved {
+        ( $($id:expr => $variant:path),+ ) => {
+            $(
+                reserved.insert($id.to_string(), $variant);
+                reserved_rev.insert($variant, $id.to_string());
+            )+
+        };
+    }
+    reg_reserved! {
+        "and" => Reserved::And,
+        "BEGIN" => Reserved::BEGIN,
+        "END" => Reserved::END,
+        "alias" => Reserved::Alias,
+        "begin" => Reserved::Begin,
+        "break" => Reserved::Break,
+        "case" => Reserved::Case,
+        "class" => Reserved::Class,
+        "def" => Reserved::Def,
+        "defined?" => Reserved::Defined,
+        "do" => Reserved::Do,
+        "else" => Reserved::Else,
+        "ensure"=> Reserved::Ensure,
+        "elsif" => Reserved::Elsif,
+        "end" => Reserved::End,
+        "for" => Reserved::For,
+        "false" => Reserved::False,
+        "if" => Reserved::If,
+        "in" => Reserved::In,
+        "module" => Reserved::Module,
+        "next" => Reserved::Next,
+        "nil" => Reserved::Nil,
+        "or" => Reserved::Or,
+        "return" => Reserved::Return,
+        "rescue" => Reserved::Rescue,
+        "self" => Reserved::Self_,
+        "super" => Reserved::Super,
+        "then" => Reserved::Then,
+        "true" => Reserved::True,
+        "until" => Reserved::Until,
+        "unless" => Reserved::Unless,
+        "when" => Reserved::When,
+        "while" => Reserved::While,
+        "yield" => Reserved::Yield
+    };
+    Mutex::new(ReservedChecker {
+        reserved,
+        reserved_rev,
+    })
+});
+
+pub struct ReservedChecker {
+    reserved: FxHashMap<String, Reserved>,
+    reserved_rev: FxHashMap<Reserved, String>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer<'a> {
@@ -11,9 +71,6 @@ pub struct Lexer<'a> {
     heredoc_pos: usize,
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
-    reserved: FxHashMap<String, Reserved>,
-    reserved_rev: FxHashMap<Reserved, String>,
-    //source_info: SourceInfoRef,
     code: &'a str,
     state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
@@ -41,71 +98,33 @@ enum InterpolateState {
 }
 
 impl<'a> Lexer<'a> {
+    pub fn get_string_from_reserved(reserved: &Reserved) -> String {
+        RESERVED
+            .lock()
+            .unwrap()
+            .reserved_rev
+            .get(reserved)
+            .unwrap()
+            .clone()
+    }
+
+    pub fn check_reserved(reserved: &str) -> Option<Reserved> {
+        RESERVED.lock().unwrap().reserved.get(reserved).cloned()
+    }
+}
+
+impl<'a> Lexer<'a> {
     pub fn new(code: &'a str) -> Self {
-        let mut reserved = FxHashMap::default();
-        let mut reserved_rev = FxHashMap::default();
         let code = code.into();
-        macro_rules! reg_reserved {
-            ( $($id:expr => $variant:path),+ ) => {
-                $(
-                    reserved.insert($id.to_string(), $variant);
-                    reserved_rev.insert($variant, $id.to_string());
-                )+
-            };
-        }
-        reg_reserved! {
-            "and" => Reserved::And,
-            "BEGIN" => Reserved::BEGIN,
-            "END" => Reserved::END,
-            "alias" => Reserved::Alias,
-            "begin" => Reserved::Begin,
-            "break" => Reserved::Break,
-            "case" => Reserved::Case,
-            "class" => Reserved::Class,
-            "def" => Reserved::Def,
-            "defined?" => Reserved::Defined,
-            "do" => Reserved::Do,
-            "else" => Reserved::Else,
-            "ensure"=> Reserved::Ensure,
-            "elsif" => Reserved::Elsif,
-            "end" => Reserved::End,
-            "for" => Reserved::For,
-            "false" => Reserved::False,
-            "if" => Reserved::If,
-            "in" => Reserved::In,
-            "module" => Reserved::Module,
-            "next" => Reserved::Next,
-            "nil" => Reserved::Nil,
-            "or" => Reserved::Or,
-            "return" => Reserved::Return,
-            "rescue" => Reserved::Rescue,
-            "self" => Reserved::Self_,
-            "super" => Reserved::Super,
-            "then" => Reserved::Then,
-            "true" => Reserved::True,
-            "until" => Reserved::Until,
-            "unless" => Reserved::Unless,
-            "when" => Reserved::When,
-            "while" => Reserved::While,
-            "yield" => Reserved::Yield
-        };
-        //let source_info = SourceInfoRef::new(SourceInfo::new(path, code.clone()));
         Lexer {
             token_start_pos: 0,
             pos: 0,
             heredoc_pos: 0,
             buf: None,
             buf_skip_lt: None,
-            reserved,
-            reserved_rev,
-            //source_info,
             code,
             state_save: vec![],
         }
-    }
-
-    pub fn get_string_from_reserved(&self, reserved: Reserved) -> &str {
-        self.reserved_rev.get(&reserved).unwrap()
     }
 
     fn error_unexpected(&self, pos: usize) -> ParseErr {
@@ -505,8 +524,8 @@ impl<'a> Lexer<'a> {
             _ => {}
         };
 
-        match self.reserved.get(&tok) {
-            Some(reserved) => return Ok(self.new_reserved(*reserved)),
+        match Lexer::check_reserved(&tok) {
+            Some(reserved) => return Ok(self.new_reserved(reserved)),
             None => {}
         };
 

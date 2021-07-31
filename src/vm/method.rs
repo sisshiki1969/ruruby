@@ -323,8 +323,7 @@ impl MethodRepo {
                 .map(|(id, counter)| (id, counter.clone()))
                 .collect();
             v.sort_by_key(|x| x.1.duration);
-            v.reverse();
-            for (id, count) in v.iter() {
+            for (id, count) in v.iter().rev() {
                 if count.count > 0 {
                     let time = format!("{:?}", count.duration);
                     eprintln!(

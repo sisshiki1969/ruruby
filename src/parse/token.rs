@@ -1,6 +1,6 @@
 use crate::parse::node::BinOp;
-use crate::util::*;
 use crate::value::real::Real;
+use crate::*;
 
 pub type Token = Annot<TokenKind>;
 
@@ -231,15 +231,19 @@ impl Token {
         }
     }
 
-    pub fn can_be_symbol(&self) -> bool {
-        match self.kind {
-            TokenKind::Const(_)
-            | TokenKind::Ident(_)
-            | TokenKind::InstanceVar(_)
-            | TokenKind::Reserved(_)
-            | TokenKind::StringLit(_) => true,
-            _ => false,
-        }
+    pub fn can_be_symbol(&self) -> Option<IdentId> {
+        let id = match &self.kind {
+            TokenKind::Ident(ident) => IdentId::get_id(ident),
+            TokenKind::Const(ident) => IdentId::get_id(ident),
+            TokenKind::InstanceVar(ident) => IdentId::get_id(ident),
+            TokenKind::StringLit(ident) => IdentId::get_id(ident),
+            TokenKind::Reserved(reserved) => {
+                let s = crate::parse::Lexer::get_string_from_reserved(&reserved);
+                IdentId::get_id(s)
+            }
+            _ => return None,
+        };
+        Some(id)
     }
 
     pub fn check_stmt_end(&self) -> bool {

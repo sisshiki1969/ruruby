@@ -550,19 +550,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn token_as_symbol(&self, token: &Token) -> String {
-        match token.kind.clone() {
-            TokenKind::Ident(ident) => ident,
-            TokenKind::Const(ident) => ident,
-            TokenKind::InstanceVar(ident) => ident,
-            TokenKind::StringLit(ident) => ident,
-            TokenKind::Reserved(reserved) => {
-                self.lexer.get_string_from_reserved(reserved).to_string()
-            }
-            _ => unreachable!(),
-        }
-    }
-
     fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseErr {
         ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
     }
@@ -793,7 +780,7 @@ impl<'a> Parser<'a> {
         let id = match &tok.kind {
             TokenKind::Ident(s) | TokenKind::Const(s) => self.get_ident_id(s),
             TokenKind::Reserved(r) => {
-                let s = self.lexer.get_string_from_reserved(*r).to_owned();
+                let s = Lexer::get_string_from_reserved(r);
                 self.get_ident_id(&s)
             }
             TokenKind::Punct(p) => self.parse_op_definable(p)?,

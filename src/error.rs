@@ -151,50 +151,50 @@ impl RubyError {
         }
     }
 
-    pub fn to_exception_val(&self) -> Option<Value> {
+    pub fn to_exception_val(self) -> Option<Value> {
         let val = match &self.kind {
             RubyErrorKind::Exception => return None,
-            RubyErrorKind::RuntimeErr { kind, .. } => match &kind {
+            RubyErrorKind::RuntimeErr { kind, .. } => match kind {
                 RuntimeErrKind::Type => {
                     let err_class = BuiltinClass::get_toplevel_constant("TypeError").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 RuntimeErrKind::Argument => {
                     let err_class =
                         BuiltinClass::get_toplevel_constant("ArgumentError").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 RuntimeErrKind::NoMethod => {
                     let err_class =
                         BuiltinClass::get_toplevel_constant("NoMethodError").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 RuntimeErrKind::Runtime => {
                     let err_class =
                         BuiltinClass::get_toplevel_constant("RuntimeError").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 RuntimeErrKind::LoadError => {
                     let err_class = BuiltinClass::get_toplevel_constant("LoadError").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 RuntimeErrKind::StopIteration => {
                     let err_class =
                         BuiltinClass::get_toplevel_constant("StopIteration").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 RuntimeErrKind::Name => {
                     let err_class = BuiltinClass::get_toplevel_constant("NameError").into_module();
-                    Value::exception(err_class, self.clone())
+                    Value::exception(err_class, self)
                 }
                 _ => {
                     let standard = BuiltinClass::standard();
-                    Value::exception(standard, self.clone())
+                    Value::exception(standard, self)
                 }
             },
             _ => {
                 let standard = BuiltinClass::standard();
-                Value::exception(standard, self.clone())
+                Value::exception(standard, self)
             }
         };
         Some(val)

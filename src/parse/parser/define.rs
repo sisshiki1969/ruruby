@@ -31,7 +31,7 @@ impl<'a> Parser<'a> {
                 (Some(Node::new_self(loc)), self.parse_method_def_name()?)
             }
             TokenKind::Reserved(r) => {
-                let s = self.lexer.get_string_from_reserved(*r).to_owned();
+                let s = Lexer::get_string_from_reserved(r);
                 (None, self.method_def_ext(&s)?)
             }
             TokenKind::Ident(s) => {
@@ -193,13 +193,13 @@ impl<'a> Parser<'a> {
         // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
         //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
         let tok = self.get()?;
-        let id = match tok.kind {
+        let id = match &tok.kind {
             TokenKind::Reserved(r) => {
-                let s = self.lexer.get_string_from_reserved(r).to_owned();
+                let s = Lexer::get_string_from_reserved(r);
                 self.method_def_ext(&s)?
             }
-            TokenKind::Ident(name) | TokenKind::Const(name) => self.method_def_ext(&name)?,
-            TokenKind::Punct(p) => self.parse_op_definable(&p)?,
+            TokenKind::Ident(name) | TokenKind::Const(name) => self.method_def_ext(name)?,
+            TokenKind::Punct(p) => self.parse_op_definable(p)?,
             _ => {
                 let loc = tok.loc.merge(self.prev_loc());
                 return Err(self.error_unexpected(loc, "Expected identifier or operator."));
