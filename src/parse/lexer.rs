@@ -1,9 +1,8 @@
 use super::*;
-use crate::error::{ParseErrKind, RubyError};
+use crate::error::ParseErrKind;
 use crate::util::*;
 use crate::value::real::Real;
 use fxhash::FxHashMap;
-use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lexer {
@@ -14,9 +13,13 @@ pub struct Lexer {
     buf_skip_lt: Option<Token>,
     reserved: FxHashMap<String, Reserved>,
     reserved_rev: FxHashMap<Reserved, String>,
-    pub source_info: SourceInfoRef,
+    //source_info: SourceInfoRef,
+    code: String,
     state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseErr(pub ParseErrKind, pub Loc);
 
 #[derive(Debug, Clone)]
 pub struct LexerResult {
@@ -38,9 +41,10 @@ enum InterpolateState {
 }
 
 impl Lexer {
-    pub fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
+    pub fn new(code: impl Into<String>) -> Self {
         let mut reserved = FxHashMap::default();
         let mut reserved_rev = FxHashMap::default();
+        let code = code.into();
         macro_rules! reg_reserved {
             ( $($id:expr => $variant:path),+ ) => {
                 $(
@@ -85,7 +89,7 @@ impl Lexer {
             "while" => Reserved::While,
             "yield" => Reserved::Yield
         };
-        let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
+        //let source_info = SourceInfoRef::new(SourceInfo::new(path, code.clone()));
         Lexer {
             token_start_pos: 0,
             pos: 0,
@@ -94,49 +98,46 @@ impl Lexer {
             buf_skip_lt: None,
             reserved,
             reserved_rev,
-            source_info,
+            //source_info,
+            code,
             state_save: vec![],
         }
+    }
+
+    pub fn set_source_info(&mut self, info: SourceInfoRef) {
+        self.code = info.code.clone();
     }
 
     pub fn get_string_from_reserved(&self, reserved: Reserved) -> &str {
         self.reserved_rev.get(&reserved).unwrap()
     }
 
-    fn error_unexpected(&self, pos: usize) -> RubyError {
+    fn error_unexpected(&self, pos: usize) -> ParseErr {
         let loc = Loc(pos, pos);
-        RubyError::new_parse_err(
+        ParseErr(
             ParseErrKind::SyntaxError(format!(
                 "Unexpected char. '{}'",
-                self.source_info
-                    .code
-                    .get(pos..)
-                    .unwrap()
-                    .chars()
-                    .next()
-                    .unwrap()
+                self.code[pos..].chars().next().unwrap()
             )),
-            self.source_info,
             loc,
         )
     }
 
-    fn error_eof(&self, pos: usize) -> RubyError {
+    fn error_eof(&self, pos: usize) -> ParseErr {
         let loc = Loc(pos, pos);
-        RubyError::new_parse_err(ParseErrKind::UnexpectedEOF, self.source_info, loc)
+        ParseErr(ParseErrKind::UnexpectedEOF, loc)
     }
 
-    fn error_parse(&self, msg: &str, pos: usize) -> RubyError {
+    fn error_parse(&self, msg: &str, pos: usize) -> ParseErr {
         let loc = Loc(pos, pos);
-        RubyError::new_parse_err(
+        ParseErr(
             ParseErrKind::SyntaxError(format!("Parse error. '{}'", msg)),
-            self.source_info,
             loc,
         )
     }
 
     #[cfg(test)]
-    pub fn tokenize(&mut self) -> Result<LexerResult, RubyError> {
+    pub fn tokenize(&mut self) -> Result<LexerResult, ParseErr> {
         let mut tokens = vec![];
         loop {
             match self.get_token() {
@@ -155,18 +156,18 @@ impl Lexer {
     }
 
     pub fn append(&mut self, code_text: &str) {
-        self.pos = self.source_info.code.len();
-        self.source_info.code += &code_text;
+        self.pos = self.code.len();
+        self.code += &code_text;
     }
 
-    pub fn get_token(&mut self) -> Result<Token, RubyError> {
+    pub fn get_token(&mut self) -> Result<Token, ParseErr> {
         self.buf = None;
         self.buf_skip_lt = None;
         let tok = self.read_token()?;
         Ok(tok)
     }
 
-    pub fn peek_token(&mut self) -> Result<Token, RubyError> {
+    pub fn peek_token(&mut self) -> Result<Token, ParseErr> {
         if let Some(tok) = &self.buf {
             return Ok(tok.clone());
         };
@@ -177,7 +178,7 @@ impl Lexer {
         Ok(tok)
     }
 
-    pub fn peek_token_skip_lt(&mut self) -> Result<Token, RubyError> {
+    pub fn peek_token_skip_lt(&mut self) -> Result<Token, ParseErr> {
         if let Some(tok) = &self.buf_skip_lt {
             return Ok(tok.clone());
         };
@@ -213,7 +214,6 @@ impl Lexer {
     /// Examine if the next char of the token is space.
     pub fn has_trailing_space(&self, tok: &Token) -> bool {
         match self
-            .source_info
             .code
             .get(tok.loc.1 + 1..)
             .map(|s| s.chars().next())
@@ -225,7 +225,7 @@ impl Lexer {
     }
 
     /// Get token as a regular expression.
-    pub fn get_regexp(&mut self) -> Result<Token, RubyError> {
+    pub fn get_regexp(&mut self) -> Result<Token, ParseErr> {
         match self.read_regexp_sub()? {
             InterpolateState::Finished(s) => Ok(self.new_stringlit(s)),
             InterpolateState::NewInterpolation(s, _) => Ok(self.new_open_reg(s)),
@@ -249,7 +249,7 @@ impl Lexer {
 
 impl Lexer {
     /// Read token.
-    fn read_token(&mut self) -> Result<Token, RubyError> {
+    fn read_token(&mut self) -> Result<Token, ParseErr> {
         loop {
             self.token_start_pos = self.pos;
             if let Some(tok) = self.skip_whitespace() {
@@ -447,7 +447,7 @@ impl Lexer {
         }
     }
 
-    fn read_global_var(&mut self) -> Result<Token, RubyError> {
+    fn read_global_var(&mut self) -> Result<Token, ParseErr> {
         let tok = match self.peek() {
             Some(ch) if ch.is_ascii_punctuation() => {
                 let ch = self.get()?;
@@ -463,7 +463,7 @@ impl Lexer {
         &mut self,
         ch: impl Into<Option<char>>,
         var_kind: VarKind,
-    ) -> Result<Token, RubyError> {
+    ) -> Result<Token, ParseErr> {
         // read identifier or reserved keyword
         let mut tok = match var_kind {
             VarKind::ClassVar => String::from("@@"),
@@ -533,7 +533,7 @@ impl Lexer {
     }
 
     /// Read number literal.
-    fn read_number_literal(&mut self, ch: char) -> Result<Token, RubyError> {
+    fn read_number_literal(&mut self, ch: char) -> Result<Token, ParseErr> {
         if ch == '0' {
             if self.consume('x') {
                 return self.read_hex_number();
@@ -609,7 +609,7 @@ impl Lexer {
     }
 
     /// Read hexadecimal number.
-    fn read_hex_number(&mut self) -> Result<Token, RubyError> {
+    fn read_hex_number(&mut self) -> Result<Token, ParseErr> {
         let mut val = match self.peek() {
             Some(ch @ '0'..='9') => (ch as u64 - '0' as u64),
             Some(ch @ 'a'..='f') => (ch as u64 - 'a' as u64 + 10),
@@ -631,7 +631,7 @@ impl Lexer {
     }
 
     /// Read binary number.
-    fn read_bin_number(&mut self) -> Result<Token, RubyError> {
+    fn read_bin_number(&mut self) -> Result<Token, ParseErr> {
         let mut val = match self.peek() {
             Some(ch @ '0'..='1') => (ch as u64 - '0' as u64),
             Some(_) => {
@@ -657,7 +657,7 @@ impl Lexer {
         open: Option<char>,
         term: char,
         level: usize,
-    ) -> Result<Token, RubyError> {
+    ) -> Result<Token, ParseErr> {
         match self.read_interpolate(open, term, level)? {
             InterpolateState::Finished(s) => Ok(self.new_stringlit(s)),
             InterpolateState::NewInterpolation(s, level) => {
@@ -672,7 +672,7 @@ impl Lexer {
         open: Option<char>,
         term: char,
         level: usize,
-    ) -> Result<Token, RubyError> {
+    ) -> Result<Token, ParseErr> {
         match self.read_interpolate(open, term, level)? {
             InterpolateState::Finished(s) => Ok(self.new_commandlit(s)),
             InterpolateState::NewInterpolation(s, level) => {
@@ -687,7 +687,7 @@ impl Lexer {
         open: Option<char>,
         term: char,
         mut level: usize,
-    ) -> Result<InterpolateState, RubyError> {
+    ) -> Result<InterpolateState, ParseErr> {
         let mut s = "".to_string();
         loop {
             match self.get()? {
@@ -728,7 +728,7 @@ impl Lexer {
         open: Option<char>,
         term: char,
         escape_backslash: bool,
-    ) -> Result<String, RubyError> {
+    ) -> Result<String, ParseErr> {
         let mut s = "".to_string();
         let mut level = 0;
         loop {
@@ -769,7 +769,7 @@ impl Lexer {
     }
 
     /// Read char literal.
-    pub fn read_char_literal(&mut self) -> Result<Token, RubyError> {
+    pub fn read_char_literal(&mut self) -> Result<Token, ParseErr> {
         let c = self.get()?;
         if c == '\\' {
             let ch = self.read_escaped_char()?;
@@ -805,7 +805,7 @@ impl Lexer {
     }
 
     /// Scan as regular expression.
-    fn read_regexp_sub(&mut self) -> Result<InterpolateState, RubyError> {
+    fn read_regexp_sub(&mut self) -> Result<InterpolateState, ParseErr> {
         let mut s = "".to_string();
         let mut char_class = 0;
         loop {
@@ -862,7 +862,7 @@ impl Lexer {
         }
     }
 
-    pub fn get_percent_notation(&mut self) -> Result<Token, RubyError> {
+    pub fn get_percent_notation(&mut self) -> Result<Token, ParseErr> {
         let pos = self.pos;
         let c = self.get()?;
         let (kind, delimiter) = match c {
@@ -908,7 +908,7 @@ impl Lexer {
         }
     }
 
-    fn char_to_hex(&self, c: char) -> Result<u32, RubyError> {
+    fn char_to_hex(&self, c: char) -> Result<u32, ParseErr> {
         match c {
             ch @ '0'..='9' => Ok(ch as u32 - '0' as u32),
             ch @ 'a'..='f' => Ok(ch as u32 - 'a' as u32 + 10),
@@ -917,7 +917,7 @@ impl Lexer {
         }
     }
 
-    fn read_escaped_char(&mut self) -> Result<char, RubyError> {
+    fn read_escaped_char(&mut self) -> Result<char, ParseErr> {
         let ch = match self.get()? {
             c @ '\'' | c @ '"' | c @ '?' | c @ '\\' => c,
             'a' => '\x07',
@@ -962,7 +962,7 @@ impl Lexer {
         Ok(ch)
     }
 
-    pub fn read_heredocument(&mut self) -> Result<Node, RubyError> {
+    pub fn read_heredocument(&mut self) -> Result<Node, ParseErr> {
         #[derive(Clone, PartialEq)]
         enum Mode {
             Normal,
@@ -999,7 +999,7 @@ impl Lexer {
             self.goto_eol();
             let end = self.pos;
             let next = self.get();
-            let line = &self.source_info.code[start..end];
+            let line = &self.code[start..end];
             if mode == Mode::AllowIndent {
                 if line.trim_start() == delimiter {
                     break;
@@ -1034,20 +1034,20 @@ impl Lexer {
     /// Peek the next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek(&self) -> Option<char> {
-        self.source_info.code.get(self.pos..)?.chars().next()
+        self.code.get(self.pos..)?.chars().next()
     }
 
     /// Peek the next next char.
     /// Returns Some(char) or None if the cursor reached EOF.
     fn peek2(&self) -> Option<char> {
-        let mut iter = self.source_info.code.get(self.pos..)?.chars();
+        let mut iter = self.code.get(self.pos..)?.chars();
         iter.next()?;
         iter.next()
     }
 
     /// Get one char and move to the next.
     /// Returns Ok(char) or RubyError if the cursor reached EOF.
-    fn get(&mut self) -> Result<char, RubyError> {
+    fn get(&mut self) -> Result<char, ParseErr> {
         match self.peek() {
             Some(ch) => {
                 self.pos += ch.len_utf8();
@@ -1263,7 +1263,7 @@ impl LexerResult {
 mod test {
     use crate::parse::lexer::*;
     fn assert_tokens(program: impl Into<String>, ans: Vec<Token>) {
-        let mut lexer = Lexer::new("test", program);
+        let mut lexer = Lexer::new(program);
         match lexer.tokenize() {
             Err(err) => panic!("{:?}", err),
             Ok(LexerResult { tokens, .. }) => {

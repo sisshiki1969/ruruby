@@ -41,7 +41,8 @@ pub fn repl_vm() {
         format!("{}", Red.bold().paint("irb:"))
     };
     let mut temp_script = String::new();
-    let mut parser = Parser::new("REPL", &String::new());
+    let mut parser = Parser::new(&String::new());
+    let source_info = SourceInfoRef::new(SourceInfo::new("REPL", ""));
     let mut parser_save = parser.clone();
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
@@ -75,26 +76,24 @@ pub fn repl_vm() {
         parser.lexer.append(&temp_script);
 
         match parser.parse_program_repl(context) {
-            Ok(parse_result) => {
-                let source_info = parse_result.source_info;
-                match vm.run_repl(parse_result, context) {
-                    Ok(result) => {
-                        parser_save.lexer.source_info = source_info;
-                        println!("=> {:?}", result);
-                    }
-                    Err(err) => {
-                        for (info, loc) in &err.info {
-                            info.show_loc(loc);
-                        }
-                        err.show_err();
-                        vm.clear();
-                    }
+            Ok(parse_result) => match vm.run_repl(parse_result, source_info, context) {
+                Ok(result) => {
+                    parser_save.lexer.set_source_info(source_info);
+                    println!("=> {:?}", result);
                 }
-            }
+                Err(err) => {
+                    for (info, loc) in &err.info {
+                        info.show_loc(loc);
+                    }
+                    err.show_err();
+                    vm.clear();
+                }
+            },
             Err(err) => {
-                if RubyErrorKind::ParseErr(ParseErrKind::UnexpectedEOF) == err.kind {
+                if ParseErrKind::UnexpectedEOF == err.0 {
                     continue;
                 }
+                let err = RubyError::new_parse_err(err.0, source_info, err.1);
                 err.show_loc(0);
                 err.show_err();
             }

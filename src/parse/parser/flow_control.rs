@@ -2,7 +2,7 @@ use super::*;
 
 // Parse
 impl Parser {
-    pub fn parse_if(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_if(&mut self) -> Result<Node, ParseErr> {
         //  if EXPR THEN
         //      COMPSTMT
         //      (elsif EXPR THEN COMPSTMT)*
@@ -13,7 +13,7 @@ impl Parser {
         Ok(node)
     }
 
-    pub fn parse_if_then(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_if_then(&mut self) -> Result<Node, ParseErr> {
         //  EXPR THEN
         //      COMPSTMT
         //      (elsif EXPR THEN COMPSTMT)*
@@ -32,7 +32,7 @@ impl Parser {
         Ok(Node::new_if(cond, then_, else_, loc))
     }
 
-    pub fn parse_unless(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_unless(&mut self) -> Result<Node, ParseErr> {
         //  unless EXPR THEN
         //      COMPSTMT
         //      [else COMPSTMT]
@@ -50,7 +50,7 @@ impl Parser {
         Ok(Node::new_if(cond, else_, then_, loc))
     }
 
-    pub fn parse_while(&mut self, is_while: bool) -> Result<Node, RubyError> {
+    pub fn parse_while(&mut self, is_while: bool) -> Result<Node, ParseErr> {
         let old_suppress_do_flag = self.suppress_do_block;
         self.suppress_do_block = true;
         let loc = self.prev_loc();
@@ -63,7 +63,7 @@ impl Parser {
         Ok(Node::new_while(cond, body, is_while, loc))
     }
 
-    pub fn parse_for(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_for(&mut self) -> Result<Node, ParseErr> {
         // for <ident>, .. in <iter>
         //   COMP_STMT
         // end
@@ -111,7 +111,7 @@ impl Parser {
         Ok(node)
     }
 
-    pub fn parse_case(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_case(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         let old = self.suppress_mul_assign;
         self.suppress_mul_assign = false;
@@ -138,22 +138,22 @@ impl Parser {
         Ok(Node::new_case(cond, when_, else_, loc))
     }
 
-    pub fn parse_return(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_return(&mut self) -> Result<Node, ParseErr> {
         let (node, loc) = self.parse_break_sub()?;
         Ok(Node::new_return(node, loc))
     }
 
-    pub fn parse_break(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_break(&mut self) -> Result<Node, ParseErr> {
         let (node, loc) = self.parse_break_sub()?;
         Ok(Node::new_break(node, loc))
     }
 
-    pub fn parse_next(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_next(&mut self) -> Result<Node, ParseErr> {
         let (node, loc) = self.parse_break_sub()?;
         Ok(Node::new_next(node, loc))
     }
 
-    fn parse_break_sub(&mut self) -> Result<(Node, Loc), RubyError> {
+    fn parse_break_sub(&mut self) -> Result<(Node, Loc), ParseErr> {
         let loc = self.prev_loc();
         let tok = self.peek_no_term()?;
         // TODO: This is not correct.

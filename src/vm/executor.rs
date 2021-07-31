@@ -280,13 +280,17 @@ impl VM {
         path: impl Into<PathBuf>,
         program: impl Into<String>,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new(path, program);
-        let result = parser.parse_program()?;
-
+        let program = program.into();
+        let parser = Parser::new(program.clone());
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
+        let result = match parser.parse_program() {
+            Ok(ok) => ok,
+            Err(err) => return Err(RubyError::new_parse_err(err.0, source_info, err.1)),
+        };
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let methodref = Codegen::new(result.source_info).gen_iseq(
+        let methodref = Codegen::new(source_info).gen_iseq(
             &mut self.globals,
             vec![],
             result.node,
@@ -303,14 +307,18 @@ impl VM {
         path: impl Into<PathBuf>,
         program: &str,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new(path, program);
+        let parser = Parser::new(program);
         let extern_context = self.context();
-        let result = parser.parse_program_eval(Some(extern_context))?;
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
+        let result = match parser.parse_program_eval(Some(extern_context)) {
+            Ok(ok) => ok,
+            Err(err) => return Err(RubyError::new_parse_err(err.0, source_info, err.1)),
+        };
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let mut codegen = Codegen::new(result.source_info);
+        let mut codegen = Codegen::new(source_info);
         codegen.set_external_context(extern_context);
         let method = codegen.gen_iseq(
             &mut self.globals,
@@ -343,11 +351,16 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(&mut self, result: ParseResult, mut context: ContextRef) -> VMResult {
+    pub fn run_repl(
+        &mut self,
+        result: ParseResult,
+        source_info: SourceInfoRef,
+        mut context: ContextRef,
+    ) -> VMResult {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
-        let method = Codegen::new(result.source_info).gen_iseq(
+        let method = Codegen::new(source_info).gen_iseq(
             &mut self.globals,
             vec![],
             result.node,

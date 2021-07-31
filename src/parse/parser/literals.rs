@@ -3,7 +3,7 @@ use super::*;
 // Parse
 impl Parser {
     /// Parse char literals.
-    pub fn parse_char_literal(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_char_literal(&mut self) -> Result<Node, ParseErr> {
         let loc = self.loc();
         match self.lexer.read_char_literal()?.kind {
             TokenKind::StringLit(s) => Ok(Node::new_string(s, loc.merge(self.prev_loc))),
@@ -13,7 +13,7 @@ impl Parser {
 
     /// Parse string literals.
     /// Adjacent string literals are to be combined.
-    pub fn parse_string_literal(&mut self, s: &str) -> Result<Node, RubyError> {
+    pub fn parse_string_literal(&mut self, s: &str) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         let mut s = s.to_string();
         loop {
@@ -38,7 +38,7 @@ impl Parser {
         s: &str,
         delimiter: char,
         level: usize,
-    ) -> Result<Node, RubyError> {
+    ) -> Result<Node, ParseErr> {
         let start_loc = self.prev_loc();
         let mut nodes = vec![Node::new_string(s.to_string(), start_loc)];
         loop {
@@ -82,7 +82,7 @@ impl Parser {
     }
 
     /// Parse template (#{..}, #$s, #@a).
-    fn parse_template(&mut self, nodes: &mut Vec<Node>) -> Result<(), RubyError> {
+    fn parse_template(&mut self, nodes: &mut Vec<Node>) -> Result<(), ParseErr> {
         if self.consume_punct(Punct::LBrace)? {
             nodes.push(self.parse_comp_stmt()?);
             if !self.consume_punct(Punct::RBrace)? {
@@ -102,7 +102,7 @@ impl Parser {
         Ok(())
     }
 
-    pub fn parse_percent_notation(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_percent_notation(&mut self) -> Result<Node, ParseErr> {
         let tok = self.lexer.get_percent_notation()?;
         let loc = tok.loc;
         if let TokenKind::PercentNotation(kind, content) = tok.kind {
@@ -139,7 +139,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_heredocument(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_heredocument(&mut self) -> Result<Node, ParseErr> {
         if self.lexer.trailing_space() {
             let loc = self.prev_loc();
             return Err(self.error_unexpected(loc, "Unexpectd <<."));
@@ -147,7 +147,7 @@ impl Parser {
         self.lexer.read_heredocument()
     }
 
-    pub fn parse_hash_literal(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_hash_literal(&mut self) -> Result<Node, ParseErr> {
         let mut kvp = vec![];
         let loc = self.prev_loc();
         loop {
@@ -185,7 +185,7 @@ impl Parser {
         Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
     }
 
-    pub fn parse_symbol(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_symbol(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         if self.lexer.trailing_space() {
             return Err(self.error_unexpected(loc, "Unexpected ':'."));
@@ -213,7 +213,7 @@ impl Parser {
         Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
     }
 
-    pub fn parse_regexp(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_regexp(&mut self) -> Result<Node, ParseErr> {
         let start_loc = self.prev_loc();
         let tok = self.lexer.get_regexp()?;
         let mut nodes = match tok.kind {
@@ -243,7 +243,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_lambda_literal(&mut self) -> Result<Node, RubyError> {
+    pub fn parse_lambda_literal(&mut self) -> Result<Node, ParseErr> {
         // Lambda literal
         let loc = self.prev_loc();
         let mut params = vec![];
