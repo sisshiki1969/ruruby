@@ -272,6 +272,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn new_with_range(&self, pos: usize, end: usize) -> Self {
+        let lexer = self.lexer.new_with_range(pos, end);
+        Parser {
+            lexer,
+            prev_loc: Loc(0, 0),
+            context_stack: vec![],
+            extern_context: None,
+            suppress_acc_assign: false,
+            suppress_mul_assign: false,
+            suppress_do_block: false,
+        }
+    }
+
     fn save_state(&mut self) {
         self.lexer.save_state();
     }

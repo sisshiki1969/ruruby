@@ -140,7 +140,13 @@ We
 RUBY
     assert "We\n  love\n    Ruby.\n", a
     assert 100, b
+    "###;
+    assert_script(program);
+}
 
+#[test]
+fn heredocument2() {
+    let program = r###"
     a = <<RUBY; b = <<RUST
 We
     love
@@ -152,7 +158,13 @@ We
 RUST
         assert "We\n    love\n        Ruby.\n", a
         assert "We\n    love\n        Rust.\n", b
+        "###;
+    assert_script(program);
+}
 
+#[test]
+fn heredocument3() {
+    let program = r###"
     b = <<-RUBY; c = 200
 We
 love
@@ -161,6 +173,46 @@ Ruby.
     assert "We\nlove\nRuby.\n", b
     assert 200, c
 
+    "###;
+    assert_script(program);
+}
+
+#[test]
+fn heredocument4() {
+    let program = r###"
+    b = <<-RUBY; c = 200
+We
+love
+Ruby.
+    RUBY
+    assert "We\nlove\nRuby.\n", b
+    assert 200, c
+    "###;
+    assert_script(program);
+}
+
+#[test]
+fn heredocument5() {
+    let program = r###"
+    a = <<"RUBY"
+rusty.
+  are #{<<RUST
+  you
+RUST
+} happy?
+RUBY
+    assert "rusty.\n  are   you\n happy?\n", a
+    "###;
+    assert_script(program);
+}
+
+#[test]
+fn heredocument6() {
+    let program = r###"
+    a = <<`RUBY` + "zzz"
+    ls *.toml
+    RUBY
+    assert "Cargo.toml\nzzz", a
     "###;
     assert_script(program);
 }

@@ -1,3 +1,4 @@
+use super::lexer::ParseMode;
 use super::*;
 
 // Parse
@@ -88,7 +89,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error_unexpected(loc, "Expect '}'"));
             }
         } else {
-            let tok = self.get()?;
+            let tok = dbg!(self.get()?);
             let loc = tok.loc();
             let node = match &tok.kind {
                 TokenKind::GlobalVar(s) => Node::new_global_var(s, loc),
@@ -142,7 +143,41 @@ impl<'a> Parser<'a> {
             let loc = self.prev_loc();
             return Err(self.error_unexpected(loc, "Unexpectd <<."));
         }
-        self.lexer.read_heredocument()
+        let (mode, start, end) = self.lexer.read_heredocument()?;
+        let node = match mode {
+            ParseMode::Single => {
+                Node::new_string(self.lexer.code[start..end].to_string(), Loc(start, end))
+            }
+            ParseMode::Double => {
+                let mut parser = self.new_with_range(start, end);
+                let tok = parser.lexer.read_string_literal_double(None, None, 0)?;
+                let loc = tok.loc();
+                match tok.kind {
+                    TokenKind::StringLit(s) => Node::new_string(s, loc),
+                    TokenKind::OpenString(s, term, level) => {
+                        return parser.parse_interporated_string_literal(&s, term, level);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            ParseMode::Command => {
+                let mut parser = self.new_with_range(start, end);
+                let tok = parser.lexer.read_command_literal(None, None, 0)?;
+                let loc = tok.loc();
+                match tok.kind {
+                    TokenKind::CommandLit(s) => {
+                        let content = Node::new_string(s, loc);
+                        Node::new_command(content)
+                    }
+                    TokenKind::OpenString(s, term, level) => {
+                        let content = parser.parse_interporated_string_literal(&s, term, level)?;
+                        Node::new_command(content)
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        };
+        Ok(node)
     }
 
     pub(super) fn parse_hash_literal(&mut self) -> Result<Node, ParseErr> {

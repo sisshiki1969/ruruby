@@ -1,7 +1,3 @@
-a = <<RUBY
-windows #{<<RUST + ":"
-rusty.
-RUST
-}
+p <<`RUBY`
+ls *.toml
 RUBY
-puts a

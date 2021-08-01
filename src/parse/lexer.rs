@@ -58,10 +58,16 @@ static RESERVED: Lazy<Mutex<ReservedChecker>> = Lazy::new(|| {
         reserved_rev,
     })
 });
-
 pub struct ReservedChecker {
     reserved: FxHashMap<String, Reserved>,
     reserved_rev: FxHashMap<Reserved, String>,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum ParseMode {
+    Double,
+    Single,
+    Command,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,7 +77,7 @@ pub struct Lexer<'a> {
     heredoc_pos: usize,
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
-    code: &'a str,
+    pub code: &'a str,
     state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
 
@@ -127,10 +133,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn new_with_range(&self, end: usize) -> Self {
+    pub fn new_with_range(&self, pos: usize, end: usize) -> Self {
         Lexer {
-            token_start_pos: 0,
-            pos: 0,
+            token_start_pos: pos,
+            pos,
             heredoc_pos: 0,
             buf: None,
             buf_skip_lt: None,
@@ -700,7 +706,17 @@ impl<'a> Lexer<'a> {
     ) -> Result<InterpolateState, ParseErr> {
         let mut s = "".to_string();
         loop {
-            match self.get()? {
+            let ch = match self.get() {
+                Ok(c) => c,
+                Err(err) => {
+                    if term.is_none() {
+                        return Ok(InterpolateState::Finished(s));
+                    } else {
+                        return Err(err);
+                    }
+                }
+            };
+            match ch {
                 c if open == Some(c) => {
                     s.push(c);
                     level += 1;
@@ -960,19 +976,12 @@ impl<'a> Lexer<'a> {
         Ok(ch)
     }
 
-    pub fn read_heredocument(&mut self) -> Result<Node, ParseErr> {
+    pub fn read_heredocument(&mut self) -> Result<(ParseMode, usize, usize), ParseErr> {
         #[derive(Clone, PartialEq)]
         enum TermMode {
             Normal,
             AllowIndent,
             Squiggly,
-        }
-
-        #[derive(Clone, PartialEq)]
-        enum ParseMode {
-            Double,
-            Single,
-            Command,
         }
 
         let term_mode = if self.consume('-') {
@@ -1009,9 +1018,9 @@ impl<'a> Lexer<'a> {
         if self.heredoc_pos > self.pos {
             self.pos = self.heredoc_pos;
         }
-        self.token_start_pos = self.pos;
-        let mut res = String::new();
-        let mut token_end = self.pos;
+        let heredoc_start = self.pos;
+        //let mut res = String::new();
+        let mut heredoc_end = self.pos;
         loop {
             let start = self.pos;
             self.goto_eol();
@@ -1036,14 +1045,13 @@ impl<'a> Lexer<'a> {
                     self.pos,
                 ));
             };
-            token_end = end;
-            res += line;
-            res.push('\n');
+            heredoc_end = end + 1;
+            //res += line;
+            //res.push('\n');
         }
         self.heredoc_pos = self.pos;
-        let node = Node::new_string(res, Loc(self.token_start_pos, token_end));
         self.restore_state();
-        Ok(node)
+        Ok((parse_mode, heredoc_start, heredoc_end))
     }
 }
 
