@@ -209,7 +209,7 @@ RUBY
 #[test]
 fn heredocument6() {
     let program = r###"
-    a = <<`RUBY` + "zzz"
+    a = <<-`RUBY` + "zzz"
     ls *.toml
     RUBY
     assert "Cargo.toml\nzzz", a
