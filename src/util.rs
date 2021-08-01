@@ -148,6 +148,12 @@ impl<T> std::ops::DerefMut for Ref<T> {
 
 pub type SourceInfoRef = Ref<SourceInfo>;
 
+impl SourceInfoRef {
+    pub fn from_code(path: PathBuf, code: String) -> Self {
+        SourceInfoRef::new(SourceInfo::new(path, code))
+    }
+}
+
 /// This struct holds infomation of a certain line in the code.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {

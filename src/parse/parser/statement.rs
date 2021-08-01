@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
         self.suppress_acc_assign = old;
         if !self.consume_punct_no_term(Punct::Assign)? {
             let loc = self.loc();
-            return Err(self.error_unexpected(loc, "Expected '='."));
+            return Err(Self::error_unexpected(loc, "Expected '='."));
         }
 
         let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
@@ -192,12 +192,11 @@ impl<'a> Parser<'a> {
 
     pub(super) fn parse_arg(&mut self) -> Result<Node, ParseErr> {
         if self.peek()?.kind == TokenKind::Reserved(Reserved::Defined) {
-            self.save_state();
+            let save = self.save_state();
             self.consume_reserved(Reserved::Defined).unwrap();
             if self.peek_punct_no_term(Punct::LParen) {
-                self.restore_state();
+                self.restore_state(save);
             } else {
-                self.discard_state();
                 let node = self.parse_arg()?;
                 return Ok(Node::new_defined(node));
             }
@@ -229,7 +228,7 @@ impl<'a> Parser<'a> {
             let then_ = self.parse_arg()?;
             if !self.consume_punct_no_term(Punct::Colon)? {
                 let loc = self.loc();
-                return Err(self.error_unexpected(loc, "Expect ':'."));
+                return Err(Self::error_unexpected(loc, "Expect ':'."));
             };
             let else_ = self.parse_arg()?;
             let node = Node::new_if(cond, then_, else_, loc);
@@ -407,22 +406,21 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary_minus(&mut self) -> Result<Node, ParseErr> {
-        self.save_state();
+        let save = self.save_state();
         let lhs = if self.consume_punct(Punct::Minus)? {
             let loc = self.prev_loc();
             match self.peek()?.kind {
                 TokenKind::IntegerLit(_) | TokenKind::FloatLit(_) => {
-                    self.restore_state();
+                    self.restore_state(save);
                     let lhs = self.parse_exponent()?;
                     return Ok(lhs);
                 }
-                _ => self.discard_state(),
+                _ => {}
             };
             let lhs = self.parse_unary_minus()?;
             let loc = loc.merge(lhs.loc());
             Node::new_unop(UnOp::Neg, lhs, loc)
         } else {
-            self.discard_state();
             self.parse_exponent()?
         };
         match self.parse_accesory_assign(&lhs)? {
@@ -618,7 +616,12 @@ impl<'a> Parser<'a> {
                 self.get_ident_id(&s)
             }
             TokenKind::Punct(p) => self.parse_op_definable(p)?,
-            _ => return Err(self.error_unexpected(tok.loc(), "method name must be an identifier.")),
+            _ => {
+                return Err(Self::error_unexpected(
+                    tok.loc(),
+                    "method name must be an identifier.",
+                ))
+            }
         };
         Ok((id, loc.merge(self.prev_loc())))
     }
@@ -628,6 +631,22 @@ impl<'a> Parser<'a> {
         let loc = tok.loc();
         match &tok.kind {
             TokenKind::Ident(name) => {
+                match name.as_str() {
+                    "true" => return Ok(Node::new_bool(true, loc)),
+                    "false" => return Ok(Node::new_bool(false, loc)),
+                    "nil" => return Ok(Node::new_nil(loc)),
+                    "self" => return Ok(Node::new_self(loc)),
+                    "__LINE__" => {
+                        let line = self.lexer.get_line(tok.loc().0);
+                        return Ok(Node::new_integer(line as i64, loc));
+                    }
+                    "__FILE__" => {
+                        let file = self.path.to_string_lossy();
+                        return Ok(Node::new_string(file.into(), loc));
+                    }
+                    _ => {}
+                };
+
                 if self.lexer.trailing_lparen() {
                     let node = Node::new_identifier(name, loc);
                     return Ok(self.parse_function_args(node)?);
@@ -715,9 +734,10 @@ impl<'a> Parser<'a> {
                 Punct::Question => self.parse_char_literal(),
                 Punct::Shl => self.parse_heredocument(),
                 _ => {
-                    return Err(
-                        self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
-                    )
+                    return Err(Self::error_unexpected(
+                        loc,
+                        format!("Unexpected token: {:?}", tok.kind),
+                    ))
                 }
             },
             TokenKind::Reserved(reserved) => match reserved {
@@ -730,7 +750,7 @@ impl<'a> Parser<'a> {
                 Reserved::Def => self.parse_def(),
                 Reserved::Class => {
                     if self.is_method_context() {
-                        return Err(self.error_unexpected(
+                        return Err(Self::error_unexpected(
                             loc,
                             "SyntaxError: class definition in method body.",
                         ));
@@ -744,7 +764,7 @@ impl<'a> Parser<'a> {
                 }
                 Reserved::Module => {
                     if self.is_method_context() {
-                        return Err(self.error_unexpected(
+                        return Err(Self::error_unexpected(
                             loc,
                             "SyntaxError: module definition in method body.",
                         ));
@@ -754,10 +774,6 @@ impl<'a> Parser<'a> {
                 Reserved::Return => self.parse_return(),
                 Reserved::Break => self.parse_break(),
                 Reserved::Next => self.parse_next(),
-                Reserved::True => Ok(Node::new_bool(true, loc)),
-                Reserved::False => Ok(Node::new_bool(false, loc)),
-                Reserved::Nil => Ok(Node::new_nil(loc)),
-                Reserved::Self_ => Ok(Node::new_self(loc)),
                 Reserved::Begin => self.parse_begin(),
                 Reserved::Defined => {
                     if self.consume_punct_no_term(Punct::LParen)? {
@@ -766,7 +782,7 @@ impl<'a> Parser<'a> {
                         Ok(Node::new_defined(node))
                     } else {
                         let tok = self.get()?;
-                        Err(self.error_unexpected(tok.loc, format!("expected '('.")))
+                        Err(Self::error_unexpected(tok.loc, format!("expected '('.")))
                     }
                 }
                 Reserved::Alias => {
@@ -778,11 +794,17 @@ impl<'a> Parser<'a> {
                 Reserved::Super => {
                     return self.parse_super();
                 }
-                _ => Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))),
+                _ => Err(Self::error_unexpected(
+                    loc,
+                    format!("Unexpected token: {:?}", tok.kind),
+                )),
             },
-            TokenKind::EOF => return Err(self.error_eof(loc)),
+            TokenKind::EOF => return Err(Self::error_eof(loc)),
             _ => {
-                return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
+                return Err(Self::error_unexpected(
+                    loc,
+                    format!("Unexpected token: {:?}", tok.kind),
+                ))
             }
         }
     }

@@ -26,16 +26,15 @@ impl<'a> Parser<'a> {
                     self.parse_method_def_name()?,
                 )
             }
-            TokenKind::Reserved(Reserved::Self_) => {
-                self.consume_punct_no_term(Punct::Dot)?;
-                (Some(Node::new_self(loc)), self.parse_method_def_name()?)
-            }
             TokenKind::Reserved(r) => {
                 let s = Lexer::get_string_from_reserved(r);
                 (None, self.method_def_ext(&s)?)
             }
             TokenKind::Ident(s) => {
-                if self.consume_punct_no_term(Punct::Dot)?
+                if s.as_str() == "self" {
+                    self.consume_punct_no_term(Punct::Dot)?;
+                    (Some(Node::new_self(loc)), self.parse_method_def_name()?)
+                } else if self.consume_punct_no_term(Punct::Dot)?
                     || self.consume_punct_no_term(Punct::Scope)?
                 {
                     let id = IdentId::get_id(s);
@@ -57,7 +56,7 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::Punct(p) => (None, self.parse_op_definable(p)?),
-            _ => return Err(self.error_unexpected(loc, "Invalid method name.")),
+            _ => return Err(Self::error_unexpected(loc, "Invalid method name.")),
         };
 
         self.context_stack.push(ParseContext::new_method(name));
@@ -97,7 +96,12 @@ impl<'a> Parser<'a> {
                 ..
             } if !self.peek_punct_no_term(Punct::Scope) => (Node::new_nil(loc), id),
             NodeKind::Scope(base, id) => (*base, id),
-            _ => return Err(self.error_unexpected(prim.loc, "Invalid Class/Module name.")),
+            _ => {
+                return Err(Self::error_unexpected(
+                    prim.loc,
+                    "Invalid Class/Module name.",
+                ))
+            }
         };
         //eprintln!("base:{:?} name:{:?}", base, name);
 
@@ -109,7 +113,7 @@ impl<'a> Parser<'a> {
         );
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
             if is_module {
-                return Err(self.error_unexpected(self.prev_loc(), "Unexpected '<'."));
+                return Err(Self::error_unexpected(self.prev_loc(), "Unexpected '<'."));
             };
             self.parse_expr()?
         } else {
@@ -202,7 +206,10 @@ impl<'a> Parser<'a> {
             TokenKind::Punct(p) => self.parse_op_definable(p)?,
             _ => {
                 let loc = tok.loc.merge(self.prev_loc());
-                return Err(self.error_unexpected(loc, "Expected identifier or operator."));
+                return Err(Self::error_unexpected(
+                    loc,
+                    "Expected identifier or operator.",
+                ));
             }
         };
         Ok(id)

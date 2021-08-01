@@ -1,10 +1,12 @@
 use super::lexer::ParseErr;
 use super::*;
 use crate::error::ParseErrKind;
+use crate::error::RubyError;
 use crate::id_table::IdentId;
 use crate::util::*;
 use crate::vm::context::{ContextRef, ISeqKind};
 use fxhash::FxHashMap;
+use std::path::PathBuf;
 
 mod define;
 mod flow_control;
@@ -14,6 +16,7 @@ mod statement;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser<'a> {
     pub lexer: Lexer<'a>,
+    pub path: PathBuf,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
     extern_context: Option<ContextRef>,
@@ -29,13 +32,15 @@ pub struct Parser<'a> {
 pub struct ParseResult {
     pub node: Node,
     pub lvar_collector: LvarCollector,
+    pub source_info: SourceInfoRef,
 }
 
 impl ParseResult {
-    pub fn default(node: Node, lvar_collector: LvarCollector) -> Self {
+    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
         ParseResult {
             node,
             lvar_collector,
+            source_info,
         }
     }
 }
@@ -259,10 +264,11 @@ enum ContextKind {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(code: &'a str) -> Self {
+    pub fn new(code: &'a str, path: PathBuf) -> Self {
         let lexer = Lexer::new(code);
         Parser {
             lexer,
+            path,
             prev_loc: Loc(0, 0),
             context_stack: vec![],
             extern_context: None,
@@ -276,6 +282,7 @@ impl<'a> Parser<'a> {
         let lexer = self.lexer.new_with_range(pos, end);
         Parser {
             lexer,
+            path: self.path.clone(),
             prev_loc: Loc(0, 0),
             context_stack: vec![],
             extern_context: None,
@@ -285,16 +292,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn save_state(&mut self) {
-        self.lexer.save_state();
+    fn save_state(&self) -> (usize, usize) {
+        self.lexer.save_state()
     }
 
-    fn restore_state(&mut self) {
-        self.lexer.restore_state();
-    }
-
-    fn discard_state(&mut self) {
-        self.lexer.discard_state();
+    fn restore_state(&mut self, state: (usize, usize)) {
+        self.lexer.restore_state(state);
     }
 
     pub fn get_context_depth(&self) -> usize {
@@ -329,7 +332,7 @@ impl<'a> Parser<'a> {
     fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<LvarId, ParseErr> {
         match self.context_mut().lvar.insert_new(id) {
             Some(lvar) => Ok(lvar),
-            None => Err(self.error_unexpected(loc, "Duplicated argument name.")),
+            None => Err(Self::error_unexpected(loc, "Duplicated argument name.")),
         }
     }
 
@@ -341,7 +344,7 @@ impl<'a> Parser<'a> {
     /// If a parameter with the same name already exists, return error.
     fn new_kwrest_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_kwrest_param(id).is_none() {
-            return Err(self.error_unexpected(loc, "Duplicated argument name."));
+            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
     }
@@ -350,7 +353,7 @@ impl<'a> Parser<'a> {
     /// If a parameter with the same name already exists, return error.
     fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_block_param(id).is_none() {
-            return Err(self.error_unexpected(loc, "Duplicated argument name."));
+            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
     }
@@ -427,7 +430,7 @@ impl<'a> Parser<'a> {
         loop {
             let tok = self.lexer.get_token()?;
             if tok.is_eof() {
-                return Err(self.error_eof(tok.loc()));
+                return Err(Self::error_eof(tok.loc()));
             }
             if !tok.is_line_term() {
                 self.prev_loc = tok.loc;
@@ -524,10 +527,10 @@ impl<'a> Parser<'a> {
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseErr> {
         match &self.get()?.kind {
             TokenKind::Reserved(reserved) if *reserved == expect => Ok(()),
-            t => {
-                Err(self
-                    .error_unexpected(self.prev_loc(), format!("Expect {:?} Got {:?}", expect, t)))
-            }
+            t => Err(Self::error_unexpected(
+                self.prev_loc(),
+                format!("Expect {:?} Got {:?}", expect, t),
+            )),
         }
     }
 
@@ -536,10 +539,10 @@ impl<'a> Parser<'a> {
     fn expect_punct(&mut self, expect: Punct) -> Result<(), ParseErr> {
         match &self.get()?.kind {
             TokenKind::Punct(punct) if *punct == expect => Ok(()),
-            t => {
-                Err(self
-                    .error_unexpected(self.prev_loc(), format!("Expect {:?} Got {:?}", expect, t)))
-            }
+            t => Err(Self::error_unexpected(
+                self.prev_loc(),
+                format!("Expect {:?} Got {:?}", expect, t),
+            )),
         }
     }
 
@@ -549,7 +552,10 @@ impl<'a> Parser<'a> {
     fn expect_ident(&mut self) -> Result<IdentId, ParseErr> {
         match &self.get()?.kind {
             TokenKind::Ident(s) => Ok(self.get_ident_id(s)),
-            _ => Err(self.error_unexpected(self.prev_loc(), "Expect identifier.")),
+            _ => Err(Self::error_unexpected(
+                self.prev_loc(),
+                "Expect identifier.",
+            )),
         }
     }
 
@@ -559,29 +565,35 @@ impl<'a> Parser<'a> {
     fn expect_const(&mut self) -> Result<String, ParseErr> {
         match self.get()?.kind {
             TokenKind::Const(s) => Ok(s),
-            _ => Err(self.error_unexpected(self.prev_loc(), "Expect constant.")),
+            _ => Err(Self::error_unexpected(self.prev_loc(), "Expect constant.")),
         }
     }
+}
 
-    fn error_unexpected(&self, loc: Loc, msg: impl Into<String>) -> ParseErr {
+impl<'a> Parser<'a> {
+    fn error_unexpected(loc: Loc, msg: impl Into<String>) -> ParseErr {
         ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
     }
 
-    fn error_eof(&self, loc: Loc) -> ParseErr {
+    fn error_eof(loc: Loc) -> ParseErr {
         ParseErr(ParseErrKind::UnexpectedEOF, loc)
     }
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse_program(mut self) -> Result<ParseResult, ParseErr> {
+    pub fn parse_program(code: &str, path: PathBuf) -> Result<ParseResult, RubyError> {
+        let parser = Parser::new(code, path.clone());
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
-        self.parse(None, parse_ctx)
+        match parser.parse(None, parse_ctx) {
+            Ok(ok) => Ok(ok),
+            Err(err) => {
+                let source_info = SourceInfoRef::new(SourceInfo::new(path.clone(), code));
+                Err(RubyError::new_parse_err(err.0, source_info, err.1))
+            }
+        }
     }
 
-    pub fn parse_program_repl(
-        mut self,
-        extern_context: ContextRef,
-    ) -> Result<ParseResult, ParseErr> {
+    pub fn parse_program_repl(self, extern_context: ContextRef) -> Result<ParseResult, ParseErr> {
         let parse_ctx = ParseContext::new_class(
             IdentId::get_id("REPL"),
             Some(extern_context.iseq_ref.unwrap().lvar.clone()),
@@ -590,14 +602,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_program_eval(
-        mut self,
+        self,
         extern_context: Option<ContextRef>,
     ) -> Result<ParseResult, ParseErr> {
         self.parse(extern_context, ParseContext::new_block())
     }
 
     fn parse(
-        &mut self,
+        mut self,
         extern_context: Option<ContextRef>,
         parse_context: ParseContext,
     ) -> Result<ParseResult, ParseErr> {
@@ -608,11 +620,12 @@ impl<'a> Parser<'a> {
         let tok = self.peek()?;
         #[cfg(feature = "emit-ast")]
         eprintln!("{:#?}", node);
+        let source_info = SourceInfoRef::from_code(self.path.clone(), self.lexer.code.to_string());
         if tok.is_eof() {
-            let result = ParseResult::default(node, lvar);
+            let result = ParseResult::default(node, lvar, source_info);
             Ok(result)
         } else {
-            Err(self.error_unexpected(tok.loc(), "Expected end-of-input."))
+            Err(Self::error_unexpected(tok.loc(), "Expected end-of-input."))
         }
     }
 
@@ -624,7 +637,7 @@ impl<'a> Parser<'a> {
         match self.parse_block()? {
             Some(actual_block) => {
                 if arglist.block.is_some() {
-                    return Err(self.error_unexpected(
+                    return Err(Self::error_unexpected(
                         actual_block.loc(),
                         "Both block arg and actual block given.",
                     ));
@@ -645,7 +658,10 @@ impl<'a> Parser<'a> {
                 match c.kind {
                     ContextKind::Class => return Ok(()),
                     ContextKind::Method => {
-                        return Err(self.error_unexpected(lhs.loc(), "Dynamic constant assignment."))
+                        return Err(Self::error_unexpected(
+                            lhs.loc(),
+                            "Dynamic constant assignment.",
+                        ))
                     }
                     _ => {}
                 }
@@ -751,7 +767,7 @@ impl<'a> Parser<'a> {
             } else {
                 let loc = self.prev_loc();
                 if arglist.block.is_some() {
-                    return Err(self.error_unexpected(loc, "unexpected ','."));
+                    return Err(Self::error_unexpected(loc, "unexpected ','."));
                 };
             }
         }
@@ -880,10 +896,10 @@ impl<'a> Parser<'a> {
                     }
                 } else {
                     let loc = self.loc();
-                    Err(self.error_unexpected(loc, "Invalid operator."))
+                    Err(Self::error_unexpected(loc, "Invalid operator."))
                 }
             }
-            _ => Err(self.error_unexpected(self.prev_loc(), "Invalid operator.")),
+            _ => Err(Self::error_unexpected(self.prev_loc(), "Invalid operator.")),
         }
     }
 
@@ -947,8 +963,10 @@ impl<'a> Parser<'a> {
                 // Splat(Rest) param
                 loc = loc.merge(self.prev_loc());
                 if state >= Kind::Rest {
-                    return Err(self
-                        .error_unexpected(loc, "Splat parameter is not allowed in ths position."));
+                    return Err(Self::error_unexpected(
+                        loc,
+                        "Splat parameter is not allowed in ths position.",
+                    ));
                 } else {
                     state = Kind::Rest;
                 };
@@ -964,7 +982,7 @@ impl<'a> Parser<'a> {
                 let id = self.expect_ident()?;
                 loc = loc.merge(self.prev_loc());
                 if state >= Kind::KWRest {
-                    return Err(self.error_unexpected(
+                    return Err(Self::error_unexpected(
                         loc,
                         "Keyword rest parameter is not allowed in ths position.",
                     ));
@@ -984,7 +1002,7 @@ impl<'a> Parser<'a> {
                         Kind::Reqired => state = Kind::Optional,
                         Kind::Optional => {}
                         _ => {
-                            return Err(self.error_unexpected(
+                            return Err(Self::error_unexpected(
                                 loc,
                                 "Optional parameter is not allowed in ths position.",
                             ))
@@ -1006,7 +1024,7 @@ impl<'a> Parser<'a> {
                     };
                     loc = loc.merge(self.prev_loc());
                     if state == Kind::KWRest {
-                        return Err(self.error_unexpected(
+                        return Err(Self::error_unexpected(
                             loc,
                             "Keyword parameter is not allowed in ths position.",
                         ));
@@ -1030,7 +1048,7 @@ impl<'a> Parser<'a> {
                             state = Kind::PostReq;
                         }
                         _ => {
-                            return Err(self.error_unexpected(
+                            return Err(Self::error_unexpected(
                                 loc,
                                 "Required parameter is not allowed in ths position.",
                             ))

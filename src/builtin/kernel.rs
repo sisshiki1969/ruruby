@@ -18,7 +18,6 @@ pub fn init() -> Module {
     class.add_builtin_module_func("is_a?", isa);
     class.add_builtin_module_func("kind_of?", isa);
     class.add_builtin_module_func("__dir__", dir);
-    class.add_builtin_module_func("__FILE__", file_);
     class.add_builtin_module_func("raise", raise);
     class.add_builtin_module_func("rand", rand_);
     class.add_builtin_module_func("loop", loop_);
@@ -199,12 +198,6 @@ fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         )));
     }
     path.pop();
-    Ok(Value::string(conv_pathbuf(&path)))
-}
-
-fn file_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    let path = vm.get_source_path();
     Ok(Value::string(conv_pathbuf(&path)))
 }
 

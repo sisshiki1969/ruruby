@@ -280,12 +280,9 @@ impl VM {
         path: impl Into<PathBuf>,
         program: &str,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new(program);
-        let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
-        let result = match parser.parse_program() {
-            Ok(ok) => ok,
-            Err(err) => return Err(RubyError::new_parse_err(err.0, source_info, err.1)),
-        };
+        let path = path.into();
+        let source_info = SourceInfoRef::new(SourceInfo::new(path.clone(), program));
+        let result = Parser::parse_program(program, path)?;
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
@@ -306,7 +303,8 @@ impl VM {
         path: impl Into<PathBuf>,
         program: &str,
     ) -> Result<MethodId, RubyError> {
-        let parser = Parser::new(program);
+        let path = path.into();
+        let parser = Parser::new(program, path.clone());
         let extern_context = self.context();
         let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
         let result = match parser.parse_program_eval(Some(extern_context)) {

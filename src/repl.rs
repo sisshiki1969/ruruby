@@ -2,6 +2,7 @@ use ansi_term::Colour::Red;
 use ruruby::error::*;
 use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
+use std::path::PathBuf;
 
 pub fn repl_vm() {
     assert_eq!(8, std::mem::size_of::<Value>());
@@ -70,7 +71,7 @@ pub fn repl_vm() {
 
         script += &line;
         {
-            let parser = Parser::new(&script);
+            let parser = Parser::new(&script, PathBuf::from("REPL"));
             match parser.parse_program_repl(context) {
                 Ok(parse_result) => {
                     let source_info = SourceInfoRef::new(SourceInfo::new("REPL", script.clone()));

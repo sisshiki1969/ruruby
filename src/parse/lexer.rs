@@ -2,57 +2,20 @@ use super::*;
 use crate::error::ParseErrKind;
 use crate::util::*;
 use crate::value::real::Real;
+use enum_iterator::IntoEnumIterator;
 use fxhash::FxHashMap;
 use once_cell::sync::Lazy;
+use std::ops::Range;
 use std::sync::Mutex;
 
 static RESERVED: Lazy<Mutex<ReservedChecker>> = Lazy::new(|| {
     let mut reserved = FxHashMap::default();
     let mut reserved_rev = FxHashMap::default();
-    macro_rules! reg_reserved {
-        ( $($id:expr => $variant:path),+ ) => {
-            $(
-                reserved.insert($id.to_string(), $variant);
-                reserved_rev.insert($variant, $id.to_string());
-            )+
-        };
+    for r in Reserved::into_enum_iter() {
+        reserved.insert(format!("{:?}", r), r);
+        reserved_rev.insert(r, format!("{:?}", r));
     }
-    reg_reserved! {
-        "and" => Reserved::And,
-        "BEGIN" => Reserved::BEGIN,
-        "END" => Reserved::END,
-        "alias" => Reserved::Alias,
-        "begin" => Reserved::Begin,
-        "break" => Reserved::Break,
-        "case" => Reserved::Case,
-        "class" => Reserved::Class,
-        "def" => Reserved::Def,
-        "defined?" => Reserved::Defined,
-        "do" => Reserved::Do,
-        "else" => Reserved::Else,
-        "ensure"=> Reserved::Ensure,
-        "elsif" => Reserved::Elsif,
-        "end" => Reserved::End,
-        "for" => Reserved::For,
-        "false" => Reserved::False,
-        "if" => Reserved::If,
-        "in" => Reserved::In,
-        "module" => Reserved::Module,
-        "next" => Reserved::Next,
-        "nil" => Reserved::Nil,
-        "or" => Reserved::Or,
-        "return" => Reserved::Return,
-        "rescue" => Reserved::Rescue,
-        "self" => Reserved::Self_,
-        "super" => Reserved::Super,
-        "then" => Reserved::Then,
-        "true" => Reserved::True,
-        "until" => Reserved::Until,
-        "unless" => Reserved::Unless,
-        "when" => Reserved::When,
-        "while" => Reserved::While,
-        "yield" => Reserved::Yield
-    };
+
     Mutex::new(ReservedChecker {
         reserved,
         reserved_rev,
@@ -78,7 +41,6 @@ pub struct Lexer<'a> {
     buf: Option<Token>,
     buf_skip_lt: Option<Token>,
     pub code: &'a str,
-    state_save: Vec<(usize, usize)>, // (token_start_pos, pos)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -129,7 +91,6 @@ impl<'a> Lexer<'a> {
             buf: None,
             buf_skip_lt: None,
             code,
-            state_save: vec![],
         }
     }
 
@@ -141,7 +102,6 @@ impl<'a> Lexer<'a> {
             buf: None,
             buf_skip_lt: None,
             code: &self.code[..end],
-            state_save: vec![],
         }
     }
 
@@ -155,13 +115,15 @@ impl<'a> Lexer<'a> {
             loc,
         )
     }
+}
 
-    fn error_eof(&self, pos: usize) -> ParseErr {
+impl<'a> Lexer<'a> {
+    fn error_eof(pos: usize) -> ParseErr {
         let loc = Loc(pos, pos);
         ParseErr(ParseErrKind::UnexpectedEOF, loc)
     }
 
-    fn error_parse(&self, msg: &str, pos: usize) -> ParseErr {
+    fn error_parse(msg: &str, pos: usize) -> ParseErr {
         let loc = Loc(pos, pos);
         ParseErr(
             ParseErrKind::SyntaxError(format!("Parse error. '{}'", msg)),
@@ -188,6 +150,14 @@ impl<'a> Lexer<'a> {
         return Ok(LexerResult::new(tokens));
     }
 
+    fn current_slice(&self) -> &str {
+        &self.code[self.token_start_pos..self.pos]
+    }
+
+    pub fn get_line(&self, pos: usize) -> usize {
+        self.code[0..=pos].chars().filter(|ch| *ch == '\n').count() + 1
+    }
+
     pub fn get_token(&mut self) -> Result<Token, ParseErr> {
         self.buf = None;
         self.buf_skip_lt = None;
@@ -199,9 +169,9 @@ impl<'a> Lexer<'a> {
         if let Some(tok) = &self.buf {
             return Ok(tok.clone());
         };
-        self.save_state();
+        let save = self.save_state();
         let tok = self.read_token()?;
-        self.restore_state();
+        self.restore_state(save);
         self.buf = Some(tok.clone());
         Ok(tok)
     }
@@ -210,7 +180,7 @@ impl<'a> Lexer<'a> {
         if let Some(tok) = &self.buf_skip_lt {
             return Ok(tok.clone());
         };
-        self.save_state();
+        let save = self.save_state();
         let mut tok;
         loop {
             tok = self.read_token()?;
@@ -218,7 +188,7 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        self.restore_state();
+        self.restore_state(save);
         self.buf_skip_lt = Some(tok.clone());
         Ok(tok)
     }
@@ -260,18 +230,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn save_state(&mut self) {
-        self.state_save.push((self.token_start_pos, self.pos));
+    pub fn save_state(&self) -> (usize, usize) {
+        (self.token_start_pos, self.pos)
     }
 
-    pub fn restore_state(&mut self) {
-        let state = self.state_save.pop().unwrap();
+    pub fn restore_state(&mut self, state: (usize, usize)) {
         self.token_start_pos = state.0;
         self.pos = state.1;
-    }
-
-    pub fn discard_state(&mut self) {
-        self.state_save.pop().unwrap();
     }
 
     pub fn flush(&mut self) {
@@ -498,36 +463,27 @@ impl<'a> Lexer<'a> {
         var_kind: VarKind,
     ) -> Result<Token, ParseErr> {
         // read identifier or reserved keyword
-        let mut tok = match var_kind {
-            VarKind::ClassVar => "@@",
-            VarKind::GlobalVar => "$",
-            VarKind::InstanceVar => "@",
-            VarKind::Identifier => "",
-        }
-        .to_string();
         let is_const = match ch.into() {
-            Some(ch) => {
-                tok.push(ch);
-                ch.is_ascii_uppercase()
-            }
+            Some(ch) => ch.is_ascii_uppercase(),
             None => {
+                // Builtin global variables.
                 let pos = self.pos;
                 match self.get() {
                     Ok(ch) => {
                         if ch.is_alphanumeric() || ch == '_' || ch == '&' || ch == '\'' {
-                            tok.push(ch);
                         } else {
                             return Err(self.error_unexpected(pos));
                         }
                     }
                     Err(_) => {
-                        return Err(self.error_eof(self.pos));
+                        return Err(Self::error_eof(pos));
                     }
                 };
                 false
             }
         };
-        tok += &self.consume_ident();
+        self.consume_ident();
+        let tok = self.current_slice();
         match var_kind {
             VarKind::InstanceVar => return Ok(self.new_instance_var(tok)),
             VarKind::ClassVar => return Ok(self.new_class_var(tok)),
@@ -537,12 +493,12 @@ impl<'a> Lexer<'a> {
 
         match self.peek() {
             Some(ch) if (ch == '!' && self.peek2() != Some('=')) || ch == '?' => {
-                tok.push(self.get()?);
+                self.get().unwrap();
             }
             _ => {}
         };
-
-        match Lexer::check_reserved(&tok) {
+        let tok = self.current_slice();
+        match Lexer::check_reserved(tok) {
             Some(reserved) => return Ok(self.new_reserved(reserved)),
             None => {}
         };
@@ -609,7 +565,7 @@ impl<'a> Lexer<'a> {
         let number = if float_flag {
             match s.parse::<f64>() {
                 Ok(f) => Real::Float(f),
-                Err(err) => return Err(self.error_parse(&format!("{:?}", err), self.pos)),
+                Err(err) => return Err(Self::error_parse(&format!("{:?}", err), self.pos)),
             }
         } else {
             match s.parse::<i64>() {
@@ -634,7 +590,7 @@ impl<'a> Lexer<'a> {
     fn read_hex_number(&mut self) -> Result<Token, ParseErr> {
         let mut val = self
             .expect_hex()
-            .map_err(|_| self.error_parse("Numeric literal without digits.", self.pos))?
+            .map_err(|_| Self::error_parse("Numeric literal without digits.", self.pos))?
             as u64;
         loop {
             if let Some(n) = self.consume_hex() {
@@ -653,7 +609,7 @@ impl<'a> Lexer<'a> {
             Some(_) => {
                 return Err(self.error_unexpected(self.pos));
             }
-            None => return Err(self.error_eof(self.pos)),
+            None => return Err(Self::error_eof(self.pos)),
         };
         self.get()?;
         loop {
@@ -961,7 +917,7 @@ impl<'a> Lexer<'a> {
                 }
                 match std::char::from_u32(code) {
                     Some(ch) => ch,
-                    None => return Err(self.error_parse("Invalid UTF-8 character.", self.pos)),
+                    None => return Err(Self::error_parse("Invalid UTF-8 character.", self.pos)),
                 }
             }
             c if '0' <= c && c <= '7' => {
@@ -981,6 +937,7 @@ impl<'a> Lexer<'a> {
         enum TermMode {
             Normal,
             AllowIndent,
+            // TODO currently, not supported.
             Squiggly,
         }
 
@@ -1010,16 +967,18 @@ impl<'a> Lexer<'a> {
             ParseMode::Command => '`',
         };
         if !no_term && !self.consume(term_ch) {
-            return Err(self.error_parse("Unterminated here document identifier.", self.pos));
+            return Err(Self::error_parse(
+                "Unterminated here document identifier.",
+                self.pos,
+            ));
         }
-        self.save_state();
+        let save = self.save_state();
         self.goto_eol();
         self.get()?;
         if self.heredoc_pos > self.pos {
             self.pos = self.heredoc_pos;
         }
         let heredoc_start = self.pos;
-        //let mut res = String::new();
         let mut heredoc_end = self.pos;
         loop {
             let start = self.pos;
@@ -1028,19 +987,19 @@ impl<'a> Lexer<'a> {
             let next = self.get();
             let line = &self.code[start..end];
             if term_mode == TermMode::AllowIndent || term_mode == TermMode::Squiggly {
-                if line.trim_start() == delimiter {
+                if line.trim_start() == &self.code[delimiter.clone()] {
                     break;
                 }
             } else {
-                if line == delimiter {
+                if line == &self.code[delimiter.clone()] {
                     break;
                 }
             }
             if next.is_err() {
-                return Err(self.error_parse(
+                return Err(Self::error_parse(
                     &format!(
                         r#"Can not find string "{}" anywhere before EOF."#,
-                        delimiter
+                        &self.code[delimiter.clone()]
                     ),
                     self.pos,
                 ));
@@ -1050,7 +1009,7 @@ impl<'a> Lexer<'a> {
             //res.push('\n');
         }
         self.heredoc_pos = self.pos;
-        self.restore_state();
+        self.restore_state(save);
         Ok((parse_mode, heredoc_start, heredoc_end))
     }
 }
@@ -1079,7 +1038,7 @@ impl<'a> Lexer<'a> {
                 self.pos += ch.len_utf8();
                 Ok(ch)
             }
-            _ => Err(self.error_eof(self.pos)),
+            _ => Err(Self::error_eof(self.pos)),
         }
     }
 
@@ -1097,7 +1056,7 @@ impl<'a> Lexer<'a> {
 
     /// Consume continuous ascii_alphanumeric or underscore characters.
     /// Return consumed string.
-    fn consume_ident(&mut self) -> String {
+    fn consume_ident(&mut self) -> Range<usize> {
         let start = self.pos;
         loop {
             match self.peek() {
@@ -1105,7 +1064,7 @@ impl<'a> Lexer<'a> {
                 _ => break,
             };
         }
-        self.code[start..self.pos].to_string()
+        start..self.pos
     }
 
     fn consume_newline(&mut self) -> bool {
@@ -1168,7 +1127,7 @@ impl<'a> Lexer<'a> {
                 ch @ 'A'..='F' => ch as u32 - 'A' as u32 + 10,
                 _ => return Err(self.error_unexpected(self.pos)),
             },
-            _ => return Err(self.error_eof(self.pos)),
+            _ => return Err(Self::error_eof(self.pos)),
         };
         self.pos += 1;
         Ok(n)

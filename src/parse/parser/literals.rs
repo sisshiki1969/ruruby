@@ -86,10 +86,10 @@ impl<'a> Parser<'a> {
             nodes.push(self.parse_comp_stmt()?);
             if !self.consume_punct(Punct::RBrace)? {
                 let loc = self.prev_loc();
-                return Err(self.error_unexpected(loc, "Expect '}'"));
+                return Err(Self::error_unexpected(loc, "Expect '}'"));
             }
         } else {
-            let tok = dbg!(self.get()?);
+            let tok = self.get()?;
             let loc = tok.loc();
             let node = match &tok.kind {
                 TokenKind::GlobalVar(s) => Node::new_global_var(s, loc),
@@ -126,7 +126,7 @@ impl<'a> Parser<'a> {
                     let ary = vec![Node::new_string(content + "-", loc)];
                     Ok(Node::new_regexp(ary, tok.loc))
                 }
-                _ => return Err(self.error_unexpected(loc, "Unsupported % notation.")),
+                _ => return Err(Self::error_unexpected(loc, "Unsupported % notation.")),
             }
         } else if let TokenKind::StringLit(s) = tok.kind {
             return Ok(Node::new_string(s, loc));
@@ -141,7 +141,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_heredocument(&mut self) -> Result<Node, ParseErr> {
         if self.lexer.trailing_space() {
             let loc = self.prev_loc();
-            return Err(self.error_unexpected(loc, "Unexpectd <<."));
+            return Err(Self::error_unexpected(loc, "Unexpectd <<."));
         }
         let (mode, start, end) = self.lexer.read_heredocument()?;
         let node = match mode {
@@ -191,14 +191,13 @@ impl<'a> Parser<'a> {
             let mut symbol_flag = false;
             let key = match self.peek()?.can_be_symbol() {
                 Some(id) => {
-                    self.save_state();
+                    let save = self.save_state();
                     self.get().unwrap();
                     if self.consume_punct(Punct::Colon)? {
-                        self.discard_state();
                         symbol_flag = true;
                         Node::new_symbol(id, ident_loc)
                     } else {
-                        self.restore_state();
+                        self.restore_state(save);
                         self.parse_arg()?
                     }
                 }
@@ -220,7 +219,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_symbol(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         if self.lexer.trailing_space() {
-            return Err(self.error_unexpected(loc, "Unexpected ':'."));
+            return Err(Self::error_unexpected(loc, "Unexpected ':'."));
         }
         // Symbol literal
         let token = self.get()?;
@@ -237,7 +236,10 @@ impl<'a> Parser<'a> {
             _ => match token.can_be_symbol() {
                 Some(id) => id,
                 None => {
-                    return Err(self.error_unexpected(symbol_loc, "Expect identifier or string."))
+                    return Err(Self::error_unexpected(
+                        symbol_loc,
+                        "Expect identifier or string.",
+                    ))
                 }
             },
         };
@@ -307,9 +309,10 @@ impl<'a> Parser<'a> {
         } else {
             let loc = self.loc();
             let tok = self.get()?;
-            return Err(
-                self.error_unexpected(loc, format!("Expected 'do' or '{{'. Actual:{:?}", tok.kind))
-            );
+            return Err(Self::error_unexpected(
+                loc,
+                format!("Expected 'do' or '{{'. Actual:{:?}", tok.kind),
+            ));
         };
         let lvar = self.context_stack.pop().unwrap().lvar;
         Ok(Node::new_proc(params, body, lvar, loc))

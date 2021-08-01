@@ -1,6 +1,8 @@
 use crate::parse::node::BinOp;
 use crate::value::real::Real;
 use crate::*;
+use enum_iterator::IntoEnumIterator;
+use std::fmt::{self, Debug};
 
 pub type Token = Annot<TokenKind>;
 
@@ -56,7 +58,7 @@ pub enum TokenKind {
     LineTerm,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, IntoEnumIterator)]
 pub enum Reserved {
     BEGIN,
     END,
@@ -73,25 +75,59 @@ pub enum Reserved {
     Elsif,
     End,
     Ensure,
-    False,
     For,
     If,
     In,
     Module,
     Next,
-    Nil,
     Or,
     Rescue,
     Return,
-    Self_,
     Super,
     Then,
-    True,
     Until,
     Unless,
     When,
     While,
     Yield,
+}
+
+impl Debug for Reserved {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Reserved::BEGIN => "BEGIN",
+            Reserved::END => "END",
+            Reserved::Alias => "alias",
+            Reserved::And => "and",
+            Reserved::Begin => "begin",
+            Reserved::Break => "break",
+            Reserved::Case => "case",
+            Reserved::Class => "class",
+            Reserved::Def => "def",
+            Reserved::Defined => "defined?",
+            Reserved::Do => "do",
+            Reserved::Else => "else",
+            Reserved::Elsif => "elsif",
+            Reserved::End => "end",
+            Reserved::Ensure => "ensure",
+            Reserved::For => "for",
+            Reserved::If => "if",
+            Reserved::In => "in",
+            Reserved::Module => "module",
+            Reserved::Next => "next",
+            Reserved::Or => "or",
+            Reserved::Rescue => "rescue",
+            Reserved::Return => "return",
+            Reserved::Super => "super",
+            Reserved::Then => "then",
+            Reserved::Until => "until",
+            Reserved::Unless => "unless",
+            Reserved::When => "when",
+            Reserved::While => "while",
+            Reserved::Yield => "yield",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
