@@ -603,19 +603,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_command(&mut self, operation: IdentId, loc: Loc) -> Result<Node, ParseErr> {
-        // FNAME ARGS
-        // FNAME ARGS DO-BLOCK
-        let send_args = self.parse_arglist_block(None)?;
-        Ok(Node::new_send(
-            Node::new_self(loc),
-            operation,
-            send_args,
-            false,
-            loc,
-        ))
-    }
-
     fn parse_arglist_block(
         &mut self,
         delimiter: impl Into<Option<Punct>>,
@@ -634,30 +621,6 @@ impl<'a> Parser<'a> {
             None => {}
         };
         Ok(arglist)
-    }
-
-    /// Parse assign-op.
-    /// <lhs> <assign_op> <arg>
-    fn parse_assign_op(&mut self, mut lhs: Node, op: BinOp) -> Result<Node, ParseErr> {
-        match op {
-            BinOp::LOr | BinOp::LAnd => {
-                self.get()?;
-                let rhs = self.parse_arg()?;
-                self.check_lhs(&lhs)?;
-                if let NodeKind::Ident(id) = lhs.kind {
-                    lhs = Node::new_lvar(id, lhs.loc());
-                };
-                let node =
-                    Node::new_binop(op, lhs.clone(), Node::new_mul_assign(vec![lhs], vec![rhs]));
-                Ok(node)
-            }
-            _ => {
-                self.get()?;
-                let rhs = self.parse_arg()?;
-                self.check_lhs(&lhs)?;
-                Ok(Node::new_assign_op(op, lhs, rhs))
-            }
-        }
     }
 
     /// Check whether `lhs` is a local variable or not.
@@ -703,65 +666,6 @@ impl<'a> Parser<'a> {
         } else {
             Ok(node)
         }
-    }
-
-    /// Parse primary method call.
-    fn parse_primary_method(&mut self, receiver: Node, safe_nav: bool) -> Result<Node, ParseErr> {
-        // 一次式メソッド呼出し : 省略可能実引数付きsuper
-        //      ｜ 添字メソッド呼出し
-        //      ｜ メソッド専用識別子
-        //      ｜ メソッド識別子 ブロック
-        //      ｜ メソッド識別子 括弧付き実引数 ブロック?
-        //      ｜ 一次式 ［行終端子禁止］ "." メソッド名 括弧付き実引数? ブロック?
-        //      ｜ 一次式 ［行終端子禁止］ "::" メソッド名 括弧付き実引数 ブロック?
-        //      ｜ 一次式 ［行終端子禁止］ "::" 定数以外のメソッド名 ブロック?
-        if self.consume_punct_no_term(Punct::LParen)? {
-            let arglist = self.parse_arglist_block(Punct::RParen)?;
-            let loc = receiver.loc().merge(self.loc());
-            let node = Node::new_send(receiver, IdentId::get_id("call"), arglist, false, loc);
-            return Ok(node);
-        };
-        let (id, loc) = self.parse_method_name()?;
-        let arglist = if self.consume_punct_no_term(Punct::LParen)? {
-            self.parse_arglist_block(Punct::RParen)?
-        } else {
-            if self.is_command() {
-                return Ok(Node::new_send(
-                    receiver,
-                    id,
-                    self.parse_arglist_block(None)?,
-                    false,
-                    loc,
-                ));
-            }
-            match self.parse_block()? {
-                Some(block) => ArgList::with_block(block),
-                None => ArgList::default(),
-            }
-        };
-
-        let node = match receiver.kind {
-            NodeKind::Ident(id) => Node::new_send_noarg(Node::new_self(loc), id, false, loc),
-            _ => receiver,
-        };
-        Ok(Node::new_send(node, id, arglist, safe_nav, loc))
-    }
-
-    /// Parse method name.
-    /// In primary method call, assign-like method name(cf. foo= or Bar=) is not allowed.
-    pub fn parse_method_name(&mut self) -> Result<(IdentId, Loc), ParseErr> {
-        let tok = self.get()?;
-        let loc = tok.loc();
-        let id = match &tok.kind {
-            TokenKind::Ident(s) | TokenKind::Const(s) => self.get_ident_id(s),
-            TokenKind::Reserved(r) => {
-                let s = Lexer::get_string_from_reserved(r);
-                self.get_ident_id(&s)
-            }
-            TokenKind::Punct(p) => self.parse_op_definable(p)?,
-            _ => return Err(self.error_unexpected(tok.loc(), "method name must be an identifier.")),
-        };
-        Ok((id, loc.merge(self.prev_loc())))
     }
 
     /// Parse argument list.
@@ -889,170 +793,6 @@ impl<'a> Parser<'a> {
         let node = Node::new_proc(params, body, lvar, loc);
         self.suppress_mul_assign = old_suppress_mul_flag;
         Ok(Some(Box::new(node)))
-    }
-
-    fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, ParseErr> {
-        let tok = self.get()?;
-        let loc = tok.loc();
-        match &tok.kind {
-            TokenKind::Ident(name) => {
-                if self.lexer.trailing_lparen() {
-                    let node = Node::new_identifier(name, loc);
-                    return Ok(self.parse_function_args(node)?);
-                };
-                let id = self.get_ident_id(name);
-                if self.is_local_var(id) {
-                    Ok(Node::new_lvar(id, loc))
-                } else {
-                    // FUNCTION or COMMAND or LHS for assignment
-                    let node = Node::new_identifier(name, loc);
-                    if let Ok(tok) = self.peek_no_term() {
-                        match tok.kind {
-                            // Multiple assignment
-                            TokenKind::Punct(Punct::Comma) => return Ok(node),
-                            // Method call with block and no args
-                            TokenKind::Punct(Punct::LBrace) | TokenKind::Reserved(Reserved::Do) => {
-                                return Ok(self.parse_function_args(node)?)
-                            }
-                            _ => {}
-                        }
-                    };
-
-                    if !suppress_unparen_call && self.is_command() {
-                        Ok(self.parse_command(id, loc)?)
-                    } else {
-                        Ok(node)
-                    }
-                }
-            }
-            TokenKind::InstanceVar(name) => Ok(Node::new_instance_var(name, loc)),
-            TokenKind::ClassVar(name) => Ok(Node::new_class_var(name, loc)),
-            TokenKind::GlobalVar(name) => Ok(Node::new_global_var(name, loc)),
-            TokenKind::Const(name) => {
-                if self.lexer.trailing_lparen() {
-                    let node = Node::new_identifier(name, loc);
-                    self.parse_function_args(node)
-                } else if !suppress_unparen_call && self.is_command() {
-                    let id = self.get_ident_id(name);
-                    Ok(self.parse_command(id, loc)?)
-                } else {
-                    Ok(Node::new_const(name, false, loc))
-                }
-            }
-            TokenKind::IntegerLit(num) => Ok(Node::new_integer(*num, loc)),
-            TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
-            TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(*num, loc)),
-            TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
-            TokenKind::CommandLit(s) => {
-                let content = Node::new_string(s.to_owned(), loc);
-                Ok(Node::new_command(content))
-            }
-            TokenKind::OpenString(s, term, level) => {
-                self.parse_interporated_string_literal(s, *term, *level)
-            }
-            TokenKind::OpenCommand(s, term, level) => {
-                let content = self.parse_interporated_string_literal(s, *term, *level)?;
-                Ok(Node::new_command(content))
-            }
-            TokenKind::Punct(punct) => match punct {
-                Punct::Minus => match self.get()?.kind {
-                    TokenKind::IntegerLit(num) => Ok(Node::new_integer(-num, loc)),
-                    TokenKind::FloatLit(num) => Ok(Node::new_float(-num, loc)),
-                    _ => unreachable!(),
-                },
-                Punct::LParen => {
-                    let node = self.parse_comp_stmt()?;
-                    self.expect_punct(Punct::RParen)?;
-                    Ok(node)
-                }
-                Punct::LBracket => {
-                    // Array literal
-                    let nodes = self.parse_mul_assign_rhs(Punct::RBracket)?;
-                    let loc = loc.merge(self.prev_loc());
-                    Ok(Node::new_array(nodes, loc))
-                }
-                Punct::LBrace => self.parse_hash_literal(),
-                Punct::Colon => self.parse_symbol(),
-                Punct::Arrow => self.parse_lambda_literal(),
-                Punct::Scope => {
-                    let name = self.expect_const()?;
-                    Ok(Node::new_const(&name, true, loc))
-                }
-                Punct::Div => self.parse_regexp(),
-                Punct::Rem => self.parse_percent_notation(),
-                Punct::Question => self.parse_char_literal(),
-                Punct::Shl => self.parse_heredocument(),
-                _ => {
-                    return Err(
-                        self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))
-                    )
-                }
-            },
-            TokenKind::Reserved(reserved) => match reserved {
-                Reserved::If => self.parse_if(),
-                Reserved::Unless => self.parse_unless(),
-                Reserved::For => self.parse_for(),
-                Reserved::While => self.parse_while(true),
-                Reserved::Until => self.parse_while(false),
-                Reserved::Case => self.parse_case(),
-                Reserved::Def => self.parse_def(),
-                Reserved::Class => {
-                    if self.is_method_context() {
-                        return Err(self.error_unexpected(
-                            loc,
-                            "SyntaxError: class definition in method body.",
-                        ));
-                    }
-                    let loc = self.prev_loc();
-                    if self.consume_punct(Punct::Shl)? {
-                        self.parse_singleton_class(loc)
-                    } else {
-                        self.parse_class(false)
-                    }
-                }
-                Reserved::Module => {
-                    if self.is_method_context() {
-                        return Err(self.error_unexpected(
-                            loc,
-                            "SyntaxError: module definition in method body.",
-                        ));
-                    }
-                    self.parse_class(true)
-                }
-                Reserved::Return => self.parse_return(),
-                Reserved::Break => self.parse_break(),
-                Reserved::Next => self.parse_next(),
-                Reserved::True => Ok(Node::new_bool(true, loc)),
-                Reserved::False => Ok(Node::new_bool(false, loc)),
-                Reserved::Nil => Ok(Node::new_nil(loc)),
-                Reserved::Self_ => Ok(Node::new_self(loc)),
-                Reserved::Begin => self.parse_begin(),
-                Reserved::Defined => {
-                    if self.consume_punct_no_term(Punct::LParen)? {
-                        let node = self.parse_expr()?;
-                        self.expect_punct(Punct::RParen)?;
-                        Ok(Node::new_defined(node))
-                    } else {
-                        let tok = self.get()?;
-                        Err(self.error_unexpected(tok.loc, format!("expected '('.")))
-                    }
-                }
-                Reserved::Alias => {
-                    let new_name = self.alias_name()?;
-                    let old_name = self.alias_name()?;
-                    let loc = loc.merge(self.prev_loc());
-                    Ok(Node::new_alias(new_name, old_name, loc))
-                }
-                Reserved::Super => {
-                    return self.parse_super();
-                }
-                _ => Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind))),
-            },
-            TokenKind::EOF => return Err(self.error_eof(loc)),
-            _ => {
-                return Err(self.error_unexpected(loc, format!("Unexpected token: {:?}", tok.kind)))
-            }
-        }
     }
 }
 
@@ -1290,47 +1030,5 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(args)
-    }
-
-    fn parse_begin(&mut self) -> Result<Node, ParseErr> {
-        // begin式 :: "begin"  複合文  rescue節*  else節?  ensure節?  "end"
-        // rescue節 :: "rescue" [行終端子禁止] 例外クラスリスト?  例外変数代入?  then節
-        // 例外クラスリスト :: 演算子式 | 多重代入右辺
-        // 例外変数代入 :: "=>" 左辺
-        // ensure節 :: "ensure" 複合文
-        let body = self.parse_comp_stmt()?;
-        let mut rescue = vec![];
-        loop {
-            if !self.consume_reserved(Reserved::Rescue)? {
-                break;
-            };
-            let mut assign = None;
-            let mut exception = vec![];
-            if !self.consume_term()? {
-                if !self.peek_punct_no_term(Punct::FatArrow) {
-                    exception = self.parse_mul_assign_rhs(None)?;
-                };
-                if self.consume_punct_no_term(Punct::FatArrow)? {
-                    let lhs = self.parse_primary(true)?;
-                    self.check_lhs(&lhs)?;
-                    assign = Some(lhs);
-                }
-                self.parse_then()?;
-            };
-            let rescue_body = self.parse_comp_stmt()?;
-            rescue.push(RescueEntry::new(exception, assign, rescue_body));
-        }
-        let else_ = if self.consume_reserved(Reserved::Else)? {
-            Some(self.parse_comp_stmt()?)
-        } else {
-            None
-        };
-        let ensure = if self.consume_reserved(Reserved::Ensure)? {
-            Some(self.parse_comp_stmt()?)
-        } else {
-            None
-        };
-        self.expect_reserved(Reserved::End)?;
-        Ok(Node::new_begin(body, rescue, else_, ensure))
     }
 }

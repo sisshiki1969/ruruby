@@ -3,7 +3,7 @@ use super::*;
 // Parse
 impl<'a> Parser<'a> {
     /// Parse char literals.
-    pub fn parse_char_literal(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_char_literal(&mut self) -> Result<Node, ParseErr> {
         let loc = self.loc();
         let s = self.lexer.read_char_literal()?;
         Ok(Node::new_string(s.to_string(), loc.merge(self.prev_loc)))
@@ -11,7 +11,7 @@ impl<'a> Parser<'a> {
 
     /// Parse string literals.
     /// Adjacent string literals are to be combined.
-    pub fn parse_string_literal(&mut self, s: &str) -> Result<Node, ParseErr> {
+    pub(super) fn parse_string_literal(&mut self, s: &str) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         let mut s = s.to_string();
         loop {
@@ -31,10 +31,10 @@ impl<'a> Parser<'a> {
         Ok(Node::new_string(s, loc))
     }
 
-    pub fn parse_interporated_string_literal(
+    pub(super) fn parse_interporated_string_literal(
         &mut self,
         s: &str,
-        delimiter: char,
+        delimiter: Option<char>,
         level: usize,
     ) -> Result<Node, ParseErr> {
         let start_loc = self.prev_loc();
@@ -100,7 +100,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    pub fn parse_percent_notation(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_percent_notation(&mut self) -> Result<Node, ParseErr> {
         let tok = self.lexer.get_percent_notation()?;
         let loc = tok.loc;
         if let TokenKind::PercentNotation(kind, content) = tok.kind {
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_heredocument(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_heredocument(&mut self) -> Result<Node, ParseErr> {
         if self.lexer.trailing_space() {
             let loc = self.prev_loc();
             return Err(self.error_unexpected(loc, "Unexpectd <<."));
@@ -145,7 +145,7 @@ impl<'a> Parser<'a> {
         self.lexer.read_heredocument()
     }
 
-    pub fn parse_hash_literal(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_hash_literal(&mut self) -> Result<Node, ParseErr> {
         let mut kvp = vec![];
         let loc = self.prev_loc();
         loop {
@@ -182,7 +182,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new_hash(kvp, loc.merge(self.prev_loc())))
     }
 
-    pub fn parse_symbol(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_symbol(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         if self.lexer.trailing_space() {
             return Err(self.error_unexpected(loc, "Unexpected ':'."));
@@ -209,7 +209,7 @@ impl<'a> Parser<'a> {
         Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
     }
 
-    pub fn parse_regexp(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_regexp(&mut self) -> Result<Node, ParseErr> {
         let start_loc = self.prev_loc();
         let tok = self.lexer.get_regexp()?;
         let mut nodes = match tok.kind {
@@ -239,7 +239,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_lambda_literal(&mut self) -> Result<Node, ParseErr> {
+    pub(super) fn parse_lambda_literal(&mut self) -> Result<Node, ParseErr> {
         // Lambda literal
         let loc = self.prev_loc();
         let mut params = vec![];

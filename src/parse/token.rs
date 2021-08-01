@@ -49,9 +49,9 @@ pub enum TokenKind {
     CommandLit(String),
     Reserved(Reserved),
     Punct(Punct),
-    OpenString(String, char, usize), // (content, delimiter, paren_level)
+    OpenString(String, Option<char>, usize), // (content, delimiter, paren_level)
     OpenRegex(String),
-    OpenCommand(String, char, usize),
+    OpenCommand(String, Option<char>, usize),
     PercentNotation(char, String),
     LineTerm,
 }
@@ -183,11 +183,21 @@ impl Token {
         Annot::new(TokenKind::StringLit(string.into()), loc)
     }
 
-    pub fn new_open_string(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
+    pub fn new_open_string(
+        s: impl Into<String>,
+        delimiter: Option<char>,
+        level: usize,
+        loc: Loc,
+    ) -> Self {
         Annot::new(TokenKind::OpenString(s.into(), delimiter, level), loc)
     }
 
-    pub fn new_open_command(s: impl Into<String>, delimiter: char, level: usize, loc: Loc) -> Self {
+    pub fn new_open_command(
+        s: impl Into<String>,
+        delimiter: Option<char>,
+        level: usize,
+        loc: Loc,
+    ) -> Self {
         Annot::new(TokenKind::OpenCommand(s.into(), delimiter, level), loc)
     }
 

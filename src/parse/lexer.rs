@@ -127,11 +127,23 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub fn new_with_range(&self, end: usize) -> Self {
+        Lexer {
+            token_start_pos: 0,
+            pos: 0,
+            heredoc_pos: 0,
+            buf: None,
+            buf_skip_lt: None,
+            code: &self.code[..end],
+            state_save: vec![],
+        }
+    }
+
     fn error_unexpected(&self, pos: usize) -> ParseErr {
         let loc = Loc(pos, pos);
         ParseErr(
             ParseErrKind::SyntaxError(format!(
-                "Unexpected char. '{}'",
+                "Unexpected char. {:?}",
                 self.code[pos..].chars().next().unwrap()
             )),
             loc,
@@ -283,8 +295,8 @@ impl<'a> Lexer<'a> {
             } else if ch.is_ascii_punctuation() {
                 match ch {
                     '#' => self.goto_eol(),
-                    '"' => return self.read_string_literal_double(None, '\"', 0),
-                    '`' => return self.read_command_literal(None, '`', 0),
+                    '"' => return self.read_string_literal_double(None, Some('\"'), 0),
+                    '`' => return self.read_command_literal(None, Some('`'), 0),
                     '\'' => {
                         let s = self.read_string_literal_single(None, '\'', false)?;
                         return Ok(self.new_stringlit(s));
@@ -614,22 +626,16 @@ impl<'a> Lexer<'a> {
 
     /// Read hexadecimal number.
     fn read_hex_number(&mut self) -> Result<Token, ParseErr> {
-        let mut val = match self.peek() {
-            Some(ch @ '0'..='9') => (ch as u64 - '0' as u64),
-            Some(ch @ 'a'..='f') => (ch as u64 - 'a' as u64 + 10),
-            Some(ch @ 'A'..='F') => (ch as u64 - 'A' as u64 + 10),
-            _ => return Err(self.error_unexpected(self.pos)),
-        };
-        self.get()?;
+        let mut val = self
+            .expect_hex()
+            .map_err(|_| self.error_parse("Numeric literal without digits.", self.pos))?
+            as u64;
         loop {
-            match self.peek() {
-                Some(ch @ '0'..='9') => val = val * 16 + (ch as u64 - '0' as u64),
-                Some(ch @ 'a'..='f') => val = val * 16 + (ch as u64 - 'a' as u64 + 10),
-                Some(ch @ 'A'..='F') => val = val * 16 + (ch as u64 - 'A' as u64 + 10),
-                Some('_') => {}
-                _ => break,
+            if let Some(n) = self.consume_hex() {
+                val = val * 16 + n as u64;
+            } else if !self.consume('_') {
+                break;
             }
-            self.get()?;
         }
         Ok(self.new_numlit(val as i64))
     }
@@ -659,7 +665,7 @@ impl<'a> Lexer<'a> {
     pub fn read_string_literal_double(
         &mut self,
         open: Option<char>,
-        term: char,
+        term: Option<char>,
         level: usize,
     ) -> Result<Token, ParseErr> {
         match self.read_interpolate(open, term, level)? {
@@ -674,7 +680,7 @@ impl<'a> Lexer<'a> {
     pub fn read_command_literal(
         &mut self,
         open: Option<char>,
-        term: char,
+        term: Option<char>,
         level: usize,
     ) -> Result<Token, ParseErr> {
         match self.read_interpolate(open, term, level)? {
@@ -689,7 +695,7 @@ impl<'a> Lexer<'a> {
     fn read_interpolate(
         &mut self,
         open: Option<char>,
-        term: char,
+        term: Option<char>,
         mut level: usize,
     ) -> Result<InterpolateState, ParseErr> {
         let mut s = "".to_string();
@@ -699,7 +705,7 @@ impl<'a> Lexer<'a> {
                     s.push(c);
                     level += 1;
                 }
-                c if c == term => {
+                c if Some(c) == term => {
                     if level == 0 {
                         return Ok(InterpolateState::Finished(s));
                     } else {
@@ -900,7 +906,7 @@ impl<'a> Lexer<'a> {
                 let s = self.read_string_literal_single(open, term, false)?;
                 Ok(self.new_stringlit(s))
             }
-            Some('Q') | None => Ok(self.read_string_literal_double(open, term, 0)?),
+            Some('Q') | None => Ok(self.read_string_literal_double(open, Some(term), 0)?),
             Some('r') => {
                 let s = self.read_string_literal_single(open, term, true)?;
                 Ok(self.new_percent('r', s))
@@ -909,15 +915,6 @@ impl<'a> Lexer<'a> {
                 let s = self.read_string_literal_single(open, term, false)?;
                 Ok(self.new_percent(kind, s))
             }
-        }
-    }
-
-    fn char_to_hex(&self, c: char) -> Result<u32, ParseErr> {
-        match c {
-            ch @ '0'..='9' => Ok(ch as u32 - '0' as u32),
-            ch @ 'a'..='f' => Ok(ch as u32 - 'a' as u32 + 10),
-            ch @ 'A'..='F' => Ok(ch as u32 - 'A' as u32 + 10),
-            _ => Err(self.error_unexpected(self.pos - c.len_utf8())),
         }
     }
 
@@ -934,10 +931,8 @@ impl<'a> Lexer<'a> {
             't' => '\x09',
             'v' => '\x0b',
             'x' => {
-                let c1 = self.get()?;
-                let c1 = self.char_to_hex(c1)?;
-                let c2 = self.get()?;
-                let c2 = self.char_to_hex(c2)?;
+                let c1 = self.expect_hex()?;
+                let c2 = self.expect_hex()?;
                 match std::char::from_u32(c1 * 16 + c2) {
                     Some(c) => c,
                     None => return Err(self.error_unexpected(self.pos)),
@@ -946,8 +941,7 @@ impl<'a> Lexer<'a> {
             'u' => {
                 let mut code = 0;
                 for _ in 0..4 {
-                    let c = self.get()?;
-                    code = code * 16 + self.char_to_hex(c)?;
+                    code = code * 16 + self.expect_hex()?;
                 }
                 match std::char::from_u32(code) {
                     Some(ch) => ch,
@@ -968,17 +962,46 @@ impl<'a> Lexer<'a> {
 
     pub fn read_heredocument(&mut self) -> Result<Node, ParseErr> {
         #[derive(Clone, PartialEq)]
-        enum Mode {
+        enum TermMode {
             Normal,
             AllowIndent,
+            Squiggly,
         }
-        let mut mode = Mode::Normal;
-        if self.consume('-') {
-            mode = Mode::AllowIndent;
+
+        #[derive(Clone, PartialEq)]
+        enum ParseMode {
+            Double,
+            Single,
+            Command,
+        }
+
+        let term_mode = if self.consume('-') {
+            TermMode::AllowIndent
+        } else if self.consume('~') {
+            TermMode::Squiggly
+        } else {
+            TermMode::Normal
+        };
+        let (parse_mode, no_term) = if self.consume('\'') {
+            (ParseMode::Single, false)
+        } else if self.consume('\"') {
+            (ParseMode::Double, false)
+        } else if self.consume('`') {
+            (ParseMode::Command, false)
+        } else {
+            (ParseMode::Double, true)
         };
         let delimiter = self.consume_ident();
         if delimiter.len() == 0 {
             return Err(self.error_unexpected(self.pos));
+        }
+        let term_ch = match parse_mode {
+            ParseMode::Single => '\'',
+            ParseMode::Double => '\"',
+            ParseMode::Command => '`',
+        };
+        if !no_term && !self.consume(term_ch) {
+            return Err(self.error_parse("Unterminated here document identifier.", self.pos));
         }
         self.save_state();
         self.goto_eol();
@@ -995,7 +1018,7 @@ impl<'a> Lexer<'a> {
             let end = self.pos;
             let next = self.get();
             let line = &self.code[start..end];
-            if mode == Mode::AllowIndent {
+            if term_mode == TermMode::AllowIndent || term_mode == TermMode::Squiggly {
                 if line.trim_start() == delimiter {
                     break;
                 }
@@ -1041,7 +1064,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Get one char and move to the next.
-    /// Returns Ok(char) or RubyError if the cursor reached EOF.
+    /// Returns Ok(char) or ParseErr if the cursor reached EOF.
     fn get(&mut self) -> Result<char, ParseErr> {
         match self.peek() {
             Some(ch) => {
@@ -1111,8 +1134,8 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Consume the next char, if the char is '0' - '7'.
-    /// Return Some(ch) if the token (ch) was consumed.
+    /// Consume the next char, if the char is '0'-'7'.
+    /// Return Some(<octal_digit>) if the char was consumed.
     fn consume_octal(&mut self) -> Option<u8> {
         match self.peek() {
             Some(ch) if '0' <= ch && ch <= '7' => {
@@ -1121,6 +1144,26 @@ impl<'a> Lexer<'a> {
             }
             _ => None,
         }
+    }
+
+    /// Consume the next char, if the char is '0'-'9' or 'a'-'f'.
+    /// Return Some(<hex_digit>) if the char was consumed.
+    fn consume_hex(&mut self) -> Option<u32> {
+        self.expect_hex().ok()
+    }
+
+    fn expect_hex(&mut self) -> Result<u32, ParseErr> {
+        let n = match self.peek() {
+            Some(ch) => match ch {
+                ch @ '0'..='9' => ch as u32 - '0' as u32,
+                ch @ 'a'..='f' => ch as u32 - 'a' as u32 + 10,
+                ch @ 'A'..='F' => ch as u32 - 'A' as u32 + 10,
+                _ => return Err(self.error_unexpected(self.pos)),
+            },
+            _ => return Err(self.error_eof(self.pos)),
+        };
+        self.pos += 1;
+        Ok(n)
     }
 
     /// Consume the next char, if the char is ascii-whitespace char.
@@ -1234,7 +1277,7 @@ impl<'a> Lexer<'a> {
         Annot::new(TokenKind::Punct(punc), self.cur_loc())
     }
 
-    fn new_open_string(&self, s: String, delimiter: char, level: usize) -> Token {
+    fn new_open_string(&self, s: String, delimiter: Option<char>, level: usize) -> Token {
         Token::new_open_string(s, delimiter, level, self.cur_loc())
     }
 
@@ -1242,7 +1285,7 @@ impl<'a> Lexer<'a> {
         Token::new_open_reg(s, self.cur_loc())
     }
 
-    fn new_open_command(&self, s: String, delimiter: char, level: usize) -> Token {
+    fn new_open_command(&self, s: String, delimiter: Option<char>, level: usize) -> Token {
         Token::new_open_command(s, delimiter, level, self.cur_loc())
     }
 
