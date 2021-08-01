@@ -429,7 +429,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         "(eval)"
     };
 
-    let method = vm.parse_program_eval(path, program)?;
+    let method = vm.parse_program_eval(path, program.to_string())?;
     let args = Args::new0();
     let block = vm.new_block(method);
     let res = vm.eval_block(&block, &args)?;

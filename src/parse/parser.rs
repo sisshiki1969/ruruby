@@ -581,8 +581,8 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse_program(code: &str, path: PathBuf) -> Result<ParseResult, RubyError> {
-        let parser = Parser::new(code, path.clone());
+    pub fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
+        let parser = Parser::new(&code, path.clone());
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
         match parser.parse(None, parse_ctx) {
             Ok(ok) => Ok(ok),

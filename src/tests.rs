@@ -3,7 +3,7 @@ use crate::*;
 pub fn eval_script(script: &str, expected: Value) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
-    let res = vm.run("", script);
+    let res = vm.run("", script.to_string());
     #[cfg(feature = "perf")]
     vm.globals.perf.print_perf();
     #[cfg(feature = "gc-debug")]
@@ -25,7 +25,7 @@ pub fn eval_script(script: &str, expected: Value) {
 pub fn assert_script(script: &str) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
-    let res = vm.run("", script);
+    let res = vm.run("", script.to_string());
     #[cfg(feature = "perf")]
     vm.globals.perf.print_perf();
     #[cfg(feature = "gc-debug")]
@@ -44,7 +44,7 @@ pub fn assert_error(script: impl Into<String>) {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     let script = script.into();
-    let res = vm.run("", &script);
+    let res = vm.run("", script.to_string());
     #[cfg(feature = "perf")]
     vm.globals.perf.print_perf();
 

@@ -95,14 +95,14 @@ impl VM {
         };
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
-        match vm.run("(startup)", load_path) {
+        match vm.run("(startup)", load_path.to_string()) {
             Ok(val) => globals.set_global_var_by_str("$:", val),
             Err(_) => {}
         };
 
         match vm.run(
             "ruruby/startup/startup.rb",
-            include_str!("../startup/startup.rb"),
+            include_str!("../startup/startup.rb").to_string(),
         ) {
             Ok(_) => {}
             Err(err) => {
@@ -278,15 +278,15 @@ impl VM {
     pub fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
-        program: &str,
+        program: String,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let source_info = SourceInfoRef::new(SourceInfo::new(path.clone(), program));
-        let result = Parser::parse_program(program, path)?;
+        let result = Parser::parse_program(program, path.clone())?;
+        //let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let methodref = Codegen::new(source_info).gen_iseq(
+        let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             vec![],
             result.node,
@@ -301,21 +301,23 @@ impl VM {
     pub fn parse_program_eval(
         &mut self,
         path: impl Into<PathBuf>,
-        program: &str,
+        program: String,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let parser = Parser::new(program, path.clone());
+        let parser = Parser::new(&program, path.clone());
         let extern_context = self.context();
-        let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
         let result = match parser.parse_program_eval(Some(extern_context)) {
             Ok(ok) => ok,
-            Err(err) => return Err(RubyError::new_parse_err(err.0, source_info, err.1)),
+            Err(err) => {
+                let source_info = SourceInfoRef::from_code(path, program);
+                return Err(RubyError::new_parse_err(err.0, source_info, err.1));
+            }
         };
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let mut codegen = Codegen::new(source_info);
+        let mut codegen = Codegen::new(result.source_info);
         codegen.set_external_context(extern_context);
         let method = codegen.gen_iseq(
             &mut self.globals,
@@ -329,7 +331,7 @@ impl VM {
         Ok(method)
     }
 
-    pub fn run(&mut self, path: impl Into<PathBuf>, program: &str) -> VMResult {
+    pub fn run(&mut self, path: impl Into<PathBuf>, program: String) -> VMResult {
         let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
         let mut iseq = method.as_iseq();
@@ -2280,7 +2282,7 @@ impl VM {
 
     #[cfg(not(tarpaulin_include))]
     pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
-        match self.run(absolute_path, program) {
+        match self.run(absolute_path, program.to_string()) {
             Ok(_) => {
                 #[cfg(feature = "perf")]
                 self.globals.perf.print_perf();
