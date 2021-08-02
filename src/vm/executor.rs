@@ -304,15 +304,8 @@ impl VM {
         program: String,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let parser = Parser::new(&program, path.clone());
         let extern_context = self.context();
-        let result = match parser.parse_program_eval(Some(extern_context)) {
-            Ok(ok) => ok,
-            Err(err) => {
-                let source_info = SourceInfoRef::from_code(path, program);
-                return Err(RubyError::new_parse_err(err.0, source_info, err.1));
-            }
-        };
+        let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
@@ -350,16 +343,11 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(
-        &mut self,
-        result: ParseResult,
-        source_info: SourceInfoRef,
-        mut context: ContextRef,
-    ) -> VMResult {
+    pub fn run_repl(&mut self, result: ParseResult, mut context: ContextRef) -> VMResult {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
-        let method = Codegen::new(source_info).gen_iseq(
+        let method = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             vec![],
             result.node,

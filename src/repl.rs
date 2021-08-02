@@ -71,29 +71,27 @@ pub fn repl_vm() {
 
         script += &line;
         {
-            let parser = Parser::new(&script, PathBuf::from("REPL"));
-            match parser.parse_program_repl(context) {
-                Ok(parse_result) => {
-                    let source_info = SourceInfoRef::new(SourceInfo::new("REPL", script.clone()));
-                    match vm.run_repl(parse_result, source_info, context) {
-                        Ok(result) => {
-                            println!("=> {:?}", result);
-                        }
-                        Err(err) => {
-                            for (info, loc) in &err.info {
-                                info.show_loc(loc);
-                            }
-                            err.show_err();
-                            vm.clear();
-                        }
+            match Parser::parse_program_repl(script.clone(), PathBuf::from("REPL"), context) {
+                Ok(parse_result) => match vm.run_repl(parse_result, context) {
+                    Ok(result) => {
+                        println!("=> {:?}", result);
                     }
-                }
+                    Err(err) => {
+                        for (info, loc) in &err.info {
+                            info.show_loc(loc);
+                        }
+                        err.show_err();
+                        vm.clear();
+                    }
+                },
                 Err(err) => {
-                    if ParseErrKind::UnexpectedEOF == err.0 {
-                        continue;
-                    }
-                    let source_info = SourceInfoRef::new(SourceInfo::new("REPL", script.clone()));
-                    let err = RubyError::new_parse_err(err.0, source_info, err.1);
+                    match &err.kind {
+                        RubyErrorKind::ParseErr(kind) => match kind {
+                            ParseErrKind::UnexpectedEOF => continue,
+                            _ => {}
+                        },
+                        _ => {}
+                    };
                     err.show_loc(0);
                     err.show_err();
                 }

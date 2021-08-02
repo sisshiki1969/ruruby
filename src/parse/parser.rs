@@ -582,51 +582,69 @@ impl<'a> Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
-        let parser = Parser::new(&code, path.clone());
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
-        match parser.parse(None, parse_ctx) {
-            Ok(ok) => Ok(ok),
-            Err(err) => {
-                let source_info = SourceInfoRef::new(SourceInfo::new(path.clone(), code));
-                Err(RubyError::new_parse_err(err.0, source_info, err.1))
-            }
-        }
+        Self::parse(code, path, None, parse_ctx)
     }
 
-    pub fn parse_program_repl(self, extern_context: ContextRef) -> Result<ParseResult, ParseErr> {
+    pub fn parse_program_repl(
+        code: String,
+        path: PathBuf,
+        extern_context: ContextRef,
+    ) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(
             IdentId::get_id("REPL"),
             Some(extern_context.iseq_ref.unwrap().lvar.clone()),
         );
-        self.parse(Some(extern_context), parse_ctx)
+        Self::parse(code, path, Some(extern_context), parse_ctx)
     }
 
     pub fn parse_program_eval(
-        self,
+        code: String,
+        path: PathBuf,
         extern_context: Option<ContextRef>,
-    ) -> Result<ParseResult, ParseErr> {
-        self.parse(extern_context, ParseContext::new_block())
+    ) -> Result<ParseResult, RubyError> {
+        Self::parse(code, path, extern_context, ParseContext::new_block())
     }
 
     fn parse(
-        mut self,
+        code: String,
+        path: PathBuf,
         extern_context: Option<ContextRef>,
         parse_context: ParseContext,
-    ) -> Result<ParseResult, ParseErr> {
-        self.extern_context = extern_context;
-        self.context_stack.push(parse_context);
-        let node = self.parse_comp_stmt()?;
-        let lvar = self.context_stack.pop().unwrap().lvar;
-        let tok = self.peek()?;
+    ) -> Result<ParseResult, RubyError> {
+        let (node, lvar, tok) =
+            match Self::parse_sub(&code, path.clone(), extern_context, parse_context) {
+                Ok(ok) => ok,
+                Err(err) => {
+                    let source_info = SourceInfoRef::from_code(path, code);
+                    return Err(RubyError::new_parse_err(err.0, source_info, err.1));
+                }
+            };
         #[cfg(feature = "emit-ast")]
         eprintln!("{:#?}", node);
-        let source_info = SourceInfoRef::from_code(self.path.clone(), self.lexer.code.to_string());
+        let source_info = SourceInfoRef::from_code(path, code);
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar, source_info);
             Ok(result)
         } else {
-            Err(Self::error_unexpected(tok.loc(), "Expected end-of-input."))
+            let err = Self::error_unexpected(tok.loc(), "Expected end-of-input.");
+            Err(RubyError::new_parse_err(err.0, source_info, err.1))
         }
+    }
+
+    fn parse_sub(
+        code: &str,
+        path: PathBuf,
+        extern_context: Option<ContextRef>,
+        parse_context: ParseContext,
+    ) -> Result<(Node, LvarCollector, Token), ParseErr> {
+        let mut parser = Parser::new(&code, path);
+        parser.extern_context = extern_context;
+        parser.context_stack.push(parse_context);
+        let node = parser.parse_comp_stmt()?;
+        let lvar = parser.context_stack.pop().unwrap().lvar;
+        let tok = parser.peek()?;
+        Ok((node, lvar, tok))
     }
 
     fn parse_arglist_block(
