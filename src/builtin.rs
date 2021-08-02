@@ -1,5 +1,6 @@
 pub mod array;
 pub mod basicobject;
+pub mod binding;
 pub mod class;
 pub mod comparable;
 pub mod complex;
@@ -93,6 +94,7 @@ pub struct BuiltinClass {
     pub fiber: Value,
     pub enumerator: Value,
     pub exception: Value,
+    pub binding: Value,
     pub standard: Value,
     pub nilclass: Value,
     pub trueclass: Value,
@@ -123,6 +125,7 @@ impl BuiltinClass {
             fiber: nil,
             enumerator: nil,
             exception: nil,
+            binding: nil,
             standard: nil,
             nilclass: nil,
             trueclass: nil,
@@ -150,7 +153,7 @@ impl BuiltinClass {
         init!(module, class, basicobject, object);
         init_builtin!(float, complex, integer, nilclass, trueclass, falseclass);
         init_builtin!(array, symbol, procobj, range, string, hash);
-        init_builtin!(method, unbound_method, regexp, fiber, enumerator);
+        init_builtin!(method, unbound_method, regexp, fiber, enumerator, binding);
         init!(math, dir, process, gc, structobj, time);
     }
 
@@ -238,6 +241,10 @@ impl BuiltinClass {
 
     pub fn exception() -> Module {
         BUILTINS.with(|b| b.borrow().exception).into_module()
+    }
+
+    pub fn binding() -> Module {
+        BUILTINS.with(|b| b.borrow().binding).into_module()
     }
 
     pub fn standard() -> Module {

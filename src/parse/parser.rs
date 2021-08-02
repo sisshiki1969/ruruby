@@ -321,6 +321,7 @@ impl<'a> Parser<'a> {
                     ContextKind::For => {}
                     _ => {
                         c.lvar.insert(id);
+                        return;
                     }
                 };
             }

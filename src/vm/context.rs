@@ -324,6 +324,7 @@ impl Context {
         match self.iseq_ref {
             Some(iseq_ref) => {
                 eprintln!("  iseq: {:?}", *iseq_ref);
+                eprintln!("  self: {:#?}", self.self_value);
                 for i in 0..iseq_ref.lvars {
                     let id = i.into();
                     let (k, _) = iseq_ref
@@ -332,7 +333,6 @@ impl Context {
                         .iter()
                         .find(|(_, v)| **v == id)
                         .unwrap();
-                    eprintln!("  self: {:#?}", self.self_value);
                     eprintln!("  lvar({}): {:?} {:#?}", id.as_u32(), k, self[id]);
                 }
             }
@@ -606,8 +606,21 @@ impl ContextRef {
         Ok(context)
     }
 
+    pub fn enumerate_local_vars(&self, vec: &mut Vec<IdentId>) {
+        let mut ctx = Some(*self);
+        while let Some(c) = ctx {
+            c.iseq_ref
+                .unwrap()
+                .lvar
+                .table()
+                .keys()
+                .for_each(|v| vec.push(*v));
+            ctx = c.outer;
+        }
+    }
+
     /// Move a context on the stack to the heap.
-    pub fn move_to_heap(mut self) -> ContextRef {
+    pub(super) fn move_to_heap(mut self) -> ContextRef {
         if self.on_heap() {
             return self;
         }

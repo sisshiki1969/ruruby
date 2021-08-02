@@ -245,7 +245,7 @@ impl RubyError {
             "undefined method `{:?}' for {:?}:{}",
             method,
             receiver,
-            receiver.get_class_name()
+            receiver.get_class().name()
         ))
     }
 

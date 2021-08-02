@@ -32,6 +32,7 @@ pub fn init() -> Module {
     class.add_builtin_module_func("at_exit", at_exit);
     class.add_builtin_module_func("`", command);
     class.add_builtin_module_func("eval", eval);
+    class.add_builtin_module_func("binding", binding);
     class
 }
 /// Built-in function "puts".
@@ -417,23 +418,28 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let mut args = args.clone();
     args.check_args_range(1, 4)?;
     let mut arg0 = args[0];
-    let program = arg0.expect_string("1st arg")?;
-    if args.len() > 1 {
-        if !args[1].is_nil() {
-            return Err(RubyError::argument("Currently, 2nd arg must be Nil."));
-        }
-    }
+    let program = arg0.expect_string("1st arg")?.to_string();
     let path = if args.len() > 2 {
         args[2].expect_string("3rd arg")?
     } else {
         "(eval)"
-    };
+    }
+    .to_string();
 
-    let method = vm.parse_program_eval(path, program.to_string())?;
-    let args = Args::new0();
-    let block = vm.new_block(method);
-    let res = vm.eval_block(&block, &args)?;
+    let context = if args.len() == 1 || args[1].is_nil() {
+        vm.context()
+    } else {
+        args[1].expect_binding("2nd arg must be Binding.")?
+    };
+    let method = vm.parse_program_eval(path, program, context)?;
+    let block = vm.new_block_with_outer(method, context);
+    let res = vm.eval_block(&block, &Args::new0())?;
     Ok(res)
+}
+
+fn binding(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+    vm.move_current_to_heap();
+    Ok(Value::binding(vm.context()))
 }
 
 #[cfg(test)]

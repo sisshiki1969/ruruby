@@ -146,6 +146,12 @@ impl VM {
         self.cur_context.unwrap()
     }
 
+    pub fn move_current_to_heap(&mut self) {
+        let ctx = self.context();
+        let heap_ctx = self.move_outer_to_heap(ctx);
+        self.cur_context = Some(heap_ctx);
+    }
+
     fn get_method_context(&self) -> ContextRef {
         let mut context = self.context();
         while let Some(c) = context.outer {
@@ -302,9 +308,9 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
+        extern_context: ContextRef,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let extern_context = self.context();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
         #[cfg(feature = "perf")]
@@ -469,11 +475,9 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
-                            assert!(self.context().called);
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
-                            //assert!(self.context().called);
                             let val = self.stack_pop();
                             loop {
                                 if self.context().called {
@@ -2017,6 +2021,10 @@ impl VM {
     pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {
         let ctx = self.context();
         Block::Block(id.into(), ctx)
+    }
+
+    pub fn new_block_with_outer(&mut self, id: impl Into<MethodId>, outer: ContextRef) -> Block {
+        Block::Block(id.into(), outer)
     }
 
     pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {

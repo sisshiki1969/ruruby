@@ -280,6 +280,9 @@ impl Value {
                 ObjKind::Exception(err) => {
                     format!("#<{}: {}>", self.get_class_name(), err.message())
                 }
+                ObjKind::Binding(_) => {
+                    format!("#<{}:0x{:x}>", self.get_class_name(), self.id())
+                }
             },
         }
     }
@@ -955,6 +958,23 @@ impl Value {
         }
     }
 
+    pub fn as_binding(&self) -> ContextRef {
+        match &self.rvalue().kind {
+            ObjKind::Binding(ctx) => *ctx,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn expect_binding(&self, error_msg: &str) -> Result<ContextRef, RubyError> {
+        match self.as_rvalue() {
+            Some(oref) => match &oref.kind {
+                ObjKind::Binding(c) => Ok(*c),
+                _ => Err(RubyError::argument(error_msg)),
+            },
+            None => Err(RubyError::argument(error_msg)),
+        }
+    }
+
     pub fn as_mut_time(&mut self) -> &mut TimeInfo {
         match &mut self.rvalue_mut().kind {
             ObjKind::Time(time) => &mut **time,
@@ -1132,6 +1152,10 @@ impl Value {
 
     pub fn exception(exception_class: Module, err: RubyError) -> Self {
         RValue::new_exception(exception_class, err).pack()
+    }
+
+    pub fn binding(ctx: ContextRef) -> Self {
+        RValue::new_binding(ctx).pack()
     }
 }
 

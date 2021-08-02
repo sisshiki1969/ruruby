@@ -30,6 +30,7 @@ pub enum ObjKind {
     Enumerator(Box<FiberContext>),
     Time(Box<TimeInfo>),
     Exception(RubyError),
+    Binding(ContextRef),
 }
 
 impl GC for RValue {
@@ -106,6 +107,7 @@ impl RValue {
                 ObjKind::String(rstr) => ObjKind::String(rstr.clone()),
                 ObjKind::Time(time) => ObjKind::Time(time.clone()),
                 ObjKind::Exception(err) => ObjKind::Exception(err.clone()),
+                ObjKind::Binding(ctx) => ObjKind::Binding(*ctx),
             },
         }
     }
@@ -247,6 +249,10 @@ impl RValue {
         rval.set_var(IdentId::get_id("@message"), message);
         rval.set_var(IdentId::get_id("@backtrace"), backtrace);
         rval
+    }
+
+    pub fn new_binding(ctx: ContextRef) -> Self {
+        RValue::new(BuiltinClass::binding(), ObjKind::Binding(ctx))
     }
 }
 
