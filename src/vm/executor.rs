@@ -94,6 +94,10 @@ impl VM {
             exec_native: false,
         };
 
+        let method = vm.parse_program("", "".to_string()).unwrap();
+        let dummy_info = MethodRepo::get(method);
+        MethodRepo::update(MethodId::default(), dummy_info);
+
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
         match vm.run("(startup)", load_path.to_string()) {
             Ok(val) => globals.set_global_var_by_str("$:", val),
@@ -144,12 +148,6 @@ impl VM {
 
     pub fn context(&self) -> ContextRef {
         self.cur_context.unwrap()
-    }
-
-    pub fn move_current_to_heap(&mut self) {
-        let ctx = self.context();
-        let heap_ctx = self.move_outer_to_heap(ctx);
-        self.cur_context = Some(heap_ctx);
     }
 
     fn get_method_context(&self) -> ContextRef {
@@ -239,7 +237,9 @@ impl VM {
         match self.cur_context {
             Some(c) => {
                 self.cur_context = c.caller;
-                self.ctx_stack.pop(c);
+                if !c.from_heap() {
+                    self.ctx_stack.pop(c)
+                };
             }
             None => {}
         }
@@ -330,6 +330,34 @@ impl VM {
         Ok(method)
     }
 
+    pub fn parse_program_binding(
+        &mut self,
+        path: impl Into<PathBuf>,
+        program: String,
+        context: ContextRef,
+    ) -> Result<MethodId, RubyError> {
+        let path = path.into();
+        let result = Parser::parse_program_binding(program, path, context)?;
+
+        #[cfg(feature = "perf")]
+        self.globals.perf.set_prev_inst(Perf::INVALID);
+
+        let mut codegen = Codegen::new(result.source_info);
+        if let Some(outer) = context.outer {
+            codegen.set_external_context(outer)
+        };
+        let method = codegen.gen_iseq(
+            &mut self.globals,
+            vec![],
+            result.node,
+            result.lvar_collector,
+            true,
+            ContextKind::Eval,
+            vec![],
+        )?;
+        Ok(method)
+    }
+
     pub fn run(&mut self, path: impl Into<PathBuf>, program: String) -> VMResult {
         let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
@@ -364,8 +392,6 @@ impl VM {
         )?;
         let iseq = method.as_iseq();
         context.iseq_ref = Some(iseq);
-        context.adjust_lvar_size();
-        //context.pc = 0;
 
         self.run_context(context)?;
         #[cfg(feature = "perf")]
@@ -1651,6 +1677,13 @@ impl VM {
         Ok(self.stack_pop())
     }
 
+    pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
+        let method = self.parse_program_binding(path, code, ctx)?;
+        ctx.iseq_ref = Some(method.as_iseq());
+        self.run_context(ctx)?;
+        Ok(self.stack_pop())
+    }
+
     /// Invoke the method with given `self_val` and `args`.
     pub fn exec_method(
         &mut self,
@@ -2152,6 +2185,8 @@ impl VM {
     }
 
     /// Create a new execution context for a block.
+    ///
+    /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub fn create_block_context(&mut self, method: MethodId, outer: ContextRef) -> ContextRef {
         assert!(outer.alive());
         let outer = self.move_outer_to_heap(outer);

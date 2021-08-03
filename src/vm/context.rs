@@ -1,4 +1,5 @@
 pub use crate::*;
+use indexmap::IndexSet;
 use std::alloc::{alloc, Layout};
 use std::cell::RefCell;
 use std::ops::{Index, IndexMut, Range};
@@ -127,7 +128,7 @@ impl ContextStack {
                     CtxKind::Dead(ctx) => {
                         assert_eq!(ctx, _context);
                     }
-                    _ => unreachable!("CtxKind::Heap on the stack."),
+                    _ => unreachable!(),
                 }
             }
             (*ptr).lvar_vec = Vec::new();
@@ -168,6 +169,7 @@ pub struct Context {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CtxKind {
+    FromHeap,
     Heap,
     Stack,
     Dead(ContextRef),
@@ -300,7 +302,14 @@ impl Context {
     }
 
     pub fn on_heap(&self) -> bool {
-        self.on_stack == CtxKind::Heap
+        match self.on_stack {
+            CtxKind::FromHeap | CtxKind::Heap => true,
+            _ => false,
+        }
+    }
+
+    pub fn from_heap(&self) -> bool {
+        self.on_stack == CtxKind::FromHeap
     }
 
     pub fn alive(&self) -> bool {
@@ -470,7 +479,7 @@ impl ContextRef {
         outer: Option<ContextRef>,
     ) -> Self {
         let mut context = Context::new(self_value, block, iseq_ref, outer);
-        context.on_stack = CtxKind::Heap;
+        context.on_stack = CtxKind::FromHeap;
         for i in &iseq_ref.lvar.optkw {
             context[*i] = Value::uninitialized();
         }
@@ -606,15 +615,12 @@ impl ContextRef {
         Ok(context)
     }
 
-    pub fn enumerate_local_vars(&self, vec: &mut Vec<IdentId>) {
+    pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
         let mut ctx = Some(*self);
         while let Some(c) = ctx {
-            c.iseq_ref
-                .unwrap()
-                .lvar
-                .table()
-                .keys()
-                .for_each(|v| vec.push(*v));
+            c.iseq_ref.unwrap().lvar.table().keys().for_each(|v| {
+                vec.insert(*v);
+            });
             ctx = c.outer;
         }
     }
@@ -639,13 +645,5 @@ impl ContextRef {
             None => {}
         }
         heap
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn adjust_lvar_size(&mut self) {
-        let len = self.iseq_ref.unwrap().lvars;
-        if LVAR_ARRAY_SIZE != len {
-            //panic!();
-        }
     }
 }

@@ -220,33 +220,21 @@ impl Value {
                     } else {
                         let s = match aref.elements.len() {
                             0 => String::new(),
-                            1 => format!("{}", aref.elements[0].format(level - 1)),
-                            2 => format!(
-                                "{}, {}",
-                                aref.elements[0].format(level - 1),
-                                aref.elements[1].format(level - 1)
-                            ),
-                            3 => format!(
-                                "{}, {}, {}",
-                                aref.elements[0].format(level - 1),
-                                aref.elements[1].format(level - 1),
-                                aref.elements[2].format(level - 1)
-                            ),
-                            4 => format!(
-                                "{}, {}, {}, {}",
-                                aref.elements[0].format(level - 1),
-                                aref.elements[1].format(level - 1),
-                                aref.elements[2].format(level - 1),
-                                aref.elements[3].format(level - 1)
-                            ),
-                            n => format!(
-                                "{}, {}, {}, {}.. {} items",
-                                aref.elements[0].format(level - 1),
-                                aref.elements[1].format(level - 1),
-                                aref.elements[2].format(level - 1),
-                                aref.elements[3].format(level - 1),
-                                n
-                            ),
+                            n if n < 10 => {
+                                let mut s = format!("{}", aref.elements[0].format(level - 1));
+                                for i in 1..n {
+                                    s += &format!(", {}", aref.elements[i].format(level - 1));
+                                }
+                                s
+                            }
+                            n => {
+                                let mut s = format!("{}", aref.elements[0].format(level - 1));
+                                for i in 1..10 {
+                                    s += &format!(", {}", aref.elements[i].format(level - 1));
+                                }
+                                s += &format!(" .. {} items", n);
+                                s
+                            }
                         };
                         format!("[{}]", s)
                     }

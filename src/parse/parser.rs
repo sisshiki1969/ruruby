@@ -208,9 +208,9 @@ impl ParseContext {
             name: Some(name),
         }
     }
-    fn new_block() -> Self {
+    fn new_block(lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
-            lvar: LvarCollector::new(),
+            lvar: lvar_collector.unwrap_or(LvarCollector::new()),
             kind: ContextKind::Block,
             name: None,
         }
@@ -599,12 +599,21 @@ impl<'a> Parser<'a> {
         Self::parse(code, path, Some(extern_context), parse_ctx)
     }
 
+    pub fn parse_program_binding(
+        code: String,
+        path: PathBuf,
+        context: ContextRef,
+    ) -> Result<ParseResult, RubyError> {
+        let parse_ctx = ParseContext::new_block(context.iseq_ref.map(|iseq| iseq.lvar.clone()));
+        Self::parse(code, path, context.outer, parse_ctx)
+    }
+
     pub fn parse_program_eval(
         code: String,
         path: PathBuf,
         extern_context: Option<ContextRef>,
     ) -> Result<ParseResult, RubyError> {
-        Self::parse(code, path, extern_context, ParseContext::new_block())
+        Self::parse(code, path, extern_context, ParseContext::new_block(None))
     }
 
     fn parse(
@@ -621,8 +630,6 @@ impl<'a> Parser<'a> {
                     return Err(RubyError::new_parse_err(err.0, source_info, err.1));
                 }
             };
-        #[cfg(feature = "emit-ast")]
-        eprintln!("{:#?}", node);
         let source_info = SourceInfoRef::from_code(path, code);
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar, source_info);
@@ -815,7 +822,7 @@ impl<'a> Parser<'a> {
             };
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();
-        self.context_stack.push(ParseContext::new_block());
+        self.context_stack.push(ParseContext::new_block(None));
 
         let params = if self.consume_punct(Punct::BitOr)? {
             if self.consume_punct(Punct::BitOr)? {

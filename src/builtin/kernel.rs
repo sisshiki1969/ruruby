@@ -426,20 +426,20 @@ fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     }
     .to_string();
 
-    let context = if args.len() == 1 || args[1].is_nil() {
-        vm.context()
+    if args.len() == 1 || args[1].is_nil() {
+        let context = vm.context();
+        let method = vm.parse_program_eval(path, program, context)?;
+        let block = vm.new_block_with_outer(method, context);
+        vm.eval_block(&block, &Args::new0())
     } else {
-        args[1].expect_binding("2nd arg must be Binding.")?
-    };
-    let method = vm.parse_program_eval(path, program, context)?;
-    let block = vm.new_block_with_outer(method, context);
-    let res = vm.eval_block(&block, &Args::new0())?;
-    Ok(res)
+        let ctx = args[1].expect_binding("2nd arg must be Binding.")?;
+        vm.eval_binding(path, program, ctx)
+    }
 }
 
 fn binding(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
-    vm.move_current_to_heap();
-    Ok(Value::binding(vm.context()))
+    let ctx = vm.create_block_context(MethodId::default(), vm.context());
+    Ok(Value::binding(ctx))
 }
 
 #[cfg(test)]

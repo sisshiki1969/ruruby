@@ -280,7 +280,7 @@ impl<'a> Parser<'a> {
         // Lambda literal
         let loc = self.prev_loc();
         let mut params = vec![];
-        self.context_stack.push(ParseContext::new_block());
+        self.context_stack.push(ParseContext::new_block(None));
         if self.consume_punct(Punct::LParen)? {
             if !self.consume_punct(Punct::RParen)? {
                 loop {
