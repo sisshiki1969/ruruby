@@ -405,23 +405,6 @@ impl VM {
 
         Ok(val)
     }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn dump_context(&self) {
-        eprintln!("---dump");
-        let mut ctx = self.cur_context;
-        let mut i = 0;
-        while let Some(c) = ctx {
-            eprintln!("context[{}]", i);
-            i += 1;
-            c.dump();
-            ctx = c.caller;
-        }
-        for v in &self.exec_stack {
-            eprintln!("stack: {:#?}", *v);
-        }
-        eprintln!("---dump end");
-    }
 }
 
 impl VM {
@@ -2067,8 +2050,7 @@ impl VM {
 
     pub fn create_proc_from_block(&mut self, method: MethodId, outer: ContextRef) -> Value {
         let iseq = method.as_iseq();
-        let outer = self.move_outer_to_heap(outer);
-        Value::procobj(outer.self_value, iseq, outer)
+        Value::procobj(self, outer.self_value, iseq, outer)
     }
 
     /// Create new Lambda object from `block`,
@@ -2078,8 +2060,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let mut iseq = method.as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                let outer = self.move_outer_to_heap(*outer);
-                Ok(Value::procobj(outer.self_value, iseq, outer))
+                Ok(Value::procobj(self, outer.self_value, iseq, *outer))
             }
             Block::Proc(proc) => Ok(proc.dup()),
         }
@@ -2138,7 +2119,7 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
+    pub fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
         if outer.on_heap() {
             return outer;
         }

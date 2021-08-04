@@ -1110,7 +1110,8 @@ impl Value {
         Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
-    pub fn procobj(self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
+    pub fn procobj(vm: &mut VM, self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
+        let outer = vm.move_outer_to_heap(outer);
         RValue::new_proc(ProcInfo::new(self_val, iseq, outer)).pack()
     }
 

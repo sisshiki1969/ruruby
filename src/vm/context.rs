@@ -330,8 +330,7 @@ impl Context {
         self.iseq_ref.unwrap().is_method()
     }
 
-    #[allow(dead_code)]
-    #[cfg(not(tarpaulin_include))]
+    #[cfg(feature = "trace")]
     pub fn dump(&self) {
         eprintln!(
             "{:?} context:{:?} outer:{:?} prev_stack_len:{}",
@@ -592,9 +591,7 @@ impl ContextRef {
                 for (k, v) in keyword.iter() {
                     let id = k.as_symbol().unwrap();
                     match params.keyword.get(&id) {
-                        Some(lvar) => {
-                            context[*lvar] = v;
-                        }
+                        Some(lvar) => context[*lvar] = v,
                         None => {
                             if params.kwrest {
                                 kwrest.insert(HashKey(k), v);
