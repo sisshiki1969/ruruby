@@ -56,7 +56,7 @@ pub enum NodeKind {
     For {
         param: Vec<IdentId>,
         iter: Box<Node>,
-        body: Box<Node>,
+        body: Block,
     },
     While {
         cond: Box<Node>,
@@ -74,11 +74,7 @@ pub enum NodeKind {
         else_: Option<Box<Node>>,
         ensure: Option<Box<Node>>,
     },
-    Proc {
-        params: Vec<FormalParam>,
-        body: Box<Node>,
-        lvar: LvarCollector,
-    },
+    Lambda(Block),
     Break(Box<Node>),
     Next(Box<Node>),
     Return(Box<Node>),
@@ -114,6 +110,23 @@ pub enum NodeKind {
     Defined(Box<Node>),
     Super(Option<ArgList>),
     AliasMethod(Box<Node>, Box<Node>), // (new_method, old_method)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub params: Vec<FormalParam>,
+    pub body: Box<Node>,
+    pub lvar: LvarCollector,
+}
+
+impl Block {
+    pub fn new(params: Vec<FormalParam>, body: Node, lvar: LvarCollector) -> Self {
+        Block {
+            params,
+            body: Box::new(body),
+            lvar,
+        }
+    }
 }
 
 pub type FormalParam = Annot<ParamKind>;
@@ -684,16 +697,9 @@ impl Node {
         Node::new(NodeKind::Super(args.into()), loc)
     }
 
-    pub fn new_proc(params: Vec<FormalParam>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
+    pub fn new_lambda(params: Vec<FormalParam>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
-        Node::new(
-            NodeKind::Proc {
-                params,
-                body: Box::new(body),
-                lvar,
-            },
-            loc,
-        )
+        Node::new(NodeKind::Lambda(Block::new(params, body, lvar)), loc)
     }
 
     pub fn is_splat(&self) -> bool {

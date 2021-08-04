@@ -1,5 +1,5 @@
 use crate::error::{ParseErrKind, RubyError};
-use crate::parse::node::{BinOp, FormalParam, Node, NodeKind, ParamKind, UnOp};
+use crate::parse::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use crate::parse::parser::RescueEntry;
 use crate::vm::vm_inst::*;
 use crate::*;
@@ -703,7 +703,7 @@ impl Codegen {
         let block = match block {
             Some(block) => match block.kind {
                 // Block literal ({})
-                NodeKind::Proc { params, body, lvar } => {
+                NodeKind::Lambda(Block { params, body, lvar }) => {
                     self.loop_stack.push(LoopInfo::new_top());
                     let methodref = self.gen_iseq(
                         globals,
@@ -1324,25 +1324,22 @@ impl Codegen {
                     }
                 }
             }
-            NodeKind::For { param, iter, body } => {
-                let block = match body.kind {
-                    NodeKind::Proc { params, body, lvar } => {
-                        self.loop_stack.push(LoopInfo::new_top());
-                        let methodref = self.gen_iseq(
-                            globals,
-                            params.to_vec(),
-                            *body,
-                            lvar,
-                            true,
-                            ContextKind::Block,
-                            param,
-                        )?;
-                        self.loop_stack.pop().unwrap();
-                        methodref
-                    }
-                    // Block parameter (&block)
-                    _ => unreachable!(),
-                };
+            NodeKind::For {
+                param,
+                iter,
+                body: Block { params, body, lvar },
+            } => {
+                self.loop_stack.push(LoopInfo::new_top());
+                let block = self.gen_iseq(
+                    globals,
+                    params.to_vec(),
+                    *body,
+                    lvar,
+                    true,
+                    ContextKind::Block,
+                    param,
+                )?;
+                self.loop_stack.pop().unwrap();
                 self.gen(globals, iseq, *iter, true)?;
                 self.gen_opt_send(iseq, IdentId::EACH, 0, Some(block), use_value);
             }
@@ -1992,11 +1989,11 @@ impl Codegen {
                     x.escape.push(EscapeInfo::new(src, EscapeKind::Next));
                 }
             }
-            NodeKind::Proc { params, body, lvar } => {
+            NodeKind::Lambda(Block { params, body, lvar }) => {
                 self.loop_stack.push(LoopInfo::new_top());
                 let method = self.gen_iseq(
                     globals,
-                    params.to_vec(),
+                    params,
                     *body,
                     lvar,
                     true,

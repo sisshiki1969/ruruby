@@ -53,6 +53,17 @@ impl Block {
     pub fn is_some(&self) -> bool {
         !self.is_none()
     }
+
+    pub fn create_context(&self, vm: &mut VM) -> ContextRef {
+        match self {
+            Block::Block(method, outer) => vm.create_block_context(*method, *outer),
+            Block::Proc(proc) => {
+                let pinfo = proc.as_proc().unwrap();
+                ContextRef::new_heap(pinfo.self_val, Block::None, pinfo.iseq, Some(pinfo.outer))
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

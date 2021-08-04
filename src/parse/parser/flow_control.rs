@@ -97,14 +97,14 @@ impl<'a> Parser<'a> {
         let lvar = self.context_stack.pop().unwrap().lvar;
 
         let loc = loc.merge(self.prev_loc());
-        let body = Node::new_proc(formal_params, body, lvar, loc);
+        let body = Block::new(formal_params, body, lvar);
 
         self.expect_reserved(Reserved::End)?;
         let node = Node::new(
             NodeKind::For {
                 param: vars,
                 iter: Box::new(iter),
-                body: Box::new(body),
+                body: body,
             },
             loc.merge(self.prev_loc()),
         );

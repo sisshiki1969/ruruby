@@ -315,6 +315,6 @@ impl<'a> Parser<'a> {
             ));
         };
         let lvar = self.context_stack.pop().unwrap().lvar;
-        Ok(Node::new_proc(params, body, lvar, loc))
+        Ok(Node::new_lambda(params, body, lvar, loc))
     }
 }

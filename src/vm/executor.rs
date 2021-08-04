@@ -2190,10 +2190,6 @@ impl VM {
         ContextRef::new_heap(outer.self_value, Block::None, iseq, Some(outer))
     }
 
-    pub fn create_proc_context(&mut self, pinfo: &ProcInfo) -> ContextRef {
-        ContextRef::new_heap(pinfo.self_val, Block::None, pinfo.iseq, Some(pinfo.outer))
-    }
-
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.

@@ -16,14 +16,7 @@ pub fn init() -> Value {
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let context = match args.expect_block()? {
-        Block::Block(method, outer) => vm.create_block_context(*method, *outer),
-        Block::Proc(proc) => {
-            let pinfo = proc.as_proc().unwrap();
-            vm.create_proc_context(pinfo)
-        }
-        _ => unreachable!(),
-    };
+    let context = args.expect_block()?.create_context(vm);
     let val = Value::fiber(vm, context);
     Ok(val)
 }

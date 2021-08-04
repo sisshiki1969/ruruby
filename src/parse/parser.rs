@@ -845,7 +845,7 @@ impl<'a> Parser<'a> {
         };
         let lvar = self.context_stack.pop().unwrap().lvar;
         let loc = loc.merge(self.prev_loc());
-        let node = Node::new_proc(params, body, lvar, loc);
+        let node = Node::new_lambda(params, body, lvar, loc);
         self.suppress_mul_assign = old_suppress_mul_flag;
         Ok(Some(Box::new(node)))
     }
