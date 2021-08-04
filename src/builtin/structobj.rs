@@ -51,11 +51,11 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     builtin::module::set_attr_accessor(class, &attr_args)?;
 
     match &args.block {
-        Block::None => {}
-        method => {
+        None => {}
+        Some(block) => {
             let arg = Args::new1(class.into());
             vm.class_push(class);
-            let res = vm.eval_block_self(method, class, &arg);
+            let res = vm.eval_block_self(block, class, &arg);
             vm.class_pop();
             res?;
         }

@@ -234,7 +234,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => {
             match &args.block {
                 // TODO: If arg[1] exists, Should warn "block supersedes default value argument".
-                Block::None => {
+                None => {
                     if args.len() == 2 {
                         args[1]
                     } else {
@@ -242,7 +242,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                         return Err(RubyError::argument("Key not found."));
                     }
                 }
-                block => vm.eval_block(block, &Args::new1(key))?,
+                Some(block) => vm.eval_block(block, &Args::new1(key))?,
             }
         }
     };

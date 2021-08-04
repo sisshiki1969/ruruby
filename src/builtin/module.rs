@@ -47,11 +47,11 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let module = Module::module();
     let val = module.into();
     match &args.block {
-        Block::None => {}
-        _ => {
+        None => {}
+        Some(block) => {
             let arg = Args::new1(val);
             vm.class_push(module);
-            let res = vm.eval_block_self(&args.block, val, &arg);
+            let res = vm.eval_block_self(block, val, &arg);
             vm.class_pop();
             res?;
         }
@@ -379,7 +379,7 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_val = self_val.into_module();
     match &args.block {
-        Block::None => {
+        None => {
             args.check_args_num(1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string("1st arg")?;
@@ -393,7 +393,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             vm.class_pop();
             res
         }
-        block => {
+        Some(block) => {
             args.check_args_num(0)?;
             // The scopes of constants and class variables are outer of the block.
             vm.class_push(self_val);

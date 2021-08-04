@@ -226,12 +226,12 @@ fn shl(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let block = match &args.block {
-        Block::None => {
+        None => {
             let id = IdentId::get_id("times");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
-        method => method,
+        Some(block) => block,
     };
     let num = self_val.as_integer().unwrap();
     if num < 1 {
@@ -247,12 +247,12 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let block = match &args.block {
-        Block::None => {
+        None => {
             let id = IdentId::get_id("upto");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
-        method => method,
+        Some(block) => block,
     };
     let num = self_val.as_integer().unwrap();
     let max = args[0].expect_integer("Arg")?;
@@ -270,12 +270,12 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn downto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let block = match &args.block {
-        Block::None => {
+        None => {
             let id = IdentId::get_id("downto");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
-        method => method,
+        Some(block) => block,
     };
     let num = self_val.as_integer().unwrap();
     let min = args[0].expect_integer("Arg")?;
@@ -309,12 +309,12 @@ impl Iterator for Step {
 fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
     let block = match &args.block {
-        Block::None => {
+        None => {
             let id = IdentId::get_id("step");
             let val = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(val);
         }
-        block => block,
+        Some(block) => block,
     };
     let start = self_val.as_integer().unwrap();
     let limit = args[0].expect_integer("Limit")?;

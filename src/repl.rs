@@ -45,12 +45,7 @@ pub fn repl_vm() {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
-    let context = ContextRef::new_heap(
-        vm.globals.main_object,
-        Block::None,
-        ISeqRef::default(),
-        None,
-    );
+    let context = ContextRef::new_heap(vm.globals.main_object, None, ISeqRef::default(), None);
     loop {
         let prompt = if script.len() == 0 { ">" } else { "*" };
         let readline = editor.readline(&format!("{}{} ", prompt_body, prompt,));

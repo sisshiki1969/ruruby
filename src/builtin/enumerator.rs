@@ -101,8 +101,8 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     // A new fiber must be constructed for each method call.
     let mut info = vm.dup_enum(eref);
     let block = match &args.block {
-        Block::None => return Ok(self_val),
-        method => method,
+        None => return Ok(self_val),
+        Some(block) => block,
     };
     let mut args = Args::new(1);
     loop {
@@ -125,13 +125,13 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     let block = match &args.block {
-        Block::None => {
+        None => {
             // return Enumerator
             let id = IdentId::MAP;
             let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
-        method => method,
+        Some(block) => block,
     };
     let mut args = Args::new(1);
     let mut ary = vec![];
@@ -154,13 +154,13 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     let block = match &args.block {
-        Block::None => {
+        None => {
             // return Enumerator
             let id = IdentId::get_id("with_index");
             let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
-        method => method,
+        Some(block) => block,
     };
 
     let mut args = Args::new(2);

@@ -831,11 +831,11 @@ impl VM {
         };
 
         let block = if block != 0 {
-            self.new_block(block)
+            Some(self.new_block(block))
         } else if flag & 0b10 == 2 {
             let val = self.stack_pop();
             if val.is_nil() {
-                Block::None
+                None
             } else {
                 // TODO: Support to_proc().
                 if val.as_proc().is_none() {
@@ -845,10 +845,10 @@ impl VM {
                         val.get_class_name()
                     )));
                 }
-                Block::Proc(val)
+                Some(Block::Proc(val))
             }
         } else {
-            Block::None
+            None
         };
         let mut args = self.pop_args_to_args(args_num as usize);
         args.block = block;
@@ -974,12 +974,12 @@ impl VM {
     /// Invoke the block given to the method with `args`.
     fn vm_yield(&mut self, args: &Args) -> Result<VMResKind, RubyError> {
         match &self.get_method_context().block {
-            Block::Block(method, ctx) => {
+            Some(Block::Block(method, ctx)) => {
                 let ctx = ctx.get_current();
                 self.invoke_func(*method, ctx.self_value, Some(ctx), args, true)
             }
-            Block::Proc(proc) => self.invoke_proc(*proc, args),
-            Block::None => return Err(RubyError::local_jump("No block given.")),
+            Some(Block::Proc(proc)) => self.invoke_proc(*proc, args),
+            None => return Err(RubyError::local_jump("No block given.")),
         }
     }
 }

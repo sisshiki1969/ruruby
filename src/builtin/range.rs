@@ -170,25 +170,20 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
-    let method = match &args.block {
-        Block::None => {
+    let block = match &args.block {
+        None => {
             // return Enumerator
             let id = IdentId::EACH;
             let e = vm.create_enumerator(id, self_val, args.clone())?;
             return Ok(e);
         }
-        method => method,
+        Some(block) => block,
     };
     let start = range.start.expect_integer("Start")?;
     let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
 
-    /*for i in start..end {
-        args[0] = Value::integer(i);
-        vm.eval_block_iter(method, &args)?;
-    }*/
-
     let iter = (start..end).map(|i| Value::integer(i));
-    vm.eval_block_each1(method, iter, self_val)
+    vm.eval_block_each1(block, iter, self_val)
 }
 
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {

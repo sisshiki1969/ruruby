@@ -64,7 +64,7 @@ impl ContextStack {
     pub fn push_with(
         &mut self,
         self_value: Value,
-        block: Block,
+        block: Option<Block>,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
     ) -> ContextRef {
@@ -151,7 +151,7 @@ impl ContextStack {
 #[derive(Debug, Clone)]
 pub struct Context {
     pub self_value: Value,
-    pub block: Block,
+    pub block: Option<Block>,
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
     pub iseq_ref: Option<ISeqRef>,
@@ -230,7 +230,9 @@ impl GC for ContextRef {
             }
             None => {}
         }
-        self.block.mark(alloc);
+        if let Some(b) = &self.block {
+            b.mark(alloc)
+        };
         match self.outer {
             Some(c) => c.mark(alloc),
             None => {}
@@ -242,7 +244,7 @@ impl Default for Context {
     fn default() -> Self {
         Context {
             self_value: Value::uninitialized(),
-            block: Block::None,
+            block: None,
             lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
             lvar_vec: Vec::new(),
             iseq_ref: None,
@@ -259,7 +261,12 @@ impl Default for Context {
 }
 
 impl Context {
-    fn new(self_value: Value, block: Block, iseq_ref: ISeqRef, outer: Option<ContextRef>) -> Self {
+    fn new(
+        self_value: Value,
+        block: Option<Block>,
+        iseq_ref: ISeqRef,
+        outer: Option<ContextRef>,
+    ) -> Self {
         let lvar_num = iseq_ref.lvars;
         let lvar_vec = if lvar_num > LVAR_ARRAY_SIZE {
             vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE]
@@ -286,7 +293,7 @@ impl Context {
     fn new_native() -> Self {
         Context {
             self_value: Value::nil(),
-            block: Block::None,
+            block: None,
             lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
             lvar_vec: vec![],
             iseq_ref: None,
@@ -474,7 +481,7 @@ impl Context {
 impl ContextRef {
     pub fn new_heap(
         self_value: Value,
-        block: Block,
+        block: Option<Block>,
         iseq_ref: ISeqRef,
         outer: Option<ContextRef>,
     ) -> Self {
@@ -604,9 +611,9 @@ impl ContextRef {
         };
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match &args.block {
-                Block::Block(method, outer) => vm.create_proc_from_block(*method, *outer),
-                Block::Proc(proc) => *proc,
-                Block::None => Value::nil(),
+                Some(Block::Block(method, outer)) => vm.create_proc_from_block(*method, *outer),
+                Some(Block::Proc(proc)) => *proc,
+                None => Value::nil(),
             };
         }
         Ok(context)

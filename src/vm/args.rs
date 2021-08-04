@@ -8,7 +8,6 @@ const ARG_ARRAY_SIZE: usize = 8;
 pub enum Block {
     Block(MethodId, ContextRef),
     Proc(Value),
-    None,
 }
 
 impl GC for Block {
@@ -18,7 +17,6 @@ impl GC for Block {
                 ctx.get_current().mark(alloc);
             }
             Block::Proc(v) => v.mark(alloc),
-            Block::None => {}
         }
     }
 }
@@ -35,23 +33,14 @@ impl Block {
                     .iseq
             }
             Block::Block(method, _) => method.as_iseq(),
-            Block::None => unreachable!(),
         }
     }
 
-    pub fn from_u32(id: u32, vm: &mut VM) -> Self {
+    pub fn from_u32(id: u32, vm: &mut VM) -> Option<Self> {
         match id {
-            0 => Block::None,
-            i => vm.new_block(i),
+            0 => None,
+            i => Some(vm.new_block(i)),
         }
-    }
-
-    pub fn is_none(&self) -> bool {
-        *self == Block::None
-    }
-
-    pub fn is_some(&self) -> bool {
-        !self.is_none()
     }
 
     pub fn create_context(&self, vm: &mut VM) -> ContextRef {
@@ -59,16 +48,15 @@ impl Block {
             Block::Block(method, outer) => vm.create_block_context(*method, *outer),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                ContextRef::new_heap(pinfo.self_val, Block::None, pinfo.iseq, Some(pinfo.outer))
+                ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, Some(pinfo.outer))
             }
-            _ => unreachable!(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Args {
-    pub block: Block,
+    pub block: Option<Block>,
     pub kw_arg: Value,
     elems: SmallVec<[Value; ARG_ARRAY_SIZE]>,
 }
@@ -79,7 +67,9 @@ impl GC for Args {
             arg.mark(alloc);
         }
         self.kw_arg.mark(alloc);
-        self.block.mark(alloc);
+        if let Some(b) = &self.block {
+            b.mark(alloc)
+        };
     }
 }
 
@@ -87,7 +77,7 @@ impl GC for Args {
 impl Args {
     pub fn new(len: usize) -> Self {
         Args {
-            block: Block::None,
+            block: None,
             kw_arg: Value::nil(),
             elems: smallvec![Value::nil(); len],
         }
@@ -95,7 +85,7 @@ impl Args {
 
     pub fn from_slice(data: &[Value]) -> Self {
         Args {
-            block: Block::None,
+            block: None,
             kw_arg: Value::nil(),
             elems: SmallVec::from_slice(data),
         }
@@ -103,7 +93,7 @@ impl Args {
 
     pub fn new0() -> Self {
         Args {
-            block: Block::None,
+            block: None,
             kw_arg: Value::nil(),
             elems: smallvec![],
         }
@@ -111,7 +101,7 @@ impl Args {
 
     pub fn new0_block(block: Block) -> Self {
         Args {
-            block: block,
+            block: Some(block),
             kw_arg: Value::nil(),
             elems: smallvec![],
         }
@@ -119,7 +109,7 @@ impl Args {
 
     pub fn new1(arg: Value) -> Self {
         Args {
-            block: Block::None,
+            block: None,
             kw_arg: Value::nil(),
             elems: smallvec![arg],
         }
@@ -127,13 +117,13 @@ impl Args {
 
     pub fn new2(arg0: Value, arg1: Value) -> Self {
         Args {
-            block: Block::None,
+            block: None,
             kw_arg: Value::nil(),
             elems: smallvec![arg0, arg1],
         }
     }
 
-    pub fn new3(block: impl Into<Block>, arg0: Value, arg1: Value, arg2: Value) -> Self {
+    pub fn new3(block: impl Into<Option<Block>>, arg0: Value, arg1: Value, arg2: Value) -> Self {
         Args {
             block: block.into(),
             kw_arg: Value::nil(),
@@ -214,14 +204,14 @@ impl Args {
 
     pub fn expect_block(&self) -> Result<&Block, RubyError> {
         match &self.block {
-            Block::None => Err(RubyError::argument("Currently, needs block.")),
-            block => Ok(block),
+            None => Err(RubyError::argument("Currently, needs block.")),
+            Some(block) => Ok(block),
         }
     }
 
     pub fn expect_no_block(&self) -> Result<(), RubyError> {
         match &self.block {
-            Block::None => Ok(()),
+            None => Ok(()),
             _ => Err(RubyError::argument("Currently, block is not supported.")),
         }
     }
@@ -303,7 +293,7 @@ mod tests {
     #[test]
     fn args3() {
         let args = Args::new3(
-            Block::None,
+            None,
             Value::integer(0),
             Value::integer(1),
             Value::integer(2),

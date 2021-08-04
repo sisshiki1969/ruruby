@@ -72,7 +72,7 @@ impl VM {
     pub fn new_stack_context_with(
         &mut self,
         self_value: Value,
-        block: Block,
+        block: Option<Block>,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
     ) -> ContextRef {
@@ -210,7 +210,7 @@ impl VM {
     pub fn temp_push_args(&mut self, args: &Args) {
         self.temp_stack.extend_from_slice(args);
         self.temp_stack.push(args.kw_arg);
-        if let Block::Proc(val) = args.block {
+        if let Some(Block::Proc(val)) = args.block {
             self.temp_stack.push(val)
         }
     }
@@ -1703,7 +1703,6 @@ impl VM {
                 self.exec_func(*method, outer.self_value, Some(outer), args)?;
             }
             Block::Proc(proc) => self.exec_proc(*proc, args)?,
-            _ => unreachable!("Block: None."),
         }
         Ok(self.stack_pop())
     }
@@ -1790,7 +1789,6 @@ impl VM {
                     self.stack_pop();
                 }
             }
-            _ => unreachable!(),
         };
         Ok(default)
     }
@@ -1816,7 +1814,6 @@ impl VM {
                 let context = ContextRef::from(self, self_value, pref.iseq, args, pref.outer)?;
                 self.run_context(context)?
             }
-            _ => unreachable!(),
         }
         Ok(self.stack_pop())
     }
@@ -2065,7 +2062,6 @@ impl VM {
         match block {
             Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
             Block::Proc(proc) => proc.dup(),
-            _ => unreachable!(),
         }
     }
 
@@ -2086,7 +2082,6 @@ impl VM {
                 Ok(Value::procobj(outer.self_value, iseq, outer))
             }
             Block::Proc(proc) => Ok(proc.dup()),
-            _ => unreachable!(),
         }
     }
 
@@ -2108,7 +2103,7 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = self.new_block(METHOD_ENUM);
+        args.block = Some(self.new_block(METHOD_ENUM));
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,
@@ -2187,7 +2182,7 @@ impl VM {
         assert!(outer.alive());
         let outer = self.move_outer_to_heap(outer);
         let iseq = method.as_iseq();
-        ContextRef::new_heap(outer.self_value, Block::None, iseq, Some(outer))
+        ContextRef::new_heap(outer.self_value, None, iseq, Some(outer))
     }
 
     /// Create fancy_regex::Regex from `string`.
