@@ -57,7 +57,7 @@ impl GC for RValue {
                 end.mark(alloc);
             }
             ObjKind::Splat(v) => v.mark(alloc),
-            ObjKind::Proc(pref) => pref.context.mark(alloc),
+            ObjKind::Proc(pref) => pref.mark(alloc),
             ObjKind::Method(mref) => mref.mark(alloc),
             ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
             _ => {}

@@ -604,13 +604,10 @@ impl ContextRef {
         };
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match &args.block {
-                Block::Block(method, ctx) => {
-                    let proc_context = vm.create_block_context(*method, *ctx);
-                    Value::procobj(proc_context)
-                }
+                Block::Block(method, outer) => vm.create_proc_from_block(*method, *outer),
                 Block::Proc(proc) => *proc,
                 Block::None => Value::nil(),
-            }
+            };
         }
         Ok(context)
     }

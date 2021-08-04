@@ -114,7 +114,7 @@ impl PartialEq for Value {
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
-            (ObjKind::Proc(lhs), ObjKind::Proc(rhs)) => lhs.context.id() == rhs.context.id(),
+            (ObjKind::Proc(lhs), ObjKind::Proc(rhs)) => *lhs == *rhs,
             (ObjKind::Invalid, _) => {
                 unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
@@ -257,18 +257,15 @@ impl Value {
                 }
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
                 ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
-                ObjKind::Proc(p) => format!("#<Proc:0x{:x}>", p.context.id()),
                 ObjKind::Method(m) => match m.receiver {
                     Some(_) => format!("#<Method: {:?}#{:?}>", m.owner.name(), m.name),
                     None => format!("#<UnboundMethod: {:?}#{:?}>", m.owner.name(), m.name),
                 },
-                ObjKind::Enumerator(_) => format!("Enumerator"),
-                ObjKind::Fiber(_) => format!("Fiber"),
                 ObjKind::Time(time) => format!("{:?}", time),
                 ObjKind::Exception(err) => {
                     format!("#<{}: {}>", self.get_class_name(), err.message())
                 }
-                ObjKind::Binding(_) => {
+                _ => {
                     format!("#<{}:0x{:x}>", self.get_class_name(), self.id())
                 }
             },
@@ -1113,8 +1110,8 @@ impl Value {
         Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
-    pub fn procobj(context: ContextRef) -> Self {
-        RValue::new_proc(ProcInfo::new(context)).pack()
+    pub fn procobj(self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
+        RValue::new_proc(ProcInfo::new(self_val, iseq, outer)).pack()
     }
 
     pub fn method(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {

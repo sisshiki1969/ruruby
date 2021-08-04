@@ -2,12 +2,25 @@ use crate::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcInfo {
-    pub context: ContextRef,
+    pub self_val: Value,
+    pub iseq: ISeqRef,
+    pub outer: ContextRef,
 }
 
 impl ProcInfo {
-    pub fn new(context: ContextRef) -> Self {
-        ProcInfo { context }
+    pub fn new(self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
+        ProcInfo {
+            self_val,
+            iseq,
+            outer,
+        }
+    }
+}
+
+impl GC for ProcInfo {
+    fn mark(&self, alloc: &mut Allocator) {
+        self.self_val.mark(alloc);
+        self.outer.mark(alloc);
     }
 }
 
@@ -27,7 +40,7 @@ pub fn init() -> Value {
 
 fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
-    let procobj = vm.create_proc(block)?;
+    let procobj = vm.create_proc(block);
     Ok(procobj)
 }
 
@@ -35,7 +48,7 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     let pref = self_val.as_proc().unwrap();
-    let s = if let ISeqKind::Block = pref.context.iseq_ref.unwrap().kind {
+    let s = if let ISeqKind::Block = pref.iseq.kind {
         format!("#<Proc:0x{:016x}>", self_val.id())
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", self_val.id())

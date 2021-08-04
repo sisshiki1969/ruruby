@@ -1773,10 +1773,10 @@ impl VM {
                 };
             }
             Block::Proc(proc) => {
-                let p_ctx = proc.as_proc().unwrap().context;
-                let self_value = p_ctx.self_value;
-                let iseq = p_ctx.iseq_ref.unwrap();
-                let outer = p_ctx.outer;
+                let pinfo = proc.as_proc().unwrap();
+                let self_value = pinfo.self_val;
+                let iseq = pinfo.iseq;
+                let outer = pinfo.outer;
                 for v in iter {
                     args[0] = v;
                     let context = ContextRef::from(self, self_value, iseq, &args, outer)?;
@@ -1813,13 +1813,7 @@ impl VM {
                     Some(proc) => proc,
                     None => return Err(RubyError::internal("Illegal proc.")),
                 };
-                let context = ContextRef::from(
-                    self,
-                    self_value,
-                    pref.context.iseq_ref.unwrap(),
-                    args,
-                    pref.context.outer,
-                )?;
+                let context = ContextRef::from(self, self_value, pref.iseq, args, pref.outer)?;
                 self.run_context(context)?
             }
             _ => unreachable!(),
@@ -1829,17 +1823,15 @@ impl VM {
 
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
     pub fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
-        let ctx = proc.as_proc().unwrap().context;
-        let context =
-            ContextRef::from(self, ctx.self_value, ctx.iseq_ref.unwrap(), args, ctx.outer)?;
+        let pinfo = proc.as_proc().unwrap();
+        let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer)?;
         self.run_context(context)
     }
 
     /// Invoke the Proc object with given `args`.
     pub fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<VMResKind, RubyError> {
-        let ctx = proc.as_proc().unwrap().context;
-        let context =
-            ContextRef::from(self, ctx.self_value, ctx.iseq_ref.unwrap(), args, ctx.outer)?;
+        let pinfo = proc.as_proc().unwrap();
+        let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer)?;
         self.invoke_new_context(context);
         Ok(VMResKind::Invoke)
     }
@@ -2067,27 +2059,31 @@ impl VM {
         Ok(Value::range(start, end, exclude_end))
     }
 
-    /// Create new Proc object from `method`,
+    /// Create new Proc object from `block`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_proc(&mut self, block: &Block) -> VMResult {
+    pub fn create_proc(&mut self, block: &Block) -> Value {
         match block {
-            Block::Block(method, outer) => {
-                let context = self.create_block_context(*method, *outer);
-                Ok(Value::procobj(context))
-            }
-            Block::Proc(proc) => Ok(proc.dup()),
+            Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
+            Block::Proc(proc) => proc.dup(),
             _ => unreachable!(),
         }
     }
 
-    /// Create new Lambda object from `method`,
+    pub fn create_proc_from_block(&mut self, method: MethodId, outer: ContextRef) -> Value {
+        let iseq = method.as_iseq();
+        let outer = self.move_outer_to_heap(outer);
+        Value::procobj(outer.self_value, iseq, outer)
+    }
+
+    /// Create new Lambda object from `block`,
     /// moving outer `Context`s on stack to heap.
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let context = self.create_block_context(*method, *outer);
-                context.iseq_ref.unwrap().kind = ISeqKind::Method(None);
-                Ok(Value::procobj(context))
+                let mut iseq = method.as_iseq();
+                iseq.kind = ISeqKind::Method(None);
+                let outer = self.move_outer_to_heap(*outer);
+                Ok(Value::procobj(outer.self_value, iseq, outer))
             }
             Block::Proc(proc) => Ok(proc.dup()),
             _ => unreachable!(),
@@ -2192,6 +2188,10 @@ impl VM {
         let outer = self.move_outer_to_heap(outer);
         let iseq = method.as_iseq();
         ContextRef::new_heap(outer.self_value, Block::None, iseq, Some(outer))
+    }
+
+    pub fn create_proc_context(&mut self, pinfo: &ProcInfo) -> ContextRef {
+        ContextRef::new_heap(pinfo.self_val, Block::None, pinfo.iseq, Some(pinfo.outer))
     }
 
     /// Create fancy_regex::Regex from `string`.

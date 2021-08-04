@@ -32,11 +32,9 @@ impl Block {
                     .unwrap_or_else(|| {
                         unimplemented!("Block argument must be Proc. given:{:?}", val)
                     })
-                    .context
-                    .iseq_ref
-                    .unwrap()
+                    .iseq
             }
-            Block::Block(methodref, _) => methodref.as_iseq(),
+            Block::Block(method, _) => method.as_iseq(),
             Block::None => unreachable!(),
         }
     }

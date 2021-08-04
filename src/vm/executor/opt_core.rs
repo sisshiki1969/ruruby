@@ -532,7 +532,7 @@ impl VM {
                     Inst::CREATE_PROC => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
                         let block = self.new_block(method);
-                        let proc_obj = self.create_proc(&block)?;
+                        let proc_obj = self.create_proc(&block);
                         self.stack_push(proc_obj);
                         self.pc += 5;
                     }

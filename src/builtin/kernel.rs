@@ -306,15 +306,13 @@ fn sleep(_: &mut VM, _: Value, args: &Args) -> VMResult {
 fn proc(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let block = args.expect_block()?;
-    let procobj = vm.create_proc(block)?;
-    Ok(procobj)
+    Ok(vm.create_proc(block))
 }
 
 fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let block = args.expect_block()?;
-    let procobj = vm.create_lambda(block)?;
-    Ok(procobj)
+    vm.create_lambda(block)
 }
 
 fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
