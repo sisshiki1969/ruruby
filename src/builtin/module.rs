@@ -302,11 +302,11 @@ fn define_writer(mut class: Module, id: IdentId) {
     class.add_method(assign_id, methodref);
 }
 
-fn module_function(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn module_function(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         vm.module_function(true);
     } else {
-        let class = vm.class();
+        let class = self_val.into_module();
         let mut singleton = class.get_singleton_class();
         for arg in args.iter() {
             let name = arg.expect_string_or_symbol("Args")?;

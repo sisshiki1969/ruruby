@@ -322,6 +322,14 @@ impl Value {
         }
     }
 
+    /// If `self` is Class or Module, return `self`.
+    /// Otherwise, return 'real' class of `self`.
+    pub fn get_class_if_object(self) -> Module {
+        match self.if_mod_class() {
+            Some(class) => class,
+            None => self.get_class(),
+        }
+    }
     /// Get reference of RValue from `self`.
     ///
     /// return None if `self` was not a packed value.

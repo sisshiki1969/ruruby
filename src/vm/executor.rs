@@ -261,8 +261,8 @@ impl VM {
     }
 
     /// Get Class of current class context.
-    pub fn class(&self) -> Module {
-        self.class_context.last().unwrap().0
+    pub fn current_class(&self) -> Module {
+        self.context().self_value.get_class_if_object()
     }
 
     pub fn define_mode(&self) -> &DefineMode {
@@ -622,7 +622,7 @@ impl VM {
     /// returning the value.
     /// Returns error if the constant was not defined, or autoload failed.
     fn find_const(&mut self, id: IdentId) -> VMResult {
-        match self.get_env_const(id)? {
+        match self.get_lexical_const(id)? {
             Some(v) => Ok(v),
             None => {
                 let class = self.context().self_value.get_class();
@@ -641,7 +641,7 @@ impl VM {
     /// Search lexical class stack for a constant `id`.
     /// If the constant was found, returns Ok(Some(Value)), and if not, returns Ok(None).
     /// Returns error if an autoload failed.
-    fn get_env_const(&mut self, id: IdentId) -> Result<Option<Value>, RubyError> {
+    fn get_lexical_const(&mut self, id: IdentId) -> Result<Option<Value>, RubyError> {
         let class_defined = &self.get_method_iseq().class_defined;
         match class_defined.len() {
             0 => Ok(None),
@@ -696,7 +696,7 @@ impl VM {
     }
 
     pub fn enumerate_super_const(&self, map: &mut FxHashSet<IdentId>) {
-        let mut class = self.class();
+        let mut class = self.context().self_value.get_class();
         let is_module = class.is_module();
         loop {
             class.enumerate_const().into_iter().for_each(|id| {
@@ -758,10 +758,7 @@ impl VM {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.context().self_value;
-        let org_class = match self_val.if_mod_class() {
-            Some(module) => module,
-            None => self_val.get_class(),
-        };
+        let org_class = self_val.get_class_if_object();
         let mut class = org_class;
         loop {
             if class.set_var_if_exists(id, val) {
@@ -783,10 +780,7 @@ impl VM {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.context().self_value;
-        let mut class = match self_val.if_mod_class() {
-            Some(module) => module,
-            None => self_val.get_class(),
-        };
+        let mut class = self_val.get_class_if_object();
         loop {
             match class.get_var(id) {
                 Some(val) => {
@@ -1553,7 +1547,7 @@ impl VM {
         super_val: Value,
     ) -> Result<Module, RubyError> {
         let mut current_class = if base.is_nil() {
-            self.class()
+            self.current_class()
         } else {
             Module::new(base)
         };
@@ -2006,10 +2000,7 @@ impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
     pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
-        match target_obj.if_mod_class() {
-            Some(mut module) => module.add_method(id, method),
-            None => target_obj.get_class().add_method(id, method),
-        };
+        target_obj.get_class_if_object().add_method(id, method);
     }
 
     /// Define a method on a singleton class of `target_obj`.

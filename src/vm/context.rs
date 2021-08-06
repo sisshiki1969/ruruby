@@ -619,8 +619,11 @@ impl ContextRef {
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
         let mut ctx = Some(*self);
         while let Some(c) = ctx {
-            c.iseq_ref.unwrap().lvar.table().keys().for_each(|v| {
-                vec.insert(*v);
+            let iseq = c.iseq_ref.unwrap();
+            let mut v: Vec<(&IdentId, &LvarId)> = iseq.lvar.table().iter().collect();
+            v.sort_by(|t1, t2| t1.1.cmp(t2.1));
+            v.iter().for_each(|(id, _)| {
+                vec.insert(**id);
             });
             ctx = c.outer;
         }
