@@ -35,7 +35,7 @@ pub fn assert_script(script: &str) {
         Err(err) => {
             err.show_err();
             err.show_loc(0);
-            panic!("Got error: {:?} {:?}", err, vm.globals.acc);
+            panic!("Got error: {:?}", err);
         }
     }
 }

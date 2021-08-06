@@ -433,7 +433,7 @@ impl Value {
             RV::Nil => BuiltinClass::nilclass(),
             RV::True => BuiltinClass::trueclass(),
             RV::False => BuiltinClass::falseclass(),
-            RV::Object(info) => info.search_class(),
+            RV::Object(info) => info.real_class(),
             RV::Uninitialized => unreachable!("[Uninitialized]"),
         }
     }
@@ -450,7 +450,7 @@ impl Value {
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::Splat(_) => "[Splat]".to_string(),
-                _ => oref.class().name(),
+                _ => oref.real_class().name(),
             },
         }
     }

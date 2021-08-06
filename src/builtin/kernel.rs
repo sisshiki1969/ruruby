@@ -85,7 +85,7 @@ fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Built-in function "assert".
 fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
-    if !vm.eval_eq(args[0], args[1])? {
+    if !vm.eval_eq2(args[0], args[1])? {
         let res = format!(
             "Assertion error: Expected: {:?} Actual: {:?}",
             args[0], args[1],
@@ -218,13 +218,13 @@ fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             } else if args[0].is_class() {
                 if args[0].is_exception_class() {
                     let method = args[0].get_method_or_nomethod(IdentId::NEW)?;
-                    vm.globals.acc = vm.eval_method(method, args[0], &Args::new0())?;
+                    vm.globals.error_register = vm.eval_method(method, args[0], &Args::new0())?;
                     Err(RubyError::value())
                 } else {
                     Err(RubyError::typeerr("Exception class/object expected."))
                 }
             } else if args[0].if_exception().is_some() {
-                vm.globals.acc = args[0];
+                vm.globals.error_register = args[0];
                 Err(RubyError::value())
             } else {
                 Err(RubyError::typeerr("Exception class/object expected."))
@@ -246,12 +246,14 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         match vm.eval_block(&block, &arg) {
             Ok(_) => {}
             Err(err) => match &err.kind {
-                RubyErrorKind::BlockReturn => return Ok(vm.globals.acc),
+                RubyErrorKind::BlockReturn => return Ok(vm.globals.error_register),
                 RubyErrorKind::RuntimeErr {
                     kind: RuntimeErrKind::StopIteration,
                     ..
                 } => return Ok(Value::nil()),
-                RubyErrorKind::Exception if vm.globals.acc.get_class_name() == "StopIteration" => {
+                RubyErrorKind::Exception
+                    if vm.globals.error_register.get_class_name() == "StopIteration" =>
+                {
                     return Ok(Value::nil())
                 }
                 _ => return Err(err),

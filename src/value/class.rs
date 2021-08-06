@@ -224,6 +224,10 @@ impl Module {
         self.get_singleton_class()
             .add_builtin_method_by_str(name, func);
     }
+
+    /*pub fn dump(self) {
+        eprintln!("{:?} {:?}", *self, *self.ext);
+    }*/
 }
 
 impl Module {
@@ -375,24 +379,26 @@ impl ClassInfo {
             Some(name) => Some(name.to_owned()),
             None => {
                 if let Some(target) = ext.singleton_for {
+                    let mut no_def_flag = false;
                     let s = format!(
                         "#<Class:{}>",
                         if let Some(c) = target.if_mod_class() {
                             match c.op_name() {
-                                Some(name) => {
-                                    ext.name = Some(name.clone());
-                                    name
+                                Some(name) => name,
+                                None => {
+                                    no_def_flag = true;
+                                    self.default_name()
                                 }
-                                None => self.default_name(),
                             }
                         } else if let Some(o) = target.as_rvalue() {
-                            let name = o.to_s();
-                            ext.name = Some(name.clone());
-                            name
+                            o.to_s()
                         } else {
                             unreachable!()
                         }
                     );
+                    if !no_def_flag {
+                        ext.name = Some(s.clone());
+                    };
                     Some(s)
                 } else {
                     None

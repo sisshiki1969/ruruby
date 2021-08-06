@@ -113,7 +113,7 @@ impl RValue {
     }
 
     pub fn class_name(&self) -> String {
-        self.search_class().name()
+        self.real_class().name()
     }
 
     pub fn inspect(&self) -> Result<String, RubyError> {
@@ -277,7 +277,7 @@ impl RValue {
     }
 
     /// Return a "real" class of the object.
-    pub fn search_class(&self) -> Module {
+    pub fn real_class(&self) -> Module {
         let mut class = self.class;
         loop {
             if class.is_singleton() {

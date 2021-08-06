@@ -449,7 +449,10 @@ impl VM {
         if self.globals.startup_flag {
             let ch = if context.called { "+++" } else { "---" };
             let iseq = context.iseq_ref.unwrap();
-            eprintln!("{}> {:?} {:?}", ch, iseq.method, iseq.kind);
+            eprintln!(
+                "{}> {:?} {:?} {:?}",
+                ch, iseq.method, iseq.kind, iseq.source_info.path
+            );
         }
         #[cfg(feature = "trace")]
         if self.globals.startup_flag {
@@ -484,6 +487,14 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
+                            #[cfg(any(feature = "trace", feature = "trace-func"))]
+                            if self.globals.startup_flag {
+                                eprintln!(
+                                    "<+++ BlockReturn({:?}) stack:{}",
+                                    self.globals.error_register,
+                                    self.stack_len()
+                                );
+                            }
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
@@ -536,7 +547,9 @@ impl VM {
                                 ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
                                 ExceptionType::Continue => {}
                             };
-                            let val = err.to_exception_val().unwrap_or(self.globals.acc);
+                            let val = err
+                                .to_exception_val()
+                                .unwrap_or(self.globals.error_register);
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
                                 eprintln!(":::: Exception({:?})", val);
@@ -611,7 +624,10 @@ impl VM {
     fn find_const(&mut self, id: IdentId) -> VMResult {
         match self.get_env_const(id)? {
             Some(v) => Ok(v),
-            None => self.get_super_const(self.class(), id),
+            None => {
+                let class = self.context().self_value.get_class();
+                self.get_super_const(class, id)
+            }
         }
     }
 
@@ -888,13 +904,14 @@ impl VM {
 }
 
 macro_rules! invoke_op_i {
-    ($vm:ident, $iseq:ident, $lhs:expr, $i:ident, $op:ident, $id:expr) => {
-        let val = if $lhs.is_packed_fixnum() {
-            Value::integer($lhs.as_packed_fixnum().$op($i as i64))
-        } else if $lhs.is_packed_num() {
-            Value::float($lhs.as_packed_flonum().$op($i as f64))
+    ($vm:ident, $iseq:ident, $i:ident, $op:ident, $id:expr) => {
+        let lhs = $vm.stack_pop();
+        let val = if lhs.is_packed_fixnum() {
+            Value::integer(lhs.as_packed_fixnum().$op($i as i64))
+        } else if lhs.is_packed_num() {
+            Value::float(lhs.as_packed_flonum().$op($i as f64))
         } else {
-            return $vm.fallback_for_binop($id, $lhs, Value::integer($i as i64));
+            return $vm.fallback_for_binop($id, lhs, Value::integer($i as i64));
         };
         $vm.stack_push(val);
         return Ok(());
@@ -902,31 +919,37 @@ macro_rules! invoke_op_i {
 }
 
 macro_rules! invoke_op {
-    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
-        let val = if $lhs.is_packed_fixnum() {
-            let lhs = $lhs.as_packed_fixnum();
-            if $rhs.is_packed_fixnum() {
-                let rhs = $rhs.as_packed_fixnum();
+    ($vm:ident, $op:ident, $id:expr) => {
+        let len = $vm.stack_len();
+        let lhs = unsafe { *$vm.exec_stack.get_unchecked(len - 2) };
+        let rhs = unsafe { *$vm.exec_stack.get_unchecked(len - 1) };
+        $vm.set_stack_len(len - 2);
+        let val = if lhs.is_packed_fixnum() {
+            if rhs.is_packed_fixnum() {
+                let lhs = lhs.as_packed_fixnum();
+                let rhs = rhs.as_packed_fixnum();
                 Value::integer(lhs.$op(rhs))
-            } else if $rhs.is_packed_num() {
-                let rhs = $rhs.as_packed_flonum();
+            } else if rhs.is_packed_num() {
+                let lhs = lhs.as_packed_fixnum();
+                let rhs = rhs.as_packed_flonum();
                 Value::float((lhs as f64).$op(rhs))
             } else {
-                return $vm.fallback_for_binop($id, $lhs, $rhs);
+                return $vm.fallback_for_binop($id, lhs, rhs);
             }
-        } else if $lhs.is_packed_num() {
-            let lhs = $lhs.as_packed_flonum();
-            if $rhs.is_packed_fixnum() {
-                let rhs = $rhs.as_packed_fixnum();
+        } else if lhs.is_packed_num() {
+            if rhs.is_packed_fixnum() {
+                let lhs = lhs.as_packed_flonum();
+                let rhs = rhs.as_packed_fixnum();
                 Value::float(lhs.$op(rhs as f64))
-            } else if $rhs.is_packed_num() {
-                let rhs = $rhs.as_packed_flonum();
+            } else if rhs.is_packed_num() {
+                let lhs = lhs.as_packed_flonum();
+                let rhs = rhs.as_packed_flonum();
                 Value::float(lhs.$op(rhs))
             } else {
-                return $vm.fallback_for_binop($id, $lhs, $rhs);
+                return $vm.fallback_for_binop($id, lhs, rhs);
             }
         } else {
-            return $vm.fallback_for_binop($id, $lhs, $rhs);
+            return $vm.fallback_for_binop($id, lhs, rhs);
         };
         $vm.stack_push(val);
         return Ok(())
@@ -934,37 +957,37 @@ macro_rules! invoke_op {
 }
 
 impl VM {
-    fn invoke_add(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    fn invoke_add(&mut self) -> Result<(), RubyError> {
         use std::ops::Add;
-        invoke_op!(self, rhs, lhs, add, IdentId::_ADD);
+        invoke_op!(self, add, IdentId::_ADD);
     }
 
-    fn invoke_addi(&mut self, lhs: Value, i: i32) -> Result<(), RubyError> {
+    fn invoke_addi(&mut self, i: i32) -> Result<(), RubyError> {
         use std::ops::Add;
-        invoke_op_i!(self, iseq, lhs, i, add, IdentId::_ADD);
+        invoke_op_i!(self, iseq, i, add, IdentId::_ADD);
     }
 
-    fn invoke_sub(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    fn invoke_sub(&mut self) -> Result<(), RubyError> {
         use std::ops::Sub;
-        invoke_op!(self, rhs, lhs, sub, IdentId::_SUB);
+        invoke_op!(self, sub, IdentId::_SUB);
     }
 
-    fn invoke_subi(&mut self, lhs: Value, i: i32) -> Result<(), RubyError> {
+    fn invoke_subi(&mut self, i: i32) -> Result<(), RubyError> {
         use std::ops::Sub;
-        invoke_op_i!(self, iseq, lhs, i, sub, IdentId::_SUB);
+        invoke_op_i!(self, iseq, i, sub, IdentId::_SUB);
     }
 
-    fn invoke_mul(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    fn invoke_mul(&mut self) -> Result<(), RubyError> {
         use std::ops::Mul;
-        invoke_op!(self, rhs, lhs, mul, IdentId::_MUL);
+        invoke_op!(self, mul, IdentId::_MUL);
     }
 
-    fn invoke_div(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    fn invoke_div(&mut self) -> Result<(), RubyError> {
         use std::ops::Div;
-        if rhs.is_zero() {
+        if self.exec_stack[self.stack_len() - 1].is_zero() {
             return Err(RubyError::zero_div("Divided by zero."));
         }
-        invoke_op!(self, rhs, lhs, div, IdentId::_DIV);
+        invoke_op!(self, div, IdentId::_DIV);
     }
 
     fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -1110,13 +1133,24 @@ impl VM {
 }
 
 macro_rules! eval_cmp {
-    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {
+    ($vm:ident, $op:ident, $id:expr) => {{
+        let len = $vm.stack_len();
+        let lhs = unsafe { *$vm.exec_stack.get_unchecked(len - 2) };
+        let rhs = unsafe { *$vm.exec_stack.get_unchecked(len - 1) };
+        $vm.set_stack_len(len - 2);
+        eval_cmp2!($vm, rhs, lhs, $op, $id)
+    }};
+}
+
+macro_rules! eval_cmp2 {
+    ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {{
         if $lhs.is_packed_fixnum() {
-            let lhs = $lhs.as_packed_fixnum();
             if $rhs.is_packed_fixnum() {
+                let lhs = $lhs.as_packed_fixnum();
                 let rhs = $rhs.as_packed_fixnum();
                 Ok(lhs.$op(&rhs))
             } else if $rhs.is_packed_num() {
+                let lhs = $lhs.as_packed_fixnum();
                 let rhs = $rhs.as_packed_flonum();
                 Ok((lhs as f64).$op(&rhs))
             } else {
@@ -1124,11 +1158,12 @@ macro_rules! eval_cmp {
                 Ok($vm.stack_pop().to_bool())
             }
         } else if $lhs.is_packed_num() {
-            let lhs = $lhs.as_packed_flonum();
             if $rhs.is_packed_fixnum() {
+                let lhs = $lhs.as_packed_flonum();
                 let rhs = $rhs.as_packed_fixnum();
                 Ok(lhs.$op(&(rhs as f64)))
             } else if $rhs.is_packed_num() {
+                let lhs = $lhs.as_packed_flonum();
                 let rhs = $rhs.as_packed_flonum();
                 Ok(lhs.$op(&rhs))
             } else {
@@ -1147,7 +1182,7 @@ macro_rules! eval_cmp {
                 }
             }
         }
-    };
+    }};
 }
 
 macro_rules! eval_cmp_i {
@@ -1173,7 +1208,7 @@ macro_rules! eval_cmp_i {
 
 impl VM {
     fn invoke_eq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        let b = self.eval_eq(rhs, lhs)?;
+        let b = self.eval_eq2(rhs, lhs)?;
         self.stack_push(Value::bool(b));
         Ok(())
     }
@@ -1228,9 +1263,9 @@ impl VM {
                     let res = RegexpInfo::find_one(self, &*re, &given)?.is_some();
                     Ok(res)
                 }
-                _ => Ok(self.eval_eq(lhs, rhs)?),
+                _ => Ok(self.eval_eq2(lhs, rhs)?),
             },
-            None => Ok(self.eval_eq(lhs, rhs)?),
+            None => Ok(self.eval_eq2(lhs, rhs)?),
         }
     }
 
@@ -1265,7 +1300,7 @@ impl VM {
         false
     }
 
-    pub fn eval_eq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+    pub fn eval_eq2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         if lhs.id() == rhs.id() {
             return Ok(true);
         };
@@ -1297,11 +1332,8 @@ impl VM {
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => Ok(**lhs == **rhs),
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Invalid, _) => {
+            (ObjKind::Invalid, _) | (_, ObjKind::Invalid) => {
                 panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs.rvalue())
-            }
-            (_, ObjKind::Invalid) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs.rvalue())
             }
             (_, _) => {
                 let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {
@@ -1313,21 +1345,36 @@ impl VM {
         }
     }
 
-    fn eval_ne(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        Ok(!self.eval_eq(rhs, lhs)?)
+    fn eval_eq(&mut self) -> Result<bool, RubyError> {
+        let len = self.stack_len();
+        let lhs = unsafe { *self.exec_stack.get_unchecked(len - 2) };
+        let rhs = unsafe { *self.exec_stack.get_unchecked(len - 1) };
+        self.set_stack_len(len - 2);
+        self.eval_eq2(rhs, lhs)
     }
 
-    fn eval_ge(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        eval_cmp!(self, rhs, lhs, ge, IdentId::_GE)
+    fn eval_ne(&mut self) -> Result<bool, RubyError> {
+        Ok(!self.eval_eq()?)
     }
-    pub fn eval_gt(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        eval_cmp!(self, rhs, lhs, gt, IdentId::_GT)
+
+    fn eval_ge(&mut self) -> Result<bool, RubyError> {
+        eval_cmp!(self, ge, IdentId::_GE)
     }
-    fn eval_le(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        eval_cmp!(self, rhs, lhs, le, IdentId::_LE)
+
+    fn eval_gt(&mut self) -> Result<bool, RubyError> {
+        eval_cmp!(self, gt, IdentId::_GT)
     }
-    fn eval_lt(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        eval_cmp!(self, rhs, lhs, lt, IdentId::_LT)
+
+    pub fn eval_gt2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+        eval_cmp2!(self, rhs, lhs, gt, IdentId::_GT)
+    }
+
+    fn eval_le(&mut self) -> Result<bool, RubyError> {
+        eval_cmp!(self, le, IdentId::_LE)
+    }
+
+    fn eval_lt(&mut self) -> Result<bool, RubyError> {
+        eval_cmp!(self, lt, IdentId::_LT)
     }
 
     fn eval_eqi(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
@@ -1723,7 +1770,9 @@ impl VM {
                                 );
                                 match self.run_context(context) {
                                     Err(err) => match err.kind {
-                                        RubyErrorKind::BlockReturn => return Ok(self.globals.acc),
+                                        RubyErrorKind::BlockReturn => {
+                                            return Ok(self.globals.error_register)
+                                        }
                                         _ => return Err(err),
                                     },
                                     Ok(()) => {}
@@ -1742,7 +1791,9 @@ impl VM {
                                 )?;
                                 match self.run_context(context) {
                                     Err(err) => match err.kind {
-                                        RubyErrorKind::BlockReturn => return Ok(self.globals.acc),
+                                        RubyErrorKind::BlockReturn => {
+                                            return Ok(self.globals.error_register)
+                                        }
                                         _ => return Err(err),
                                     },
                                     Ok(()) => {}
@@ -1764,7 +1815,7 @@ impl VM {
                     let context = ContextRef::from(self, self_value, iseq, &args, outer)?;
                     match self.run_context(context) {
                         Err(err) => match err.kind {
-                            RubyErrorKind::BlockReturn => return Ok(self.globals.acc),
+                            RubyErrorKind::BlockReturn => return Ok(self.globals.error_register),
                             _ => return Err(err),
                         },
                         Ok(()) => {}

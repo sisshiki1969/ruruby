@@ -67,37 +67,33 @@ impl VM {
 
             macro_rules! cmp {
                 ($eval:ident) => {{
-                    let rhs = self.stack_pop();
-                    let lhs = self.stack_pop();
                     self.pc += 1;
-                    let val = Value::bool(self.$eval(rhs, lhs)?);
+                    let val = Value::bool(self.$eval()?);
                     self.stack_push(val);
                 }};
             }
 
             macro_rules! cmp_i {
                 ($eval:ident) => {{
-                    let lhs = self.stack_pop();
+                    let idx = self.stack_len() - 1;
+                    let lhs = self.exec_stack[idx];
                     let i = iseq.read32(self.pc + 1) as i32;
                     self.pc += 5;
-                    let val = Value::bool(self.$eval(lhs, i)?);
-                    self.stack_push(val);
+                    self.exec_stack[idx] = Value::bool(self.$eval(lhs, i)?);
                 }};
             }
 
             macro_rules! jmp_cmp {
                 ($eval:ident) => {{
-                    let rhs = self.stack_pop();
-                    let lhs = self.stack_pop();
-                    let b = self.$eval(rhs, lhs)?;
+                    let b = self.$eval()?;
                     self.jmp_cond(iseq, b, 5, 1);
                 }};
             }
 
             macro_rules! jmp_cmp_i {
                 ($eval:ident) => {{
-                    let i = iseq.read32(self.pc + 1) as i32;
                     let lhs = self.stack_pop();
+                    let i = iseq.read32(self.pc + 1) as i32;
                     let b = self.$eval(lhs, i)?;
                     self.jmp_cond(iseq, b, 9, 5);
                 }};
@@ -142,22 +138,14 @@ impl VM {
                         assert!(iseqref.kind == ISeqKind::Block || iseqref.kind == ISeqKind::Other);
                         let val = self.stack_pop();
                         self.unwind_context();
-                        self.globals.acc = val;
+                        self.globals.error_register = val;
                         if called {
                             let err = RubyError::block_return();
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!(
-                                    "<+++ BlockReturn({:?}) stack:{}",
-                                    self.globals.acc,
-                                    self.stack_len()
-                                );
-                            }
                             return Err(err);
                         } else {
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
-                                eprintln!("<--- BlockReturn({:?})", self.globals.acc);
+                                eprintln!("<--- BlockReturn({:?})", self.globals.error_register);
                             }
                             break;
                         }
@@ -171,7 +159,7 @@ impl VM {
                     }
                     Inst::THROW => {
                         // - raise error
-                        self.globals.acc = self.stack_pop();
+                        self.globals.error_register = self.stack_pop();
                         return Err(RubyError::value());
                     }
                     Inst::PUSH_NIL => {
@@ -188,34 +176,26 @@ impl VM {
                         self.pc += 9;
                     }
                     Inst::ADD => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
                         self.pc += 1;
-                        self.invoke_add(rhs, lhs)?;
+                        self.invoke_add()?;
                     }
                     Inst::ADDI => {
-                        let lhs = self.stack_pop();
                         let i = iseq.read32(self.pc + 1) as i32;
                         self.pc += 5;
-                        self.invoke_addi(lhs, i)?;
+                        self.invoke_addi(i)?;
                     }
                     Inst::SUB => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
                         self.pc += 1;
-                        self.invoke_sub(rhs, lhs)?;
+                        self.invoke_sub()?;
                     }
                     Inst::SUBI => {
-                        let lhs = self.stack_pop();
                         let i = iseq.read32(self.pc + 1) as i32;
                         self.pc += 5;
-                        self.invoke_subi(lhs, i)?;
+                        self.invoke_subi(i)?;
                     }
                     Inst::MUL => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
                         self.pc += 1;
-                        self.invoke_mul(rhs, lhs)?;
+                        self.invoke_mul()?;
                     }
                     Inst::POW => {
                         let rhs = self.stack_pop();
@@ -224,10 +204,8 @@ impl VM {
                         self.invoke_exp(rhs, lhs)?;
                     }
                     Inst::DIV => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
                         self.pc += 1;
-                        self.invoke_div(rhs, lhs)?;
+                        self.invoke_div()?;
                     }
                     Inst::REM => {
                         let rhs = self.stack_pop();
