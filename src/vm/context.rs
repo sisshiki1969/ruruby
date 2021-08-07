@@ -620,11 +620,9 @@ impl ContextRef {
         let mut ctx = Some(*self);
         while let Some(c) = ctx {
             let iseq = c.iseq_ref.unwrap();
-            let mut v: Vec<(&IdentId, &LvarId)> = iseq.lvar.table().iter().collect();
-            v.sort_by(|t1, t2| t1.1.cmp(t2.1));
-            v.iter().for_each(|(id, _)| {
-                vec.insert(**id);
-            });
+            for v in iseq.lvar.table() {
+                vec.insert(*v);
+            }
             ctx = c.outer;
         }
     }

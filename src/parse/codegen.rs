@@ -1,6 +1,6 @@
 use crate::error::{ParseErrKind, RubyError};
 use crate::parse::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
-use crate::parse::parser::RescueEntry;
+use crate::parse::parser::{LvarTable, RescueEntry};
 use crate::vm::vm_inst::*;
 use crate::*;
 mod defined;
@@ -67,7 +67,7 @@ enum EscapeKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Context {
-    lvar_info: FxHashMap<IdentId, LvarId>,
+    lvar_info: LvarTable,
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     /// Unsolved destinations of local jumps.
     jump_dest: Vec<LocalJumpDest>,
@@ -173,7 +173,7 @@ impl ContextKind {
 impl Context {
     fn new() -> Self {
         Context {
-            lvar_info: FxHashMap::default(),
+            lvar_info: LvarTable::new(),
             iseq_sourcemap: vec![],
             jump_dest: vec![],
             exception_table: vec![],
@@ -181,7 +181,7 @@ impl Context {
         }
     }
 
-    fn from(lvar_info: FxHashMap<IdentId, LvarId>, kind: ContextKind) -> Self {
+    fn from(lvar_info: LvarTable, kind: ContextKind) -> Self {
         Context {
             lvar_info,
             iseq_sourcemap: vec![],
@@ -325,8 +325,8 @@ impl Codegen {
     fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
         let mut idx = 0u32;
         for (i, context) in self.context_stack.iter().rev().enumerate() {
-            match context.lvar_info.get(&id) {
-                Some(id) => return Some((i as u32, *id)),
+            match context.lvar_info.get_lvarid(id) {
+                Some(id) => return Some((i as u32, id)),
                 None => idx = i as u32,
             };
             if context.kind.is_method() {
@@ -335,8 +335,8 @@ impl Codegen {
         }
         let mut ctx = self.extern_context?;
         loop {
-            if let Some(id) = ctx.iseq_ref.unwrap().lvar.get(&id) {
-                return Some((idx as u32, *id));
+            if let Some(id) = ctx.iseq_ref.unwrap().lvar.table.get_lvarid(id) {
+                return Some((idx as u32, id));
             };
             ctx = ctx.outer?;
             idx += 1;
@@ -750,7 +750,7 @@ impl Codegen {
         let mut iseq = ISeq::new();
 
         self.context_stack
-            .push(Context::from(lvar_collector.clone_table(), kind));
+            .push(Context::from(lvar_collector.table.clone(), kind));
         for (lvar_id, param) in param_list.into_iter().enumerate() {
             match param.kind {
                 ParamKind::Param(id) => {

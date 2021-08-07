@@ -5,7 +5,6 @@ use crate::error::RubyError;
 use crate::id_table::IdentId;
 use crate::util::*;
 use crate::vm::context::{ContextRef, ISeqKind};
-use fxhash::FxHashMap;
 use std::path::PathBuf;
 
 mod define;
@@ -85,20 +84,39 @@ impl From<u32> for LvarId {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
-    id: usize,
     pub optkw: Vec<LvarId>,
-    table: FxHashMap<IdentId, LvarId>,
+    pub table: LvarTable,
     kwrest: Option<LvarId>,
     block: Option<LvarId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct LvarTable(Vec<IdentId>);
+
+impl LvarTable {
+    pub fn new() -> Self {
+        Self(vec![])
+    }
+
+    pub fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
+        self.0.iter().position(|i| *i == id).map(|i| LvarId(i))
+    }
+
+    fn push(&mut self, id: IdentId) {
+        self.0.push(id)
+    }
+
+    fn get(&self, i: usize) -> Option<IdentId> {
+        self.0.get(i).cloned()
+    }
 }
 
 impl LvarCollector {
     /// Create new `LvarCollector`.
     pub fn new() -> Self {
         LvarCollector {
-            id: 0,
             optkw: vec![],
-            table: FxHashMap::default(),
+            table: LvarTable::new(),
             kwrest: None,
             block: None,
         }
@@ -107,13 +125,11 @@ impl LvarCollector {
     /// Check whether `val` exists in `LvarCollector` or not, and return `LvarId` if exists.
     /// If not, add new variable `val` to the `LvarCollector`.
     fn insert(&mut self, val: IdentId) -> LvarId {
-        match self.table.get(&val) {
-            Some(id) => *id,
+        match self.table.get_lvarid(val) {
+            Some(id) => id,
             None => {
-                let id = self.id;
-                self.table.insert(val, LvarId(id));
-                self.id += 1;
-                LvarId(id)
+                self.table.push(val);
+                LvarId(self.len() - 1)
             }
         }
     }
@@ -121,12 +137,13 @@ impl LvarCollector {
     /// Add a new variable `val` to the `LvarCollector`.
     /// Return None if `val` already exists.
     fn insert_new(&mut self, val: IdentId) -> Option<LvarId> {
-        let id = self.id;
-        if self.table.insert(val, LvarId(id)).is_some() {
-            return None;
-        };
-        self.id += 1;
-        Some(LvarId(id))
+        match self.table.get_lvarid(val) {
+            Some(_) => None,
+            None => {
+                self.table.push(val);
+                Some(LvarId(self.len() - 1))
+            }
+        }
     }
 
     fn insert_block_param(&mut self, val: IdentId) -> Option<LvarId> {
@@ -141,17 +158,8 @@ impl LvarCollector {
         Some(lvar)
     }
 
-    pub fn get(&self, val: &IdentId) -> Option<&LvarId> {
-        self.table.get(val)
-    }
-
     pub fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
-        for (k, v) in self.table.iter() {
-            if *v == id {
-                return Some(*k);
-            }
-        }
-        None
+        self.table.get(id.as_usize())
     }
 
     pub fn get_name(&self, id: LvarId) -> String {
@@ -170,19 +178,15 @@ impl LvarCollector {
     }
 
     pub fn len(&self) -> usize {
-        self.table.len()
+        self.table.0.len()
     }
 
-    pub fn table(&self) -> &FxHashMap<IdentId, LvarId> {
-        &self.table
+    pub fn table(&self) -> &Vec<IdentId> {
+        &self.table.0
     }
 
     pub fn block(&self) -> &Option<LvarId> {
         &self.block
-    }
-
-    pub fn clone_table(&self) -> FxHashMap<IdentId, LvarId> {
-        self.table.clone()
     }
 }
 
@@ -363,7 +367,7 @@ impl<'a> Parser<'a> {
     /// If exiets, return true.
     fn is_local_var(&mut self, id: IdentId) -> bool {
         for c in self.context_stack.iter().rev() {
-            if c.lvar.table.contains_key(&id) {
+            if c.lvar.table.get_lvarid(id).is_some() {
                 return true;
             }
             match c.kind {
@@ -377,7 +381,7 @@ impl<'a> Parser<'a> {
         };
         loop {
             let iseq = ctx.iseq_ref.unwrap();
-            if iseq.lvar.table.contains_key(&id) {
+            if iseq.lvar.table.get_lvarid(id).is_some() {
                 return true;
             };
             if let ISeqKind::Method(_) = iseq.kind {
