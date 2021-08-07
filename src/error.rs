@@ -132,6 +132,10 @@ impl RubyError {
     pub fn to_exception_val(self) -> Option<Value> {
         let val = match &self.kind {
             RubyErrorKind::Exception => return None,
+            RubyErrorKind::ParseErr(_) => {
+                let err_class = BuiltinClass::get_toplevel_constant("SyntaxError").into_module();
+                Value::exception(err_class, self)
+            }
             RubyErrorKind::RuntimeErr { kind, .. } => match kind {
                 RuntimeErrKind::Type => {
                     let err_class = BuiltinClass::get_toplevel_constant("TypeError").into_module();
@@ -163,6 +167,15 @@ impl RubyError {
                 }
                 RuntimeErrKind::Name => {
                     let err_class = BuiltinClass::get_toplevel_constant("NameError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::ZeroDivision => {
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("ZeroDivisionError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::Range => {
+                    let err_class = BuiltinClass::get_toplevel_constant("RangeError").into_module();
                     Value::exception(err_class, self)
                 }
                 _ => {
@@ -340,12 +353,23 @@ mod tests {
     #[test]
     fn errors() {
         let program = r#"
-        assert_error { a }
-        assert_error { break }
-        assert_error { Integer("z") }
-        assert_error { 5 * :sym }
-        assert_error { 4 / 0 }
-        assert_error { 500.chr }
+        errors = [
+          ["a", NameError],
+          ["break", SyntaxError],
+          ["Integer('z')", ArgumentError],
+          ["5 * :sym", TypeError],
+          ["4 / 0", ZeroDivisionError],
+          ["500.chr", RangeError],
+        ]
+        errors.each do | code, error|
+          begin
+            eval code
+          rescue SyntaxError, StandardError => err
+            assert error, err.class
+          else
+            raise
+          end
+        end
         "#;
         assert_script(program);
     }

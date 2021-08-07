@@ -104,7 +104,10 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::undefined_op("-", args[0], self_val)),
+            None => Err(RubyError::typeerr(format!(
+                "{:?} can't be coerced into Integer.",
+                args[0]
+            ))),
         },
     }
 }

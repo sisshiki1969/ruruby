@@ -845,7 +845,16 @@ impl VM {
                 new_args[1..len + 1].copy_from_slice(args);
                 self.invoke_func(method, receiver, None, &new_args, use_value)
             }
-            None => Err(RubyError::undefined_method(method_id, receiver)),
+            None => {
+                if receiver == self.context().self_value {
+                    Err(RubyError::name(format!(
+                        "Undefined local variable or method `{:?}' for {:?}",
+                        method_id, receiver
+                    )))
+                } else {
+                    Err(RubyError::undefined_method(method_id, receiver))
+                }
+            }
         }
     }
 

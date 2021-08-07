@@ -84,6 +84,11 @@ mod test {
         assert [:x, :a, :b], b.local_variables
         assert 3, eval "x", b
         assert 2, eval "a", b
+        assert true, b.local_variable_defined?(:x)
+        assert true, b.local_variable_defined?(:a)
+        assert false, b.local_variable_defined?(:z)
+        assert b.eval("self"), b.receiver
+        assert_error { Binding.new }
         "#;
         assert_script(program);
     }

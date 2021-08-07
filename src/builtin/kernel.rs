@@ -327,7 +327,7 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 Some(num) => num,
                 None => {
                     let inspect = vm.val_inspect(args[0])?;
-                    return Err(RubyError::typeerr(format!(
+                    return Err(RubyError::argument(format!(
                         "Invalid value for Integer(): {}",
                         inspect
                     )));

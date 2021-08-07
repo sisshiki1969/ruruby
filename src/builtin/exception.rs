@@ -1,39 +1,56 @@
 use crate::*;
 
 pub fn init() -> Value {
-    let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Exception", class);
-    class.add_builtin_class_method("new", exception_new);
-    class.add_builtin_class_method("exception", exception_new);
-    class.add_builtin_class_method("allocate", exception_allocate);
+    let exception = Module::class_under_object();
+    BuiltinClass::set_toplevel_constant("Exception", exception);
+    exception.add_builtin_class_method("new", exception_new);
+    exception.add_builtin_class_method("exception", exception_new);
+    exception.add_builtin_class_method("allocate", exception_allocate);
 
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", tos);
+    exception.add_builtin_method_by_str("inspect", inspect);
+    exception.add_builtin_method_by_str("to_s", tos);
     builtin::module::set_attr_accessor(
-        class,
+        exception,
         &Args::new2(
             Value::symbol_from_str("message"),
             Value::symbol_from_str("backtrace"),
         ),
     )
     .unwrap();
-    let standard_error = Module::class_under(class);
+    // StandardError.
+    let standard_error = Module::class_under(exception);
     BUILTINS.with(|m| m.borrow_mut().standard = standard_error.into());
     BuiltinClass::set_toplevel_constant("StandardError", standard_error);
-    // Subclasses of StandardError.
+
     let err = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("ArgumentError", err);
+
     let err = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("TypeError", err);
-    let err = Module::class_under(standard_error);
+
+    let name_error = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("NameError", name_error);
+    let err = Module::class_under(name_error);
     BuiltinClass::set_toplevel_constant("NoMethodError", err);
-    let runtime_error = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("StopIteration", runtime_error);
+
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("ZeroDivisionError", err);
+
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("StopIteration", err);
+    // RuntimeError
     let runtime_error = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("RuntimeError", runtime_error);
     let frozen_error = Module::class_under(runtime_error);
     BuiltinClass::set_toplevel_constant("FrozenError", frozen_error);
-    class.into()
+
+    let script_error = Module::class_under(exception);
+    BuiltinClass::set_toplevel_constant("ScriptError", script_error);
+    // Subclasses of ScriptError.
+    let err = Module::class_under(script_error);
+    BuiltinClass::set_toplevel_constant("SyntaxError", err);
+
+    exception.into()
 }
 
 // Class methods
@@ -99,7 +116,8 @@ mod tests {
         assert Exception, StandardError.superclass
         assert StandardError, RuntimeError.superclass
         assert StandardError, ArgumentError.superclass
-        assert StandardError, NoMethodError.superclass
+        assert StandardError, NameError.superclass
+        assert NameError, NoMethodError.superclass
         assert StandardError, TypeError.superclass
         assert RuntimeError, FrozenError.superclass
 
@@ -118,7 +136,7 @@ mod tests {
         assert "#<NoMethodError: foo>", NoMethodError.new("foo").inspect
         assert "NoMethodError", NoMethodError.new.to_s
         assert "foo", NoMethodError.new("foo").to_s
-        assert StandardError.singleton_class, NoMethodError.singleton_class.superclass
+        assert StandardError.singleton_class, NameError.singleton_class.superclass
 
         assert StandardError.singleton_class, TypeError.singleton_class.superclass
         "##;

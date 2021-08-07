@@ -1,19 +1,25 @@
-def f
-  a = 0
-  b = 1
-  k = 1.times do
-    v = 2
-    a = 5
-    break binding
+def assert(expected, actual)
+  if expected != actual
+    puts "expected:#{expected}, actual:#{actual}"
+  else
+    puts "OK #{actual}"
   end
-  b = 10
-  k
 end
 
-b = f
-puts b
-p b.local_variables
-eval "puts a", b
-eval "puts b", b
-eval "puts v", b
-#puts b1.source_location
+errors = [
+  ["a", NameError],
+  ["break", SyntaxError],
+  ["Integer('z')", ArgumentError],
+  ["5 * :sym", TypeError],
+  ["4 / 0", ZeroDivisionError],
+  ["500.chr", RangeError],
+]
+errors.each do | code, error|
+  begin
+    eval code
+  rescue SyntaxError, StandardError => err
+    assert error, err.class
+  else
+    raise
+  end
+end

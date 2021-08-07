@@ -38,7 +38,7 @@ fn alias_method(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn method_missing(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn method_missing(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_min(1)?;
     let method_id = match args[0].as_symbol() {
         Some(id) => id,
@@ -49,7 +49,14 @@ fn method_missing(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             )))
         }
     };
-    Err(RubyError::undefined_method(method_id, self_val))
+    if self_val == vm.context().self_value {
+        Err(RubyError::name(format!(
+            "Undefined local variable or method `{:?}' for {:?}",
+            method_id, self_val
+        )))
+    } else {
+        Err(RubyError::undefined_method(method_id, self_val))
+    }
 }
 
 fn basicobject_id(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
