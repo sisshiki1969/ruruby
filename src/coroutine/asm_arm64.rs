@@ -20,7 +20,6 @@ pub(super) extern "C" fn skip() {
 }
 
 #[naked]
-#[inline(never)]
 pub(super) extern "C" fn invoke_context(
     _fiber: *mut FiberContext,
     _send_val: Value,
@@ -64,7 +63,6 @@ pub(super) extern "C" fn invoke_context(
 }
 
 #[naked]
-#[inline(never)]
 pub(super) extern "C" fn switch_context(
     _fiber: *mut FiberContext,
     _ret_val: Value,
@@ -107,7 +105,6 @@ pub(super) extern "C" fn switch_context(
 }
 
 #[naked]
-#[inline(never)]
 pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut VMResult) -> u64 {
     // x0: _fiber
     // x1: _ret_val
