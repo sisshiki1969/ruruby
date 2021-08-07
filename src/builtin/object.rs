@@ -274,10 +274,7 @@ fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let block = args.expect_block()?;
-    let class = self_val.get_class_for_method();
-    vm.class_push(class);
     let res = vm.eval_block_self(block, self_val, args);
-    vm.class_pop();
     res
 }
 

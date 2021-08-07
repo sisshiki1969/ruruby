@@ -105,6 +105,7 @@ impl ContextStack {
             //(*ptr).prev_stack_len = 0;
             (*ptr).called = false;
             (*ptr).use_value = true;
+            (*ptr).module_function = false;
             self.sp += 1;
             self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)
@@ -165,6 +166,7 @@ pub struct Context {
     pub prev_stack_len: usize,
     pub called: bool,
     pub use_value: bool,
+    pub module_function: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -256,6 +258,7 @@ impl Default for Context {
             prev_stack_len: 0,
             called: false,
             use_value: true,
+            module_function: false,
         }
     }
 }
@@ -287,6 +290,7 @@ impl Context {
             prev_stack_len: 0,
             called: false,
             use_value: true,
+            module_function: false,
         }
     }
 
@@ -305,6 +309,7 @@ impl Context {
             prev_stack_len: 0,
             called: false,
             use_value: true,
+            module_function: false,
         }
     }
 
@@ -340,15 +345,8 @@ impl Context {
             Some(iseq_ref) => {
                 eprintln!("  iseq: {:?}", *iseq_ref);
                 eprintln!("  self: {:#?}", self.self_value);
-                for i in 0..iseq_ref.lvars {
-                    let id = i.into();
-                    let (k, _) = iseq_ref
-                        .lvar
-                        .table()
-                        .iter()
-                        .find(|(_, v)| **v == id)
-                        .unwrap();
-                    eprintln!("  lvar({}): {:?} {:#?}", id.as_u32(), k, self[id]);
+                for (i, id) in iseq_ref.lvar.table().iter().enumerate() {
+                    eprintln!("  lvar({}): {:?} {:#?}", i, *id, self[i]);
                 }
             }
             None => {}

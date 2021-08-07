@@ -19,7 +19,6 @@ pub struct VM {
     // VM state
     cur_context: Option<ContextRef>,
     ctx_stack: ContextStack,
-    class_context: Vec<(Module, DefineMode)>,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     pc: ISeqPos,
@@ -28,19 +27,6 @@ pub struct VM {
 }
 
 pub type VMRef = Ref<VM>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DefineMode {
-    module_function: bool,
-}
-
-impl DefineMode {
-    pub fn default() -> Self {
-        DefineMode {
-            module_function: false,
-        }
-    }
-}
 
 pub enum VMResKind {
     Return,
@@ -56,8 +42,6 @@ impl GC for VM {
             c.mark(alloc);
             ctx = c.caller;
         }
-        //self.exec_context.iter().for_each(|c| c.mark(alloc));
-        self.class_context.iter().for_each(|(v, _)| v.mark(alloc));
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
     }
@@ -84,7 +68,6 @@ impl VM {
     pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            class_context: vec![(BuiltinClass::object(), DefineMode::default())],
             cur_context: None,
             ctx_stack: ContextStack::new(),
             exec_stack: vec![],
@@ -138,7 +121,6 @@ impl VM {
             cur_context: None,
             ctx_stack: ContextStack::new(),
             temp_stack: vec![],
-            class_context: self.class_context.clone(),
             exec_stack: vec![],
             pc: ISeqPos::from(0),
             handle: None,
@@ -248,16 +230,7 @@ impl VM {
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
         self.exec_stack.clear();
-        self.class_context = vec![(BuiltinClass::object(), DefineMode::default())];
         self.cur_context = None;
-    }
-
-    pub fn class_push(&mut self, val: Module) {
-        self.class_context.push((val, DefineMode::default()));
-    }
-
-    pub fn class_pop(&mut self) {
-        self.class_context.pop().unwrap();
     }
 
     /// Get Class of current class context.
@@ -265,16 +238,12 @@ impl VM {
         self.context().self_value.get_class_if_object()
     }
 
-    pub fn define_mode(&self) -> &DefineMode {
-        &self.class_context.last().unwrap().1
+    pub fn is_module_function(&self) -> bool {
+        self.context().module_function
     }
 
-    pub fn define_mode_mut(&mut self) -> &mut DefineMode {
-        &mut self.class_context.last_mut().unwrap().1
-    }
-
-    pub fn module_function(&mut self, flag: bool) {
-        self.define_mode_mut().module_function = flag;
+    pub fn set_module_function(&mut self, flag: bool) {
+        self.context().module_function = flag;
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -361,8 +330,6 @@ impl VM {
     pub fn run(&mut self, path: impl Into<PathBuf>, program: String) -> VMResult {
         let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
-        let mut iseq = method.as_iseq();
-        iseq.class_defined = self.get_class_defined();
         let self_value = self.globals.main_object;
         let val = self.eval_method(method, self_value, &Args::new0())?;
         #[cfg(feature = "perf")]
@@ -600,8 +567,22 @@ impl VM {
     /// At first, this method searches the class list of outer context,
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
-    fn get_class_defined(&self) -> Vec<Module> {
-        self.class_context.iter().map(|(v, _)| *v).collect()
+    fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
+        /*dbg!(self
+        .class_context
+        .iter()
+        .map(|(v, _)| *v)
+        .collect::<Vec<Module>>());*/
+        let mut ctx = self.cur_context;
+        let mut v = vec![new_module.into()];
+        while let Some(c) = ctx {
+            if c.iseq_ref.unwrap().is_classdef() {
+                v.push(Module::new(c.self_value));
+            }
+            ctx = c.caller;
+        }
+        v.reverse();
+        v
     }
 }
 
@@ -643,34 +624,22 @@ impl VM {
     /// Returns error if an autoload failed.
     fn get_lexical_const(&mut self, id: IdentId) -> Result<Option<Value>, RubyError> {
         let class_defined = &self.get_method_iseq().class_defined;
-        match class_defined.len() {
-            0 => Ok(None),
-            1 => self.get_mut_const(class_defined[0], id),
-            _ => {
-                for m in class_defined[1..].iter().rev() {
-                    match self.get_mut_const(*m, id)? {
-                        Some(v) => return Ok(Some(v)),
-                        None => {}
-                    }
-                }
-                Ok(None)
+        for m in class_defined.iter().rev() {
+            match self.get_mut_const(*m, id)? {
+                Some(v) => return Ok(Some(v)),
+                None => {}
             }
         }
+        Ok(None)
     }
 
     fn enumerate_env_const(&self, map: &mut FxHashSet<IdentId>) {
         let class_defined = &self.get_method_iseq().class_defined;
-        match class_defined.len() {
-            0 => {}
-            1 => class_defined[0].enumerate_const().for_each(|id| {
+        class_defined.iter().for_each(|m| {
+            m.enumerate_const().for_each(|id| {
                 map.insert(*id);
-            }),
-            _ => class_defined[1..].iter().for_each(|m| {
-                m.enumerate_const().for_each(|id| {
-                    map.insert(*id);
-                })
-            }),
-        };
+            })
+        });
     }
 
     /// Search class inheritance chain of `class` for a constant `id`, returning the value.

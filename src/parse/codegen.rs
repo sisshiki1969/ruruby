@@ -834,8 +834,8 @@ impl Codegen {
                 eprintln!("-----------------------------------------");
                 eprintln!("[{:?}] {:?}", id, *iseq);
                 eprint!("local var: ");
-                for (k, v) in iseq.lvar.table() {
-                    eprint!("{}:{:?} ", v.as_u32(), k);
+                for (i, id) in iseq.lvar.table().iter().enumerate() {
+                    eprint!("{}:{:?} ", i, id);
                 }
                 eprintln!("");
                 eprintln!("block: {:?}", iseq.lvar.block());

@@ -640,24 +640,20 @@ impl VM {
                         let base = self.stack_pop();
                         let super_val = self.stack_pop();
                         let val = self.define_class(base, id, is_module, super_val)?;
-                        self.class_push(val);
                         let mut iseq = method.as_iseq();
-                        iseq.class_defined = self.get_class_defined();
+                        iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
                         let res = self.exec_method(method, val, &Args::new0());
-                        self.class_pop();
                         try_err!(res);
                     }
                     Inst::DEF_SCLASS => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
                         self.pc += 5;
                         let singleton = self.stack_pop().get_singleton_class()?;
-                        self.class_push(singleton);
                         let mut iseq = method.as_iseq();
-                        iseq.class_defined = self.get_class_defined();
+                        iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
                         let res = self.exec_method(method, singleton, &Args::new0());
-                        self.class_pop();
                         try_err!(res);
                     }
                     Inst::DEF_METHOD => {
@@ -667,7 +663,7 @@ impl VM {
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         self.define_method(self_value, id, method);
-                        if self.define_mode().module_function {
+                        if self.is_module_function() {
                             self.define_singleton_method(self_value, id, method)?;
                         };
                     }
@@ -679,7 +675,7 @@ impl VM {
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let singleton = self.stack_pop();
                         self.define_singleton_method(singleton, id, method)?;
-                        if self.define_mode().module_function {
+                        if self.is_module_function() {
                             self.define_method(singleton, id, method);
                         };
                     }
