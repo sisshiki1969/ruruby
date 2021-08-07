@@ -11,7 +11,7 @@ pub fn repl_vm() {
     {
         println!("VMResult: {}", std::mem::size_of::<VMResult>());
         println!("Context: {}", std::mem::size_of::<Context>());
-        println!("ErrorInfo: {}", std::mem::size_of::<ErrorInfo>());
+        println!("RubyError: {}", std::mem::size_of::<RubyError>());
         //println!("RV: {}", std::mem::size_of::<RV>());
         //println!("Value: {}", std::mem::size_of::<Value>());
         //println!("Option<Value>: {}", std::mem::size_of::<Option<Value>>());

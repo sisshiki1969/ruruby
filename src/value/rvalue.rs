@@ -29,7 +29,7 @@ pub enum ObjKind {
     Fiber(Box<FiberContext>),
     Enumerator(Box<FiberContext>),
     Time(Box<TimeInfo>),
-    Exception(RubyError),
+    Exception(Box<RubyError>),
     Binding(ContextRef),
 }
 
@@ -245,7 +245,7 @@ impl RValue {
             backtrace.push(Value::string(err.get_location(pos)));
         }
         let backtrace = Value::array_from(backtrace);
-        let mut rval = RValue::new(exception_class, ObjKind::Exception(err));
+        let mut rval = RValue::new(exception_class, ObjKind::Exception(Box::new(err)));
         rval.set_var(IdentId::get_id("@message"), message);
         rval.set_var(IdentId::get_id("@backtrace"), backtrace);
         rval

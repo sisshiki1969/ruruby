@@ -1,34 +1,12 @@
 use crate::*;
 
 #[derive(Clone, PartialEq)]
-pub struct RubyError(Box<ErrorInfo>);
-
-impl std::ops::Deref for RubyError {
-    type Target = ErrorInfo;
-    fn deref(&self) -> &ErrorInfo {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for RubyError {
-    fn deref_mut(&mut self) -> &mut ErrorInfo {
-        &mut self.0
-    }
-}
-
-impl std::fmt::Debug for RubyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
-
-#[derive(Clone, PartialEq)]
-pub struct ErrorInfo {
+pub struct RubyError {
     pub kind: RubyErrorKind,
     pub info: Vec<(SourceInfoRef, Loc)>,
 }
 
-impl std::fmt::Debug for ErrorInfo {
+impl std::fmt::Debug for RubyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             RubyErrorKind::RuntimeErr { kind, message } => {
@@ -85,18 +63,18 @@ pub enum RuntimeErrKind {
 
 impl RubyError {
     pub fn new(kind: RubyErrorKind) -> Self {
-        Self(Box::new(ErrorInfo { kind, info: vec![] }))
+        Self { kind, info: vec![] }
     }
 
     pub fn new_with_info(kind: RubyErrorKind, source_info: SourceInfoRef, loc: Loc) -> Self {
-        Self(Box::new(ErrorInfo {
+        Self {
             kind,
             info: vec![(source_info, loc)],
-        }))
+        }
     }
 
     pub fn is_stop_iteration(&self) -> bool {
-        match &self.0.kind {
+        match &self.kind {
             RubyErrorKind::RuntimeErr {
                 kind: RuntimeErrKind::StopIteration,
                 ..
@@ -108,16 +86,16 @@ impl RubyError {
 
 impl RubyError {
     pub fn get_location(&self, pos: usize) -> String {
-        if let Some(info) = self.0.info.get(pos) {
-            info.0.get_location(&self.0.info[pos].1)
+        if let Some(info) = self.info.get(pos) {
+            info.0.get_location(&self.info[pos].1)
         } else {
             "".to_string()
         }
     }
 
     pub fn show_loc(&self, pos: usize) {
-        if let Some(info) = self.0.info.get(pos) {
-            info.0.show_loc(&self.0.info[pos].1);
+        if let Some(info) = self.info.get(pos) {
+            info.0.show_loc(&self.info[pos].1);
         }
     }
 
@@ -133,7 +111,7 @@ impl RubyError {
     }
 
     pub fn message(&self) -> String {
-        match &self.0.kind {
+        match &self.kind {
             RubyErrorKind::ParseErr(e) => match e {
                 ParseErrKind::UnexpectedEOF => "Unexpected EOF".to_string(),
                 ParseErrKind::UnexpectedToken => "Unexpected token".to_string(),
