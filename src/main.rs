@@ -69,6 +69,7 @@ fn main() {
     execute(&mut vm, absolute_path, program.to_string());
 }
 
+#[cfg(not(tarpaulin_include))]
 fn execute(vm: &mut VM, absolute_path: std::path::PathBuf, program: impl Into<String>) {
     let program = program.into();
     match vm.run(absolute_path, program) {
