@@ -1,12 +1,12 @@
 use crate::coroutine::*;
-use crate::loader::*;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use vm_inst::*;
+mod loader;
 mod opt_core;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
@@ -2197,131 +2197,5 @@ impl VM {
     /// Returns RubyError if `string` was invalid regular expression.
     pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_string(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
-    }
-}
-
-impl VM {
-    pub fn canonicalize_path(&mut self, path: &PathBuf) -> Result<PathBuf, RubyError> {
-        match path.canonicalize() {
-            Ok(path) => Ok(path),
-            Err(ioerr) => {
-                let msg = format!("File not found. {:?}\n{}", path, ioerr);
-                Err(RubyError::runtime(msg))
-            }
-        }
-    }
-
-    pub fn load_file(&mut self, path: &PathBuf) -> Result<String, RubyError> {
-        use crate::loader::*;
-        match loader::load_file(path) {
-            Ok(program) => {
-                self.globals.add_source_file(path);
-                Ok(program)
-            }
-            Err(err) => {
-                let err_str = match err {
-                    LoadError::NotFound(msg) => {
-                        format!("No such file or directory -- {:?}\n{}", path, msg)
-                    }
-                    LoadError::CouldntOpen(msg) => {
-                        format!("Cannot open file. '{:?}'\n{}", path, msg)
-                    }
-                };
-                Err(RubyError::load(err_str))
-            }
-        }
-    }
-
-    pub fn require(&mut self, file_name: &str) -> Result<bool, RubyError> {
-        let mut path = PathBuf::from(file_name);
-        if path.is_absolute() {
-            path.set_extension("rb");
-            if path.exists() {
-                return Ok(load_exec(self, &path, false)?);
-            }
-            path.set_extension("so");
-            if path.exists() {
-                eprintln!("Warning: currently, can not require .so file. {:?}", path);
-                return Ok(false);
-            }
-        }
-        let mut load_path = match self.get_global_var(IdentId::get_id("$:")) {
-            Some(path) => path,
-            None => return Ok(false),
-        };
-        let mut ainfo = load_path.expect_array("LOAD_PATH($:)")?;
-        for path in ainfo.iter_mut() {
-            let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
-            base_path.push(file_name);
-            base_path.set_extension("rb");
-            if base_path.exists() {
-                return Ok(load_exec(self, &base_path, false)?);
-            }
-            base_path.set_extension("so");
-            if base_path.exists() {
-                eprintln!(
-                    "Warning: currently, can not require .so file. {:?}",
-                    base_path
-                );
-                return Ok(false);
-            }
-        }
-        Err(RubyError::load(format!(
-            "Can not load such file -- {:?}",
-            file_name
-        )))
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn exec_file(&mut self, file_name: &str) {
-        use crate::loader::*;
-        let path = match Path::new(file_name).canonicalize() {
-            Ok(path) => path,
-            Err(ioerr) => {
-                eprintln!("LoadError: {}\n{}", file_name, ioerr);
-                return;
-            }
-        };
-        let (absolute_path, program) = match loader::load_file(&path) {
-            Ok(program) => (path, program),
-            Err(err) => {
-                match err {
-                    LoadError::NotFound(msg) => eprintln!("LoadError: {}\n{}", file_name, msg),
-                    LoadError::CouldntOpen(msg) => eprintln!("LoadError: {}\n{}", file_name, msg),
-                };
-                return;
-            }
-        };
-        self.globals.add_source_file(&absolute_path);
-        let file = absolute_path
-            .file_name()
-            .map(|x| x.to_string_lossy())
-            .unwrap_or(std::borrow::Cow::Borrowed(""));
-        self.set_global_var(IdentId::get_id("$0"), Value::string(file));
-        #[cfg(feature = "verbose")]
-        eprintln!("load file: {:?}", &absolute_path);
-        self.exec_program(absolute_path, &program);
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn exec_program(&mut self, absolute_path: PathBuf, program: &str) {
-        match self.run(absolute_path, program.to_string()) {
-            Ok(_) => {
-                #[cfg(feature = "perf")]
-                self.globals.perf.print_perf();
-                #[cfg(feature = "perf-method")]
-                {
-                    MethodRepo::print_stats();
-                    self.globals.print_constant_cache_stats();
-                    MethodPerf::print_stats();
-                }
-                #[cfg(feature = "gc-debug")]
-                self.globals.print_mark();
-            }
-            Err(err) => {
-                err.show_err();
-                err.show_all_loc();
-            }
-        };
     }
 }

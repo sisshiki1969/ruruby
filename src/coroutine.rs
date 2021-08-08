@@ -1,10 +1,13 @@
 use crate::*;
+#[cfg(not(tarpaulin_include))]
 #[cfg(all(unix, target_arch = "aarch64"))]
 #[path = "coroutine/asm_arm64.rs"]
 mod asm;
+#[cfg(not(tarpaulin_include))]
 #[cfg(all(windows, target_arch = "x86_64"))]
 #[path = "coroutine/asm_windows_x64.rs"]
 mod asm;
+#[cfg(not(tarpaulin_include))]
 #[cfg(all(unix, target_arch = "x86_64"))]
 #[path = "coroutine/asm_x64.rs"]
 mod asm;

@@ -1,4 +1,3 @@
-use crate::loader::*;
 use crate::*;
 use rand;
 use std::path::PathBuf;
@@ -145,7 +144,7 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         }
     }
     path.set_extension("rb");
-    Ok(Value::bool(load_exec(vm, &path, false)?))
+    Ok(Value::bool(vm.load_exec(&path, false)?))
 }
 
 fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -156,7 +155,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     };
     let path = PathBuf::from(file_name);
     if path.exists() {
-        load_exec(vm, &path, true)?;
+        vm.load_exec(&path, true)?;
         return Ok(Value::true_val());
     }
 
@@ -170,7 +169,7 @@ fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
         let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);
         if base_path.exists() {
-            load_exec(vm, &base_path, true)?;
+            vm.load_exec(&base_path, true)?;
             return Ok(Value::true_val());
         }
     }

@@ -16,7 +16,6 @@ pub mod coroutine;
 pub mod error;
 pub mod globals;
 pub mod id_table;
-pub mod loader;
 pub mod parse;
 pub mod tests;
 pub mod util;
