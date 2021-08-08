@@ -86,7 +86,7 @@ fn execute(vm: &mut VM, absolute_path: std::path::PathBuf, program: impl Into<St
             vm.globals.print_mark();
         }
         Err(err) => {
-            err.show_err();
+            vm.show_err(&err);
             err.show_all_loc();
         }
     };

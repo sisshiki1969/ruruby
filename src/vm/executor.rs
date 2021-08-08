@@ -93,7 +93,7 @@ impl VM {
         ) {
             Ok(_) => {}
             Err(err) => {
-                err.show_err();
+                vm.show_err(&err);
                 err.show_loc(0);
                 panic!("Error occured in executing startup.rb.");
             }
@@ -497,7 +497,6 @@ impl VM {
                             err.info.push((self.source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
-                            //eprintln!();
                             err.show_err();
                             err.show_all_loc();
                             unreachable!("{}", msg);
@@ -548,6 +547,18 @@ impl VM {
 }
 
 impl VM {
+    pub fn show_err(&self, err: &RubyError) {
+        if err.is_exception() {
+            let val = self.globals.error_register;
+            match val.if_exception() {
+                Some(err) => err.show_err(),
+                None => eprintln!("{:?}", val),
+            }
+        } else {
+            err.show_err();
+        }
+    }
+
     fn get_loc(&self) -> Loc {
         let pc = self.context().cur_pc;
         match self.context().iseq_ref {

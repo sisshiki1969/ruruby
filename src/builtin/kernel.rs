@@ -112,7 +112,7 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 _ => {}
             }
             println!("Assert_error OK:");
-            err.show_err();
+            vm.show_err(&err);
             err.show_loc(0);
             Ok(Value::nil())
         }

@@ -983,6 +983,7 @@ impl<'a> Parser<'a> {
         loop {
             let mut loc = self.loc();
             if self.consume_punct(Punct::Range3)? {
+                // Argument delegation
                 if state > Kind::Required {
                     return Err(Self::error_unexpected(
                         loc,

@@ -44,7 +44,7 @@ pub enum ParseErrKind {
     Name(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum RuntimeErrKind {
     Name,
     NoMethod,
@@ -59,6 +59,26 @@ pub enum RuntimeErrKind {
     LoadError,
     Range,
     ZeroDivision,
+}
+
+impl std::fmt::Debug for RuntimeErrKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Name => write!(f, "NameError"),
+            Self::NoMethod => write!(f, "NoMethodError"),
+            Self::Argument => write!(f, "ArgumentError"),
+            Self::Index => write!(f, "IndexError"),
+            Self::Type => write!(f, "TypeError"),
+            Self::Regexp => write!(f, "RegexpError"),
+            Self::Fiber => write!(f, "FiberError"),
+            Self::LocalJump => write!(f, "LocalJumpError"),
+            Self::StopIteration => write!(f, "StopIteration"),
+            Self::Runtime => write!(f, "Runtime"),
+            Self::LoadError => write!(f, "LoadError"),
+            Self::Range => write!(f, "RangeError"),
+            Self::ZeroDivision => write!(f, "ZeroDivisionError"),
+        }
+    }
 }
 
 impl RubyError {
@@ -79,6 +99,13 @@ impl RubyError {
                 kind: RuntimeErrKind::StopIteration,
                 ..
             } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_exception(&self) -> bool {
+        match &self.kind {
+            RubyErrorKind::Exception => true,
             _ => false,
         }
     }
@@ -113,12 +140,12 @@ impl RubyError {
     pub fn message(&self) -> String {
         match &self.kind {
             RubyErrorKind::ParseErr(e) => match e {
-                ParseErrKind::UnexpectedEOF => "Unexpected EOF".to_string(),
-                ParseErrKind::UnexpectedToken => "Unexpected token".to_string(),
-                ParseErrKind::SyntaxError(n) => format!("SyntaxError: {}", n),
-                ParseErrKind::Name(n) => format!("NameError: {}", n),
+                ParseErrKind::UnexpectedEOF => "SyntaxError (Unexpected EOF)".to_string(),
+                ParseErrKind::UnexpectedToken => "SyntaxError (Unexpected token)".to_string(),
+                ParseErrKind::SyntaxError(n) => format!("SyntaxError ({})", n),
+                ParseErrKind::Name(n) => format!("NameError ({})", n),
             },
-            RubyErrorKind::RuntimeErr { message, .. } => message.to_owned(),
+            RubyErrorKind::RuntimeErr { kind, message } => format!("{:?} ({})", kind, message),
             RubyErrorKind::MethodReturn => "LocalJumpError".to_string(),
             RubyErrorKind::BlockReturn => "LocalJumpError".to_string(),
             RubyErrorKind::Exception => "Exception".to_string(),

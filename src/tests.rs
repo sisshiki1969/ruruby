@@ -15,7 +15,7 @@ pub fn eval_script(script: &str, expected: Value) {
             }
         }
         Err(err) => {
-            err.show_err();
+            vm.show_err(&err);
             err.show_loc(0);
             panic!("Got error: {:?}", err);
         }
@@ -33,7 +33,7 @@ pub fn assert_script(script: &str) {
     match res {
         Ok(_) => {}
         Err(err) => {
-            err.show_err();
+            vm.show_err(&err);
             err.show_loc(0);
             panic!("Got error: {:?}", err);
         }
@@ -53,7 +53,7 @@ pub fn assert_error(script: impl Into<String>) {
     match res {
         Ok(_) => panic!("Must be an error:{}", script),
         Err(err) => {
-            err.show_err();
+            vm.show_err(&err);
             err.show_loc(0);
         }
     }
