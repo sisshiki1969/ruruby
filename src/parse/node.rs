@@ -141,6 +141,7 @@ pub enum ParamKind {
     Keyword(IdentId, Option<Box<Node>>), // name, default expr
     KWRest(IdentId),
     Block(IdentId),
+    Delegate,
 }
 
 impl FormalParam {
@@ -177,6 +178,10 @@ impl FormalParam {
 
     pub fn block(id: IdentId, loc: Loc) -> Self {
         FormalParam::new(ParamKind::Block(id), loc)
+    }
+
+    pub fn delegeate(loc: Loc) -> Self {
+        FormalParam::new(ParamKind::Delegate, loc)
     }
 }
 

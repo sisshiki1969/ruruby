@@ -137,6 +137,10 @@ impl ISeq {
         self.push(num as u8);
     }
 
+    pub fn push_argflag(&mut self, flag: ArgFlag) {
+        self.push(flag.to_u8());
+    }
+
     pub fn push16(&mut self, num: u16) {
         self.push(num as u8);
         self.push((num >> 8) as u8);
@@ -172,6 +176,35 @@ impl ISeq {
 
     pub fn gen_push_self(&mut self) {
         self.push(Inst::PUSH_SELF);
+    }
+
+    pub fn gen_pop(&mut self) {
+        self.push(Inst::POP);
+    }
+
+    pub fn gen_dup(&mut self, len: usize) {
+        self.push(Inst::DUP);
+        self.push32(len as u32);
+    }
+
+    pub fn gen_sinkn(&mut self, len: usize) {
+        self.push(Inst::SINKN);
+        self.push32(len as u32);
+    }
+
+    pub fn gen_topn(&mut self, len: usize) {
+        self.push(Inst::TOPN);
+        self.push32(len as u32);
+    }
+
+    pub fn gen_take(&mut self, len: usize) {
+        self.push(Inst::TAKE);
+        self.push32(len as u32);
+    }
+
+    pub fn gen_concat(&mut self, len: usize) {
+        self.push(Inst::CONCAT_STRING);
+        self.push32(len as u32);
     }
 
     pub fn gen_val(&mut self, val: Value) {

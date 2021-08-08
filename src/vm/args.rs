@@ -154,10 +154,7 @@ impl Args {
         if len == num {
             Ok(())
         } else {
-            Err(RubyError::argument(format!(
-                "Wrong number of arguments. (given {}, expected {})",
-                len, num
-            )))
+            Err(RubyError::argument_wrong(len, num))
         }
     }
 
@@ -166,27 +163,7 @@ impl Args {
         if min <= len && len <= max {
             Ok(())
         } else {
-            Err(RubyError::argument(format!(
-                "Wrong number of arguments. (given {}, expected {}..{})",
-                len, min, max
-            )))
-        }
-    }
-
-    pub fn check_args_range_ofs(
-        &self,
-        offset: usize,
-        min: usize,
-        max: usize,
-    ) -> Result<(), RubyError> {
-        let len = self.len() + offset;
-        if min <= len && len <= max {
-            Ok(())
-        } else {
-            Err(RubyError::argument(format!(
-                "Wrong number of arguments. (given {}, expected {}..{})",
-                len, min, max
-            )))
+            Err(RubyError::argument_wrong_range(len, min, max))
         }
     }
 

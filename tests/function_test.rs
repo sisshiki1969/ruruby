@@ -62,6 +62,21 @@ fn func4(b: &mut Bencher) {
 }
 
 #[test]
+fn argument_delegete() {
+    let program = "
+        def f(a,b,...)
+          assert 1, a
+          assert 2, b
+        end
+        f(1,2,3,4)
+        f(1,2,3)
+        f(1,2)
+        assert_error {f(1)}
+    ";
+    assert_script(program);
+}
+
+#[test]
 fn optional_param() {
     let program = "
         def fn(a = 0, b = 1, c = 2) [a,b,c] end

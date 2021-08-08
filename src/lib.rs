@@ -32,7 +32,7 @@ pub use crate::builtin::*;
 pub use crate::error::*;
 pub use crate::globals::*;
 pub use crate::id_table::*;
-pub use crate::parse::codegen::{Codegen, ExceptionEntry};
+pub use crate::parse::codegen::{ArgFlag, Codegen, ExceptionEntry};
 pub use crate::parse::parser::{LvarCollector, LvarId, ParseResult, Parser};
 pub use crate::util::*;
 pub use crate::value::*;

@@ -970,7 +970,7 @@ impl<'a> Parser<'a> {
     fn parse_formal_params(&mut self, terminator: TokenKind) -> Result<Vec<FormalParam>, ParseErr> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
-            Reqired,
+            Required,
             Optional,
             Rest,
             PostReq,
@@ -979,10 +979,19 @@ impl<'a> Parser<'a> {
         }
 
         let mut args = vec![];
-        let mut state = Kind::Reqired;
+        let mut state = Kind::Required;
         loop {
             let mut loc = self.loc();
-            if self.consume_punct(Punct::BitAnd)? {
+            if self.consume_punct(Punct::Range3)? {
+                if state > Kind::Required {
+                    return Err(Self::error_unexpected(
+                        loc,
+                        "parameter delegate is not allowed in ths position.",
+                    ));
+                }
+                args.push(FormalParam::delegeate(self.prev_loc()));
+                break;
+            } else if self.consume_punct(Punct::BitAnd)? {
                 // Block param
                 let id = self.expect_ident()?;
                 loc = loc.merge(self.prev_loc());
@@ -1029,7 +1038,7 @@ impl<'a> Parser<'a> {
                     let default = self.parse_arg()?;
                     loc = loc.merge(self.prev_loc());
                     match state {
-                        Kind::Reqired => state = Kind::Optional,
+                        Kind::Required => state = Kind::Optional,
                         Kind::Optional => {}
                         _ => {
                             return Err(Self::error_unexpected(
@@ -1068,7 +1077,7 @@ impl<'a> Parser<'a> {
                     // Required param
                     loc = self.prev_loc();
                     match state {
-                        Kind::Reqired => {
+                        Kind::Required => {
                             args.push(FormalParam::req_param(id, loc));
                             self.new_param(id, loc)?;
                         }

@@ -18,7 +18,7 @@ pub struct VM {
     pub globals: GlobalsRef,
     // VM state
     cur_context: Option<ContextRef>,
-    ctx_stack: ContextStack,
+    ctx_stack: ContextStore,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     pc: ISeqPos,
@@ -69,7 +69,7 @@ impl VM {
         let mut vm = VM {
             globals,
             cur_context: None,
-            ctx_stack: ContextStack::new(),
+            ctx_stack: ContextStore::new(),
             exec_stack: vec![],
             temp_stack: vec![],
             pc: ISeqPos::from(0),
@@ -119,7 +119,7 @@ impl VM {
         VM {
             globals: self.globals,
             cur_context: None,
-            ctx_stack: ContextStack::new(),
+            ctx_stack: ContextStore::new(),
             temp_stack: vec![],
             exec_stack: vec![],
             pc: ISeqPos::from(0),

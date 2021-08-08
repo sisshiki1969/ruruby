@@ -531,11 +531,17 @@ pub struct ISeqParams {
     pub param_ident: Vec<IdentId>,
     pub req: usize,
     pub opt: usize,
-    pub rest: Option<bool>, // Some(true): exists and bind to param, Some(false): exists but to be discarded, None: not exists.
+    /// A flag for rest parameter.
+    /// * Some(true): exists and bound to a param
+    /// * Some(false): exists but to be discarded
+    /// * None: not exists.
+    pub rest: Option<bool>,
     pub post: usize,
     pub block: bool,
     pub keyword: FxHashMap<IdentId, LvarId>,
     pub kwrest: bool,
+    /// A flag for argument delegation. e.g. f(...)
+    pub delegate: Option<LvarId>,
 }
 
 impl ISeqParams {
@@ -546,6 +552,7 @@ impl ISeqParams {
             && !self.block
             && self.keyword.is_empty()
             && !self.kwrest
+            && self.delegate.is_none()
     }
 }
 
@@ -585,7 +592,7 @@ pub struct ISeqInfo {
     pub lvar: LvarCollector,
     pub lvars: usize,
     /// This flag is set when the following conditions are met.
-    /// - Has no optional/post/rest/block/keyword parameters.
+    /// - Has no optional/post/rest/block/keyword/delegaet parameters.
     pub opt_flag: bool,
     /// The Class where this method was described.
     /// This field is set to None when IseqInfo was created by Codegen.

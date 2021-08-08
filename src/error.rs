@@ -296,6 +296,13 @@ impl RubyError {
         ))
     }
 
+    pub fn argument_wrong_range(given: usize, min: usize, max: usize) -> RubyError {
+        RubyError::argument(format!(
+            "Wrong number of arguments. (given {}, expected {}..{})",
+            given, min, max
+        ))
+    }
+
     pub fn regexp(err: fancy_regex::Error) -> RubyError {
         RubyError::new_runtime_err(
             RuntimeErrKind::Regexp,
