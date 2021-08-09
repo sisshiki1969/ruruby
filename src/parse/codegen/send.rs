@@ -12,16 +12,11 @@ impl Codegen {
         use_value: bool,
     ) -> Result<(), RubyError> {
         let loc = self.loc;
-        let mut no_splat_flag = true;
-        let kwrest_len = arglist.kw_rest.len();
+        let delegate_flag = arglist.delegate;
+        let hash_len = arglist.hash_splat.len();
         // push positional args.
-        let args_len = arglist.args.len();
-        for arg in arglist.args {
-            if let NodeKind::Splat(_) = arg.kind {
-                no_splat_flag = false;
-            };
-            self.gen(globals, iseq, arg, true)?;
-        }
+        let args_num = arglist.args.len();
+        let splat_flag = self.gen_nodes_check_splat(globals, iseq, arglist.args)?;
         // push keword args as a Hash.
         let kw_args_len = arglist.kw_args.len();
         let kw_flag = kw_args_len != 0;
@@ -32,16 +27,16 @@ impl Codegen {
             }
             iseq.gen_create_hash(kw_args_len);
         }
-        // push keyword rest args.
-        for arg in arglist.kw_rest {
+        // push double splat args.
+        for arg in arglist.hash_splat {
             self.gen(globals, iseq, arg, true)?;
         }
         let (block_ref, block_flag) = self.get_block(globals, iseq, arglist.block)?;
         // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
-        if !block_flag && !kw_flag && no_splat_flag && kwrest_len == 0 {
+        if !block_flag && !kw_flag && !splat_flag && hash_len == 0 && !delegate_flag {
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_opt_send_self(iseq, method, args_len, block_ref, use_value);
+                self.emit_opt_send_self(iseq, method, args_num, block_ref, use_value);
                 return Ok(());
             } else {
                 self.gen(globals, iseq, receiver, true)?;
@@ -51,37 +46,24 @@ impl Codegen {
                     iseq.push(Inst::NE);
                     let src = iseq.gen_jmp_if_f();
                     self.loc = loc;
-                    self.emit_opt_send(iseq, method, args_len, block_ref, use_value);
+                    self.emit_opt_send(iseq, method, args_num, block_ref, use_value);
                     iseq.write_disp_from_cur(src);
                     return Ok(());
                 } else {
                     self.loc = loc;
-                    self.emit_opt_send(iseq, method, args_len, block_ref, use_value);
+                    self.emit_opt_send(iseq, method, args_num, block_ref, use_value);
                     return Ok(());
                 }
             }
         } else {
+            let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag);
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_send_self(
-                    iseq,
-                    method,
-                    args_len,
-                    kwrest_len,
-                    ArgFlag::new(kw_flag, block_flag),
-                    block_ref,
-                );
+                self.emit_send_self(iseq, method, args_num, hash_len, flag, block_ref);
             } else {
                 self.gen(globals, iseq, receiver, true)?;
                 self.loc = loc;
-                self.emit_send(
-                    iseq,
-                    method,
-                    args_len,
-                    kwrest_len,
-                    ArgFlag::new(kw_flag, block_flag),
-                    block_ref,
-                );
+                self.emit_send(iseq, method, args_num, hash_len, flag, block_ref);
             }
         };
         if !use_value {

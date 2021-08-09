@@ -25,6 +25,7 @@ pub struct Context {
     pub called: bool,
     pub use_value: bool,
     pub module_function: bool,
+    pub delegate_args: Option<Value>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,6 +94,9 @@ impl GC for ContextRef {
         if let Some(b) = &self.block {
             b.mark(alloc)
         };
+        if let Some(v) = self.delegate_args {
+            v.mark(alloc)
+        }
         match self.outer {
             Some(c) => c.mark(alloc),
             None => {}
@@ -117,6 +121,7 @@ impl Default for Context {
             called: false,
             use_value: true,
             module_function: false,
+            delegate_args: None,
         }
     }
 }
@@ -149,6 +154,7 @@ impl Context {
             called: false,
             use_value: true,
             module_function: false,
+            delegate_args: None,
         }
     }
 
@@ -168,6 +174,7 @@ impl Context {
             called: false,
             use_value: true,
             module_function: false,
+            delegate_args: None,
         }
     }
 
@@ -206,6 +213,7 @@ impl Context {
                 for (i, id) in iseq_ref.lvar.table().iter().enumerate() {
                     eprintln!("  lvar({}): {:?} {:#?}", i, *id, self[i]);
                 }
+                eprintln!("  delegate: {:?}", self.delegate_args);
             }
             None => {}
         }
@@ -289,6 +297,10 @@ impl Context {
                 // fill rest req params with nil.
                 self.fill(req_opt..req_len, Value::nil());
             }
+        }
+        if self.iseq_ref.unwrap().lvar.delegate_param && req_opt < arg_len {
+            let v = args[req_opt..arg_len].to_vec();
+            self.delegate_args = Some(Value::array_from(v));
         }
         if rest_len == 1 {
             let ary = if optreq_len >= arg_len {

@@ -71,21 +71,13 @@ impl ContextStore {
             };
             let ptr = self.sp_ptr;
             let lvar_num = iseq.lvars;
-            let mut lvar_ary = std::ptr::addr_of_mut!((*ptr).lvar_ary) as *mut Value;
             let lvar_vec = std::ptr::addr_of_mut!((*ptr).lvar_vec);
-            //(*ptr).lvar_ary.fill(Value::nil());
             if lvar_num > LVAR_ARRAY_SIZE {
-                for _ in 0..LVAR_ARRAY_SIZE {
-                    std::ptr::write(lvar_ary, Value::nil());
-                    lvar_ary = lvar_ary.add(1);
-                }
+                (*ptr).lvar_ary.fill(Value::nil());
                 let v = vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE];
                 std::ptr::write(lvar_vec, v);
             } else {
-                for _ in 0..lvar_num {
-                    std::ptr::write(lvar_ary, Value::nil());
-                    lvar_ary = lvar_ary.add(1);
-                }
+                (*ptr).lvar_ary[..lvar_num].fill(Value::nil());
                 std::ptr::write(lvar_vec, Vec::new());
             };
             for i in &iseq.lvar.optkw {
@@ -97,12 +89,10 @@ impl ContextStore {
             (*ptr).outer = outer;
             (*ptr).caller = None;
             (*ptr).on_stack = CtxKind::Stack;
-            //(*ptr).cur_pc = ISeqPos::from(0);
-            //(*ptr).prev_pc = ISeqPos::from(0);
-            //(*ptr).prev_stack_len = 0;
             (*ptr).called = false;
             (*ptr).use_value = true;
             (*ptr).module_function = false;
+            (*ptr).delegate_args = None;
             self.sp += 1;
             self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)

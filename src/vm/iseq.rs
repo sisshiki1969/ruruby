@@ -85,6 +85,10 @@ impl ISeq {
         self[pc]
     }
 
+    pub fn read_argflag(&self, pc: ISeqPos) -> ArgFlag {
+        ArgFlag::from_u8(self[pc])
+    }
+
     pub fn read16(&self, pc: ISeqPos) -> u16 {
         u16::from_le_bytes((&self[pc..pc + 2]).try_into().unwrap())
     }

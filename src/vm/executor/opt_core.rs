@@ -772,19 +772,40 @@ impl VM {
     fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<VMResKind, RubyError> {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
-        let kw_rest_num = iseq.read8(self.pc + 7);
-        let flag = iseq.read8(self.pc + 8);
+        let hash_num = iseq.read8(self.pc + 7);
+        let flag = iseq.read_argflag(self.pc + 8);
         let block = iseq.read32(self.pc + 9);
         let cache = iseq.read32(self.pc + 13);
         self.pc += 17;
-        let mut kwrest = vec![];
-        for _ in 0..kw_rest_num {
-            let val = self.stack_pop();
-            kwrest.push(val);
+        let block = self.handle_block_arg(block, flag)?;
+        let keyword = self.handle_hash_args(hash_num, flag)?;
+        let mut args = self.pop_args_to_args(args_num as usize);
+        if flag.has_delegate() {
+            let method_context = self.get_method_context();
+            match method_context.delegate_args {
+                Some(v) => {
+                    let ary = &v.as_array().unwrap().elements;
+                    args.append(ary);
+                }
+                None => {}
+            }
         }
+        args.block = block;
+        args.kw_arg = keyword;
 
-        let keyword = if flag & 0b01 == 1 {
-            let mut val = self.stack_pop();
+        let rec_class = receiver.get_class_for_method();
+        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
+            Some(method) => self.invoke_func(method, receiver, None, &args, true),
+            None => self.invoke_method_missing(method_id, receiver, &args, true),
+        }
+    }
+
+    fn handle_hash_args(&mut self, kw_rest_num: u8, flag: ArgFlag) -> VMResult {
+        let mut stack_len = self.stack_len() - kw_rest_num as usize;
+        let kwrest = &self.exec_stack[stack_len..];
+        let kw = if flag.has_hash_arg() {
+            let mut val = self.exec_stack[stack_len - 1];
+            stack_len -= 1;
             let hash = val.as_mut_hash().unwrap();
             for h in kwrest {
                 for (k, v) in h.expect_hash("Arg")? {
@@ -803,10 +824,14 @@ impl VM {
             }
             Value::hash_from_map(hash)
         };
+        self.set_stack_len(stack_len);
+        Ok(kw)
+    }
 
+    fn handle_block_arg(&mut self, block: u32, flag: ArgFlag) -> Result<Option<Block>, RubyError> {
         let block = if block != 0 {
             Some(self.new_block(block))
-        } else if flag & 0b10 == 2 {
+        } else if flag.has_block_arg() {
             let val = self.stack_pop();
             if val.is_nil() {
                 None
@@ -824,16 +849,7 @@ impl VM {
         } else {
             None
         };
-        let mut args = self.pop_args_to_args(args_num as usize);
-        args.block = block;
-        args.kw_arg = keyword;
-
-        let rec_class = receiver.get_class_for_method();
-        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => return self.invoke_func(method, receiver, None, &args, true),
-            None => {}
-        }
-        self.invoke_method_missing(method_id, receiver, &args, true)
+        Ok(block)
     }
 
     /// continue current context -> true
@@ -845,7 +861,7 @@ impl VM {
         receiver: Value,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
-        // With block and no keyword/block/splat arguments for OPT_SEND.
+        // With block and no keyword/block/splat/delegate arguments for OPT_SEND.
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
         let block = iseq.read32(self.pc + 7);

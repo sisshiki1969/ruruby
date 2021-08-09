@@ -197,15 +197,30 @@ impl Context {
 
 /// Flag for argument info.
 /// 0b0000_0011
-///          ||
-///          |+- 1: keyword args exists. 0: no keyword args,
-///          +-- 1: a block arg exists. 0: no block arg.
-#[derive(Debug, Clone, Copy, PartialEq)]
+///         III
+///         II+- 1: double splat hash args exists. 0: no keyword args,
+///         I+-- 1: a block arg exists. 0: no block arg.
+///         +--- 1: arg delegate exists.
+#[derive(Clone, Copy, PartialEq)]
 pub struct ArgFlag(u8);
 
+impl std::fmt::Debug for ArgFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {}",
+            if self.has_hash_arg() { "HASH" } else { "" },
+            if self.has_block_arg() { "BLKARG" } else { "" },
+            if self.has_delegate() { "DELEG" } else { "" },
+        )
+    }
+}
+
 impl ArgFlag {
-    fn new(kw_flag: bool, block_flag: bool) -> Self {
-        let f = (if kw_flag { 1 } else { 0 }) + (if block_flag { 2 } else { 0 });
+    fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool) -> Self {
+        let f = (if kw_flag { 1 } else { 0 })
+            + (if block_flag { 2 } else { 0 })
+            + (if delegate_flag { 4 } else { 0 });
         Self(f)
     }
 
@@ -215,6 +230,22 @@ impl ArgFlag {
 
     pub fn to_u8(self) -> u8 {
         self.0
+    }
+
+    pub fn from_u8(f: u8) -> Self {
+        Self(f)
+    }
+
+    pub fn has_hash_arg(&self) -> bool {
+        self.0 & 0b001 == 1
+    }
+
+    pub fn has_block_arg(&self) -> bool {
+        self.0 & 0b010 == 2
+    }
+
+    pub fn has_delegate(&self) -> bool {
+        self.0 & 0b100 == 4
     }
 }
 

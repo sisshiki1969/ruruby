@@ -63,7 +63,7 @@ fn func4(b: &mut Bencher) {
 
 #[test]
 fn argument_delegete() {
-    let program = "
+    let program = r##"
         def f(a,b,...)
           assert 1, a
           assert 2, b
@@ -72,7 +72,22 @@ fn argument_delegete() {
         f(1,2,3)
         f(1,2)
         assert_error {f(1)}
-    ";
+
+        assert_error {
+          eval "f(...)"
+        }
+        def g(...)
+          h(...)
+        end
+        def h(*x)
+          x
+        end
+        assert [1,2,3], g(1,2,3)
+        def g(a,b,...)
+            h(...)
+        end
+        assert [3,4], g(1,2,3,4)
+    "##;
     assert_script(program);
 }
 
@@ -98,14 +113,20 @@ fn optional_param() {
 #[test]
 fn parameters() {
     let program = "
-        def fn(a,b,c,d,e=100,f=77,*g,h,i,kw:100,&j)
-            [a,b,c,d,e,f,g,h,i,kw]
+        def fn(a,b,c,d,e=100,f=77,*g,h,i,kw:100, &p)
+            [a,b,c,d,e,f,g,h,i,kw,p&.call]
         end
-    
-        assert([1,2,3,4,5,6,[7,8],9,10,100], fn(1,2,3,4,5,6,7,8,9,10))
-        assert([1,2,3,4,100,77,[],5,6,100], fn(1,2,3,4,5,6))
-        assert([1,2,3,4,100,77,[],5,6,88], fn(1,2,3,4,5,6,kw:88))
-        assert([1,2,3,4,5,6,[7,8],9,10,55], fn(1,2,3,4,5,6,7,8,9,10,kw:55))
+
+        assert([1,2,3,4,5,6,[7,8],9,10,100,nil], fn(1,2,3,4,5,6,7,8,9,10))
+        assert([1,2,3,4,100,77,[],5,6,100,nil], fn(1,2,3,4,5,6))
+        assert([1,2,3,4,100,77,[],5,6,88,nil], fn(1,2,3,4,5,6,kw:88))
+        assert([1,2,3,4,5,6,[7,8],9,10,55,nil], fn(1,2,3,4,5,6,7,8,9,10,kw:55))
+
+        p = Proc.new{42}
+        assert([1,2,3,4,5,6,[7,8],9,10,100,42], fn(1,2,3,4,5,6,7,8,9,10,&p))
+        assert([1,2,3,4,100,77,[],5,6,100,42], fn(1,2,3,4,5,6,&p))
+        assert([1,2,3,4,100,77,[],5,6,88,42], fn(1,2,3,4,5,6,kw:88,&p))
+        assert([1,2,3,4,5,6,[7,8],9,10,55,42], fn(1,2,3,4,5,6,7,8,9,10,kw:55,&p))
         ";
     assert_script(program);
 }
@@ -250,8 +271,8 @@ fn double_splat_argument() {
 
         assert ({}), foo(**{})
         assert ({a:2,b:3}), foo(a:2,b:3)
-        #assert ({a:2,b:3}), foo(**{a:2,b:3})
-        #assert ({a:2,b:3,c:1}), foo(**{a:2,b:3},c:1)
+        assert ({a:2,b:3}), foo(**{a:2,b:3})
+        assert ({a:2,b:3,c:1}), foo(**{a:2,b:3},c:1)
     "#;
     assert_script(program);
 }

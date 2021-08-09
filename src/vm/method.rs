@@ -592,7 +592,7 @@ pub struct ISeqInfo {
     pub lvar: LvarCollector,
     pub lvars: usize,
     /// This flag is set when the following conditions are met.
-    /// - Has no optional/post/rest/block/keyword/delegaet parameters.
+    /// - Has no optional/post/rest/block/keyword/delegate parameters.
     pub opt_flag: bool,
     /// The Class where this method was described.
     /// This field is set to None when IseqInfo was created by Codegen.

@@ -863,4 +863,52 @@ impl<'a> Parser<'a> {
             loc,
         ))
     }
+
+    fn parse_function_args(&mut self, node: Node) -> Result<Node, ParseErr> {
+        let loc = node.loc();
+        if self.consume_punct_no_term(Punct::LParen)? {
+            // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
+            let send_args = self.parse_arglist_block(Punct::RParen)?;
+
+            Ok(Node::new_send(
+                Node::new_self(loc),
+                node.as_method_name().unwrap(),
+                send_args,
+                false,
+                loc,
+            ))
+        } else if let Some(block) = self.parse_block()? {
+            // PRIMARY-METHOD : FNAME BLOCK
+            Ok(Node::new_send(
+                Node::new_self(loc),
+                node.as_method_name().unwrap(),
+                ArgList::with_block(block),
+                false,
+                loc,
+            ))
+        } else {
+            Ok(node)
+        }
+    }
+
+    /// Check whether `lhs` is a local variable or not.
+    fn check_lhs(&mut self, lhs: &Node) -> Result<(), ParseErr> {
+        if let NodeKind::Ident(id) = lhs.kind {
+            self.add_local_var_if_new(id);
+        } else if let NodeKind::Const { .. } = lhs.kind {
+            for c in self.context_stack.iter().rev() {
+                match c.kind {
+                    ContextKind::Class => return Ok(()),
+                    ContextKind::Method => {
+                        return Err(Self::error_unexpected(
+                            lhs.loc(),
+                            "Dynamic constant assignment.",
+                        ))
+                    }
+                    _ => {}
+                }
+            }
+        };
+        Ok(())
+    }
 }

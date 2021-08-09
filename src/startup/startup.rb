@@ -34,6 +34,12 @@ class Thread
   end
 end
 
+class Monitor
+  def try_enter; end
+  def enter; end
+  def synchronize; end
+end
+
 class Delegator
 end
 

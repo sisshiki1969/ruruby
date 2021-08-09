@@ -378,7 +378,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_val = self_val.into_module();
     match &args.block {
         None => {
-            args.check_args_num(1)?;
+            args.check_args_min(1)?;
             let mut arg0 = args[0];
             let program = arg0.expect_string("1st arg")?;
             let method = vm.parse_program_eval("(eval)", program.to_string(), vm.context())?;
@@ -390,7 +390,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             res
         }
         Some(block) => {
-            args.check_args_num(0)?;
+            args.check_args_min(0)?;
             // The scopes of constants and class variables are outer of the block.
             let res = vm.eval_block_self(block, self_val, &Args::new0());
             res

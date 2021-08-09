@@ -470,20 +470,23 @@ impl Inst {
                 iseq.ident_name(pc + 1)
             ),
             Inst::SEND | Inst::SEND_SELF => format!(
-                "{} '{}' {} items",
+                "{} '{}' args:{} kwrest:{} block:{} flag:{:?}",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
-                iseq.read16(pc + 5)
+                iseq.read16(pc + 5),
+                iseq.read8(pc + 7),
+                iseq.read_block(pc + 9),
+                iseq.read_argflag(pc + 8),
             ),
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N => format!(
-                "{} '{}' {} items block:{}",
+                "{} '{}' args:{} block:{}",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5),
                 iseq.read_block(pc + 7),
             ),
             Inst::SUPER => format!(
-                "{} {} items {} block:{}",
+                "{} args:{} block:{} {}",
                 Inst::inst_name(iseq[pc]),
                 iseq.read16(pc + 1),
                 iseq.read_block(pc + 3),

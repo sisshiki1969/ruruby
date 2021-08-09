@@ -7,6 +7,7 @@ use crate::util::*;
 use crate::vm::context::{ContextRef, ISeqKind};
 use std::path::PathBuf;
 
+mod arguments;
 mod define;
 mod flow_control;
 mod literals;
@@ -88,6 +89,7 @@ pub struct LvarCollector {
     pub table: LvarTable,
     kwrest: Option<LvarId>,
     block: Option<LvarId>,
+    pub delegate_param: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -119,6 +121,7 @@ impl LvarCollector {
             table: LvarTable::new(),
             kwrest: None,
             block: None,
+            delegate_param: false,
         }
     }
 
@@ -659,152 +662,19 @@ impl<'a> Parser<'a> {
         Ok((node, lvar, tok))
     }
 
-    fn parse_arglist_block(
-        &mut self,
-        delimiter: impl Into<Option<Punct>>,
-    ) -> Result<ArgList, ParseErr> {
-        let mut arglist = self.parse_argument_list(delimiter)?;
-        match self.parse_block()? {
-            Some(actual_block) => {
-                if arglist.block.is_some() {
-                    return Err(Self::error_unexpected(
-                        actual_block.loc(),
-                        "Both block arg and actual block given.",
-                    ));
+    /// Check whether parameter delegation exists or not in the method def of current context.
+    /// If not, return ParseErr.
+    fn check_delegate(&self) -> Result<(), ParseErr> {
+        for ctx in self.context_stack.iter().rev() {
+            if ctx.kind == ContextKind::Method {
+                if ctx.lvar.delegate_param {
+                    return Ok(());
+                } else {
+                    break;
                 }
-                arglist.block = Some(actual_block);
-            }
-            None => {}
-        };
-        Ok(arglist)
-    }
-
-    /// Check whether `lhs` is a local variable or not.
-    fn check_lhs(&mut self, lhs: &Node) -> Result<(), ParseErr> {
-        if let NodeKind::Ident(id) = lhs.kind {
-            self.add_local_var_if_new(id);
-        } else if let NodeKind::Const { .. } = lhs.kind {
-            for c in self.context_stack.iter().rev() {
-                match c.kind {
-                    ContextKind::Class => return Ok(()),
-                    ContextKind::Method => {
-                        return Err(Self::error_unexpected(
-                            lhs.loc(),
-                            "Dynamic constant assignment.",
-                        ))
-                    }
-                    _ => {}
-                }
-            }
-        };
-        Ok(())
-    }
-
-    fn parse_function_args(&mut self, node: Node) -> Result<Node, ParseErr> {
-        let loc = node.loc();
-        if self.consume_punct_no_term(Punct::LParen)? {
-            // PRIMARY-METHOD : FNAME ( ARGS ) BLOCK?
-            let send_args = self.parse_arglist_block(Punct::RParen)?;
-
-            Ok(Node::new_send(
-                Node::new_self(loc),
-                node.as_method_name().unwrap(),
-                send_args,
-                false,
-                loc,
-            ))
-        } else if let Some(block) = self.parse_block()? {
-            // PRIMARY-METHOD : FNAME BLOCK
-            Ok(Node::new_send(
-                Node::new_self(loc),
-                node.as_method_name().unwrap(),
-                ArgList::with_block(block),
-                false,
-                loc,
-            ))
-        } else {
-            Ok(node)
-        }
-    }
-
-    /// Parse argument list.
-    /// arg, *splat_arg, kw: kw_arg, **double_splat_arg, &block <punct>
-    /// punct: punctuator for terminating arg list. Set None for unparenthesized argument list.
-    fn parse_argument_list(
-        &mut self,
-        punct: impl Into<Option<Punct>>,
-    ) -> Result<ArgList, ParseErr> {
-        let punct = punct.into();
-        let mut arglist = ArgList::default();
-        loop {
-            if let Some(punct) = punct {
-                if self.consume_punct(punct)? {
-                    return Ok(arglist);
-                }
-            }
-            if self.consume_punct(Punct::Mul)? {
-                // splat argument
-                let loc = self.prev_loc();
-                let array = self.parse_arg()?;
-                arglist.args.push(Node::new_splat(array, loc));
-            } else if self.consume_punct(Punct::DMul)? {
-                // double splat argument
-                arglist.kw_rest.push(self.parse_arg()?);
-            } else if self.consume_punct(Punct::BitAnd)? {
-                // block argument
-                arglist.block = Some(Box::new(self.parse_arg()?));
-            } else {
-                let node = self.parse_arg()?;
-                let loc = node.loc();
-                if self.consume_punct(Punct::FatArrow)? {
-                    let value = self.parse_arg()?;
-                    let mut kvp = vec![(node, value)];
-                    if self.consume_punct(Punct::Comma)? {
-                        loop {
-                            let key = self.parse_arg()?;
-                            self.expect_punct(Punct::FatArrow)?;
-                            let value = self.parse_arg()?;
-                            kvp.push((key, value));
-                            if !self.consume_punct(Punct::Comma)? {
-                                break;
-                            }
-                        }
-                    }
-                    if let Some(punct) = punct {
-                        self.consume_punct(punct)?;
-                    };
-                    let node = Node::new_hash(kvp, loc);
-                    arglist.args.push(node);
-                    return Ok(arglist);
-                }
-                match node.kind {
-                    NodeKind::Ident(id, ..) | NodeKind::LocalVar(id) => {
-                        if self.consume_punct_no_term(Punct::Colon)? {
-                            // keyword args
-                            arglist.kw_args.push((id, self.parse_arg()?));
-                        } else {
-                            // positional args
-                            arglist.args.push(node);
-                        }
-                    }
-                    _ => {
-                        arglist.args.push(node);
-                    }
-                }
-            }
-            if !self.consume_punct(Punct::Comma)? {
-                break;
-            } else {
-                let loc = self.prev_loc();
-                if arglist.block.is_some() {
-                    return Err(Self::error_unexpected(loc, "unexpected ','."));
-                };
             }
         }
-        if let Some(punct) = punct {
-            self.consume_punct(punct)?;
-        };
-        Ok(arglist)
+        Err(Parser::error_unexpected(self.prev_loc(), "Unexpected ..."))
     }
 
     /// Parse block.
@@ -991,6 +861,7 @@ impl<'a> Parser<'a> {
                     ));
                 }
                 args.push(FormalParam::delegeate(self.prev_loc()));
+                self.context_mut().lvar.delegate_param = true;
                 break;
             } else if self.consume_punct(Punct::BitAnd)? {
                 // Block param

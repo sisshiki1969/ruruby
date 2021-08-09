@@ -187,10 +187,16 @@ impl FormalParam {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArgList {
+    /// positional args
     pub args: Vec<Node>,
+    /// keyword args
     pub kw_args: Vec<(IdentId, Node)>,
-    pub kw_rest: Vec<Node>,
+    /// double splat args (**{})
+    pub hash_splat: Vec<Node>,
+    /// block
     pub block: Option<Box<Node>>,
+    /// args delegate
+    pub delegate: bool,
 }
 
 impl ArgList {
@@ -198,8 +204,9 @@ impl ArgList {
         ArgList {
             args: vec![],
             kw_args: vec![],
-            kw_rest: vec![],
+            hash_splat: vec![],
             block: None,
+            delegate: false,
         }
     }
 
@@ -207,8 +214,9 @@ impl ArgList {
         ArgList {
             args: args,
             kw_args: vec![],
-            kw_rest: vec![],
+            hash_splat: vec![],
             block: None,
+            delegate: false,
         }
     }
 
@@ -216,8 +224,9 @@ impl ArgList {
         ArgList {
             args: vec![],
             kw_args: vec![],
-            kw_rest: vec![],
+            hash_splat: vec![],
             block: Some(block),
+            delegate: false,
         }
     }
 }

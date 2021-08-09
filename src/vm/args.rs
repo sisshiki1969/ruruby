@@ -25,7 +25,6 @@ impl Block {
     pub fn to_iseq(&self) -> ISeqRef {
         match self {
             Block::Proc(val) => {
-                //let val = *val;
                 val.as_proc()
                     .unwrap_or_else(|| {
                         unimplemented!("Block argument must be Proc. given:{:?}", val)
