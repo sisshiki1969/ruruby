@@ -420,9 +420,9 @@ impl VM {
         }
         #[cfg(feature = "trace")]
         if self.globals.startup_flag {
-            eprintln!("  ------invoke new context------------------------------------------");
+            eprintln!("--------invoke new context------------------------------------------");
             context.dump();
-            eprintln!("  ------------------------------------------------------------------");
+            eprintln!("--------------------------------------------------------------------");
         }
     }
 
@@ -451,11 +451,12 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
+                            let _val = self.globals.error_register;
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
                                 eprintln!(
                                     "<+++ BlockReturn({:?}) stack:{}",
-                                    self.globals.error_register,
+                                    _val,
                                     self.stack_len()
                                 );
                             }
@@ -1007,7 +1008,11 @@ impl VM {
         let val = match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => {
                 if 0 <= rhs && rhs <= std::u32::MAX as i64 {
-                    Value::integer(lhs.pow(rhs as u32))
+                    let i = match lhs.checked_pow(rhs as u32) {
+                        Some(i) => i,
+                        None => return Err(RubyError::runtime("Power overflow.")),
+                    };
+                    Value::integer(i)
                 } else {
                     Value::float((lhs as f64).powf(rhs as f64))
                 }
@@ -1025,7 +1030,10 @@ impl VM {
 
     fn invoke_neg(&mut self, lhs: Value) -> Result<(), RubyError> {
         let val = match lhs.unpack() {
-            RV::Integer(i) => Value::integer(-i),
+            RV::Integer(i) => match i.checked_neg() {
+                Some(i) => Value::integer(i),
+                None => return Err(RubyError::runtime("Negate overflow.")),
+            },
             RV::Float(f) => Value::float(-f),
             _ => return self.invoke_send0(IdentId::get_id("-@"), lhs),
         };
@@ -1035,7 +1043,18 @@ impl VM {
 
     fn invoke_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            let val = Value::integer(lhs.as_packed_fixnum() << rhs.as_packed_fixnum());
+            let rhs = rhs.as_packed_fixnum();
+            let rhs = if rhs < u32::MAX as i64 && rhs > 0 {
+                rhs as u32
+            } else {
+                // TODO: if rhs < 0, execute Shr.
+                return Err(RubyError::runtime("Rhs of Shl must be u32."));
+            };
+            let i = match lhs.as_packed_fixnum().checked_shl(rhs) {
+                Some(i) => i,
+                None => return Err(RubyError::runtime("Shl overflow.")),
+            };
+            let val = Value::integer(i);
             self.stack_push(val);
             Ok(())
         } else if let Some(mut ainfo) = lhs.as_array() {
@@ -1948,8 +1967,17 @@ impl VM {
         if self.globals.startup_flag {
             println!("<+++ {:?}", res);
         }
-
-        res
+        match res {
+            Ok(val) => Ok(val),
+            Err(err) => {
+                if err.is_block_return() {
+                    let val = self.globals.error_register;
+                    Ok(val)
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 
     /// Invoke attr_getter and return the value.

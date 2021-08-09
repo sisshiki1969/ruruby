@@ -344,10 +344,7 @@ impl Node {
             | NodeKind::Float(_)
             | NodeKind::Nil
             | NodeKind::Symbol(_)
-            | NodeKind::String(_)
-            | NodeKind::Hash(_, true)
-            | NodeKind::RegExp(_, true)
-            | NodeKind::Array(_, true) => true,
+            | NodeKind::String(_) => true,
             _ => false,
         }
     }

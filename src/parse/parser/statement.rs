@@ -707,7 +707,10 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Punct(punct) => match punct {
                 Punct::Minus => match self.get()?.kind {
-                    TokenKind::IntegerLit(num) => Ok(Node::new_integer(-num, loc)),
+                    TokenKind::IntegerLit(num) => match num.checked_neg() {
+                        Some(i) => Ok(Node::new_integer(i, loc)),
+                        None => Err(Self::error_unexpected(loc, "Integer overflow.")),
+                    },
                     TokenKind::FloatLit(num) => Ok(Node::new_float(-num, loc)),
                     _ => unreachable!(),
                 },

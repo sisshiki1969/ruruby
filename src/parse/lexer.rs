@@ -594,7 +594,10 @@ impl<'a> Lexer<'a> {
             as u64;
         loop {
             if let Some(n) = self.consume_hex() {
-                val = val * 16 + n as u64;
+                val = val
+                    .checked_mul(16)
+                    .ok_or_else(|| Self::error_parse("Too big Numeric literal.", self.pos - 1))?
+                    + n as u64;
             } else if !self.consume('_') {
                 break;
             }

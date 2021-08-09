@@ -103,6 +103,13 @@ impl RubyError {
         }
     }
 
+    pub fn is_block_return(&self) -> bool {
+        match &self.kind {
+            RubyErrorKind::BlockReturn => true,
+            _ => false,
+        }
+    }
+
     pub fn is_exception(&self) -> bool {
         match &self.kind {
             RubyErrorKind::Exception => true,

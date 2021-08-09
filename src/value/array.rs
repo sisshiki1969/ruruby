@@ -205,36 +205,13 @@ impl ArrayInfo {
             return self.set_elem1(args[0], args[1]);
         } else {
             let index = args[0].expect_integer("Index")?;
-            let elements = &mut self.elements;
-            let len = elements.len();
-            let index = get_array_index(index, len)?;
             let length = args[1].expect_integer("Length")?;
             if length < 0 {
                 return Err(RubyError::index(format!("Negative length. {}", length)));
             };
             let length = length as usize;
-            let end = std::cmp::min(len, index + length);
-            match val.as_array() {
-                Some(ary) => {
-                    let ary_len = ary.len();
-                    if ary_len > (end - index) {
-                        elements.resize(len - end + index + ary_len, Value::nil());
-                        elements.copy_within(end..len, index + ary_len);
-                        elements[index..index + ary_len].copy_from_slice(&ary.elements);
-                    } else {
-                        elements.copy_within(end..len, index + ary_len);
-                        elements[index..index + ary_len].copy_from_slice(&ary.elements);
-                        elements.truncate(len - end + index + ary_len);
-                    }
-                }
-                None => {
-                    elements.copy_within(end..len, index + 1);
-                    elements[index] = val;
-                    elements.truncate(len - end + index + 1);
-                }
-            };
+            return self.set_elem2(index, length, val);
         };
-        Ok(val)
     }
 
     pub fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
@@ -248,6 +225,39 @@ impl ArrayInfo {
             let index = get_array_index(index, len)?;
             elements[index] = val;
         }
+        Ok(val)
+    }
+
+    pub fn set_elem2(&mut self, index: i64, length: usize, val: Value) -> VMResult {
+        let elements = &mut self.elements;
+        let len = elements.len();
+        let index = get_array_index(index, len)?;
+        let end = std::cmp::min(len, index + length);
+        match val.as_array() {
+            Some(ary) => {
+                let ary_len = ary.len();
+                if ary_len + index > end {
+                    elements.resize(len - end + index + ary_len, Value::nil());
+                    elements.copy_within(end..len, index + ary_len);
+                    elements[index..index + ary_len].copy_from_slice(&ary.elements);
+                } else {
+                    elements.copy_within(end..len, index + ary_len);
+                    elements[index..index + ary_len].copy_from_slice(&ary.elements);
+                    elements.truncate(len - end + index + ary_len);
+                }
+            }
+            None => {
+                if index < len {
+                    if end > index {
+                        elements.copy_within(end..len, index + 1);
+                    }
+                    elements[index] = val;
+                    elements.truncate(len - end + index + 1);
+                } else {
+                    panic!()
+                }
+            }
+        };
         Ok(val)
     }
 
