@@ -105,24 +105,24 @@ impl std::ops::DerefMut for ArrayInfo {
     }
 }
 
-/// Calculate array index.
-/// if `index` is a zero or positeve integer, return `index`.
-/// Else, return `len` + `index.`
-fn get_array_index(index: i64, len: usize) -> Result<usize, RubyError> {
-    if index < 0 {
-        let i = len as i64 + index;
-        if i < 0 {
-            return Err(RubyError::internal("Index too small for array."));
-        };
-        Ok(i as usize)
-    } else {
-        Ok(index as usize)
-    }
-}
-
 impl ArrayInfo {
     pub fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
+    }
+
+    /// Calculate array index.
+    /// if `index` is a zero or positeve integer, return `index`.
+    /// Else, return `len` + `index.`
+    fn get_array_index(&self, index: i64) -> Result<usize, RubyError> {
+        if index < 0 {
+            let i = self.len() as i64 + index;
+            if i < 0 {
+                return Err(RubyError::range("Index too small for array."));
+            };
+            Ok(i as usize)
+        } else {
+            Ok(index as usize)
+        }
     }
 
     pub fn get_elem(&self, args: &Args) -> VMResult {
@@ -132,7 +132,7 @@ impl ArrayInfo {
         };
         let index = args[0].expect_integer("Index")?;
         let self_len = self.elements.len();
-        let index = get_array_index(index, self_len).unwrap_or(self_len);
+        let index = self.get_array_index(index).unwrap_or(self_len);
         let len = args[1].expect_integer("Index")?;
         let val = if len < 0 {
             Value::nil()
@@ -150,7 +150,7 @@ impl ArrayInfo {
     pub fn get_elem1(&self, idx: Value) -> VMResult {
         if let Some(index) = idx.as_integer() {
             let self_len = self.len();
-            let index = get_array_index(index, self_len).unwrap_or(self_len);
+            let index = self.get_array_index(index).unwrap_or(self_len);
             let val = self.get_elem_imm(index);
             Ok(val)
         } else if let Some(range) = idx.as_range() {
@@ -201,6 +201,7 @@ impl ArrayInfo {
             self.set_elem1(args[0], args[1])
         } else {
             let index = args[0].expect_integer("Index")?;
+            let index = self.get_array_index(index)?;
             let length = args[1].expect_integer("Length")?;
             if length < 0 {
                 return Err(RubyError::index(format!("Negative length. {}", length)));
@@ -210,62 +211,80 @@ impl ArrayInfo {
     }
 
     pub fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
-        let index = idx.expect_integer("Index")?;
-        let elements = &mut self.elements;
-        let len = elements.len();
-        if index >= 0 {
-            self.set_elem_imm(index as usize, val);
+        if let Some(index) = idx.as_integer() {
+            if index >= 0 {
+                self.set_elem_imm(index as usize, val);
+            } else {
+                let index = self.get_array_index(index)?;
+                self[index] = val;
+            }
+            Ok(val)
+        } else if let Some(range) = idx.as_range() {
+            let first = {
+                let i = range.start.expect_integer("Start of the range")?;
+                self.get_array_index(i)?
+            };
+            let last = {
+                let i = range.end.expect_integer("End of the range")?;
+                self.get_array_index(i)? + if range.exclude { 0 } else { 1 }
+            };
+            if last < first {
+                self.set_elem2(first, 0, val)
+            } else {
+                let length = last - first;
+                self.set_elem2(first, length, val)
+            }
         } else {
-            let index = get_array_index(index, len)?;
-            elements[index] = val;
+            Err(RubyError::no_implicit_conv(idx, "Integer or Range"))
         }
-        Ok(val)
     }
 
-    pub fn set_elem2(&mut self, index: i64, length: usize, val: Value) -> VMResult {
-        let elements = &mut self.elements;
-        let len = elements.len();
-        let index = get_array_index(index, len)?;
+    pub fn set_elem2(&mut self, index: usize, length: usize, val: Value) -> VMResult {
+        let len = self.len();
         match val.as_array() {
             Some(ary) => {
+                // if self = ary, something wrong happens..
                 let ary_len = ary.len();
                 if index >= len || index + length > len {
-                    elements.resize(index + ary_len, Value::nil());
+                    self.resize(index + ary_len, Value::nil());
+                } else if ary_len > length {
+                    // possibly self == ary
+                    self.resize(len + ary_len - length, Value::nil());
+                    self.copy_within(index + length..len, index + ary_len);
                 } else {
-                    elements.resize(len + ary_len - length, Value::nil());
-                    elements.copy_within(index + length..len, index + ary_len);
-                };
-                elements[index..index + ary_len].copy_from_slice(&ary.elements);
+                    // self != ary
+                    self.copy_within(index + length..len, index + ary_len);
+                    self.resize(len + ary_len - length, Value::nil());
+                }
+                self[index..index + ary_len].copy_from_slice(&ary[0..ary_len]);
             }
             None => {
                 if index >= len {
-                    elements.resize(index + 1, Value::nil());
+                    self.resize(index + 1, Value::nil());
                 } else if length == 0 {
-                    elements.push(Value::nil());
-                    elements.copy_within(index..len, index + 1);
+                    self.push(Value::nil());
+                    self.copy_within(index..len, index + 1);
                 } else {
                     let end = index + length;
                     if end < len {
-                        elements.copy_within(end..len, index + 1);
-                        elements.truncate(len + 1 - length);
+                        self.copy_within(end..len, index + 1);
+                        self.truncate(len + 1 - length);
                     } else {
-                        elements.truncate(index + 1);
+                        self.truncate(index + 1);
                     }
                 }
-                elements[index] = val;
+                self[index] = val;
             }
         };
         Ok(val)
     }
 
     pub fn set_elem_imm(&mut self, index: usize, val: Value) {
-        let elements = &mut self.elements;
-        let len = elements.len();
-        if index >= len {
-            elements.resize(index as usize, Value::nil());
-            elements.push(val);
+        if index >= self.len() {
+            self.resize(index as usize, Value::nil());
+            self.push(val);
         } else {
-            elements[index] = val;
+            self[index] = val;
         }
     }
 

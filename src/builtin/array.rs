@@ -1187,6 +1187,10 @@ fn bsearch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+/// bsearch_index { |x| ... } -> Integer | nil
+/// bsearch_index -> Enumerator
+///
+///https://docs.ruby-lang.org/ja/latest/method/Array/i/bsearch_index.html
 fn bsearch_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let ary = self_val.into_array();
@@ -1365,6 +1369,35 @@ mod tests {
         a[1,4] = [0]
         assert [1,0], a
         ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn array_set_elem_range() {
+        let program = r##"
+        ary = [0, 1, 2, 3, 4, 5]
+        ary[0..2] = ["a", "b"]
+        assert ["a", "b", 3, 4, 5], ary
+        
+        ary = [0, 1, 2]
+        ary[5..6] = "x"
+        assert [0, 1, 2, nil, nil, "x"], ary
+        
+        ary = [0, 1, 2, 3, 4, 5]
+        ary[1..3] = "x"
+        assert [0, "x", 4, 5], ary
+
+        ary = [0, 1, 2, 3, 4, 5]
+        ary[2..4] = []
+        assert [0, 1, 5], ary
+
+        ary = [0, 1, 2, 3, 4, 5]
+        ary[2..0] = ["a", "b", "c"]
+        assert [0, 1, "a", "b", "c", 2, 3, 4, 5], ary
+
+        a = [0, 1, 2, 3, 4, 5]
+        assert_error { a[-10..10] = 1 }       #=> RangeError
+        "##;
         assert_script(program);
     }
 
