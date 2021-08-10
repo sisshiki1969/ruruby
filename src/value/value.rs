@@ -1216,6 +1216,18 @@ impl Value {
         !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
     }
 
+    pub fn expect_bool_nil_num(self) -> Result<bool, RubyError> {
+        match self.unpack() {
+            RV::True | RV::Integer(0) => Ok(true),
+            RV::Float(f) if f == 0.0 => Ok(true),
+            RV::False | RV::Nil | RV::Integer(_) | RV::Float(_) => Ok(false),
+            _ => Err(RubyError::typeerr(format!(
+                "Wrong argument type {} (must be numeric, true, false or nil)",
+                self.get_class_name()
+            ))),
+        }
+    }
+
     /// Convert `self` to `Option<Real>`.
     /// If `self` was not a integer nor a float, return `None`.
     pub fn to_real(&self) -> Option<Real> {

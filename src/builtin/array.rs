@@ -1106,11 +1106,11 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
     let mut i_min = 0;
     let mut i_max = ary.len() - 1;
     args[0] = ary.elements[0];
-    if vm.eval_block(block, &args)?.to_bool() {
+    if vm.eval_block(block, &args)?.expect_bool_nil_num()? {
         return Ok(Some(0));
     };
     args[0] = ary.elements[i_max];
-    if !vm.eval_block(block, &args)?.to_bool() {
+    if !vm.eval_block(block, &args)?.expect_bool_nil_num()? {
         return Ok(None);
     };
 
@@ -1120,7 +1120,7 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
             return Ok(Some(i_max));
         };
         args[0] = ary.elements[i_mid];
-        if vm.eval_block(block, &args)?.to_bool() {
+        if vm.eval_block(block, &args)?.expect_bool_nil_num()? {
             i_max = i_mid;
         } else {
             i_min = i_mid;
@@ -1128,6 +1128,9 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
     }
 }
 
+/// bsearch { |x| ... } -> object | nil
+/// bsearch -> Enumerator
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/bsearch.html
 fn bsearch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let ary = self_val.into_array();
@@ -1784,6 +1787,12 @@ mod tests {
         assert 7, ary.bsearch {|x| x >=  6 } # => 7
         assert 0, ary.bsearch {|x| x >= -1 } # => 0
         assert nil, ary.bsearch {|x| x >= 100 } # => nil
+        assert nil, ary.bsearch { false }
+        assert nil, ary.bsearch { nil }
+        assert 0, ary.bsearch { true }
+        assert nil, ary.bsearch { 1 }
+        assert 0, ary.bsearch { 0 }
+        assert 0, ary.bsearch { 0.0 }
         "#;
         assert_script(program);
     }

@@ -1,7 +1,7 @@
 use crate::*;
 
 pub fn init() -> Value {
-    let class = Module::class_under(BuiltinClass::numeric());
+    let mut class = Module::class_under(BuiltinClass::numeric());
     BuiltinClass::set_toplevel_constant("Float", class);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
@@ -12,6 +12,17 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("to_i", toi);
+    class.set_const_by_str("DIG", Value::integer(std::f64::DIGITS as i64));
+    class.set_const_by_str("INFINITY", Value::float(std::f64::INFINITY));
+    class.set_const_by_str("EPSILON", Value::float(std::f64::EPSILON));
+    class.set_const_by_str("RADIX", Value::integer(std::f64::RADIX as i64));
+    class.set_const_by_str("NAN", Value::float(std::f64::NAN));
+    class.set_const_by_str("MIN", Value::float(std::f64::MIN_POSITIVE));
+    class.set_const_by_str("MIN_EXP", Value::integer(std::f64::MIN_EXP as i64));
+    class.set_const_by_str("MIN_10_EXP", Value::integer(std::f64::MIN_10_EXP as i64));
+    class.set_const_by_str("MAX", Value::float(std::f64::MAX));
+    class.set_const_by_str("MAX_EXP", Value::integer(std::f64::MAX_EXP as i64));
+    class.set_const_by_str("MAX_10_EXP", Value::integer(std::f64::MAX_10_EXP as i64));
     class.into()
 }
 
