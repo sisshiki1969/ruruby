@@ -1467,7 +1467,7 @@ impl VM {
             Some(oref) => {
                 match oref.kind {
                     ObjKind::Array(ref mut aref) => {
-                        aref.set_elem_imm(idx, val);
+                        aref.set_elem_imm(idx as usize, val);
                     }
                     ObjKind::Hash(ref mut href) => href.insert(Value::integer(idx as i64), val),
                     _ => {
@@ -1509,7 +1509,7 @@ impl VM {
     fn invoke_get_index_imm(&mut self, receiver: Value, idx: u32) -> Result<(), RubyError> {
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => aref.get_elem_imm(idx),
+                ObjKind::Array(aref) => aref.get_elem_imm(idx as usize),
                 ObjKind::Hash(href) => match href.get(&Value::integer(idx as i64)) {
                     Some(val) => *val,
                     None => Value::nil(),

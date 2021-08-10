@@ -12,7 +12,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("size", length);
     class.add_builtin_method_by_str("empty?", empty);
     class.add_builtin_method_by_str("[]", get_elem);
-    class.add_builtin_method_by_str("at", get_elem);
+    class.add_builtin_method_by_str("at", at);
     class.add_builtin_method_by_str("[]=", set_elem);
     class.add_builtin_method_by_str("push", push);
     class.add_builtin_method_by_str("<<", push);
@@ -32,6 +32,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("collect!", map_);
     class.add_builtin_method_by_str("flat_map", flat_map);
     class.add_builtin_method_by_str("each", each);
+    class.add_builtin_method_by_str("each_index", each_index);
     class.add_builtin_method_by_str("each_with_index", each_with_index);
     class.add_builtin_method_by_str("partition", partition);
 
@@ -163,10 +164,28 @@ fn toa(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(new_val)
 }
 
+/// self[nth] -> object | nil
+/// self[range] -> Array | nil
+/// self[start, length] -> Array | nil
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d.html
 fn get_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     self_val.into_array().get_elem(args)
 }
 
+/// at(nth) -> object | nil
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d.html
+fn at(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    self_val.into_array().get_elem1(args[0])
+}
+
+/// self[nth] = val
+/// self[range] = val
+/// self[start, length] = val
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d=3d.html
 fn set_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     self_val.into_array().set_elem(args)
 }
@@ -450,6 +469,10 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
+/// each {|item| .... } -> self
+/// each -> Enumerator
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/each.html
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
@@ -464,6 +487,29 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+/// each_index {|index| .... } -> self
+/// each_index -> Enumerator
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/each_index.html
+fn each_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let method = to_enum_str!(vm, self_val, args, "each_index");
+    let aref = self_val.into_array();
+    let mut i = 0;
+    let mut arg = Args::new(1);
+    while i < aref.len() {
+        arg[0] = Value::integer(i as i64);
+        vm.eval_block(method, &arg)?;
+        i += 1;
+    }
+    Ok(self_val)
+}
+
+/// Enumerable#each_with_index
+/// each_with_index(*args) -> Enumerator
+/// each_with_index(*args) {|item, index| ... } -> self
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/each_with_index.html
 fn each_with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "each_with_index");
@@ -1323,6 +1369,40 @@ mod tests {
     }
 
     #[test]
+    fn array_set_elem2() {
+        let program = "
+        a = *(1..5)
+        assert 9, a[7,2] = 9
+        assert [1,2,3,4,5,nil,nil,9], a
+        
+        a = *(1..5)
+        assert 9, a[3,3] = 9
+        assert [1,2,3,9], a
+        
+        a = *(1..5)
+        assert 9, a[3,1] = 9
+        assert [1,2,3,9,5], a
+
+        a = *(1..5)
+        assert 9, a[4,0] = 9
+        assert [1,2,3,4,9,5], a
+
+        a = *(1..5)
+        assert [9,9,9], a[7,4] = [9,9,9]
+        assert [1,2,3,4,5,nil,nil,9,9,9], a
+
+        a = *(1..5)
+        assert [9,9,9], a[3,4] = [9,9,9]
+        assert [1,2,3,9,9,9], a
+
+        a = *(1..5)
+        assert [9,9,9], a[1,2] = [9,9,9]
+        assert [1,9,9,9,4,5], a
+        ";
+        assert_script(program);
+    }
+
+    #[test]
     fn array_bracket() {
         let program = "
         class MyArray < Array
@@ -1548,6 +1628,11 @@ mod tests {
         end
         assert([1,2,3], a)
         assert([[0,0], [1,1], [2,2]], b)
+
+        b = []
+        a = [4,3,2,1].each_index {|x| b << x*2}
+        assert [4,3,2,1], a
+        assert [0,2,4,6], b
     ";
         assert_script(program);
     }

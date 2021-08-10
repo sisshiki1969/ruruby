@@ -151,11 +151,7 @@ impl ArrayInfo {
         if let Some(index) = idx.as_integer() {
             let self_len = self.len();
             let index = get_array_index(index, self_len).unwrap_or(self_len);
-            let val = if index >= self_len {
-                Value::nil()
-            } else {
-                self.elements[index]
-            };
+            let val = self.get_elem_imm(index);
             Ok(val)
         } else if let Some(range) = idx.as_range() {
             let len = self.len() as i64;
@@ -190,11 +186,11 @@ impl ArrayInfo {
         }
     }
 
-    pub fn get_elem_imm(&self, index: u32) -> Value {
-        if index as usize >= self.elements.len() {
+    pub fn get_elem_imm(&self, index: usize) -> Value {
+        if index >= self.elements.len() {
             Value::nil()
         } else {
-            self.elements[index as usize]
+            self.elements[index]
         }
     }
 
@@ -202,25 +198,23 @@ impl ArrayInfo {
         args.check_args_range(2, 3)?;
         let val = if args.len() == 3 { args[2] } else { args[1] };
         if args.len() == 2 {
-            return self.set_elem1(args[0], args[1]);
+            self.set_elem1(args[0], args[1])
         } else {
             let index = args[0].expect_integer("Index")?;
             let length = args[1].expect_integer("Length")?;
             if length < 0 {
                 return Err(RubyError::index(format!("Negative length. {}", length)));
             };
-            let length = length as usize;
-            return self.set_elem2(index, length, val);
-        };
+            self.set_elem2(index, length as usize, val)
+        }
     }
 
     pub fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
         let index = idx.expect_integer("Index")?;
         let elements = &mut self.elements;
         let len = elements.len();
-        if index >= elements.len() as i64 {
-            elements.resize(index as usize, Value::nil());
-            elements.push(val);
+        if index >= 0 {
+            self.set_elem_imm(index as usize, val);
         } else {
             let index = get_array_index(index, len)?;
             elements[index] = val;
@@ -232,43 +226,46 @@ impl ArrayInfo {
         let elements = &mut self.elements;
         let len = elements.len();
         let index = get_array_index(index, len)?;
-        let end = std::cmp::min(len, index + length);
         match val.as_array() {
             Some(ary) => {
                 let ary_len = ary.len();
-                if ary_len + index > end {
-                    elements.resize(len - end + index + ary_len, Value::nil());
-                    elements.copy_within(end..len, index + ary_len);
-                    elements[index..index + ary_len].copy_from_slice(&ary.elements);
+                if index >= len || index + length > len {
+                    elements.resize(index + ary_len, Value::nil());
                 } else {
-                    elements.copy_within(end..len, index + ary_len);
-                    elements[index..index + ary_len].copy_from_slice(&ary.elements);
-                    elements.truncate(len - end + index + ary_len);
-                }
+                    elements.resize(len + ary_len - length, Value::nil());
+                    elements.copy_within(index + length..len, index + ary_len);
+                };
+                elements[index..index + ary_len].copy_from_slice(&ary.elements);
             }
             None => {
-                if index < len {
-                    if end > index {
-                        elements.copy_within(end..len, index + 1);
-                    }
-                    elements[index] = val;
-                    elements.truncate(len - end + index + 1);
+                if index >= len {
+                    elements.resize(index + 1, Value::nil());
+                } else if length == 0 {
+                    elements.push(Value::nil());
+                    elements.copy_within(index..len, index + 1);
                 } else {
-                    panic!()
+                    let end = index + length;
+                    if end < len {
+                        elements.copy_within(end..len, index + 1);
+                        elements.truncate(len + 1 - length);
+                    } else {
+                        elements.truncate(index + 1);
+                    }
                 }
+                elements[index] = val;
             }
         };
         Ok(val)
     }
 
-    pub fn set_elem_imm(&mut self, index: u32, val: Value) {
+    pub fn set_elem_imm(&mut self, index: usize, val: Value) {
         let elements = &mut self.elements;
         let len = elements.len();
-        if index as usize >= len {
+        if index >= len {
             elements.resize(index as usize, Value::nil());
             elements.push(val);
         } else {
-            elements[index as usize] = val;
+            elements[index] = val;
         }
     }
 
