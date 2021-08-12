@@ -227,11 +227,14 @@ impl RValue {
 
     pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
         let fiber = FiberContext::new_fiber(vm, context);
-        RValue::new(BuiltinClass::fiber(), ObjKind::Fiber(fiber))
+        RValue::new(BuiltinClass::fiber(), ObjKind::Fiber(Box::new(fiber)))
     }
 
-    pub fn new_enumerator(fiber: Box<FiberContext>) -> Self {
-        RValue::new(BuiltinClass::enumerator(), ObjKind::Enumerator(fiber))
+    pub fn new_enumerator(fiber: FiberContext) -> Self {
+        RValue::new(
+            BuiltinClass::enumerator(),
+            ObjKind::Enumerator(Box::new(fiber)),
+        )
     }
 
     pub fn new_time(time_class: Module, time: TimeInfo) -> Self {

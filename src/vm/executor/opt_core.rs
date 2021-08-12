@@ -257,22 +257,22 @@ impl VM {
                     }
 
                     Inst::EQ => cmp!(eval_eq),
-                    Inst::EQI => cmp_i!(eval_eqi),
                     Inst::NE => cmp!(eval_ne),
-                    Inst::NEI => cmp_i!(eval_nei),
+                    Inst::GT => cmp!(eval_gt),
+                    Inst::GE => cmp!(eval_ge),
+                    Inst::LT => cmp!(eval_lt),
+                    Inst::LE => cmp!(eval_le),
                     Inst::TEQ => {
                         let rhs = self.stack_pop();
                         let lhs = self.stack_pop();
                         self.pc += 1;
                         self.invoke_teq(rhs, lhs)?;
                     }
-                    Inst::GT => cmp!(eval_gt),
+                    Inst::EQI => cmp_i!(eval_eqi),
+                    Inst::NEI => cmp_i!(eval_nei),
                     Inst::GTI => cmp_i!(eval_gti),
-                    Inst::GE => cmp!(eval_ge),
                     Inst::GEI => cmp_i!(eval_gei),
-                    Inst::LT => cmp!(eval_lt),
                     Inst::LTI => cmp_i!(eval_lti),
-                    Inst::LE => cmp!(eval_le),
                     Inst::LEI => cmp_i!(eval_lei),
                     Inst::CMP => {
                         let rhs = self.stack_pop();
@@ -461,7 +461,7 @@ impl VM {
                     }
                     Inst::SET_INDEX => {
                         self.pc += 1;
-                        self.set_index()?;
+                        self.invoke_set_index()?;
                     }
                     Inst::GET_INDEX => {
                         self.pc += 1;
@@ -472,7 +472,7 @@ impl VM {
                     Inst::SET_IDX_I => {
                         let idx = iseq.read32(self.pc + 1);
                         self.pc += 5;
-                        self.set_index_imm(idx)?;
+                        self.invoke_set_index_imm(idx)?;
                     }
                     Inst::GET_IDX_I => {
                         let idx = iseq.read32(self.pc + 1);
@@ -862,67 +862,12 @@ impl VM {
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         // With block and no keyword/block/splat/delegate arguments for OPT_SEND.
-        let method_id = iseq.read_id(self.pc + 1);
+        let method_name = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5) as usize;
         let block = iseq.read32(self.pc + 7);
         let cache_id = iseq.read32(self.pc + 11);
         self.pc += 15;
-        let len = self.stack_len();
-        let rec_class = receiver.get_class_for_method();
-        let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_id) {
-            Some(method) => match MethodRepo::get(method) {
-                MethodInfo::BuiltinFunc { func, name, .. } => {
-                    let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
-                    args.block = Block::from_u32(block, self);
-                    self.set_stack_len(len - args_num);
-                    self.exec_native(&func, method, name, receiver, &args)?
-                }
-                MethodInfo::AttrReader { id } => {
-                    if args_num != 0 {
-                        return Err(RubyError::argument_wrong(args_num, 0));
-                    }
-                    self.exec_getter(id, receiver)?
-                }
-                MethodInfo::AttrWriter { id } => {
-                    if args_num != 1 {
-                        return Err(RubyError::argument_wrong(args_num, 1));
-                    }
-                    let val = self.stack_pop();
-                    self.exec_setter(id, receiver, val)?
-                }
-                MethodInfo::RubyFunc { iseq } => {
-                    let block = Block::from_u32(block, self);
-                    let mut context = if iseq.opt_flag {
-                        let req_len = iseq.params.req;
-                        if args_num != req_len {
-                            return Err(RubyError::argument_wrong(args_num, req_len));
-                        };
-                        let mut context = self.new_stack_context_with(receiver, block, iseq, None);
-                        context.copy_from_slice0(&self.exec_stack[len - args_num..]);
-                        context
-                    } else {
-                        let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
-                        args.block = block;
-                        ContextRef::from_noopt(self, receiver, iseq, &args, None)?
-                    };
-                    context.use_value = use_value;
-                    self.set_stack_len(len - args_num);
-                    self.invoke_new_context(context);
-                    return Ok(VMResKind::Invoke);
-                }
-                _ => unreachable!(),
-            },
-            None => {
-                let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
-                args.block = Block::from_u32(block, self);
-                self.set_stack_len(len - args_num);
-                return self.invoke_method_missing(method_id, receiver, &args, use_value);
-            }
-        };
-        if use_value {
-            self.stack_push(val);
-        }
-        Ok(VMResKind::Return)
+        self.eval_fast_send(method_name, receiver, cache_id, args_num, block, use_value)
     }
 
     fn vm_super(

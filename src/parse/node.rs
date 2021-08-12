@@ -21,6 +21,7 @@ pub enum NodeKind {
         start: Box<Node>,
         end: Box<Node>,
         exclude_end: bool,
+        is_const: bool,
     }, // start, end, exclude_end
     Array(Vec<Node>, bool),        // Vec<ELEM>, is_constant_expr
     Hash(Vec<(Node, Node)>, bool), // Vec<KEY, VALUE>, is_constant_expr
@@ -337,6 +338,13 @@ impl Node {
         }
     }
 
+    pub fn is_integer(&self) -> bool {
+        match &self.kind {
+            NodeKind::Integer(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_const_expr(&self) -> bool {
         match &self.kind {
             NodeKind::Bool(_)
@@ -383,11 +391,13 @@ impl Node {
     }
 
     pub fn new_range(start: Node, end: Node, exclude_end: bool, loc: Loc) -> Self {
+        let is_const = start.is_integer() && end.is_integer();
         Node::new(
             NodeKind::Range {
                 start: Box::new(start),
                 end: Box::new(end),
                 exclude_end,
+                is_const,
             },
             loc,
         )

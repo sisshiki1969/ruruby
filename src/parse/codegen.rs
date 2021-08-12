@@ -974,15 +974,25 @@ impl Codegen {
                 start,
                 end,
                 exclude_end,
+                is_const,
             } => {
-                iseq.gen_val(Value::bool(exclude_end));
-                self.gen(globals, iseq, *end, true)?;
-                self.gen(globals, iseq, *start, true)?;
-                self.save_loc(iseq, node_loc);
-                iseq.push(Inst::CREATE_RANGE);
-                if !use_value {
-                    iseq.gen_pop()
-                };
+                if is_const {
+                    if use_value {
+                        let start = self.const_expr(globals, *start)?;
+                        let end = self.const_expr(globals, *end)?;
+                        let val = Value::range(start, end, exclude_end);
+                        iseq.gen_const_val(globals, val);
+                    }
+                } else {
+                    iseq.gen_val(Value::bool(exclude_end));
+                    self.gen(globals, iseq, *end, true)?;
+                    self.gen(globals, iseq, *start, true)?;
+                    self.save_loc(iseq, node_loc);
+                    iseq.push(Inst::CREATE_RANGE);
+                    if !use_value {
+                        iseq.gen_pop()
+                    };
+                }
             }
             NodeKind::Array(nodes, is_const) => {
                 if is_const {

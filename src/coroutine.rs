@@ -50,21 +50,6 @@ impl GC for EnumInfo {
     }
 }
 
-impl EnumInfo {
-    /// This BuiltinFunc is called in the fiber thread of a enumerator.
-    /// `vm`: VM of created fiber.
-    pub fn enumerator_fiber(&self, vm: &mut VM) -> VMResult {
-        let receiver = self.receiver;
-        let method = receiver.get_method_or_nomethod(self.method)?;
-        let context = ContextRef::new_native(vm);
-        vm.context_push(context);
-        let val = vm.eval_method(method, receiver, &self.args)?;
-        vm.context_pop();
-        vm.stack_push(val);
-        Err(RubyError::stop_iteration("Iteration reached an end."))
-    }
-}
-
 #[derive(Debug, PartialEq)]
 #[repr(C)]
 pub struct FiberContext {
@@ -169,14 +154,14 @@ impl FiberContext {
         }
     }
 
-    pub fn new_fiber(vm: VM, context: ContextRef) -> Box<Self> {
+    pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
         let vmref = VMRef::new(vm);
-        Box::new(FiberContext::new(vmref, FiberKind::Fiber(context)))
+        FiberContext::new(vmref, FiberKind::Fiber(context))
     }
 
-    pub fn new_enumerator(vm: VM, info: EnumInfo) -> Box<Self> {
+    pub fn new_enumerator(vm: VM, info: EnumInfo) -> Self {
         let vmref = VMRef::new(vm);
-        Box::new(FiberContext::new(vmref, FiberKind::Enum(Box::new(info))))
+        FiberContext::new(vmref, FiberKind::Enum(Box::new(info)))
     }
 }
 

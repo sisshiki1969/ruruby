@@ -2,6 +2,8 @@ use crate::*;
 
 pub fn init() -> Value {
     let class = Module::class_under_object();
+    class.add_builtin_class_method("new", nil_new);
+    class.add_builtin_class_method("allocate", nil_allocate);
     class.add_builtin_method_by_str("&", and);
     class.add_builtin_method_by_str("|", or);
     class.add_builtin_method_by_str("^", xor);
@@ -18,6 +20,14 @@ pub fn init() -> Value {
 }
 
 // Class methods
+
+fn nil_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    Err(RubyError::undefined_method(IdentId::NEW, self_val))
+}
+
+fn nil_allocate(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+    Err(RubyError::typeerr("Allocator undefined for NilClass"))
+}
 
 // Instance methods
 

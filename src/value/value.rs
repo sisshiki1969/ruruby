@@ -397,7 +397,7 @@ impl Value {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
                 ObjKind::String(s) => s.to_s(),
                 _ => {
-                    let val = vm.send0(IdentId::TO_S, *self)?;
+                    let val = vm.eval_send0(IdentId::TO_S, *self)?;
                     Cow::from(val.as_string().unwrap().to_owned())
                 }
             },
@@ -1148,7 +1148,7 @@ impl Value {
         RValue::new_fiber(new_fiber, context).pack()
     }
 
-    pub fn enumerator(fiber: Box<FiberContext>) -> Self {
+    pub fn enumerator(fiber: FiberContext) -> Self {
         RValue::new_enumerator(fiber).pack()
     }
 

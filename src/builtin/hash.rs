@@ -11,6 +11,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("compact", compact);
     class.add_builtin_method_by_str("delete", delete);
     class.add_builtin_method_by_str("empty?", empty);
+    class.add_builtin_method_by_str("default", default);
 
     class.add_builtin_method_by_str("select", select);
     class.add_builtin_method_by_str("find_all", select);
@@ -95,6 +96,14 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::bool(hash.len() == 0))
+}
+
+/// default -> object | nil
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Hash/i/default.html
+fn default(_: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    Ok(Value::nil())
 }
 
 /// Enumerable#filter { |item| .. } -> [object]

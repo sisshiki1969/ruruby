@@ -69,7 +69,7 @@ extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
             Ok(()) => Ok(fiber_vm.stack_pop()),
             Err(err) => Err(err),
         },
-        FiberKind::Enum(info) => info.enumerator_fiber(&mut fiber_vm),
+        FiberKind::Enum(info) => fiber_vm.enumerator_fiber(info),
     };
     #[cfg(any(feature = "trace", feature = "trace-func"))]
     {

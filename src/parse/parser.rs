@@ -9,9 +9,9 @@ use std::path::PathBuf;
 
 mod arguments;
 mod define;
+mod expression;
 mod flow_control;
 mod literals;
-mod statement;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser<'a> {
