@@ -159,7 +159,7 @@ fn toa(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     if self_val.get_class().id() == array.id() {
         return Ok(self_val);
     };
-    let new_val = self_val.dup();
+    let new_val = self_val.shallow_dup();
     new_val.set_class(array);
     Ok(new_val)
 }
@@ -300,21 +300,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let Some(num) = args[0].as_integer() {
         let v = match num {
             i if i < 0 => return Err(RubyError::argument("Negative argument.")),
-            0 => vec![],
-            1 => ary.elements.clone(),
-            _ => {
-                let len = ary.len();
-                let src = &ary[0..len];
-                let mut v = vec![Value::nil(); len * num as usize];
-                let mut i = 0;
-                for _ in 0..num {
-                    for src_val in src[0..len].iter() {
-                        v[i] = src_val.dup();
-                        i += 1;
-                    }
-                }
-                v
-            }
+            i => ary.elements.repeat(i as usize),
         };
         let res = Value::array_from_with_class(v, self_val.get_class());
         Ok(res.into())

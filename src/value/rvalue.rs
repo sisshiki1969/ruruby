@@ -81,15 +81,15 @@ impl RValue {
         self as *const RValue as u64
     }
 
-    pub fn dup(&self) -> Self {
+    pub fn shallow_dup(&self) -> Self {
         RValue {
             class: self.class,
             var_table: self.var_table.clone(),
             kind: match &self.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", &self),
                 ObjKind::Complex { r, i } => ObjKind::Complex {
-                    r: r.dup(),
-                    i: i.dup(),
+                    r: r.shallow_dup(),
+                    i: i.shallow_dup(),
                 },
                 ObjKind::Array(aref) => ObjKind::Array(aref.clone()),
                 ObjKind::Module(cinfo) => ObjKind::Module(cinfo.clone()),

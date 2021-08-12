@@ -87,7 +87,7 @@ impl Module {
     /// Duplicate `self`.
     /// This fn creates a new RValue.
     pub fn dup(&self) -> Self {
-        Module(self.get().dup())
+        Module(self.get().shallow_dup())
     }
 
     /// Get a class of `self`.
@@ -512,7 +512,7 @@ impl ClassInfo {
         let info = MethodInfo::BuiltinFunc {
             name: id,
             func,
-            class: self.name(),
+            class: IdentId::get_id(self.name()),
         };
         let methodref = MethodRepo::add(info);
         self.ext.method_table.insert(id, methodref);

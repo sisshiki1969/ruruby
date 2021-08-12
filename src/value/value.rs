@@ -265,6 +265,18 @@ impl Value {
                 ObjKind::Exception(err) => {
                     format!("#<{}: {}>", self.get_class_name(), err.message())
                 }
+                ObjKind::Enumerator(fctx) => {
+                    let info = match &fctx.kind {
+                        FiberKind::Enum(info) => info,
+                        _ => unreachable!(),
+                    };
+                    format!(
+                        "#<{}: {:?}:{:?}>",
+                        self.get_class_name(),
+                        info.receiver,
+                        info.method
+                    )
+                }
                 _ => {
                     format!("#<{}:0x{:x}>", self.get_class_name(), self.id())
                 }
@@ -292,9 +304,9 @@ impl Value {
         Array::new_unchecked(self)
     }
 
-    pub fn dup(&self) -> Self {
+    pub fn shallow_dup(&self) -> Self {
         match self.as_rvalue() {
-            Some(rv) => rv.dup().pack(),
+            Some(rv) => rv.shallow_dup().pack(),
             None => *self,
         }
     }

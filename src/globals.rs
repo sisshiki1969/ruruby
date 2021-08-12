@@ -240,7 +240,7 @@ impl ConstantValues {
     }
 
     pub fn get(&self, id: usize) -> Value {
-        self.table[id].dup()
+        self.table[id].shallow_dup()
     }
 
     #[cfg(not(tarpaulin_include))]

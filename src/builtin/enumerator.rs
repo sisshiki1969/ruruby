@@ -99,14 +99,14 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
-    let mut info = vm.dup_enum(eref);
+    let mut fiber = vm.dup_enum(eref);
     let block = match &args.block {
         None => return Ok(self_val),
         Some(block) => block,
     };
     let mut args = Args::new(1);
     loop {
-        args[0] = match info.resume(Value::nil()) {
+        args[0] = match fiber.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
@@ -114,7 +114,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         vm.eval_block(block, &args)?;
     }
 
-    match &info.kind {
+    match &fiber.kind {
         FiberKind::Enum(info) => Ok(info.receiver),
         _ => unreachable!(),
     }

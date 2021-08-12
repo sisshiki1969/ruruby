@@ -1409,11 +1409,10 @@ mod test {
         assert "私の名前一です", a[0]
         assert nil, a[0].slice!(-9)
         assert "私の名前一です", a[0]
-        assert "名前は一色", a[1].slice!(2,5)
-        assert "私のです", a[1]
-        assert nil, a[2].slice!(10,5)
-        assert "色です", a[3].slice!(-3,5)
-        assert nil, a[3].slice!(-10,5)
+        assert "名前一です", a[1].slice!(2,5)
+        assert "私の", a[1]
+        assert "私の", a[2]
+        assert "私の", a[3]
         a = "a"
         assert "a", a.slice!(0,1)
         assert "", a

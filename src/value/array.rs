@@ -76,8 +76,8 @@ impl Array {
         self.0.id()
     }
 
-    pub fn dup(&self) -> Self {
-        Array(self.get().dup())
+    pub fn shallow_dup(&self) -> Self {
+        Array(self.get().shallow_dup())
     }
 }
 

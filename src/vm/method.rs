@@ -179,7 +179,7 @@ impl MethodRepo {
                 MethodInfo::BuiltinFunc {
                     func: enumerator_iterate,
                     name: IdentId::_ENUM_FUNC,
-                    class: "Enumerator".to_string(),
+                    class: IdentId::get_id("Enumerator"),
                 }, // METHOD_ENUM
             ],
             counter: vec![
@@ -359,7 +359,7 @@ pub enum MethodInfo {
     BuiltinFunc {
         name: IdentId,
         func: BuiltinFunc,
-        class: String,
+        class: IdentId,
     },
     Void,
 }
@@ -380,7 +380,7 @@ impl std::fmt::Debug for MethodInfo {
             MethodInfo::AttrReader { id } => write!(f, "AttrReader {:?}", id),
             MethodInfo::AttrWriter { id } => write!(f, "AttrWriter {:?}", id),
             MethodInfo::BuiltinFunc { name, class, .. } => {
-                write!(f, r##"BuiltinFunc {}#{:?}"##, class, name)
+                write!(f, r##"BuiltinFunc {:?}#{:?}"##, class, name)
             }
             MethodInfo::Void => write!(f, "Void"),
         }

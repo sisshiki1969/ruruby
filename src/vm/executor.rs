@@ -2099,7 +2099,7 @@ impl VM {
     pub fn create_proc(&mut self, block: &Block) -> Value {
         match block {
             Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
-            Block::Proc(proc) => proc.dup(),
+            Block::Proc(proc) => *proc,
         }
     }
 
@@ -2117,7 +2117,7 @@ impl VM {
                 iseq.kind = ISeqKind::Method(None);
                 Ok(Value::procobj(self, outer.self_value, iseq, *outer))
             }
-            Block::Proc(proc) => Ok(proc.dup()),
+            Block::Proc(proc) => Ok(*proc),
         }
     }
 

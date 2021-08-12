@@ -91,7 +91,7 @@ fn extend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let val = self_val.dup();
+    let val = self_val.shallow_dup();
     Ok(val)
 }
 
