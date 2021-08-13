@@ -17,7 +17,7 @@ impl VM {
     /// false: invoke mode
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         loop {
-            let iseqref = self.context().iseq_ref.unwrap();
+            let iseqref = self.context().iseq_ref;
             let iseq = &iseqref.iseq;
             let self_value = self.context().self_value;
             let use_value = self.context().use_value;
@@ -108,7 +108,7 @@ impl VM {
                     eprintln!(
                         "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                         self.pc.into_usize(),
-                        Inst::inst_info(&self.globals, self.context().iseq_ref.unwrap(), self.pc),
+                        Inst::inst_info(&self.globals, self.context().iseq_ref, self.pc),
                         self.temp_stack.len(),
                         self.stack_len(),
                         match self.exec_stack.last() {
@@ -877,7 +877,7 @@ impl VM {
         flag: bool,
     ) -> Result<VMResKind, RubyError> {
         // TODO: support keyword parameter, etc..
-        let iseq = self.get_method_context().iseq_ref.unwrap();
+        let iseq = self.get_method_context().iseq_ref;
         if let ISeqKind::Method(Some(m_id)) = iseq.kind {
             let class = self_value.get_class_for_method();
             let method = class

@@ -32,7 +32,6 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     } else {
         vm.context()
             .iseq_ref
-            .unwrap()
             .source_info
             .path
             .to_string_lossy()

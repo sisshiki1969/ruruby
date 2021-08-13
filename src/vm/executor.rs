@@ -142,18 +142,15 @@ impl VM {
     }
 
     pub fn get_method_iseq(&self) -> ISeqRef {
-        self.get_method_context().iseq_ref.unwrap()
+        self.get_method_context().iseq_ref
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
-        match self.context().iseq_ref {
-            Some(iseq) => iseq.source_info,
-            None => SourceInfoRef::default(),
-        }
+        self.context().iseq_ref.source_info
     }
 
     pub fn get_source_path(&self) -> PathBuf {
-        self.context().iseq_ref.unwrap().source_info.path.clone()
+        self.context().iseq_ref.source_info.path.clone()
     }
 
     fn is_method(&self) -> bool {
@@ -359,7 +356,7 @@ impl VM {
             vec![],
         )?;
         let iseq = method.as_iseq();
-        context.iseq_ref = Some(iseq);
+        context.iseq_ref = iseq;
 
         self.run_context(context)?;
         #[cfg(feature = "perf")]
@@ -407,7 +404,7 @@ impl VM {
     fn invoke_new_context(&mut self, mut context: ContextRef) {
         #[cfg(feature = "perf-method")]
         {
-            MethodRepo::inc_counter(context.iseq_ref.unwrap().method);
+            MethodRepo::inc_counter(context.iseq_ref.method);
         }
         context.prev_stack_len = self.stack_len();
         context.prev_pc = self.pc;
@@ -416,7 +413,7 @@ impl VM {
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             let ch = if context.called { "+++" } else { "---" };
-            let iseq = context.iseq_ref.unwrap();
+            let iseq = context.iseq_ref;
             eprintln!(
                 "{}> {:?} {:?} {:?}",
                 ch, iseq.method, iseq.kind, iseq.source_info.path
@@ -494,8 +491,7 @@ impl VM {
                     }
                     loop {
                         let context = self.context();
-                        if err.info.len() == 0 || context.iseq_ref.unwrap().kind != ISeqKind::Block
-                        {
+                        if err.info.len() == 0 || context.iseq_ref.kind != ISeqKind::Block {
                             err.info.push((self.source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
@@ -503,7 +499,7 @@ impl VM {
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
-                        let iseq = context.iseq_ref.unwrap();
+                        let iseq = context.iseq_ref;
                         let catch = iseq
                             .exception_table
                             .iter()
@@ -563,15 +559,13 @@ impl VM {
 
     fn get_loc(&self) -> Loc {
         let pc = self.context().cur_pc;
-        match self.context().iseq_ref {
-            None => Loc(1, 1),
-            Some(iseq) => match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
-                Some((_, loc)) => *loc,
-                None => {
-                    eprintln!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
-                    Loc(0, 0)
-                }
-            },
+        let iseq = self.context().iseq_ref;
+        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+            Some((_, loc)) => *loc,
+            None => {
+                eprintln!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
+                Loc(0, 0)
+            }
         }
     }
 
@@ -584,7 +578,7 @@ impl VM {
         let mut ctx = self.cur_context;
         let mut v = vec![new_module.into()];
         while let Some(c) = ctx {
-            if c.iseq_ref.unwrap().is_classdef() {
+            if c.iseq_ref.is_classdef() {
                 v.push(Module::new(c.self_value));
             }
             ctx = c.caller;

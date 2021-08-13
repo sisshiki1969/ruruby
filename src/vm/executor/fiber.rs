@@ -32,13 +32,17 @@ impl VM {
 
     /// This func is called in the fiber thread of a enumerator.
     /// `vm`: VM of created fiber.
-    pub fn enumerator_fiber(&mut self, info: &EnumInfo) -> VMResult {
-        let receiver = info.receiver;
-        let method = receiver.get_method_or_nomethod(info.method)?;
-        let context = ContextRef::new_native(self);
-        self.context_push(context);
-        let val = self.eval_method(method, receiver, &info.args)?;
-        self.context_pop();
+    pub fn enumerator_fiber(
+        &mut self,
+        self_val: Value,
+        args: &Args,
+        method_name: IdentId,
+    ) -> VMResult {
+        let method = self_val.get_method_or_nomethod(method_name)?;
+        //let context = ContextRef::new_native(self);
+        //self.context_push(context);
+        let val = self.eval_method(method, self_val, args)?;
+        //self.context_pop();
         self.globals.error_register = val;
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }

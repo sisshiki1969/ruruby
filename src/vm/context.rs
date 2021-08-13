@@ -13,7 +13,7 @@ pub struct Context {
     pub block: Option<Block>,
     lvar_ary: [Value; LVAR_ARRAY_SIZE],
     lvar_vec: Vec<Value>,
-    pub iseq_ref: Option<ISeqRef>,
+    pub iseq_ref: ISeqRef,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
     /// Previous context.
@@ -83,13 +83,8 @@ impl Into<ContextRef> for &Context {
 impl GC for ContextRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_value.mark(alloc);
-        match self.iseq_ref {
-            Some(iseq_ref) => {
-                for i in 0..iseq_ref.lvars {
-                    self[i].mark(alloc);
-                }
-            }
-            None => {}
+        for i in 0..self.iseq_ref.lvars {
+            self[i].mark(alloc);
         }
         if let Some(b) = &self.block {
             b.mark(alloc)
@@ -100,28 +95,6 @@ impl GC for ContextRef {
         match self.outer {
             Some(c) => c.mark(alloc),
             None => {}
-        }
-    }
-}
-
-impl Default for Context {
-    fn default() -> Self {
-        Context {
-            self_value: Value::uninitialized(),
-            block: None,
-            lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
-            lvar_vec: Vec::new(),
-            iseq_ref: None,
-            outer: None,
-            caller: None,
-            on_stack: CtxKind::Stack,
-            cur_pc: ISeqPos::from(0),
-            prev_pc: ISeqPos::from(0),
-            prev_stack_len: 0,
-            called: false,
-            use_value: true,
-            module_function: false,
-            delegate_args: None,
         }
     }
 }
@@ -144,7 +117,7 @@ impl Context {
             block,
             lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
             lvar_vec,
-            iseq_ref: Some(iseq_ref),
+            iseq_ref,
             outer,
             caller: None,
             on_stack: CtxKind::Stack,
@@ -158,7 +131,7 @@ impl Context {
         }
     }
 
-    fn new_native() -> Self {
+    /*fn new_native() -> Self {
         Context {
             self_value: Value::nil(),
             block: None,
@@ -176,7 +149,7 @@ impl Context {
             module_function: false,
             delegate_args: None,
         }
-    }
+    }*/
 
     pub fn on_heap(&self) -> bool {
         match self.on_stack {
@@ -197,7 +170,7 @@ impl Context {
     }
 
     pub fn is_method(&self) -> bool {
-        self.iseq_ref.unwrap().is_method()
+        self.iseq_ref.is_method()
     }
 
     #[cfg(feature = "trace")]
@@ -206,17 +179,12 @@ impl Context {
             "{:?} context:{:?} outer:{:?} prev_stack_len:{}",
             self.on_stack, self as *const Context, self.outer, self.prev_stack_len
         );
-        match self.iseq_ref {
-            Some(iseq_ref) => {
-                eprintln!("  iseq: {:?}", *iseq_ref);
-                eprintln!("  self: {:#?}", self.self_value);
-                for (i, id) in iseq_ref.lvar.table().iter().enumerate() {
-                    eprintln!("  lvar({}): {:?} {:#?}", i, *id, self[i]);
-                }
-                eprintln!("  delegate: {:?}", self.delegate_args);
-            }
-            None => {}
+        eprintln!("  iseq: {:?}", self.iseq_ref);
+        eprintln!("  self: {:#?}", self.self_value);
+        for (i, id) in self.iseq_ref.lvar.table().iter().enumerate() {
+            eprintln!("  lvar({}): {:?} {:#?}", i, *id, self[i]);
         }
+        eprintln!("  delegate: {:?}", self.delegate_args);
     }
 
     #[cfg(not(tarpaulin_include))]
@@ -253,7 +221,7 @@ impl Context {
     }
 
     fn set_arguments(&mut self, args: &[Value], kw_arg: Value) {
-        let iseq = self.iseq_ref.unwrap();
+        let iseq = self.iseq_ref;
         let req_len = iseq.params.req;
         let post_len = iseq.params.post;
         if iseq.is_block() && args.len() == 1 && req_len + post_len > 1 {
@@ -298,7 +266,7 @@ impl Context {
                 self.fill(req_opt..req_len, Value::nil());
             }
         }
-        if self.iseq_ref.unwrap().lvar.delegate_param && req_opt < arg_len {
+        if self.iseq_ref.lvar.delegate_param && req_opt < arg_len {
             let v = args[req_opt..arg_len].to_vec();
             self.delegate_args = Some(Value::array_from(v));
         }
@@ -358,11 +326,6 @@ impl ContextRef {
             context[*i] = Value::uninitialized();
         }
         ContextRef::new(context)
-    }
-
-    pub fn new_native(vm: &mut VM) -> Self {
-        let context = Context::new_native();
-        vm.new_stack_context(context)
     }
 
     pub fn get_current(self) -> Self {
@@ -498,7 +461,7 @@ impl ContextRef {
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
         let mut ctx = Some(*self);
         while let Some(c) = ctx {
-            let iseq = c.iseq_ref.unwrap();
+            let iseq = c.iseq_ref;
             for v in iseq.lvar.table() {
                 vec.insert(*v);
             }

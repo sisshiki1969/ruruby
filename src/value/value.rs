@@ -1216,9 +1216,9 @@ impl Value {
     }
 
     /// Get method(MethodId) for receiver.
-    pub fn get_method_or_nomethod(self, method_id: IdentId) -> Result<MethodId, RubyError> {
+    pub fn get_method_or_nomethod(self, method_name: IdentId) -> Result<MethodId, RubyError> {
         let rec_class = self.get_class_for_method();
-        rec_class.get_method_or_nomethod(method_id)
+        rec_class.get_method_or_nomethod(method_name)
     }
 }
 

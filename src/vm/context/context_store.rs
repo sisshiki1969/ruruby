@@ -85,7 +85,7 @@ impl ContextStore {
             }
             (*ptr).self_value = self_value;
             (*ptr).block = block;
-            (*ptr).iseq_ref = Some(iseq);
+            (*ptr).iseq_ref = iseq;
             (*ptr).outer = outer;
             (*ptr).caller = None;
             (*ptr).on_stack = CtxKind::Stack;
