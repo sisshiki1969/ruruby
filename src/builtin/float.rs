@@ -5,6 +5,7 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("Float", class);
     class.add_builtin_method_by_str("to_s", inspect);
     class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("nan?", nan);
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
@@ -38,6 +39,12 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         f.to_string()
     };
     Ok(Value::string(s))
+}
+
+fn nan(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let f = self_val.as_float().unwrap();
+    Ok(Value::bool(f.is_nan()))
 }
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -181,6 +188,9 @@ mod tests {
         assert(1, 3.0.div(2.0)) 
         assert(-2, (-3.0).div(2.0)) 
         assert(-2, (-3.0).div(2)) 
+
+        assert('NaN', (0/0.0).to_s)
+        assert(true, (0/0.0).nan?)
     ";
         assert_script(program);
     }
