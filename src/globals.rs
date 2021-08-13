@@ -68,11 +68,9 @@ impl Globals {
         let mut globals = Globals {
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),
-            //method_cache: MethodCache::new(),
             const_cache: ConstCache::new(),
             main_fiber: None,
             instant: std::time::Instant::now(),
-            //class_version: 0,
             const_version: 0,
             main_object,
             case_dispatch: CaseDispatchMap::new(),
@@ -116,6 +114,7 @@ impl Globals {
 
         let env = Value::hash_from(env_map);
         globals.set_toplevel_constant("ENV", env);
+        globals.set_global_var_by_str("$/", Value::string("\n"));
         globals
     }
 

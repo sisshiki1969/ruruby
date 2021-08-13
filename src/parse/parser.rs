@@ -699,13 +699,8 @@ impl<'a> Parser<'a> {
         self.context_stack.push(ParseContext::new_block(None));
 
         let params = if self.consume_punct(Punct::BitOr)? {
-            if self.consume_punct(Punct::BitOr)? {
-                vec![]
-            } else {
-                let params = self.parse_formal_params(TokenKind::Punct(Punct::BitOr))?;
-                self.consume_punct(Punct::BitOr)?;
-                params
-            }
+            let params = self.parse_formal_params(Punct::BitOr)?;
+            params
         } else {
             self.consume_punct(Punct::LOr)?;
             vec![]
@@ -837,7 +832,10 @@ impl<'a> Parser<'a> {
 
     /// Parse formal parameters.
     /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
-    fn parse_formal_params(&mut self, terminator: TokenKind) -> Result<Vec<FormalParam>, ParseErr> {
+    fn parse_formal_params(
+        &mut self,
+        terminator: impl Into<Option<Punct>>,
+    ) -> Result<Vec<FormalParam>, ParseErr> {
         #[derive(Debug, Clone, PartialEq, PartialOrd)]
         enum Kind {
             Required,
@@ -848,8 +846,14 @@ impl<'a> Parser<'a> {
             KWRest,
         }
 
+        let terminator = terminator.into();
         let mut args = vec![];
         let mut state = Kind::Required;
+        if let Some(term) = terminator {
+            if self.consume_punct(term)? {
+                return Ok(args);
+            }
+        }
         loop {
             let mut loc = self.loc();
             if self.consume_punct(Punct::Range3)? {
@@ -925,14 +929,18 @@ impl<'a> Parser<'a> {
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
                     let next = self.peek_no_term()?.kind;
-                    let default = if next == TokenKind::Punct(Punct::Comma)
-                        || next == terminator
-                        || next == TokenKind::LineTerm
-                    {
-                        None
-                    } else {
-                        Some(self.parse_arg()?)
-                    };
+                    let default =
+                        if next == TokenKind::Punct(Punct::Comma) || next == TokenKind::LineTerm {
+                            None
+                        } else if let Some(term) = terminator {
+                            if next == TokenKind::Punct(term) {
+                                None
+                            } else {
+                                Some(self.parse_arg()?)
+                            }
+                        } else {
+                            Some(self.parse_arg()?)
+                        };
                     loc = loc.merge(self.prev_loc());
                     if state == Kind::KWRest {
                         return Err(Self::error_unexpected(
@@ -970,6 +978,9 @@ impl<'a> Parser<'a> {
             if !self.consume_punct_no_term(Punct::Comma)? {
                 break;
             }
+        }
+        if let Some(term) = terminator {
+            self.expect_punct(term)?;
         }
         Ok(args)
     }

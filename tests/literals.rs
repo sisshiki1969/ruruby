@@ -288,13 +288,19 @@ fn lambda_literal() {
         f0 = ->{100}
         f1 = ->x{x*6}
         f2 = ->(x,y){x*y}
+        f3 = ->x,y{x*y}
+        f4 = ->*x{x}
         assert 100, f0.call
         assert 300, f1.call(50)
         assert 35, f2.call(5,7)
+        assert 35, f3.call(5,7)
+        assert [1,2,3,4], f4.call(1,2,3,4)
         f3 = -> do 100 end
         f4 = ->(x,y) do x*y end
+        f5 = ->x,y do x*y end
         assert 100, f3.call
-        assert 35, f4.call(5,7)";
+        assert 35, f4.call(5,7)
+        assert 35, f5.call(5,7)";
     assert_script(program);
 }
 

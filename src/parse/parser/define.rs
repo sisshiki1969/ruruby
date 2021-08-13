@@ -221,18 +221,12 @@ impl<'a> Parser<'a> {
         if self.consume_term()? {
             return Ok(vec![]);
         };
-        let paren_flag = self.consume_punct(Punct::LParen)?;
-
-        if paren_flag && self.consume_punct(Punct::RParen)? {
-            self.consume_term()?;
-            return Ok(vec![]);
-        }
-
-        let args = self.parse_formal_params(TokenKind::Punct(Punct::RParen))?;
-
-        if paren_flag {
-            self.expect_punct(Punct::RParen)?
+        let term = if self.consume_punct(Punct::LParen)? {
+            Some(Punct::RParen)
+        } else {
+            None
         };
+        let args = self.parse_formal_params(term)?;
         self.consume_term()?;
         Ok(args)
     }

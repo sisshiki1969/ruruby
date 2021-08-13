@@ -39,10 +39,7 @@ impl VM {
         method_name: IdentId,
     ) -> VMResult {
         let method = self_val.get_method_or_nomethod(method_name)?;
-        //let context = ContextRef::new_native(self);
-        //self.context_push(context);
         let val = self.eval_method(method, self_val, args)?;
-        //self.context_pop();
         self.globals.error_register = val;
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }

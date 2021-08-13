@@ -81,7 +81,13 @@ impl VM {
 
     pub(super) fn invoke_div(&mut self) -> Result<(), RubyError> {
         use std::ops::Div;
-        if self.exec_stack[self.stack_len() - 1].is_zero() {
+        let rhs = self.exec_stack[self.stack_len() - 1];
+        if rhs.as_float() == Some(0.0) {
+            self.set_stack_len(self.stack_len() - 2);
+            self.stack_push(Value::float(f64::NAN));
+            return Ok(());
+        }
+        if rhs.is_zero() {
             return Err(RubyError::zero_div("Divided by zero."));
         }
         invoke_op!(self, div, IdentId::_DIV);

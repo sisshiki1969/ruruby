@@ -279,24 +279,16 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_lambda_literal(&mut self) -> Result<Node, ParseErr> {
         // Lambda literal
         let loc = self.prev_loc();
-        let mut params = vec![];
         self.context_stack.push(ParseContext::new_block(None));
-        if self.consume_punct(Punct::LParen)? {
-            if !self.consume_punct(Punct::RParen)? {
-                loop {
-                    let id = self.expect_ident()?;
-                    params.push(FormalParam::req_param(id, self.prev_loc()));
-                    self.new_param(id, self.prev_loc())?;
-                    if !self.consume_punct(Punct::Comma)? {
-                        break;
-                    }
-                }
-                self.expect_punct(Punct::RParen)?;
-            }
-        } else if let TokenKind::Ident(_) = self.peek()?.kind {
-            let id = self.expect_ident()?;
-            self.new_param(id, self.prev_loc())?;
-            params.push(FormalParam::req_param(id, self.prev_loc()));
+        let peek = self.peek()?.kind;
+        let params = if peek == TokenKind::Punct(Punct::LBrace)
+            || peek == TokenKind::Reserved(Reserved::Do)
+        {
+            vec![]
+        } else if self.consume_punct(Punct::LParen)? {
+            self.parse_formal_params(Punct::RParen)?
+        } else {
+            self.parse_formal_params(None)?
         };
         let body = if self.consume_punct(Punct::LBrace)? {
             let body = self.parse_comp_stmt()?;
