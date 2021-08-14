@@ -914,4 +914,48 @@ impl<'a> Parser<'a> {
         };
         Ok(())
     }
+
+    fn is_command(&mut self) -> bool {
+        let tok = match self.peek_no_term() {
+            Ok(tok) => tok,
+            _ => return false,
+        };
+        if self.lexer.trailing_space() {
+            match tok.kind {
+                TokenKind::LineTerm => false,
+                TokenKind::Punct(p) => match p {
+                    Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => true,
+                    Punct::Colon
+                    | Punct::Plus
+                    | Punct::Minus
+                    | Punct::Mul
+                    | Punct::Div
+                    | Punct::Rem
+                    | Punct::Shl => !self.lexer.has_trailing_space(&tok),
+                    _ => false,
+                },
+                TokenKind::Reserved(r) => match r {
+                    Reserved::Do
+                    | Reserved::If
+                    | Reserved::Unless
+                    | Reserved::While
+                    | Reserved::Until
+                    | Reserved::And
+                    | Reserved::Or
+                    | Reserved::Then
+                    | Reserved::End => false,
+                    _ => true,
+                },
+                _ => true,
+            }
+        } else {
+            match tok.kind {
+                TokenKind::GlobalVar(_)
+                | TokenKind::InstanceVar(_)
+                | TokenKind::StringLit(_)
+                | TokenKind::IntegerLit(_) => true,
+                _ => false,
+            }
+        }
+    }
 }

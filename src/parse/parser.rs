@@ -721,56 +721,18 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    fn is_command(&mut self) -> bool {
-        let tok = match self.peek_no_term() {
-            Ok(tok) => tok,
-            _ => return false,
-        };
-        if self.lexer.trailing_space() {
-            match tok.kind {
-                TokenKind::LineTerm => false,
-                TokenKind::Punct(p) => match p {
-                    Punct::LParen | Punct::LBracket | Punct::Scope | Punct::Arrow => true,
-                    Punct::Colon
-                    | Punct::Plus
-                    | Punct::Minus
-                    | Punct::Mul
-                    | Punct::Div
-                    | Punct::Rem
-                    | Punct::Shl => !self.lexer.has_trailing_space(&tok),
-                    _ => false,
-                },
-                TokenKind::Reserved(r) => match r {
-                    Reserved::Do
-                    | Reserved::If
-                    | Reserved::Unless
-                    | Reserved::While
-                    | Reserved::Until
-                    | Reserved::And
-                    | Reserved::Or
-                    | Reserved::Then
-                    | Reserved::End => false,
-                    _ => true,
-                },
-                _ => true,
-            }
-        } else {
-            match tok.kind {
-                TokenKind::GlobalVar(_) => true,
-                TokenKind::InstanceVar(_) => true,
-                TokenKind::StringLit(_) => true,
-                _ => false,
-            }
-        }
-    }
-
     /// Parse operator which can be defined as a method.
     /// Return IdentId of the operator.
     fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, ParseErr> {
+        // TODO: must support
+        // |  ^  &
+        // **   ~   +@  -@   ` !  !~
         match punct {
             Punct::Plus => Ok(IdentId::_ADD),
             Punct::Minus => Ok(IdentId::_SUB),
             Punct::Mul => Ok(IdentId::_MUL),
+            Punct::Div => Ok(IdentId::_DIV),
+            Punct::Rem => Ok(IdentId::_REM),
             Punct::Shl => Ok(IdentId::_SHL),
             Punct::Shr => Ok(IdentId::_SHR),
             Punct::Cmp => Ok(IdentId::_CMP),

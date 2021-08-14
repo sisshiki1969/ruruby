@@ -10,6 +10,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
+    class.add_builtin_method_by_str("/", div);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("==", eq);
     class.add_builtin_method_by_str("===", eq);
@@ -102,6 +103,26 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs * r;
                 let i = lhs * i;
+                Ok(Value::complex(r.to_val(), i.to_val()))
+            }
+            None => Err(RubyError::typeerr(format!(
+                "{:?} can't be coerced into Integer.",
+                args[0]
+            ))),
+        },
+    }
+}
+
+fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs / rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let divider = r * r + i * i;
+                let r = (lhs * r).divide(divider);
+                let i = (-lhs * i).divide(divider);
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(RubyError::typeerr(format!(
@@ -413,67 +434,83 @@ mod tests {
     }
 
     #[test]
+    fn integer_ops() {
+        let program = r#"
+        assert 30, 25.+ 5
+        assert 20, 25.- 5
+        assert 125, 25.* 5
+        assert 5, 25./ 5
+        assert 30, 25.+5
+        assert 20, 25.-5
+        assert 125, 25.*5
+        assert 5, 25./5
+
+        assert 8+4i, 5+(3+4i)
+        assert 2-4i, 5-(3+4i)
+        assert 15+20i, 5*(3+4i)
+        assert 0.6-0.8i, 5/(3+4i)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn integer_cmp() {
         let program = r#"
-            assert true, 4.send(:"==", 4)
-            assert false, 4.send(:"==", 14)
-            assert false, 4.send(:"==", "4")
-            assert true, 4.send(:"==", 4.0)
-            assert false, 4.send(:"==", 4.1)
+            assert true, 4.== 4
+            assert false, 4.== 14
+            assert false, 4.== "4"
+            assert true, 4.== 4.0
+            assert false, 4.== 4.1
 
-            assert false, 4.send(:"!=", 4)
-            assert true, 4.send(:"!=", 14)
-            assert true, 4.send(:"!=", "4")
-            assert false, 4.send(:"!=", 4.0)
-            assert true, 4.send(:"!=", 4.1)
+            assert false, 4.!= 4
+            assert true, 4.!= 14
+            assert true, 4.!= "4"
+            assert false, 4.!= 4.0
+            assert true, 4.!= 4.1
 
-            assert true, 4.send(:">=", -1)
-            assert true, 4.send(:">=", 4)
-            assert false, 4.send(:">=", 14)
-            #assert false, 4.send(:">=", "4")
-            assert true, 4.send(:">=", 3.9)
-            assert true, 4.send(:">=", 4.0)
-            assert false, 4.send(:">=", 4.1)
+            assert true, 4.>= -1
+            assert true, 4.>= 4
+            assert false, 4.>= 14
+            assert true, 4.>= 3.9
+            assert true, 4.>= 4.0
+            assert false, 4.>= 4.1
 
-            assert false, 4.send(:"<=", -1)
-            assert true, 4.send(:"<=", 4)
-            assert true, 4.send(:"<=", 14)
-            #assert false, 4.send(:"<=", "4")
-            assert false, 4.send(:"<=", 3.9)
-            assert true, 4.send(:"<=", 4.0)
-            assert true, 4.send(:"<=", 4.1)
+            assert false, 4.<= -1
+            assert true, 4.<= 4
+            assert true, 4.<= 14
+            assert false, 4.<= 3.9
+            assert true, 4.<= 4.0
+            assert true, 4.<= 4.1
 
-            assert true, 4.send(:">", -1)
-            assert false, 4.send(:">", 4)
-            assert false, 4.send(:">", 14)
-            #assert false, 4.send(:">", "4")
-            assert true, 4.send(:">", 3.9)
-            assert false, 4.send(:">", 4.0)
-            assert false, 4.send(:">", 4.1)
+            assert true, 4.> -1
+            assert false, 4.> 4
+            assert false, 4.> 14
+            assert true, 4.> 3.9
+            assert false, 4.> 4.0
+            assert false, 4.> 4.1
 
-            assert false, 4.send(:"<", -1)
-            assert false, 4.send(:"<", 4)
-            assert true, 4.send(:"<", 14)
-            #assert false, 4.send(:"<", "4")
-            assert false, 4.send(:"<", 3.9)
-            assert false, 4.send(:"<", 4.0)
-            assert true, 4.send(:"<", 4.1)
+            assert false, 4.< -1
+            assert false, 4.< 4
+            assert true, 4.< 14
+            assert false, 4.< 3.9
+            assert false, 4.< 4.0
+            assert true, 4.< 4.1
 
-            assert(0, 3.send(:"<=>", 3))
-            assert(1, 5.send(:"<=>", 3))
-            assert(-1, 3.send(:"<=>", 5))
-            assert(0, 3.send(:"<=>", 3.0))
-            assert(1, 5.send(:"<=>", 3.9))
-            assert(-1, 3.send(:"<=>", 5.8))
-            assert(nil, 3.send(:"<=>", "three"))
+            assert 0, 3.<=> 3
+            assert 1, 5.<=> 3
+            assert -1, 3.<=> 5
+            assert 0, 3.<=> 3.0
+            assert 1, 5.<=> 3.9
+            assert -1, 3.<=> 5.8
+            assert nil, 3.<=> "three"
 
-            assert(0, 3 <=> 3)
-            assert(1, 5 <=> 3)
-            assert(-1, 3 <=> 5)
-            assert(0, 3 <=> 3.0)
-            assert(1, 5 <=> 3.9)
-            assert(-1, 3 <=> 5.8)
-            assert(nil, 3 <=> "three")
+            assert 0, 3 <=> 3
+            assert 1, 5 <=> 3
+            assert -1, 3 <=> 5
+            assert 0, 3 <=> 3.0
+            assert 1, 5 <=> 3.9
+            assert -1, 3 <=> 5.8
+            assert nil, 3 <=> "three"
         "#;
         assert_script(program);
     }

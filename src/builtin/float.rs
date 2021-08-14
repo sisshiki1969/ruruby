@@ -9,6 +9,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("+", add);
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
+    class.add_builtin_method_by_str("/", div);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
@@ -88,6 +89,23 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Some((r, i)) => {
                 let r = lhs * r;
                 let i = lhs * i;
+                Ok(Value::complex(r.to_val(), i.to_val()))
+            }
+            None => Err(RubyError::undefined_op("-", args[0], self_val)),
+        },
+    }
+}
+
+fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs / rhs).to_val()),
+        None => match args[0].to_complex() {
+            Some((r, i)) => {
+                let divider = r * r + i * i;
+                let r = lhs * r / divider;
+                let i = -lhs * i / divider;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
             None => Err(RubyError::undefined_op("-", args[0], self_val)),
@@ -191,6 +209,11 @@ mod tests {
 
         assert('NaN', (0/0.0).to_s)
         assert(true, (0/0.0).nan?)
+
+        assert 8.0+4.0i, 5.0+(3+4.0i)
+        assert 2.0-4.0i, 5.0-(3+4.0i)
+        assert 15.0+20.0i, 5.0*(3+4.0i)
+        assert 0.6-0.8i, 5.0/(3+4i)
     ";
         assert_script(program);
     }

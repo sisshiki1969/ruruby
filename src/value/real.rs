@@ -51,6 +51,15 @@ impl Real {
         }
     }
 
+    pub fn divide(self, other: Real) -> Real {
+        match (self, other) {
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Float(i1 as f64 / i2 as f64),
+            (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 / f2),
+            (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 / i2 as f64),
+            (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 / f2),
+        }
+    }
+
     pub fn included(&self, start: &Self, end: &Self, exclude: bool) -> bool {
         start <= self && (if exclude { self < end } else { self <= end })
     }
@@ -109,7 +118,7 @@ impl Div for Real {
     type Output = Real;
     fn div(self, other: Real) -> Real {
         match (self, other) {
-            (Real::Integer(i1), Real::Integer(i2)) => Real::Float((i1 as f64) / (i2 as f64)),
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1 / i2),
             (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 / f2),
             (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 / i2 as f64),
             (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 / f2),

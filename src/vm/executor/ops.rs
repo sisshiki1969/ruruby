@@ -16,20 +16,23 @@ macro_rules! invoke_op_i {
 }
 
 macro_rules! invoke_op {
-    ($vm:ident, $op:ident, $id:expr) => {
+    ($vm:ident, $op1:ident, $op2:ident, $id:expr) => {
         let len = $vm.stack_len();
-        let lhs = unsafe { *$vm.exec_stack.get_unchecked(len - 2) };
-        let rhs = unsafe { *$vm.exec_stack.get_unchecked(len - 1) };
+        let lhs = $vm.exec_stack[len - 2];
+        let rhs = $vm.exec_stack[len - 1];
         $vm.set_stack_len(len - 2);
         let val = if lhs.is_packed_fixnum() {
             if rhs.is_packed_fixnum() {
                 let lhs = lhs.as_packed_fixnum();
                 let rhs = rhs.as_packed_fixnum();
-                Value::integer(lhs.$op(rhs))
+                match lhs.$op2(rhs) {
+                    Some(res) => Value::integer(res),
+                    None => Value::float((lhs as f64).$op1(rhs as f64)),
+                }
             } else if rhs.is_packed_num() {
                 let lhs = lhs.as_packed_fixnum();
                 let rhs = rhs.as_packed_flonum();
-                Value::float((lhs as f64).$op(rhs))
+                Value::float((lhs as f64).$op1(rhs))
             } else {
                 return $vm.fallback_for_binop($id, lhs, rhs);
             }
@@ -37,11 +40,11 @@ macro_rules! invoke_op {
             if rhs.is_packed_fixnum() {
                 let lhs = lhs.as_packed_flonum();
                 let rhs = rhs.as_packed_fixnum();
-                Value::float(lhs.$op(rhs as f64))
+                Value::float(lhs.$op1(rhs as f64))
             } else if rhs.is_packed_num() {
                 let lhs = lhs.as_packed_flonum();
                 let rhs = rhs.as_packed_flonum();
-                Value::float(lhs.$op(rhs))
+                Value::float(lhs.$op1(rhs))
             } else {
                 return $vm.fallback_for_binop($id, lhs, rhs);
             }
@@ -56,27 +59,17 @@ macro_rules! invoke_op {
 impl VM {
     pub(super) fn invoke_add(&mut self) -> Result<(), RubyError> {
         use std::ops::Add;
-        invoke_op!(self, add, IdentId::_ADD);
-    }
-
-    pub(super) fn invoke_addi(&mut self, i: i32) -> Result<(), RubyError> {
-        use std::ops::Add;
-        invoke_op_i!(self, iseq, i, add, IdentId::_ADD);
+        invoke_op!(self, add, checked_add, IdentId::_ADD);
     }
 
     pub(super) fn invoke_sub(&mut self) -> Result<(), RubyError> {
         use std::ops::Sub;
-        invoke_op!(self, sub, IdentId::_SUB);
-    }
-
-    pub(super) fn invoke_subi(&mut self, i: i32) -> Result<(), RubyError> {
-        use std::ops::Sub;
-        invoke_op_i!(self, iseq, i, sub, IdentId::_SUB);
+        invoke_op!(self, sub, checked_sub, IdentId::_SUB);
     }
 
     pub(super) fn invoke_mul(&mut self) -> Result<(), RubyError> {
         use std::ops::Mul;
-        invoke_op!(self, mul, IdentId::_MUL);
+        invoke_op!(self, mul, checked_mul, IdentId::_MUL);
     }
 
     pub(super) fn invoke_div(&mut self) -> Result<(), RubyError> {
@@ -87,10 +80,20 @@ impl VM {
             self.stack_push(Value::float(f64::NAN));
             return Ok(());
         }
-        if rhs.is_zero() {
+        if rhs.as_integer() == Some(0) {
             return Err(RubyError::zero_div("Divided by zero."));
         }
-        invoke_op!(self, div, IdentId::_DIV);
+        invoke_op!(self, div, checked_div, IdentId::_DIV);
+    }
+
+    pub(super) fn invoke_addi(&mut self, i: i32) -> Result<(), RubyError> {
+        use std::ops::Add;
+        invoke_op_i!(self, iseq, i, add, IdentId::_ADD);
+    }
+
+    pub(super) fn invoke_subi(&mut self, i: i32) -> Result<(), RubyError> {
+        use std::ops::Sub;
+        invoke_op_i!(self, iseq, i, sub, IdentId::_SUB);
     }
 
     pub(super) fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {

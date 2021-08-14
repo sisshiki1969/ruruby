@@ -185,7 +185,7 @@ impl RegexpInfo {
                     Ok(None) => break,
                     Ok(Some(captures)) => {
                         let m = captures.get(0).unwrap();
-                        i = m.end();
+                        i = m.end() + if m.start() == m.end() { 1 } else { 0 };
                         RegexpInfo::get_captures(vm, &captures, given);
                         (m.start(), m.end(), m.as_str())
                     }
