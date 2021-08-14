@@ -1,3 +1,5 @@
+use num::BigInt;
+
 use crate::*;
 
 macro_rules! invoke_op_i {
@@ -133,11 +135,11 @@ impl VM {
         let val = match (lhs.unpack(), rhs.unpack()) {
             (RV::Integer(lhs), RV::Integer(rhs)) => {
                 if 0 <= rhs && rhs <= std::u32::MAX as i64 {
-                    let i = match lhs.checked_pow(rhs as u32) {
-                        Some(i) => i,
-                        None => return Err(RubyError::runtime("Power overflow.")),
-                    };
-                    Value::integer(i)
+                    if let Some(i) = lhs.checked_pow(rhs as u32) {
+                        Value::integer(i)
+                    } else {
+                        Value::bignum(BigInt::from(lhs).pow(rhs as u32))
+                    }
                 } else {
                     Value::float((lhs as f64).powf(rhs as f64))
                 }

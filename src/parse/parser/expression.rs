@@ -629,7 +629,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, ParseErr> {
         let tok = self.get()?;
         let loc = tok.loc();
-        match &tok.kind {
+        match tok.kind {
             TokenKind::Ident(name) => {
                 match name.as_str() {
                     "true" => return Ok(Node::new_bool(true, loc)),
@@ -637,7 +637,7 @@ impl<'a> Parser<'a> {
                     "nil" => return Ok(Node::new_nil(loc)),
                     "self" => return Ok(Node::new_self(loc)),
                     "__LINE__" => {
-                        let line = self.lexer.get_line(tok.loc().0);
+                        let line = self.lexer.get_line(loc.0);
                         return Ok(Node::new_integer(line as i64, loc));
                     }
                     "__FILE__" => {
@@ -648,15 +648,15 @@ impl<'a> Parser<'a> {
                 };
 
                 if self.lexer.trailing_lparen() {
-                    let node = Node::new_identifier(name, loc);
+                    let node = Node::new_identifier(&name, loc);
                     return Ok(self.parse_function_args(node)?);
                 };
-                let id = self.get_ident_id(name);
+                let id = self.get_ident_id(&name);
                 if self.is_local_var(id) {
                     Ok(Node::new_lvar(id, loc))
                 } else {
                     // FUNCTION or COMMAND or LHS for assignment
-                    let node = Node::new_identifier(name, loc);
+                    let node = Node::new_identifier(&name, loc);
                     if let Ok(tok) = self.peek_no_term() {
                         match tok.kind {
                             // Multiple assignment
@@ -676,33 +676,34 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            TokenKind::InstanceVar(name) => Ok(Node::new_instance_var(name, loc)),
-            TokenKind::ClassVar(name) => Ok(Node::new_class_var(name, loc)),
-            TokenKind::GlobalVar(name) => Ok(Node::new_global_var(name, loc)),
+            TokenKind::InstanceVar(name) => Ok(Node::new_instance_var(&name, loc)),
+            TokenKind::ClassVar(name) => Ok(Node::new_class_var(&name, loc)),
+            TokenKind::GlobalVar(name) => Ok(Node::new_global_var(&name, loc)),
             TokenKind::Const(name) => {
                 if self.lexer.trailing_lparen() {
-                    let node = Node::new_identifier(name, loc);
+                    let node = Node::new_identifier(&name, loc);
                     self.parse_function_args(node)
                 } else if !suppress_unparen_call && self.is_command() {
-                    let id = self.get_ident_id(name);
+                    let id = self.get_ident_id(&name);
                     Ok(self.parse_command(id, loc)?)
                 } else {
-                    Ok(Node::new_const(name, false, loc))
+                    Ok(Node::new_const(&name, false, loc))
                 }
             }
-            TokenKind::IntegerLit(num) => Ok(Node::new_integer(*num, loc)),
-            TokenKind::FloatLit(num) => Ok(Node::new_float(*num, loc)),
-            TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(*num, loc)),
-            TokenKind::StringLit(s) => Ok(self.parse_string_literal(s)?),
+            TokenKind::IntegerLit(num) => Ok(Node::new_integer(num, loc)),
+            TokenKind::BignumLit(num) => Ok(Node::new_bignum(num, loc)),
+            TokenKind::FloatLit(num) => Ok(Node::new_float(num, loc)),
+            TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(num, loc)),
+            TokenKind::StringLit(s) => Ok(self.parse_string_literal(&s)?),
             TokenKind::CommandLit(s) => {
                 let content = Node::new_string(s.to_owned(), loc);
                 Ok(Node::new_command(content))
             }
             TokenKind::OpenString(s, term, level) => {
-                self.parse_interporated_string_literal(s, *term, *level)
+                self.parse_interporated_string_literal(&s, term, level)
             }
             TokenKind::OpenCommand(s, term, level) => {
-                let content = self.parse_interporated_string_literal(s, *term, *level)?;
+                let content = self.parse_interporated_string_literal(&s, term, level)?;
                 Ok(Node::new_command(content))
             }
             TokenKind::Punct(punct) => match punct {

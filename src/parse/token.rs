@@ -2,6 +2,7 @@ use crate::parse::node::BinOp;
 use crate::value::real::Real;
 use crate::*;
 use enum_iterator::IntoEnumIterator;
+use num::BigInt;
 use std::fmt::{self, Debug};
 
 pub type Token = Annot<TokenKind>;
@@ -45,6 +46,7 @@ pub enum TokenKind {
     ClassVar(String),
     Const(String),
     IntegerLit(i64),
+    BignumLit(BigInt),
     FloatLit(f64),
     ImaginaryLit(Real),
     StringLit(String),
@@ -203,8 +205,12 @@ impl Token {
         Annot::new(TokenKind::Reserved(ident), loc)
     }
 
-    pub fn new_numlit(num: i64, loc: Loc) -> Self {
+    pub fn new_intlit(num: i64, loc: Loc) -> Self {
         Annot::new(TokenKind::IntegerLit(num), loc)
+    }
+
+    pub fn new_bignumlit(num: BigInt, loc: Loc) -> Self {
+        Annot::new(TokenKind::BignumLit(num), loc)
     }
 
     pub fn new_floatlit(num: f64, loc: Loc) -> Self {

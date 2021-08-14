@@ -2,6 +2,7 @@ use super::parser::{LvarCollector, RescueEntry};
 use crate::id_table::IdentId;
 use crate::util::{Annot, Loc};
 use crate::value::real::Real;
+use num::BigInt;
 
 pub type Node = Annot<NodeKind>;
 
@@ -10,6 +11,7 @@ pub enum NodeKind {
     SelfValue,
     Nil,
     Integer(i64),
+    Bignum(BigInt),
     Float(f64),
     Imaginary(Real),
     Bool(bool),
@@ -363,6 +365,10 @@ impl Node {
 
     pub fn new_integer(num: i64, loc: Loc) -> Self {
         Node::new(NodeKind::Integer(num), loc)
+    }
+
+    pub fn new_bignum(num: BigInt, loc: Loc) -> Self {
+        Node::new(NodeKind::Bignum(num), loc)
     }
 
     pub fn new_bool(b: bool, loc: Loc) -> Self {

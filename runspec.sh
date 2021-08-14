@@ -1,4 +1,4 @@
 #!/bin/sh
 
 cargo build --release
-../mspec/bin/mspec ../spec/core/true -t target/release/ruruby
+../mspec/bin/mspec ../spec/core/integer -t target/release/ruruby

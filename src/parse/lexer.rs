@@ -1,9 +1,10 @@
 use super::*;
-use crate::error::ParseErrKind;
 use crate::util::*;
 use crate::value::real::Real;
+use crate::ParseErrKind;
 use enum_iterator::IntoEnumIterator;
 use fxhash::FxHashMap;
+use num::BigInt;
 use once_cell::sync::Lazy;
 use std::ops::Range;
 use std::sync::Mutex;
@@ -570,9 +571,12 @@ impl<'a> Lexer<'a> {
         } else {
             match s.parse::<i64>() {
                 Ok(i) => Real::Integer(i),
-                Err(_err) => {
-                    // TODO: parse BigNum
-                    Real::Integer(0)
+                Err(_) => {
+                    let num = match BigInt::parse_bytes(s.as_bytes(), 10) {
+                        Some(num) => num,
+                        None => return Err(Self::error_parse("Invalid number literal.", self.pos)),
+                    };
+                    Real::Bignum(num)
                 }
             }
         };
@@ -580,6 +584,7 @@ impl<'a> Lexer<'a> {
             Ok(self.new_imaginarylit(number))
         } else {
             match number {
+                Real::Bignum(n) => Ok(self.new_bignumlit(n)),
                 Real::Integer(i) => Ok(self.new_numlit(i)),
                 Real::Float(f) => Ok(self.new_floatlit(f)),
             }
@@ -1224,7 +1229,11 @@ impl<'a> Lexer<'a> {
     }
 
     fn new_numlit(&self, num: i64) -> Token {
-        Token::new_numlit(num, self.cur_loc())
+        Token::new_intlit(num, self.cur_loc())
+    }
+
+    fn new_bignumlit(&self, num: BigInt) -> Token {
+        Token::new_bignumlit(num, self.cur_loc())
     }
 
     fn new_floatlit(&self, num: f64) -> Token {
@@ -1333,7 +1342,7 @@ mod test {
             Token::new_reserved($item, Loc($loc_0, $loc_1))
         };
         (NumLit($num:expr), $loc_0:expr, $loc_1:expr) => {
-            Token::new_numlit($num, Loc($loc_0, $loc_1))
+            Token::new_intlit($num, Loc($loc_0, $loc_1))
         };
         (StringLit($item:expr), $loc_0:expr, $loc_1:expr) => {
             Token::new_stringlit($item, Loc($loc_0, $loc_1))

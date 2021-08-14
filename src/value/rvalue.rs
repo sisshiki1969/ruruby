@@ -1,5 +1,6 @@
 use crate::coroutine::*;
 use crate::*;
+use num::BigInt;
 use std::borrow::Cow;
 
 /// Heap-allocated objects.
@@ -15,6 +16,7 @@ pub enum ObjKind {
     Invalid,
     Ordinary,
     Integer(i64),
+    BigNum(BigInt),
     Float(f64),
     Complex { r: Value, i: Value },
     Module(ClassInfo),
@@ -97,6 +99,7 @@ impl RValue {
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
                 ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
+                ObjKind::BigNum(bigint) => ObjKind::BigNum(bigint.clone()),
                 ObjKind::Hash(hinfo) => ObjKind::Hash(hinfo.clone()),
                 ObjKind::Method(hinfo) => ObjKind::Method(hinfo.clone()),
                 ObjKind::Ordinary => ObjKind::Ordinary,
@@ -155,6 +158,10 @@ impl RValue {
 
     pub fn new_integer(i: i64) -> Self {
         RValue::new(BuiltinClass::integer(), ObjKind::Integer(i))
+    }
+
+    pub fn new_bigint(bigint: BigInt) -> Self {
+        RValue::new(BuiltinClass::integer(), ObjKind::BigNum(bigint))
     }
 
     pub fn new_float(f: f64) -> Self {

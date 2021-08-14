@@ -63,7 +63,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
-    let r = r1 * r2 - i1 * i2;
+    let r = r1.clone() * r2.clone() - i1.clone() * i2.clone();
     let i = i1 * r2 + i2 * r1;
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
@@ -75,8 +75,8 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
-    let abs2 = r2 * r2 + i2 * i2;
-    let r = (r2 * r1 + i2 * i1) / abs2;
+    let abs2 = r2.clone().exp2() + i2.clone().exp2();
+    let r = (r2.clone() * r1.clone() + i2.clone() * i1.clone()) / abs2.clone();
     let i = (r2 * i1 - r1 * i2) / abs2;
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
@@ -95,13 +95,13 @@ fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn abs2(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
-    Ok((r * r + i * i).to_val())
+    Ok((r.exp2() + i.exp2()).to_val())
 }
 
 fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
-    Ok((r * r + i * i).sqrt().to_val())
+    Ok((r.exp2() + i.exp2()).sqrt().to_val())
 }
 
 fn rect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

@@ -1,3 +1,5 @@
+use num::BigInt;
+
 use crate::coroutine::*;
 use crate::*;
 use std::borrow::Cow;
@@ -57,6 +59,7 @@ impl std::hash::Hash for Value {
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::Integer(lhs) => (*lhs as f64).to_bits().hash(state),
+                ObjKind::BigNum(num) => num.hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
@@ -104,6 +107,7 @@ impl PartialEq for Value {
             (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
             (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
             (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
+            (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => *lhs == *rhs,
             (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
                 r1.eq(r2) && i1.eq(i2)
@@ -193,14 +197,15 @@ impl Value {
             RV::False => format!("false"),
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Integer(i) => format!("{}", i),
-            RV::Float(f) => format!("{}", f),
+            RV::Float(f) => Self::float_format(f),
             RV::Symbol(id) => format!(":\"{:?}\"", id),
             RV::Object(rval) => match &rval.kind {
                 ObjKind::Invalid => format!("[Invalid]"),
                 ObjKind::Ordinary => format!("#<{}:0x{:016x}>", self.get_class_name(), self.id()),
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
                 ObjKind::Integer(i) => format!("{}", i),
-                ObjKind::Float(f) => format!("{}", f),
+                ObjKind::BigNum(n) => format!("{}", n),
+                ObjKind::Float(f) => Self::float_format(*f),
                 ObjKind::Range(r) => {
                     let sym = if r.exclude { "..." } else { ".." };
                     format!("{}{}{}", r.start.format(0), sym, r.end.format(0))
@@ -281,6 +286,15 @@ impl Value {
                     format!("#<{}:0x{:x}>", self.get_class_name(), self.id())
                 }
             },
+        }
+    }
+
+    fn float_format(f: f64) -> String {
+        let fabs = f.abs();
+        if fabs < 0.001 || fabs >= 1000000000000000.0 {
+            format!("{:.1e}", f)
+        } else {
+            format!("{}", f)
         }
     }
 
@@ -593,6 +607,16 @@ impl Value {
         }
     }
 
+    pub fn as_bignum(&self) -> Option<BigInt> {
+        match self.as_rvalue() {
+            Some(info) => match &info.kind {
+                ObjKind::BigNum(n) => Some(n.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
@@ -717,9 +741,9 @@ impl Value {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(cinfo) => cinfo,
-                _ => unreachable!(),
+                _ => unreachable!("Not a module/class. {:?}", self),
             },
-            None => unreachable!(),
+            None => unreachable!("Not a module/class. {:?}", self),
         }
     }
 
@@ -1048,6 +1072,10 @@ impl Value {
         }
     }
 
+    pub fn bignum(num: BigInt) -> Self {
+        RValue::new_bigint(num).pack()
+    }
+
     pub fn float(num: f64) -> Self {
         if num == 0.0 {
             return Value::from(ZERO);
@@ -1246,6 +1274,10 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Some(Real::Integer(i)),
             RV::Float(f) => Some(Real::Float(f)),
+            RV::Object(obj) => match &obj.kind {
+                ObjKind::BigNum(n) => Some(Real::Bignum(n.clone())),
+                _ => None,
+            },
             _ => None,
         }
     }

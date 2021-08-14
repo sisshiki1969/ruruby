@@ -2,23 +2,14 @@ use crate::*;
 
 pub fn init() -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
+    BUILTINS.with(|m| m.borrow_mut().integer = class.into());
     BuiltinClass::set_toplevel_constant("Integer", class);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("+@", plus);
     class.add_builtin_method_by_str("-@", minus);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("/", div);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("==", eq);
     class.add_builtin_method_by_str("===", eq);
     class.add_builtin_method_by_str("!=", neq);
-    class.add_builtin_method_by_str(">=", ge);
-    class.add_builtin_method_by_str(">", gt);
-    class.add_builtin_method_by_str("<=", le);
-    class.add_builtin_method_by_str("<", lt);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("[]", index);
     class.add_builtin_method_by_str(">>", shr);
@@ -45,12 +36,6 @@ pub fn init() -> Value {
 // Class methods
 
 // Instance methods
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    let i = self_val.as_integer().unwrap();
-    Ok(Value::string(i.to_string()))
-}
-
 fn plus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     Ok(self_val)
@@ -58,79 +43,8 @@ fn plus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn minus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let rec = self_val.as_integer().unwrap();
-    Ok(Value::integer(-rec))
-}
-
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs + rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let r = lhs + r;
-                let i = i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::undefined_op("+", args[0], self_val)),
-        },
-    }
-}
-
-fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs - rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let r = lhs - r;
-                let i = -i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::undefined_op("-", args[0], self_val)),
-        },
-    }
-}
-
-fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs * rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let r = lhs * r;
-                let i = lhs * i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::typeerr(format!(
-                "{:?} can't be coerced into Integer.",
-                args[0]
-            ))),
-        },
-    }
-}
-
-fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs / rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let divider = r * r + i * i;
-                let r = (lhs * r).divide(divider);
-                let i = (-lhs * i).divide(divider);
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::typeerr(format!(
-                "{:?} can't be coerced into Integer.",
-                args[0]
-            ))),
-        },
-    }
+    let rec = self_val.to_real().unwrap();
+    Ok((-rec).to_val())
 }
 
 fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -141,7 +55,7 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
-            Ok((lhs.quo(rhs)).to_val())
+            Ok(lhs.quotient(rhs).to_val())
         }
         None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }
@@ -149,64 +63,28 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = self_val.as_integer().unwrap();
-    match args[0].unpack() {
-        RV::Integer(rhs) => Ok(Value::bool(lhs == rhs)),
-        RV::Float(rhs) => Ok(Value::bool(lhs as f64 == rhs)),
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok(Value::bool(lhs == rhs)),
         _ => Ok(Value::bool(false)),
     }
 }
 
 fn neq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = self_val.as_integer().unwrap();
-    match args[0].unpack() {
-        RV::Integer(rhs) => Ok(Value::bool(lhs != rhs)),
-        RV::Float(rhs) => Ok(Value::bool(lhs as f64 != rhs)),
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok(Value::bool(lhs != rhs)),
         _ => Ok(Value::bool(true)),
     }
-}
-
-macro_rules! define_cmp {
-    ($self_val:ident, $args:ident, $op:ident) => {
-        $args.check_args_num(1)?;
-        let lhs = $self_val.expect_integer("Receiver")?;
-        match $args[0].unpack() {
-            RV::Integer(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
-            RV::Float(rhs) => return Ok(Value::bool((lhs as f64).$op(&rhs))),
-            _ => {
-                return Err(RubyError::argument(format!(
-                    "Comparison of Integer with {} failed.",
-                    $args[0].get_class_name()
-                )))
-            }
-        }
-    };
-}
-
-fn ge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(self_val, args, ge);
-}
-
-fn gt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(self_val, args, gt);
-}
-
-fn le(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(self_val, args, le);
-}
-
-fn lt(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    define_cmp!(self_val, args, lt);
 }
 
 fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     //use std::cmp::Ordering;
     args.check_args_num(1)?;
-    let lhs = self_val.as_integer().unwrap();
-    let res = match args[0].unpack() {
-        RV::Integer(rhs) => lhs.partial_cmp(&rhs),
-        RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
+    let lhs = self_val.to_real().unwrap();
+    let res = match args[0].to_real() {
+        Some(rhs) => lhs.partial_cmp(&rhs),
         _ => return Ok(Value::nil()),
     };
     match res {
@@ -382,8 +260,8 @@ fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn tof(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let num = self_val.as_integer().unwrap();
-    Ok(Value::float(num as f64))
+    let num = self_val.to_real().unwrap();
+    Ok(Value::float(num.to_f64()))
 }
 
 fn toi(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -393,14 +271,14 @@ fn toi(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn even(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let num = self_val.as_integer().unwrap();
-    Ok(Value::bool(num % 2 == 0))
+    let num = self_val.to_real().unwrap();
+    Ok(Value::bool((num % Real::Integer(2)).is_zero()))
 }
 
 fn odd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let num = self_val.as_integer().unwrap();
-    Ok(Value::bool(num % 2 != 0))
+    let num = self_val.to_real().unwrap();
+    Ok(Value::bool(!(num % Real::Integer(2)).is_zero()))
 }
 
 fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -444,6 +322,17 @@ mod tests {
         assert 20, 25.-5
         assert 125, 25.*5
         assert 5, 25./5
+
+        assert 4000000000000000000000000, 2000000000000000000000000+2000000000000000000000000
+        assert 2000000000000000000000002, 2000000000000000000000000+2
+        assert 2000000000000000000000002, 2+2000000000000000000000000
+        assert 1000000000000000000000000, 3000000000000000000000000-2000000000000000000000000
+        assert 2999999999999999999999998, 3000000000000000000000000-2
+        assert -2999999999999999999999998, 2-3000000000000000000000000
+        assert 8000000000000000000000000, 4*2000000000000000000000000
+        assert 8000000000000000000000000, 2000000000000000000000000*4
+        assert 2000000000000000000000000, 8000000000000000000000000/4
+        assert 3,6000000000000000000000000/2000000000000000000000000
 
         assert 8+4i, 5+(3+4i)
         assert 2-4i, 5-(3+4i)

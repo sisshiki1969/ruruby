@@ -2,14 +2,9 @@ use crate::*;
 
 pub fn init() -> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
+    BUILTINS.with(|m| m.borrow_mut().float = class.into());
     BuiltinClass::set_toplevel_constant("Float", class);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
     class.add_builtin_method_by_str("nan?", nan);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("/", div);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
@@ -31,86 +26,10 @@ pub fn init() -> Value {
 // Class methods
 
 // Instance methods
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    let f = self_val.as_float().unwrap();
-    let s = if f.fract() == 0.0 {
-        format!("{:.1}", f)
-    } else {
-        f.to_string()
-    };
-    Ok(Value::string(s))
-}
-
 fn nan(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let f = self_val.as_float().unwrap();
     Ok(Value::bool(f.is_nan()))
-}
-
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs + rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let r = lhs + r;
-                let i = i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::undefined_op("+", args[0], self_val)),
-        },
-    }
-}
-
-fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs - rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let r = lhs - r;
-                let i = -i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::undefined_op("-", args[0], self_val)),
-        },
-    }
-}
-
-fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs * rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let r = lhs * r;
-                let i = lhs * i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::undefined_op("-", args[0], self_val)),
-        },
-    }
-}
-
-fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs / rhs).to_val()),
-        None => match args[0].to_complex() {
-            Some((r, i)) => {
-                let divider = r * r + i * i;
-                let r = lhs * r / divider;
-                let i = -lhs * i / divider;
-                Ok(Value::complex(r.to_val(), i.to_val()))
-            }
-            None => Err(RubyError::undefined_op("-", args[0], self_val)),
-        },
-    }
 }
 
 fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -121,7 +40,7 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
-            Ok((lhs.quo(rhs)).to_val())
+            Ok(lhs.quotient(rhs).to_val())
         }
         None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }

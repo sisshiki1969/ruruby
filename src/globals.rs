@@ -35,10 +35,6 @@ impl GC for Globals {
         self.const_values.mark(alloc);
         self.main_object.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
-        /*self.method_cache
-        .cache
-        .keys()
-        .for_each(|(v, _)| v.mark(alloc));*/
         for t in &self.case_dispatch.table {
             t.keys().for_each(|k| k.mark(alloc));
         }
