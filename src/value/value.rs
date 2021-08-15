@@ -189,6 +189,10 @@ impl Value {
         }
     }
 
+    pub fn eql(&self, other: &Self) -> bool {
+        HashKey(*self) == HashKey(*other)
+    }
+
     fn format(&self, level: usize) -> String {
         match self.unpack() {
             RV::Nil => format!("nil"),

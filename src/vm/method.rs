@@ -686,7 +686,7 @@ impl PartialEq for MethodObjInfo {
         self.name == other.name
             && self.method == other.method
             && match (self.receiver, other.receiver) {
-                (Some(r1), Some(r2)) => HashKey(r1) == HashKey(r2),
+                (Some(r1), Some(r2)) => r1.id() == r2.id(),
                 _ => false,
             }
     }

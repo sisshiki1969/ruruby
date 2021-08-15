@@ -42,7 +42,7 @@ impl RValue {
             (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => *lhs == *rhs,
             (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                HashKey(*r1) == HashKey(*r2) && HashKey(*i1) == HashKey(*i2)
+                r1.eql(r2) && i1.eql(i2)
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.eql(rhs),

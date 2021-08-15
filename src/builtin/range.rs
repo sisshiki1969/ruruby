@@ -17,9 +17,7 @@ impl RangeInfo {
     }
 
     pub fn eql(&self, other: &Self) -> bool {
-        HashKey(self.start) == HashKey(other.start)
-            && HashKey(self.end) == HashKey(other.end)
-            && self.exclude == other.exclude
+        self.start.eql(&other.start) && self.end.eql(&other.end) && self.exclude == other.exclude
     }
 
     pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {

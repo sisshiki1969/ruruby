@@ -99,7 +99,7 @@ fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Object/i/eql=3f.html
 fn eql(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    Ok(Value::bool(HashKey(self_val) == HashKey(args[0])))
+    Ok(Value::bool(self_val.eql(&args[0])))
 }
 
 fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {

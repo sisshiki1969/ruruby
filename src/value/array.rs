@@ -117,7 +117,7 @@ impl ArrayInfo {
         self.elements
             .iter()
             .zip(other.elements.iter())
-            .all(|(a1, a2)| HashKey(*a1) == HashKey(*a2))
+            .all(|(a1, a2)| a1.eql(a2))
     }
 
     /// Calculate array index.
