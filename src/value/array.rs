@@ -81,7 +81,7 @@ impl Array {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ArrayInfo {
     pub elements: Vec<Value>,
 }
@@ -108,6 +108,16 @@ impl std::ops::DerefMut for ArrayInfo {
 impl ArrayInfo {
     pub fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
+    }
+
+    pub fn eql(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        self.elements
+            .iter()
+            .zip(other.elements.iter())
+            .all(|(a1, a2)| HashKey(*a1) == HashKey(*a2))
     }
 
     /// Calculate array index.
@@ -148,7 +158,7 @@ impl ArrayInfo {
     }
 
     pub fn get_elem1(&self, idx: Value) -> VMResult {
-        if let Some(index) = idx.as_integer() {
+        if let Some(index) = idx.as_fixnum() {
             let self_len = self.len();
             let index = self.get_array_index(index).unwrap_or(self_len);
             let val = self.get_elem_imm(index);
@@ -211,7 +221,7 @@ impl ArrayInfo {
     }
 
     pub fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
-        if let Some(index) = idx.as_integer() {
+        if let Some(index) = idx.as_fixnum() {
             if index >= 0 {
                 self.set_elem_imm(index as usize, val);
             } else {

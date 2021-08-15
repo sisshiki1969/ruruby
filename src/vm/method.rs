@@ -673,12 +673,23 @@ impl ISeqInfo {
 
 //----------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct MethodObjInfo {
     pub name: IdentId,
     pub receiver: Option<Value>,
     pub method: MethodId,
     pub owner: Module,
+}
+
+impl PartialEq for MethodObjInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.method == other.method
+            && match (self.receiver, other.receiver) {
+                (Some(r1), Some(r2)) => HashKey(r1) == HashKey(r2),
+                _ => false,
+            }
+    }
 }
 
 impl MethodObjInfo {

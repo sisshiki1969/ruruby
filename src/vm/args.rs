@@ -4,7 +4,7 @@ use std::ops::{Index, IndexMut, Range};
 
 const ARG_ARRAY_SIZE: usize = 8;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Block {
     Block(MethodId, ContextRef),
     Proc(Value),
@@ -53,7 +53,7 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Args {
     pub block: Option<Block>,
     pub kw_arg: Value,
@@ -245,7 +245,7 @@ mod tests {
             args.push(Value::integer(i as i64));
         }
         for i in 0..20 {
-            assert_eq!(i as i64, args[i].as_integer().unwrap());
+            assert_eq!(i as i64, args[i].as_fixnum().unwrap());
         }
         args[3] = Value::false_val();
         args[17] = Value::true_val();
@@ -256,14 +256,14 @@ mod tests {
     #[test]
     fn args1() {
         let args = Args::new1(Value::integer(0));
-        assert_eq!(0, args[0].as_integer().unwrap());
+        assert_eq!(0, args[0].as_fixnum().unwrap());
     }
 
     #[test]
     fn args2() {
         let args = Args::new2(Value::integer(0), Value::integer(1));
-        assert_eq!(0, args[0].as_integer().unwrap());
-        assert_eq!(1, args[1].as_integer().unwrap());
+        assert_eq!(0, args[0].as_fixnum().unwrap());
+        assert_eq!(1, args[1].as_fixnum().unwrap());
     }
 
     #[test]
@@ -274,8 +274,8 @@ mod tests {
             Value::integer(1),
             Value::integer(2),
         );
-        assert_eq!(0, args[0].as_integer().unwrap());
-        assert_eq!(1, args[1].as_integer().unwrap());
-        assert_eq!(2, args[2].as_integer().unwrap());
+        assert_eq!(0, args[0].as_fixnum().unwrap());
+        assert_eq!(1, args[1].as_fixnum().unwrap());
+        assert_eq!(2, args[2].as_fixnum().unwrap());
     }
 }

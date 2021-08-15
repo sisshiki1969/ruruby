@@ -10,7 +10,7 @@ pub fn eval_script(script: &str, expected: Value) {
     globals.print_mark();
     match res {
         Ok(res) => {
-            if res != expected {
+            if !vm.eval_eq2(res, expected).unwrap() {
                 panic!("Expected:{:?} Got:{:?}", expected, res);
             }
         }

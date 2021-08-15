@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct ProcInfo {
     pub self_val: Value,
     pub iseq: ISeqRef,
@@ -21,6 +21,14 @@ impl GC for ProcInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_val.mark(alloc);
         self.outer.mark(alloc);
+    }
+}
+
+impl PartialEq for ProcInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.self_val.id() == other.self_val.id()
+            && self.iseq == other.iseq
+            && self.outer == other.outer
     }
 }
 

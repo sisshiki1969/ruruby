@@ -248,7 +248,7 @@ impl VM {
                 self.invoke_func(method, receiver, None, &new_args, use_value)
             }
             None => {
-                if receiver == self.context().self_value {
+                if receiver.id() == self.context().self_value.id() {
                     Err(RubyError::name(format!(
                         "Undefined local variable or method `{:?}' for {:?}",
                         method_id, receiver

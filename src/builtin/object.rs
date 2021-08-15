@@ -95,9 +95,11 @@ fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
+/// eql?(other) -> bool
+/// https://docs.ruby-lang.org/ja/latest/method/Object/i/eql=3f.html
 fn eql(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    Ok(Value::bool(self_val == args[0]))
+    Ok(Value::bool(HashKey(self_val) == HashKey(args[0])))
 }
 
 fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -236,7 +238,7 @@ fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Err(_) => Some(self_val.get_class_for_method()),
         Ok(class) => {
             for k in class.method_table().keys() {
-                v.insert(Value::symbol(*k));
+                v.insert(*k);
             }
             class.upper()
         }
@@ -248,7 +250,7 @@ fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                     break;
                 }
                 for k in module.method_table().keys() {
-                    v.insert(Value::symbol(*k));
+                    v.insert(*k);
                 }
                 match module.upper() {
                     None => break,
@@ -259,7 +261,9 @@ fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         }
     }
-    Ok(Value::array_from(v.iter().cloned().collect()))
+    Ok(Value::array_from(
+        v.into_iter().map(|id| Value::symbol(id)).collect(),
+    ))
 }
 
 fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

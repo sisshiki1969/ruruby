@@ -2,14 +2,13 @@ use crate::*;
 use std::hash::Hash;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone)]
 pub enum HashInfo {
     Map(FxIndexMap<HashKey, Value>),
     IdentMap(FxIndexMap<IdentKey, Value>),
 }
 
 impl PartialEq for HashInfo {
-    // Object#eql?()
     // This type of equality is used for comparison for keys of Hash.
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -61,7 +60,7 @@ impl Hash for HashKey {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::Integer(lhs) => lhs.hash(state),
+                ObjKind::BigNum(lhs) => lhs.hash(state),
                 ObjKind::Float(lhs) => (*lhs as u64).hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
@@ -87,19 +86,8 @@ impl PartialEq for HashKey {
             return true;
         }
         match (self.as_rvalue(), other.as_rvalue()) {
-            (None, None) => self.0 == other.0,
-            (Some(lhs), Some(rhs)) => match (&lhs.kind, &rhs.kind) {
-                (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
-                (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
-                (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
-                (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-                (ObjKind::Range(lhs), ObjKind::Range(rhs)) => *lhs == *rhs,
-                (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
-                (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs == *rhs,
-                (ObjKind::Invalid, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                (_, ObjKind::Invalid) => panic!("Invalid rvalue. (maybe GC problem) {:?}", rhs),
-                _ => lhs.kind == rhs.kind,
-            },
+            (None, None) => self.0.id() == other.0.id(),
+            (Some(lhs), Some(rhs)) => lhs.eql(&rhs),
             _ => false,
         }
     }

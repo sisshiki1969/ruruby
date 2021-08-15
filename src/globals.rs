@@ -339,7 +339,7 @@ impl ConstCache {
 ///
 #[derive(Debug, Clone)]
 pub struct CaseDispatchMap {
-    table: Vec<FxHashMap<Value, ISeqDisp>>,
+    table: Vec<FxHashMap<HashKey, ISeqDisp>>,
     id: u32,
 }
 
@@ -357,11 +357,11 @@ impl CaseDispatchMap {
         self.id - 1
     }
 
-    pub fn get_entry(&self, id: u32) -> &FxHashMap<Value, ISeqDisp> {
+    pub fn get_entry(&self, id: u32) -> &FxHashMap<HashKey, ISeqDisp> {
         &self.table[id as usize]
     }
 
-    pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<Value, ISeqDisp> {
+    pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<HashKey, ISeqDisp> {
         &mut self.table[id as usize]
     }
 }

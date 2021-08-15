@@ -1466,7 +1466,9 @@ impl Codegen {
                 match cond {
                     Some(cond) => {
                         self.gen(globals, iseq, *cond, true)?;
+                        // This flag is set when when label of all branches are Integer.
                         let mut opt_flag = true;
+                        // This flag is set when when label of all branches are Integer, Symbol, or String.
                         let mut opt_flag2 = true;
                         let mut opt_min = i64::max_value();
                         let mut opt_max = i64::min_value();
@@ -1532,7 +1534,7 @@ impl Codegen {
                                         NodeKind::String(str) => Value::string(str),
                                         _ => unreachable!(),
                                     };
-                                    map.insert(k, disp);
+                                    map.insert(HashKey(k), disp);
                                 }
                                 self.gen(globals, iseq, *branch.body, use_value)?;
                                 end.push(iseq.gen_jmp());

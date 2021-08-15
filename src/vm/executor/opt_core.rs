@@ -567,7 +567,7 @@ impl VM {
                             .globals
                             .case_dispatch
                             .get_entry(iseq.read32(self.pc + 1));
-                        let disp = match map.get(&val) {
+                        let disp = match map.get(&HashKey(val)) {
                             Some(disp) => *disp,
                             None => iseq.read_disp(self.pc + 5),
                         };
@@ -575,7 +575,7 @@ impl VM {
                     }
                     Inst::OPT_CASE2 => {
                         let val = self.stack_pop();
-                        let disp = if let Some(i) = val.as_integer() {
+                        let disp = if let Some(i) = val.as_fixnum() {
                             let map = self
                                 .globals
                                 .case_dispatch2

@@ -219,7 +219,7 @@ pub(crate) fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMRe
             let mut v = FxIndexSet::default();
             loop {
                 for k in module.method_table().keys() {
-                    v.insert(Value::symbol(*k));
+                    v.insert(*k);
                 }
                 match module.upper() {
                     None => break,
@@ -228,7 +228,9 @@ pub(crate) fn instance_methods(_: &mut VM, self_val: Value, args: &Args) -> VMRe
                     }
                 }
             }
-            Ok(Value::array_from(v.iter().cloned().collect()))
+            Ok(Value::array_from(
+                v.into_iter().map(|id| Value::symbol(id)).collect(),
+            ))
         }
     }
 }

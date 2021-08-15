@@ -12,49 +12,31 @@ pub fn init() -> Value {
 
 // Class methods
 
-// Instance methods
+fn coarce_to_float(val: Value) -> Result<f64, RubyError> {
+    if let Some(real) = val.to_real() {
+        Ok(real.to_f64())
+    } else {
+        Err(RubyError::typeerr("Must be a number."))
+    }
+}
 
 fn sqrt(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    let arg = args[0];
-    let num = if arg.is_packed_num() {
-        if arg.is_packed_fixnum() {
-            arg.as_packed_fixnum() as f64
-        } else {
-            arg.as_packed_flonum()
-        }
-    } else {
-        return Err(RubyError::typeerr("Must be a number."));
-    };
+    args.check_args_num(1)?;
+    let num = coarce_to_float(args[0])?;
     let res = Value::float(num.sqrt());
     Ok(res)
 }
 
 fn cos(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    let arg = args[0];
-    let num = if arg.is_packed_num() {
-        if arg.is_packed_fixnum() {
-            arg.as_packed_fixnum() as f64
-        } else {
-            arg.as_packed_flonum()
-        }
-    } else {
-        return Err(RubyError::typeerr("Must be a number."));
-    };
+    args.check_args_num(1)?;
+    let num = coarce_to_float(args[0])?;
     let res = Value::float(num.cos());
     Ok(res)
 }
 
 fn sin(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    let arg = args[0];
-    let num = if arg.is_packed_num() {
-        if arg.is_packed_fixnum() {
-            arg.as_packed_fixnum() as f64
-        } else {
-            arg.as_packed_flonum()
-        }
-    } else {
-        return Err(RubyError::typeerr("Must be a number."));
-    };
+    args.check_args_num(1)?;
+    let num = coarce_to_float(args[0])?;
     let res = Value::float(num.sin());
     Ok(res)
 }

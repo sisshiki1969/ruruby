@@ -111,6 +111,7 @@ impl<'a> Parser<'a> {
                 'w' => {
                     let ary = content
                         .split(|c| c == ' ' || c == '\n')
+                        .filter(|x| x != &"")
                         .map(|x| Node::new_string(x.to_string(), loc))
                         .collect();
                     Ok(Node::new_array(ary, tok.loc))
@@ -118,6 +119,7 @@ impl<'a> Parser<'a> {
                 'i' => {
                     let ary = content
                         .split(|c| c == ' ' || c == '\n')
+                        .filter(|x| x != &"")
                         .map(|x| Node::new_symbol(IdentId::get_id(x), loc))
                         .collect();
                     Ok(Node::new_array(ary, tok.loc))

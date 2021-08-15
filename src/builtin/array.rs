@@ -199,7 +199,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     };
     if lhs.len() >= rhs.len() {
         for (i, rhs_v) in rhs.iter().enumerate() {
-            match vm.eval_compare(*rhs_v, lhs[i])?.as_integer() {
+            match vm.eval_compare(*rhs_v, lhs[i])?.as_fixnum() {
                 Some(0) => {}
                 Some(ord) => return Ok(Value::integer(ord)),
                 None => return Ok(Value::nil()),
@@ -212,7 +212,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
     } else {
         for (i, lhs_v) in lhs.iter().enumerate() {
-            match vm.eval_compare(rhs[i], *lhs_v)?.as_integer() {
+            match vm.eval_compare(rhs[i], *lhs_v)?.as_fixnum() {
                 Some(0) => {}
                 Some(ord) => return Ok(Value::integer(ord)),
                 None => return Ok(Value::nil()),
@@ -297,7 +297,7 @@ fn empty(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let ary = self_val.into_array();
-    if let Some(num) = args[0].as_integer() {
+    if let Some(num) = args[0].as_fixnum() {
         let v = match num {
             i if i < 0 => return Err(RubyError::argument("Negative argument.")),
             i => ary.elements.repeat(i as usize),
@@ -565,7 +565,7 @@ fn rotate_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let i = if args.len() == 0 {
         1
     } else {
-        match args[0].as_integer() {
+        match args[0].as_fixnum() {
             Some(i) => i,
             None => return Err(RubyError::argument("Must be Integer.")),
         }
@@ -658,10 +658,10 @@ fn transpose(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn min(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     fn to_float(val: Value) -> Result<f64, RubyError> {
-        if val.is_packed_fixnum() {
-            Ok(val.as_packed_fixnum() as f64)
-        } else if val.is_packed_num() {
-            Ok(val.as_packed_flonum())
+        if let Some(i) = val.as_fixnum() {
+            Ok(i as f64)
+        } else if let Some(f) = val.as_flonum() {
+            Ok(f)
         } else {
             Err(RubyError::typeerr(
                 "Currently, each element must be Numeric.",
@@ -815,7 +815,7 @@ fn pack(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let aref = self_val.into_array();
     let mut v = vec![];
     for elem in &aref.elements {
-        let i = match elem.as_integer() {
+        let i = match elem.as_fixnum() {
             Some(i) => i as i8 as u8,
             None => return Err(RubyError::argument("Must be Array of Integer.")),
         };

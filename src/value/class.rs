@@ -617,7 +617,7 @@ impl ClassFlags {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 struct ClassExt {
     name: Option<String>,
     method_table: MethodTable,
@@ -627,7 +627,7 @@ struct ClassExt {
     origin: Option<Module>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ConstEntry {
     Autoload(String),
     Value(Value),

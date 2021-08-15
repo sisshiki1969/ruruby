@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Clone, Hash)]
 pub struct RangeInfo {
     pub start: Value,
     pub end: Value,
@@ -14,6 +14,12 @@ impl RangeInfo {
             end,
             exclude,
         }
+    }
+
+    pub fn eql(&self, other: &Self) -> bool {
+        HashKey(self.start) == HashKey(other.start)
+            && HashKey(self.end) == HashKey(other.end)
+            && self.exclude == other.exclude
     }
 
     pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
@@ -84,8 +90,8 @@ fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
-    let start = range.start.as_integer().unwrap();
-    let mut end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
+    let start = range.start.as_fixnum().unwrap();
+    let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.start);
     };
@@ -106,8 +112,8 @@ fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     let range = self_val.as_range().unwrap();
-    let mut start = range.start.as_integer().unwrap();
-    let end = range.end.as_integer().unwrap() - if range.exclude { 1 } else { 0 };
+    let mut start = range.start.as_fixnum().unwrap();
+    let end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.end);
     };
@@ -209,7 +215,7 @@ fn to_a(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         end,
         exclude,
     } = *self_val.as_range().unwrap();
-    if let Some(start) = start.as_integer() {
+    if let Some(start) = start.as_fixnum() {
         /*let start = range.start.expect_integer(format!(
             "Can not iterate from {}",
             range.start.get_class_name()

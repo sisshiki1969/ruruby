@@ -8,6 +8,15 @@ use std::rc::Rc;
 #[derive(Clone, Debug)]
 pub struct RegexpInfo(Rc<Regex>);
 
+impl PartialEq for RegexpInfo {
+    fn eq(&self, other: &Self) -> bool {
+        if Rc::ptr_eq(&self.0, &other.0) {
+            return true;
+        }
+        self.as_str() == other.as_str()
+    }
+}
+
 impl RegexpInfo {
     /// Create `RegexpInfo` from `escaped_str` escaping all meta characters.
     pub fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
@@ -407,15 +416,6 @@ impl RegexpInfo {
             }
             Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
         }
-    }
-}
-
-impl PartialEq for RegexpInfo {
-    fn eq(&self, other: &Self) -> bool {
-        if Rc::ptr_eq(&self.0, &other.0) {
-            return true;
-        }
-        self.as_str() == other.as_str()
     }
 }
 

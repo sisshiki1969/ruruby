@@ -1,4 +1,5 @@
-use num::BigInt;
+use num::bigint::ToBigInt;
+use num::{BigInt, ToPrimitive};
 
 use crate::coroutine::*;
 use crate::*;
@@ -41,7 +42,7 @@ impl<'a> RV<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq)]
 #[repr(transparent)]
 pub struct Value(std::num::NonZeroU64);
 
@@ -58,7 +59,7 @@ impl std::hash::Hash for Value {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::Integer(lhs) => (*lhs as f64).to_bits().hash(state),
+                //ObjKind::Integer(lhs) => (*lhs as f64).to_bits().hash(state),
                 ObjKind::BigNum(num) => num.hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
@@ -90,31 +91,30 @@ impl PartialEq for Value {
             return true;
         };
         if self.is_packed_value() || other.is_packed_value() {
-            if self.is_packed_num() && other.is_packed_num() {
-                match (self.is_packed_fixnum(), other.is_packed_fixnum()) {
-                    (true, false) => {
-                        return self.as_packed_fixnum() as f64 == other.as_packed_flonum()
-                    }
-                    (false, true) => {
-                        return self.as_packed_flonum() == other.as_packed_fixnum() as f64
-                    }
-                    _ => return false,
+            if let Some(lhsi) = self.as_fixnum() {
+                if let Some(rhsf) = other.as_flonum() {
+                    return lhsi as f64 == rhsf;
+                }
+            } else if let Some(lhsf) = self.as_flonum() {
+                if let Some(rhsi) = other.as_fixnum() {
+                    return rhsi as f64 == lhsf;
                 }
             }
             return false;
-        };
+        }
         match (&self.rvalue().kind, &other.rvalue().kind) {
-            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs,
-            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
-            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => *lhs as f64 == *rhs,
             (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => *lhs == *rhs,
-            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => *lhs == *rhs as f64,
+            (ObjKind::BigNum(lhs), ObjKind::Float(rhs)) => lhs.to_f64().unwrap() == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
+            (ObjKind::Float(lhs), ObjKind::BigNum(rhs)) => *lhs == rhs.to_f64().unwrap(),
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
                 r1.eq(r2) && i1.eq(i2)
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs == rhs,
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+                lhs.exclude == rhs.exclude && lhs.start == rhs.start && rhs.end == lhs.end
+            }
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
@@ -130,7 +130,7 @@ impl PartialEq for Value {
     }
 }
 
-impl Eq for Value {}
+//impl Eq for Value {}
 
 impl Default for Value {
     fn default() -> Self {
@@ -169,14 +169,13 @@ impl Value {
                     "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
                     &*info as *const RValue, info
                 ),
-                ObjKind::Integer(i) => RV::Integer(*i),
                 ObjKind::Float(f) => RV::Float(*f),
                 _ => RV::Object(info),
             }
-        } else if self.is_packed_fixnum() {
-            RV::Integer(self.as_packed_fixnum())
-        } else if self.is_packed_num() {
-            RV::Float(self.as_packed_flonum())
+        } else if let Some(i) = self.as_fixnum() {
+            RV::Integer(i)
+        } else if let Some(f) = self.as_flonum() {
+            RV::Float(f)
         } else if self.is_packed_symbol() {
             RV::Symbol(self.as_packed_symbol())
         } else {
@@ -203,7 +202,6 @@ impl Value {
                 ObjKind::Invalid => format!("[Invalid]"),
                 ObjKind::Ordinary => format!("#<{}:0x{:016x}>", self.get_class_name(), self.id()),
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
-                ObjKind::Integer(i) => format!("{}", i),
                 ObjKind::BigNum(n) => format!("{}", n),
                 ObjKind::Float(f) => Self::float_format(*f),
                 ObjKind::Range(r) => {
@@ -441,7 +439,7 @@ impl Value {
     pub fn get_class_for_method(&self) -> Module {
         if !self.is_packed_value() {
             self.rvalue().class()
-        } else if self.is_packed_fixnum() {
+        } else if self.as_fixnum().is_some() {
             BuiltinClass::integer()
         } else if self.is_packed_num() {
             BuiltinClass::float()
@@ -549,22 +547,6 @@ impl Value {
 }
 
 impl Value {
-    pub fn is_packed_fixnum(&self) -> bool {
-        self.get() & 0b1 == 1
-    }
-
-    pub fn is_packed_flonum(&self) -> bool {
-        self.get() & 0b11 == 2
-    }
-
-    pub fn is_packed_num(&self) -> bool {
-        self.get() & 0b11 != 0
-    }
-
-    pub fn is_packed_symbol(&self) -> bool {
-        self.get() & 0xff == TAG_SYMBOL
-    }
-
     pub fn is_uninitialized(&self) -> bool {
         self.get() == UNINITIALIZED
     }
@@ -585,18 +567,49 @@ impl Value {
         self.get() & 0b0111 != 0
     }
 
-    pub fn as_integer(&self) -> Option<i64> {
-        if self.is_packed_fixnum() {
-            Some(self.as_packed_fixnum())
+    pub fn as_fixnum(&self) -> Option<i64> {
+        if self.get() & 0b1 == 1 {
+            Some((self.get() as i64) >> 1)
         } else {
-            match self.as_rvalue() {
-                Some(info) => match &info.kind {
-                    ObjKind::Integer(f) => Some(*f),
-                    _ => None,
-                },
-                _ => None,
-            }
+            None
         }
+    }
+
+    pub fn as_flonum(&self) -> Option<f64> {
+        let u = self.get();
+        if u & 0b11 == 2 {
+            if u == ZERO {
+                return Some(0.0);
+            }
+            let bit = 0b10 - ((u >> 63) & 0b1);
+            let num = ((u & !(0b0011u64)) | bit).rotate_right(3);
+            //eprintln!("after  unpack:{:064b}", num);
+            Some(f64::from_bits(num))
+        } else {
+            None
+        }
+    }
+
+    pub fn is_packed_num(&self) -> bool {
+        self.get() & 0b11 != 0
+    }
+
+    pub fn is_packed_symbol(&self) -> bool {
+        self.get() & 0xff == TAG_SYMBOL
+    }
+
+    /*pub fn as_packed_flonum(&self) -> f64 {
+        if self.get() == ZERO {
+            return 0.0;
+        }
+        let bit = 0b10 - ((self.get() >> 63) & 0b1);
+        let num = ((self.get() & !(0b0011u64)) | bit).rotate_right(3);
+        //eprintln!("after  unpack:{:064b}", num);
+        f64::from_bits(num)
+    }*/
+
+    pub fn as_packed_symbol(&self) -> IdentId {
+        IdentId::from((self.get() >> 32) as u32)
     }
 
     pub fn expect_integer(&self, msg: impl Into<String>) -> Result<i64, RubyError> {
@@ -625,8 +638,8 @@ impl Value {
     }
 
     pub fn as_float(&self) -> Option<f64> {
-        if self.is_packed_flonum() {
-            Some(self.as_packed_flonum())
+        if let Some(f) = self.as_flonum() {
+            Some(f)
         } else {
             match self.as_rvalue() {
                 Some(info) => match &info.kind {
@@ -1018,24 +1031,6 @@ impl Value {
             None
         }
     }
-
-    pub fn as_packed_fixnum(&self) -> i64 {
-        (self.get() as i64) >> 1
-    }
-
-    pub fn as_packed_flonum(&self) -> f64 {
-        if self.get() == ZERO {
-            return 0.0;
-        }
-        let bit = 0b10 - ((self.get() >> 63) & 0b1);
-        let num = ((self.get() & !(0b0011u64)) | bit).rotate_right(3);
-        //eprintln!("after  unpack:{:064b}", num);
-        f64::from_bits(num)
-    }
-
-    pub fn as_packed_symbol(&self) -> IdentId {
-        IdentId::from((self.get() >> 32) as u32)
-    }
 }
 
 impl Value {
@@ -1068,11 +1063,17 @@ impl Value {
         if top & 0b1 == 0 {
             Value::from((num << 1) as u64 | 0b1)
         } else {
-            RValue::new_integer(num).pack()
+            RValue::new_bigint(num.to_bigint().unwrap()).pack()
         }
     }
 
     pub fn bignum(num: BigInt) -> Self {
+        if let Some(i) = num.to_i64() {
+            let top = (i as u64) >> 62 ^ (i as u64) >> 63;
+            if top & 0b1 == 0 {
+                return Value::from((i << 1) as u64 | 0b1);
+            }
+        }
         RValue::new_bigint(num).pack()
     }
 
@@ -1196,7 +1197,7 @@ impl Value {
 impl Value {
     pub fn to_ordering(&self) -> std::cmp::Ordering {
         use std::cmp::Ordering;
-        match self.as_integer() {
+        match self.as_fixnum() {
             Some(1) => Ordering::Greater,
             Some(0) => Ordering::Equal,
             Some(-1) => Ordering::Less,
@@ -1357,71 +1358,6 @@ mod tests {
     }
 
     #[test]
-    fn pack_integer11() {
-        let _globals = GlobalsRef::new_globals();
-        let expect_ary = [
-            12054,
-            -58993,
-            0x8000_0000_0000_0000 as u64 as i64,
-            0x4000_0000_0000_0000 as u64 as i64,
-            0x7fff_ffff_ffff_ffff as u64 as i64,
-        ];
-        for expect in expect_ary.iter() {
-            let got = match RV::Integer(*expect).pack().as_integer() {
-                Some(int) => int,
-                None => panic!("Expect:{:?} Got:Invalid RValue", *expect),
-            };
-            if *expect != got {
-                panic!("Expect:{:?} Got:{:?}", *expect, got)
-            };
-        }
-    }
-
-    #[test]
-    fn pack_integer2() {
-        let _globals = GlobalsRef::new_globals();
-        let expect = RV::Integer(-58993);
-        let packed = expect.pack();
-        let got = packed.unpack();
-        if expect != got {
-            panic!("Expect:{:?} Got:{:?}", expect, got)
-        }
-    }
-
-    #[test]
-    fn pack_integer3() {
-        let _globals = GlobalsRef::new_globals();
-        let expect = RV::Integer(0x8000_0000_0000_0000 as u64 as i64);
-        let packed = expect.pack();
-        let got = packed.unpack();
-        if expect != got {
-            panic!("Expect:{:?} Got:{:?}", expect, got)
-        }
-    }
-
-    #[test]
-    fn pack_integer4() {
-        let _globals = GlobalsRef::new_globals();
-        let expect = RV::Integer(0x4000_0000_0000_0000 as u64 as i64);
-        let packed = expect.pack();
-        let got = packed.unpack();
-        if expect != got {
-            panic!("Expect:{:?} Got:{:?}", expect, got)
-        }
-    }
-
-    #[test]
-    fn pack_integer5() {
-        let _globals = GlobalsRef::new_globals();
-        let expect = RV::Integer(0x7fff_ffff_ffff_ffff as u64 as i64);
-        let packed = expect.pack();
-        let got = packed.unpack();
-        if expect != got {
-            panic!("Expect:{:?} Got:{:?}", expect, got)
-        }
-    }
-
-    #[test]
     fn pack_float0() {
         let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(0.0);
@@ -1472,7 +1408,7 @@ mod tests {
         let to = RV::Integer(36).pack();
         let expect = Value::range(from, to, true);
         let got = expect.unpack().pack();
-        if expect != got {
+        if expect.id() != got.id() {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
     }
@@ -1482,7 +1418,7 @@ mod tests {
         GlobalsRef::new_globals();
         let expect: Value = Module::class_under(None).into();
         let got = expect.unpack().pack();
-        if expect != got {
+        if expect.id() != got.id() {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
     }
@@ -1492,7 +1428,7 @@ mod tests {
         GlobalsRef::new_globals();
         let expect = Value::ordinary_object(BuiltinClass::class());
         let got = expect.unpack().pack();
-        if expect != got {
+        if expect.id() != got.id() {
             panic!("Expect:{:?} Got:{:?}", expect, got)
         }
     }

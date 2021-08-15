@@ -170,7 +170,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         RV::Object(oref) => match &oref.kind {
             ObjKind::Range(info) => {
                 let len = lhs.chars().count();
-                let (start, end) = match (info.start.as_integer(), info.end.as_integer()) {
+                let (start, end) = match (info.start.as_fixnum(), info.end.as_fixnum()) {
                     (Some(start), Some(end)) => {
                         match (conv_index(start, len), conv_index(end, len)) {
                             (Some(start), Some(end)) if start > end => {
@@ -262,7 +262,7 @@ fn concat(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let lhs = self_val.as_mut_rstring().unwrap();
     match args[0].as_rstring() {
         Some(rhs) => lhs.append(rhs),
-        None => match args[0].as_integer() {
+        None => match args[0].as_fixnum() {
             Some(i) => {
                 let rhs = RString::Bytes(vec![i as i8 as u8]);
                 lhs.append(&rhs);

@@ -17,7 +17,7 @@ pub fn init() -> Module {
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
-    let b = match res.as_integer() {
+    let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             0 => true,
             _ => false,
@@ -30,7 +30,7 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
-    let b = match res.as_integer() {
+    let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i <= 0 => true,
             _ => false,
@@ -43,7 +43,7 @@ fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
-    let b = match res.as_integer() {
+    let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i < 0 => true,
             _ => false,
@@ -56,7 +56,7 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
-    let b = match res.as_integer() {
+    let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i >= 0 => true,
             _ => false,
@@ -69,7 +69,7 @@ fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
-    let b = match res.as_integer() {
+    let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i > 0 => true,
             _ => false,

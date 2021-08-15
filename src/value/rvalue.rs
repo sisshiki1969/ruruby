@@ -4,18 +4,17 @@ use num::BigInt;
 use std::borrow::Cow;
 
 /// Heap-allocated objects.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct RValue {
     class: Module,
     var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub enum ObjKind {
     Invalid,
     Ordinary,
-    Integer(i64),
     BigNum(BigInt),
     Float(f64),
     Complex { r: Value, i: Value },
@@ -33,6 +32,28 @@ pub enum ObjKind {
     Time(Box<TimeInfo>),
     Exception(Box<RubyError>),
     Binding(ContextRef),
+}
+
+impl RValue {
+    // This type of equality is used for comparison for keys of Hash.
+    pub fn eql(&self, other: &Self) -> bool {
+        match (&self.kind, &other.kind) {
+            (ObjKind::Ordinary, ObjKind::Ordinary) => self.id() == other.id(),
+            (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => *lhs == *rhs,
+            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
+            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
+                HashKey(*r1) == HashKey(*r2) && HashKey(*i1) == HashKey(*i2)
+            }
+            (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
+            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.eql(rhs),
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs.eql(rhs),
+            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs == rhs,
+            (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs == *rhs,
+            (ObjKind::Invalid, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", self),
+            (_, ObjKind::Invalid) => panic!("Invalid rvalue. (maybe GC problem) {:?}", other),
+            _ => false,
+        }
+    }
 }
 
 impl GC for RValue {
@@ -67,9 +88,15 @@ impl GC for RValue {
     }
 }
 
+impl PartialEq for RValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
 impl RValue {
     pub fn free(&mut self) -> bool {
-        if self.kind == ObjKind::Invalid {
+        if self.is_invalid() {
             return false;
         };
         self.kind = ObjKind::Invalid;
@@ -81,6 +108,13 @@ impl RValue {
 impl RValue {
     pub fn id(&self) -> u64 {
         self as *const RValue as u64
+    }
+
+    pub fn is_invalid(&self) -> bool {
+        match self.kind {
+            ObjKind::Invalid => true,
+            _ => false,
+        }
     }
 
     pub fn shallow_dup(&self) -> Self {
@@ -97,7 +131,6 @@ impl RValue {
                 ObjKind::Module(cinfo) => ObjKind::Module(cinfo.clone()),
                 ObjKind::Enumerator(_eref) => ObjKind::Ordinary,
                 ObjKind::Fiber(_fref) => ObjKind::Ordinary,
-                ObjKind::Integer(num) => ObjKind::Integer(*num),
                 ObjKind::Float(num) => ObjKind::Float(*num),
                 ObjKind::BigNum(bigint) => ObjKind::BigNum(bigint.clone()),
                 ObjKind::Hash(hinfo) => ObjKind::Hash(hinfo.clone()),
@@ -154,10 +187,6 @@ impl RValue {
             Module::default(), // dummy for boot strapping
             ObjKind::Module(cinfo),
         )
-    }
-
-    pub fn new_integer(i: i64) -> Self {
-        RValue::new(BuiltinClass::integer(), ObjKind::Integer(i))
     }
 
     pub fn new_bigint(bigint: BigInt) -> Self {

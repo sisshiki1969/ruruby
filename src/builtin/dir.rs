@@ -109,7 +109,9 @@ fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
         Ok(_) => {}
         Err(err) => return Err(RubyError::internal(format!("{:?}", err))),
     };
-    Ok(Value::array_from(matches.into_iter().collect()))
+    Ok(Value::array_from(
+        matches.into_iter().map(|s| Value::string(s)).collect(),
+    ))
 }
 
 fn traverse_dir(
@@ -117,7 +119,7 @@ fn traverse_dir(
     path: &PathBuf,
     glob: &Vec<Option<regex::Regex>>,
     level: usize,
-    matches: &mut FxHashSet<Value>,
+    matches: &mut FxHashSet<String>,
 ) -> std::io::Result<()> {
     #[derive(Debug, PartialEq)]
     enum MatchState {
@@ -127,7 +129,7 @@ fn traverse_dir(
     }
 
     if level == glob.len() {
-        matches.insert(Value::string(conv_pathbuf(path)));
+        matches.insert(conv_pathbuf(path));
         return Ok(());
     }
     assert!(level < glob.len());
@@ -173,7 +175,7 @@ fn traverse_dir(
         {
             let mut path = path.clone();
             path.push(name_cow.as_ref());
-            matches.insert(Value::string(conv_pathbuf(&path)));
+            matches.insert(conv_pathbuf(&path));
         }
     }
     Ok(())

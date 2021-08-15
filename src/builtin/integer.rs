@@ -1,4 +1,5 @@
 use crate::*;
+use num::{bigint::ToBigInt, BigInt, Signed, Zero};
 
 pub fn init() -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
@@ -14,6 +15,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("[]", index);
     class.add_builtin_method_by_str(">>", shr);
     class.add_builtin_method_by_str("<<", shl);
+    class.add_builtin_method_by_str("&", band);
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
@@ -95,33 +97,164 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn index(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let i = self_val.as_integer().unwrap();
-    let index = args[0].expect_integer("Index")?;
-    let val = if index < 0 || 63 < index {
-        0
+    if let Some(i) = self_val.as_fixnum() {
+        let index = args[0].expect_integer("Index")?;
+        let val = if index < 0 || 63 < index {
+            0
+        } else {
+            (i >> index) & 1
+        };
+        Ok(Value::integer(val))
+    } else if let Some(i) = self_val.as_bignum() {
+        let index = args[0].expect_integer("Index")?;
+        let val = if index < 0 || 63 < index {
+            BigInt::from(0)
+        } else {
+            (i >> index) & BigInt::from(1)
+        };
+        Ok(Value::bignum(val))
     } else {
-        (i >> index) & 1
-    };
-    Ok(Value::integer(val))
+        unreachable!()
+    }
 }
 
 fn shr(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = self_val.as_integer().unwrap();
-    let rhs = args[0];
-    match rhs.as_integer() {
-        Some(rhs) => Ok(Value::integer(lhs >> rhs)),
+    if let Some(lhs) = self_val.as_fixnum() {
+        let rhs = args[0];
+        match rhs.as_fixnum() {
+            Some(rhs) => {
+                if rhs >= 0 {
+                    Ok(fixnum_shr(lhs, rhs))
+                } else {
+                    Ok(fixnum_shl(lhs, -rhs))
+                }
+            }
+            None => shr_bignum(rhs),
+        }
+    } else if let Some(lhs) = self_val.as_bignum() {
+        let rhs = args[0];
+        match rhs.as_fixnum() {
+            Some(rhs) => {
+                if rhs >= 0 {
+                    Ok(Value::bignum(lhs >> rhs))
+                } else {
+                    Ok(Value::bignum(lhs << -rhs))
+                }
+            }
+            None => shr_bignum(rhs),
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn shr_bignum(rhs: Value) -> VMResult {
+    match rhs.as_bignum() {
+        Some(rhs) => {
+            if !rhs.is_negative() {
+                Ok(Value::integer(0))
+            } else {
+                Err(RubyError::runtime("Shift width too big"))
+            }
+        }
         None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
     }
 }
 
 fn shl(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = self_val.as_integer().unwrap();
-    let rhs = args[0];
-    match rhs.as_integer() {
-        Some(rhs) => Ok(Value::integer(lhs << rhs)),
+    if let Some(lhs) = self_val.as_fixnum() {
+        let rhs = args[0];
+        match rhs.as_fixnum() {
+            Some(rhs) => {
+                if rhs >= 0 {
+                    Ok(fixnum_shl(lhs, rhs))
+                } else {
+                    Ok(fixnum_shr(lhs, -rhs))
+                }
+            }
+            None => shl_bignum(rhs),
+        }
+    } else if let Some(lhs) = self_val.as_bignum() {
+        let rhs = args[0];
+        match rhs.as_fixnum() {
+            Some(rhs) => {
+                if rhs >= 0 {
+                    Ok(Value::bignum(lhs << rhs))
+                } else {
+                    Ok(Value::bignum(lhs >> -rhs))
+                }
+            }
+            None => shl_bignum(rhs),
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn shl_bignum(rhs: Value) -> VMResult {
+    match rhs.as_bignum() {
+        Some(rhs) => {
+            if rhs.is_negative() {
+                Ok(Value::integer(0))
+            } else {
+                Err(RubyError::runtime("Shift width too big"))
+            }
+        }
         None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+    }
+}
+
+/// rhs must be a non-negative value.
+fn fixnum_shr(lhs: i64, rhs: i64) -> Value {
+    if rhs < u32::MAX as i64 {
+        match lhs.checked_shr(rhs as u32) {
+            Some(i) => Value::integer(i),
+            None => Value::integer(0),
+        }
+    } else {
+        Value::bignum(lhs.to_bigint().unwrap() >> rhs)
+    }
+}
+
+/// rhs must be a non-negative value.
+fn fixnum_shl(lhs: i64, rhs: i64) -> Value {
+    if rhs < u32::MAX as i64 {
+        match lhs.checked_shl(rhs as u32) {
+            Some(i) => Value::integer(i),
+            None => {
+                let n = lhs.to_bigint().unwrap() << rhs;
+                Value::bignum(n)
+            }
+        }
+    } else {
+        Value::bignum(lhs.to_bigint().unwrap() << rhs)
+    }
+}
+
+fn band(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if let Some(lhs) = self_val.as_fixnum() {
+        let rhs = args[0];
+        match rhs.as_fixnum() {
+            Some(rhs) => Ok(Value::integer(lhs & rhs)),
+            None => match rhs.as_bignum() {
+                Some(rhs) => Ok(Value::bignum(lhs.to_bigint().unwrap() & rhs)),
+                None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+            },
+        }
+    } else if let Some(lhs) = self_val.as_bignum() {
+        let rhs = match args[0].as_fixnum() {
+            Some(rhs) => rhs.to_bigint().unwrap(),
+            None => match args[0].as_bignum() {
+                Some(rhs) => rhs,
+                None => return Err(RubyError::no_implicit_conv(args[0], "Integer")),
+            },
+        };
+        Ok(Value::bignum(lhs & rhs))
+    } else {
+        unreachable!()
     }
 }
 
@@ -135,12 +268,21 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => block,
     };
-    let num = self_val.as_integer().unwrap();
-    if num < 1 {
-        return Ok(self_val);
-    };
-    let iter = (0..num).map(|i| Value::integer(i));
-    vm.eval_block_each1(block, iter, self_val)
+    if let Some(num) = self_val.as_fixnum() {
+        if num < 1 {
+            return Ok(self_val);
+        };
+        let iter = (0..num).map(|i| Value::integer(i));
+        vm.eval_block_each1(block, iter, self_val)
+    } else if let Some(num) = self_val.as_bignum() {
+        if !num.is_positive() {
+            return Ok(self_val);
+        };
+        let iter = num::range(BigInt::zero(), num).map(|num| Value::bignum(num));
+        vm.eval_block_each1(block, iter, self_val)
+    } else {
+        unreachable!()
+    }
 }
 
 /// Integer#upto(min) { |n| .. } -> self
@@ -156,7 +298,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => block,
     };
-    let num = self_val.as_integer().unwrap();
+    let num = self_val.as_fixnum().unwrap();
     let max = args[0].expect_integer("Arg")?;
     if num <= max {
         let iter = (num..max + 1).map(|i| Value::integer(i));
@@ -179,7 +321,7 @@ fn downto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => block,
     };
-    let num = self_val.as_integer().unwrap();
+    let num = self_val.as_fixnum().unwrap();
     let min = args[0].expect_integer("Arg")?;
     if num >= min {
         let iter = (min..num + 1).rev().map(|i| Value::integer(i));
@@ -218,7 +360,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => block,
     };
-    let start = self_val.as_integer().unwrap();
+    let start = self_val.as_fixnum().unwrap();
     let limit = args[0].expect_integer("Limit")?;
     let step = if args.len() == 2 {
         let step = args[1].expect_integer("Step")?;
@@ -240,11 +382,17 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Built-in function "chr".
 fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    let num = self_val.as_integer().unwrap();
-    if 0 > num || num > 255 {
-        return Err(RubyError::range(format!("{} Out of char range.", num)));
-    };
-    Ok(Value::bytes(vec![num as u8]))
+    if let Some(num) = self_val.as_fixnum() {
+        if 0 > num || num > 255 {
+            return Err(RubyError::range(format!("{} Out of char range.", num)));
+        };
+        Ok(Value::bytes(vec![num as u8]))
+    } else {
+        return Err(RubyError::range(format!(
+            "{:?} Out of char range.",
+            self_val
+        )));
+    }
 }
 
 fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -254,8 +402,13 @@ fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
-    let num = self_val.as_integer().unwrap();
-    Ok(Value::integer(num.abs()))
+    if let Some(num) = self_val.as_fixnum() {
+        Ok(Value::integer(num.abs()))
+    } else if let Some(num) = self_val.as_bignum() {
+        Ok(Value::bignum(num.abs()))
+    } else {
+        unreachable!()
+    }
 }
 
 fn tof(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -288,7 +441,7 @@ fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 
 fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let i = self_val.as_integer().unwrap();
+    let i = self_val.as_fixnum().unwrap();
     Ok(Value::integer(i + 1))
 }
 
@@ -406,6 +559,24 @@ mod tests {
     #[test]
     fn integer_shift() {
         let program = r#"
+        assert 4, 19>>2
+        assert 4, 19<<-2
+        assert 2383614482228453421613056, 2019<<70
+        assert 2383614482228453421613056, 2019>>-70
+        assert 76, 19<<2
+        assert 76, 19>>-2
+        assert 2019, 2383614482228453421613056>>70
+        assert 2019, 2383614482228453421613056<<-70
+
+        assert 4, 19.>>2
+        assert 4, 19.<<(-2)
+        assert 2383614482228453421613056, 2019.<<70
+        assert 2383614482228453421613056, 2019.>>(-70)
+        assert 76, 19.<<2
+        assert 76, 19.>>(-2)
+        assert 2019, 2383614482228453421613056.>>70
+        assert 2019, 2383614482228453421613056.<<(-70)
+
         assert 8785458905193172896, (0x7f3d870a761a99f4 << 3) & 0x7fffffffffffffff
         assert 1146079111924634430, 0x7f3d870a761a99f4 >> 3
         "#;

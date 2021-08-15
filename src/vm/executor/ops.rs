@@ -1,14 +1,14 @@
-use num::BigInt;
+use num::{bigint::ToBigInt, BigInt, ToPrimitive};
 
 use crate::*;
 
 macro_rules! invoke_op_i {
     ($vm:ident, $iseq:ident, $i:ident, $op:ident, $id:expr) => {
         let lhs = $vm.stack_pop();
-        let val = if lhs.is_packed_fixnum() {
-            Value::integer(lhs.as_packed_fixnum().$op($i as i64))
-        } else if lhs.is_packed_num() {
-            Value::float(lhs.as_packed_flonum().$op($i as f64))
+        let val = if let Some(i) = lhs.as_fixnum() {
+            Value::integer(i.$op($i as i64))
+        } else if let Some(f) = lhs.as_flonum() {
+            Value::float(f.$op($i as f64))
         } else {
             return $vm.fallback_for_binop($id, lhs, Value::integer($i as i64));
         };
@@ -23,30 +23,24 @@ macro_rules! invoke_op {
         let lhs = $vm.exec_stack[len - 2];
         let rhs = $vm.exec_stack[len - 1];
         $vm.set_stack_len(len - 2);
-        let val = if lhs.is_packed_fixnum() {
-            if rhs.is_packed_fixnum() {
-                let lhs = lhs.as_packed_fixnum();
-                let rhs = rhs.as_packed_fixnum();
-                match lhs.$op2(rhs) {
+        let val = if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                match lhsi.$op2(rhsi) {
                     Some(res) => Value::integer(res),
-                    None => Value::float((lhs as f64).$op1(rhs as f64)),
+                    None => {
+                        Value::bignum((lhsi.to_bigint().unwrap()).$op1(rhsi.to_bigint().unwrap()))
+                    }
                 }
-            } else if rhs.is_packed_num() {
-                let lhs = lhs.as_packed_fixnum();
-                let rhs = rhs.as_packed_flonum();
-                Value::float((lhs as f64).$op1(rhs))
+            } else if let Some(rhsf) = rhs.as_flonum() {
+                Value::float((lhsi as f64).$op1(rhsf))
             } else {
                 return $vm.fallback_for_binop($id, lhs, rhs);
             }
-        } else if lhs.is_packed_num() {
-            if rhs.is_packed_fixnum() {
-                let lhs = lhs.as_packed_flonum();
-                let rhs = rhs.as_packed_fixnum();
-                Value::float(lhs.$op1(rhs as f64))
-            } else if rhs.is_packed_num() {
-                let lhs = lhs.as_packed_flonum();
-                let rhs = rhs.as_packed_flonum();
-                Value::float(lhs.$op1(rhs))
+        } else if let Some(lhsf) = lhs.as_flonum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                Value::float(lhsf.$op1(rhsi as f64))
+            } else if let Some(rhsf) = rhs.as_flonum() {
+                Value::float(lhsf.$op1(rhsf))
             } else {
                 return $vm.fallback_for_binop($id, lhs, rhs);
             }
@@ -82,7 +76,7 @@ impl VM {
             self.stack_push(Value::float(f64::NAN));
             return Ok(());
         }
-        if rhs.as_integer() == Some(0) {
+        if rhs.as_fixnum() == Some(0) {
             return Err(RubyError::zero_div("Divided by zero."));
         }
         invoke_op!(self, div, checked_div, IdentId::_DIV);
@@ -169,22 +163,18 @@ impl VM {
     }
 
     pub(super) fn invoke_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            let rhs = rhs.as_packed_fixnum();
-            let rhs = if rhs < u32::MAX as i64 && rhs > 0 {
-                rhs as u32
-            } else {
-                // TODO: if rhs < 0, execute Shr.
-                return Err(RubyError::runtime("Rhs of Shl must be u32."));
-            };
-            let i = match lhs.as_packed_fixnum().checked_shl(rhs) {
-                Some(i) => i,
-                None => return Err(RubyError::runtime("Shl overflow.")),
-            };
-            let val = Value::integer(i);
-            self.stack_push(val);
-            Ok(())
-        } else if let Some(mut ainfo) = lhs.as_array() {
+        if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                let val = if 0 < rhsi {
+                    Self::fixnum_shl(lhsi, rhsi)
+                } else {
+                    Self::fixnum_shr(lhsi, -rhsi)
+                };
+                self.stack_push(val);
+                return Ok(());
+            }
+        }
+        if let Some(mut ainfo) = lhs.as_array() {
             ainfo.push(rhs);
             self.stack_push(lhs);
             Ok(())
@@ -194,27 +184,62 @@ impl VM {
     }
 
     pub(super) fn invoke_shr(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            let val = Value::integer(lhs.as_packed_fixnum() >> rhs.as_packed_fixnum());
-            self.stack_push(val);
-            Ok(())
+        if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                let val = if 0 < rhsi {
+                    Self::fixnum_shr(lhsi, rhsi)
+                } else {
+                    Self::fixnum_shl(lhsi, -rhsi)
+                };
+                self.stack_push(val);
+                return Ok(());
+            }
+        }
+        self.fallback_for_binop(IdentId::_SHR, lhs, rhs)
+    }
+
+    /// rhs must be a non-negative value.
+    fn fixnum_shr(lhs: i64, rhs: i64) -> Value {
+        if rhs < u32::MAX as i64 {
+            match lhs.checked_shr(rhs as u32) {
+                Some(i) => Value::integer(i),
+                None => Value::integer(0),
+            }
         } else {
-            self.fallback_for_binop(IdentId::_SHR, lhs, rhs)
+            Value::bignum(lhs.to_bigint().unwrap() >> rhs)
+        }
+    }
+
+    /// rhs must be a non-negative value.
+    fn fixnum_shl(lhs: i64, rhs: i64) -> Value {
+        if rhs < u32::MAX as i64 {
+            match lhs.checked_shl(rhs as u32) {
+                Some(i) => Value::integer(i),
+                None => {
+                    let n = lhs.to_bigint().unwrap() << rhs;
+                    Value::bignum(n)
+                }
+            }
+        } else {
+            Value::bignum(lhs.to_bigint().unwrap() << rhs)
         }
     }
 
     pub(super) fn invoke_bitand(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            Value::integer(lhs.as_packed_fixnum() & rhs.as_packed_fixnum())
-        } else {
-            match (lhs.unpack(), rhs.unpack()) {
-                (RV::True, _) => Value::bool(rhs.to_bool()),
-                (RV::False, _) => Value::false_val(),
-                (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs & rhs),
-                (RV::Nil, _) => Value::false_val(),
-                (_, _) => {
-                    return self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs);
-                }
+        if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                let val = Value::integer(lhsi & rhsi);
+                self.stack_push(val);
+                return Ok(());
+            }
+        }
+        let val = match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Value::bool(rhs.to_bool()),
+            (RV::False, _) => Value::false_val(),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs & rhs),
+            (RV::Nil, _) => Value::false_val(),
+            (_, _) => {
+                return self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs);
             }
         };
         self.stack_push(val);
@@ -222,16 +247,19 @@ impl VM {
     }
 
     pub(super) fn invoke_bitor(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        let val = if lhs.is_packed_fixnum() && rhs.is_packed_fixnum() {
-            Value::integer(lhs.as_packed_fixnum() | rhs.as_packed_fixnum())
-        } else {
-            match (lhs.unpack(), rhs.unpack()) {
-                (RV::True, _) => Value::true_val(),
-                (RV::False, _) | (RV::Nil, _) => Value::bool(rhs.to_bool()),
-                (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs | rhs),
-                (_, _) => {
-                    return self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs);
-                }
+        if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                let val = Value::integer(lhsi | rhsi);
+                self.stack_push(val);
+                return Ok(());
+            }
+        }
+        let val = match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Value::true_val(),
+            (RV::False, _) | (RV::Nil, _) => Value::bool(rhs.to_bool()),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs | rhs),
+            (_, _) => {
+                return self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs);
             }
         };
         self.stack_push(val);
@@ -273,28 +301,20 @@ macro_rules! eval_cmp {
 
 macro_rules! eval_cmp2 {
     ($vm:ident, $rhs:expr, $lhs:expr, $op:ident, $id:expr) => {{
-        if $lhs.is_packed_fixnum() {
-            if $rhs.is_packed_fixnum() {
-                let lhs = $lhs.as_packed_fixnum();
-                let rhs = $rhs.as_packed_fixnum();
-                Ok(lhs.$op(&rhs))
-            } else if $rhs.is_packed_num() {
-                let lhs = $lhs.as_packed_fixnum();
-                let rhs = $rhs.as_packed_flonum();
-                Ok((lhs as f64).$op(&rhs))
+        if let Some(lhsi) = $lhs.as_fixnum() {
+            if let Some(rhsi) = $rhs.as_fixnum() {
+                Ok(lhsi.$op(&rhsi))
+            } else if let Some(rhsf) = $rhs.as_flonum() {
+                Ok((lhsi as f64).$op(&rhsf))
             } else {
                 $vm.fallback_for_binop($id, $lhs, $rhs)?;
                 Ok($vm.stack_pop().to_bool())
             }
-        } else if $lhs.is_packed_num() {
-            if $rhs.is_packed_fixnum() {
-                let lhs = $lhs.as_packed_flonum();
-                let rhs = $rhs.as_packed_fixnum();
-                Ok(lhs.$op(&(rhs as f64)))
-            } else if $rhs.is_packed_num() {
-                let lhs = $lhs.as_packed_flonum();
-                let rhs = $rhs.as_packed_flonum();
-                Ok(lhs.$op(&rhs))
+        } else if let Some(lhsf) = $lhs.as_flonum() {
+            if let Some(rhsi) = $rhs.as_fixnum() {
+                Ok(lhsf.$op(&(rhsi as f64)))
+            } else if let Some(rhsf) = $rhs.as_flonum() {
+                Ok(lhsf.$op(&rhsf))
             } else {
                 $vm.fallback_for_binop($id, $lhs, $rhs)?;
                 Ok($vm.stack_pop().to_bool())
@@ -309,12 +329,12 @@ macro_rules! eval_cmp2 {
 macro_rules! eval_cmp_i {
     ($vm:ident,$func_name:ident, $op:ident, $id:expr) => {
         pub(super) fn $func_name(&mut $vm, lhs: Value, i: i32) -> Result<bool, RubyError> {
-            if lhs.is_packed_fixnum() {
+            if let Some(lhsi) = lhs.as_fixnum() {
                 let i = i as i64;
-                Ok(lhs.as_packed_fixnum().$op(&i))
-            } else if lhs.is_packed_num() {
+                Ok(lhsi.$op(&i))
+            } else if let Some(lhsf) = lhs.as_flonum() {
                 let i = i as f64;
-                Ok(lhs.as_packed_flonum().$op(&i))
+                Ok(lhsf.$op(&i))
             } else {
                 $vm.fallback_for_binop($id, lhs, Value::integer(i as i64))?;
                 Ok($vm.stack_pop().to_bool())
@@ -386,35 +406,52 @@ impl VM {
         }
     }
 
+    /// Equality of value.
+    ///
+    /// This kind of equality is used for `==` operator of Ruby.
+    /// Generally, two objects which all of properties are `eq` are defined as `eq`.
+    /// Some classes have original difinitions of `eq`.
+    ///
+    /// ex. 3.0 == 3.
     pub fn eval_eq2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         if lhs.id() == rhs.id() {
             return Ok(true);
         };
-        if lhs.is_packed_value() || rhs.is_packed_value() {
-            if lhs.is_packed_num() && rhs.is_packed_num() {
-                match (lhs.is_packed_fixnum(), rhs.is_packed_fixnum()) {
-                    (true, false) => {
-                        return Ok(lhs.as_packed_fixnum() as f64 == rhs.as_packed_flonum())
-                    }
-                    (false, true) => {
-                        return Ok(lhs.as_packed_flonum() == rhs.as_packed_fixnum() as f64)
-                    }
-                    _ => return Ok(false),
+        if rhs.is_packed_value() || lhs.is_packed_value() {
+            if let Some(lhsi) = lhs.as_fixnum() {
+                if let Some(rhsf) = rhs.as_flonum() {
+                    return Ok(lhsi as f64 == rhsf);
+                }
+            } else if let Some(lhsf) = lhs.as_flonum() {
+                if let Some(rhsi) = rhs.as_fixnum() {
+                    return Ok(rhsi as f64 == lhsf);
                 }
             }
             return Ok(false);
-        };
+        }
         match (&lhs.rvalue().kind, &rhs.rvalue().kind) {
-            (ObjKind::Integer(lhs), ObjKind::Integer(rhs)) => Ok(*lhs == *rhs),
+            (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Float(lhs), ObjKind::Float(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Integer(lhs), ObjKind::Float(rhs)) => Ok(*lhs as f64 == *rhs),
-            (ObjKind::Float(lhs), ObjKind::Integer(rhs)) => Ok(*lhs == *rhs as f64),
+            (ObjKind::BigNum(lhs), ObjKind::Float(rhs)) => Ok(lhs.to_f64().unwrap() == *rhs),
+            (ObjKind::Float(lhs), ObjKind::BigNum(rhs)) => Ok(*lhs == rhs.to_f64().unwrap()),
             (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                Ok(*r1 == *r2 && *i1 == *i2)
+                Ok(r1.to_real() == r2.to_real() && i1.to_real() == i2.to_real())
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => Ok(lhs.as_bytes() == rhs.as_bytes()),
-            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => Ok(lhs.elements == rhs.elements),
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => Ok(lhs == rhs),
+            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                if lhs.len() != rhs.len() {
+                    return Ok(false);
+                }
+                for (l, r) in lhs.elements.iter().zip(rhs.elements.iter()) {
+                    if !self.eval_eq2(*r, *l)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            }
+            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => Ok(rhs.exclude == lhs.exclude
+                && self.eval_eq2(rhs.start, lhs.start)?
+                && self.eval_eq2(rhs.end, lhs.end)?),
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => Ok(**lhs == **rhs),
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
@@ -453,10 +490,10 @@ impl VM {
     }
 
     pub(super) fn eval_eqi(&mut self, lhs: Value, i: i32) -> Result<bool, RubyError> {
-        let res = if lhs.is_packed_fixnum() {
-            lhs.as_packed_fixnum() == i as i64
-        } else if lhs.is_packed_num() {
-            lhs.as_packed_flonum() == i as f64
+        let res = if let Some(lhsi) = lhs.as_fixnum() {
+            lhsi == i as i64
+        } else if let Some(lhsf) = lhs.as_flonum() {
+            lhsf == i as f64
         } else {
             match lhs.unpack() {
                 RV::Integer(lhs) => lhs == i as i64,
@@ -605,13 +642,17 @@ impl VM {
                     );
                 }
             },
-            None if receiver.is_packed_fixnum() => {
-                let i = receiver.as_packed_fixnum();
-                let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
-                Value::integer(val)
-            }
-            _ => {
-                return self.invoke_send1(IdentId::_INDEX, receiver, Value::integer(idx as i64));
+            None => {
+                if let Some(i) = receiver.as_fixnum() {
+                    let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
+                    Value::integer(val)
+                } else {
+                    return self.invoke_send1(
+                        IdentId::_INDEX,
+                        receiver,
+                        Value::integer(idx as i64),
+                    );
+                }
             }
         };
         self.stack_push(val);

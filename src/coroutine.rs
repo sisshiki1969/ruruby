@@ -21,7 +21,7 @@ pub enum FiberState {
     Dead,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub enum FiberKind {
     Fiber(ContextRef),
     Enum(Box<EnumInfo>),
@@ -36,7 +36,7 @@ impl GC for FiberKind {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct EnumInfo {
     pub receiver: Value,
     pub method: IdentId,
@@ -50,7 +50,7 @@ impl GC for EnumInfo {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 #[repr(C)]
 pub struct FiberContext {
     rsp: u64,

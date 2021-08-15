@@ -151,11 +151,15 @@ fn has_key(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(res))
 }
 
-fn has_value(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn has_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let hash = self_val.as_hash().unwrap();
-    let res = hash.iter().find(|(_, v)| *v == args[0]).is_some();
-    Ok(Value::bool(res))
+    for v in hash.iter().map(|(_, v)| v) {
+        if vm.eval_eq2(args[0], v)? {
+            return Ok(Value::bool(true));
+        }
+    }
+    Ok(Value::false_val())
 }
 
 fn length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

@@ -12,6 +12,7 @@ pub fn init() -> Module {
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
     class.add_builtin_method_by_str("/", div);
+    class.add_builtin_method_by_str("%", rem);
     class.add_builtin_method_by_str(">=", ge);
     class.add_builtin_method_by_str(">", gt);
     class.add_builtin_method_by_str("<=", le);
@@ -124,6 +125,18 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 args[0]
             ))),
         },
+    }
+}
+
+fn rem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok((lhs % rhs).to_val()),
+        None => Err(RubyError::typeerr(format!(
+            "{:?} can't be coerced into Integer.",
+            args[0]
+        ))),
     }
 }
 
