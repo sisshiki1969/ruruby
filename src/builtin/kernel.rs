@@ -266,7 +266,7 @@ fn exit(_: &mut VM, _: Value, args: &Args) -> VMResult {
     let code = if args.len() == 0 {
         0
     } else {
-        args[0].expect_integer("Expect Integer.")?
+        args[0].coerce_to_fixnum("Expect Integer.")?
     };
     std::process::exit(code as i32);
 }

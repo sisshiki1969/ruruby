@@ -93,7 +93,7 @@ fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         return Ok(range.start);
     };
-    let arg = args[0].expect_integer("Argument")?;
+    let arg = args[0].coerce_to_fixnum("Argument")?;
     if arg < 0 {
         return Err(RubyError::argument("Negative array size"));
     };
@@ -115,7 +115,7 @@ fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         return Ok(range.end);
     };
-    let arg = args[0].expect_integer("Argument")?;
+    let arg = args[0].coerce_to_fixnum("Argument")?;
     if arg < 0 {
         return Err(RubyError::argument("Negative array size"));
     };
@@ -133,8 +133,8 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
-    let start = range.start.expect_integer("Start")?;
-    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.coerce_to_fixnum("Start")?;
+    let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new(1);
     let mut res = vec![];
     for i in start..end {
@@ -151,8 +151,8 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
-    let start = range.start.expect_integer("Start")?;
-    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.coerce_to_fixnum("Start")?;
+    let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new(1);
     let mut res = vec![];
     for i in start..end {
@@ -183,8 +183,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => block,
     };
-    let start = range.start.expect_integer("Start")?;
-    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.coerce_to_fixnum("Start")?;
+    let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
 
     let iter = (start..end).map(|i| Value::integer(i));
     vm.eval_block_each1(block, iter, self_val)
@@ -194,8 +194,8 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
-    let start = range.start.expect_integer("Start")?;
-    let end = range.end.expect_integer("End")? + if range.exclude { 0 } else { 1 };
+    let start = range.start.coerce_to_fixnum("Start")?;
+    let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
         let arg = Args::new1(Value::integer(i));
         let res = vm.eval_block(&block, &arg)?;
@@ -218,7 +218,7 @@ fn to_a(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             "Can not iterate from {}",
             range.start.get_class_name()
         ))?;*/
-        let end = end.expect_integer("Range.end")?;
+        let end = end.coerce_to_fixnum("Range.end")?;
         let v = if exclude { start..end } else { start..end + 1 }
             .map(|i| Value::integer(i))
             .collect();

@@ -872,8 +872,8 @@ impl VM {
                         // TODO: should use `to_a` method.
                         ObjKind::Array(a) => args.append(&a.elements),
                         ObjKind::Range(r) => {
-                            let start = r.start.expect_integer("Expect Integer.").unwrap();
-                            let end = r.end.expect_integer("Expect Integer.").unwrap()
+                            let start = r.start.coerce_to_fixnum("Expect Integer.").unwrap();
+                            let end = r.end.coerce_to_fixnum("Expect Integer.").unwrap()
                                 + if r.exclude { 0 } else { 1 };
                             (start..end).for_each(|i| args.push(Value::integer(i)));
                         }

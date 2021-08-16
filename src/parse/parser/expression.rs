@@ -1,3 +1,5 @@
+use num::BigInt;
+
 use super::*;
 
 impl<'a> Parser<'a> {
@@ -409,8 +411,8 @@ impl<'a> Parser<'a> {
         let save = self.save_state();
         let lhs = if self.consume_punct(Punct::Minus)? {
             let loc = self.prev_loc();
-            match self.peek()?.kind {
-                TokenKind::IntegerLit(_) | TokenKind::FloatLit(_) => {
+            match self.peek_no_term()?.kind {
+                TokenKind::IntegerLit(_) | TokenKind::FloatLit(_) | TokenKind::BignumLit(_) => {
                     self.restore_state(save);
                     let lhs = self.parse_exponent()?;
                     return Ok(lhs);
@@ -710,8 +712,9 @@ impl<'a> Parser<'a> {
                 Punct::Minus => match self.get()?.kind {
                     TokenKind::IntegerLit(num) => match num.checked_neg() {
                         Some(i) => Ok(Node::new_integer(i, loc)),
-                        None => Err(Self::error_unexpected(loc, "Integer overflow.")),
+                        None => Ok(Node::new_bignum(-BigInt::from(num), loc)),
                     },
+                    TokenKind::BignumLit(num) => Ok(Node::new_bignum(-num, loc)),
                     TokenKind::FloatLit(num) => Ok(Node::new_float(-num, loc)),
                     _ => unreachable!(),
                 },

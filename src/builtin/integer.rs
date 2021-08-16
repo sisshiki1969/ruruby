@@ -32,6 +32,8 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("size", size);
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("succ", next);
+
+    class.add_builtin_method_by_str("_fixnum?", fixnum);
     class.into()
 }
 
@@ -95,10 +97,18 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+/// self[nth] -> Integer
+/// NOT SUPPORTED: self[nth, len] -> Integer
+/// NOT SUPPORTED: self[range] -> Integer
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/=5b=5d.html
 fn index(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     if let Some(i) = self_val.as_fixnum() {
-        let index = args[0].expect_integer("Index")?;
+        if args[0].as_bignum().is_some() {
+            return Ok(Value::integer(0));
+        }
+        let index = args[0].coerce_to_fixnum("Index")?;
         let val = if index < 0 || 63 < index {
             0
         } else {
@@ -106,12 +116,11 @@ fn index(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         };
         Ok(Value::integer(val))
     } else if let Some(i) = self_val.as_bignum() {
-        let index = args[0].expect_integer("Index")?;
-        let val = if index < 0 || 63 < index {
-            BigInt::from(0)
-        } else {
-            (i >> index) & BigInt::from(1)
-        };
+        if args[0].as_bignum().is_some() {
+            return Ok(Value::integer(0));
+        }
+        let index = args[0].coerce_to_fixnum("Index")?;
+        let val = (i >> index) & BigInt::from(1);
         Ok(Value::bignum(val))
     } else {
         unreachable!()
@@ -299,7 +308,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) => block,
     };
     let num = self_val.as_fixnum().unwrap();
-    let max = args[0].expect_integer("Arg")?;
+    let max = args[0].coerce_to_fixnum("Arg")?;
     if num <= max {
         let iter = (num..max + 1).map(|i| Value::integer(i));
         vm.eval_block_each1(block, iter, self_val)
@@ -322,7 +331,7 @@ fn downto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) => block,
     };
     let num = self_val.as_fixnum().unwrap();
-    let min = args[0].expect_integer("Arg")?;
+    let min = args[0].coerce_to_fixnum("Arg")?;
     if num >= min {
         let iter = (min..num + 1).rev().map(|i| Value::integer(i));
         vm.eval_block_each1(block, iter, self_val)
@@ -361,9 +370,9 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) => block,
     };
     let start = self_val.as_fixnum().unwrap();
-    let limit = args[0].expect_integer("Limit")?;
+    let limit = args[0].coerce_to_fixnum("Limit")?;
     let step = if args.len() == 2 {
-        let step = args[1].expect_integer("Step")?;
+        let step = args[1].coerce_to_fixnum("Step")?;
         if step == 0 {
             return Err(RubyError::argument("Step can not be 0."));
         }
@@ -441,8 +450,22 @@ fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 
 fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let i = self_val.as_fixnum().unwrap();
-    Ok(Value::integer(i + 1))
+    if let Some(i) = self_val.as_fixnum() {
+        match i.checked_add(1) {
+            Some(i) => Ok(Value::integer(i)),
+            None => Ok(Value::bignum(BigInt::from(i) + 1)),
+        }
+    } else if let Some(n) = self_val.as_bignum() {
+        Ok(Value::bignum(n + 1))
+    } else {
+        unreachable!()
+    }
+}
+
+fn fixnum(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let b = self_val.as_fixnum().is_some();
+    Ok(Value::bool(b))
 }
 
 #[cfg(test)]
@@ -457,9 +480,30 @@ mod tests {
         assert(-4.0, -4.to_f)
         assert(4, 4.floor)
         assert(-4, -4.floor)
+
         assert(true, 8.even?)
+        assert(false, 8.odd?)
         assert(false, 9.even?)
+        assert(true, 9.odd?)
+
+        assert(true, 99999999999999999999999999999998.even?)
+        assert(false, 99999999999999999999999999999998.odd?)
+        assert(false, 99999999999999999999999999999999.even?)
+        assert(true, 99999999999999999999999999999999.odd?)
+
+        assert 6, 6.abs
+        assert 6, -6.abs
+
+        assert 8888888888855555555555555777777776, 8888888888855555555555555777777776.abs
+        assert 8888888888855555555555555777777776, -8888888888855555555555555777777776.abs
+
         assert(8, 1.size)
+
+        assert 19, 18.next
+        assert 7777777777777777777777777777, 7777777777777777777777777776.next
+        assert true, 0x3fff_ffff_ffff_ffff._fixnum?
+        assert true, 0x3fff_ffff_ffff_ffff.next == 4611686018427387904
+        assert false, 0x3fff_ffff_ffff_ffff.next._fixnum?
         "#;
         assert_script(program);
     }
@@ -467,6 +511,9 @@ mod tests {
     #[test]
     fn integer_ops() {
         let program = r#"
+        assert 999999999999999999999999999 * -1, -999999999999999999999999999
+        assert 999999999999999999999999999, +999999999999999999999999999
+
         assert 30, 25.+ 5
         assert 20, 25.- 5
         assert 125, 25.* 5
@@ -491,6 +538,36 @@ mod tests {
         assert 2-4i, 5-(3+4i)
         assert 15+20i, 5*(3+4i)
         assert 0.6-0.8i, 5/(3+4i)
+
+        assert 79, 75487.& 111
+        assert 79, 75487 & 111
+        assert 110, 9999999999999999999999999999999998.& 111
+        assert 110, 9999999999999999999999999999999998 & 111
+        assert 110, 111.& 9999999999999999999999999999999998
+        assert 110, 111 & 9999999999999999999999999999999998
+        assert 6665389879227453860303075412000, 6666666666666666666666666666666.& 77777777777777777777777777777777
+        assert 6665389879227453860303075412000, 6666666666666666666666666666666 & 77777777777777777777777777777777
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_overflow() {
+        let program = r#"
+        assert true, 0x3fff_ffff_ffff_ffff._fixnum?
+        assert true, 0x3fff_ffff_ffff_ffff + 1 == 4611686018427387904
+        assert false, (0x3fff_ffff_ffff_ffff + 1)._fixnum?
+        assert true, 0x3fff_ffff_ffff_ffff * 5 == 23058430092136939515
+        assert false, (0x3fff_ffff_ffff_ffff * 5)._fixnum?
+        assert true, 0x3fff_ffff_ffff_ffff == 0x3fff_ffff_ffff_ffff * 5 / 5
+        assert true, (0x3fff_ffff_ffff_ffff * 5 / 5)._fixnum?
+
+        assert true, (-0x4000_0000_0000_0000)._fixnum?
+        assert true, -0x4000_0000_0000_0000 - 1 == -4611686018427387905
+        assert false, (-0x4000_0000_0000_0000 - 1)._fixnum?
+        assert true, (-0x4000_0000_0000_0000 - 1 + 1)._fixnum?
+        assert true, -0x4000_0000_0000_0000 == -0x4000_0000_0000_0000 - 1 + 1
+
         "#;
         assert_script(program);
     }
@@ -545,6 +622,7 @@ mod tests {
             assert 1, 5.<=> 3.9
             assert -1, 3.<=> 5.8
             assert nil, 3.<=> "three"
+            assert nil, Float::NAN.<=> Float::NAN
 
             assert 0, 3 <=> 3
             assert 1, 5 <=> 3
@@ -579,6 +657,15 @@ mod tests {
 
         assert 8785458905193172896, (0x7f3d870a761a99f4 << 3) & 0x7fffffffffffffff
         assert 1146079111924634430, 0x7f3d870a761a99f4 >> 3
+
+        big = 999999999999999999999999999999999
+        assert 0, 100 >> big
+        assert 0, 100 << -big
+        assert 0, big >> big
+        assert 0, big << -big
+        assert_error { 100 << big }
+        assert_error { 100 >> -big }
+
         "#;
         assert_script(program);
     }
@@ -592,6 +679,10 @@ mod tests {
         res = []
         assert 0, 0.times {|x| res[x] = x * x}
         assert [], res
+        assert -100, -100.times { break 77 }
+
+        assert 1001, 9999999999999999999999999.times {|x| break x if x > 1000}
+        assert -9999999999999999999999999, -9999999999999999999999999.times {|x| break x if x > 1000}
         "#;
         assert_script(program);
     }
@@ -611,6 +702,11 @@ mod tests {
         res = []
         assert 5, 5.downto(2) { |x| res << x }
         assert [5, 4, 3, 2], res
+        res = []
+        assert 5, 5.downto(8) { |x| res << x * x }
+        assert [], res
+        enum = 5.downto(2)
+        assert [10, 8, 6, 4], enum.map{ |x| x * 2 }
         "#;
         assert_script(program);
     }
@@ -624,6 +720,14 @@ mod tests {
         res = 0
         4.step(20, 3){|x| res += x}
         assert(69, res)
+
+        res = 0
+        enum = 4.step(20, 3)
+        enum.each{|x| res += x}
+        assert(69, res)
+
+        res = 0
+        assert_error { 4.step(20, 0){|x| res += x} }
         "#;
         assert_script(program);
     }
@@ -631,10 +735,28 @@ mod tests {
     #[test]
     fn integer_quotient() {
         let program = r#"
-        assert(1, 3.div(2))
-        assert(1, 3.div(2.0))
-        assert(-2, (-3).div(2))
-        assert(-2, (-3).div(2.0))
+        assert 1, 3.div(2)
+        assert 1, 3.div(2.0)
+        assert_error { 3.div(0.0) }
+        assert_error { 3.div("Ruby") }
+        assert -2, (-3).div(2)
+        assert -2, (-3).div(2.0)
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_index() {
+        let program = r#"
+        assert 0, 999999999999999999999999999999999[47]
+        assert 1, 999999999999999999999999999999999[48]
+        assert 1, 999999999999999999999999999999999[82]
+        assert 0, 999999999999999999999999999999999[85]
+        assert 1, 999999999999999999999999999999999[86]
+        assert 0, 999999999999999999999999999999999[999999999999999999999999999999999999]
+        assert 0, 27[2]
+        assert 1, 27[0]
+        assert 0, 27[999999999999999999999999999999999]
         "#;
         assert_script(program);
     }

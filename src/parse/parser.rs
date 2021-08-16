@@ -725,7 +725,7 @@ impl<'a> Parser<'a> {
     /// Return IdentId of the operator.
     fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, ParseErr> {
         // TODO: must support
-        // |  ^  &
+        // ^
         // **   ~   +@  -@   ` !  !~
         match punct {
             Punct::Plus => Ok(IdentId::_ADD),
@@ -735,6 +735,9 @@ impl<'a> Parser<'a> {
             Punct::Rem => Ok(IdentId::_REM),
             Punct::Shl => Ok(IdentId::_SHL),
             Punct::Shr => Ok(IdentId::_SHR),
+            Punct::BitAnd => Ok(IdentId::get_id("&")),
+            Punct::BitOr => Ok(IdentId::get_id("|")),
+
             Punct::Cmp => Ok(IdentId::_CMP),
             Punct::Eq => Ok(IdentId::_EQ),
             Punct::Ne => Ok(IdentId::_NEQ),

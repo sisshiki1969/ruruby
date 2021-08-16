@@ -616,11 +616,14 @@ impl Value {
         IdentId::from((self.get() >> 32) as u32)
     }
 
-    pub fn expect_integer(&self, msg: impl Into<String>) -> Result<i64, RubyError> {
+    pub fn coerce_to_fixnum(&self, msg: impl Into<String>) -> Result<i64, RubyError> {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(RubyError::wrong_type(msg.into(), "Integer", *self)),
+            _ => Err(RubyError::typeerr(format!(
+                "Can not coerce {} into Fixnum.",
+                msg.into()
+            ))),
         }
     }
 

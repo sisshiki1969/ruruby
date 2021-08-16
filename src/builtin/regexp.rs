@@ -467,7 +467,7 @@ fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/last_match.html
 fn regexp_last_match(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let nth = args[0].expect_integer("1st arg")?;
+    let nth = args[0].coerce_to_fixnum("1st arg")?;
     if nth == 0 {
         return Ok(vm.get_global_var(IdentId::get_id("$&")).unwrap_or_default());
     }

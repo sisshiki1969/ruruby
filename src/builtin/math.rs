@@ -12,7 +12,7 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn coarce_to_float(val: Value) -> Result<f64, RubyError> {
+fn coerce_to_float(val: Value) -> Result<f64, RubyError> {
     if let Some(real) = val.to_real() {
         Ok(real.to_f64())
     } else {
@@ -22,21 +22,21 @@ fn coarce_to_float(val: Value) -> Result<f64, RubyError> {
 
 fn sqrt(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let num = coarce_to_float(args[0])?;
+    let num = coerce_to_float(args[0])?;
     let res = Value::float(num.sqrt());
     Ok(res)
 }
 
 fn cos(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let num = coarce_to_float(args[0])?;
+    let num = coerce_to_float(args[0])?;
     let res = Value::float(num.cos());
     Ok(res)
 }
 
 fn sin(_: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let num = coarce_to_float(args[0])?;
+    let num = coerce_to_float(args[0])?;
     let res = Value::float(num.sin());
     Ok(res)
 }

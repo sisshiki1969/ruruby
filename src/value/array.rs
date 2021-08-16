@@ -140,10 +140,10 @@ impl ArrayInfo {
         if args.len() == 1 {
             return self.get_elem1(args[0]);
         };
-        let index = args[0].expect_integer("Index")?;
+        let index = args[0].coerce_to_fixnum("Index")?;
         let self_len = self.elements.len();
         let index = self.get_array_index(index).unwrap_or(self_len);
-        let len = args[1].expect_integer("Index")?;
+        let len = args[1].coerce_to_fixnum("Index")?;
         let val = if len < 0 {
             Value::nil()
         } else if index >= self_len {
@@ -165,7 +165,7 @@ impl ArrayInfo {
             Ok(val)
         } else if let Some(range) = idx.as_range() {
             let len = self.len() as i64;
-            let i_start = match range.start.expect_integer("Start of the range")? {
+            let i_start = match range.start.coerce_to_fixnum("Start of the range")? {
                 i if i < 0 => len + i,
                 i => i,
             };
@@ -176,7 +176,7 @@ impl ArrayInfo {
             } else {
                 i_start as usize
             };
-            let i_end = range.end.expect_integer("End of the range")?;
+            let i_end = range.end.coerce_to_fixnum("End of the range")?;
             let end = if i_end >= 0 {
                 let end = i_end as usize + if range.exclude { 0 } else { 1 };
                 if self.len() < end {
@@ -210,9 +210,9 @@ impl ArrayInfo {
         if args.len() == 2 {
             self.set_elem1(args[0], args[1])
         } else {
-            let index = args[0].expect_integer("Index")?;
+            let index = args[0].coerce_to_fixnum("Index")?;
             let index = self.get_array_index(index)?;
-            let length = args[1].expect_integer("Length")?;
+            let length = args[1].coerce_to_fixnum("Length")?;
             if length < 0 {
                 return Err(RubyError::index(format!("Negative length. {}", length)));
             };
@@ -231,11 +231,11 @@ impl ArrayInfo {
             Ok(val)
         } else if let Some(range) = idx.as_range() {
             let first = {
-                let i = range.start.expect_integer("Start of the range")?;
+                let i = range.start.coerce_to_fixnum("Start of the range")?;
                 self.get_array_index(i)?
             };
             let last = {
-                let i = range.end.expect_integer("End of the range")?;
+                let i = range.end.coerce_to_fixnum("End of the range")?;
                 self.get_array_index(i)? + if range.exclude { 0 } else { 1 }
             };
             if last < first {

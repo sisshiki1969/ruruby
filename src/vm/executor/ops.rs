@@ -406,17 +406,16 @@ impl VM {
         }
     }
 
-    /// Equality of value.
+    /// Equality of Value.
     ///
-    /// This kind of equality is used for `==` operator of Ruby.
-    /// Generally, two objects which all of properties are `eq` are defined as `eq`.
-    /// Some classes have original difinitions of `eq`.
+    /// This kind of equality is used for `==` method (or operator) of Ruby.
+    /// Generally, objects that are considered to have a same value are `==`.
+    /// Numeric which have a same mathematical value are `==`.
+    /// String or Symbol which indicate an identical string or symbol are `==`.
+    /// Some classes have original difinitions of `==`.
     ///
     /// ex. 3.0 == 3.
     pub fn eval_eq2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        if lhs.id() == rhs.id() {
-            return Ok(true);
-        };
         if rhs.is_packed_value() || lhs.is_packed_value() {
             if let Some(lhsi) = lhs.as_fixnum() {
                 if let Some(rhsf) = rhs.as_flonum() {
@@ -425,10 +424,17 @@ impl VM {
             } else if let Some(lhsf) = lhs.as_flonum() {
                 if let Some(rhsi) = rhs.as_fixnum() {
                     return Ok(rhsi as f64 == lhsf);
+                } else if let Some(rhsf) = rhs.as_flonum() {
+                    if lhsf.is_nan() && rhsf.is_nan() {
+                        return Ok(false);
+                    }
                 }
             }
-            return Ok(false);
+            return Ok(lhs.id() == rhs.id());
         }
+        if lhs.id() == rhs.id() {
+            return Ok(true);
+        };
         match (&lhs.rvalue().kind, &rhs.rvalue().kind) {
             (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Float(lhs), ObjKind::Float(rhs)) => Ok(*lhs == *rhs),

@@ -115,7 +115,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
-    let count = match args[0].expect_integer("1st arg")? {
+    let count = match args[0].coerce_to_fixnum("1st arg")? {
         i if i < 0 => return Err(RubyError::argument("Negative argument.")),
         i => i as usize,
     };
@@ -152,7 +152,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 None => return Ok(Value::nil()),
             };
             let len = if args.len() == 2 {
-                match args[1].expect_integer("1st arg")? {
+                match args[1].coerce_to_fixnum("1st arg")? {
                     0 => return Ok(Value::string("")),
                     i if i < 0 => return Ok(Value::nil()),
                     i => i as usize,
@@ -189,7 +189,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 let nth = if args.len() == 1 {
                     0
                 } else {
-                    args[1].expect_integer("2nd arg")?
+                    args[1].coerce_to_fixnum("2nd arg")?
                 };
                 match info.captures(lhs) {
                     Ok(None) => return Ok(Value::nil()),
@@ -225,10 +225,10 @@ fn index_assign(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(2, 3)?;
     let string = self_val.as_mut_rstring().unwrap();
     let str_len = string.chars().count();
-    let start_pos = args[0].expect_integer("1st arg")? as usize;
+    let start_pos = args[0].coerce_to_fixnum("1st arg")? as usize;
     let (len, mut subst_val) = match args.len() {
         2 => (0, args[1]),
-        3 => (args[1].expect_integer("2nd arg")? as usize - 1, args[2]),
+        3 => (args[1].coerce_to_fixnum("2nd arg")? as usize - 1, args[2]),
         _ => unreachable!(),
     };
     if start_pos >= str_len {
@@ -354,7 +354,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         arg_no += 1;
         let format = match ch {
             'd' => {
-                let val = val.expect_integer("Invalid value for placeholder of Integer.")?;
+                let val = val.coerce_to_fixnum("Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$.p$}", val, w = width, p = precision)
                 } else {
@@ -362,7 +362,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'b' => {
-                let val = val.expect_integer("Invalid value for placeholder of Integer.")?;
+                let val = val.coerce_to_fixnum("Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$b}", val, w = width)
                 } else {
@@ -370,7 +370,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'x' => {
-                let val = val.expect_integer("Invalid value for placeholder of Integer.")?;
+                let val = val.coerce_to_fixnum("Invalid value for placeholder of Integer.")?;
                 if zero_flag {
                     format!("{:0w$x}", val, w = width)
                 } else {
@@ -378,7 +378,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'X' => {
-                let val = val.expect_integer("Value for the placeholder")?;
+                let val = val.coerce_to_fixnum("Value for the placeholder")?;
                 if zero_flag {
                     format!("{:0w$X}", val, w = width)
                 } else {
@@ -388,7 +388,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             'f' => {
                 let f = match val.as_float() {
                     Some(f) => f,
-                    None => val.expect_integer("Value for the placeholder")? as f64,
+                    None => val.coerce_to_fixnum("Value for the placeholder")? as f64,
                 };
                 if zero_flag {
                     format!("{:0w$.p$}", f, w = width, p = precision)
@@ -397,7 +397,7 @@ fn rem(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 }
             }
             'c' => {
-                let val = val.expect_integer("Value for the placeholder")?;
+                let val = val.coerce_to_fixnum("Value for the placeholder")?;
                 let ch = char::from_u32(val as u32)
                     .ok_or_else(|| RubyError::argument("Invalid value for placeholder."))?;
                 format!("{}", ch)
@@ -449,7 +449,7 @@ fn split(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let mut arg0 = args[0];
     let sep = arg0.expect_string("1st arg")?;
     let lim = if args.len() > 1 {
-        args[1].expect_integer("Second arg must be Integer.")?
+        args[1].coerce_to_fixnum("Second arg must be Integer.")?
     } else {
         0
     };
@@ -602,7 +602,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 target.remove(pos);
                 return Ok(Value::string(ch.to_string()));
             } else {
-                let len = args[1].expect_integer("2nd arg")?;
+                let len = args[1].coerce_to_fixnum("2nd arg")?;
                 let len = if len < 0 {
                     return Ok(Value::nil());
                 } else {
@@ -684,7 +684,7 @@ fn str_match(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     let pos = if args.len() == 1 {
         0usize
     } else {
-        match args[1].expect_integer("2nd arg")? {
+        match args[1].coerce_to_fixnum("2nd arg")? {
             pos if pos >= 0 => pos as usize,
             _ => return Ok(Value::nil()),
         }
@@ -954,7 +954,7 @@ fn center(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Err(RubyError::argument("Zero width padding."));
     };
     let lhs = self_val.as_string().unwrap();
-    let width = args[0].expect_integer("1st arg")?;
+    let width = args[0].coerce_to_fixnum("1st arg")?;
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
         return Ok(Value::string(lhs));
@@ -981,7 +981,7 @@ fn ljust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Err(RubyError::argument("Zero width padding."));
     };
     let lhs = self_val.as_string().unwrap();
-    let width = args[0].expect_integer("1st arg")?;
+    let width = args[0].coerce_to_fixnum("1st arg")?;
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
         return Ok(Value::string(lhs));
@@ -1002,7 +1002,7 @@ fn rjust(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         return Err(RubyError::argument("Zero width padding."));
     };
     let lhs = self_val.as_string().unwrap();
-    let width = args[0].expect_integer("1st arg")?;
+    let width = args[0].coerce_to_fixnum("1st arg")?;
     let str_len = lhs.chars().count();
     if width <= 0 || width as usize <= str_len {
         return Ok(Value::string(lhs));

@@ -121,7 +121,7 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         },
         2 => {
-            let num = args[0].expect_integer("1st arg")?;
+            let num = args[0].coerce_to_fixnum("1st arg")?;
             if num < 0 {
                 return Err(RubyError::argument("Negative array size."));
             };
@@ -243,7 +243,7 @@ fn shift(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let num = if args.len() == 0 {
         0
     } else {
-        let i = args[0].expect_integer("1st arg")?;
+        let i = args[0].coerce_to_fixnum("1st arg")?;
         if i < 0 {
             return Err(RubyError::argument("Negative array size."));
         }
@@ -769,11 +769,11 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn slice_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
-    let start = args[0].expect_integer("Currently, first arg must be Integer.")?;
+    let start = args[0].coerce_to_fixnum("Currently, first arg must be Integer.")?;
     if start < 0 {
         return Err(RubyError::argument("First arg must be positive value."));
     };
-    let len = args[1].expect_integer("Currently, second arg must be Integer")?;
+    let len = args[1].coerce_to_fixnum("Currently, second arg must be Integer")?;
     if len < 0 {
         return Err(RubyError::argument("Second arg must be positive value."));
     };
@@ -850,7 +850,7 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn drop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let aref = self_val.into_array();
-    let num = args[0].expect_integer("An argument must be Integer.")? as usize;
+    let num = args[0].coerce_to_fixnum("An argument must be Integer.")? as usize;
     if num >= aref.len() {
         return Err(RubyError::argument(format!("An argument too big. {}", num)));
     };
@@ -1209,7 +1209,7 @@ fn flatten(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let level = if args.len() == 0 {
         None
     } else {
-        let i = args[0].expect_integer("1st arg")?;
+        let i = args[0].coerce_to_fixnum("1st arg")?;
         if i < 0 {
             None
         } else {
@@ -1228,7 +1228,7 @@ fn flatten_(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let level = if args.len() == 0 {
         None
     } else {
-        let i = args[0].expect_integer("1st arg")?;
+        let i = args[0].coerce_to_fixnum("1st arg")?;
         if i < 0 {
             None
         } else {
