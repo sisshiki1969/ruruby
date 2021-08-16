@@ -16,31 +16,34 @@ impl<'a> Parser<'a> {
                 self.consume_punct_no_term(Punct::Dot)?;
                 (
                     Some(Node::new_global_var(name, loc)),
-                    self.parse_method_def_name()?,
+                    self.lexer.read_method_name()?.0,
                 )
             }
             TokenKind::InstanceVar(name) => {
                 self.consume_punct_no_term(Punct::Dot)?;
                 (
                     Some(Node::new_instance_var(name, loc)),
-                    self.parse_method_def_name()?,
+                    self.lexer.read_method_name()?.0,
                 )
             }
             TokenKind::Reserved(r) => {
                 let s = Lexer::get_string_from_reserved(r);
-                (None, self.method_def_ext(&s)?)
+                (None, self.lexer.read_method_ext(&s)?)
             }
             TokenKind::Ident(s) => {
                 if s.as_str() == "self" {
                     self.consume_punct_no_term(Punct::Dot)?;
-                    (Some(Node::new_self(loc)), self.parse_method_def_name()?)
+                    (Some(Node::new_self(loc)), self.lexer.read_method_name()?.0)
                 } else if self.consume_punct_no_term(Punct::Dot)?
                     || self.consume_punct_no_term(Punct::Scope)?
                 {
                     let id = IdentId::get_id(s);
-                    (Some(Node::new_lvar(id, loc)), self.parse_method_def_name()?)
+                    (
+                        Some(Node::new_lvar(id, loc)),
+                        self.lexer.read_method_name()?.0,
+                    )
                 } else {
-                    (None, self.method_def_ext(s)?)
+                    (None, self.lexer.read_method_ext(s)?)
                 }
             }
             TokenKind::Const(s) => {
@@ -49,10 +52,10 @@ impl<'a> Parser<'a> {
                 {
                     (
                         Some(Node::new_const(s, false, loc)),
-                        self.parse_method_def_name()?,
+                        self.lexer.read_method_name()?.0,
                     )
                 } else {
-                    (None, self.method_def_ext(s)?)
+                    (None, self.lexer.read_method_ext(s)?)
                 }
             }
             TokenKind::Punct(p) => (None, self.parse_op_definable(p)?),
@@ -180,13 +183,13 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(Node::new_symbol(
-                self.parse_method_def_name()?,
+                self.lexer.read_method_name()?.0,
                 self.prev_loc(),
             ))
         }
     }
 
-    /// Parse method definition name.
+    /*/// Parse method definition name.
     fn parse_method_def_name(&mut self) -> Result<IdentId, ParseErr> {
         // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
         // メソッド名 : 局所変数識別子
@@ -213,7 +216,7 @@ impl<'a> Parser<'a> {
             }
         };
         Ok(id)
-    }
+    }*/
 
     // ( )
     // ( ident [, ident]* )

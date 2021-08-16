@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
         let symbol_loc = self.prev_loc();
         let id = match &token.kind {
             TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
-            TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
+            TokenKind::Const(s) | TokenKind::Ident(s) => self.lexer.read_method_ext(s)?,
             TokenKind::OpenString(s, term, level) => {
                 let node = self.parse_interporated_string_literal(&s, *term, *level)?;
                 let method = self.get_ident_id("to_sym");

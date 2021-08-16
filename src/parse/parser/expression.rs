@@ -580,7 +580,7 @@ impl<'a> Parser<'a> {
             let node = Node::new_send(receiver, IdentId::get_id("call"), arglist, false, loc);
             return Ok(node);
         };
-        let (id, loc) = self.parse_method_name()?;
+        let (id, loc) = self.lexer.read_method_name()?;
         let arglist = if self.consume_punct_no_term(Punct::LParen)? {
             self.parse_arglist_block(Punct::RParen)?
         } else {
@@ -604,28 +604,6 @@ impl<'a> Parser<'a> {
             _ => receiver,
         };
         Ok(Node::new_send(node, id, arglist, safe_nav, loc))
-    }
-
-    /// Parse method name.
-    /// In primary method call, assign-like method name(cf. foo= or Bar=) is not allowed.
-    fn parse_method_name(&mut self) -> Result<(IdentId, Loc), ParseErr> {
-        let tok = self.get()?;
-        let loc = tok.loc();
-        let id = match &tok.kind {
-            TokenKind::Ident(s) | TokenKind::Const(s) => self.get_ident_id(s),
-            TokenKind::Reserved(r) => {
-                let s = Lexer::get_string_from_reserved(r);
-                self.get_ident_id(&s)
-            }
-            TokenKind::Punct(p) => self.parse_op_definable(p)?,
-            _ => {
-                return Err(Self::error_unexpected(
-                    tok.loc(),
-                    "method name must be an identifier.",
-                ))
-            }
-        };
-        Ok((id, loc.merge(self.prev_loc())))
     }
 
     pub(super) fn parse_primary(&mut self, suppress_unparen_call: bool) -> Result<Node, ParseErr> {

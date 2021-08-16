@@ -548,6 +548,11 @@ mod tests {
         assert 2-4i, 5-(3+4i)
         assert 15+20i, 5*(3+4i)
         assert 0.6-0.8i, 5/(3+4i)
+
+        assert 475, +(475)
+        assert 475, 475.+@
+        assert -475, -(475)
+        assert -475, 475.-@
         "#;
         assert_script(program);
     }

@@ -780,7 +780,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    /// Check method name extension.
+    /*/// Check method name extension.
     /// Parse "xxxx!" as a valid mathod name.
     /// "xxxx!=" or "xxxx?=" is invalid.
     fn method_def_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
@@ -793,7 +793,7 @@ impl<'a> Parser<'a> {
             self.get_ident_id(s)
         };
         Ok(id)
-    }
+    }*/
 
     /// Parse formal parameters.
     /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block

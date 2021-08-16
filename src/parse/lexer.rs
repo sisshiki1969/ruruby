@@ -1,7 +1,7 @@
 use super::*;
-use crate::util::*;
 use crate::value::real::Real;
 use crate::ParseErrKind;
+use crate::{util::*, IdentId};
 use enum_iterator::IntoEnumIterator;
 use fxhash::FxHashMap;
 use num::BigInt;
@@ -509,6 +509,85 @@ impl<'a> Lexer<'a> {
         } else {
             Ok(self.new_ident(tok))
         }
+    }
+
+    /// Read method name.
+    ///
+    /// e.g. Foo? bar bar! == != <= <=>
+    // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
+    // メソッド名 : 局所変数識別子
+    //      | 定数識別子
+    //      | ( 定数識別子 | 局所変数識別子 ) ( "!" | "?" )
+    //      | 演算子メソッド名
+    //      | キーワード
+    // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
+    //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
+    pub fn read_method_name(&mut self) -> Result<(IdentId, Loc), ParseErr> {
+        self.flush();
+        while self.consume_whitespace() || self.consume_newline() {}
+        self.token_start_pos = self.pos;
+        let ch = self.get()?;
+        if ch.is_ascii_alphabetic() || ch == '_' {
+            self.consume_ident();
+            match self.peek() {
+                Some(ch) if (ch == '!' && self.peek2() != Some('=')) || ch == '?' || ch == '=' => {
+                    self.get().unwrap();
+                }
+                _ => {}
+            };
+        } else if ch.is_ascii_punctuation() {
+            // re-definable operators
+            // https://docs.ruby-lang.org/ja/latest/doc/spec=2foperator.html
+            // |  ^  &  <=>  ==  ===  =~  >   >=  <   <=   <<  >>
+            // +  -  *  /    %   **   ~   +@  -@  []  []=  ` ! != !~
+            match ch {
+                '*' | '/' | '%' | '&' | '|' | '^' | '~' | '`' => {}
+                '+' | '-' => {
+                    self.consume('@');
+                }
+                '<' => if self.consume('<') || (self.consume('=') && self.consume('>')) {},
+                '>' => if self.consume('>') || self.consume('=') {},
+                '=' => {
+                    if self.consume('=') {
+                        self.consume('=');
+                    } else if self.consume('~') {
+                    } else {
+                        return Err(self.error_unexpected(self.pos));
+                    };
+                }
+                '!' => {
+                    if self.consume('=') || self.consume('~') {};
+                }
+                '[' => {
+                    if self.consume(']') {
+                        self.consume('=');
+                    } else {
+                        return Err(self.error_unexpected(self.token_start_pos));
+                    }
+                }
+                _ => return Err(self.error_unexpected(self.token_start_pos)),
+            };
+        } else {
+            return Err(self.error_unexpected(self.token_start_pos));
+        };
+        Ok((
+            IdentId::get_id(self.current_slice()),
+            Loc(self.token_start_pos, self.pos),
+        ))
+    }
+
+    /// Check method name extension.
+    /// Parse "xxxx!" as a valid mathod name.
+    /// "xxxx!=" or "xxxx?=" is invalid.
+    pub fn read_method_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
+        self.flush();
+        let id =
+            if !(s.ends_with(&['!', '?'][..])) && self.peek2() != Some('>') && self.consume('=') {
+                IdentId::get_id(&format!("{}=", s))
+            } else {
+                IdentId::get_id(s)
+            };
+        Ok(id)
     }
 
     /// Read number literal.
@@ -1548,5 +1627,34 @@ mod test {
             Token![EOF, 4],
         ];
         assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn method_name() {
+        fn assert(program: &str, expect: &str) {
+            let mut lexer = Lexer::new(program);
+            assert_eq!(
+                lexer.read_method_name().unwrap().0,
+                (IdentId::get_id(expect))
+            );
+        }
+        assert("Func", "Func");
+        assert("Func!", "Func!");
+        assert("Func!=", "Func");
+        assert("Func?", "Func?");
+        assert("func", "func");
+        assert("compare_by_identity\n", "compare_by_identity");
+        assert("func!", "func!");
+        assert("func!=", "func");
+        assert("func?", "func?");
+        assert("==4", "==");
+        assert("<=>>", "<=>");
+        assert("===-", "===");
+        assert(">==", ">=");
+        assert("[]*", "[]");
+        assert("[]=", "[]=");
+        assert("<<<", "<<");
+        assert("==~", "==");
+        assert("=~-", "=~");
     }
 }
