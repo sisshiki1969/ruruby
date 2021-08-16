@@ -293,7 +293,7 @@ impl Value {
 
     fn float_format(f: f64) -> String {
         let fabs = f.abs();
-        if fabs < 0.001 || fabs >= 1000000000000000.0 {
+        if fabs < 0.0001 || fabs >= 1000000000000000.0 {
             format!("{:.1e}", f)
         } else {
             format!("{}", f)

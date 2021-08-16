@@ -1,3 +1,5 @@
+use std::ops::{BitAnd, BitOr};
+
 use crate::*;
 use num::{bigint::ToBigInt, BigInt, Signed, Zero};
 
@@ -16,6 +18,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str(">>", shr);
     class.add_builtin_method_by_str("<<", shl);
     class.add_builtin_method_by_str("&", band);
+    class.add_builtin_method_by_str("|", bor);
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
@@ -242,30 +245,37 @@ fn fixnum_shl(lhs: i64, rhs: i64) -> Value {
     }
 }
 
-fn band(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    if let Some(lhs) = self_val.as_fixnum() {
-        let rhs = args[0];
-        match rhs.as_fixnum() {
-            Some(rhs) => Ok(Value::integer(lhs & rhs)),
-            None => match rhs.as_bignum() {
-                Some(rhs) => Ok(Value::bignum(lhs.to_bigint().unwrap() & rhs)),
-                None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
-            },
+macro_rules! bit_ops {
+    ($fname:ident, $op:ident) => {
+        fn $fname(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+            args.check_args_num(1)?;
+            if let Some(lhs) = self_val.as_fixnum() {
+                let rhs = args[0];
+                match rhs.as_fixnum() {
+                    Some(rhs) => Ok(Value::integer(lhs.$op(rhs))),
+                    None => match rhs.as_bignum() {
+                        Some(rhs) => Ok(Value::bignum(lhs.to_bigint().unwrap().$op(rhs))),
+                        None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+                    },
+                }
+            } else if let Some(lhs) = self_val.as_bignum() {
+                let rhs = match args[0].as_fixnum() {
+                    Some(rhs) => rhs.to_bigint().unwrap(),
+                    None => match args[0].as_bignum() {
+                        Some(rhs) => rhs,
+                        None => return Err(RubyError::no_implicit_conv(args[0], "Integer")),
+                    },
+                };
+                Ok(Value::bignum(lhs.$op(rhs)))
+            } else {
+                unreachable!()
+            }
         }
-    } else if let Some(lhs) = self_val.as_bignum() {
-        let rhs = match args[0].as_fixnum() {
-            Some(rhs) => rhs.to_bigint().unwrap(),
-            None => match args[0].as_bignum() {
-                Some(rhs) => rhs,
-                None => return Err(RubyError::no_implicit_conv(args[0], "Integer")),
-            },
-        };
-        Ok(Value::bignum(lhs & rhs))
-    } else {
-        unreachable!()
-    }
+    };
 }
+
+bit_ops!(band, bitand);
+bit_ops!(bor, bitor);
 
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
@@ -538,7 +548,13 @@ mod tests {
         assert 2-4i, 5-(3+4i)
         assert 15+20i, 5*(3+4i)
         assert 0.6-0.8i, 5/(3+4i)
+        "#;
+        assert_script(program);
+    }
 
+    #[test]
+    fn integer_bitwise_ops() {
+        let program = r#"
         assert 79, 75487.& 111
         assert 79, 75487 & 111
         assert 110, 9999999999999999999999999999999998.& 111
@@ -547,6 +563,15 @@ mod tests {
         assert 110, 111 & 9999999999999999999999999999999998
         assert 6665389879227453860303075412000, 6666666666666666666666666666666.& 77777777777777777777777777777777
         assert 6665389879227453860303075412000, 6666666666666666666666666666666 & 77777777777777777777777777777777
+
+        assert 75519, 75487.| 111
+        assert 75519, 75487 | 111
+        assert 9999999999999555555599999999999999, 9999999999999555555599999999999888.| 111
+        assert 9999999999999555555599999999999999, 9999999999999555555599999999999888 | 111
+        assert 9999999999999555555599999999999999, 111.| 9999999999999555555599999999999888
+        assert 9999999999999555555599999999999999, 111 | 9999999999999555555599999999999888
+        assert 77779054565216990584141369032443, 6666666666666666666666666666666.| 77777777777777777777777777777777
+        assert 77779054565216990584141369032443, 6666666666666666666666666666666 | 77777777777777777777777777777777
         "#;
         assert_script(program);
     }

@@ -1,5 +1,3 @@
-use num::Zero;
-
 use crate::*;
 
 pub fn init() -> Module {
@@ -13,6 +11,8 @@ pub fn init() -> Module {
     class.add_builtin_method_by_str("*", mul);
     class.add_builtin_method_by_str("/", div);
     class.add_builtin_method_by_str("%", rem);
+    class.add_builtin_method_by_str("==", eq);
+    class.add_builtin_method_by_str("!=", ne);
     class.add_builtin_method_by_str(">=", ge);
     class.add_builtin_method_by_str(">", gt);
     class.add_builtin_method_by_str("<=", le);
@@ -27,7 +27,7 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(r) => match r {
             Real::Bignum(n) => n.to_string(),
             Real::Integer(i) => i.to_string(),
-            Real::Float(f) => float_format(f),
+            Real::Float(f) => format!("{:?}", f),
         },
         None => match self_val.as_complex() {
             Some((r, i)) => {
@@ -42,19 +42,6 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         },
     };
     Ok(Value::string(s))
-}
-
-fn float_format(f: f64) -> String {
-    let fabs = f.abs();
-    if f.is_zero() {
-        "0.0".to_string()
-    } else if fabs < 0.001 || fabs >= 1000000000000000.0 {
-        format!("{:.1e}", f)
-    } else if f.fract().is_zero() {
-        format!("{:.1}", f)
-    } else {
-        format!("{}", f)
-    }
 }
 
 fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -149,7 +136,8 @@ macro_rules! define_cmp {
                 Some(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
                 _ => {
                     return Err(RubyError::argument(format!(
-                        "Comparison of Integer with {} failed.",
+                        "Comparison of {} with {} failed.",
+                        self_val.get_class_name(),
                         args[0].get_class_name()
                     )))
                 }
@@ -162,3 +150,50 @@ define_cmp!(ge);
 define_cmp!(gt);
 define_cmp!(le);
 define_cmp!(lt);
+define_cmp!(eq);
+define_cmp!(ne);
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::*;
+
+    #[test]
+    fn inspect() {
+        let program = r##"
+        assert "(-23-7i)", (-23-7i).inspect
+        assert "(23-7i)", (23-7i).inspect
+        assert "0.0", 0.0000.inspect
+        assert "0.0003", 0.0003.inspect
+        assert "-0.0003", -0.0003.inspect
+        "##;
+        assert_script(program);
+    }
+
+    #[test]
+    fn ops() {
+        let program = r##"
+        assert_error { 100.+ "" }
+        assert_error { 0.01.+ "" }
+        assert_error { 100.- "" }
+        assert_error { 0.01.- "" }
+        assert_error { 100.* "" }
+        assert_error { 0.01.* "" }
+        assert_error { 100./ "" }
+        assert_error { 0.01./ "" }
+        assert 1, 100 % 3
+        assert -1, -100 % -3
+        assert 2, -100 % 3
+        assert -2, 100 % -3
+        assert 1.0, 100.0 % 3.0
+        assert 2.0, -100.0 % 3.0
+
+        assert_error {4.0.== ""}
+        assert_error {4.0.!= ""}
+        assert_error {4.0.<= ""}
+        assert_error {4.0.< ""}
+        assert_error {4.0.>= ""}
+        assert_error {4.0.> ""}
+        "##;
+        assert_script(program);
+    }
+}
