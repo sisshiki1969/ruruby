@@ -30,11 +30,11 @@ impl MethodId {
     }
 }
 
-impl From<u64> for MethodId {
+/*impl From<u64> for MethodId {
     fn from(id: u64) -> Self {
         Self::new(id as u32)
     }
-}
+}*/
 
 impl Into<u32> for MethodId {
     fn into(self) -> u32 {
@@ -48,11 +48,11 @@ impl From<u32> for MethodId {
     }
 }
 
-impl Into<usize> for MethodId {
+/*impl Into<usize> for MethodId {
     fn into(self) -> usize {
         self.0.get() as usize
     }
-}
+}*/
 
 #[cfg(feature = "perf-method")]
 pub struct MethodPerf {
@@ -120,6 +120,7 @@ impl MethodPerf {
         });
     }
 
+    #[cfg(feature = "perf-method")]
     pub fn print_stats() {
         METHOD_PERF.with(|m| {
             let perf = m.borrow();
@@ -275,12 +276,6 @@ impl MethodRepo {
         let rec_class = receiver.get_class_for_method();
         Self::find_method(rec_class, method_id)
     }
-
-    pub fn mark(alloc: &mut Allocator) {
-        let keys: Vec<Module> =
-            METHODS.with(|m| m.borrow().m_cache.cache.keys().map(|(v, _)| *v).collect());
-        keys.iter().for_each(|m| m.mark(alloc));
-    }
 }
 
 #[cfg(feature = "perf-method")]
@@ -300,6 +295,7 @@ impl MethodRepo {
         MethodPerf::clear_stats();
     }
 
+    #[cfg(feature = "perf-method")]
     pub fn print_stats() {
         eprintln!(
             "+-----------------------------------------------------------------------------------------------------+"

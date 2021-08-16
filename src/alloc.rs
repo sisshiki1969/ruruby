@@ -521,7 +521,7 @@ mod tests {
             300.times {
                 a = []
                 100.times.each {|x|
-                    a << Vec.new(x.to_s, x.to_s)
+                    a << Vec.new(x.to_s, 4.method(:inspect))
                 }
                 b = {}
                 100.times.each {|x|

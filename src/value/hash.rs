@@ -18,6 +18,13 @@ impl PartialEq for HashInfo {
                     return false;
                 };
                 let mut m1 = FxHashMap::default();
+                map1.iter().for_each(|(k, v)| {
+                    m1.insert(HashKey(k.0), *v);
+                });
+                map2.iter()
+                    .all(|(k, v)| m1.get(&HashKey(k.0)).map_or(false, |v2| *v == *v2))
+                /*
+                let mut m1 = FxHashMap::default();
                 for (k, v) in map1 {
                     let a = m1.get_mut(&(k.0, *v));
                     match a {
@@ -37,14 +44,14 @@ impl PartialEq for HashInfo {
                         }
                     };
                 }
-                m1 == m2
+                m1 == m2*/
             }
             _ => return false,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct HashKey(pub Value);
 
 impl Deref for HashKey {
@@ -61,7 +68,7 @@ impl Hash for HashKey {
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
                 ObjKind::BigNum(lhs) => lhs.hash(state),
-                ObjKind::Float(lhs) => (*lhs as u64).hash(state),
+                ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),
                 ObjKind::Array(lhs) => lhs.elements.hash(state),
                 ObjKind::Range(lhs) => lhs.hash(state),
@@ -93,9 +100,7 @@ impl PartialEq for HashKey {
     }
 }
 
-impl Eq for HashKey {}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct IdentKey(pub Value);
 
 impl Deref for IdentKey {
@@ -115,10 +120,9 @@ impl PartialEq for IdentKey {
     // Object#eql?()
     // This type of equality is used for comparison for keys of Hash.
     fn eq(&self, other: &Self) -> bool {
-        *self.0 == *other.0
+        self.0.id() == other.0.id()
     }
 }
-impl Eq for IdentKey {}
 
 pub enum IntoIter {
     Map(indexmap::map::IntoIter<HashKey, Value>),

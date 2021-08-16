@@ -76,6 +76,20 @@ mod tests {
     }
 
     #[test]
+    fn method3() {
+        let program = r#"
+    m1 = 4.method(:inspect)
+    m2 = 4.method(:inspect)
+    h = {m1=>100}
+    assert "4", m1.call
+    assert "4", m2.call
+    assert 100, h[m1]
+    assert 100, h[m2]
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn method_unbind() {
         let program = r#"
         class Foo
