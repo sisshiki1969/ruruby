@@ -167,6 +167,14 @@ impl VM {
             .unwrap_or_else(|| panic!("exec stack is empty."))
     }
 
+    pub fn stack_pop2(&mut self) -> (Value, Value) {
+        let len = self.stack_len();
+        let lhs = self.exec_stack[len - 2];
+        let rhs = self.exec_stack[len - 1];
+        self.set_stack_len(len - 2);
+        (lhs, rhs)
+    }
+
     pub fn stack_top(&mut self) -> Value {
         *self
             .exec_stack

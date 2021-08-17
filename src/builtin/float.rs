@@ -1,4 +1,6 @@
+use crate::num::ToPrimitive;
 use crate::*;
+use std::convert::TryInto;
 
 pub fn init() -> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
@@ -6,6 +8,7 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("Float", class);
     class.add_builtin_method_by_str("nan?", nan);
     class.add_builtin_method_by_str("div", quotient);
+    class.add_builtin_method_by_str("**", exp);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("to_i", toi);
@@ -44,6 +47,28 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         }
         None => Err(RubyError::undefined_op("div", args[0], self_val)),
     }
+}
+
+fn exp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let f = self_val.as_float().unwrap();
+    exp_float(f, args[0])
+}
+
+pub fn exp_float(lhsf: f64, rhs: Value) -> VMResult {
+    let f = if let Some(rhsi) = rhs.as_fixnum() {
+        match rhsi.try_into() {
+            Ok(r) => lhsf.powi(r),
+            Err(_) => lhsf.powf(rhsi as f64),
+        }
+    } else if let Some(rhsf) = rhs.as_float() {
+        lhsf.powf(rhsf)
+    } else if let Some(rhsb) = rhs.as_bignum() {
+        lhsf.powf(rhsb.to_f64().unwrap())
+    } else {
+        return Err(RubyError::cant_coerse(rhs, "Integer"));
+    };
+    Ok(Value::float(f))
 }
 
 fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {

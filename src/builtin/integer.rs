@@ -1,12 +1,14 @@
-use std::ops::{BitAnd, BitOr};
-
 use crate::*;
+use num::ToPrimitive;
 use num::{bigint::ToBigInt, BigInt, Signed, Zero};
+use std::convert::TryInto;
+use std::ops::{BitAnd, BitOr};
 
 pub fn init() -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().integer = class.into());
     BuiltinClass::set_toplevel_constant("Integer", class);
+    class.add_builtin_method_by_str("**", exp);
     class.add_builtin_method_by_str("+@", plus);
     class.add_builtin_method_by_str("-@", minus);
     class.add_builtin_method_by_str("div", quotient);
@@ -43,6 +45,53 @@ pub fn init() -> Value {
 // Class methods
 
 // Instance methods
+fn exp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if let Some(n) = self_val.as_bignum() {
+        if let Some(rhsi) = args[0].as_fixnum() {
+            if let Ok(rhsu) = rhsi.try_into() {
+                Ok(Value::bignum(n.pow(rhsu)))
+            } else {
+                Ok(Value::float(n.to_f64().unwrap().powf(rhsi as f64)))
+            }
+        } else if let Some(f) = args[0].as_float() {
+            Ok(Value::float(n.to_f64().unwrap().powf(f)))
+        } else if let Some(b) = args[0].as_bignum() {
+            Ok(Value::float(n.to_f64().unwrap().powf(b.to_f64().unwrap())))
+        } else {
+            Err(RubyError::cant_coerse(args[0], "Integer"))
+        }
+    } else if let Some(i) = self_val.as_fixnum() {
+        exp_fixnum(i, args[0])
+    } else {
+        Err(RubyError::cant_coerse(args[0], "Integer"))
+    }
+}
+
+pub fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
+    let val = if let Some(rhsi) = rhs.as_fixnum() {
+        // fixnum, fixnum
+        if let Ok(rhsu) = rhsi.try_into() {
+            // fixnum, u32
+            match lhsi.checked_pow(rhsu) {
+                Some(i) => Value::integer(i),
+                None => Value::bignum(BigInt::from(lhsi).pow(rhsu)),
+            }
+        } else {
+            Value::float((lhsi as f64).powf(rhsi as f64))
+        }
+    } else if let Some(rhsf) = rhs.as_float() {
+        // fixnum, float
+        Value::float((lhsi as f64).powf(rhsf))
+    } else if let Some(rhsb) = rhs.as_bignum() {
+        // fixnum, bignum
+        Value::float((lhsi as f64).powf(rhsb.to_f64().unwrap()))
+    } else {
+        return Err(RubyError::cant_coerse(rhs, "Integer"));
+    };
+    Ok(val)
+}
+
 fn plus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     Ok(self_val)

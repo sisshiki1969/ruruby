@@ -319,6 +319,10 @@ impl RubyError {
         ))
     }
 
+    pub fn cant_coerse(val: Value, class: &str) -> RubyError {
+        RubyError::typeerr(format!("Can not coerce {:?} into {}.", val, class))
+    }
+
     pub fn argument(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
     }
