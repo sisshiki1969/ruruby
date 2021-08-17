@@ -503,7 +503,7 @@ impl VM {
                             err.info.push((self.source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
-                            err.show_err();
+                            err.clone().show_err();
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
@@ -557,11 +557,11 @@ impl VM {
         if err.is_exception() {
             let val = self.globals.error_register;
             match val.if_exception() {
-                Some(err) => err.show_err(),
+                Some(err) => err.clone().show_err(),
                 None => eprintln!("{:?}", val),
             }
         } else {
-            err.show_err();
+            err.clone().show_err();
         }
     }
 

@@ -85,7 +85,7 @@ pub fn repl_vm() {
                         },
                         _ => {}
                     };
-                    err.show_err();
+                    err.clone().show_err();
                     err.show_loc(0);
                 }
             }

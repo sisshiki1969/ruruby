@@ -10,9 +10,9 @@ impl std::fmt::Debug for RubyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             RubyErrorKind::RuntimeErr { kind, message } => {
-                write!(f, "{:?} {}", kind, message)
+                write!(f, "{:?}: ({})", kind, message)
             }
-            RubyErrorKind::ParseErr(kind) => write!(f, "ParseErr: {:?}", kind),
+            RubyErrorKind::ParseErr(kind) => write!(f, "{:?}", kind),
             RubyErrorKind::MethodReturn => write!(f, "MethodReturn"),
             RubyErrorKind::BlockReturn => write!(f, "BlockReturn"),
             RubyErrorKind::Exception => write!(f, "Exception"),
@@ -36,12 +36,19 @@ pub enum RubyErrorKind {
     None(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum ParseErrKind {
     UnexpectedEOF,
-    UnexpectedToken,
     SyntaxError(String),
-    Name(String),
+}
+
+impl std::fmt::Debug for ParseErrKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedEOF => write!(f, "SyntaxError (Unexpected EOF.)"),
+            Self::SyntaxError(msg) => write!(f, "SyntaxError ({})", msg),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -142,17 +149,21 @@ impl RubyError {
         }
     }
 
-    pub fn show_err(&self) {
-        eprintln!("{}", self.message());
+    pub fn show_err(self) {
+        match self.to_exception_val() {
+            Some(ex) => match ex.if_exception() {
+                Some(err) => eprintln!("{:?}", err),
+                None => unreachable!(),
+            },
+            None => eprint!("None"),
+        }
     }
 
     pub fn message(&self) -> String {
         match &self.kind {
             RubyErrorKind::ParseErr(e) => match e {
                 ParseErrKind::UnexpectedEOF => "SyntaxError (Unexpected EOF)".to_string(),
-                ParseErrKind::UnexpectedToken => "SyntaxError (Unexpected token)".to_string(),
                 ParseErrKind::SyntaxError(n) => format!("SyntaxError ({})", n),
-                ParseErrKind::Name(n) => format!("NameError ({})", n),
             },
             RubyErrorKind::RuntimeErr { kind, message } => format!("{:?} ({})", kind, message),
             RubyErrorKind::MethodReturn => "LocalJumpError".to_string(),
