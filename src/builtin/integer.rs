@@ -37,6 +37,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("size", size);
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("succ", next);
+    class.add_builtin_method_by_str("digits", digits);
 
     class.add_builtin_method_by_str("_fixnum?", fixnum);
     class.into()
@@ -136,12 +137,37 @@ fn neq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    //use std::cmp::Ordering;
     args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    let res = match args[0].to_real() {
-        Some(rhs) => lhs.partial_cmp(&rhs),
-        _ => return Ok(Value::nil()),
+    if let Some(i) = self_val.as_fixnum() {
+        cmp_fixnum(i, args[0])
+    } else if let Some(n) = self_val.as_bignum() {
+        let res = if let Some(rhsi) = args[0].as_fixnum() {
+            n.partial_cmp(&rhsi.to_bigint().unwrap())
+        } else if let Some(rhsf) = args[0].as_float() {
+            n.to_f64().unwrap().partial_cmp(&rhsf)
+        } else if let Some(rhsb) = args[0].as_bignum() {
+            n.partial_cmp(&rhsb)
+        } else {
+            return Ok(Value::nil());
+        };
+        match res {
+            Some(ord) => Ok(Value::integer(ord as i64)),
+            None => Ok(Value::nil()),
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+pub fn cmp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
+    let res = if let Some(rhsi) = rhs.as_fixnum() {
+        lhsi.partial_cmp(&rhsi)
+    } else if let Some(rhsf) = rhs.as_float() {
+        (lhsi as f64).partial_cmp(&rhsf)
+    } else if let Some(rhsb) = rhs.as_bignum() {
+        lhsi.to_bigint().unwrap().partial_cmp(&rhsb)
+    } else {
+        return Ok(Value::nil());
     };
     match res {
         Some(ord) => Ok(Value::integer(ord as i64)),
@@ -521,6 +547,40 @@ fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+/// digits -> Integer
+/// digits(base) -> Integer
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/digits.html
+fn digits(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let base = if args.len() == 0 {
+        10
+    } else {
+        match args[0].coerce_to_fixnum("Arg")? {
+            i if i < 0 => return Err(RubyError::argument("Negative radix.")),
+            0 => return Err(RubyError::argument("Invalid radix 0.")),
+            i => i,
+        }
+    };
+    let mut ary = vec![];
+    let mut self_ = self_val.as_fixnum().unwrap();
+    if self_ < 0 {
+        return Err(RubyError::math_domain("Out of domain."));
+    }
+    loop {
+        let r = self_ % base;
+        self_ = self_ / base;
+        if r == 0 {
+            break;
+        }
+        ary.push(Value::integer(r));
+    }
+    if ary.len() == 0 {
+        ary.push(Value::integer(0))
+    }
+    Ok(Value::array_from(ary))
+}
+
 fn fixnum(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let b = self_val.as_fixnum().is_some();
@@ -695,21 +755,45 @@ mod tests {
             assert true, 4.< 4.1
 
             assert 0, 3.<=> 3
-            assert 1, 5.<=> 3
-            assert -1, 3.<=> 5
-            assert 0, 3.<=> 3.0
-            assert 1, 5.<=> 3.9
-            assert -1, 3.<=> 5.8
-            assert nil, 3.<=> "three"
-            assert nil, Float::NAN.<=> Float::NAN
-
             assert 0, 3 <=> 3
+            assert 0, 300000000000000000000000000.<=> 300000000000000000000000000
+            assert 0, 300000000000000000000000000 <=> 300000000000000000000000000
+            assert 1, 5.<=> 3
             assert 1, 5 <=> 3
+            assert 1, 500000000000000000000000000.<=> 300000000000000000000000000
+            assert 1, 500000000000000000000000000 <=> 300000000000000000000000000
+            assert 1, 500000000000000000000000000.<=> 300
+            assert 1, 500000000000000000000000000 <=> 300
+            assert 1, 5 <=> -3333333333333333333333333333
+            assert 1, 5.<=> -3333333333333333333333333333
+            assert -1, 3.<=> 5
             assert -1, 3 <=> 5
+            assert -1, 3.<=> 5555555555555555555555555555
+            assert -1, 3 <=> 5555555555555555555555555555
+            assert -1, -500000000000000000000000000.<=> 300
+            assert -1, -500000000000000000000000000 <=> 300
+            assert -1, -5 <=> 3333333333333333333333333333
+            assert -1, -5.<=> 3333333333333333333333333333
+            assert 0, 3.<=> 3.0
             assert 0, 3 <=> 3.0
+            assert 0, 3333333333333333333333333333.<=> 3333333333333333333333333333.0
+            assert 0, 3333333333333333333333333333 <=> 3333333333333333333333333333.0
+            assert 1, 5.<=> 3.9
             assert 1, 5 <=> 3.9
+            assert 1, 5555555555555555555555555555.<=> 3.9
+            assert 1, 5555555555555555555555555555 <=> 3.9
+            assert -1, 3.<=> 5.8
             assert -1, 3 <=> 5.8
+            assert -1, 333333333333333333333333333.<=> 533333333333333333333333335.8
+            assert -1, 333333333333333333333333333 <=> 533333333333333333333333335.8
+
+            # assert 1, 333333333333333333333333333.<=> 333333333333333333333333335.8   Ruby
+            # assert 0, 333333333333333333333333333.<=> 333333333333333333333333335.8   ruruby
+
+            assert nil, 3.<=> "three"
             assert nil, 3 <=> "three"
+            assert nil, Float::NAN.<=> Float::NAN
+            assert nil, Float::NAN <=> Float::NAN
         "#;
         assert_script(program);
     }
@@ -836,6 +920,20 @@ mod tests {
         assert 0, 27[2]
         assert 1, 27[0]
         assert 0, 27[999999999999999999999999999999999]
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_digits() {
+        let program = r#"
+        assert [4,4,4,4], 4444.digits
+        assert [12,5,1,1], 4444.digits(16)
+        assert [7,8,5], 4444.digits(29)
+        assert [7,8,5], 4444.digits(29.34)
+        assert_error {5555.digits(-5)}
+        assert_error {5555.digits(0)}
+        assert_error {-5555.digits}
         "#;
         assert_script(program);
     }

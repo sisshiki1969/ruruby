@@ -59,6 +59,7 @@ pub enum RuntimeErrKind {
     LoadError,
     Range,
     ZeroDivision,
+    DomainError,
 }
 
 impl std::fmt::Debug for RuntimeErrKind {
@@ -77,6 +78,7 @@ impl std::fmt::Debug for RuntimeErrKind {
             Self::LoadError => write!(f, "LoadError"),
             Self::Range => write!(f, "RangeError"),
             Self::ZeroDivision => write!(f, "ZeroDivisionError"),
+            Self::DomainError => write!(f, "Math::DomainError"),
         }
     }
 }
@@ -212,11 +214,37 @@ impl RubyError {
                     let err_class = BuiltinClass::get_toplevel_constant("RangeError").into_module();
                     Value::exception(err_class, self)
                 }
-                _ => {
-                    let standard = BuiltinClass::standard();
-                    Value::exception(standard, self)
+                RuntimeErrKind::Index => {
+                    let err_class = BuiltinClass::get_toplevel_constant("IndexError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::Regexp => {
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("RegexpError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::Fiber => {
+                    let err_class = BuiltinClass::get_toplevel_constant("FiberError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::LocalJump => {
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("LocalJumpError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::DomainError => {
+                    let math = BuiltinClass::get_toplevel_constant("Math");
+                    let err = math
+                        .into_module()
+                        .get_const_noautoload(IdentId::get_id("DomainError"))
+                        .unwrap();
+                    Value::exception(err.into_module(), self)
                 }
             },
+            RubyErrorKind::MethodReturn | RubyErrorKind::BlockReturn => {
+                let err_class = BuiltinClass::get_toplevel_constant("LocalJumpError").into_module();
+                Value::exception(err_class, self)
+            }
             _ => {
                 let standard = BuiltinClass::standard();
                 Value::exception(standard, self)
@@ -366,6 +394,10 @@ impl RubyError {
 
     pub fn zero_div(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::ZeroDivision, msg.into())
+    }
+
+    pub fn math_domain(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::DomainError, msg.into())
     }
 }
 

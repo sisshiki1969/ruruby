@@ -151,6 +151,7 @@ impl BuiltinClass {
         }
         init_builtin!(comparable, numeric, kernel);
         init!(module, class, basicobject, object);
+        init_builtin!(exception);
         init_builtin!(integer, float, complex, nilclass, trueclass, falseclass);
         init_builtin!(array, symbol, procobj, range, string, hash);
         init_builtin!(method, unbound_method, regexp, fiber, enumerator, binding);

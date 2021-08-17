@@ -81,8 +81,6 @@ impl Globals {
 
         BuiltinClass::initialize();
 
-        BUILTINS.with(|m| m.borrow_mut().exception = exception::init());
-
         io::init(&mut globals);
         file::init();
 

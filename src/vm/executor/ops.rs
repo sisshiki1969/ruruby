@@ -497,24 +497,21 @@ impl VM {
     eval_cmp_i!(eval_lti, lt, _LT);
 
     pub fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if rhs.id() == lhs.id() {
-            return Ok(Value::integer(0));
-        };
-        let res = match lhs.unpack() {
-            RV::Integer(lhs) => match rhs.unpack() {
-                RV::Integer(rhs) => lhs.partial_cmp(&rhs),
-                RV::Float(rhs) => (lhs as f64).partial_cmp(&rhs),
-                _ => return Ok(Value::nil()),
-            },
-            RV::Float(lhs) => match rhs.unpack() {
-                RV::Integer(rhs) => lhs.partial_cmp(&(rhs as f64)),
-                RV::Float(rhs) => lhs.partial_cmp(&rhs),
-                _ => return Ok(Value::nil()),
-            },
-            _ => {
-                self.fallback_for_binop(IdentId::_CMP, lhs, rhs)?;
-                return Ok(self.stack_pop());
+        let res = if let Some(lhsi) = lhs.as_fixnum() {
+            return crate::integer::cmp_fixnum(lhsi, rhs);
+        } else if let Some(lhsf) = lhs.as_float() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                lhsf.partial_cmp(&(rhsi as f64))
+            } else if let Some(rhsf) = rhs.as_float() {
+                lhsf.partial_cmp(&rhsf)
+            } else if let Some(rhsb) = rhs.as_bignum() {
+                lhsf.partial_cmp(&rhsb.to_f64().unwrap())
+            } else {
+                return Ok(Value::nil());
             }
+        } else {
+            self.fallback_for_binop(IdentId::_CMP, lhs, rhs)?;
+            return Ok(self.stack_pop());
         };
         match res {
             Some(ord) => Ok(Value::integer(ord as i64)),
