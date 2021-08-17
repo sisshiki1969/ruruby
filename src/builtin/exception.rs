@@ -34,6 +34,9 @@ pub fn init() -> Value {
     let err = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("TypeError", err);
 
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("FiberError", err);
+
     let name_error = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("NameError", name_error);
     let err = Module::class_under(name_error);
@@ -44,6 +47,10 @@ pub fn init() -> Value {
 
     let err = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("StopIteration", err);
+
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("LocalJumpError", err);
+
     // RuntimeError
     let runtime_error = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("RuntimeError", runtime_error);
