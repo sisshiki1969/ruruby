@@ -12,6 +12,7 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("Bignum", class);
     class.add_builtin_method_by_str("%", rem);
     class.add_builtin_method_by_str("**", exp);
+    class.add_builtin_method_by_str("pow", exp);
     class.add_builtin_method_by_str("+@", plus);
     class.add_builtin_method_by_str("-@", minus);
     class.add_builtin_method_by_str("div", quotient);
@@ -30,6 +31,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("even?", even);
     class.add_builtin_method_by_str("odd?", odd);
     class.add_builtin_method_by_str("gcd", gcd);
+    class.add_builtin_method_by_str("lcm", lcm);
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
@@ -443,16 +445,32 @@ fn toi(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+/// even? -> bool
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/even=3f.html
 fn even(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let num = self_val.to_real().unwrap();
-    Ok(Value::bool((num % Real::Integer(2)).is_zero()))
+    if let Some(i) = self_val.as_fixnum() {
+        Ok(Value::bool(i.is_even()))
+    } else if let Some(b) = self_val.as_bignum() {
+        Ok(Value::bool(b.is_even()))
+    } else {
+        unreachable!()
+    }
 }
 
+/// odd? -> bool
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/odd=3f.html
 fn odd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    let num = self_val.to_real().unwrap();
-    Ok(Value::bool(!(num % Real::Integer(2)).is_zero()))
+    if let Some(i) = self_val.as_fixnum() {
+        Ok(Value::bool(i.is_odd()))
+    } else if let Some(b) = self_val.as_bignum() {
+        Ok(Value::bool(b.is_odd()))
+    } else {
+        unreachable!()
+    }
 }
 
 /// gcd(n) -> Integer
@@ -464,7 +482,7 @@ fn gcd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let res = if let Some(b2) = args[0].as_bignum() {
             Value::bignum(BigInt::from(i).gcd(b2))
         } else if let Some(i2) = args[0].as_fixnum() {
-            Value::integer(i.gcd(&i2))
+            arith::safe_gcd(&i, &i2)
         } else {
             return Err(RubyError::cant_coerse(args[0], "Integer"));
         };
@@ -474,6 +492,34 @@ fn gcd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             b.gcd(b2)
         } else if let Some(i2) = args[0].as_fixnum() {
             b.gcd(&BigInt::from(i2))
+        } else {
+            return Err(RubyError::cant_coerse(args[0], "Integer"));
+        };
+        Ok(Value::bignum(res))
+    } else {
+        unreachable!()
+    }
+}
+
+/// lcm(n) -> Integer
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/lcm.html
+fn lcm(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if let Some(i) = self_val.as_fixnum() {
+        let res = if let Some(b2) = args[0].as_bignum() {
+            Value::bignum(BigInt::from(i).lcm(b2))
+        } else if let Some(i2) = args[0].as_fixnum() {
+            arith::safe_lcm(&i, &i2)
+        } else {
+            return Err(RubyError::cant_coerse(args[0], "Integer"));
+        };
+        Ok(res)
+    } else if let Some(b) = self_val.as_bignum() {
+        let res = if let Some(b2) = args[0].as_bignum() {
+            b.lcm(b2)
+        } else if let Some(i2) = args[0].as_fixnum() {
+            b.lcm(&BigInt::from(i2))
         } else {
             return Err(RubyError::cant_coerse(args[0], "Integer"));
         };
@@ -796,7 +842,7 @@ mod tests {
     }
 
     #[test]
-    fn integer_gcd() {
+    fn integer_gcd_lcm() {
         let program = r#"
         assert 49, 49.gcd(245)                  
         assert 49, 49.gcd(-245)                  
@@ -810,6 +856,15 @@ mod tests {
         assert 175, -175.gcd 0 
         assert 175, 0.gcd 175
         assert 0, 0.gcd 0
+
+        assert 2, 2.lcm(2)
+        assert 21, 3.lcm(-7)
+        assert 4951760154835678088235319297, ((1<<31)-1).lcm((1<<61)-1)
+        assert 284671973855620070019183339, 123456789.lcm((1<<61)-1)
+        assert 284671973855620070019183339, ((1<<61)-1).lcm(123456789)
+        assert 0, 3.lcm(0)
+        assert 0, 0.lcm(-7)
+        assert 0, 0.lcm(0)
         "#;
         assert_script(program);
     }

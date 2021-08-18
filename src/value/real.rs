@@ -1,5 +1,4 @@
 use crate::*;
-use divrem::RemFloor;
 use num::{BigInt, FromPrimitive, Integer, Signed, ToPrimitive, Zero};
 
 /// This module represents real values and their basic calculations.
@@ -137,27 +136,6 @@ impl Div for Real {
             (Real::Float(f1), Real::Bignum(n2)) => Real::Float(f1 / n2.to_f64().unwrap()),
             (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 / i2 as f64),
             (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 / f2),
-        }
-    }
-}
-
-impl Rem for Real {
-    type Output = Real;
-    fn rem(self, other: Real) -> Real {
-        match (self, other) {
-            (Real::Bignum(n1), Real::Bignum(n2)) => Real::integer(n1.mod_floor(&n2)),
-            (Real::Bignum(n1), Real::Integer(i2)) => Real::integer(n1.mod_floor(&BigInt::from(i2))),
-            (Real::Bignum(n1), Real::Float(f2)) => {
-                Real::Float(arith::rem_floorf64(n1.to_f64().unwrap(), f2))
-            }
-            (Real::Integer(i1), Real::Bignum(n2)) => Real::integer(BigInt::from(i1).mod_floor(&n2)),
-            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1.rem_floor(&i2)),
-            (Real::Integer(i1), Real::Float(f2)) => Real::Float(arith::rem_floorf64(i1 as f64, f2)),
-            (Real::Float(f1), Real::Bignum(n2)) => {
-                Real::Float(arith::rem_floorf64(f1, n2.to_f64().unwrap()))
-            }
-            (Real::Float(f1), Real::Integer(i2)) => Real::Float(arith::rem_floorf64(f1, i2 as f64)),
-            (Real::Float(f1), Real::Float(f2)) => Real::Float(arith::rem_floorf64(f1, f2)),
         }
     }
 }

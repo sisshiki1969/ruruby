@@ -8,6 +8,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("%", rem);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("**", exp);
+    class.add_builtin_method_by_str("mod", exp);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
     class.add_builtin_method_by_str("to_i", toi);
@@ -139,6 +140,8 @@ mod tests {
         assert 2.0-4.0i, 5.0-(3+4.0i)
         assert 15.0+20.0i, 5.0*(3+4.0i)
         assert 0.6-0.8i, 5.0/(3+4i)
+
+        assert 41.35042052785396, 3.2**3.2
     ";
         assert_script(program);
     }

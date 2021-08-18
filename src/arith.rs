@@ -237,3 +237,74 @@ fn shl_fixnum_sub(lhs: i64, rhs: i64) -> Value {
         Value::bignum(lhs.to_bigint().unwrap() << rhs)
     }
 }
+
+/// Safe gcd calc for i64.
+// This code is from num-integer crate, and modified by @sisshiki1969.
+// https://docs.rs/num-integer/0.1.44/src/num_integer/lib.rs.html#462
+pub fn safe_gcd(self_: &i64, other: &i64) -> Value {
+    // Use Stein's algorithm
+    let mut m = *self_;
+    let mut n = *other;
+    if m == 0 || n == 0 {
+        return Value::integer((m | n).abs());
+    }
+
+    // find common factors of 2
+    let shift = (m | n).trailing_zeros();
+
+    // The algorithm needs positive numbers, but the minimum value
+    // can't be represented as a positive one.
+    // It's also a power of two, so the gcd can be
+    // calculated by bitshifting in that case
+
+    // Assuming two's complement, the number created by the shift
+    // is positive for all numbers except gcd = abs(min value)
+    // The call to .abs() causes a panic in debug mode
+    if m == i64::min_value() || n == i64::min_value() {
+        return match 1i64.checked_shl(shift) {
+            Some(i) => Value::integer(i.abs()),
+            None => Value::bignum((BigInt::from(n) << shift).abs()),
+        };
+    }
+
+    // guaranteed to be positive now, rest like unsigned algorithm
+    m = m.abs();
+    n = n.abs();
+
+    // divide n and m by 2 until odd
+    // m inside loop
+    n >>= n.trailing_zeros();
+
+    while m != 0 {
+        m >>= m.trailing_zeros();
+        if n > m {
+            std::mem::swap(&mut n, &mut m)
+        }
+        m -= n;
+    }
+
+    match n.checked_shl(shift) {
+        Some(i) => Value::integer(i),
+        None => Value::bignum(BigInt::from(n) << shift),
+    }
+}
+
+// This code is from num-integer crate, and modified by @sisshiki1969.
+//
+pub fn safe_lcm(self_: &i64, other: &i64) -> Value {
+    if self_.is_zero() && other.is_zero() {
+        return Value::integer(0);
+    }
+    // should not have to recalculate abs
+    let gcd = safe_gcd(self_, other);
+    if let Some(i) = gcd.as_fixnum() {
+        match (*self_).checked_mul(*other / i) {
+            Some(i) => Value::integer(i.abs()),
+            None => Value::bignum((BigInt::from(*self_) * BigInt::from(*other / i)).abs()),
+        }
+    } else if let Some(b) = gcd.as_bignum() {
+        Value::bignum((*self_ * (*other / b)).abs())
+    } else {
+        unreachable!()
+    }
+}
