@@ -513,7 +513,9 @@ impl<'a> Lexer<'a> {
 
     /// Read method name.
     ///
-    /// e.g. Foo? bar bar! == != <= <=>
+    /// e.g. Foo? bar bar! baz= == != <= <=>
+    /// In primary method call, assign-like method name(cf. foo= or Bar=) is not allowed.
+    ///
     // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
     // メソッド名 : 局所変数識別子
     //      | 定数識別子
@@ -522,7 +524,10 @@ impl<'a> Lexer<'a> {
     //      | キーワード
     // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
     //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
-    pub fn read_method_name(&mut self) -> Result<(IdentId, Loc), ParseErr> {
+    pub fn read_method_name(
+        &mut self,
+        allow_assign_like: bool,
+    ) -> Result<(IdentId, Loc), ParseErr> {
         self.flush();
         while self.consume_whitespace() || self.consume_newline() {}
         self.token_start_pos = self.pos;
@@ -530,7 +535,11 @@ impl<'a> Lexer<'a> {
         if ch.is_ascii_alphabetic() || ch == '_' {
             self.consume_ident();
             match self.peek() {
-                Some(ch) if (ch == '!' && self.peek2() != Some('=')) || ch == '?' || ch == '=' => {
+                Some(ch)
+                    if (ch == '!' && self.peek2() != Some('='))
+                        || ch == '?'
+                        || (ch == '=' && allow_assign_like) =>
+                {
                     self.get().unwrap();
                 }
                 _ => {}
@@ -580,7 +589,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Check method name extension.
-    /// Parse "xxxx!" as a valid mathod name.
+    /// Parse "xxxx=" as a valid mathod name.
     /// "xxxx!=" or "xxxx?=" is invalid.
     pub fn read_method_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
         self.flush();
@@ -1637,7 +1646,7 @@ mod test {
         fn assert(program: &str, expect: &str) {
             let mut lexer = Lexer::new(program);
             assert_eq!(
-                lexer.read_method_name().unwrap().0,
+                lexer.read_method_name(true).unwrap().0,
                 (IdentId::get_id(expect))
             );
         }
@@ -1646,6 +1655,7 @@ mod test {
         assert("Func!=", "Func");
         assert("Func?", "Func?");
         assert("func", "func");
+        assert("func=[1,2,3]", "func=");
         assert("compare_by_identity\n", "compare_by_identity");
         assert("func!", "func!");
         assert("func!=", "func");

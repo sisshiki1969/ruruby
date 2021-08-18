@@ -580,7 +580,7 @@ impl<'a> Parser<'a> {
             let node = Node::new_send(receiver, IdentId::get_id("call"), arglist, false, loc);
             return Ok(node);
         };
-        let (id, loc) = self.lexer.read_method_name()?;
+        let (id, loc) = self.lexer.read_method_name(false)?;
         let arglist = if self.consume_punct_no_term(Punct::LParen)? {
             self.parse_arglist_block(Punct::RParen)?
         } else {

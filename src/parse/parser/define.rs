@@ -8,6 +8,7 @@ impl<'a> Parser<'a> {
         // 特異メソッド定義
         // ( 変数参照 | "(" 式 ")" ) ( "." | "::" ) メソッド定義名
         // 変数参照 : 定数識別子 | 大域変数識別子 | クラス変数識別子 | インスタンス変数識別子 | 局所変数識別子 | 擬似変数
+        // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
 
         let tok = self.get()?;
         let loc = tok.loc;
@@ -16,14 +17,14 @@ impl<'a> Parser<'a> {
                 self.consume_punct_no_term(Punct::Dot)?;
                 (
                     Some(Node::new_global_var(name, loc)),
-                    self.lexer.read_method_name()?.0,
+                    self.lexer.read_method_name(true)?.0,
                 )
             }
             TokenKind::InstanceVar(name) => {
                 self.consume_punct_no_term(Punct::Dot)?;
                 (
                     Some(Node::new_instance_var(name, loc)),
-                    self.lexer.read_method_name()?.0,
+                    self.lexer.read_method_name(true)?.0,
                 )
             }
             TokenKind::Reserved(r) => {
@@ -33,14 +34,17 @@ impl<'a> Parser<'a> {
             TokenKind::Ident(s) => {
                 if s.as_str() == "self" {
                     self.consume_punct_no_term(Punct::Dot)?;
-                    (Some(Node::new_self(loc)), self.lexer.read_method_name()?.0)
+                    (
+                        Some(Node::new_self(loc)),
+                        self.lexer.read_method_name(true)?.0,
+                    )
                 } else if self.consume_punct_no_term(Punct::Dot)?
                     || self.consume_punct_no_term(Punct::Scope)?
                 {
                     let id = IdentId::get_id(s);
                     (
                         Some(Node::new_lvar(id, loc)),
-                        self.lexer.read_method_name()?.0,
+                        self.lexer.read_method_name(true)?.0,
                     )
                 } else {
                     (None, self.lexer.read_method_ext(s)?)
@@ -52,7 +56,7 @@ impl<'a> Parser<'a> {
                 {
                     (
                         Some(Node::new_const(s, false, loc)),
-                        self.lexer.read_method_name()?.0,
+                        self.lexer.read_method_name(true)?.0,
                     )
                 } else {
                     (None, self.lexer.read_method_ext(s)?)
@@ -183,7 +187,7 @@ impl<'a> Parser<'a> {
             }
         } else {
             Ok(Node::new_symbol(
-                self.lexer.read_method_name()?.0,
+                self.lexer.read_method_name(true)?.0,
                 self.prev_loc(),
             ))
         }
