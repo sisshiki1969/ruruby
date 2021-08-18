@@ -351,14 +351,14 @@ macro_rules! bit_ops {
                     },
                 }
             } else if let Some(lhs) = self_val.as_bignum() {
-                let rhs = match args[0].as_fixnum() {
-                    Some(rhs) => rhs.to_bigint().unwrap(),
+                let res = match args[0].as_fixnum() {
+                    Some(rhs) => lhs.$op(&rhs.to_bigint().unwrap()),
                     None => match args[0].as_bignum() {
-                        Some(rhs) => rhs,
+                        Some(rhs) => lhs.$op(rhs),
                         None => return Err(RubyError::no_implicit_conv(args[0], "Integer")),
                     },
                 };
-                Ok(Value::bignum(lhs.$op(rhs)))
+                Ok(Value::bignum(res))
             } else {
                 unreachable!()
             }
@@ -389,7 +389,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         if !num.is_positive() {
             return Ok(self_val);
         };
-        let iter = num::range(BigInt::zero(), num).map(|num| Value::bignum(num));
+        let iter = num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num));
         vm.eval_block_each1(block, iter, self_val)
     } else {
         unreachable!()

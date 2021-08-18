@@ -439,7 +439,11 @@ impl VM {
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Invalid, _) | (_, ObjKind::Invalid) => {
-                panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs.rvalue())
+                panic!(
+                    "Invalid rvalue. (maybe GC problem) {:?} {:?}",
+                    lhs.rvalue(),
+                    rhs.rvalue()
+                )
             }
             (_, _) => {
                 let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {

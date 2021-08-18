@@ -624,10 +624,10 @@ impl Value {
         }
     }
 
-    pub fn as_bignum(&self) -> Option<BigInt> {
+    pub fn as_bignum(&self) -> Option<&BigInt> {
         match self.as_rvalue() {
             Some(info) => match &info.kind {
-                ObjKind::BigNum(n) => Some(n.clone()),
+                ObjKind::BigNum(n) => Some(n),
                 _ => None,
             },
             _ => None,

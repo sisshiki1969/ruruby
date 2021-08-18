@@ -41,6 +41,7 @@ impl GC for Globals {
         if let Some(vm) = self.main_fiber {
             vm.mark(alloc);
         }
+        self.error_register.mark(alloc);
     }
 }
 

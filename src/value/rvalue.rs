@@ -68,6 +68,13 @@ impl GC for RValue {
                 "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
                 self as *const RValue, self
             ),
+            &ObjKind::Ordinary
+            | ObjKind::BigNum(_)
+            | ObjKind::Float(_)
+            | ObjKind::String(_)
+            | ObjKind::Regexp(_)
+            | ObjKind::Time(_)
+            | ObjKind::Exception(_) => {}
             ObjKind::Complex { r, i } => {
                 r.mark(alloc);
                 i.mark(alloc);
@@ -83,7 +90,7 @@ impl GC for RValue {
             ObjKind::Proc(pref) => pref.mark(alloc),
             ObjKind::Method(mref) => mref.mark(alloc),
             ObjKind::Enumerator(fref) | ObjKind::Fiber(fref) => fref.mark(alloc),
-            _ => {}
+            ObjKind::Binding(cref) => cref.mark(alloc),
         }
     }
 }
