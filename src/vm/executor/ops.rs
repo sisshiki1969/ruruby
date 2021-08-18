@@ -1,7 +1,8 @@
 use crate::*;
+use divrem::DivFloor;
+use num::Zero;
 use num::{bigint::ToBigInt, ToPrimitive};
 use std::ops::Add;
-use std::ops::Div;
 use std::ops::Mul;
 use std::ops::Sub;
 
@@ -58,19 +59,59 @@ impl VM {
     invoke_op!(invoke_add, add, checked_add, _ADD);
     invoke_op!(invoke_sub, sub, checked_sub, _SUB);
     invoke_op!(invoke_mul, mul, checked_mul, _MUL);
-    invoke_op!(invoke_div_sub, div, checked_div, _DIV);
 
     pub(super) fn invoke_div(&mut self) -> Result<(), RubyError> {
-        let rhs = self.exec_stack[self.stack_len() - 1];
+        let (lhs, rhs) = self.stack_pop2();
         if rhs.as_float() == Some(0.0) {
-            self.set_stack_len(self.stack_len() - 2);
             self.stack_push(Value::float(f64::NAN));
             return Ok(());
         }
-        if rhs.as_fixnum() == Some(0) {
-            return Err(RubyError::zero_div("Divided by zero."));
-        }
-        self.invoke_div_sub()
+
+        let val = if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                if rhsi.is_zero() {
+                    return Err(RubyError::zero_div("Divided by zero."));
+                }
+                Value::integer(lhsi.div_floor(rhsi))
+            } else if let Some(rhsf) = rhs.as_flonum() {
+                if rhsf.is_zero() {
+                    return Err(RubyError::zero_div("Divided by zero."));
+                }
+                Value::float(lhsi as f64 / rhsf)
+            } else {
+                return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
+            }
+        } else if let Some(lhsf) = lhs.as_flonum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                if rhsi.is_zero() {
+                    return Err(RubyError::zero_div("Divided by zero."));
+                }
+                Value::float(lhsf / rhsi as f64)
+            } else if let Some(rhsf) = rhs.as_flonum() {
+                if rhsf.is_zero() {
+                    return Err(RubyError::zero_div("Divided by zero."));
+                }
+                Value::float(lhsf / rhsf)
+            } else {
+                return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
+            }
+        } else {
+            return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
+        };
+        self.stack_push(val);
+        return Ok(());
+    }
+
+    pub(super) fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+        let val = if let Some(lhs) = lhs.as_fixnum() {
+            arith::rem_fixnum(lhs, rhs)?
+        } else if let Some(lhs) = lhs.as_float() {
+            arith::rem_float(lhs, rhs)?
+        } else {
+            return self.fallback_for_binop(IdentId::_REM, lhs, rhs);
+        };
+        self.stack_push(val);
+        Ok(())
     }
 
     pub(super) fn invoke_addi(&mut self, i: i32) -> Result<(), RubyError> {
@@ -81,44 +122,11 @@ impl VM {
         invoke_op_i!(self, iseq, i, sub, IdentId::_SUB);
     }
 
-    pub(super) fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        fn rem_floorf64(self_: f64, other: f64) -> Result<f64, RubyError> {
-            if other == 0.0 {
-                return Err(RubyError::zero_div("Divided by zero."));
-            }
-            let res = if self_ > 0.0 && other < 0.0 {
-                ((self_ - 1.0) % other) + other + 1.0
-            } else if self_ < 0.0 && other > 0.0 {
-                ((self_ + 1.0) % other) + other - 1.0
-            } else {
-                self_ % other
-            };
-            Ok(res)
-        }
-        use divrem::*;
-        let val = match (lhs.unpack(), rhs.unpack()) {
-            (RV::Integer(lhs), RV::Integer(rhs)) => {
-                if rhs == 0 {
-                    return Err(RubyError::zero_div("Divided by zero."));
-                }
-                Value::integer(lhs.rem_floor(rhs))
-            }
-            (RV::Integer(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs as f64, rhs)?),
-            (RV::Float(lhs), RV::Integer(rhs)) => Value::float(rem_floorf64(lhs, rhs as f64)?),
-            (RV::Float(lhs), RV::Float(rhs)) => Value::float(rem_floorf64(lhs, rhs)?),
-            (_, _) => {
-                return self.fallback_for_binop(IdentId::_REM, lhs, rhs);
-            }
-        };
-        self.stack_push(val);
-        Ok(())
-    }
-
     pub(super) fn invoke_exp(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let val = if let Some(i) = lhs.as_fixnum() {
-            crate::integer::exp_fixnum(i, rhs)?
+            arith::exp_fixnum(i, rhs)?
         } else if let Some(f) = lhs.as_float() {
-            crate::float::exp_float(f, rhs)?
+            arith::exp_float(f, rhs)?
         } else {
             return self.fallback_for_binop(IdentId::_POW, lhs, rhs);
         };
@@ -142,11 +150,7 @@ impl VM {
     pub(super) fn invoke_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
-                let val = if 0 < rhsi {
-                    Self::fixnum_shl(lhsi, rhsi)
-                } else {
-                    Self::fixnum_shr(lhsi, -rhsi)
-                };
+                let val = arith::shl_fixnum(lhsi, rhsi)?;
                 self.stack_push(val);
                 return Ok(());
             }
@@ -163,43 +167,12 @@ impl VM {
     pub(super) fn invoke_shr(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
-                let val = if 0 < rhsi {
-                    Self::fixnum_shr(lhsi, rhsi)
-                } else {
-                    Self::fixnum_shl(lhsi, -rhsi)
-                };
+                let val = arith::shr_fixnum(lhsi, rhsi)?;
                 self.stack_push(val);
                 return Ok(());
             }
         }
         self.fallback_for_binop(IdentId::_SHR, lhs, rhs)
-    }
-
-    /// rhs must be a non-negative value.
-    fn fixnum_shr(lhs: i64, rhs: i64) -> Value {
-        if rhs < u32::MAX as i64 {
-            match lhs.checked_shr(rhs as u32) {
-                Some(i) => Value::integer(i),
-                None => Value::integer(0),
-            }
-        } else {
-            Value::bignum(lhs.to_bigint().unwrap() >> rhs)
-        }
-    }
-
-    /// rhs must be a non-negative value.
-    fn fixnum_shl(lhs: i64, rhs: i64) -> Value {
-        if rhs < u32::MAX as i64 {
-            match lhs.checked_shl(rhs as u32) {
-                Some(i) => Value::integer(i),
-                None => {
-                    let n = lhs.to_bigint().unwrap() << rhs;
-                    Value::bignum(n)
-                }
-            }
-        } else {
-            Value::bignum(lhs.to_bigint().unwrap() << rhs)
-        }
     }
 
     pub(super) fn invoke_bitand(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -439,11 +412,11 @@ impl VM {
             (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
             (ObjKind::Invalid, _) | (_, ObjKind::Invalid) => {
-                panic!(
+                return Err(RubyError::internal(format!(
                     "Invalid rvalue. (maybe GC problem) {:?} {:?}",
                     lhs.rvalue(),
                     rhs.rvalue()
-                )
+                )))
             }
             (_, _) => {
                 let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {
@@ -501,35 +474,13 @@ impl VM {
     eval_cmp_i!(eval_lti, lt, _LT);
 
     pub fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        let res = if let Some(lhsi) = lhs.as_fixnum() {
-            return Ok(Value::from_ord(crate::integer::cmp_fixnum(lhsi, rhs)));
+        if let Some(lhsi) = lhs.as_fixnum() {
+            Ok(Value::from_ord(arith::cmp_fixnum(lhsi, rhs)))
         } else if let Some(lhsf) = lhs.as_float() {
-            if let Some(rhsi) = rhs.as_fixnum() {
-                lhsf.partial_cmp(&(rhsi as f64))
-            } else if let Some(rhsf) = rhs.as_float() {
-                lhsf.partial_cmp(&rhsf)
-            } else if let Some(rhsb) = rhs.as_bignum() {
-                if lhsf.is_infinite() {
-                    if lhsf == f64::INFINITY {
-                        Some(std::cmp::Ordering::Greater)
-                    } else if lhsf == f64::NEG_INFINITY {
-                        Some(std::cmp::Ordering::Less)
-                    } else {
-                        unreachable!()
-                    }
-                } else {
-                    lhsf.partial_cmp(&rhsb.to_f64().unwrap())
-                }
-            } else {
-                None
-            }
+            Ok(Value::from_ord(arith::cmp_float(lhsf, rhs)))
         } else {
             self.fallback_for_binop(IdentId::_CMP, lhs, rhs)?;
-            return Ok(self.stack_pop());
-        };
-        match res {
-            Some(ord) => Ok(Value::integer(ord as i64)),
-            None => Ok(Value::nil()),
+            Ok(self.stack_pop())
         }
     }
 
@@ -812,12 +763,106 @@ mod test {
     }
 
     #[test]
+    fn op_div() {
+        let program = r#"
+        assert 5, 17/3
+        assert -6, -17/3
+        assert -6, 17/-3
+        assert 5, -17/-3
+        assert 5.666666666666667, 17.0/3
+        assert -5.666666666666667, -17.0/3
+        assert -5.666666666666667, 17.0/-3
+        assert 5.666666666666667, -17.0/-3
+        assert 5.483870967741935, 17/3.1
+        assert -5.483870967741935, -17/3.1
+        assert -5.483870967741935, 17/-3.1
+        assert 5.483870967741935, -17/-3.1
+        assert 5.483870967741935, 17.0/3.1
+        assert -5.483870967741935, -17.0/3.1
+        assert -5.483870967741935, 17.0/-3.1
+        assert 5.483870967741935, -17.0/-3.1
+
+        assert 5, 17./3
+        assert -6, -17./3
+        assert -6, 17./ -3      # `17./-3` cause ArgumentError (wrong number of arguments (given 0, expected 1)) in CRuby.
+        assert 5, -17./ -3
+        assert 5.666666666666667, 17.0./3
+        assert -5.666666666666667, -17.0./3
+        assert -5.666666666666667, 17.0./ -3
+        assert 5.666666666666667, -17.0./ -3
+        assert 5.483870967741935, 17./3.1
+        assert -5.483870967741935, -17./3.1
+        assert -5.483870967741935, 17./ -3.1
+        assert 5.483870967741935, -17./ -3.1
+        assert 5.483870967741935, 17.0./3.1
+        assert -5.483870967741935, -17.0./3.1
+        assert -5.483870967741935, 17.0./ -3.1
+        assert 5.483870967741935, -17.0./ -3.1
+
+        assert 70707070707070707070707070707070707070707070, 777777777777777777777777777777777777777777777/11
+        assert -70707070707070707070707070707070707070707071, 777777777777777777777777777777777777777777777/-11
+        assert -70707070707070707070707070707070707070707071, -777777777777777777777777777777777777777777777/11
+        assert 70707070707070707070707070707070707070707070, -777777777777777777777777777777777777777777777/-11
+
+        assert 14000000, 777777777777777777777777777777777777777777777/55555555555555555555555555555555555555
+        assert -14000001, 777777777777777777777777777777777777777777777/-55555555555555555555555555555555555555
+        assert -14000001, -777777777777777777777777777777777777777777777/55555555555555555555555555555555555555
+        assert 14000000, -777777777777777777777777777777777777777777777/-55555555555555555555555555555555555555
+
+        assert_error { Object / 2 }
+        assert_error { 4 / 0 }
+        assert true, (4 / 0.0).nan?
+    "#;
+        assert_script(program);
+    }
+
+    #[test]
     fn op_rem() {
         let program = r#"
-        assert 1, 5%2
-        assert 1.0, 5.0%2
-        assert 1.0, 5%2.0
-        assert 1.0, 5.0%2.0
+        assert 2, 17%3
+        assert 1, -17%3
+        assert -1, 17%-3
+        assert -2, -17%-3
+        assert 2.0, 17.0%3
+        assert 1.0, -17.0%3
+        assert -1.0, 17.0%-3
+        assert -2.0, -17.0%-3
+        assert 1.4999999999999996, 17%3.1
+        assert 1.6000000000000005, -17%3.1
+        assert -1.6000000000000005, 17% -3.1
+        assert -1.4999999999999996, -17% -3.1
+        assert 1.4999999999999996, 17.0%3.1
+        assert 1.6000000000000005, -17.0%3.1
+        assert -1.6000000000000005, 17.0% -3.1
+        assert -1.4999999999999996, -17.0% -3.1
+
+        assert 2, 17.%3
+        assert 1, -17.%3
+        assert -1, 17.% -3
+        assert -2, -17.% -3
+        assert 2.0, 17.0.%3
+        assert 1.0, -17.0.%3
+        assert -1.0, 17.0.% -3
+        assert -2.0, -17.0.% -3
+        assert 1.4999999999999996, 17.%3.1
+        assert 1.6000000000000005, -17.%3.1
+        assert -1.6000000000000005, 17.% -3.1
+        assert -1.4999999999999996, -17.% -3.1
+        assert 1.4999999999999996, 17.0.%3.1
+        assert 1.6000000000000005, -17.0.%3.1
+        assert -1.6000000000000005, 17.0.% -3.1
+        assert -1.4999999999999996, -17.0.% -3.1
+
+        assert 7, 777777777777777777777777777777777777777777777%11
+        assert -4, 777777777777777777777777777777777777777777777%-11
+        assert 4, -777777777777777777777777777777777777777777777%11
+        assert -7, -777777777777777777777777777777777777777777777%-11
+
+        assert 7777777, 777777777777777777777777777777777777777777777%55555555555555555555555555555555555555
+        assert -55555555555555555555555555555547777778, 777777777777777777777777777777777777777777777%-55555555555555555555555555555555555555
+        assert 55555555555555555555555555555547777778, -777777777777777777777777777777777777777777777%55555555555555555555555555555555555555
+        assert -7777777, -777777777777777777777777777777777777777777777%-55555555555555555555555555555555555555
+
         assert_error { Object % 2 }
         assert_error { 4 % 0 }
         assert_error { 4 % 0.0 }

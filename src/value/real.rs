@@ -1,6 +1,6 @@
-use num::{BigInt, FromPrimitive, Signed, ToPrimitive, Zero};
-
 use crate::*;
+use divrem::RemFloor;
+use num::{BigInt, FromPrimitive, Integer, Signed, ToPrimitive, Zero};
 
 /// This module represents real values and their basic calculations.
 #[derive(Clone)]
@@ -121,8 +121,46 @@ macro_rules! impl_ops {
 impl_ops!(Add, add, checked_add);
 impl_ops!(Sub, sub, checked_sub);
 impl_ops!(Mul, mul, checked_mul);
-impl_ops!(Div, div, checked_div);
-impl_ops!(Rem, rem, checked_rem);
+//impl_ops!(Div, div_floor, checked_div);
+//impl_ops!(Rem, rem, checked_rem);
+
+impl Div for Real {
+    type Output = Real;
+    fn div(self, other: Real) -> Real {
+        match (self, other) {
+            (Real::Bignum(n1), Real::Bignum(n2)) => Real::integer(n1.div_floor(&n2)),
+            (Real::Bignum(n1), Real::Integer(i2)) => Real::integer(n1.div_floor(&BigInt::from(i2))),
+            (Real::Bignum(n1), Real::Float(f2)) => Real::Float(n1.to_f64().unwrap() / f2),
+            (Real::Integer(i1), Real::Bignum(n2)) => Real::integer(BigInt::from(i1).div_floor(&n2)),
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1.div_floor(&i2)),
+            (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 / f2),
+            (Real::Float(f1), Real::Bignum(n2)) => Real::Float(f1 / n2.to_f64().unwrap()),
+            (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 / i2 as f64),
+            (Real::Float(f1), Real::Float(f2)) => Real::Float(f1 / f2),
+        }
+    }
+}
+
+impl Rem for Real {
+    type Output = Real;
+    fn rem(self, other: Real) -> Real {
+        match (self, other) {
+            (Real::Bignum(n1), Real::Bignum(n2)) => Real::integer(n1.mod_floor(&n2)),
+            (Real::Bignum(n1), Real::Integer(i2)) => Real::integer(n1.mod_floor(&BigInt::from(i2))),
+            (Real::Bignum(n1), Real::Float(f2)) => {
+                Real::Float(arith::rem_floorf64(n1.to_f64().unwrap(), f2))
+            }
+            (Real::Integer(i1), Real::Bignum(n2)) => Real::integer(BigInt::from(i1).mod_floor(&n2)),
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1.rem_floor(&i2)),
+            (Real::Integer(i1), Real::Float(f2)) => Real::Float(arith::rem_floorf64(i1 as f64, f2)),
+            (Real::Float(f1), Real::Bignum(n2)) => {
+                Real::Float(arith::rem_floorf64(f1, n2.to_f64().unwrap()))
+            }
+            (Real::Float(f1), Real::Integer(i2)) => Real::Float(arith::rem_floorf64(f1, i2 as f64)),
+            (Real::Float(f1), Real::Float(f2)) => Real::Float(arith::rem_floorf64(f1, f2)),
+        }
+    }
+}
 
 impl PartialEq for Real {
     fn eq(&self, other: &Self) -> bool {
@@ -153,24 +191,10 @@ impl Neg for Real {
 
 impl PartialOrd for Real {
     fn partial_cmp(&self, other: &Real) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (Real::Bignum(n1), _) => crate::integer::cmp_bignum(n1, other.clone().to_val()),
-            (Real::Integer(i1), _) => crate::integer::cmp_fixnum(*i1, other.clone().to_val()),
-            (Real::Float(f1), Real::Bignum(n2)) => {
-                if f1.is_infinite() {
-                    if *f1 == f64::INFINITY {
-                        Some(std::cmp::Ordering::Greater)
-                    } else if *f1 == f64::NEG_INFINITY {
-                        Some(std::cmp::Ordering::Less)
-                    } else {
-                        unreachable!()
-                    }
-                } else {
-                    f1.partial_cmp(&n2.to_f64().unwrap())
-                }
-            }
-            (Real::Float(f1), Real::Integer(i2)) => f1.partial_cmp(&(*i2 as f64)),
-            (Real::Float(f1), Real::Float(f2)) => f1.partial_cmp(f2),
+        match self {
+            Real::Bignum(n1) => arith::cmp_bignum(n1, other.clone().to_val()),
+            Real::Integer(i1) => arith::cmp_fixnum(*i1, other.clone().to_val()),
+            Real::Float(f1) => arith::cmp_float(*f1, other.clone().to_val()),
         }
     }
 }

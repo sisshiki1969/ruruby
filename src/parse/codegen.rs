@@ -904,7 +904,7 @@ impl Codegen {
             NodeKind::Nil => iseq.gen_push_nil(),
             NodeKind::Bool(b) => iseq.gen_val(Value::bool(b)),
             NodeKind::Integer(num) => iseq.gen_integer(globals, num),
-            NodeKind::Bignum(num) => iseq.gen_val(Value::bignum(num)),
+            NodeKind::Bignum(num) => iseq.gen_const_val(globals, Value::bignum(num)),
             NodeKind::Float(num) => iseq.gen_float(globals, num),
             NodeKind::Imaginary(r) => iseq.gen_complex(globals, r),
             NodeKind::String(s) => iseq.gen_string(globals, &s),

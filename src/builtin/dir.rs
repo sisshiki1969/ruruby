@@ -191,7 +191,7 @@ mod test {
         #assert ENV["PWD"], Dir.pwd  this fails in GitHub Actions 2021.2
         assert ["src/builtin/enumerator.rs"], Dir["**/en*?.rs"]
         assert [
-            "src/alloc.rs","src/builtin/array.rs",
+            "src/alloc.rs","src/arith.rs","src/builtin/array.rs",
             "src/coroutine/asm_windows_x64.rs",
             "src/coroutine/asm_x64.rs",
             "src/coroutine/asm_arm64.rs",

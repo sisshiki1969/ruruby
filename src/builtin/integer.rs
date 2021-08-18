@@ -1,6 +1,6 @@
 use crate::*;
-use num::ToPrimitive;
-use num::{bigint::ToBigInt, BigInt, Signed, Zero};
+use num::Integer;
+use num::{bigint::ToBigInt, BigInt, Signed, ToPrimitive, Zero};
 use std::convert::TryInto;
 use std::ops::{BitAnd, BitOr};
 
@@ -10,6 +10,7 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("Integer", class);
     BuiltinClass::set_toplevel_constant("Fixnum", class);
     BuiltinClass::set_toplevel_constant("Bignum", class);
+    class.add_builtin_method_by_str("%", rem);
     class.add_builtin_method_by_str("**", exp);
     class.add_builtin_method_by_str("+@", plus);
     class.add_builtin_method_by_str("-@", minus);
@@ -24,18 +25,21 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("&", band);
     class.add_builtin_method_by_str("|", bor);
 
+    class.add_builtin_method_by_str("abs", abs);
+    class.add_builtin_method_by_str("floor", floor);
+    class.add_builtin_method_by_str("even?", even);
+    class.add_builtin_method_by_str("odd?", odd);
+    class.add_builtin_method_by_str("gcd", gcd);
+
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
     class.add_builtin_method_by_str("downto", downto);
     class.add_builtin_method_by_str("step", step);
+
     class.add_builtin_method_by_str("chr", chr);
     class.add_builtin_method_by_str("to_f", tof);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("to_int", toi);
-    class.add_builtin_method_by_str("floor", floor);
-    class.add_builtin_method_by_str("abs", abs);
-    class.add_builtin_method_by_str("even?", even);
-    class.add_builtin_method_by_str("odd?", odd);
     class.add_builtin_method_by_str("size", size);
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("succ", next);
@@ -48,6 +52,18 @@ pub fn init() -> Value {
 // Class methods
 
 // Instance methods
+
+fn rem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if let Some(n) = self_val.as_bignum() {
+        arith::rem_bignum(n, args[0])
+    } else if let Some(i) = self_val.as_fixnum() {
+        arith::rem_fixnum(i, args[0])
+    } else {
+        unreachable!()
+    }
+}
+
 fn exp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     if let Some(n) = self_val.as_bignum() {
@@ -65,34 +81,10 @@ fn exp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Err(RubyError::cant_coerse(args[0], "Integer"))
         }
     } else if let Some(i) = self_val.as_fixnum() {
-        exp_fixnum(i, args[0])
+        arith::exp_fixnum(i, args[0])
     } else {
-        Err(RubyError::cant_coerse(args[0], "Integer"))
+        unreachable!()
     }
-}
-
-pub fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
-    let val = if let Some(rhsi) = rhs.as_fixnum() {
-        // fixnum, fixnum
-        if let Ok(rhsu) = rhsi.try_into() {
-            // fixnum, u32
-            match lhsi.checked_pow(rhsu) {
-                Some(i) => Value::integer(i),
-                None => Value::bignum(BigInt::from(lhsi).pow(rhsu)),
-            }
-        } else {
-            Value::float((lhsi as f64).powf(rhsi as f64))
-        }
-    } else if let Some(rhsf) = rhs.as_float() {
-        // fixnum, float
-        Value::float((lhsi as f64).powf(rhsf))
-    } else if let Some(rhsb) = rhs.as_bignum() {
-        // fixnum, bignum
-        Value::float((lhsi as f64).powf(rhsb.to_f64().unwrap()))
-    } else {
-        return Err(RubyError::cant_coerse(rhs, "Integer"));
-    };
-    Ok(val)
 }
 
 fn plus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -141,54 +133,11 @@ fn neq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     if let Some(i) = self_val.as_fixnum() {
-        Ok(Value::from_ord(cmp_fixnum(i, args[0])))
+        Ok(Value::from_ord(arith::cmp_fixnum(i, args[0])))
     } else if let Some(n) = self_val.as_bignum() {
-        Ok(Value::from_ord(cmp_bignum(&n, args[0])))
+        Ok(Value::from_ord(arith::cmp_bignum(&n, args[0])))
     } else {
         unreachable!()
-    }
-}
-
-pub fn cmp_fixnum(lhsi: i64, rhs: Value) -> Option<std::cmp::Ordering> {
-    if let Some(rhsi) = rhs.as_fixnum() {
-        lhsi.partial_cmp(&rhsi)
-    } else if let Some(rhsf) = rhs.as_float() {
-        (lhsi as f64).partial_cmp(&rhsf)
-    } else if let Some(rhsb) = rhs.as_bignum() {
-        if rhsb.is_positive() {
-            Some(std::cmp::Ordering::Less)
-        } else {
-            Some(std::cmp::Ordering::Greater)
-        }
-    } else {
-        None
-    }
-}
-
-pub fn cmp_bignum(lhsb: &BigInt, rhs: Value) -> Option<std::cmp::Ordering> {
-    use std::cmp::Ordering::*;
-    if let Some(_) = rhs.as_fixnum() {
-        if lhsb.is_positive() {
-            Some(Greater)
-        } else {
-            Some(Less)
-        }
-    } else if let Some(rhsf) = rhs.as_float() {
-        if rhsf.is_infinite() {
-            if rhsf == f64::INFINITY {
-                Some(Less)
-            } else if rhsf == f64::NEG_INFINITY {
-                Some(Greater)
-            } else {
-                unreachable!()
-            }
-        } else {
-            lhsb.to_f64().unwrap().partial_cmp(&rhsf)
-        }
-    } else if let Some(rhsb) = rhs.as_bignum() {
-        lhsb.partial_cmp(&rhsb)
-    } else {
-        None
     }
 }
 
@@ -227,13 +176,7 @@ fn shr(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let Some(lhs) = self_val.as_fixnum() {
         let rhs = args[0];
         match rhs.as_fixnum() {
-            Some(rhs) => {
-                if rhs >= 0 {
-                    Ok(fixnum_shr(lhs, rhs))
-                } else {
-                    Ok(fixnum_shl(lhs, -rhs))
-                }
-            }
+            Some(rhs) => arith::shr_fixnum(lhs, rhs),
             None => shr_bignum(rhs),
         }
     } else if let Some(lhs) = self_val.as_bignum() {
@@ -271,13 +214,7 @@ fn shl(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     if let Some(lhs) = self_val.as_fixnum() {
         let rhs = args[0];
         match rhs.as_fixnum() {
-            Some(rhs) => {
-                if rhs >= 0 {
-                    Ok(fixnum_shl(lhs, rhs))
-                } else {
-                    Ok(fixnum_shr(lhs, -rhs))
-                }
-            }
+            Some(rhs) => arith::shl_fixnum(lhs, rhs),
             None => shl_bignum(rhs),
         }
     } else if let Some(lhs) = self_val.as_bignum() {
@@ -307,33 +244,6 @@ fn shl_bignum(rhs: Value) -> VMResult {
             }
         }
         None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
-    }
-}
-
-/// rhs must be a non-negative value.
-fn fixnum_shr(lhs: i64, rhs: i64) -> Value {
-    if rhs < u32::MAX as i64 {
-        match lhs.checked_shr(rhs as u32) {
-            Some(i) => Value::integer(i),
-            None => Value::integer(0),
-        }
-    } else {
-        Value::bignum(lhs.to_bigint().unwrap() >> rhs)
-    }
-}
-
-/// rhs must be a non-negative value.
-fn fixnum_shl(lhs: i64, rhs: i64) -> Value {
-    if rhs < u32::MAX as i64 {
-        match lhs.checked_shl(rhs as u32) {
-            Some(i) => Value::integer(i),
-            None => {
-                let n = lhs.to_bigint().unwrap() << rhs;
-                Value::bignum(n)
-            }
-        }
-    } else {
-        Value::bignum(lhs.to_bigint().unwrap() << rhs)
     }
 }
 
@@ -543,6 +453,34 @@ fn odd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let num = self_val.to_real().unwrap();
     Ok(Value::bool(!(num % Real::Integer(2)).is_zero()))
+}
+
+/// gcd(n) -> Integer
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/gcd.html
+fn gcd(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if let Some(i) = self_val.as_fixnum() {
+        let res = if let Some(b2) = args[0].as_bignum() {
+            Value::bignum(BigInt::from(i).gcd(b2))
+        } else if let Some(i2) = args[0].as_fixnum() {
+            Value::integer(i.gcd(&i2))
+        } else {
+            return Err(RubyError::cant_coerse(args[0], "Integer"));
+        };
+        Ok(res)
+    } else if let Some(b) = self_val.as_bignum() {
+        let res = if let Some(b2) = args[0].as_bignum() {
+            b.gcd(b2)
+        } else if let Some(i2) = args[0].as_fixnum() {
+            b.gcd(&BigInt::from(i2))
+        } else {
+            return Err(RubyError::cant_coerse(args[0], "Integer"));
+        };
+        Ok(Value::bignum(res))
+    } else {
+        unreachable!()
+    }
 }
 
 fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
@@ -853,6 +791,25 @@ mod tests {
         assert_error { 100 << big }
         assert_error { 100 >> -big }
 
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_gcd() {
+        let program = r#"
+        assert 49, 49.gcd(245)                  
+        assert 49, 49.gcd(-245)                  
+        assert 1, 3.gcd(7)                  
+        assert 1, 3.gcd(-7)                 
+        assert 1, ((1<<31)-1).gcd((1<<61)-1)
+        assert 4722366482869645213695, ((1<<72)-1).gcd((1<<144)-1)
+        assert 9, 123456789.gcd((1<<144)-1)
+        assert 9, ((1<<144)-1).gcd(123456789)
+
+        assert 175, -175.gcd 0 
+        assert 175, 0.gcd 175
+        assert 0, 0.gcd 0
         "#;
         assert_script(program);
     }

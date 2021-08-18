@@ -935,6 +935,8 @@ impl<'a> Parser<'a> {
                 TokenKind::GlobalVar(_)
                 | TokenKind::InstanceVar(_)
                 | TokenKind::StringLit(_)
+                | TokenKind::FloatLit(_)
+                | TokenKind::BignumLit(_)
                 | TokenKind::IntegerLit(_) => true,
                 _ => false,
             }
