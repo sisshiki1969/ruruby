@@ -498,16 +498,26 @@ impl VM {
 
     pub fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
         let res = if let Some(lhsi) = lhs.as_fixnum() {
-            return crate::integer::cmp_fixnum(lhsi, rhs);
+            return Ok(Value::from_ord(crate::integer::cmp_fixnum(lhsi, rhs)));
         } else if let Some(lhsf) = lhs.as_float() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 lhsf.partial_cmp(&(rhsi as f64))
             } else if let Some(rhsf) = rhs.as_float() {
                 lhsf.partial_cmp(&rhsf)
             } else if let Some(rhsb) = rhs.as_bignum() {
-                lhsf.partial_cmp(&rhsb.to_f64().unwrap())
+                if lhsf.is_infinite() {
+                    if lhsf == f64::INFINITY {
+                        Some(std::cmp::Ordering::Greater)
+                    } else if lhsf == f64::NEG_INFINITY {
+                        Some(std::cmp::Ordering::Less)
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    lhsf.partial_cmp(&rhsb.to_f64().unwrap())
+                }
             } else {
-                return Ok(Value::nil());
+                None
             }
         } else {
             self.fallback_for_binop(IdentId::_CMP, lhs, rhs)?;
