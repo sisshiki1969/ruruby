@@ -95,9 +95,7 @@ macro_rules! impl_ops {
             fn $fname(self, other: Real) -> Real {
                 match (self, other) {
                     (Real::Bignum(n1), Real::Bignum(n2)) => Real::integer(n1.$fname(n2)),
-                    (Real::Bignum(n1), Real::Integer(i2)) => {
-                        Real::integer(n1.$fname(BigInt::from(i2)))
-                    }
+                    (Real::Bignum(n1), Real::Integer(i2)) => Real::integer(n1.$fname(i2)),
                     (Real::Bignum(n1), Real::Float(f2)) => {
                         Real::Float(n1.to_f64().unwrap().$fname(f2))
                     }
@@ -106,7 +104,7 @@ macro_rules! impl_ops {
                     }
                     (Real::Integer(i1), Real::Integer(i2)) => match i1.$check_fname(i2) {
                         Some(i) => Real::Integer(i),
-                        None => Real::Bignum(BigInt::from(i1).$fname(BigInt::from(i2))),
+                        None => Real::Bignum(BigInt::from(i1).$fname(i2)),
                     },
                     (Real::Integer(i1), Real::Float(f2)) => Real::Float((i1 as f64).$fname(f2)),
                     (Real::Float(f1), Real::Bignum(n2)) => {
@@ -130,9 +128,9 @@ impl PartialEq for Real {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Real::Bignum(n1), Real::Bignum(n2)) => n1 == n2,
-            (Real::Bignum(n1), Real::Integer(i2)) => *n1 == BigInt::from(*i2),
+            (Real::Bignum(_), Real::Integer(_)) => false,
             (Real::Bignum(n1), Real::Float(f2)) => n1.to_f64().unwrap() == *f2,
-            (Real::Integer(i1), Real::Bignum(n2)) => BigInt::from(*i1) == *n2,
+            (Real::Integer(_), Real::Bignum(_)) => false,
             (Real::Integer(i1), Real::Integer(i2)) => i1 == i2,
             (Real::Integer(i1), Real::Float(f2)) => *i1 as f64 == *f2,
             (Real::Float(f1), Real::Bignum(n2)) => *f1 == n2.to_f64().unwrap(),
@@ -156,13 +154,21 @@ impl Neg for Real {
 impl PartialOrd for Real {
     fn partial_cmp(&self, other: &Real) -> Option<std::cmp::Ordering> {
         match (self, other) {
-            (Real::Bignum(n1), Real::Bignum(n2)) => n1.partial_cmp(n2),
-            (Real::Bignum(n1), Real::Integer(i2)) => n1.partial_cmp(&BigInt::from(*i2)),
-            (Real::Bignum(n1), Real::Float(f2)) => n1.to_f64().unwrap().partial_cmp(f2),
-            (Real::Integer(i1), Real::Bignum(n2)) => (BigInt::from(*i1)).partial_cmp(n2),
-            (Real::Integer(i1), Real::Integer(i2)) => i1.partial_cmp(i2),
-            (Real::Integer(i1), Real::Float(f2)) => (*i1 as f64).partial_cmp(f2),
-            (Real::Float(f1), Real::Bignum(n2)) => f1.partial_cmp(&n2.to_f64().unwrap()),
+            (Real::Bignum(n1), _) => crate::integer::cmp_bignum(n1, other.clone().to_val()),
+            (Real::Integer(i1), _) => crate::integer::cmp_fixnum(*i1, other.clone().to_val()),
+            (Real::Float(f1), Real::Bignum(n2)) => {
+                if f1.is_infinite() {
+                    if *f1 == f64::INFINITY {
+                        Some(std::cmp::Ordering::Greater)
+                    } else if *f1 == f64::NEG_INFINITY {
+                        Some(std::cmp::Ordering::Less)
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    f1.partial_cmp(&n2.to_f64().unwrap())
+                }
+            }
             (Real::Float(f1), Real::Integer(i2)) => f1.partial_cmp(&(*i2 as f64)),
             (Real::Float(f1), Real::Float(f2)) => f1.partial_cmp(f2),
         }

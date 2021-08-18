@@ -8,6 +8,8 @@ pub fn init() -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().integer = class.into());
     BuiltinClass::set_toplevel_constant("Integer", class);
+    BuiltinClass::set_toplevel_constant("Fixnum", class);
+    BuiltinClass::set_toplevel_constant("Bignum", class);
     class.add_builtin_method_by_str("**", exp);
     class.add_builtin_method_by_str("+@", plus);
     class.add_builtin_method_by_str("-@", minus);
@@ -139,39 +141,54 @@ fn neq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     if let Some(i) = self_val.as_fixnum() {
-        cmp_fixnum(i, args[0])
+        Ok(Value::from_ord(cmp_fixnum(i, args[0])))
     } else if let Some(n) = self_val.as_bignum() {
-        let res = if let Some(rhsi) = args[0].as_fixnum() {
-            n.partial_cmp(&rhsi.to_bigint().unwrap())
-        } else if let Some(rhsf) = args[0].as_float() {
-            n.to_f64().unwrap().partial_cmp(&rhsf)
-        } else if let Some(rhsb) = args[0].as_bignum() {
-            n.partial_cmp(&rhsb)
-        } else {
-            return Ok(Value::nil());
-        };
-        match res {
-            Some(ord) => Ok(Value::integer(ord as i64)),
-            None => Ok(Value::nil()),
-        }
+        Ok(Value::from_ord(cmp_bignum(&n, args[0])))
     } else {
         unreachable!()
     }
 }
 
-pub fn cmp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
-    let res = if let Some(rhsi) = rhs.as_fixnum() {
+pub fn cmp_fixnum(lhsi: i64, rhs: Value) -> Option<std::cmp::Ordering> {
+    if let Some(rhsi) = rhs.as_fixnum() {
         lhsi.partial_cmp(&rhsi)
     } else if let Some(rhsf) = rhs.as_float() {
         (lhsi as f64).partial_cmp(&rhsf)
     } else if let Some(rhsb) = rhs.as_bignum() {
-        lhsi.to_bigint().unwrap().partial_cmp(&rhsb)
+        if rhsb.is_positive() {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            Some(std::cmp::Ordering::Greater)
+        }
     } else {
-        return Ok(Value::nil());
-    };
-    match res {
-        Some(ord) => Ok(Value::integer(ord as i64)),
-        None => Ok(Value::nil()),
+        None
+    }
+}
+
+pub fn cmp_bignum(lhsb: &BigInt, rhs: Value) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering::*;
+    if let Some(_) = rhs.as_fixnum() {
+        if lhsb.is_positive() {
+            Some(Greater)
+        } else {
+            Some(Less)
+        }
+    } else if let Some(rhsf) = rhs.as_float() {
+        if rhsf.is_infinite() {
+            if rhsf == f64::INFINITY {
+                Some(Less)
+            } else if rhsf == f64::NEG_INFINITY {
+                Some(Greater)
+            } else {
+                unreachable!()
+            }
+        } else {
+            lhsb.to_f64().unwrap().partial_cmp(&rhsf)
+        }
+    } else if let Some(rhsb) = rhs.as_bignum() {
+        lhsb.partial_cmp(&rhsb)
+    } else {
+        None
     }
 }
 
@@ -623,6 +640,10 @@ mod tests {
         assert true, 0x3fff_ffff_ffff_ffff._fixnum?
         assert true, 0x3fff_ffff_ffff_ffff.next == 4611686018427387904
         assert false, 0x3fff_ffff_ffff_ffff.next._fixnum?
+
+        Integer
+        Bignum
+        Fixnum
         "#;
         assert_script(program);
     }
@@ -786,6 +807,9 @@ mod tests {
             assert -1, 3 <=> 5.8
             assert -1, 333333333333333333333333333.<=> 533333333333333333333333335.8
             assert -1, 333333333333333333333333333 <=> 533333333333333333333333335.8
+
+            assert -1, 3333333333333333333333333333 <=> (10000000000.0**10000000000)
+            assert 1, 3333333333333333333333333333 <=> -(10000000000.0**10000000000)
 
             # assert 1, 333333333333333333333333333.<=> 333333333333333333333333335.8   Ruby
             # assert 0, 333333333333333333333333333.<=> 333333333333333333333333335.8   ruruby

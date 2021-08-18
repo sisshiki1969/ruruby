@@ -1196,6 +1196,10 @@ impl Value {
     pub fn binding(ctx: ContextRef) -> Self {
         RValue::new_binding(ctx).pack()
     }
+
+    pub fn from_ord(ord: Option<std::cmp::Ordering>) -> Self {
+        ord.map_or(Value::nil(), |ord| Value::integer(ord as i64))
+    }
 }
 
 impl Value {

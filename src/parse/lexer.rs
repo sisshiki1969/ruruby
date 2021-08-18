@@ -538,7 +538,7 @@ impl<'a> Lexer<'a> {
                 Some(ch)
                     if (ch == '!' && self.peek2() != Some('='))
                         || ch == '?'
-                        || (ch == '=' && allow_assign_like) =>
+                        || (allow_assign_like && ch == '=' && self.peek2() != Some('>')) =>
                 {
                     self.get().unwrap();
                 }
@@ -586,6 +586,29 @@ impl<'a> Lexer<'a> {
             IdentId::get_id(self.current_slice()),
             Loc(self.token_start_pos, self.pos),
         ))
+    }
+
+    pub fn read_symbol_literal(&mut self) -> Result<Option<(IdentId, Loc)>, ParseErr> {
+        self.flush();
+        self.token_start_pos = self.pos;
+        let ch = self.peek().ok_or_else(|| self.error_unexpected(self.pos))?;
+        match ch {
+            '@' => {
+                self.consume('@');
+                self.consume('@');
+                let ch = self.get()?;
+                if !ch.is_ascii_alphabetic() && ch != '_' {
+                    return Err(self.error_unexpected(self.pos - ch.len_utf8()));
+                }
+                self.consume_ident();
+                Ok(Some((
+                    IdentId::get_id(self.current_slice()),
+                    Loc(self.token_start_pos, self.pos),
+                )))
+            }
+            '\"' | '\'' => Ok(None),
+            _ => self.read_method_name(true).map(|res| Some(res)),
+        }
     }
 
     /// Check method name extension.
