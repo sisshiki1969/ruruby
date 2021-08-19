@@ -4,7 +4,7 @@ use crate::ParseErrKind;
 use crate::{util::*, IdentId};
 use enum_iterator::IntoEnumIterator;
 use fxhash::FxHashMap;
-use num::BigInt;
+use num::{BigInt, ToPrimitive};
 use once_cell::sync::Lazy;
 use std::ops::Range;
 use std::sync::Mutex;
@@ -683,15 +683,12 @@ impl<'a> Lexer<'a> {
                 Err(err) => return Err(Self::error_parse(&format!("{:?}", err), self.pos)),
             }
         } else {
-            match s.parse::<i64>() {
-                Ok(i) => Real::Integer(i),
-                Err(_) => {
-                    let num = match BigInt::parse_bytes(s.as_bytes(), 10) {
-                        Some(num) => num,
-                        None => return Err(Self::error_parse("Invalid number literal.", self.pos)),
-                    };
-                    Real::Bignum(num)
-                }
+            match BigInt::parse_bytes(s.as_bytes(), 10) {
+                Some(b) => match b.to_i64() {
+                    Some(i) => Real::Integer(i),
+                    None => Real::Bignum(b),
+                },
+                None => return Err(Self::error_parse("Invalid number literal.", self.pos)),
             }
         };
         if self.consume('i') {
@@ -707,21 +704,20 @@ impl<'a> Lexer<'a> {
 
     /// Read hexadecimal number.
     fn read_hex_number(&mut self) -> Result<Token, ParseErr> {
-        let mut val = self
-            .expect_hex()
-            .map_err(|_| Self::error_parse("Numeric literal without digits.", self.pos))?
-            as u64;
-        loop {
-            if let Some(n) = self.consume_hex() {
-                val = val
-                    .checked_mul(16)
-                    .ok_or_else(|| Self::error_parse("Too big Numeric literal.", self.pos - 1))?
-                    + n as u64;
-            } else if !self.consume('_') {
-                break;
-            }
+        let start_pos = self.pos;
+        self.expect_hex()
+            .map_err(|_| Self::error_parse("Numeric literal without digits.", self.pos))?;
+
+        while self.consume_hex().is_some() || self.consume('_') {}
+
+        let s = &self.code[start_pos..self.pos];
+        match BigInt::parse_bytes(s.as_bytes(), 16) {
+            Some(b) => match b.to_i64() {
+                Some(i) => Ok(self.new_numlit(i)),
+                None => Ok(self.new_bignumlit(b)),
+            },
+            None => Err(Self::error_parse("Invalid hex number literal.", self.pos)),
         }
-        Ok(self.new_numlit(val as i64))
     }
 
     /// Read binary number.

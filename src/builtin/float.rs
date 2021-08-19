@@ -4,13 +4,17 @@ pub fn init() -> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().float = class.into());
     BuiltinClass::set_toplevel_constant("Float", class);
-    class.add_builtin_method_by_str("nan?", nan);
     class.add_builtin_method_by_str("%", rem);
     class.add_builtin_method_by_str("div", quotient);
     class.add_builtin_method_by_str("**", exp);
     class.add_builtin_method_by_str("mod", exp);
     class.add_builtin_method_by_str("<=>", cmp);
     class.add_builtin_method_by_str("floor", floor);
+    class.add_builtin_method_by_str("abs", abs);
+    class.add_builtin_method_by_str("magnitude", abs);
+
+    class.add_builtin_method_by_str("nan?", nan);
+    class.add_builtin_method_by_str("infinite?", infinite);
     class.add_builtin_method_by_str("to_i", toi);
     class.set_const_by_str("DIG", Value::integer(std::f64::DIGITS as i64));
     class.set_const_by_str("INFINITY", Value::float(std::f64::INFINITY));
@@ -33,6 +37,20 @@ fn nan(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let f = self_val.as_float().unwrap();
     Ok(Value::bool(f.is_nan()))
+}
+
+fn infinite(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let f = self_val.as_float().unwrap();
+    Ok(if f.is_infinite() {
+        if f.is_sign_positive() {
+            Value::integer(1)
+        } else {
+            Value::integer(-1)
+        }
+    } else {
+        Value::nil()
+    })
 }
 
 fn rem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -74,6 +92,16 @@ fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::integer(lhs.floor() as i64))
 }
 
+/// abs -> Float
+/// magnitude -> Float
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Float/i/abs.html
+fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let lhs = self_val.as_float().unwrap();
+    Ok(Value::float(lhs.abs()))
+}
+
 fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     //args.check_args_num( 1, 1)?;
     let num = self_val.as_float().unwrap().trunc() as i64;
@@ -89,6 +117,15 @@ mod tests {
         assert "34.5", 34.5.to_s
         assert "34.5", 34.5.inspect
         assert "34.0", 34.000.to_s
+        assert 852.456734, 852.456734.abs
+        assert 852.456734, -852.456734.abs
+        assert -Float::INFINITY, -(20000.0**200000)
+        assert Float::INFINITY, (-(20000.0**200000)).abs
+        inf = 1.0/0
+        assert 1, inf.infinite?
+        inf = -1.0/0
+        assert -1, inf.infinite?
+        assert nil, 0.0.infinite?
         "#;
         assert_script(program);
     }

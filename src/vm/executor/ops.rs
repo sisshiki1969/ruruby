@@ -62,11 +62,6 @@ impl VM {
 
     pub(super) fn invoke_div(&mut self) -> Result<(), RubyError> {
         let (lhs, rhs) = self.stack_pop2();
-        if rhs.as_float() == Some(0.0) {
-            self.stack_push(Value::float(f64::NAN));
-            return Ok(());
-        }
-
         let val = if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 if rhsi.is_zero() {
@@ -74,23 +69,14 @@ impl VM {
                 }
                 Value::integer(lhsi.div_floor(rhsi))
             } else if let Some(rhsf) = rhs.as_flonum() {
-                if rhsf.is_zero() {
-                    return Err(RubyError::zero_div("Divided by zero."));
-                }
                 Value::float(lhsi as f64 / rhsf)
             } else {
                 return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
             }
         } else if let Some(lhsf) = lhs.as_flonum() {
             if let Some(rhsi) = rhs.as_fixnum() {
-                if rhsi.is_zero() {
-                    return Err(RubyError::zero_div("Divided by zero."));
-                }
                 Value::float(lhsf / rhsi as f64)
             } else if let Some(rhsf) = rhs.as_flonum() {
-                if rhsf.is_zero() {
-                    return Err(RubyError::zero_div("Divided by zero."));
-                }
                 Value::float(lhsf / rhsf)
             } else {
                 return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
@@ -811,7 +797,9 @@ mod test {
 
         assert_error { Object / 2 }
         assert_error { 4 / 0 }
-        assert true, (4 / 0.0).nan?
+        assert true, (0 / 0.0).nan?
+        assert 1, (1 / 0.0).infinite?
+        assert -1, (-1 / 0.0).infinite?
     "#;
         assert_script(program);
     }

@@ -16,6 +16,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("+@", plus);
     class.add_builtin_method_by_str("-@", minus);
     class.add_builtin_method_by_str("div", quotient);
+    class.add_builtin_method_by_str("fdiv", fdiv);
     class.add_builtin_method_by_str("==", eq);
     class.add_builtin_method_by_str("===", eq);
     class.add_builtin_method_by_str("!=", neq);
@@ -39,12 +40,15 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("step", step);
 
     class.add_builtin_method_by_str("chr", chr);
+    class.add_builtin_method_by_str("ord", ord);
+    class.add_builtin_method_by_str("bit_length", bit_length);
     class.add_builtin_method_by_str("to_f", tof);
     class.add_builtin_method_by_str("to_i", toi);
     class.add_builtin_method_by_str("to_int", toi);
     class.add_builtin_method_by_str("size", size);
     class.add_builtin_method_by_str("next", next);
     class.add_builtin_method_by_str("succ", next);
+    class.add_builtin_method_by_str("pred", pred);
     class.add_builtin_method_by_str("digits", digits);
 
     class.add_builtin_method_by_str("_fixnum?", fixnum);
@@ -100,6 +104,15 @@ fn minus(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok((-rec).to_val())
 }
 
+fn fdiv(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    let lhs = self_val.to_real().unwrap();
+    match args[0].to_real() {
+        Some(rhs) => Ok(Value::float(lhs.to_f64() / rhs.to_f64())),
+        None => Err(RubyError::cant_coerse(args[0], "Numeric")),
+    }
+}
+
 fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
@@ -110,7 +123,7 @@ fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             Ok(lhs.quotient(rhs).to_val())
         }
-        None => Err(RubyError::undefined_op("div", args[0], self_val)),
+        None => Err(RubyError::cant_coerse(args[0], "Numeric")),
     }
 }
 
@@ -166,7 +179,11 @@ fn index(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             return Ok(Value::integer(0));
         }
         let index = args[0].coerce_to_fixnum("Index")?;
-        let val = (i >> index) & BigInt::from(1);
+        let val = if index < 0 {
+            BigInt::from(0)
+        } else {
+            (i >> index) & BigInt::from(1)
+        };
         Ok(Value::bignum(val))
     } else {
         unreachable!()
@@ -418,6 +435,40 @@ fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
+/// ord -> Integer
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/ord.html
+fn ord(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    Ok(self_val)
+}
+
+/// bit_length -> Integer
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/bit_length.html
+fn bit_length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    let bits = if let Some(i) = self_val.as_fixnum() {
+        if i >= 0 {
+            64 - i.leading_zeros()
+        } else {
+            64 - i.leading_ones()
+        }
+    } else if let Some(b) = self_val.as_bignum() {
+        let all = ((b.bits() + 63) / 64 * 64) as usize;
+        let lead = if !b.is_negative() {
+            (0..all).into_iter().find(|x| b.bit((all - *x) as u64))
+        } else {
+            (0..all).into_iter().find(|x| !b.bit((all - *x) as u64))
+        }
+        .unwrap_or(all) as u32;
+        dbg!(all) as u32 - dbg!(lead) + 1
+    } else {
+        unreachable!()
+    };
+    Ok(Value::integer(bits as i64))
+}
+
 fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     Ok(self_val)
@@ -548,6 +599,20 @@ fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+fn pred(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
+    if let Some(i) = self_val.as_fixnum() {
+        match i.checked_sub(1) {
+            Some(i) => Ok(Value::integer(i)),
+            None => Ok(Value::bignum(BigInt::from(i) - 1)),
+        }
+    } else if let Some(n) = self_val.as_bignum() {
+        Ok(Value::bignum(n - 1))
+    } else {
+        unreachable!()
+    }
+}
+
 /// digits -> Integer
 /// digits(base) -> Integer
 ///
@@ -625,9 +690,40 @@ mod tests {
         assert true, 0x3fff_ffff_ffff_ffff.next == 4611686018427387904
         assert false, 0x3fff_ffff_ffff_ffff.next._fixnum?
 
+        assert 18, 19.pred
+        assert 7777777777777777777777777776, 7777777777777777777777777777.pred
+        assert false, 4611686018427387904._fixnum?
+        assert true, 0x3fff_ffff_ffff_ffff == 4611686018427387904.pred
+        assert true, 4611686018427387904.pred._fixnum?
+
+        assert 100, 100.ord
+        assert 42, 42.ord
+
         Integer
         Bignum
         Fixnum
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn integer_bit_length() {
+        let program = r#"
+        #assert 13, (-2**12-1).bit_length     # => 13
+        #assert 12, (-2**12).bit_length       # => 12
+        #assert 12, (-2**12+1).bit_length     # => 12
+        assert 9, -0x101.bit_length         # => 9
+        assert 8, -0x100.bit_length         # => 8
+        assert 8, -0xff.bit_length          # => 8
+        assert 1, -2.bit_length             # => 1
+        assert 0, -1.bit_length             # => 0
+        assert 0, 0.bit_length              # => 0
+        assert 1, 1.bit_length              # => 1
+        assert 8, 0xff.bit_length           # => 8
+        assert 9, 0x100.bit_length          # => 9
+        assert 12, (2**12-1).bit_length      # => 12
+        assert 13, (2**12).bit_length        # => 13
+        assert 13, (2**12+1).bit_length      # => 13
         "#;
         assert_script(program);
     }
@@ -667,6 +763,10 @@ mod tests {
         assert 475, 475.+@
         assert -475, -(475)
         assert -475, 475.-@
+
+        assert 10.714285714285714, 75.fdiv 7
+        assert 1.0779533505209252e+28, 75456734536464756757558868676.fdiv 7
+        assert 1.0531053059310664, 75456734536464756757558868676.fdiv 71651651654866852525254452425
         "#;
         assert_script(program);
     }
