@@ -48,14 +48,6 @@ impl Real {
         }
     }
 
-    pub fn to_float(&self) -> Self {
-        match self {
-            Real::Bignum(n) => Real::Float(n.to_f64().unwrap()),
-            Real::Integer(i) => Real::Float(*i as f64),
-            Real::Float(_) => self.clone(),
-        }
-    }
-
     pub fn sqrt(&self) -> Self {
         Real::Float(self.to_f64().sqrt())
     }

@@ -709,21 +709,27 @@ mod tests {
     #[test]
     fn integer_bit_length() {
         let program = r#"
-        #assert 13, (-2**12-1).bit_length     # => 13
-        #assert 12, (-2**12).bit_length       # => 12
-        #assert 12, (-2**12+1).bit_length     # => 12
-        assert 9, -0x101.bit_length         # => 9
-        assert 8, -0x100.bit_length         # => 8
-        assert 8, -0xff.bit_length          # => 8
-        assert 1, -2.bit_length             # => 1
-        assert 0, -1.bit_length             # => 0
-        assert 0, 0.bit_length              # => 0
-        assert 1, 1.bit_length              # => 1
-        assert 8, 0xff.bit_length           # => 8
-        assert 9, 0x100.bit_length          # => 9
-        assert 12, (2**12-1).bit_length      # => 12
-        assert 13, (2**12).bit_length        # => 13
-        assert 13, (2**12+1).bit_length      # => 13
+        assert 65, (-(2**64)-1).bit_length
+        assert 64, (-(2**64)).bit_length  
+        assert 64, (-(2**64)+1).bit_length
+        assert 13, (-(2**12)-1).bit_length
+        assert 12, (-(2**12)).bit_length  
+        assert 12, (-(2**12)+1).bit_length
+        assert 9, -0x101.bit_length  
+        assert 8, -0x100.bit_length  
+        assert 8, -0xff.bit_length   
+        assert 1, -2.bit_length      
+        assert 0, -1.bit_length      
+        assert 0, 0.bit_length       
+        assert 1, 1.bit_length       
+        assert 8, 0xff.bit_length    
+        assert 9, 0x100.bit_length   
+        assert 12, (2**12-1).bit_length
+        assert 13, (2**12).bit_length  
+        assert 13, (2**12+1).bit_length
+        assert 64, (2**64-1).bit_length
+        assert 65, (2**64).bit_length  
+        assert 65, (2**64+1).bit_length
         "#;
         assert_script(program);
     }
@@ -767,6 +773,7 @@ mod tests {
         assert 10.714285714285714, 75.fdiv 7
         assert 1.0779533505209252e+28, 75456734536464756757558868676.fdiv 7
         assert 1.0531053059310664, 75456734536464756757558868676.fdiv 71651651654866852525254452425
+        assert_error { 4.fdiv "Ruby" }
         "#;
         assert_script(program);
     }
