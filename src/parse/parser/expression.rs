@@ -410,12 +410,22 @@ impl<'a> Parser<'a> {
     fn parse_unary_minus(&mut self) -> Result<Node, ParseErr> {
         let save = self.save_state();
         let lhs = if self.consume_punct(Punct::Minus)? {
+            let save2 = self.save_state();
             let loc = self.prev_loc();
             match self.peek_no_term()?.kind {
                 TokenKind::IntegerLit(_) | TokenKind::FloatLit(_) | TokenKind::BignumLit(_) => {
-                    self.restore_state(save);
-                    let lhs = self.parse_exponent()?;
-                    return Ok(lhs);
+                    self.parse_primary(true)?;
+                    if self.consume_punct_no_term(Punct::DMul)? {
+                        self.restore_state(save2);
+                        let lhs = self.parse_exponent()?;
+                        let loc = loc.merge(lhs.loc());
+                        let lhs = Node::new_unop(UnOp::Neg, lhs, loc);
+                        return self.parse_accesory_assign(lhs);
+                    } else {
+                        self.restore_state(save);
+                        let lhs = self.parse_exponent()?;
+                        return Ok(lhs);
+                    }
                 }
                 _ => {}
             };
@@ -425,23 +435,20 @@ impl<'a> Parser<'a> {
         } else {
             self.parse_exponent()?
         };
-        match self.parse_accesory_assign(&lhs)? {
-            Some(node) => Ok(node),
-            None => Ok(lhs),
-        }
+        self.parse_accesory_assign(lhs)
     }
 
-    fn parse_accesory_assign(&mut self, lhs: &Node) -> Result<Option<Node>, ParseErr> {
+    fn parse_accesory_assign(&mut self, lhs: Node) -> Result<Node, ParseErr> {
         if !self.suppress_acc_assign {
             if self.consume_punct_no_term(Punct::Assign)? {
                 self.check_lhs(&lhs)?;
                 let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
-                return Ok(Some(Node::new_mul_assign(vec![lhs.clone()], mrhs)));
+                return Ok(Node::new_mul_assign(vec![lhs], mrhs));
             } else if let Some(op) = self.consume_assign_op_no_term()? {
-                return Ok(Some(self.parse_assign_op(lhs.clone(), op)?));
+                return Ok(self.parse_assign_op(lhs, op)?);
             }
         };
-        Ok(None)
+        Ok(lhs)
     }
 
     /// Parse assign-op.

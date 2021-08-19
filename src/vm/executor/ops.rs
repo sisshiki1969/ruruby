@@ -948,4 +948,12 @@ mod test {
     "#;
         assert_script(program);
     }
+
+    #[test]
+    fn unary_minus_and_exponential() {
+        let program = r#"
+        assert -78125..0, -5**7..b=0
+    "#;
+        assert_script(program);
+    }
 }

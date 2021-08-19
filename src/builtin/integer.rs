@@ -709,12 +709,12 @@ mod tests {
     #[test]
     fn integer_bit_length() {
         let program = r#"
-        assert 65, (-(2**64)-1).bit_length
-        assert 64, (-(2**64)).bit_length  
-        assert 64, (-(2**64)+1).bit_length
-        assert 13, (-(2**12)-1).bit_length
-        assert 12, (-(2**12)).bit_length  
-        assert 12, (-(2**12)+1).bit_length
+        assert 65, (-2**64-1).bit_length
+        assert 64, (-2**64).bit_length  
+        assert 64, (-2**64+1).bit_length
+        assert 13, (-2**12-1).bit_length
+        assert 12, (-2**12).bit_length  
+        assert 12, (-2**12+1).bit_length
         assert 9, -0x101.bit_length  
         assert 8, -0x100.bit_length  
         assert 8, -0xff.bit_length   
